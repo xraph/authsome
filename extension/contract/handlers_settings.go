@@ -530,10 +530,10 @@ func resolveOptsFromInput(in NamespaceInput, deps Deps, p contract.Principal) se
 // (scope, scopeID, appID, orgID) tuple expected by mgr.Set / Enforce.
 // Empty scope defaults to ScopeApp at the principal's app — preserves
 // the v1 settings.update handler's behaviour for legacy callers.
-func writeScopeFromInput(scopeStr, appID, orgID, userID string, deps Deps, p contract.Principal) (settings.Scope, string, string, string) {
-	scope := strings.ToLower(scopeStr)
+func writeScopeFromInput(scopeStr, appID, orgID, userID string, deps Deps, p contract.Principal) (scope settings.Scope, scopeID, resolvedAppID, resolvedOrgID string) {
+	scopeKey := strings.ToLower(scopeStr)
 	resolvedApp := firstNonEmpty(appID, AppIDFromPrincipal(p, deps.Engine).String())
-	switch scope {
+	switch scopeKey {
 	case "global":
 		return settings.ScopeGlobal, "", "", ""
 	case "org":

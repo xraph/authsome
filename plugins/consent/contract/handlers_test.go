@@ -3,6 +3,7 @@ package contract
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/xraph/forge/extensions/dashboard/contract"
@@ -38,7 +39,8 @@ func TestManifest_Validates(t *testing.T) {
 func TestListHandler_UnavailableWhenStoreNil(t *testing.T) {
 	h := listHandler(Deps{})
 	_, err := h(context.Background(), ListConsentsInput{}, contract.Principal{})
-	if ce, ok := err.(*contract.Error); !ok || ce.Code != contract.CodeUnavailable {
+	var ce *contract.Error
+	if !errors.As(err, &ce) || ce.Code != contract.CodeUnavailable {
 		t.Errorf("expected CodeUnavailable, got %v", err)
 	}
 }

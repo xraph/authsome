@@ -3,6 +3,7 @@ package contract
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/xraph/forge/extensions/dashboard/contract"
@@ -64,8 +65,8 @@ func expectCode(t *testing.T, err error, want contract.ErrorCode) {
 	if err == nil {
 		t.Fatalf("expected error code %q, got nil", want)
 	}
-	ce, ok := err.(*contract.Error)
-	if !ok {
+	var ce *contract.Error
+	if !errors.As(err, &ce) {
 		t.Fatalf("expected *contract.Error, got %T: %v", err, err)
 	}
 	if ce.Code != want {

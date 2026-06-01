@@ -169,7 +169,7 @@ func installedPluginSet(eng *authsome.Engine) map[string]bool {
 	return out
 }
 
-func resolveFeatureDefault(f featureSpec, available bool) bool {
+func resolveFeatureDefault(_ featureSpec, available bool) bool {
 	if !available {
 		return false
 	}

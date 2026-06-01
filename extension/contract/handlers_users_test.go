@@ -162,7 +162,7 @@ func TestMapEngineError(t *testing.T) {
 	// short-circuit with a CodeBadRequest before reaching the engine
 	// without it getting reinterpreted by the catch-all branch.
 	pre := &dashcontract.Error{Code: dashcontract.CodeBadRequest, Message: "already mapped"}
-	if got := mapEngineError(pre); got != pre {
+	if got := mapEngineError(pre); !errors.Is(got, pre) {
 		t.Errorf("pre-mapped error should pass through, got %v", got)
 	}
 }

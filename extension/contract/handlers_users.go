@@ -394,7 +394,8 @@ func mapEngineError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if ce, ok := err.(*contract.Error); ok {
+	var ce *contract.Error
+	if errors.As(err, &ce) {
 		return ce
 	}
 	switch {

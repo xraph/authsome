@@ -163,8 +163,8 @@ func (s *Store) runMigrationsWithSelfHeal(ctx context.Context, groups []*migrate
 			return fmt.Errorf("authsome/mongo: rebuild executor after breaking stale lock: %w", retryErr)
 		}
 		retryOrch := migrate.NewOrchestrator(retryExec, groups...)
-		if _, err := retryOrch.Migrate(ctx); err != nil {
-			return fmt.Errorf("authsome/mongo: migration retry after breaking stale lock: %w", err)
+		if _, retryMigrateErr := retryOrch.Migrate(ctx); retryMigrateErr != nil {
+			return fmt.Errorf("authsome/mongo: migration retry after breaking stale lock: %w", retryMigrateErr)
 		}
 		return nil
 	}

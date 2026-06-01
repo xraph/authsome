@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -328,7 +329,8 @@ func mapErr(err error) error {
 	if err == nil {
 		return nil
 	}
-	if ce, ok := err.(*contract.Error); ok {
+	var ce *contract.Error
+	if errors.As(err, &ce) {
 		return ce
 	}
 	return &contract.Error{Code: contract.CodeInternal, Message: err.Error()}

@@ -77,7 +77,7 @@ func (s *storeShim) ListEntries(ctx context.Context, q *wlcontract.EntryQuery) (
 	return out, nil
 }
 
-func (s *storeShim) CountByStatus(ctx context.Context, appID id.AppID) (int, int, int, error) {
+func (s *storeShim) CountByStatus(ctx context.Context, appID id.AppID) (pending, approved, rejected int, err error) {
 	return s.inner.CountByStatus(ctx, appID)
 }
 

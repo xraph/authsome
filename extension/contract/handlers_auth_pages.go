@@ -128,7 +128,7 @@ func forgotPasswordHandler(deps Deps) func(ctx context.Context, in ForgotPasswor
 		}
 		// Best-effort: fire the engine call but always return OK on the
 		// wire to avoid account enumeration. Logging stays internal.
-		_, _ = eng.ForgotPassword(ctx, defaultAppID(eng), email)
+		_, _ = eng.ForgotPassword(ctx, defaultAppID(eng), email) //nolint:errcheck // best-effort; error deliberately swallowed to avoid account enumeration
 		return ForgotPasswordResponse{OK: true}, nil
 	}
 }
@@ -160,7 +160,7 @@ func resetPasswordHandler(deps Deps) func(ctx context.Context, in ResetPasswordI
 // engine's first/last fields. Unicode-aware trimming would be nicer;
 // the current split-on-first-space matches what the templ register
 // page does today.
-func splitName(name string) (string, string) {
+func splitName(name string) (first, last string) {
 	n := strings.TrimSpace(name)
 	if n == "" {
 		return "", ""

@@ -13,6 +13,7 @@ package contract
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -91,12 +92,9 @@ type ackResponse struct {
 func apikeysListHandler(deps Deps) func(ctx context.Context, _ struct{}, p contract.Principal) (APIKeyListResponse, error) {
 	return func(ctx context.Context, _ struct{}, p contract.Principal) (APIKeyListResponse, error) {
 		if deps.Engine == nil {
-			return APIKeyListResponse{}, unavailable("auth engine not configured")
+			return APIKeyListResponse{}, unavailable()
 		}
 		store := deps.Engine.APIKeyStore()
-		if store == nil {
-			return APIKeyListResponse{}, unavailable("api key store not configured")
-		}
 		list, err := store.ListAPIKeysByApp(ctx, authcontract.AppIDFromPrincipal(p, deps.Engine))
 		if err != nil {
 			return APIKeyListResponse{}, mapErr(err)
@@ -112,12 +110,9 @@ func apikeysListHandler(deps Deps) func(ctx context.Context, _ struct{}, p contr
 func apikeysCreateHandler(deps Deps) func(ctx context.Context, in CreateAPIKeyInput, p contract.Principal) (CreateAPIKeyResponse, error) {
 	return func(ctx context.Context, in CreateAPIKeyInput, p contract.Principal) (CreateAPIKeyResponse, error) {
 		if deps.Engine == nil {
-			return CreateAPIKeyResponse{}, unavailable("auth engine not configured")
+			return CreateAPIKeyResponse{}, unavailable()
 		}
 		store := deps.Engine.APIKeyStore()
-		if store == nil {
-			return CreateAPIKeyResponse{}, unavailable("api key store not configured")
-		}
 		name := strings.TrimSpace(in.Name)
 		if name == "" {
 			return CreateAPIKeyResponse{}, badReq("name is required")
@@ -155,12 +150,9 @@ func apikeysCreateHandler(deps Deps) func(ctx context.Context, in CreateAPIKeyIn
 func apikeysRevokeHandler(deps Deps) func(ctx context.Context, in RevokeAPIKeyInput, _ contract.Principal) (ackResponse, error) {
 	return func(ctx context.Context, in RevokeAPIKeyInput, _ contract.Principal) (ackResponse, error) {
 		if deps.Engine == nil {
-			return ackResponse{}, unavailable("auth engine not configured")
+			return ackResponse{}, unavailable()
 		}
 		store := deps.Engine.APIKeyStore()
-		if store == nil {
-			return ackResponse{}, unavailable("api key store not configured")
-		}
 		kid, err := parseAPIKeyID(in.ID)
 		if err != nil {
 			return ackResponse{}, err
@@ -180,12 +172,9 @@ func apikeysRevokeHandler(deps Deps) func(ctx context.Context, in RevokeAPIKeyIn
 func apikeysDetailHandler(deps Deps) func(ctx context.Context, in GetAPIKeyInput, _ contract.Principal) (APIKeyDetail, error) {
 	return func(ctx context.Context, in GetAPIKeyInput, _ contract.Principal) (APIKeyDetail, error) {
 		if deps.Engine == nil {
-			return APIKeyDetail{}, unavailable("auth engine not configured")
+			return APIKeyDetail{}, unavailable()
 		}
 		store := deps.Engine.APIKeyStore()
-		if store == nil {
-			return APIKeyDetail{}, unavailable("api key store not configured")
-		}
 		kid, err := parseAPIKeyID(in.ID)
 		if err != nil {
 			return APIKeyDetail{}, err
@@ -257,8 +246,8 @@ func badReq(msg string) error {
 	return &contract.Error{Code: contract.CodeBadRequest, Message: msg}
 }
 
-func unavailable(msg string) error {
-	return &contract.Error{Code: contract.CodeUnavailable, Message: msg}
+func unavailable() error {
+	return &contract.Error{Code: contract.CodeUnavailable, Message: "auth engine not configured"}
 }
 
 // mapErr is a tiny pass-through that wraps engine errors as contract
@@ -270,7 +259,8 @@ func mapErr(err error) error {
 	if err == nil {
 		return nil
 	}
-	if ce, ok := err.(*contract.Error); ok {
+	var ce *contract.Error
+	if errors.As(err, &ce) {
 		return ce
 	}
 	return &contract.Error{Code: contract.CodeInternal, Message: err.Error()}

@@ -66,7 +66,7 @@ func TestRegisterRemoteContractContributor_PortalURLWithBasePath(t *testing.T) {
 	e.config = Config{BasePath: "/authsome", PortalURL: upstream.URL + "/authsome"}
 	// e.Logger() panics until the extension is wired into a forge app;
 	// inject a noop logger so the success/failure log lines don't crash.
-	e.BaseExtension.SetLogger(forge.NewNoopLogger())
+	e.SetLogger(forge.NewNoopLogger())
 
 	hostReg := dashcontract.NewRegistry()
 	hostWreg := dashcontract.NewWardenRegistry()
