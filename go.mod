@@ -2,7 +2,7 @@ module github.com/xraph/authsome
 
 go 1.25.7
 
-replace github.com/xraph/forge => ../../forge
+// replace github.com/xraph/forge => ../../forge
 
 require (
 	github.com/a-h/templ v0.3.1001
@@ -12,7 +12,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
 	github.com/xraph/chronicle v1.5.1
-	github.com/xraph/forge v1.6.4
+	github.com/xraph/forge v1.6.5
 	github.com/xraph/forgeui v1.4.1
 	github.com/xraph/grove v1.5.2
 	github.com/xraph/grove/drivers/mongodriver v1.5.2
@@ -22,7 +22,7 @@ require (
 	github.com/xraph/keysmith v1.5.1
 	github.com/xraph/relay v1.5.2
 	github.com/xraph/vessel v1.0.2
-	github.com/xraph/warden v1.5.1
+	github.com/xraph/warden v1.5.2
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 	go.mongodb.org/mongo-driver/v2 v2.5.0
 	golang.org/x/crypto v0.48.0

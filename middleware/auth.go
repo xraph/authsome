@@ -174,6 +174,15 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 				return next(ctx)
 			}
 
+			// Cross-tenant guard: a session minted under one app must not be
+			// honored when the caller presents a different app's publishable key.
+			if requestAppIDMismatch(ctx.Context(), sess.AppID.String()) {
+				logger.Warn("auth middleware: session app mismatch (publishable key switched)",
+					log.String("session_id", sess.ID.String()),
+				)
+				return next(ctx)
+			}
+
 			// Session binding: validate IP and/or device match
 			if bindCfg.BindToIP && sess.IPAddress != "" {
 				clientIP := clientIPFromRequest(ctx.Request())
@@ -364,6 +373,15 @@ func tryJWTAuth(
 		return false
 	}
 
+	// Cross-tenant guard: a JWT minted under one app must not be honored when
+	// the caller presents a different app's publishable key.
+	if requestAppIDMismatch(ctx.Context(), claims.AppID) {
+		logger.Warn("auth middleware: JWT app mismatch (publishable key switched)",
+			log.String("session_id", claims.SessionID),
+		)
+		return false
+	}
+
 	// When a session checker is configured, cross-check the JWT's session ID
 	// against the store. This enables revocation and IP/device binding for JWTs.
 	// The checker returns (nil, nil) when the feature is disabled via settings.
@@ -468,6 +486,15 @@ func trySessionAuth(
 		return false
 	}
 
+	// Cross-tenant guard: a session minted under one app must not be honored
+	// when the caller presents a different app's publishable key.
+	if requestAppIDMismatch(ctx.Context(), sess.AppID.String()) {
+		logger.Warn("auth middleware: session app mismatch (publishable key switched)",
+			log.String("session_id", sess.ID.String()),
+		)
+		return false
+	}
+
 	// Session binding: validate IP and/or device match.
 	if bindCfg.BindToIP && sess.IPAddress != "" {
 		clientIP := clientIPFromRequest(ctx.Request())
@@ -550,6 +577,17 @@ func tryStrategyAuth(
 	if result.User == nil && !isServiceAccount {
 		// no user and not a service account — treat as unauthenticated
 		ctx.WithContext(withAuthDebug(ctx.Context(), "strategy: returned no user (resolveUser nil or Result empty)"))
+		return false
+	}
+
+	// Cross-tenant guard: credentials that resolve a session bound to one app
+	// must not be honored when the caller presents a different app's
+	// publishable key (e.g. an API key for app A sent with app B's pk header).
+	if result.Session != nil && requestAppIDMismatch(ctx.Context(), result.Session.AppID.String()) {
+		logger.Warn("auth middleware: strategy app mismatch (publishable key switched)",
+			log.String("session_id", result.Session.ID.String()),
+		)
+		ctx.WithContext(withAuthDebug(ctx.Context(), "strategy: session app mismatch with request publishable key"))
 		return false
 	}
 
@@ -655,6 +693,20 @@ func RequireAuth() forge.Middleware {
 // isAPIKeyToken returns true if the token has an API key prefix (ask_, sk_*, pk_*).
 func isAPIKeyToken(token string) bool {
 	return apikey.IsAPIKey(token)
+}
+
+// requestAppIDMismatch reports whether the request carries a resolved
+// publishable-key AppID that differs from the credential's bound app. A
+// session/JWT minted under one app must not be honored when the caller
+// presents a different app's publishable key. Returns false when the request
+// has no publishable-key app (nothing to compare) so bearer-only flows are
+// unaffected.
+func requestAppIDMismatch(ctx context.Context, boundAppID string) bool {
+	reqAppID, ok := AppIDFrom(ctx)
+	if !ok || reqAppID.IsNil() || boundAppID == "" {
+		return false
+	}
+	return reqAppID.String() != boundAppID
 }
 
 func extractBearerToken(r *http.Request, cookieName string) string {
