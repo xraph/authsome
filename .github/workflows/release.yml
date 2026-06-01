@@ -160,8 +160,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           registry-url: "https://registry.npmjs.org"
+
+      - name: Upgrade npm for trusted publishing
+        # Trusted publishing (OIDC) + provenance require npm >= 11.5.1.
+        run: npm install -g npm@latest
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -188,32 +192,32 @@ jobs:
       - name: Publish @authsome/client
         run: |
           cd sdk/typescript
-          npm publish --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+          npm publish --provenance --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
 
       - name: Publish @authsome/ui-core
         run: |
           cd ui/packages/core
-          npm publish --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+          npm publish --provenance --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
 
       - name: Publish @authsome/ui-react
         run: |
           cd ui/packages/react
-          npm publish --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+          npm publish --provenance --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
 
       - name: Publish @authsome/ui-vue
         run: |
           cd ui/packages/vue
-          npm publish --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+          npm publish --provenance --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
 
       - name: Publish @authsome/ui-components
         run: |
           cd ui/packages/components
-          npm publish --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+          npm publish --provenance --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
 
       - name: Publish @authsome/ui-nextjs
         run: |
           cd ui/packages/nextjs
-          npm publish --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+          npm publish --provenance --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
 
   # ─── Flutter/pub.dev Release ─────────────────────────────────────────
   flutter-release:
