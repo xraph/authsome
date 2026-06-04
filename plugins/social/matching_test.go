@@ -30,12 +30,12 @@ func tok() *oauth2.Token {
 	return &oauth2.Token{AccessToken: "access-tok", RefreshToken: "refresh-tok"}
 }
 
-func seedPrimaryUser(t *testing.T, ms *memory.Store, appID id.AppID, envID id.EnvironmentID, email string, verified bool) *user.User {
+func seedPrimaryUser(t *testing.T, ms *memory.Store, appID id.AppID, envID id.EnvironmentID, email string) *user.User {
 	t.Helper()
-	u := &user.User{ID: id.NewUserID(), AppID: appID, EnvID: envID, Email: email, EmailVerified: verified}
+	u := &user.User{ID: id.NewUserID(), AppID: appID, EnvID: envID, Email: email, EmailVerified: true}
 	require.NoError(t, ms.CreateUserWithPrimaryEmail(context.Background(), u, &user.UserEmail{
 		ID: id.NewUserEmailID(), UserID: u.ID, AppID: appID, EnvID: envID,
-		Email: email, Verified: verified, IsPrimary: true, Source: "test",
+		Email: email, Verified: true, IsPrimary: true, Source: "test",
 	}))
 	return u
 }
@@ -48,7 +48,7 @@ func TestResolve_ProviderIDMatch_SurvivesEmailChange(t *testing.T) {
 	p, ms := newResolveTestPlugin(t)
 	appID, envID := id.NewAppID(), id.NewEnvironmentID()
 
-	u := seedPrimaryUser(t, ms, appID, envID, "a@x.com", true)
+	u := seedPrimaryUser(t, ms, appID, envID, "a@x.com")
 	require.NoError(t, p.oauthStore.CreateOAuthConnection(ctx, &OAuthConnection{
 		ID: id.NewOAuthConnectionID(), AppID: appID, UserID: u.ID,
 		Provider: "github", ProviderUserID: "gh-1", Email: "a@x.com",
@@ -76,7 +76,7 @@ func TestResolve_VerifiedEmailMatch_LinksExistingAccount(t *testing.T) {
 	p, ms := newResolveTestPlugin(t)
 	appID, envID := id.NewAppID(), id.NewEnvironmentID()
 
-	existing := seedPrimaryUser(t, ms, appID, envID, "a@x.com", true)
+	existing := seedPrimaryUser(t, ms, appID, envID, "a@x.com")
 
 	// First GitHub login (new provider id): primary c@x, but also owns a@x.
 	pu := &ProviderUser{
@@ -106,7 +106,7 @@ func TestResolve_UnverifiedEmail_NoTakeover(t *testing.T) {
 	p, ms := newResolveTestPlugin(t)
 	appID, envID := id.NewAppID(), id.NewEnvironmentID()
 
-	existing := seedPrimaryUser(t, ms, appID, envID, "a@x.com", true)
+	existing := seedPrimaryUser(t, ms, appID, envID, "a@x.com")
 
 	pu := &ProviderUser{
 		ProviderUserID: "gh-3", Email: "a@x.com", EmailVerified: false,
@@ -129,8 +129,8 @@ func TestResolve_AmbiguousMatch_Refuses(t *testing.T) {
 	p, ms := newResolveTestPlugin(t)
 	appID, envID := id.NewAppID(), id.NewEnvironmentID()
 
-	seedPrimaryUser(t, ms, appID, envID, "d@x.com", true)
-	seedPrimaryUser(t, ms, appID, envID, "e@x.com", true)
+	seedPrimaryUser(t, ms, appID, envID, "d@x.com")
+	seedPrimaryUser(t, ms, appID, envID, "e@x.com")
 
 	pu := &ProviderUser{
 		ProviderUserID: "gh-4", Email: "d@x.com", EmailVerified: true,

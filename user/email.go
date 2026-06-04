@@ -11,7 +11,7 @@ import (
 // multiple emails; exactly one is marked primary and mirrors User.Email /
 // User.EmailVerified. Email uniqueness is enforced per (AppID, EnvID, Email)
 // so an address can belong to at most one account within an environment.
-type UserEmail struct {
+type UserEmail struct { //nolint:revive // exported name stutter is intentional: User.Email is the field, UserEmail is the row type
 	ID        id.UserEmailID   `json:"id"`
 	UserID    id.UserID        `json:"user_id"`
 	AppID     id.AppID         `json:"app_id"`

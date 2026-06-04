@@ -38,7 +38,7 @@ func (emptyClientsStore) ListClients(_ context.Context, _ id.AppID) ([]*OAuth2Cl
 	return nil, nil
 }
 
-func renderClientsPageHTML(t *testing.T, ctx context.Context, comp templ.Component) string {
+func renderClientsPageHTML(ctx context.Context, t *testing.T, comp templ.Component) string {
 	t.Helper()
 	var buf bytes.Buffer
 	if err := comp.Render(ctx, &buf); err != nil {
@@ -60,7 +60,7 @@ func TestRenderClientsPage_SurfacesListError(t *testing.T) {
 		t.Fatalf("renderClientsPage returned error: %v", err)
 	}
 
-	html := renderClientsPageHTML(t, ctx, comp)
+	html := renderClientsPageHTML(ctx, t, comp)
 	if !strings.Contains(html, "Failed to load OAuth2 clients") {
 		t.Errorf("expected the list error to be surfaced on the page, got:\n%s", html)
 	}
@@ -77,7 +77,7 @@ func TestRenderClientsPage_EmptyShowsEmptyState(t *testing.T) {
 		t.Fatalf("renderClientsPage returned error: %v", err)
 	}
 
-	html := renderClientsPageHTML(t, ctx, comp)
+	html := renderClientsPageHTML(ctx, t, comp)
 	if strings.Contains(html, "Failed to load OAuth2 clients") {
 		t.Errorf("did not expect an error banner for an empty (non-error) list, got:\n%s", html)
 	}

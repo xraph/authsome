@@ -11,8 +11,8 @@ import (
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
-	mongostore "github.com/xraph/authsome/store/mongo"
 	"github.com/xraph/authsome/store"
+	mongostore "github.com/xraph/authsome/store/mongo"
 	"github.com/xraph/authsome/user"
 )
 

@@ -17,8 +17,8 @@ import (
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
-	pgstore "github.com/xraph/authsome/store/postgres"
 	"github.com/xraph/authsome/store"
+	pgstore "github.com/xraph/authsome/store/postgres"
 	"github.com/xraph/authsome/user"
 )
 

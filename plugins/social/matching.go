@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/xraph/forge"
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/user"
@@ -135,7 +136,7 @@ func (p *Plugin) createUserFromProvider(ctx context.Context, appID id.AppID, env
 				continue
 			}
 			// Best-effort; a lost race surfaces as ErrEmailTaken and is skipped.
-			_ = p.store.AddUserEmail(ctx, &user.UserEmail{
+			if err := p.store.AddUserEmail(ctx, &user.UserEmail{
 				ID:       id.NewUserEmailID(),
 				UserID:   u.ID,
 				AppID:    appID,
@@ -143,7 +144,12 @@ func (p *Plugin) createUserFromProvider(ctx context.Context, appID id.AppID, env
 				Email:    pe.Email,
 				Verified: pe.Verified,
 				Source:   source,
-			})
+			}); err != nil && p.logger != nil {
+				p.logger.Debug("social: skip attaching provider email",
+					log.String("email", pe.Email),
+					log.String("error", err.Error()),
+				)
+			}
 		}
 	}
 
@@ -192,7 +198,7 @@ func (p *Plugin) reconcileProviderEmails(ctx context.Context, u *user.User, appI
 		if recErr != nil {
 			// Not owned by anyone — attach only if the provider verified it.
 			if pe.Verified {
-				_ = p.store.AddUserEmail(ctx, &user.UserEmail{
+				if err := p.store.AddUserEmail(ctx, &user.UserEmail{
 					ID:       id.NewUserEmailID(),
 					UserID:   u.ID,
 					AppID:    appID,
@@ -200,12 +206,22 @@ func (p *Plugin) reconcileProviderEmails(ctx context.Context, u *user.User, appI
 					Email:    pe.Email,
 					Verified: true,
 					Source:   source,
-				})
+				}); err != nil && p.logger != nil {
+					p.logger.Debug("social: skip attaching provider email",
+						log.String("email", pe.Email),
+						log.String("error", err.Error()),
+					)
+				}
 			}
 			continue
 		}
 		if rec.UserID.String() == u.ID.String() && !rec.Verified && pe.Verified {
-			_ = p.store.MarkUserEmailVerified(ctx, u.ID, pe.Email)
+			if err := p.store.MarkUserEmailVerified(ctx, u.ID, pe.Email); err != nil && p.logger != nil {
+				p.logger.Debug("social: failed to upgrade email verification",
+					log.String("email", pe.Email),
+					log.String("error", err.Error()),
+				)
+			}
 		}
 	}
 }

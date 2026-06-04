@@ -10,8 +10,8 @@ import (
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
-	memory "github.com/xraph/authsome/store/memory"
 	"github.com/xraph/authsome/store"
+	memory "github.com/xraph/authsome/store/memory"
 	"github.com/xraph/authsome/user"
 )
 
