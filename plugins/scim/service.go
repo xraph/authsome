@@ -207,8 +207,15 @@ func (s *Service) ProvisionUser(ctx context.Context, cfg *SCIMConfig, scimUser *
 		return nil, ActionCreateUser, fmt.Errorf("scim: auth store not available")
 	}
 
-	// Try to find existing user by email.
-	existing, err := s.authStore.GetUserByEmail(ctx, cfg.AppID, scimUser.PrimaryEmail())
+	// Resolve the app's default environment so the user and its email row are
+	// scoped consistently with the other sign-up paths.
+	var envID id.EnvironmentID
+	if env, _ := s.authStore.GetDefaultEnvironment(ctx, cfg.AppID); env != nil { //nolint:errcheck // best-effort env lookup
+		envID = env.ID
+	}
+
+	// Try to find an existing user by any of their emails.
+	existing, err := s.authStore.GetUserByAnyEmail(ctx, cfg.AppID, envID, scimUser.PrimaryEmail())
 	if err == nil && existing != nil {
 		// Update existing user.
 		existing.FirstName = scimUser.Name.GivenName
@@ -224,9 +231,12 @@ func (s *Service) ProvisionUser(ctx context.Context, cfg *SCIMConfig, scimUser *
 		return nil, ActionCreateUser, fmt.Errorf("scim: auto-create disabled for config %s", cfg.ID)
 	}
 
-	// Create new user.
+	// Create new user, scoped to the SCIM config's app + default env, seeding
+	// its primary email row so it participates in cross-account matching.
 	newUser := &user.User{
 		ID:            id.NewUserID(),
+		AppID:         cfg.AppID,
+		EnvID:         envID,
 		Email:         scimUser.PrimaryEmail(),
 		FirstName:     scimUser.Name.GivenName,
 		LastName:      scimUser.Name.FamilyName,
@@ -236,7 +246,7 @@ func (s *Service) ProvisionUser(ctx context.Context, cfg *SCIMConfig, scimUser *
 		UpdatedAt:     time.Now(),
 	}
 
-	if err := s.authStore.CreateUser(ctx, newUser); err != nil {
+	if err := s.authStore.CreateUserWithPrimaryEmail(ctx, newUser, user.NewPrimaryEmail(newUser, "scim")); err != nil {
 		return nil, ActionCreateUser, err
 	}
 	if s.roleEnsurer != nil {

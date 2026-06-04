@@ -469,12 +469,20 @@ func (p *Plugin) authenticateUser(ctx forge.Context, provider Provider, params m
 
 	goCtx := ctx.Context()
 
-	// Find or create user by email.
+	// Resolve the app's default environment so the user and its email row are
+	// env-scoped consistently with password/social sign-ups.
+	var envID id.EnvironmentID
+	if env, _ := p.store.GetDefaultEnvironment(goCtx, appID); env != nil { //nolint:errcheck // best-effort env lookup
+		envID = env.ID
+	}
+
+	// Find or create user by email. Match across all of an account's emails so
+	// a verified SSO email links to the existing account instead of duplicating.
 	var u *user.User
 	isNew := false
 
 	if ssoUser.Email != "" {
-		u, err = p.store.GetUserByEmail(goCtx, appID, strings.ToLower(ssoUser.Email))
+		u, err = p.store.GetUserByAnyEmail(goCtx, appID, envID, strings.ToLower(ssoUser.Email))
 		if err != nil {
 			// No existing user -- create one. Prefer the upstream
 			// IdP's user_id (sub claim) as the local user_id when
@@ -501,6 +509,7 @@ func (p *Plugin) authenticateUser(ctx forge.Context, provider Provider, params m
 			u = &user.User{
 				ID:            localID,
 				AppID:         appID,
+				EnvID:         envID,
 				Email:         strings.ToLower(ssoUser.Email),
 				EmailVerified: true, // SSO-authenticated emails are verified
 				FirstName:     ssoUser.FirstName,
@@ -508,7 +517,7 @@ func (p *Plugin) authenticateUser(ctx forge.Context, provider Provider, params m
 				CreatedAt:     time.Now(),
 				UpdatedAt:     time.Now(),
 			}
-			if createErr := p.store.CreateUser(goCtx, u); createErr != nil {
+			if createErr := p.store.CreateUserWithPrimaryEmail(goCtx, u, user.NewPrimaryEmail(u, "sso")); createErr != nil {
 				return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", createErr))
 			}
 			if p.engine != nil {

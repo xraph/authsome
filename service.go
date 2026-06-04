@@ -100,8 +100,8 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 		}
 	}
 
-	// Check email uniqueness
-	_, err := e.store.GetUserByEmail(ctx, req.AppID, req.Email)
+	// Check email uniqueness across all accounts' emails (incl. secondaries).
+	_, err := e.store.GetUserByAnyEmail(ctx, req.AppID, id.Nil, req.Email)
 	if err == nil {
 		return nil, nil, account.ErrEmailTaken
 	}
@@ -141,7 +141,11 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 		return nil, nil, fmt.Errorf("authsome: before user create: %w", hookErr)
 	}
 
-	if createErr := e.store.CreateUser(ctx, u); createErr != nil {
+	// Seed the user together with its primary email row so the address is
+	// recorded in authsome_user_emails — this lets social/SSO sign-ins later
+	// link to this account by email and enforces cross-account email
+	// uniqueness (incl. against other accounts' secondary emails).
+	if createErr := e.store.CreateUserWithPrimaryEmail(ctx, u, user.NewPrimaryEmail(u, "password")); createErr != nil {
 		return nil, nil, fmt.Errorf("authsome: create user: %w", createErr)
 	}
 
@@ -915,7 +919,7 @@ func (e *Engine) ForgotPassword(ctx context.Context, appID id.AppID, email strin
 
 	email = strings.ToLower(strings.TrimSpace(email))
 
-	u, err := e.store.GetUserByEmail(ctx, appID, email)
+	u, err := e.store.GetUserByAnyEmail(ctx, appID, id.Nil, email)
 	if err != nil {
 		return nil, nil //nolint:nilerr // intentionally returning nil on auth failure
 	}
@@ -1146,7 +1150,7 @@ func (e *Engine) ResendEmailVerification(ctx context.Context, appID id.AppID, em
 	if email == "" {
 		return nil
 	}
-	u, err := e.store.GetUserByEmail(ctx, appID, email)
+	u, err := e.store.GetUserByAnyEmail(ctx, appID, id.Nil, email)
 	if err != nil || u == nil {
 		// Silent no-op: don't reveal that the email is unregistered.
 		return nil
@@ -2045,7 +2049,7 @@ func (e *Engine) AdminCreateUser(ctx context.Context, adminID id.UserID, appID i
 	}
 
 	// Check email uniqueness
-	if _, err := e.store.GetUserByEmail(ctx, appID, email); err == nil {
+	if _, err := e.store.GetUserByAnyEmail(ctx, appID, id.Nil, email); err == nil {
 		return nil, account.ErrEmailTaken
 	}
 
@@ -2084,7 +2088,7 @@ func (e *Engine) AdminCreateUser(ctx context.Context, adminID id.UserID, appID i
 		UpdatedAt:     now,
 	}
 
-	if err := e.store.CreateUser(ctx, u); err != nil {
+	if err := e.createUserSeedingEmail(ctx, u, "admin"); err != nil {
 		return nil, fmt.Errorf("authsome: admin create user: %w", err)
 	}
 
@@ -2125,7 +2129,7 @@ func (e *Engine) AdminCopyUserToApp(ctx context.Context, adminID, sourceUserID i
 		return nil, fmt.Errorf("authsome: admin copy user: source and target apps are identical")
 	}
 
-	if _, err := e.store.GetUserByEmail(ctx, targetAppID, src.Email); err == nil {
+	if _, err := e.store.GetUserByAnyEmail(ctx, targetAppID, id.Nil, src.Email); err == nil {
 		return nil, account.ErrEmailTaken
 	}
 
@@ -2152,7 +2156,7 @@ func (e *Engine) AdminCopyUserToApp(ctx context.Context, adminID, sourceUserID i
 		UpdatedAt:     now,
 	}
 
-	if err := e.store.CreateUser(ctx, dup); err != nil {
+	if err := e.createUserSeedingEmail(ctx, dup, "admin"); err != nil {
 		return nil, fmt.Errorf("authsome: admin copy user: %w", err)
 	}
 
@@ -2225,7 +2229,7 @@ func (e *Engine) AdminBulkImportUsers(ctx context.Context, adminID id.UserID, us
 		}
 
 		// Check email uniqueness
-		if _, err := e.store.GetUserByEmail(ctx, u.AppID, u.Email); err == nil {
+		if _, err := e.store.GetUserByAnyEmail(ctx, u.AppID, id.Nil, u.Email); err == nil {
 			result.Skipped++
 			continue
 		}
@@ -2239,7 +2243,7 @@ func (e *Engine) AdminBulkImportUsers(ctx context.Context, adminID id.UserID, us
 			}
 		}
 
-		if err := e.store.CreateUser(ctx, u); err != nil {
+		if err := e.createUserSeedingEmail(ctx, u, "import"); err != nil {
 			result.Errors = append(result.Errors, BulkError{Index: i, Email: u.Email, Error: err.Error()})
 			result.Skipped++
 			continue
@@ -2898,4 +2902,16 @@ func (e *Engine) relayEvent(ctx context.Context, eventType, tenantID string, dat
 			log.String("error", err.Error()),
 		)
 	}
+}
+
+// createUserSeedingEmail creates a user and, when it has an email, seeds the
+// primary authsome_user_emails row in the same step. Recording the address in
+// the email table lets social/SSO sign-ins later link to this account by email
+// and enforces cross-account email uniqueness. Users without an email (e.g.
+// phone-only signups) are created plainly.
+func (e *Engine) createUserSeedingEmail(ctx context.Context, u *user.User, source string) error {
+	if u.Email == "" {
+		return e.store.CreateUser(ctx, u)
+	}
+	return e.store.CreateUserWithPrimaryEmail(ctx, u, user.NewPrimaryEmail(u, source))
 }

@@ -60,6 +60,7 @@ const (
 	PrefixWaitlist        Prefix = "awlt"
 	PrefixSessionFamily   Prefix = "asfm"
 	PrefixServiceAccount  Prefix = "svc"
+	PrefixUserEmail       Prefix = "auem"
 )
 
 // ID is the primary identifier type for all AuthSome entities.
@@ -120,6 +121,9 @@ type APIKeyID = ID
 
 // OAuthConnectionID is a type-safe identifier for OAuth connections (prefix: "aoau").
 type OAuthConnectionID = ID
+
+// UserEmailID is a type-safe identifier for user email records (prefix: "auem").
+type UserEmailID = ID
 
 // PasskeyID is a type-safe identifier for passkeys (prefix: "apsk").
 type PasskeyID = ID
@@ -304,6 +308,9 @@ func NewAPIKeyID() ID { return New(PrefixAPIKey) }
 // NewOAuthConnectionID generates a new unique OAuth connection ID.
 func NewOAuthConnectionID() ID { return New(PrefixOAuthConnection) }
 
+// NewUserEmailID generates a new unique user email record ID.
+func NewUserEmailID() ID { return New(PrefixUserEmail) }
+
 // NewPasskeyID generates a new unique passkey ID.
 func NewPasskeyID() ID { return New(PrefixPasskey) }
 
@@ -417,6 +424,11 @@ func ParseAPIKeyID(s string) (ID, error) { return ParseWithPrefix(s, PrefixAPIKe
 // ParseOAuthConnectionID parses a string and validates the "aoau" prefix.
 func ParseOAuthConnectionID(s string) (ID, error) {
 	return ParseWithPrefix(s, PrefixOAuthConnection)
+}
+
+// ParseUserEmailID parses a string and validates the "auem" prefix.
+func ParseUserEmailID(s string) (ID, error) {
+	return ParseWithPrefix(s, PrefixUserEmail)
 }
 
 // ParsePasskeyID parses a string and validates the "apsk" prefix.

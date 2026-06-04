@@ -75,6 +75,20 @@ func (s *EncryptedStore) GetOAuthConnectionsByUserID(ctx context.Context, userID
 	return conns, nil
 }
 
+// UpdateOAuthConnection encrypts tokens then delegates to the inner store.
+// The caller's *OAuthConnection is left untouched.
+func (s *EncryptedStore) UpdateOAuthConnection(ctx context.Context, c *OAuthConnection) error {
+	encConn, err := s.encryptCopy(c)
+	if err != nil {
+		return fmt.Errorf("social: encrypt oauth tokens: %w", err)
+	}
+	if err := s.inner.UpdateOAuthConnection(ctx, encConn); err != nil {
+		return err
+	}
+	c.UpdatedAt = encConn.UpdatedAt
+	return nil
+}
+
 // DeleteOAuthConnection delegates without modification.
 func (s *EncryptedStore) DeleteOAuthConnection(ctx context.Context, connID id.OAuthConnectionID) error {
 	return s.inner.DeleteOAuthConnection(ctx, connID)

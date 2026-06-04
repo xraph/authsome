@@ -78,6 +78,13 @@ func (s *SqliteStore) GetOAuthConnectionsByUserID(ctx context.Context, userID id
 	return result, nil
 }
 
+func (s *SqliteStore) UpdateOAuthConnection(ctx context.Context, c *OAuthConnection) error {
+	c.UpdatedAt = time.Now()
+	m := fromOAuthConnection(c)
+	_, err := s.sdb.NewUpdate(m).Where("id = ?", c.ID.String()).Exec(ctx)
+	return socialSqliteError(err)
+}
+
 func (s *SqliteStore) DeleteOAuthConnection(ctx context.Context, connID id.OAuthConnectionID) error {
 	_, err := s.sdb.NewDelete((*oauthConnectionModel)(nil)).
 		Where("id = ?", connID.String()).

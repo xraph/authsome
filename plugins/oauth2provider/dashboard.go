@@ -8,6 +8,8 @@ import (
 
 	"github.com/a-h/templ"
 
+	log "github.com/xraph/go-utils/log"
+
 	"github.com/xraph/forge/extensions/dashboard/contributor"
 
 	"github.com/xraph/authsome/dashboard"
@@ -116,9 +118,30 @@ func (p *Plugin) renderClientsPage(ctx context.Context, params contributor.Param
 	}
 
 	// Fetch all clients for the app.
+	//
+	// Never silently swallow a store error here: a hidden failure renders an
+	// empty table that is indistinguishable from a genuine "no clients" state,
+	// which masks real problems (DB errors, an app_id scoping mismatch between
+	// the row and the resolved app). Log it with the resolved app_id and surface
+	// it to the page so the failure is visible instead of looking like an empty
+	// list.
 	clients, err := p.oauth2Store.ListClients(ctx, appID)
 	if err != nil {
+		p.logger.Error("oauth2: dashboard failed to list clients",
+			log.String("app_id", appID.String()),
+			log.Error(err),
+		)
+		if data.Error == "" {
+			data.Error = "Failed to load OAuth2 clients: " + err.Error()
+		}
 		clients = nil
+	} else {
+		// Logged so an empty list can be diagnosed: it shows the exact app_id the
+		// list is scoped to, which can be compared against the stored rows' app_id.
+		p.logger.Debug("oauth2: dashboard listed clients",
+			log.String("app_id", appID.String()),
+			log.Int("count", len(clients)),
+		)
 	}
 
 	data.Clients = make([]o2dash.OAuth2ClientView, 0, len(clients))

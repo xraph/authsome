@@ -43,6 +43,7 @@ const (
 	colAppSessionConfigs    = "authsome_app_session_configs"
 	colRevokedRefreshTokens = "authsome_revoked_refresh_tokens"
 	colServiceAccounts      = "authsome_service_accounts"
+	colUserEmails           = "authsome_user_emails"
 )
 
 // Compile-time interface checks.

@@ -241,8 +241,8 @@ func (p *Plugin) AcceptInvitation(ctx context.Context, token string) (*organizat
 		return nil, fmt.Errorf("organization: accept invitation: org lookup: %w", err)
 	}
 
-	// Look up user by email to get their user ID
-	u, err := p.store.GetUserByEmail(ctx, org.AppID, inv.Email)
+	// Look up user by any of their emails to get their user ID
+	u, err := p.store.GetUserByAnyEmail(ctx, org.AppID, id.Nil, inv.Email)
 	if err != nil {
 		return nil, fmt.Errorf("organization: accept invitation: user not found for email: %w", err)
 	}

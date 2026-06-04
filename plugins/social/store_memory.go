@@ -59,6 +59,17 @@ func (s *MemoryStore) GetOAuthConnectionsByUserID(_ context.Context, userID id.U
 	return result, nil
 }
 
+// UpdateOAuthConnection replaces an existing connection by ID.
+func (s *MemoryStore) UpdateOAuthConnection(_ context.Context, c *OAuthConnection) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.conns[c.ID]; !ok {
+		return ErrConnectionNotFound
+	}
+	s.conns[c.ID] = c
+	return nil
+}
+
 // DeleteOAuthConnection removes a connection by ID.
 func (s *MemoryStore) DeleteOAuthConnection(_ context.Context, connID id.OAuthConnectionID) error {
 	s.mu.Lock()

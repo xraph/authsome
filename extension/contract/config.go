@@ -61,6 +61,14 @@ func configHandler(deps Deps) func(ctx context.Context, _ struct{}, _ contract.P
 			PrivacyURL:      strings.TrimSpace(deps.PrivacyURL),
 		}
 
+		// Default the signup link to the contract /signup graph route (always
+		// registered in manifest.yaml) so the dashboard login form advertises
+		// it out of the box. Operators override via the signup_url config —
+		// point it at an external page, or unset it to keep this default.
+		if out.SignupURL == "" {
+			out.SignupURL = "/signup"
+		}
+
 		// Brand fallback: pull the platform app's display name + logo when
 		// not explicitly set in Deps. Operators that want a custom label
 		// override via Deps.Brand.

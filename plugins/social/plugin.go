@@ -31,7 +31,6 @@ import (
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
-	"github.com/xraph/authsome/user"
 
 	"github.com/xraph/grove/migrate"
 
@@ -260,9 +259,28 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.settingsMgr = engine.Settings()
 	p.basePath = engine.BasePath()
 
-	// If an OAuth store has been wired (via SetOAuthStore) and is not
-	// already encrypted, transparently wrap it so access/refresh tokens
-	// are encrypted at rest. Skipping when the engine's encryptor is a
+	// Auto-wire the OAuth connection store from the engine's database when one
+	// wasn't supplied via SetOAuthStore. This is the load-bearing fix for the
+	// duplicate-user bug: without a connection store, the authoritative match
+	// by (provider, provider_user_id) is skipped and every social login falls
+	// back to brittle email-only matching — so a changed provider email (or a
+	// GitHub account with multiple emails) spawns a new user.
+	if p.oauthStore == nil {
+		if db := engine.DB(); db != nil {
+			switch db.Driver().Name() {
+			case "pg":
+				p.oauthStore = NewPostgresStore(db)
+			case "sqlite":
+				p.oauthStore = NewSqliteStore(db)
+			case "mongo":
+				p.oauthStore = NewMongoStore(db)
+			}
+		}
+	}
+
+	// If an OAuth store has been wired (via SetOAuthStore or auto-wiring above)
+	// and is not already encrypted, transparently wrap it so access/refresh
+	// tokens are encrypted at rest. Skipping when the engine's encryptor is a
 	// Noop is fine — wrapping is still semantically a passthrough.
 	if p.oauthStore != nil {
 		if _, already := p.oauthStore.(*EncryptedStore); !already {
@@ -898,89 +916,13 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		}
 	}
 
-	// Check if an OAuth connection already exists
-	var u *user.User
-	if p.oauthStore != nil {
-		conn, connErr := p.oauthStore.GetOAuthConnection(goCtx, req.Provider, providerUser.ProviderUserID)
-		if connErr == nil {
-			// Existing connection — look up the user
-			u, err = p.store.GetUser(goCtx, conn.UserID)
-			if err != nil {
-				return nil, forge.InternalError(fmt.Errorf("failed to resolve user: %w", err))
-			}
-
-			// Update tokens
-			conn.AccessToken = token.AccessToken
-			conn.RefreshToken = token.RefreshToken
-			conn.ExpiresAt = token.Expiry
-			conn.UpdatedAt = time.Now()
-		}
-	}
-
-	if u == nil {
-		// Try to find user by email
-		if providerUser.Email != "" {
-			u, err = p.store.GetUserByEmail(goCtx, appID, strings.ToLower(providerUser.Email))
-			if err != nil {
-				// No existing user — create one
-				u = &user.User{
-					ID:            id.NewUserID(),
-					AppID:         appID,
-					EnvID:         envID,
-					Email:         strings.ToLower(providerUser.Email),
-					EmailVerified: true, // Social-authenticated emails are pre-verified by the provider.
-					FirstName:     providerUser.FirstName,
-					LastName:      providerUser.LastName,
-					Image:         providerUser.AvatarURL,
-					CreatedAt:     time.Now(),
-					UpdatedAt:     time.Now(),
-				}
-				if createErr := p.store.CreateUser(goCtx, u); createErr != nil {
-					return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", createErr))
-				}
-				if p.engine != nil {
-					p.engine.EnsureDefaultRole(goCtx, appID, u.ID)
-				}
-			}
-		} else {
-			// No email from provider — create user without email
-			u = &user.User{
-				ID:        id.NewUserID(),
-				AppID:     appID,
-				EnvID:     envID,
-				FirstName: providerUser.FirstName,
-				LastName:  providerUser.LastName,
-				Image:     providerUser.AvatarURL,
-				CreatedAt: time.Now(),
-				UpdatedAt: time.Now(),
-			}
-			if createErr := p.store.CreateUser(goCtx, u); createErr != nil {
-				return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", createErr))
-			}
-			if p.engine != nil {
-				p.engine.EnsureDefaultRole(goCtx, appID, u.ID)
-			}
-		}
-
-		// Create OAuth connection if we have a connection store
-		if p.oauthStore != nil {
-			conn := &OAuthConnection{
-				ID:             id.NewOAuthConnectionID(),
-				AppID:          appID,
-				UserID:         u.ID,
-				Provider:       req.Provider,
-				ProviderUserID: providerUser.ProviderUserID,
-				Email:          providerUser.Email,
-				AccessToken:    token.AccessToken,
-				RefreshToken:   token.RefreshToken,
-				ExpiresAt:      token.Expiry,
-				CreatedAt:      time.Now(),
-				UpdatedAt:      time.Now(),
-			}
-			if createErr := p.oauthStore.CreateOAuthConnection(goCtx, conn); createErr != nil {
-				return nil, forge.InternalError(fmt.Errorf("failed to store oauth connection: %w", createErr))
-			}
-		}
+	// Resolve (or create) the user behind this social identity using the
+	// provider-account-id-first, verified-email-set algorithm. This replaces
+	// the old brittle single-email match that spawned duplicate users when a
+	// provider email changed or a GitHub account exposed multiple emails.
+	u, err := p.resolveUserForCallback(goCtx, appID, envID, req.Provider, providerUser, token)
+	if err != nil {
+		return nil, err
 	}
 
 	// Mint the session through Engine.IssueSession so the centralized

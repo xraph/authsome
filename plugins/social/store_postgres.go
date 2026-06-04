@@ -78,6 +78,13 @@ func (s *PostgresStore) GetOAuthConnectionsByUserID(ctx context.Context, userID 
 	return result, nil
 }
 
+func (s *PostgresStore) UpdateOAuthConnection(ctx context.Context, c *OAuthConnection) error {
+	c.UpdatedAt = time.Now()
+	m := fromOAuthConnection(c)
+	_, err := s.pg.NewUpdate(m).Where("id = ?", c.ID.String()).Exec(ctx)
+	return socialPgError(err)
+}
+
 func (s *PostgresStore) DeleteOAuthConnection(ctx context.Context, connID id.OAuthConnectionID) error {
 	_, err := s.pg.NewDelete((*oauthConnectionModel)(nil)).
 		Where("id = ?", connID.String()).

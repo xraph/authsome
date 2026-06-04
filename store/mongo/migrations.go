@@ -10,6 +10,9 @@ import (
 
 	"github.com/xraph/grove/drivers/mongodriver/mongomigrate"
 	"github.com/xraph/grove/migrate"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/user"
 )
 
 // Migrations is the grove migration group for the AuthSome mongo store.
@@ -761,6 +764,92 @@ func init() {
 			Down: func(_ context.Context, _ migrate.Executor) error {
 				// Backfilled empty strings are equivalent to the absent field; no-op down.
 				return nil
+			},
+		},
+		// Migration: User emails collection (multiple emails per account).
+		// Each user owns >=1 email; exactly one is primary and mirrors the
+		// user's email/email_verified. Addresses are unique per
+		// (app_id, env_id, email) so an address belongs to one account.
+		// Backfills one primary doc per existing user with a non-empty email.
+		&migrate.Migration{
+			Name:    "create_user_emails",
+			Version: "20260601000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				if err := mexec.CreateCollection(ctx, (*userEmailModel)(nil)); err != nil {
+					return err
+				}
+				// MongoDB partial-index filters reject $exists:false ($not), so
+				// (unlike the SQL backends, which use WHERE deleted_at IS NULL)
+				// the email-uniqueness index is non-partial. To keep "deleting an
+				// email frees the address" observable, DeleteUserEmail hard-deletes
+				// on mongo. The single-primary index uses an equality-only partial
+				// filter (is_primary: true), which mongo does allow.
+				if err := mexec.CreateIndexes(ctx, colUserEmails, []mongo.IndexModel{
+					{
+						Keys:    bson.D{{Key: "app_id", Value: 1}, {Key: "env_id", Value: 1}, {Key: "email", Value: 1}},
+						Options: options.Index().SetUnique(true),
+					},
+					{
+						Keys: bson.D{{Key: "user_id", Value: 1}},
+						Options: options.Index().SetUnique(true).
+							SetPartialFilterExpression(bson.M{"is_primary": true}),
+					},
+					{
+						Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "created_at", Value: 1}},
+					},
+				}); err != nil {
+					return err
+				}
+
+				// Backfill: one primary doc per existing non-deleted user with
+				// a non-empty email. {deleted_at: nil} matches missing-or-null.
+				usersColl := mexec.DB().Collection(colUsers)
+				cur, err := usersColl.Find(ctx, bson.M{"deleted_at": nil, "email": bson.M{"$ne": ""}})
+				if err != nil {
+					return fmt.Errorf("list users for email backfill: %w", err)
+				}
+				defer cur.Close(ctx)
+
+				emailsColl := mexec.DB().Collection(colUserEmails)
+				for cur.Next(ctx) {
+					var u struct {
+						ID            string `bson:"_id"`
+						AppID         string `bson:"app_id"`
+						EnvID         string `bson:"env_id"`
+						Email         string `bson:"email"`
+						EmailVerified bool   `bson:"email_verified"`
+					}
+					if err := cur.Decode(&u); err != nil {
+						return fmt.Errorf("decode user for backfill: %w", err)
+					}
+					t := now()
+					if _, err := emailsColl.InsertOne(ctx, bson.M{
+						"_id":        id.NewUserEmailID().String(),
+						"user_id":    u.ID,
+						"app_id":     u.AppID,
+						"env_id":     u.EnvID,
+						"email":      user.NormalizeEmail(u.Email),
+						"verified":   u.EmailVerified,
+						"is_primary": true,
+						"source":     "backfill",
+						"created_at": t,
+						"updated_at": t,
+					}); err != nil {
+						return fmt.Errorf("backfill email for user %s: %w", u.ID, err)
+					}
+				}
+				return cur.Err()
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				return mexec.DropCollection(ctx, (*userEmailModel)(nil))
 			},
 		},
 	)

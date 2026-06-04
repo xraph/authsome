@@ -62,6 +62,10 @@ type Store struct {
 
 	serviceAccounts map[string]*serviceaccount.ServiceAccount
 
+	// userEmails maps UserEmail.ID -> record. A user may own several emails;
+	// uniqueness is enforced per (app_id, env_id, email) among non-deleted rows.
+	userEmails map[string]*user.UserEmail
+
 	// revokedRefreshTokens maps SHA-256(refresh_token) -> revocation record.
 	// Used to detect refresh-token replay (RFC 6819 §5.2.2.3): every
 	// successful rotation records the OLD hash with reason="rotated", and
@@ -99,6 +103,7 @@ func New() *Store {
 		appClientConfigs:     make(map[string]*appclientconfig.Config),
 		settingsMap:          make(map[string]*settings.Setting),
 		serviceAccounts:      make(map[string]*serviceaccount.ServiceAccount),
+		userEmails:           make(map[string]*user.UserEmail),
 		revokedRefreshTokens: make(map[string]*session.RevokedRefreshToken),
 		faults:               make(map[string]error),
 	}

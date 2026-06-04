@@ -178,6 +178,19 @@ func (s *MongoStore) GetOAuthConnectionsByUserID(ctx context.Context, userID id.
 	return result, nil
 }
 
+func (s *MongoStore) UpdateOAuthConnection(ctx context.Context, c *OAuthConnection) error {
+	c.UpdatedAt = time.Now()
+	doc := oauthConnectionToDoc(c)
+	res, err := s.mdb.Collection(oauthConnectionsColl).ReplaceOne(ctx, bson.M{"_id": c.ID.String()}, doc)
+	if err != nil {
+		return socialMongoError(err)
+	}
+	if res.MatchedCount == 0 {
+		return ErrConnectionNotFound
+	}
+	return nil
+}
+
 func (s *MongoStore) DeleteOAuthConnection(ctx context.Context, connID id.OAuthConnectionID) error {
 	_, err := s.mdb.Collection(oauthConnectionsColl).DeleteOne(ctx, bson.M{
 		"_id": connID.String(),

@@ -70,6 +70,23 @@ func TestParseSessionFamilyID_RejectsWrongPrefix(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestNewUserEmailID_HasCorrectPrefix(t *testing.T) {
+	id := NewUserEmailID()
+	assert.True(t, strings.HasPrefix(id.String(), string(PrefixUserEmail)+"_"))
+}
+
+func TestParseUserEmailID_RoundTrip(t *testing.T) {
+	original := NewUserEmailID()
+	parsed, err := ParseUserEmailID(original.String())
+	require.NoError(t, err)
+	assert.Equal(t, original.String(), parsed.String())
+}
+
+func TestParseUserEmailID_RejectsWrongPrefix(t *testing.T) {
+	_, err := ParseUserEmailID(NewUserID().String())
+	assert.Error(t, err)
+}
+
 // ──────────────────────────────────────────────────
 // Uniqueness
 // ──────────────────────────────────────────────────

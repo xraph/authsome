@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/xraph/authsome/id"
+
 	"github.com/xraph/grove/migrate"
 )
 
@@ -851,6 +853,81 @@ CREATE TABLE IF NOT EXISTS authsome_revoked_refresh_tokens (
 					return err
 				}
 				_, err := exec.Exec(ctx, `CREATE UNIQUE INDEX idx_authsome_users_username ON authsome_users (app_id, username);`)
+				return err
+			},
+		},
+		// Migration 22: User emails table (multiple emails per account).
+		// Each user owns >=1 email; exactly one is primary and mirrors
+		// authsome_users.email/email_verified. Addresses are unique per
+		// (app_id, env_id, email) so an address belongs to one account.
+		// Backfills one primary row per existing user with a non-empty email.
+		&migrate.Migration{
+			Name:    "create_user_emails",
+			Version: "20260601000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				if _, err := exec.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS authsome_user_emails (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL,
+    app_id     TEXT NOT NULL,
+    env_id     TEXT NOT NULL,
+    email      TEXT NOT NULL,
+    verified   INTEGER NOT NULL DEFAULT 0,
+    is_primary INTEGER NOT NULL DEFAULT 0,
+    source     TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    updated_at TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    deleted_at TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_user_emails_unique
+    ON authsome_user_emails (app_id, env_id, email) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_user_emails_primary
+    ON authsome_user_emails (user_id) WHERE is_primary = 1 AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_authsome_user_emails_user
+    ON authsome_user_emails (user_id) WHERE deleted_at IS NULL;
+`); err != nil {
+					return fmt.Errorf("create user_emails table: %w", err)
+				}
+
+				// Backfill: one primary row per existing non-deleted user that
+				// has an email. IDs are generated in Go (prefixed TypeIDs).
+				rows, err := exec.Query(ctx,
+					`SELECT id, app_id, env_id, email, email_verified FROM authsome_users WHERE deleted_at IS NULL AND email != ''`)
+				if err != nil {
+					return fmt.Errorf("list users for email backfill: %w", err)
+				}
+				defer rows.Close()
+
+				type seed struct {
+					userID, appID, envID, email string
+					verified                    int
+				}
+				var seeds []seed
+				for rows.Next() {
+					var sd seed
+					if err := rows.Scan(&sd.userID, &sd.appID, &sd.envID, &sd.email, &sd.verified); err != nil {
+						return fmt.Errorf("scan user row: %w", err)
+					}
+					seeds = append(seeds, sd)
+				}
+				if err := rows.Err(); err != nil {
+					return fmt.Errorf("iterate users: %w", err)
+				}
+
+				for _, sd := range seeds {
+					if _, err := exec.Exec(ctx,
+						`INSERT INTO authsome_user_emails (id, user_id, app_id, env_id, email, verified, is_primary, source)
+						 VALUES (?, ?, ?, ?, LOWER(?), ?, 1, 'backfill')`,
+						id.NewUserEmailID().String(), sd.userID, sd.appID, sd.envID, sd.email, sd.verified,
+					); err != nil {
+						return fmt.Errorf("backfill email for user %s: %w", sd.userID, err)
+					}
+				}
+				return nil
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_user_emails;`)
 				return err
 			},
 		},

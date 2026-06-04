@@ -58,19 +58,25 @@ func (p *googleProvider) FetchUser(ctx context.Context, token *oauth2.Token) (*P
 	}
 
 	var info struct {
-		ID      string `json:"id"`
-		Email   string `json:"email"`
-		Name    string `json:"name"`
-		Picture string `json:"picture"`
+		ID            string `json:"id"`
+		Email         string `json:"email"`
+		VerifiedEmail bool   `json:"verified_email"`
+		Name          string `json:"name"`
+		Picture       string `json:"picture"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return nil, fmt.Errorf("social: google: decode user: %w", err)
 	}
 
-	return &ProviderUser{
+	pu := &ProviderUser{
 		ProviderUserID: info.ID,
 		Email:          info.Email,
+		EmailVerified:  info.VerifiedEmail,
 		FirstName:      info.Name,
 		AvatarURL:      info.Picture,
-	}, nil
+	}
+	if info.Email != "" {
+		pu.Emails = []ProviderEmail{{Email: info.Email, Verified: info.VerifiedEmail, Primary: true}}
+	}
+	return pu, nil
 }

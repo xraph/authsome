@@ -351,9 +351,10 @@ export function SignInForm({
               </Label>
               <Input
                 id="signin-email"
+                name="username"
                 type="email"
                 placeholder="name@example.com"
-                autoComplete="email"
+                autoComplete="username"
                 required
                 disabled={isSubmitting}
                 value={email}
@@ -408,6 +409,19 @@ export function SignInForm({
         </button>
 
         <form onSubmit={handleSignIn} className="grid gap-3">
+          {/* Keeps the email in the password form's DOM so password managers can
+              save / prefill the email+password pair. Visually hidden (not
+              type="hidden") because many managers skip type="hidden" inputs. */}
+          <input
+            type="text"
+            name="username"
+            autoComplete="username"
+            value={email}
+            readOnly
+            tabIndex={-1}
+            aria-hidden="true"
+            className="sr-only"
+          />
           <ErrorDisplay error={error} />
 
           <div className="grid gap-1.5">
@@ -426,6 +440,7 @@ export function SignInForm({
             </div>
             <PasswordInput
               id="signin-password"
+              name="password"
               placeholder="Enter your password"
               autoComplete="current-password"
               required

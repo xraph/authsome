@@ -611,8 +611,8 @@ func (a *API) handleGrantPlatformOwner(ctx forge.Context, req *AdminGrantPlatfor
 		}
 		targetUserID = parsed
 	} else {
-		// Look up by email within the platform app.
-		u, lookupErr := a.engine.Store().GetUserByEmail(ctx.Context(), appID, strings.ToLower(strings.TrimSpace(req.Email)))
+		// Look up by any of the user's emails within the platform app.
+		u, lookupErr := a.engine.Store().GetUserByAnyEmail(ctx.Context(), appID, id.Nil, strings.ToLower(strings.TrimSpace(req.Email)))
 		if lookupErr != nil {
 			return nil, mapError(lookupErr)
 		}
