@@ -153,18 +153,19 @@ func (s *Store) MarkUserEmailVerified(_ context.Context, userID id.UserID, email
 
 	norm := user.NormalizeEmail(email)
 	for _, e := range s.userEmails {
-		if liveEmail(e) && e.UserID.String() == userID.String() && e.Email == norm {
-			now := time.Now()
-			e.Verified = true
-			e.UpdatedAt = now
-			if e.IsPrimary {
-				if u, ok := s.users[userID.String()]; ok {
-					u.EmailVerified = true
-					u.UpdatedAt = now
-				}
-			}
-			return nil
+		if !liveEmail(e) || e.UserID.String() != userID.String() || e.Email != norm {
+			continue
 		}
+		now := time.Now()
+		e.Verified = true
+		e.UpdatedAt = now
+		if e.IsPrimary {
+			if u, ok := s.users[userID.String()]; ok {
+				u.EmailVerified = true
+				u.UpdatedAt = now
+			}
+		}
+		return nil
 	}
 	return store.ErrNotFound
 }
@@ -218,15 +219,16 @@ func (s *Store) DeleteUserEmail(_ context.Context, userID id.UserID, email strin
 
 	norm := user.NormalizeEmail(email)
 	for _, e := range s.userEmails {
-		if liveEmail(e) && e.UserID.String() == userID.String() && e.Email == norm {
-			if e.IsPrimary {
-				return store.ErrConflict
-			}
-			now := time.Now()
-			e.DeletedAt = &now
-			e.UpdatedAt = now
-			return nil
+		if !liveEmail(e) || e.UserID.String() != userID.String() || e.Email != norm {
+			continue
 		}
+		if e.IsPrimary {
+			return store.ErrConflict
+		}
+		now := time.Now()
+		e.DeletedAt = &now
+		e.UpdatedAt = now
+		return nil
 	}
 	return store.ErrNotFound
 }
