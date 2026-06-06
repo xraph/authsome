@@ -127,28 +127,49 @@ func (a *API) handleChangePassword(ctx forge.Context, req *ChangePasswordRequest
 }
 
 func (a *API) handleVerifyEmail(ctx forge.Context, req *VerifyEmailRequest) (*StatusResponse, error) {
-	// Code mode (OTP): verify the authenticated session user's email. The user
-	// is authenticated via the session minted at signup.
-	if req.Code != "" {
-		userID, ok := middleware.UserIDFrom(ctx.Context())
-		if !ok {
-			return nil, forge.Unauthorized("authentication required to verify with a code")
-		}
-		if err := a.engine.VerifyEmailCode(ctx.Context(), userID, req.Code); err != nil {
-			return nil, mapError(err)
-		}
-		return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "email verified"})
+	// The OTP form submits {token: <6-digit code>} (the @authsome/ui-components
+	// EmailVerificationForm). req.Code is also accepted for forward-compat.
+	candidate := req.Code
+	if candidate == "" {
+		candidate = req.Token
+	}
+	if candidate == "" {
+		return nil, forge.BadRequest("code or token is required")
 	}
 
-	// Token mode (link-based flows, e.g. magic link).
-	if req.Token != "" {
-		if err := a.engine.VerifyEmail(ctx.Context(), req.Token); err != nil {
-			return nil, mapError(err)
+	// OTP path: a 6-digit numeric value from an authenticated session user (the
+	// account created at signup) is verified via the secure per-user code path
+	// (per-user lookup + attempt limiting + constant-time compare). We do NOT
+	// fall through to the global token lookup on failure — that could match a
+	// different user's identical code.
+	if isOTPCode(candidate) {
+		if userID, ok := middleware.UserIDFrom(ctx.Context()); ok {
+			if err := a.engine.VerifyEmailCode(ctx.Context(), userID, candidate); err != nil {
+				return nil, mapError(err)
+			}
+			return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "email verified"})
 		}
-		return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "email verified"})
 	}
 
-	return nil, forge.BadRequest("code or token is required")
+	// Token path: long verification tokens (link flows, e.g. magic link), and
+	// the unauthenticated OTP fallback (global lookup by token).
+	if err := a.engine.VerifyEmail(ctx.Context(), candidate); err != nil {
+		return nil, mapError(err)
+	}
+	return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "email verified"})
+}
+
+// isOTPCode reports whether s is a 6-digit numeric OTP code.
+func isOTPCode(s string) bool {
+	if len(s) != 6 {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func (a *API) handleResendVerification(ctx forge.Context, req *ResendVerificationRequest) (*StatusResponse, error) {
