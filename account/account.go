@@ -8,6 +8,11 @@ import (
 )
 
 // Verification represents an email or phone verification token.
+//
+// Token holds either a long random token (link-based flows like magic link) or
+// a short 6-digit OTP code (email verification). For OTP flows, Attempts tracks
+// failed entry attempts so callers can enforce a maximum before requiring a
+// resend.
 type Verification struct {
 	ID        id.VerificationID `json:"id"`
 	AppID     id.AppID          `json:"app_id"`
@@ -15,6 +20,7 @@ type Verification struct {
 	UserID    id.UserID         `json:"user_id"`
 	Token     string            `json:"-"`
 	Type      VerificationType  `json:"type"`
+	Attempts  int               `json:"attempts"`
 	ExpiresAt time.Time         `json:"expires_at"`
 	Consumed  bool              `json:"consumed"`
 	CreatedAt time.Time         `json:"created_at"`

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 	"time"
 	"unicode"
@@ -254,6 +255,37 @@ func generateSecureToken(bytes int) (string, error) { //nolint:unparam // keep b
 // GenerateVerificationToken generates a new verification token string.
 func GenerateVerificationToken() (string, error) {
 	return generateSecureToken(32)
+}
+
+// GenerateOTPCode returns a cryptographically random 6-digit numeric code,
+// zero-padded (e.g. "004271"). Used for email/phone OTP verification where the
+// user types a short code instead of clicking a long token link.
+func GenerateOTPCode() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%06d", n.Int64()), nil
+}
+
+// NewEmailVerificationCode creates an email-verification record carrying a
+// 6-digit OTP code (stored in Token) that the user types to verify. Attempts
+// starts at 0.
+func NewEmailVerificationCode(appID id.AppID, userID id.UserID, ttl time.Duration) (*Verification, error) {
+	code, err := GenerateOTPCode()
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	return &Verification{
+		ID:        id.NewVerificationID(),
+		AppID:     appID,
+		UserID:    userID,
+		Token:     code,
+		Type:      VerificationEmail,
+		ExpiresAt: now.Add(ttl),
+		CreatedAt: now,
+	}, nil
 }
 
 // NewVerification creates a new email/phone verification record.
