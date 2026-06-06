@@ -1248,6 +1248,11 @@ func (e *Engine) issueEmailVerificationForUser(ctx context.Context, u *user.User
 	if err != nil {
 		return "", fmt.Errorf("authsome: new email verification: %w", err)
 	}
+	// env_id is a non-null FK on authsome_verifications — populate it from the
+	// app's default environment, else the insert is rejected.
+	if env, envErr := e.GetDefaultEnvironment(ctx, u.AppID); envErr == nil && env != nil {
+		v.EnvID = env.ID
+	}
 	if createErr := e.store.CreateVerification(ctx, v); createErr != nil {
 		return "", fmt.Errorf("authsome: create verification: %w", createErr)
 	}
