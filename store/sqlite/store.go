@@ -421,6 +421,31 @@ func (s *Store) ConsumeVerification(ctx context.Context, token string) error {
 	return sqliteError(err)
 }
 
+func (s *Store) GetActiveEmailVerification(ctx context.Context, userID id.UserID) (*account.Verification, error) {
+	m := new(VerificationModel)
+	err := s.sdb.NewSelect(m).
+		Where("user_id = ?", userID.String()).
+		Where("type = ?", string(account.VerificationEmail)).
+		Where("consumed = FALSE").
+		Where("expires_at > ?", time.Now()).
+		OrderExpr("created_at DESC").
+		Limit(1).
+		Scan(ctx)
+	if err != nil {
+		return nil, sqliteError(err)
+	}
+	return toVerification(m)
+}
+
+func (s *Store) UpdateVerification(ctx context.Context, v *account.Verification) error {
+	_, err := s.sdb.NewUpdate((*VerificationModel)(nil)).
+		Set("attempts = ?", v.Attempts).
+		Set("consumed = ?", v.Consumed).
+		Where("id = ?", v.ID.String()).
+		Exec(ctx)
+	return sqliteError(err)
+}
+
 func (s *Store) CreatePasswordReset(ctx context.Context, pr *account.PasswordReset) error {
 	m := fromPasswordReset(pr)
 	_, err := s.sdb.NewInsert(m).Exec(ctx)

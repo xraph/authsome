@@ -1035,5 +1035,34 @@ CREATE INDEX IF NOT EXISTS idx_authsome_user_emails_user
 				return err
 			},
 		},
+
+		// Migration: email-verification OTP support.
+		// Adds an attempts counter and replaces the UNIQUE token index with a
+		// non-unique one (6-digit OTP codes are not globally unique across
+		// users), plus a per-user lookup index for the active-code query.
+		&migrate.Migration{
+			Name:    "verification_otp_support",
+			Version: "20260605000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_verifications
+    ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
+
+DROP INDEX IF EXISTS idx_authsome_verifications_token;
+CREATE INDEX IF NOT EXISTS idx_authsome_verifications_token
+    ON authsome_verifications (token);
+CREATE INDEX IF NOT EXISTS idx_authsome_verifications_active
+    ON authsome_verifications (user_id, type, consumed, expires_at);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_verifications_active;
+ALTER TABLE authsome_verifications DROP COLUMN IF EXISTS attempts;
+`)
+				return err
+			},
+		},
 	)
 }

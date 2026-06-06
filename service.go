@@ -11,6 +11,7 @@ import (
 
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 
 	"github.com/xraph/forge"
@@ -151,6 +152,14 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 
 	// Plugin: after user create
 	e.plugins.EmitAfterUserCreate(ctx, u)
+
+	// Issue an email-verification OTP for the new (unverified) user. Best-effort:
+	// a failure to mint/deliver the code must not block signup.
+	if !u.EmailVerified {
+		if issueErr := e.issueEmailVerificationForUser(ctx, u); issueErr != nil {
+			e.logger.Warn("authsome: issue email verification failed", log.String("error", issueErr.Error()))
+		}
+	}
 
 	// Assign default Warden role to the new user.
 	e.EnsureDefaultRole(ctx, req.AppID, u.ID)
@@ -1214,6 +1223,114 @@ func (e *Engine) VerifyEmail(ctx context.Context, token string) error {
 	})
 
 	e.relayEvent(ctx, "user.email_verified", v.AppID.String(), map[string]string{
+		"user_id": u.ID.String(),
+	})
+
+	return nil
+}
+
+// emailVerificationTTL is how long an email OTP code stays valid.
+const emailVerificationTTL = 15 * time.Minute
+
+// maxEmailVerificationAttempts caps wrong-code entries before a fresh code must
+// be requested (mitigates brute-forcing the 6-digit code).
+const maxEmailVerificationAttempts = 5
+
+// IssueEmailVerification mints a fresh 6-digit OTP for the user's email and
+// fires ActionEmailVerificationRequested carrying the code so the notification
+// layer can deliver it. Safe to call repeatedly (e.g. resend).
+func (e *Engine) IssueEmailVerification(ctx context.Context, userID id.UserID) error {
+	if err := e.requireStarted(); err != nil {
+		return err
+	}
+	u, err := e.store.GetUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("authsome: get user: %w", err)
+	}
+	return e.issueEmailVerificationForUser(ctx, u)
+}
+
+// issueEmailVerificationForUser is the internal path used by both
+// IssueEmailVerification and SignUp (which already has the user loaded).
+func (e *Engine) issueEmailVerificationForUser(ctx context.Context, u *user.User) error {
+	v, err := account.NewEmailVerificationCode(u.AppID, u.ID, emailVerificationTTL)
+	if err != nil {
+		return fmt.Errorf("authsome: new email verification: %w", err)
+	}
+	if createErr := e.store.CreateVerification(ctx, v); createErr != nil {
+		return fmt.Errorf("authsome: create verification: %w", createErr)
+	}
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionEmailVerificationRequested,
+		Resource:   hook.ResourceUser,
+		ResourceID: u.ID.String(),
+		ActorID:    u.ID.String(),
+		Tenant:     u.AppID.String(),
+		Metadata: map[string]string{
+			"email":     u.Email,
+			"user_name": u.Name(),
+			"code":      v.Token,
+		},
+	})
+	return nil
+}
+
+// VerifyEmailCode verifies a user's email using the 6-digit OTP code they were
+// emailed. It enforces expiry and a maximum number of attempts, and uses a
+// constant-time comparison to avoid leaking the code via timing.
+func (e *Engine) VerifyEmailCode(ctx context.Context, userID id.UserID, code string) error {
+	if err := e.requireStarted(); err != nil {
+		return err
+	}
+
+	v, err := e.store.GetActiveEmailVerification(ctx, userID)
+	if err != nil {
+		return account.ErrInvalidCredentials
+	}
+	if v.Consumed || time.Now().After(v.ExpiresAt) {
+		return account.ErrInvalidCredentials
+	}
+	if v.Attempts >= maxEmailVerificationAttempts {
+		return account.ErrTooManyAttempts
+	}
+
+	if subtle.ConstantTimeCompare([]byte(v.Token), []byte(code)) != 1 {
+		v.Attempts++
+		_ = e.store.UpdateVerification(ctx, v) //nolint:errcheck // best-effort attempt tracking
+		return account.ErrInvalidCredentials
+	}
+
+	v.Consumed = true
+	if updateErr := e.store.UpdateVerification(ctx, v); updateErr != nil {
+		return fmt.Errorf("authsome: consume verification: %w", updateErr)
+	}
+
+	u, err := e.store.GetUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("authsome: get user: %w", err)
+	}
+	u.EmailVerified = true
+	u.UpdatedAt = time.Now()
+	if updateErr := e.store.UpdateUser(ctx, u); updateErr != nil {
+		return fmt.Errorf("authsome: update user: %w", updateErr)
+	}
+
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "verify_email", "user", u.ID.String(), u.ID.String(), u.AppID.String(), "auth", nil)
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionEmailVerify,
+		Resource:   hook.ResourceUser,
+		ResourceID: u.ID.String(),
+		ActorID:    u.ID.String(),
+		Tenant:     u.AppID.String(),
+		Metadata: map[string]string{
+			"email":     u.Email,
+			"user_name": u.Name(),
+		},
+	})
+
+	e.relayEvent(ctx, "user.email_verified", u.AppID.String(), map[string]string{
 		"user_id": u.ID.String(),
 	})
 

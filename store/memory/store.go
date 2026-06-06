@@ -579,6 +579,38 @@ func (s *Store) ConsumeVerification(_ context.Context, token string) error {
 	return nil
 }
 
+func (s *Store) GetActiveEmailVerification(_ context.Context, userID id.UserID) (*account.Verification, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	now := time.Now()
+	var latest *account.Verification
+	for _, v := range s.verifications {
+		if v.UserID != userID || v.Type != account.VerificationEmail {
+			continue
+		}
+		if v.Consumed || now.After(v.ExpiresAt) {
+			continue
+		}
+		if latest == nil || v.CreatedAt.After(latest.CreatedAt) {
+			latest = v
+		}
+	}
+	if latest == nil {
+		return nil, store.ErrNotFound
+	}
+	return latest, nil
+}
+
+func (s *Store) UpdateVerification(_ context.Context, v *account.Verification) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.verifications[v.Token]; !ok {
+		return store.ErrNotFound
+	}
+	s.verifications[v.Token] = v
+	return nil
+}
+
 func (s *Store) CreatePasswordReset(_ context.Context, pr *account.PasswordReset) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

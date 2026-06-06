@@ -3,10 +3,12 @@ package mongo
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/store"
 )
 
@@ -58,6 +60,43 @@ func (s *Store) ConsumeVerification(ctx context.Context, token string) error {
 		return store.ErrNotFound
 	}
 
+	return nil
+}
+
+// GetActiveEmailVerification returns the most recent unconsumed, unexpired
+// email verification for a user (OTP lookup by user, not token).
+func (s *Store) GetActiveEmailVerification(ctx context.Context, userID id.UserID) (*account.Verification, error) {
+	var m verificationModel
+
+	err := s.mdb.NewFind(&m).
+		Filter(bson.M{
+			"user_id":    userID.String(),
+			"type":       string(account.VerificationEmail),
+			"consumed":   false,
+			"expires_at": bson.M{"$gt": time.Now()},
+		}).
+		Sort(bson.D{{Key: "created_at", Value: -1}}).
+		Scan(ctx)
+	if err != nil {
+		if isNoDocuments(err) {
+			return nil, store.ErrNotFound
+		}
+		return nil, fmt.Errorf("authsome/mongo: get active email verification: %w", err)
+	}
+
+	return fromVerificationModel(&m)
+}
+
+// UpdateVerification persists mutable fields (attempts, consumed).
+func (s *Store) UpdateVerification(ctx context.Context, v *account.Verification) error {
+	_, err := s.mdb.NewUpdate((*verificationModel)(nil)).
+		Filter(bson.M{"_id": v.ID.String()}).
+		Set("attempts", v.Attempts).
+		Set("consumed", v.Consumed).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("authsome/mongo: update verification: %w", err)
+	}
 	return nil
 }
 

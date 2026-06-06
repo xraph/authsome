@@ -30,6 +30,7 @@ var (
 	ErrPasswordExpired    = errors.New("account: password has expired and must be changed")
 	ErrPasswordReused     = errors.New("account: password was recently used and cannot be reused")
 	ErrEmailNotVerified   = errors.New("account: email address must be verified before signing in")
+	ErrTooManyAttempts    = errors.New("account: too many verification attempts; request a new code")
 	ErrMFARequired        = errors.New("account: MFA challenge required to complete sign-in")
 )
 

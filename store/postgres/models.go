@@ -319,6 +319,7 @@ type VerificationModel struct {
 	UserID    string    `grove:"user_id,notnull"`
 	Token     string    `grove:"token,notnull"`
 	Type      string    `grove:"type,notnull"`
+	Attempts  int       `grove:"attempts,notnull,default:0"`
 	ExpiresAt time.Time `grove:"expires_at,notnull"`
 	Consumed  bool      `grove:"consumed"`
 	CreatedAt time.Time `grove:"created_at,notnull,default:now()"`
@@ -348,6 +349,7 @@ func toVerification(m *VerificationModel) (*account.Verification, error) {
 		UserID:    userID,
 		Token:     m.Token,
 		Type:      account.VerificationType(m.Type),
+		Attempts:  m.Attempts,
 		ExpiresAt: m.ExpiresAt,
 		Consumed:  m.Consumed,
 		CreatedAt: m.CreatedAt,
@@ -362,6 +364,7 @@ func fromVerification(v *account.Verification) *VerificationModel {
 		UserID:    v.UserID.String(),
 		Token:     v.Token,
 		Type:      string(v.Type),
+		Attempts:  v.Attempts,
 		ExpiresAt: v.ExpiresAt,
 		Consumed:  v.Consumed,
 		CreatedAt: v.CreatedAt,
