@@ -1200,7 +1200,7 @@ func TestResendVerification_CreatesTokenForExistingUnverifiedUser(t *testing.T) 
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	require.NotNil(t, captured, "auth.email_verification_requested hook must fire for a real unverified user")
-	require.NotEmpty(t, captured["verification_token"], "hook payload must carry the token so a delivery handler can render the link")
+	require.Len(t, captured["code"], 6, "hook payload must carry the 6-digit OTP code for the delivery handler to render")
 	require.NotEmpty(t, captured["expires_at"])
 	require.Equal(t, "resend-target@example.com", captured["email"])
 }

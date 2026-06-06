@@ -156,7 +156,7 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 	// Issue an email-verification OTP for the new (unverified) user. Best-effort:
 	// a failure to mint/deliver the code must not block signup.
 	if !u.EmailVerified {
-		if issueErr := e.issueEmailVerificationForUser(ctx, u); issueErr != nil {
+		if _, issueErr := e.issueEmailVerificationForUser(ctx, u); issueErr != nil {
 			e.logger.Warn("authsome: issue email verification failed", log.String("error", issueErr.Error()))
 		}
 	}
@@ -1117,29 +1117,17 @@ func (e *Engine) SendEmailVerification(ctx context.Context, u *user.User) (strin
 	if u == nil {
 		return "", fmt.Errorf("authsome: send email verification: nil user")
 	}
-	v, err := account.NewVerification(ctx, u.AppID, u.ID, account.VerificationEmail, EmailVerificationTTL)
+
+	// Delegate to the canonical OTP issue path so signup and resend deliver the
+	// same 6-digit code (the notification layer renders {{code}}).
+	code, err := e.issueEmailVerificationForUser(ctx, u)
 	if err != nil {
-		return "", fmt.Errorf("authsome: build verification: %w", err)
-	}
-	if storeErr := e.store.CreateVerification(ctx, v); storeErr != nil {
-		return "", fmt.Errorf("authsome: persist verification: %w", storeErr)
+		return "", err
 	}
 
-	e.hooks.Emit(ctx, &hook.Event{
-		Action:     hook.ActionEmailVerificationRequested,
-		Resource:   hook.ResourceUser,
-		ResourceID: u.ID.String(),
-		ActorID:    u.ID.String(),
-		Tenant:     u.AppID.String(),
-		Metadata: map[string]string{
-			"email":              u.Email,
-			"verification_token": v.Token,
-			"expires_at":         v.ExpiresAt.UTC().Format(time.RFC3339),
-		},
-	})
 	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "email_verification_requested",
 		"user", u.ID.String(), u.ID.String(), u.AppID.String(), "auth", nil)
-	return v.Token, nil
+	return code, nil
 }
 
 // ResendEmailVerification is the public, enumeration-safe entry
@@ -1247,18 +1235,21 @@ func (e *Engine) IssueEmailVerification(ctx context.Context, userID id.UserID) e
 	if err != nil {
 		return fmt.Errorf("authsome: get user: %w", err)
 	}
-	return e.issueEmailVerificationForUser(ctx, u)
+	_, err = e.issueEmailVerificationForUser(ctx, u)
+	return err
 }
 
-// issueEmailVerificationForUser is the internal path used by both
-// IssueEmailVerification and SignUp (which already has the user loaded).
-func (e *Engine) issueEmailVerificationForUser(ctx context.Context, u *user.User) error {
+// issueEmailVerificationForUser mints a 6-digit OTP, persists it, and fires
+// ActionEmailVerificationRequested carrying the code. It is the single canonical
+// issue path shared by SignUp, SendEmailVerification, and resend. Returns the
+// generated code.
+func (e *Engine) issueEmailVerificationForUser(ctx context.Context, u *user.User) (string, error) {
 	v, err := account.NewEmailVerificationCode(u.AppID, u.ID, emailVerificationTTL)
 	if err != nil {
-		return fmt.Errorf("authsome: new email verification: %w", err)
+		return "", fmt.Errorf("authsome: new email verification: %w", err)
 	}
 	if createErr := e.store.CreateVerification(ctx, v); createErr != nil {
-		return fmt.Errorf("authsome: create verification: %w", createErr)
+		return "", fmt.Errorf("authsome: create verification: %w", createErr)
 	}
 
 	e.hooks.Emit(ctx, &hook.Event{
@@ -1268,12 +1259,13 @@ func (e *Engine) issueEmailVerificationForUser(ctx context.Context, u *user.User
 		ActorID:    u.ID.String(),
 		Tenant:     u.AppID.String(),
 		Metadata: map[string]string{
-			"email":     u.Email,
-			"user_name": u.Name(),
-			"code":      v.Token,
+			"email":      u.Email,
+			"user_name":  u.Name(),
+			"code":       v.Token,
+			"expires_at": v.ExpiresAt.UTC().Format(time.RFC3339),
 		},
 	})
-	return nil
+	return v.Token, nil
 }
 
 // VerifyEmailCode verifies a user's email using the 6-digit OTP code they were

@@ -58,8 +58,14 @@ type ChangePasswordRequest struct {
 }
 
 // VerifyEmailRequest binds the body for POST /verify-email.
+//
+// Two modes are supported:
+//   - Code: the 6-digit OTP emailed to the user. Verifies the email of the
+//     authenticated session user (the account just created at signup).
+//   - Token: a long verification token (link-based flows, e.g. magic link).
 type VerifyEmailRequest struct {
-	Token string `json:"token" description:"Email verification token"`
+	Code  string `json:"code,omitempty" description:"6-digit OTP code (verifies the authenticated user's email)"`
+	Token string `json:"token,omitempty" description:"Email verification token (link-based flows)"`
 }
 
 // ResendVerificationRequest binds the body for POST /verify-email/resend.

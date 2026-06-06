@@ -74,6 +74,9 @@ func mapError(err error) error {
 	if errors.Is(err, account.ErrInvalidCredentials) {
 		return forge.Unauthorized("invalid credentials")
 	}
+	if errors.Is(err, account.ErrTooManyAttempts) {
+		return forge.NewHTTPError(http.StatusTooManyRequests, "too many verification attempts; request a new code")
+	}
 	if errors.Is(err, account.ErrEmailTaken) {
 		return forge.NewHTTPError(http.StatusConflict, "email already taken")
 	}

@@ -237,46 +237,13 @@ func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, _ *session.Ses
 	return nil
 }
 
-// OnAfterUserCreate sends a verification notification to the newly created user.
-func (p *Plugin) OnAfterUserCreate(ctx context.Context, u *user.User) error {
-	if p.herald == nil {
-		return nil
-	}
-
-	// Only send if user has not yet verified their email.
-	if u.EmailVerified {
-		return nil
-	}
-
-	m, ok := p.mappings[hook.ActionUserCreate]
-	if !ok || !m.Enabled {
-		return nil
-	}
-
-	name := u.Name()
-	if name == "" {
-		name = u.Email
-	}
-
-	if err := p.herald.Notify(ctx, &bridge.HeraldNotifyRequest{
-		Template: m.Template,
-		Channels: m.Channels,
-		To:       []string{u.Email},
-		UserID:   u.ID.String(),
-		Locale:   p.config.DefaultLocale,
-		Async:    p.config.Async,
-		Data: map[string]any{
-			"user_name":  name,
-			"app_name":   p.config.AppName,
-			"verify_url": p.config.BaseURL + "/verify-email",
-		},
-	}); err != nil {
-		p.logger.Warn("notification plugin: failed to send verification notification",
-			log.String("email", u.Email),
-			log.String("error", err.Error()),
-		)
-	}
-
+// OnAfterUserCreate is intentionally a no-op for email verification.
+//
+// The engine now owns verification issuance: SignUp (and ResendEmailVerification)
+// mint a 6-digit OTP and fire ActionEmailVerificationRequested carrying the code,
+// which handleHookEvent delivers. Sending here as well would double-email the
+// user (and the old payload had no token/code, so the link was unusable).
+func (p *Plugin) OnAfterUserCreate(_ context.Context, _ *user.User) error {
 	return nil
 }
 

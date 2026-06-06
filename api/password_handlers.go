@@ -127,16 +127,28 @@ func (a *API) handleChangePassword(ctx forge.Context, req *ChangePasswordRequest
 }
 
 func (a *API) handleVerifyEmail(ctx forge.Context, req *VerifyEmailRequest) (*StatusResponse, error) {
-	if req.Token == "" {
-		return nil, forge.BadRequest("token is required")
+	// Code mode (OTP): verify the authenticated session user's email. The user
+	// is authenticated via the session minted at signup.
+	if req.Code != "" {
+		userID, ok := middleware.UserIDFrom(ctx.Context())
+		if !ok {
+			return nil, forge.Unauthorized("authentication required to verify with a code")
+		}
+		if err := a.engine.VerifyEmailCode(ctx.Context(), userID, req.Code); err != nil {
+			return nil, mapError(err)
+		}
+		return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "email verified"})
 	}
 
-	if err := a.engine.VerifyEmail(ctx.Context(), req.Token); err != nil {
-		return nil, mapError(err)
+	// Token mode (link-based flows, e.g. magic link).
+	if req.Token != "" {
+		if err := a.engine.VerifyEmail(ctx.Context(), req.Token); err != nil {
+			return nil, mapError(err)
+		}
+		return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "email verified"})
 	}
 
-	resp := &StatusResponse{Status: "email verified"}
-	return nil, ctx.JSON(http.StatusOK, resp)
+	return nil, forge.BadRequest("code or token is required")
 }
 
 func (a *API) handleResendVerification(ctx forge.Context, req *ResendVerificationRequest) (*StatusResponse, error) {
