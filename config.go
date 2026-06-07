@@ -145,6 +145,15 @@ type RateLimitConfig struct {
 	// MFAChallengeLimit is the max MFA challenge attempts per window (default: 5).
 	MFAChallengeLimit int `json:"mfa_challenge_limit"`
 
+	// VerifyEmailLimit is the max email-verification (code/token submit)
+	// attempts per window (default: 10). Defense-in-depth on top of the
+	// per-user OTP attempt cap.
+	VerifyEmailLimit int `json:"verify_email_limit"`
+
+	// ResendVerificationLimit is the max resend-verification requests per
+	// window (default: 3). Caps how fast fresh codes can be minted.
+	ResendVerificationLimit int `json:"resend_verification_limit"`
+
 	// WindowSeconds is the sliding window duration in seconds (default: 60).
 	WindowSeconds int `json:"window_seconds"`
 
@@ -207,13 +216,15 @@ func DefaultConfig() Config {
 			BcryptCost:       12,
 		},
 		RateLimit: RateLimitConfig{
-			SignInLimit:         5,
-			SignUpLimit:         3,
-			RefreshLimit:        10,
-			IntrospectLimit:     20,
-			ForgotPasswordLimit: 3,
-			MFAChallengeLimit:   5,
-			WindowSeconds:       60,
+			SignInLimit:             5,
+			SignUpLimit:             3,
+			RefreshLimit:            10,
+			IntrospectLimit:         20,
+			ForgotPasswordLimit:     3,
+			MFAChallengeLimit:       5,
+			VerifyEmailLimit:        10,
+			ResendVerificationLimit: 3,
+			WindowSeconds:           60,
 		},
 		Lockout: LockoutConfig{
 			MaxAttempts:            5,

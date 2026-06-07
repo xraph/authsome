@@ -14,6 +14,21 @@ type Config struct {
 	// (e.g. "https://example.com").
 	BaseURL string
 
+	// EmailVerifyPath is the path (relative to BaseURL) of the page where a
+	// user enters their email-verification code. It is used to synthesize the
+	// verify_url template variable for the email-verification notification
+	// (the default Herald template requires verify_url even though the OTP
+	// flow delivers a code rather than a link). Defaults to "/verify-email".
+	// The recipient's email is appended as an ?email= query parameter.
+	EmailVerifyPath string
+
+	// PasswordResetPath is the path (relative to BaseURL) of the reset-password
+	// page. It is used to synthesize the reset_url template variable for the
+	// password-reset notification (the default Herald template requires
+	// reset_url). Defaults to "/reset-password". The reset token is appended as
+	// a ?token= query parameter.
+	PasswordResetPath string
+
 	// DefaultLocale is the default locale for notifications (e.g. "en").
 	// If empty, defaults to "en".
 	DefaultLocale string

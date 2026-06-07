@@ -66,6 +66,13 @@ type ChangePasswordRequest struct {
 type VerifyEmailRequest struct {
 	Code  string `json:"code,omitempty" description:"6-digit OTP code (verifies the authenticated user's email)"`
 	Token string `json:"token,omitempty" description:"Email verification token (link-based flows)"`
+	// Email scopes an OTP code to a specific user when the request is not
+	// authenticated (e.g. cross-origin signup where the session cookie is not
+	// carried). The code is still verified against that user's active
+	// verification with per-user attempt limiting, so it is not brute-forceable.
+	// Enables auto-login: on success a fresh session is issued and returned.
+	Email string `json:"email,omitempty" description:"Email to scope the OTP code to when unauthenticated (enables auto-login)"`
+	AppID string `json:"app_id,omitempty" description:"App ID (optional; resolved from publishable key when omitted)"`
 }
 
 // ResendVerificationRequest binds the body for POST /verify-email/resend.

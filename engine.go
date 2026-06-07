@@ -564,6 +564,12 @@ func (e *Engine) GetUser(ctx context.Context, userID id.UserID) (*user.User, err
 	return e.store.GetUser(ctx, userID)
 }
 
+// GetUserByEmail looks up a user by any of their email addresses (primary or
+// secondary) within an app. Returns store.ErrNotFound when no match exists.
+func (e *Engine) GetUserByEmail(ctx context.Context, appID id.AppID, email string) (*user.User, error) {
+	return e.store.GetUserByAnyEmail(ctx, appID, id.Nil, email)
+}
+
 // Plugins returns the plugin registry.
 func (e *Engine) Plugins() *plugin.Registry { return e.plugins }
 

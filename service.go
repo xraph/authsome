@@ -921,6 +921,30 @@ func (e *Engine) recordFailedSignin(ctx context.Context, req *account.SignInRequ
 // ForgotPassword creates a password reset token for the given email.
 // Returns the reset record (token can be sent via email by the caller).
 // Returns nil, nil if user not found (avoids email enumeration).
+// humanizeDuration renders a duration as a short human-readable string for use
+// in notification templates (e.g. "1 hour", "30 minutes"). Falls back to the
+// stdlib string form for irregular durations.
+func humanizeDuration(d time.Duration) string {
+	switch {
+	case d <= 0:
+		return ""
+	case d%time.Hour == 0:
+		if h := int(d / time.Hour); h == 1 {
+			return "1 hour"
+		} else {
+			return fmt.Sprintf("%d hours", h)
+		}
+	case d%time.Minute == 0:
+		if m := int(d / time.Minute); m == 1 {
+			return "1 minute"
+		} else {
+			return fmt.Sprintf("%d minutes", m)
+		}
+	default:
+		return d.String()
+	}
+}
+
 func (e *Engine) ForgotPassword(ctx context.Context, appID id.AppID, email string) (*account.PasswordReset, error) {
 	if err := e.requireStarted(); err != nil {
 		return nil, err
@@ -939,9 +963,49 @@ func (e *Engine) ForgotPassword(ctx context.Context, appID id.AppID, email strin
 		return nil, fmt.Errorf("authsome: create password reset: %w", err)
 	}
 
+	// env_id is a non-null FK on authsome_password_resets — populate it from the
+	// app's default environment, else the insert is rejected (NewPasswordReset
+	// does not set it).
+	if env, envErr := e.GetDefaultEnvironment(ctx, appID); envErr == nil && env != nil {
+		pr.EnvID = env.ID
+	} else {
+		e.logger.Warn("authsome: no default environment resolved for password reset env_id", log.String("app_id", appID.String()))
+	}
+
 	if storeErr := e.store.CreatePasswordReset(ctx, pr); storeErr != nil {
+		e.logger.Warn("authsome: store password reset failed", log.String("error", storeErr.Error()))
 		return nil, fmt.Errorf("authsome: store password reset: %w", storeErr)
 	}
+
+	// u.Email may be empty when the user is loaded via the multi-email lookup
+	// (the address lives in the user_emails table). Fall back to the looked-up
+	// address so the notification always has a recipient.
+	notifyEmail := u.Email
+	if notifyEmail == "" {
+		notifyEmail = email
+	}
+
+	// Emit the password-reset hook so a delivery handler (the herald
+	// notification plugin or a custom mailer) can send the reset link. The
+	// token is high-entropy (32 bytes), so carrying it in the link is safe.
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionPasswordReset,
+		Resource:   hook.ResourceUser,
+		ResourceID: u.ID.String(),
+		ActorID:    u.ID.String(),
+		Tenant:     appID.String(),
+		Metadata: map[string]string{
+			"email":     notifyEmail,
+			"user_name": u.Name(),
+			"token":     pr.Token,
+			// expires_at is the absolute timestamp; expires_in is the
+			// human-readable duration the reset template renders ("This link
+			// expires in {{.expires_in}}"). Herald does not apply template
+			// variable defaults at render time, so we must supply it.
+			"expires_at": pr.ExpiresAt.UTC().Format(time.RFC3339),
+			"expires_in": humanizeDuration(ttl),
+		},
+	})
 
 	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "forgot_password", "user", u.ID.String(), u.ID.String(), appID.String(), "auth", nil)
 	e.relayEvent(ctx, "auth.forgot_password", appID.String(), map[string]string{
@@ -1252,6 +1316,8 @@ func (e *Engine) issueEmailVerificationForUser(ctx context.Context, u *user.User
 	// app's default environment, else the insert is rejected.
 	if env, envErr := e.GetDefaultEnvironment(ctx, u.AppID); envErr == nil && env != nil {
 		v.EnvID = env.ID
+	} else {
+		e.logger.Warn("authsome: no default environment resolved for verification env_id", log.String("app_id", u.AppID.String()))
 	}
 	if createErr := e.store.CreateVerification(ctx, v); createErr != nil {
 		return "", fmt.Errorf("authsome: create verification: %w", createErr)

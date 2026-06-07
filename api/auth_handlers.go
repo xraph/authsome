@@ -481,6 +481,33 @@ func authResponse(u *user.User, sess *session.Session) map[string]any {
 	}
 }
 
+// issueSessionForUser mints a fresh session for an already-authenticated user
+// and returns the standard auth response shape (and sets the session cookie).
+// Used by the email-verification auto-login path: signup intentionally withholds
+// a client session until the email is verified, so on successful verification we
+// sign the user in here rather than forcing a separate login round-trip.
+// Returns an MFARequiredError when the per-app MFA gate fires; callers should
+// fall back to a non-session status response in that case.
+func (a *API) issueSessionForUser(ctx forge.Context, userID id.UserID, authMethod string) (map[string]any, error) {
+	u, err := a.engine.GetUser(ctx.Context(), userID)
+	if err != nil {
+		return nil, err
+	}
+	httpReq := ctx.Request()
+	res, err := a.engine.IssueSession(ctx.Context(), &authsome.IssueSessionRequest{
+		User:       u,
+		AppID:      u.AppID,
+		AuthMethod: authMethod,
+		IPAddress:  clientIPFromRequest(httpReq),
+		UserAgent:  httpReq.UserAgent(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	a.setSessionCookie(ctx, res.Session.Token, a.sessionTokenMaxAge())
+	return authResponse(res.User, res.Session), nil
+}
+
 // clientIPFromRequest extracts the client IP from the request, checking
 // X-Forwarded-For and X-Real-IP headers before falling back to RemoteAddr.
 func clientIPFromRequest(r *http.Request) string {

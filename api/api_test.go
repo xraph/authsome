@@ -1205,6 +1205,73 @@ func TestResendVerification_CreatesTokenForExistingUnverifiedUser(t *testing.T) 
 	require.Equal(t, "resend-target@example.com", captured["email"])
 }
 
+// TestForgotPassword_EmitsResetHookWithToken pins that POST /v1/forgot-password
+// for a real user mints a reset token AND emits the auth.password_reset hook
+// carrying that token + the user's email, so a wired-up notifier (the herald
+// notification plugin) can deliver the reset link.
+func TestForgotPassword_EmitsResetHookWithToken(t *testing.T) {
+	t.Parallel()
+	_, eng := newTestAPI(t)
+	router := newAPIWithRouter(t, eng)
+	ctx := context.Background()
+
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+
+	_, _, err = eng.SignUp(ctx, &account.SignUpRequest{
+		AppID:    appID,
+		Email:    "forgot-target@example.com",
+		Password: "SecureP@ss1",
+	})
+	require.NoError(t, err)
+
+	var captured map[string]string
+	eng.Hooks().On("test", func(_ context.Context, ev *hook.Event) error {
+		if ev.Action == hook.ActionPasswordReset {
+			captured = ev.Metadata
+		}
+		return nil
+	})
+
+	body := []byte(`{"email":"forgot-target@example.com"}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/forgot-password", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	require.NotNil(t, captured, "auth.password_reset hook must fire for a real user")
+	require.NotEmpty(t, captured["token"], "hook payload must carry the reset token for the delivery handler to build the link")
+	require.Equal(t, "forgot-target@example.com", captured["email"])
+	require.NotEmpty(t, captured["expires_at"])
+}
+
+// TestForgotPassword_NoHookForUnknownEmail pins anti-enumeration: an unknown
+// email still returns 200 but fires no hook (no reset token leaked, no signal
+// that the address is unregistered).
+func TestForgotPassword_NoHookForUnknownEmail(t *testing.T) {
+	t.Parallel()
+	_, eng := newTestAPI(t)
+	router := newAPIWithRouter(t, eng)
+
+	var fired bool
+	eng.Hooks().On("test", func(_ context.Context, ev *hook.Event) error {
+		if ev.Action == hook.ActionPasswordReset {
+			fired = true
+		}
+		return nil
+	})
+
+	body := []byte(`{"email":"nobody-here@example.com"}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/forgot-password", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "forgot-password must return 200 for unknown emails (anti-enumeration)")
+	require.False(t, fired, "no password_reset hook may fire for an unregistered email")
+}
+
 // TestResendVerification_NoHookForVerifiedUser pins the silent no-op
 // path: a user who's already verified gets no fresh token and no hook
 // fires (otherwise an attacker could distinguish verified vs not by
