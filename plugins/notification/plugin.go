@@ -2,6 +2,9 @@ package notification
 
 import (
 	"context"
+	"net/url"
+	"strings"
+	"time"
 
 	log "github.com/xraph/go-utils/log"
 
@@ -109,6 +112,12 @@ func New(cfg ...Config) *Plugin {
 	}
 	if c.DefaultLocale == "" {
 		c.DefaultLocale = "en"
+	}
+	if c.EmailVerifyPath == "" {
+		c.EmailVerifyPath = "/verify-email"
+	}
+	if c.PasswordResetPath == "" {
+		c.PasswordResetPath = "/reset-password"
 	}
 
 	// Merge user-provided mappings with defaults.
@@ -237,46 +246,13 @@ func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, _ *session.Ses
 	return nil
 }
 
-// OnAfterUserCreate sends a verification notification to the newly created user.
-func (p *Plugin) OnAfterUserCreate(ctx context.Context, u *user.User) error {
-	if p.herald == nil {
-		return nil
-	}
-
-	// Only send if user has not yet verified their email.
-	if u.EmailVerified {
-		return nil
-	}
-
-	m, ok := p.mappings[hook.ActionUserCreate]
-	if !ok || !m.Enabled {
-		return nil
-	}
-
-	name := u.Name()
-	if name == "" {
-		name = u.Email
-	}
-
-	if err := p.herald.Notify(ctx, &bridge.HeraldNotifyRequest{
-		Template: m.Template,
-		Channels: m.Channels,
-		To:       []string{u.Email},
-		UserID:   u.ID.String(),
-		Locale:   p.config.DefaultLocale,
-		Async:    p.config.Async,
-		Data: map[string]any{
-			"user_name":  name,
-			"app_name":   p.config.AppName,
-			"verify_url": p.config.BaseURL + "/verify-email",
-		},
-	}); err != nil {
-		p.logger.Warn("notification plugin: failed to send verification notification",
-			log.String("email", u.Email),
-			log.String("error", err.Error()),
-		)
-	}
-
+// OnAfterUserCreate is intentionally a no-op for email verification.
+//
+// The engine now owns verification issuance: SignUp (and ResendEmailVerification)
+// mint a 6-digit OTP and fire ActionEmailVerificationRequested carrying the code,
+// which handleHookEvent delivers. Sending here as well would double-email the
+// user (and the old payload had no token/code, so the link was unusable).
+func (p *Plugin) OnAfterUserCreate(_ context.Context, _ *user.User) error {
 	return nil
 }
 
@@ -368,7 +344,10 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 	}
 
 	if len(to) == 0 {
-		// No recipient — skip silently.
+		// No recipient — skip. Logged so a misconfigured hook (missing email
+		// metadata) is diagnosable rather than failing invisibly.
+		p.logger.Warn("notification: no recipient resolved for action, skipping",
+			log.String("action", event.Action))
 		return nil
 	}
 
@@ -379,7 +358,47 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 	}
 	data["app_name"] = p.config.AppName
 
-	return p.herald.Notify(ctx, &bridge.HeraldNotifyRequest{
+	// The default Herald auth.email-verification template marks verify_url as a
+	// required variable — it predates the OTP flow, which delivers a 6-digit
+	// code (event.Metadata["code"]) rather than a click-through link. Without a
+	// verify_url the renderer fails validation and Notify silently drops the
+	// email. Synthesize a deep-link to the code-entry page so the template
+	// renders (the page can read ?email= to pre-fill) and validation passes.
+	if event.Action == hook.ActionEmailVerificationRequested {
+		if existing, ok := data["verify_url"].(string); !ok || existing == "" {
+			verifyURL := strings.TrimRight(p.config.BaseURL, "/") + p.config.EmailVerifyPath
+			if email := event.Metadata["email"]; email != "" {
+				verifyURL += "?email=" + url.QueryEscape(email)
+			}
+			data["verify_url"] = verifyURL
+		}
+	}
+
+	// Likewise the default auth.password-reset template requires reset_url.
+	// Synthesize it from the reset token so the email renders and the link
+	// lands on the reset-password page.
+	if event.Action == hook.ActionPasswordReset {
+		if existing, ok := data["reset_url"].(string); !ok || existing == "" {
+			resetURL := strings.TrimRight(p.config.BaseURL, "/") + p.config.PasswordResetPath
+			if token := event.Metadata["token"]; token != "" {
+				resetURL += "?token=" + url.QueryEscape(token)
+			}
+			data["reset_url"] = resetURL
+		}
+	}
+
+	// Deliver on a context detached from the caller's request context. Hook
+	// handlers run inline on the originating request (e.g. signup), which has
+	// often already spent most of its deadline on password hashing, user
+	// creation and role assignment by the time this fires. Sending on that
+	// near-exhausted context makes a perfectly healthy provider call fail with
+	// "context deadline exceeded" and silently drops the email. Detaching (and
+	// granting a fresh timeout) makes delivery independent of how much budget
+	// the originating request had left.
+	sendCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), notifyDeliveryTimeout)
+	defer cancel()
+
+	return p.herald.Notify(sendCtx, &bridge.HeraldNotifyRequest{
 		AppID:    event.Tenant,
 		Template: m.Template,
 		Channels: m.Channels,
@@ -390,3 +409,8 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 		Data:     data,
 	})
 }
+
+// notifyDeliveryTimeout bounds a single hook-triggered notification delivery on
+// its detached context. Generous enough to absorb a slow provider response
+// without inheriting the originating request's (possibly tiny) remaining budget.
+const notifyDeliveryTimeout = 30 * time.Second

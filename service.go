@@ -11,6 +11,7 @@ import (
 
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 
 	"github.com/xraph/forge"
@@ -151,6 +152,14 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 
 	// Plugin: after user create
 	e.plugins.EmitAfterUserCreate(ctx, u)
+
+	// Issue an email-verification OTP for the new (unverified) user. Best-effort:
+	// a failure to mint/deliver the code must not block signup.
+	if !u.EmailVerified {
+		if _, issueErr := e.issueEmailVerificationForUser(ctx, u); issueErr != nil {
+			e.logger.Warn("authsome: issue email verification failed", log.String("error", issueErr.Error()))
+		}
+	}
 
 	// Assign default Warden role to the new user.
 	e.EnsureDefaultRole(ctx, req.AppID, u.ID)
@@ -912,6 +921,30 @@ func (e *Engine) recordFailedSignin(ctx context.Context, req *account.SignInRequ
 // ForgotPassword creates a password reset token for the given email.
 // Returns the reset record (token can be sent via email by the caller).
 // Returns nil, nil if user not found (avoids email enumeration).
+// humanizeDuration renders a duration as a short human-readable string for use
+// in notification templates (e.g. "1 hour", "30 minutes"). Falls back to the
+// stdlib string form for irregular durations.
+func humanizeDuration(d time.Duration) string {
+	switch {
+	case d <= 0:
+		return ""
+	case d%time.Hour == 0:
+		h := int(d / time.Hour)
+		if h == 1 {
+			return "1 hour"
+		}
+		return fmt.Sprintf("%d hours", h)
+	case d%time.Minute == 0:
+		m := int(d / time.Minute)
+		if m == 1 {
+			return "1 minute"
+		}
+		return fmt.Sprintf("%d minutes", m)
+	default:
+		return d.String()
+	}
+}
+
 func (e *Engine) ForgotPassword(ctx context.Context, appID id.AppID, email string) (*account.PasswordReset, error) {
 	if err := e.requireStarted(); err != nil {
 		return nil, err
@@ -930,9 +963,49 @@ func (e *Engine) ForgotPassword(ctx context.Context, appID id.AppID, email strin
 		return nil, fmt.Errorf("authsome: create password reset: %w", err)
 	}
 
+	// env_id is a non-null FK on authsome_password_resets — populate it from the
+	// app's default environment, else the insert is rejected (NewPasswordReset
+	// does not set it).
+	if env, envErr := e.GetDefaultEnvironment(ctx, appID); envErr == nil && env != nil {
+		pr.EnvID = env.ID
+	} else {
+		e.logger.Warn("authsome: no default environment resolved for password reset env_id", log.String("app_id", appID.String()))
+	}
+
 	if storeErr := e.store.CreatePasswordReset(ctx, pr); storeErr != nil {
+		e.logger.Warn("authsome: store password reset failed", log.String("error", storeErr.Error()))
 		return nil, fmt.Errorf("authsome: store password reset: %w", storeErr)
 	}
+
+	// u.Email may be empty when the user is loaded via the multi-email lookup
+	// (the address lives in the user_emails table). Fall back to the looked-up
+	// address so the notification always has a recipient.
+	notifyEmail := u.Email
+	if notifyEmail == "" {
+		notifyEmail = email
+	}
+
+	// Emit the password-reset hook so a delivery handler (the herald
+	// notification plugin or a custom mailer) can send the reset link. The
+	// token is high-entropy (32 bytes), so carrying it in the link is safe.
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionPasswordReset,
+		Resource:   hook.ResourceUser,
+		ResourceID: u.ID.String(),
+		ActorID:    u.ID.String(),
+		Tenant:     appID.String(),
+		Metadata: map[string]string{
+			"email":     notifyEmail,
+			"user_name": u.Name(),
+			"token":     pr.Token,
+			// expires_at is the absolute timestamp; expires_in is the
+			// human-readable duration the reset template renders ("This link
+			// expires in {{.expires_in}}"). Herald does not apply template
+			// variable defaults at render time, so we must supply it.
+			"expires_at": pr.ExpiresAt.UTC().Format(time.RFC3339),
+			"expires_in": humanizeDuration(ttl),
+		},
+	})
 
 	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "forgot_password", "user", u.ID.String(), u.ID.String(), appID.String(), "auth", nil)
 	e.relayEvent(ctx, "auth.forgot_password", appID.String(), map[string]string{
@@ -1108,29 +1181,17 @@ func (e *Engine) SendEmailVerification(ctx context.Context, u *user.User) (strin
 	if u == nil {
 		return "", fmt.Errorf("authsome: send email verification: nil user")
 	}
-	v, err := account.NewVerification(ctx, u.AppID, u.ID, account.VerificationEmail, EmailVerificationTTL)
+
+	// Delegate to the canonical OTP issue path so signup and resend deliver the
+	// same 6-digit code (the notification layer renders {{code}}).
+	code, err := e.issueEmailVerificationForUser(ctx, u)
 	if err != nil {
-		return "", fmt.Errorf("authsome: build verification: %w", err)
-	}
-	if storeErr := e.store.CreateVerification(ctx, v); storeErr != nil {
-		return "", fmt.Errorf("authsome: persist verification: %w", storeErr)
+		return "", err
 	}
 
-	e.hooks.Emit(ctx, &hook.Event{
-		Action:     hook.ActionEmailVerificationRequested,
-		Resource:   hook.ResourceUser,
-		ResourceID: u.ID.String(),
-		ActorID:    u.ID.String(),
-		Tenant:     u.AppID.String(),
-		Metadata: map[string]string{
-			"email":              u.Email,
-			"verification_token": v.Token,
-			"expires_at":         v.ExpiresAt.UTC().Format(time.RFC3339),
-		},
-	})
 	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "email_verification_requested",
 		"user", u.ID.String(), u.ID.String(), u.AppID.String(), "auth", nil)
-	return v.Token, nil
+	return code, nil
 }
 
 // ResendEmailVerification is the public, enumeration-safe entry
@@ -1214,6 +1275,125 @@ func (e *Engine) VerifyEmail(ctx context.Context, token string) error {
 	})
 
 	e.relayEvent(ctx, "user.email_verified", v.AppID.String(), map[string]string{
+		"user_id": u.ID.String(),
+	})
+
+	return nil
+}
+
+// emailVerificationTTL is how long an email OTP code stays valid.
+const emailVerificationTTL = 15 * time.Minute
+
+// maxEmailVerificationAttempts caps wrong-code entries before a fresh code must
+// be requested (mitigates brute-forcing the 6-digit code).
+const maxEmailVerificationAttempts = 5
+
+// IssueEmailVerification mints a fresh 6-digit OTP for the user's email and
+// fires ActionEmailVerificationRequested carrying the code so the notification
+// layer can deliver it. Safe to call repeatedly (e.g. resend).
+func (e *Engine) IssueEmailVerification(ctx context.Context, userID id.UserID) error {
+	if err := e.requireStarted(); err != nil {
+		return err
+	}
+	u, err := e.store.GetUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("authsome: get user: %w", err)
+	}
+	_, err = e.issueEmailVerificationForUser(ctx, u)
+	return err
+}
+
+// issueEmailVerificationForUser mints a 6-digit OTP, persists it, and fires
+// ActionEmailVerificationRequested carrying the code. It is the single canonical
+// issue path shared by SignUp, SendEmailVerification, and resend. Returns the
+// generated code.
+func (e *Engine) issueEmailVerificationForUser(ctx context.Context, u *user.User) (string, error) {
+	v, err := account.NewEmailVerificationCode(u.AppID, u.ID, emailVerificationTTL)
+	if err != nil {
+		return "", fmt.Errorf("authsome: new email verification: %w", err)
+	}
+	// env_id is a non-null FK on authsome_verifications — populate it from the
+	// app's default environment, else the insert is rejected.
+	if env, envErr := e.GetDefaultEnvironment(ctx, u.AppID); envErr == nil && env != nil {
+		v.EnvID = env.ID
+	} else {
+		e.logger.Warn("authsome: no default environment resolved for verification env_id", log.String("app_id", u.AppID.String()))
+	}
+	if createErr := e.store.CreateVerification(ctx, v); createErr != nil {
+		return "", fmt.Errorf("authsome: create verification: %w", createErr)
+	}
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionEmailVerificationRequested,
+		Resource:   hook.ResourceUser,
+		ResourceID: u.ID.String(),
+		ActorID:    u.ID.String(),
+		Tenant:     u.AppID.String(),
+		Metadata: map[string]string{
+			"email":      u.Email,
+			"user_name":  u.Name(),
+			"code":       v.Token,
+			"expires_at": v.ExpiresAt.UTC().Format(time.RFC3339),
+		},
+	})
+	return v.Token, nil
+}
+
+// VerifyEmailCode verifies a user's email using the 6-digit OTP code they were
+// emailed. It enforces expiry and a maximum number of attempts, and uses a
+// constant-time comparison to avoid leaking the code via timing.
+func (e *Engine) VerifyEmailCode(ctx context.Context, userID id.UserID, code string) error {
+	if err := e.requireStarted(); err != nil {
+		return err
+	}
+
+	v, err := e.store.GetActiveEmailVerification(ctx, userID)
+	if err != nil {
+		return account.ErrInvalidCredentials
+	}
+	if v.Consumed || time.Now().After(v.ExpiresAt) {
+		return account.ErrInvalidCredentials
+	}
+	if v.Attempts >= maxEmailVerificationAttempts {
+		return account.ErrTooManyAttempts
+	}
+
+	if subtle.ConstantTimeCompare([]byte(v.Token), []byte(code)) != 1 {
+		v.Attempts++
+		_ = e.store.UpdateVerification(ctx, v) //nolint:errcheck // best-effort attempt tracking
+		return account.ErrInvalidCredentials
+	}
+
+	v.Consumed = true
+	if updateErr := e.store.UpdateVerification(ctx, v); updateErr != nil {
+		return fmt.Errorf("authsome: consume verification: %w", updateErr)
+	}
+
+	u, err := e.store.GetUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("authsome: get user: %w", err)
+	}
+	u.EmailVerified = true
+	u.UpdatedAt = time.Now()
+	if updateErr := e.store.UpdateUser(ctx, u); updateErr != nil {
+		return fmt.Errorf("authsome: update user: %w", updateErr)
+	}
+
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "verify_email", "user", u.ID.String(), u.ID.String(), u.AppID.String(), "auth", nil)
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionEmailVerify,
+		Resource:   hook.ResourceUser,
+		ResourceID: u.ID.String(),
+		ActorID:    u.ID.String(),
+		Tenant:     u.AppID.String(),
+		Metadata: map[string]string{
+			"email":     u.Email,
+			"user_name": u.Name(),
+		},
+	})
+
+	e.relayEvent(ctx, "user.email_verified", u.AppID.String(), map[string]string{
 		"user_id": u.ID.String(),
 	})
 
