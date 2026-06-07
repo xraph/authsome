@@ -53,27 +53,29 @@ func (a *API) registerPasswordRoutes(router forge.Router) error {
 		return err
 	}
 
-	verifyOpts := []forge.RouteOption{
+	verifyOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
+	verifyOpts = append(verifyOpts,
 		forge.WithSummary("Verify email"),
 		forge.WithDescription("Verifies a user's email address using a 6-digit OTP code (per-user, attempt-limited) or a verification token."),
 		forge.WithOperationID("verifyEmail"),
 		forge.WithRequestSchema(VerifyEmailRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Email verified", StatusResponse{}),
 		forge.WithErrorResponses(),
-	}
+	)
 	verifyOpts = append(verifyOpts, a.rateLimitOpt(rlCfg.VerifyEmailLimit)...)
 	if err := g.POST("/verify-email", a.handleVerifyEmail, verifyOpts...); err != nil {
 		return err
 	}
 
-	resendOpts := []forge.RouteOption{
+	resendOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
+	resendOpts = append(resendOpts,
 		forge.WithSummary("Resend email verification"),
 		forge.WithDescription("Issues a fresh email verification token and emits the auth.email_verification_requested hook so a delivery handler (notification plugin or custom mailer) can send the link. Always returns 200 to avoid email-existence enumeration; callers cannot tell whether the email was registered or already verified."),
 		forge.WithOperationID("resendEmailVerification"),
 		forge.WithRequestSchema(ResendVerificationRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Verification queued", StatusResponse{}),
 		forge.WithErrorResponses(),
-	}
+	)
 	resendOpts = append(resendOpts, a.rateLimitOpt(rlCfg.ResendVerificationLimit)...)
 	return g.POST("/verify-email/resend", a.handleResendVerification, resendOpts...)
 }

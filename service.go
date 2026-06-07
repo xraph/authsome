@@ -929,17 +929,17 @@ func humanizeDuration(d time.Duration) string {
 	case d <= 0:
 		return ""
 	case d%time.Hour == 0:
-		if h := int(d / time.Hour); h == 1 {
+		h := int(d / time.Hour)
+		if h == 1 {
 			return "1 hour"
-		} else {
-			return fmt.Sprintf("%d hours", h)
 		}
+		return fmt.Sprintf("%d hours", h)
 	case d%time.Minute == 0:
-		if m := int(d / time.Minute); m == 1 {
+		m := int(d / time.Minute)
+		if m == 1 {
 			return "1 minute"
-		} else {
-			return fmt.Sprintf("%d minutes", m)
 		}
+		return fmt.Sprintf("%d minutes", m)
 	default:
 		return d.String()
 	}
