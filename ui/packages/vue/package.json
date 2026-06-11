@@ -1,6 +1,6 @@
 {
   "name": "@authsome/ui-vue",
-  "version": "1.4.0",
+  "version": "1.5.5",
   "description": "Vue.js bindings for AuthSome authentication UI",
   "license": "MIT",
   "type": "module",

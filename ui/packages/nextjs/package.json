@@ -1,6 +1,6 @@
 {
   "name": "@authsome/ui-nextjs",
-  "version": "1.4.0",
+  "version": "1.5.5",
   "description": "Next.js integration for AuthSome authentication",
   "license": "MIT",
   "type": "module",
