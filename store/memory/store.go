@@ -33,8 +33,10 @@ import (
 )
 
 // Compile-time checks.
-var _ store.Store = (*Store)(nil)
-var _ environment.Store = (*Store)(nil)
+var (
+	_ store.Store       = (*Store)(nil)
+	_ environment.Store = (*Store)(nil)
+)
 
 // Store is an in-memory implementation of the composite store interface.
 type Store struct {
@@ -708,10 +710,125 @@ func (s *Store) UpdateApp(_ context.Context, a *app.App) error {
 	return nil
 }
 
+// DeleteApp removes the app and every child record scoped to it, mirroring
+// the ON DELETE CASCADE behaviour of the PostgreSQL backend so the in-memory
+// store stays consistent (no orphaned users/sessions/etc.). Plugin-owned
+// tables (passkey, oauth connections, oauth2 clients, ...) live in their own
+// stores and are not tracked here.
 func (s *Store) DeleteApp(_ context.Context, appID id.AppID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.apps, appID.String())
+
+	aid := appID.String()
+
+	// Organizations key their dependent rows (members, teams, invitations)
+	// off org_id, so collect this app's org IDs before dropping the orgs.
+	orgIDs := make(map[string]bool)
+	for k, o := range s.orgs {
+		if o.AppID.String() == aid {
+			orgIDs[k] = true
+			delete(s.orgs, k)
+		}
+	}
+	for k, m := range s.members {
+		if orgIDs[m.OrgID.String()] {
+			delete(s.members, k)
+		}
+	}
+	for k, t := range s.teams {
+		if orgIDs[t.OrgID.String()] {
+			delete(s.teams, k)
+		}
+	}
+	for k, inv := range s.invitations {
+		if orgIDs[inv.OrgID.String()] {
+			delete(s.invitations, k)
+		}
+	}
+
+	// App-scoped child records (every map keyed by an entity with an AppID).
+	for k, u := range s.users {
+		if u.AppID.String() == aid {
+			delete(s.users, k)
+		}
+	}
+	for k, sess := range s.sessions {
+		if sess.AppID.String() == aid {
+			delete(s.sessions, k)
+		}
+	}
+	for k, v := range s.verifications {
+		if v.AppID.String() == aid {
+			delete(s.verifications, k)
+		}
+	}
+	for k, pr := range s.passwordResets {
+		if pr.AppID.String() == aid {
+			delete(s.passwordResets, k)
+		}
+	}
+	for k, d := range s.devices {
+		if d.AppID.String() == aid {
+			delete(s.devices, k)
+		}
+	}
+	for k, w := range s.webhooks {
+		if w.AppID.String() == aid {
+			delete(s.webhooks, k)
+		}
+	}
+	for k, n := range s.notifications {
+		if n.AppID.String() == aid {
+			delete(s.notifications, k)
+		}
+	}
+	for k, ak := range s.apikeys {
+		if ak.AppID.String() == aid {
+			delete(s.apikeys, k)
+		}
+	}
+	for k, e := range s.environments {
+		if e.AppID.String() == aid {
+			delete(s.environments, k)
+		}
+	}
+	for k, fc := range s.formConfigs {
+		if fc.AppID.String() == aid {
+			delete(s.formConfigs, k)
+		}
+	}
+	for k, bc := range s.brandingConfigs {
+		if bc.AppID.String() == aid {
+			delete(s.brandingConfigs, k)
+		}
+	}
+	for k, c := range s.appSessionConfigs {
+		if c.AppID.String() == aid {
+			delete(s.appSessionConfigs, k)
+		}
+	}
+	for k, c := range s.appClientConfigs {
+		if c.AppID.String() == aid {
+			delete(s.appClientConfigs, k)
+		}
+	}
+	for k, sa := range s.serviceAccounts {
+		if sa.AppID.String() == aid {
+			delete(s.serviceAccounts, k)
+		}
+	}
+	for k, st := range s.settingsMap {
+		if st.AppID == aid {
+			delete(s.settingsMap, k)
+		}
+	}
+	for k, ue := range s.userEmails {
+		if ue.AppID.String() == aid {
+			delete(s.userEmails, k)
+		}
+	}
+
+	delete(s.apps, aid)
 	return nil
 }
 

@@ -840,6 +840,56 @@ func TestHandleRefresh_MissingToken(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+// A request with no body refresh token but a valid session cookie ("logged in
+// with cookies") refreshes from the session instead of 400/401.
+func TestHandleRefresh_CookieFallback_EmptyBody(t *testing.T) {
+	a, eng := newTestAPI(t)
+	handler := withTestKey(a.Handler())
+
+	_, sessionToken, _ := signUp(t, eng, "cookie-refresh@test.com", "SecureP@ss1")
+
+	body := jsonBody(t, map[string]string{})
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/refresh", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "authsome_session_token", Value: sessionToken})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	assert.NotEmpty(t, resp["session_token"])
+	assert.NotEmpty(t, resp["refresh_token"])
+}
+
+// A stale (already-rotated) body refresh token must NOT log the user out when a
+// valid session cookie is present: the cookie-first path rotates from the live
+// session rather than feeding the stale token into replay detection.
+func TestHandleRefresh_CookieFallback_StaleBodyToken(t *testing.T) {
+	a, eng := newTestAPI(t)
+	handler := withTestKey(a.Handler())
+
+	_, _, r1 := signUp(t, eng, "stale-refresh@test.com", "SecureP@ss1")
+
+	// Rotate once so r1 becomes stale; the returned session carries the current
+	// session token to present as the cookie.
+	cur, err := eng.Refresh(context.Background(), r1)
+	require.NoError(t, err)
+
+	body := jsonBody(t, map[string]string{"refresh_token": r1}) // stale
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/refresh", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "authsome_session_token", Value: cur.Token})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	assert.NotEmpty(t, resp["refresh_token"])
+	assert.NotEqual(t, r1, resp["refresh_token"], "should issue a fresh refresh token, not echo the stale one")
+}
+
 // ──────────────────────────────────────────────────
 // GetMe endpoint
 // ──────────────────────────────────────────────────

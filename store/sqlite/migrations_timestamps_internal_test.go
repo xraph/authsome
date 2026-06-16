@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/xraph/grove"
 	"github.com/xraph/grove/drivers/sqlitedriver"
 	"github.com/xraph/grove/migrate"
 )
@@ -91,36 +90,49 @@ func TestTimestampRebuild_CopiesExistingRows(t *testing.T) {
 	assert.WithinDuration(t, want, got, time.Second, "copied timestamp value lost")
 }
 
+// rebuildMigrationVersion is the version of the convert_text_timestamps_to_timestamp
+// migration (the one driven by timestampRebuilds).
+const rebuildMigrationVersion = "20260601000002"
+
 // TestTimestampRebuild_SpecColumnsMatchSchema guards against the one mistake
 // the migration cannot catch at run time on an empty database: a column
 // present in a rebuild's CREATE statement but omitted from its copy list. Such
 // an omission would silently drop that column's data during the rebuild. For
 // every rebuilt table it asserts the live column set (PRAGMA table_info, which
 // reflects the CREATE) equals the set named in the copy list.
+//
+// The comparison is made against the schema as it exists THROUGH the rebuild
+// migration, not the final schema. Running only up to (and including) the
+// rebuild is deliberate: a column added by a LATER migration — e.g.
+// authsome_verifications.attempts at 20260605000001 — is legitimately absent
+// from the rebuild's CREATE and so must not be expected in the copy list. The
+// rebuild migration is released and immutable; comparing against the final
+// schema would wrongly demand that already-shipped copy lists mirror columns
+// that did not exist when the rebuild ran. Comparing against the rebuild-time
+// schema tests the real invariant: the rebuild's CREATE and its copy list name
+// the same columns.
 func TestTimestampRebuild_SpecColumnsMatchSchema(t *testing.T) {
 	ctx := context.Background()
+	exec := openExec(t)
 
-	dir := t.TempDir()
-	dsn := "file:" + filepath.Join(dir, "schema.db") + "?cache=shared&_pragma=foreign_keys(1)"
-	sdb := sqlitedriver.New()
-	require.NoError(t, sdb.Open(ctx, dsn))
-	t.Cleanup(func() { _ = sdb.Close() })
-
-	db, err := grove.Open(sdb)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-
-	require.NoError(t, New(db).Migrate(ctx))
-
-	exec, err := migrate.NewExecutorFor(sdb)
-	require.NoError(t, err)
+	// Apply migrations in version order, stopping after the rebuild itself
+	// runs, so the live schema reflects exactly what the rebuild produced.
+	var ranRebuild bool
+	for _, m := range Migrations.Migrations() {
+		require.NoErrorf(t, m.Up(ctx, exec), "migration %s (%s)", m.Version, m.Name)
+		if m.Version == rebuildMigrationVersion {
+			ranRebuild = true
+			break
+		}
+	}
+	require.Truef(t, ranRebuild, "rebuild migration %s not registered", rebuildMigrationVersion)
 
 	for _, r := range timestampRebuilds {
 		t.Run(r.table, func(t *testing.T) {
 			live := tableColumns(t, ctx, exec, r.table)
 			copyCols := splitCols(r.cols)
 			assert.ElementsMatchf(t, live, copyCols,
-				"table %s: copy list and live schema disagree — a missing copy column drops data", r.table)
+				"table %s: copy list and rebuild-time schema disagree — a missing copy column drops data", r.table)
 		})
 	}
 }
@@ -135,7 +147,7 @@ func TestTimestampRebuild_PreservesAllColumns(t *testing.T) {
 	ctx := context.Background()
 	exec := openExec(t)
 
-	const rebuildVersion = "20260601000002"
+	const rebuildVersion = rebuildMigrationVersion
 
 	var rebuild *migrate.Migration
 	for _, m := range Migrations.Migrations() {

@@ -137,9 +137,42 @@ func (s *Store) UpdateApp(ctx context.Context, a *app.App) error {
 	return pgError(err)
 }
 
+// DeleteApp removes the app and all of its data. Deleting the app row cascades
+// (ON DELETE CASCADE, see the "cascade_app_id_foreign_keys" migration) to every
+// table whose app_id references authsome_apps(id): users, sessions,
+// environments, organizations, webhooks, oauth2 clients, ... The few app-scoped
+// config tables (branding, session/client configs, settings) carry an app_id
+// column but no foreign key, so they are deleted explicitly. Everything runs in
+// one transaction so the app is never left half-deleted. Global settings (empty
+// app_id) are left untouched.
 func (s *Store) DeleteApp(ctx context.Context, appID id.AppID) error {
-	_, err := s.pg.NewDelete((*AppModel)(nil)).Where("id = ?", appID.String()).Exec(ctx)
-	return pgError(err)
+	ptx, err := s.pg.BeginTxQuery(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("authsome/postgres: begin tx for app cascade: %w", err)
+	}
+	defer func() { _ = ptx.Rollback() }() //nolint:errcheck // best-effort rollback after commit
+
+	aid := appID.String()
+
+	for _, m := range []any{
+		&BrandingConfigModel{},
+		&AppSessionConfigModel{},
+		&AppClientConfigModel{},
+		&SettingModel{},
+	} {
+		if _, err := ptx.NewDelete(m).Where("app_id = ?", aid).Exec(ctx); err != nil {
+			return fmt.Errorf("authsome/postgres: delete app config: %w", pgError(err))
+		}
+	}
+
+	if _, err := ptx.NewDelete(&AppModel{}).Where("id = ?", aid).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/postgres: delete app row: %w", pgError(err))
+	}
+
+	if err := ptx.Commit(); err != nil {
+		return fmt.Errorf("authsome/postgres: commit app cascade: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) ListApps(ctx context.Context) ([]*app.App, error) {

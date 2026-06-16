@@ -137,9 +137,63 @@ func (s *Store) UpdateApp(ctx context.Context, a *app.App) error {
 	return sqliteError(err)
 }
 
+// DeleteApp removes the app and every child record scoped to it. The sqlite
+// schema declares no app_id foreign keys, so the cascade is performed
+// explicitly inside a single transaction to keep this backend consistent with
+// PostgreSQL (which relies on ON DELETE CASCADE). Child rows are hard-deleted:
+// once the owning app is gone there is nothing to restore them under. Plugin-
+// owned tables (passkey, oauth connections, oauth2 clients, ...) live in their
+// own stores and are not handled here.
 func (s *Store) DeleteApp(ctx context.Context, appID id.AppID) error {
-	_, err := s.sdb.NewDelete((*AppModel)(nil)).Where("id = ?", appID.String()).Exec(ctx)
-	return sqliteError(err)
+	stx, err := s.sdb.BeginTxQuery(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("authsome/sqlite: begin tx for app cascade: %w", err)
+	}
+	defer func() { _ = stx.Rollback() }() //nolint:errcheck // best-effort rollback after commit
+
+	aid := appID.String()
+
+	// Organization-scoped rows are keyed by org_id; delete them while their
+	// parent org rows still exist so the subquery can resolve them.
+	const orgsOfApp = "org_id IN (SELECT id FROM authsome_organizations WHERE app_id = ?)"
+	for _, m := range []any{&MemberModel{}, &TeamModel{}, &InvitationModel{}} {
+		if _, err := stx.NewDelete(m).Where(orgsOfApp, aid).Exec(ctx); err != nil {
+			return fmt.Errorf("authsome/sqlite: delete org children: %w", sqliteError(err))
+		}
+	}
+
+	// App-scoped rows (every model carrying an app_id column).
+	for _, m := range []any{
+		&OrganizationModel{},
+		&UserEmailModel{},
+		&SessionModel{},
+		&VerificationModel{},
+		&PasswordResetModel{},
+		&DeviceModel{},
+		&WebhookModel{},
+		&NotificationModel{},
+		&APIKeyModel{},
+		&UserModel{},
+		&EnvironmentModel{},
+		&FormConfigModel{},
+		&BrandingConfigModel{},
+		&AppSessionConfigModel{},
+		&AppClientConfigModel{},
+		&SettingModel{},
+	} {
+		if _, err := stx.NewDelete(m).Where("app_id = ?", aid).Exec(ctx); err != nil {
+			return fmt.Errorf("authsome/sqlite: delete app children: %w", sqliteError(err))
+		}
+	}
+
+	if _, err := stx.NewDelete(&AppModel{}).Where("id = ?", aid).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/sqlite: delete app row: %w", sqliteError(err))
+	}
+
+	if err := stx.Commit(); err != nil {
+		return fmt.Errorf("authsome/sqlite: commit app cascade: %w", sqliteError(err))
+	}
+	return nil
 }
 
 func (s *Store) ListApps(ctx context.Context) ([]*app.App, error) {

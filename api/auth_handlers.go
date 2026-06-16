@@ -308,20 +308,55 @@ func (a *API) handleSignOut(ctx forge.Context, _ *SignOutRequest) (*StatusRespon
 }
 
 func (a *API) handleRefresh(ctx forge.Context, req *RefreshRequest) (*TokenResponse, error) {
+	httpReq := ctx.Request()
+	opts := authsome.RefreshOpts{
+		IPAddress: clientIPFromRequest(httpReq),
+		UserAgent: httpReq.UserAgent(),
+	}
+
+	// Cookie-first: when the request carries a valid session cookie, rotate via
+	// that session's *current* server-side refresh token. Browsers commonly lose
+	// track of the rotated refresh token (the cause of repeated /refresh 401s);
+	// this lets them re-sync from their still-valid session. We deliberately do
+	// NOT feed the body token in first — a stale body token trips replay
+	// detection, which cascade-revokes the whole token family and would log the
+	// user out (see Engine.Refresh).
+	if cookieTok := a.sessionTokenFromCookie(ctx); cookieTok != "" {
+		if cur, err := a.engine.ResolveSessionByToken(cookieTok); err == nil && cur.RefreshToken != "" {
+			if sess, rerr := a.engine.Refresh(ctx.Context(), cur.RefreshToken, opts); rerr == nil {
+				return a.respondWithTokens(ctx, sess)
+			}
+		}
+	}
+
+	// Fall back to the refresh token presented in the body (pure API clients
+	// with no session cookie).
 	if req.RefreshToken == "" {
 		return nil, forge.BadRequest("refresh_token is required")
 	}
-
-	httpReq := ctx.Request()
-	sess, err := a.engine.Refresh(ctx.Context(), req.RefreshToken, authsome.RefreshOpts{
-		IPAddress: clientIPFromRequest(httpReq),
-		UserAgent: httpReq.UserAgent(),
-	})
+	sess, err := a.engine.Refresh(ctx.Context(), req.RefreshToken, opts)
 	if err != nil {
 		a.deleteSessionCookie(ctx)
 		return nil, mapError(err)
 	}
+	return a.respondWithTokens(ctx, sess)
+}
 
+// sessionTokenFromCookie returns the session token carried in the request's
+// session cookie, or "" when absent. The cookie name is resolved from dynamic
+// settings (same source as setSessionCookie).
+func (a *API) sessionTokenFromCookie(ctx forge.Context) string {
+	cc := a.resolveCookieConfig(ctx)
+	c, err := ctx.Request().Cookie(cc.Name)
+	if err != nil || c == nil {
+		return ""
+	}
+	return c.Value
+}
+
+// respondWithTokens sets the session cookie to the (possibly rotated) session
+// token and returns the token triplet as JSON.
+func (a *API) respondWithTokens(ctx forge.Context, sess *session.Session) (*TokenResponse, error) {
 	a.setSessionCookie(ctx, sess.Token, a.sessionTokenMaxAge())
 	resp := &TokenResponse{
 		SessionToken: sess.Token,

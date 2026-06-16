@@ -14,6 +14,42 @@ import (
 // management (locking, version tracking, rollback support).
 var Migrations = migrate.NewGroup("authsome")
 
+// appIDForeignKeyTables lists every core table whose app_id column references
+// authsome_apps(id). The "cascade_app_id_foreign_keys" migration recreates
+// each of these foreign keys ON DELETE CASCADE so deleting an app removes all
+// of its children. Plugin-owned tables (e.g. the oauth2 provider's) carry
+// their own cascade migration in the plugin's migration group.
+var appIDForeignKeyTables = []string{
+	"authsome_users",
+	"authsome_sessions",
+	"authsome_verifications",
+	"authsome_password_resets",
+	"authsome_organizations",
+	"authsome_devices",
+	"authsome_webhooks",
+	"authsome_notifications",
+	"authsome_api_keys",
+	"authsome_passkey_credentials",
+	"authsome_oauth_connections",
+	"authsome_sso_connections",
+	"authsome_environments",
+	"authsome_form_configs",
+	"authsome_user_emails",
+}
+
+// userIDForeignKeyCascades lists foreign keys that reference authsome_users(id)
+// on tables that have no app_id column of their own, so they are NOT covered by
+// appIDForeignKeyTables. The app cascade hard-deletes users, which would trip
+// these NO ACTION checks (members/invitations are only removed via their org's
+// cascade; mfa_enrollments has no cascade path at all). Recreating them ON
+// DELETE CASCADE lets the user delete unwind them directly. This only ever
+// fires during app deletion, since DeleteUser is a soft delete.
+var userIDForeignKeyCascades = []struct{ table, column string }{
+	{"authsome_members", "user_id"},
+	{"authsome_invitations", "inviter_id"},
+	{"authsome_mfa_enrollments", "user_id"},
+}
+
 func init() {
 	Migrations.MustRegister(
 		// Migration 1: Initial schema (11 tables: apps, users, sessions,
@@ -1062,6 +1098,66 @@ DROP INDEX IF EXISTS idx_authsome_verifications_active;
 ALTER TABLE authsome_verifications DROP COLUMN IF EXISTS attempts;
 `)
 				return err
+			},
+		},
+
+		// Migration 23: Recreate every app_id foreign key ON DELETE CASCADE.
+		// Previously all 18 app_id FKs were NO ACTION, so DeleteApp failed with
+		// a 23503 violation whenever the app had any children — and every app
+		// gets a default environment at creation, so it failed in practice for
+		// all apps. With CASCADE, a single DELETE on authsome_apps unwinds the
+		// whole tree. Child-of-child FKs (e.g. sessions.user_id, orgs.created_by)
+		// stay NO ACTION; their checks are deferred to statement end and pass
+		// because those rows are removed by the same cascade. The constraint
+		// names are PostgreSQL's deterministic defaults (<table>_app_id_fkey).
+		&migrate.Migration{
+			Name:    "cascade_app_id_foreign_keys",
+			Version: "20260615000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				for _, t := range appIDForeignKeyTables {
+					if _, err := exec.Exec(ctx, fmt.Sprintf(
+						`ALTER TABLE %[1]s DROP CONSTRAINT IF EXISTS %[1]s_app_id_fkey;
+ALTER TABLE %[1]s ADD CONSTRAINT %[1]s_app_id_fkey
+    FOREIGN KEY (app_id) REFERENCES authsome_apps(id) ON DELETE CASCADE;`,
+						t,
+					)); err != nil {
+						return fmt.Errorf("cascade app_id fk on %s: %w", t, err)
+					}
+				}
+				for _, fk := range userIDForeignKeyCascades {
+					if _, err := exec.Exec(ctx, fmt.Sprintf(
+						`ALTER TABLE %[1]s DROP CONSTRAINT IF EXISTS %[1]s_%[2]s_fkey;
+ALTER TABLE %[1]s ADD CONSTRAINT %[1]s_%[2]s_fkey
+    FOREIGN KEY (%[2]s) REFERENCES authsome_users(id) ON DELETE CASCADE;`,
+						fk.table, fk.column,
+					)); err != nil {
+						return fmt.Errorf("cascade %s.%s fk: %w", fk.table, fk.column, err)
+					}
+				}
+				return nil
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				for _, fk := range userIDForeignKeyCascades {
+					if _, err := exec.Exec(ctx, fmt.Sprintf(
+						`ALTER TABLE %[1]s DROP CONSTRAINT IF EXISTS %[1]s_%[2]s_fkey;
+ALTER TABLE %[1]s ADD CONSTRAINT %[1]s_%[2]s_fkey
+    FOREIGN KEY (%[2]s) REFERENCES authsome_users(id);`,
+						fk.table, fk.column,
+					)); err != nil {
+						return fmt.Errorf("revert %s.%s fk: %w", fk.table, fk.column, err)
+					}
+				}
+				for _, t := range appIDForeignKeyTables {
+					if _, err := exec.Exec(ctx, fmt.Sprintf(
+						`ALTER TABLE %[1]s DROP CONSTRAINT IF EXISTS %[1]s_app_id_fkey;
+ALTER TABLE %[1]s ADD CONSTRAINT %[1]s_app_id_fkey
+    FOREIGN KEY (app_id) REFERENCES authsome_apps(id);`,
+						t,
+					)); err != nil {
+						return fmt.Errorf("revert app_id fk on %s: %w", t, err)
+					}
+				}
+				return nil
 			},
 		},
 	)

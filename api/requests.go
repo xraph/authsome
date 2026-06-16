@@ -30,9 +30,11 @@ type SignInRequest struct {
 // SignOutRequest is an empty request for POST /signout (session from context).
 type SignOutRequest struct{}
 
-// RefreshRequest binds the body for POST /refresh.
+// RefreshRequest binds the body for POST /refresh. The token is optional at the
+// binding layer: a request with a valid session cookie can refresh without one
+// (the handler falls back to the cookie). Absence of both is rejected there.
 type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token" description:"Refresh token to exchange for new tokens"`
+	RefreshToken string `json:"refresh_token,omitempty" description:"Refresh token to exchange for new tokens (optional when a valid session cookie is present)"`
 }
 
 // ---------------------------------------------------------------------------

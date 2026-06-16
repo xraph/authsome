@@ -108,6 +108,51 @@ CREATE INDEX IF NOT EXISTS idx_authsome_oauth2_device_codes_user_code
 		},
 	)
 
+	// Recreate the oauth2 app_id foreign keys ON DELETE CASCADE so deleting an
+	// app removes its oauth2 clients, authorization codes and device codes
+	// along with the core children (see the authsome group's
+	// "cascade_app_id_foreign_keys" migration). PostgreSQL only — the sqlite
+	// schema does not enforce these foreign keys, and the core DeleteApp does
+	// not reach the plugin's separate sqlite/memory stores.
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "cascade_oauth2_app_id_foreign_keys",
+			Version: "20260615000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_oauth2_clients DROP CONSTRAINT IF EXISTS authsome_oauth2_clients_app_id_fkey;
+ALTER TABLE authsome_oauth2_clients ADD CONSTRAINT authsome_oauth2_clients_app_id_fkey
+    FOREIGN KEY (app_id) REFERENCES authsome_apps(id) ON DELETE CASCADE;
+
+ALTER TABLE authsome_oauth2_auth_codes DROP CONSTRAINT IF EXISTS authsome_oauth2_auth_codes_app_id_fkey;
+ALTER TABLE authsome_oauth2_auth_codes ADD CONSTRAINT authsome_oauth2_auth_codes_app_id_fkey
+    FOREIGN KEY (app_id) REFERENCES authsome_apps(id) ON DELETE CASCADE;
+
+ALTER TABLE authsome_oauth2_device_codes DROP CONSTRAINT IF EXISTS authsome_oauth2_device_codes_app_id_fkey;
+ALTER TABLE authsome_oauth2_device_codes ADD CONSTRAINT authsome_oauth2_device_codes_app_id_fkey
+    FOREIGN KEY (app_id) REFERENCES authsome_apps(id) ON DELETE CASCADE;
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_oauth2_clients DROP CONSTRAINT IF EXISTS authsome_oauth2_clients_app_id_fkey;
+ALTER TABLE authsome_oauth2_clients ADD CONSTRAINT authsome_oauth2_clients_app_id_fkey
+    FOREIGN KEY (app_id) REFERENCES authsome_apps(id);
+
+ALTER TABLE authsome_oauth2_auth_codes DROP CONSTRAINT IF EXISTS authsome_oauth2_auth_codes_app_id_fkey;
+ALTER TABLE authsome_oauth2_auth_codes ADD CONSTRAINT authsome_oauth2_auth_codes_app_id_fkey
+    FOREIGN KEY (app_id) REFERENCES authsome_apps(id);
+
+ALTER TABLE authsome_oauth2_device_codes DROP CONSTRAINT IF EXISTS authsome_oauth2_device_codes_app_id_fkey;
+ALTER TABLE authsome_oauth2_device_codes ADD CONSTRAINT authsome_oauth2_device_codes_app_id_fkey
+    FOREIGN KEY (app_id) REFERENCES authsome_apps(id);
+`)
+				return err
+			},
+		},
+	)
+
 	// ──────────────────────────────────────────────────
 	// SQLite migrations
 	// ──────────────────────────────────────────────────

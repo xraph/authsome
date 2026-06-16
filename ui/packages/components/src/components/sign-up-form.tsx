@@ -264,8 +264,9 @@ export function SignUpForm({
     setFieldValues((prev) => ({ ...prev, [key]: value }));
   };
 
-  // Fallback: when no signup fields are configured, show the classic "Name" field.
-  const [fallbackName, setFallbackName] = useState("");
+  // Fallback: when no signup fields are configured, show first/last name fields.
+  const [fallbackFirstName, setFallbackFirstName] = useState("");
+  const [fallbackLastName, setFallbackLastName] = useState("");
 
   const handleEmailContinue = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -288,9 +289,10 @@ export function SignUpForm({
       // Build the fields object.
       const fields: Record<string, string> = { ...fieldValues };
 
-      // If using fallback (no dynamic fields), map name to first_name.
-      if (!signupFields && fallbackName) {
-        fields.first_name = fallbackName;
+      // If using fallback (no dynamic fields), map the first/last name inputs.
+      if (!signupFields) {
+        if (fallbackFirstName) fields.first_name = fallbackFirstName;
+        if (fallbackLastName) fields.last_name = fallbackLastName;
       }
 
       await signUp(
@@ -490,21 +492,38 @@ export function SignUpForm({
               />
             ))
           ) : (
-            /* Fallback: classic Name field */
-            <div className="grid gap-1.5">
-              <Label htmlFor="signup-name" className="text-[13px]">
-                Name
-                <span className="ml-1 text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                id="signup-name"
-                type="text"
-                placeholder="John Doe"
-                autoComplete="name"
-                disabled={isSubmitting}
-                value={fallbackName}
-                onChange={(e) => setFallbackName(e.target.value)}
-              />
+            /* Fallback: first & last name fields */
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="signup-first-name" className="text-[13px]">
+                  First name
+                  <span className="ml-1 text-muted-foreground">(optional)</span>
+                </Label>
+                <Input
+                  id="signup-first-name"
+                  type="text"
+                  placeholder="John"
+                  autoComplete="given-name"
+                  disabled={isSubmitting}
+                  value={fallbackFirstName}
+                  onChange={(e) => setFallbackFirstName(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="signup-last-name" className="text-[13px]">
+                  Last name
+                  <span className="ml-1 text-muted-foreground">(optional)</span>
+                </Label>
+                <Input
+                  id="signup-last-name"
+                  type="text"
+                  placeholder="Doe"
+                  autoComplete="family-name"
+                  disabled={isSubmitting}
+                  value={fallbackLastName}
+                  onChange={(e) => setFallbackLastName(e.target.value)}
+                />
+              </div>
             </div>
           )}
 
