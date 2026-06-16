@@ -50,7 +50,7 @@ jobs:
 
       - name: Upload coverage
         if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-go${{ matrix.go-version }}
           path: coverage.out
@@ -128,7 +128,7 @@ jobs:
         run: make -C sdkgen generate SDK_OUT=../sdk SDK_PLUGINS=social,mfa,apikey,magiclink,sso
 
       - name: Upload SDK artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: authsome-sdk
           path: sdk/
