@@ -48,7 +48,10 @@ export function AuthCard({
   return (
     <Card
       className={cn(
-        "mx-auto w-full max-w-[400px]",
+        // Definite width so the card never sizes to its content — otherwise a
+        // shrink-to-fit/centered parent makes each step (email vs. password)
+        // a different width. max-w-full keeps it from overflowing small screens.
+        "mx-auto w-[400px] max-w-full",
         variantClasses[variant],
         className,
       )}
