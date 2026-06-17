@@ -12,12 +12,12 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
 	github.com/xraph/chronicle v1.5.2
-	github.com/xraph/forge v1.7.1
+	github.com/xraph/forge v1.7.2
 	github.com/xraph/forgeui v1.4.1
-	github.com/xraph/grove v1.5.5
-	github.com/xraph/grove/drivers/mongodriver v1.5.5
-	github.com/xraph/grove/drivers/pgdriver v1.5.5
-	github.com/xraph/grove/drivers/sqlitedriver v1.5.5
+	github.com/xraph/grove v1.5.6
+	github.com/xraph/grove/drivers/mongodriver v1.5.6
+	github.com/xraph/grove/drivers/pgdriver v1.5.6
+	github.com/xraph/grove/drivers/sqlitedriver v1.5.6
 	github.com/xraph/herald v1.5.2
 	github.com/xraph/keysmith v1.5.2
 	github.com/xraph/relay v1.5.4
