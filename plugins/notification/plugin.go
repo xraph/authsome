@@ -357,6 +357,12 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 		data[k] = v
 	}
 	data["app_name"] = p.config.AppName
+	// app_url is the application root, available to every template for generic
+	// "open the app" call-to-action buttons (templates whose own variables don't
+	// include a specific link, e.g. email-verified, welcome, password-changed).
+	if p.config.BaseURL != "" {
+		data["app_url"] = strings.TrimRight(p.config.BaseURL, "/")
+	}
 
 	// The default Herald auth.email-verification template marks verify_url as a
 	// required variable — it predates the OTP flow, which delivers a 6-digit

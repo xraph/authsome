@@ -1077,8 +1077,13 @@ func (e *Engine) ResetPassword(ctx context.Context, token, newPassword string) e
 
 	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "reset_password", "user", u.ID.String(), u.ID.String(), pr.AppID.String(), "auth", nil)
 
+	// A completed reset means the password changed — emit ActionPasswordChange
+	// (the "your password was changed" confirmation), NOT ActionPasswordReset.
+	// ActionPasswordReset is the reset-*requested* event (it sends the "Reset
+	// your password" link email); emitting it here re-sent that link email
+	// after the user had already reset their password.
 	e.hooks.Emit(ctx, &hook.Event{
-		Action:     hook.ActionPasswordReset,
+		Action:     hook.ActionPasswordChange,
 		Resource:   hook.ResourceUser,
 		ResourceID: u.ID.String(),
 		ActorID:    u.ID.String(),
