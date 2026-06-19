@@ -56,6 +56,16 @@ export interface SignInFormComponentProps {
   variant?: AuthCardVariant;
   /** Additional CSS class names. */
   className?: string;
+  /**
+   * Heading shown on the initial sign-in view (email / passwordless steps).
+   * Defaults to "Sign in". Use it to brand the form, e.g. "Sign in to Acme".
+   */
+  title?: string;
+  /**
+   * Subtitle shown under the heading on the initial sign-in view.
+   * Defaults to "Welcome back. Sign in to your account."
+   */
+  description?: string;
 }
 
 /**
@@ -81,6 +91,8 @@ export function SignInForm({
   align,
   variant,
   className,
+  title = "Sign in",
+  description = "Welcome back. Sign in to your account.",
 }: SignInFormComponentProps) {
   const { signIn, client, resendVerification } = useAuth();
   const { config } = useClientConfig();
@@ -221,8 +233,8 @@ export function SignInForm({
     const hasAnyMethod = hasSocial || showPasskey;
     return (
       <AuthCard
-        title="Sign in"
-        description="Welcome back. Sign in to your account."
+        title={title}
+        description={description}
         logo={logo}
         footer={footer}
         align={align}
@@ -320,8 +332,8 @@ export function SignInForm({
   if (step === "email") {
     return (
       <AuthCard
-        title="Sign in"
-        description="Welcome back. Sign in to your account."
+        title={title}
+        description={description}
         logo={logo}
         footer={footer}
         align={align}
