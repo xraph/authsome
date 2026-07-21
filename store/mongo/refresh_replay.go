@@ -13,6 +13,7 @@ import (
 	"github.com/xraph/grove/drivers/mongodriver"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store"
 )
 
@@ -155,6 +156,24 @@ func (s *Store) RevokeRefreshTokenFamily(ctx context.Context, familyID id.Sessio
 	}
 	committed = true
 	return nil
+}
+
+// MarkRefreshTokenReplayed flips an already-revoked token's reason to
+// "replay_detected", returning whether this call made the change. The filter
+// excludes tokens already flagged, so a match is a real transition — the
+// engine's once-per-family storm guard.
+func (s *Store) MarkRefreshTokenReplayed(ctx context.Context, tokenHash string) (bool, error) {
+	if tokenHash == "" {
+		return false, nil
+	}
+	res, err := s.mdb.NewUpdate((*revokedRefreshTokenModel)(nil)).
+		Filter(bson.M{"_id": tokenHash, "reason": bson.M{"$ne": session.RevokeReasonReplayDetected}}).
+		Set("reason", session.RevokeReasonReplayDetected).
+		Exec(ctx)
+	if err != nil {
+		return false, fmt.Errorf("authsome/mongo: mark refresh token replayed: %w", err)
+	}
+	return res.MatchedCount() > 0, nil
 }
 
 // hashRefreshTokenMongo returns hex(SHA-256(tok)).

@@ -2,17 +2,16 @@ package authsome
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
-
-	"crypto/rand"
-	"crypto/sha256"
-	"crypto/subtle"
-	"encoding/hex"
 
 	"github.com/xraph/forge"
 	"github.com/xraph/warden"
@@ -472,7 +471,24 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 	// Replay check: if the presented token's hash is already in the
 	// revoked set, this is either a leaked token being replayed or a
 	// double-spend. Either way: cascade-revoke the family and refuse.
+	//
+	// The cascade + security alert fire only the FIRST time a given token
+	// transitions to replay_detected (MarkRefreshTokenReplayed is an atomic
+	// conditional upgrade). A client stuck re-presenting an already-dead token
+	// — the common cause of a runaway audit stream — is refused quietly on
+	// every subsequent attempt without re-alerting or re-revoking.
 	if revoked, _ := e.store.IsRefreshTokenRevoked(ctx, presentedHash); revoked { //nolint:errcheck // err treated as "not revoked"
+		firstReplay, mrErr := e.store.MarkRefreshTokenReplayed(ctx, presentedHash)
+		if mrErr != nil {
+			e.logger.Warn("authsome: mark refresh-token replayed failed",
+				log.String("error", mrErr.Error()),
+			)
+		}
+		if !firstReplay {
+			// Already handled — refuse without re-alerting to avoid a storm.
+			return nil, account.ErrInvalidCredentials
+		}
+
 		var ipAddr, userAgent string
 		if len(opts) > 0 {
 			ipAddr = opts[0].IPAddress

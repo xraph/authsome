@@ -542,6 +542,24 @@ func (s *Store) RevokeRefreshTokenFamily(_ context.Context, familyID id.SessionF
 	return nil
 }
 
+// MarkRefreshTokenReplayed flips an already-revoked token's reason to
+// "replay_detected", returning whether this call made the change. Guarded by
+// the store mutex so concurrent presentations resolve to a single
+// firstReplay=true — the engine's storm guard.
+func (s *Store) MarkRefreshTokenReplayed(_ context.Context, tokenHash string) (bool, error) {
+	if tokenHash == "" {
+		return false, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rec, ok := s.revokedRefreshTokens[tokenHash]
+	if !ok || rec == nil || rec.Reason == session.RevokeReasonReplayDetected {
+		return false, nil
+	}
+	rec.Reason = session.RevokeReasonReplayDetected
+	return true, nil
+}
+
 // hashRefreshToken returns the hex-encoded SHA-256 of a refresh token. Kept as
 // a small helper so memory + service share the exact same canonicalisation.
 func hashRefreshToken(tok string) string {

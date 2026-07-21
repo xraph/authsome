@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store"
 )
 
@@ -124,6 +125,25 @@ func (s *Store) RevokeRefreshTokenFamily(ctx context.Context, familyID id.Sessio
 		return fmt.Errorf("authsome/sqlite: commit refresh-family revoke: %w", err)
 	}
 	return nil
+}
+
+// MarkRefreshTokenReplayed flips an already-revoked token's reason to
+// "replay_detected", returning whether this call made the change. Atomic
+// conditional UPDATE — the engine's once-per-family storm guard.
+func (s *Store) MarkRefreshTokenReplayed(ctx context.Context, tokenHash string) (bool, error) {
+	if tokenHash == "" {
+		return false, nil
+	}
+	res, err := s.sdb.NewUpdate((*RevokedRefreshTokenModel)(nil)).
+		Set("reason = ?", session.RevokeReasonReplayDetected).
+		Where("token_hash = ?", tokenHash).
+		Where("reason <> ?", session.RevokeReasonReplayDetected).
+		Exec(ctx)
+	if err != nil {
+		return false, fmt.Errorf("authsome/sqlite: mark refresh token replayed: %w", sqliteError(err))
+	}
+	n, _ := res.RowsAffected() //nolint:errcheck // driver always supports RowsAffected
+	return n > 0, nil
 }
 
 // hashRefreshTokenSqlite returns hex(SHA-256(tok)).

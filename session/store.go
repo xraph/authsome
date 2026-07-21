@@ -59,4 +59,13 @@ type Store interface {
 	// family. Called on replay detection so a leaked token doesn't keep
 	// working through siblings.
 	RevokeRefreshTokenFamily(ctx context.Context, familyID id.SessionFamilyID, reason string) error
+
+	// MarkRefreshTokenReplayed upgrades an already-revoked token's reason to
+	// "replay_detected" and reports whether this call performed that transition
+	// (i.e. the token was not already flagged as replayed). It is the
+	// idempotency guard for replay handling: the engine cascade-revokes the
+	// family and emits the security alert only when firstReplay is true, so a
+	// client stuck re-presenting a dead token yields exactly one alert instead
+	// of one per attempt. The token must already be in the revoked set.
+	MarkRefreshTokenReplayed(ctx context.Context, tokenHash string) (firstReplay bool, err error)
 }
