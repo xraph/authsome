@@ -284,15 +284,34 @@ func (a *API) handleAdminListUsers(ctx forge.Context, req *AdminListUsersRequest
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
+// userInCallerApp loads a user and verifies they belong to the caller's tenant
+// app. A missing user and a user in another app both return 404, so a tenant
+// admin cannot view, mutate, or even confirm the existence of users outside
+// their own app.
+func (a *API) userInCallerApp(ctx forge.Context, userID id.UserID) (*user.User, error) {
+	appID, ok := a.callerAppID(ctx)
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+	u, err := a.engine.AdminGetUser(ctx.Context(), userID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	if u.AppID.String() != appID.String() {
+		return nil, forge.NotFound("user not found")
+	}
+	return u, nil
+}
+
 func (a *API) handleAdminGetUser(ctx forge.Context, req *AdminGetUserRequest) (*user.User, error) {
 	userID, err := id.ParseUserID(req.UserID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid user_id")
 	}
 
-	u, err := a.engine.AdminGetUser(ctx.Context(), userID)
+	u, err := a.userInCallerApp(ctx, userID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 
 	return u, nil
@@ -312,6 +331,10 @@ func (a *API) handleAdminBanUser(ctx forge.Context, req *AdminBanUserRequest) (*
 	// Prevent self-ban
 	if adminID == userID {
 		return nil, forge.BadRequest("cannot ban yourself")
+	}
+
+	if _, err := a.userInCallerApp(ctx, userID); err != nil {
+		return nil, err
 	}
 
 	var expiresAt *time.Time
@@ -342,6 +365,10 @@ func (a *API) handleAdminUnbanUser(ctx forge.Context, req *AdminUnbanUserRequest
 		return nil, forge.BadRequest("invalid user_id")
 	}
 
+	if _, err := a.userInCallerApp(ctx, userID); err != nil {
+		return nil, err
+	}
+
 	if err := a.engine.AdminUnbanUser(ctx.Context(), adminID, userID); err != nil {
 		return nil, mapError(err)
 	}
@@ -364,6 +391,10 @@ func (a *API) handleAdminDeleteUser(ctx forge.Context, req *AdminDeleteUserReque
 	// Prevent self-deletion
 	if adminID == userID {
 		return nil, forge.BadRequest("cannot delete yourself")
+	}
+
+	if _, err := a.userInCallerApp(ctx, userID); err != nil {
+		return nil, err
 	}
 
 	if err := a.engine.AdminDeleteUser(ctx.Context(), adminID, userID); err != nil {
@@ -409,6 +440,10 @@ func (a *API) handleAdminImpersonate(ctx forge.Context, req *AdminImpersonateReq
 		return nil, forge.BadRequest("cannot impersonate yourself")
 	}
 
+	if _, err := a.userInCallerApp(ctx, targetID); err != nil {
+		return nil, err
+	}
+
 	u, sess, err := a.engine.Impersonate(ctx.Context(), adminID, targetID)
 	if err != nil {
 		return nil, mapError(err)
@@ -440,6 +475,10 @@ func (a *API) handleAdminUpdateUser(ctx forge.Context, req *AdminUpdateUserReque
 	userID, err := id.ParseUserID(req.UserID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid user_id")
+	}
+
+	if _, err := a.userInCallerApp(ctx, userID); err != nil {
+		return nil, err
 	}
 
 	updates := authsome.AdminUserUpdates{

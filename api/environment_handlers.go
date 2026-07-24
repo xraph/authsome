@@ -16,7 +16,13 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerEnvironmentRoutes(router forge.Router) error {
-	g := router.Group("/v1", forge.WithGroupTags("environments"))
+	g := router.Group("/v1",
+		forge.WithGroupTags("environments"),
+		forge.WithGroupMiddleware(
+			middleware.RequireAuth(),
+			middleware.RequirePermission(a.engine, "manage", "environment"),
+		),
+	)
 
 	if err := g.POST("/environments", a.handleCreateEnvironment,
 		forge.WithSummary("Create environment"),
@@ -135,9 +141,9 @@ func (a *API) handleCreateEnvironment(ctx forge.Context, req *CreateEnvironmentR
 		return nil, forge.BadRequest(fmt.Sprintf("invalid environment type: %s (must be development, staging, or production)", req.Type))
 	}
 
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	env := &environment.Environment{
@@ -166,9 +172,9 @@ func (a *API) handleCreateEnvironment(ctx forge.Context, req *CreateEnvironmentR
 }
 
 func (a *API) handleListEnvironments(ctx forge.Context, req *ListEnvironmentsRequest) (*EnvironmentListResponse, error) {
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	envs, err := a.engine.Store().ListEnvironments(ctx.Context(), appID)
@@ -193,6 +199,9 @@ func (a *API) handleGetEnvironment(ctx forge.Context, _ *GetEnvironmentRequest) 
 	if err != nil {
 		return nil, mapError(err)
 	}
+	if err := a.assertAppScope(ctx, env.AppID); err != nil {
+		return nil, err
+	}
 
 	return env, nil
 }
@@ -206,6 +215,9 @@ func (a *API) handleUpdateEnvironment(ctx forge.Context, req *UpdateEnvironmentR
 	env, err := a.engine.Store().GetEnvironment(ctx.Context(), envID)
 	if err != nil {
 		return nil, mapError(err)
+	}
+	if err := a.assertAppScope(ctx, env.AppID); err != nil {
+		return nil, err
 	}
 
 	if req.Name != nil {
@@ -236,6 +248,9 @@ func (a *API) handleDeleteEnvironment(ctx forge.Context, _ *DeleteEnvironmentReq
 	if err != nil {
 		return nil, mapError(err)
 	}
+	if err := a.assertAppScope(ctx, env.AppID); err != nil {
+		return nil, err
+	}
 	if env.IsDefault {
 		return nil, forge.BadRequest("cannot delete the default environment")
 	}
@@ -252,6 +267,15 @@ func (a *API) handleCloneEnvironment(ctx forge.Context, req *CloneEnvironmentReq
 	srcEnvID, err := id.ParseEnvironmentID(ctx.Param("envId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid environment id: %v", err))
+	}
+
+	// The source environment must belong to the caller's app.
+	srcEnv, err := a.engine.Store().GetEnvironment(ctx.Context(), srcEnvID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	if err := a.assertAppScope(ctx, srcEnv.AppID); err != nil {
+		return nil, err
 	}
 
 	if req.Name == "" {
@@ -304,6 +328,9 @@ func (a *API) handleGetEnvironmentSettings(ctx forge.Context, _ *GetEnvironmentS
 	if err != nil {
 		return nil, mapError(err)
 	}
+	if err := a.assertAppScope(ctx, env.AppID); err != nil {
+		return nil, err
+	}
 
 	// Resolve effective settings: type defaults + per-env overrides.
 	typeDefaults := environment.DefaultSettingsForType(env.Type)
@@ -332,6 +359,9 @@ func (a *API) handleUpdateEnvironmentSettings(ctx forge.Context, req *UpdateEnvi
 	if err != nil {
 		return nil, mapError(err)
 	}
+	if err := a.assertAppScope(ctx, env.AppID); err != nil {
+		return nil, err
+	}
 
 	// Merge new overrides on top of existing.
 	settings := req.Settings
@@ -353,6 +383,9 @@ func (a *API) handleSetDefaultEnvironment(ctx forge.Context, _ *SetDefaultEnviro
 	env, err := a.engine.Store().GetEnvironment(ctx.Context(), envID)
 	if err != nil {
 		return nil, mapError(err)
+	}
+	if err := a.assertAppScope(ctx, env.AppID); err != nil {
+		return nil, err
 	}
 
 	if err := a.engine.Store().SetDefaultEnvironment(ctx.Context(), env.AppID, envID); err != nil {

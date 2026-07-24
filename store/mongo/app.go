@@ -6,6 +6,8 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"github.com/xraph/grove/drivers/mongodriver"
+
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/store"
@@ -115,18 +117,84 @@ func (s *Store) UpdateApp(ctx context.Context, a *app.App) error {
 }
 
 // DeleteApp removes an app.
+// DeleteApp removes an app and cascades to every app-scoped collection, so a
+// deleted app leaves no orphaned users, sessions, org memberships, API keys,
+// etc. behind (which the SQL backends achieve via ON DELETE CASCADE / explicit
+// deletes). Runs inside a MongoTx for atomicity — this requires the deployment
+// to run against a replica set or sharded cluster.
 func (s *Store) DeleteApp(ctx context.Context, appID id.AppID) error {
-	res, err := s.mdb.NewDelete((*appModel)(nil)).
-		Filter(bson.M{"_id": appID.String()}).
-		Exec(ctx)
+	mtx, err := s.mdb.GroveTx(ctx, 0, false)
 	if err != nil {
-		return fmt.Errorf("authsome/mongo: delete app: %w", err)
+		return fmt.Errorf("authsome/mongo: begin tx for app cascade: %w", err)
+	}
+	tx, ok := mtx.(*mongodriver.MongoTx)
+	if !ok {
+		return fmt.Errorf("authsome/mongo: unexpected tx type %T", mtx)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback() //nolint:errcheck // best-effort rollback
+		}
+	}()
+
+	aid := appID.String()
+	appFilter := bson.M{"app_id": aid}
+
+	// Organization-scoped children (members, teams, invitations) are keyed by
+	// org_id. Mongo has no subqueries, so resolve this app's org ids first,
+	// then delete their children by org_id.
+	var orgs []organizationModel
+	if err := tx.NewFind(&orgs).Filter(appFilter).Scan(ctx); err != nil {
+		return fmt.Errorf("authsome/mongo: list app orgs for cascade: %w", err)
+	}
+	if len(orgs) > 0 {
+		orgIDs := make([]string, 0, len(orgs))
+		for i := range orgs {
+			orgIDs = append(orgIDs, orgs[i].ID)
+		}
+		orgFilter := bson.M{"org_id": bson.M{"$in": orgIDs}}
+		for _, m := range []any{(*memberModel)(nil), (*teamModel)(nil), (*invitationModel)(nil)} {
+			if _, err := tx.NewDelete(m).Filter(orgFilter).Exec(ctx); err != nil {
+				return fmt.Errorf("authsome/mongo: delete org children: %w", err)
+			}
+		}
 	}
 
-	if res.DeletedCount() == 0 {
-		return store.ErrNotFound
+	// App-scoped rows (every model carrying an app_id).
+	for _, m := range []any{
+		(*organizationModel)(nil),
+		(*userEmailModel)(nil),
+		(*sessionModel)(nil),
+		(*verificationModel)(nil),
+		(*passwordResetModel)(nil),
+		(*deviceModel)(nil),
+		(*webhookModel)(nil),
+		(*notificationModel)(nil),
+		(*apiKeyModel)(nil),
+		(*userModel)(nil),
+		(*environmentModel)(nil),
+		(*formConfigModel)(nil),
+		(*brandingConfigModel)(nil),
+		(*appSessionConfigModel)(nil),
+		(*appClientConfigModel)(nil),
+		(*settingModel)(nil),
+	} {
+		if _, err := tx.NewDelete(m).Filter(appFilter).Exec(ctx); err != nil {
+			return fmt.Errorf("authsome/mongo: delete app children: %w", err)
+		}
 	}
 
+	// Delete is idempotent (matching the SQL backends and every other Delete*
+	// method): a missing app is a no-op, not an error.
+	if _, err := tx.NewDelete((*appModel)(nil)).Filter(bson.M{"_id": aid}).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/mongo: delete app row: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("authsome/mongo: commit app cascade: %w", err)
+	}
+	committed = true
 	return nil
 }
 

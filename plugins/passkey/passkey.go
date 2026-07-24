@@ -125,7 +125,8 @@ type Plugin struct {
 	hooks        *hook.Bus
 	logger       log.Logger
 	settingsMgr  *settings.Manager
-	originWAOnce sync.Map // map[string]*webauthn.WebAuthn — per-origin webauthn cache for localhost dev
+	engine       plugin.Engine // used to resolve users and issue sessions for passwordless login
+	originWAOnce sync.Map      // map[string]*webauthn.WebAuthn — per-origin webauthn cache for localhost dev
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -217,6 +218,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.wa = wa
 
 	if engine != nil {
+		p.engine = engine
 		p.chronicle = engine.Chronicle()
 		p.relay = engine.Relay()
 		p.hooks = engine.Hooks()

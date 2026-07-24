@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -342,6 +343,11 @@ func (s *Store) ListUsers(_ context.Context, q *user.Query) (*user.List, error) 
 		if !q.EnvID.IsNil() && u.EnvID.String() != q.EnvID.String() {
 			continue
 		}
+		// Case-insensitive substring match on email, mirroring the SQL
+		// backends' LIKE '%email%' so admin user search behaves identically.
+		if q.Email != "" && !strings.Contains(strings.ToLower(u.Email), strings.ToLower(q.Email)) {
+			continue
+		}
 		result = append(result, u)
 	}
 	return &user.List{Users: result, Total: len(result)}, nil
@@ -388,7 +394,12 @@ func (s *Store) GetSessionByRefreshToken(_ context.Context, refreshToken string)
 	defer s.mu.RUnlock()
 	for _, sess := range s.sessions {
 		if sess.RefreshToken == refreshToken {
-			return sess, nil
+			// Return a copy: the refresh flow mutates the returned session in
+			// place before persisting via RotateSession, and the CAS there must
+			// still be able to observe the pre-rotation token. Sharing the map
+			// pointer would let that mutation defeat the compare-and-swap.
+			copied := *sess
+			return &copied, nil
 		}
 	}
 	return nil, store.ErrNotFound
@@ -403,6 +414,24 @@ func (s *Store) UpdateSession(_ context.Context, sess *session.Session) error {
 	sess.UpdatedAt = time.Now()
 	s.sessions[sess.ID.String()] = sess
 	return nil
+}
+
+func (s *Store) RotateSession(_ context.Context, sess *session.Session, expectedToken string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stored, ok := s.sessions[sess.ID.String()]
+	if !ok {
+		return false, store.ErrNotFound
+	}
+	// Compare-and-swap on the access token: only apply if the stored token is
+	// still the pre-rotation value the caller observed.
+	if stored.Token != expectedToken {
+		return false, nil
+	}
+	updated := *sess
+	updated.UpdatedAt = time.Now()
+	s.sessions[sess.ID.String()] = &updated
+	return true, nil
 }
 
 func (s *Store) TouchSession(_ context.Context, sessionID id.SessionID, lastActivityAt, expiresAt time.Time) error {

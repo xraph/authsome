@@ -365,6 +365,19 @@ func (s *Store) UpdateSession(ctx context.Context, sess *session.Session) error 
 	return pgError(err)
 }
 
+func (s *Store) RotateSession(ctx context.Context, sess *session.Session, expectedToken string) (bool, error) {
+	m := fromSession(sess)
+	m.UpdatedAt = time.Now()
+	// Compare-and-swap: only rotate if the stored access token is still the
+	// pre-rotation value, so two concurrent refreshes cannot both win.
+	res, err := s.pg.NewUpdate(m).WherePK().Where("token = ?", expectedToken).Exec(ctx)
+	if err != nil {
+		return false, pgError(err)
+	}
+	n, _ := res.RowsAffected() //nolint:errcheck // RowsAffected always succeeds for pgx
+	return n > 0, nil
+}
+
 func (s *Store) TouchSession(ctx context.Context, sessionID id.SessionID, lastActivityAt, expiresAt time.Time) error {
 	_, err := s.pg.NewUpdate((*SessionModel)(nil)).
 		Set("last_activity_at = ?", lastActivityAt).

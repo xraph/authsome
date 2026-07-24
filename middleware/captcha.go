@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 	"sync"
 
 	log "github.com/xraph/go-utils/log"
@@ -291,20 +290,9 @@ func captchaExtractToken(r *http.Request) string {
 }
 
 func captchaClientIP(r *http.Request) string {
-	if v := r.Header.Get("X-Forwarded-For"); v != "" {
-		// First entry is the original client.
-		if idx := strings.Index(v, ","); idx >= 0 {
-			return strings.TrimSpace(v[:idx])
-		}
-		return strings.TrimSpace(v)
-	}
-	if v := r.Header.Get("X-Real-IP"); v != "" {
-		return strings.TrimSpace(v)
-	}
-	if i := strings.LastIndex(r.RemoteAddr, ":"); i >= 0 {
-		return r.RemoteAddr[:i]
-	}
-	return r.RemoteAddr
+	// Trusted-proxy-aware resolution so the CAPTCHA's remote-IP binding can't be
+	// forged by a direct client spoofing X-Forwarded-For.
+	return ClientIP(r)
 }
 
 func captchaVerifierFromCache(cache *sync.Map, key, provider, secret string, factory func(string, string) (captcha.Verifier, error)) (captcha.Verifier, error) {

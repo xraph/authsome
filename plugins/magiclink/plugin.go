@@ -226,8 +226,19 @@ func (p *Plugin) handleSend(ctx forge.Context, req *SendRequest) (*SendResponse,
 		return nil, forge.BadRequest("invalid app_id")
 	}
 
-	// Create verification token
-	v, err := account.NewVerification(ctx.Context(), appID, id.NewUserID(), VerificationTypeMagicLink, p.config.TokenTTL)
+	// Resolve the real user by email. The verification token must be bound to
+	// their actual user id so /verify can resolve them — binding it to a random
+	// id (the previous behavior) made every real magic-link login fail.
+	u, lookupErr := p.store.GetUserByEmail(ctx.Context(), appID, req.Email)
+	if lookupErr != nil {
+		// Anti-enumeration: return the same success response whether or not the
+		// email is registered, and never mint a token or send a link for an
+		// address with no account.
+		return &SendResponse{Status: "magic link sent"}, nil
+	}
+
+	// Create verification token bound to the resolved user.
+	v, err := account.NewVerification(ctx.Context(), appID, u.ID, VerificationTypeMagicLink, p.config.TokenTTL)
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("failed to create magic link token: %w", err))
 	}

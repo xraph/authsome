@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
@@ -160,22 +161,29 @@ func (s *Store) DeleteUser(ctx context.Context, userID id.UserID) error {
 	return nil
 }
 
-// ListUsers returns a paginated list of users for an app, with optional email search.
-func (s *Store) ListUsers(ctx context.Context, q *user.Query) (*user.List, error) {
-	var models []userModel
-
+// buildUserListFilter builds the base Mongo query for ListUsers (app/env scope
+// and optional email search), excluding pagination. The email value is escaped
+// with regexp.QuoteMeta so a caller cannot inject regex metacharacters — a
+// pathological pattern (ReDoS) or one that alters the query semantics.
+func buildUserListFilter(q *user.Query) bson.M {
 	filter := bson.M{
 		"app_id":     q.AppID.String(),
 		"deleted_at": nil,
 	}
-
 	if !q.EnvID.IsNil() {
 		filter["env_id"] = q.EnvID.String()
 	}
-
 	if q.Email != "" {
-		filter["email"] = bson.M{"$regex": q.Email, "$options": "i"}
+		filter["email"] = bson.M{"$regex": regexp.QuoteMeta(q.Email), "$options": "i"}
 	}
+	return filter
+}
+
+// ListUsers returns a paginated list of users for an app, with optional email search.
+func (s *Store) ListUsers(ctx context.Context, q *user.Query) (*user.List, error) {
+	var models []userModel
+
+	filter := buildUserListFilter(q)
 
 	if q.Cursor != "" {
 		filter["_id"] = bson.M{"$lt": q.Cursor}
@@ -197,6 +205,13 @@ func (s *Store) ListUsers(ctx context.Context, q *user.Query) (*user.List, error
 
 	list := &user.List{
 		Users: make([]*user.User, 0, len(models)),
+		Total: len(models),
+	}
+	// Adjust total if we fetched the extra sentinel row (limit+1), mirroring
+	// the SQL stores so callers (e.g. the first-run /setup guard and admin
+	// counts) see a consistent, non-zero total when users exist.
+	if len(models) > limit {
+		list.Total = limit
 	}
 
 	for i := range models {

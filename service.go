@@ -523,6 +523,12 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 		return nil, account.ErrInvalidCredentials
 	}
 
+	// Capture the pre-rotation access token. The rotation below is committed
+	// via a compare-and-swap keyed on this value, so two concurrent refreshes
+	// presenting the same token cannot both persist their (different) rotated
+	// tokens — exactly one wins.
+	oldAccessToken := sess.Token
+
 	// Check if refresh token is expired
 	if time.Now().After(sess.RefreshTokenExpiresAt) {
 		_ = e.store.DeleteSession(ctx, sess.ID) //nolint:errcheck // best-effort cleanup
@@ -567,8 +573,44 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 		return nil, fmt.Errorf("authsome: refresh session: %w", err)
 	}
 
-	if err := e.store.UpdateSession(ctx, sess); err != nil {
+	// account.RefreshSession always mints an opaque access token. If the app is
+	// configured for JWT access tokens, re-derive a JWT here (mirroring
+	// newSession) so a refresh does not silently downgrade the token format —
+	// which would break stateless verification and JWT-revocation binding.
+	tokFmt := e.TokenFormatForApp(sess.AppID.String())
+	if tokFmt.Name() == "jwt" {
+		jwtToken, genErr := tokFmt.GenerateAccessToken(tokenformat.TokenClaims{
+			UserID:    sess.UserID.String(),
+			AppID:     sess.AppID.String(),
+			SessionID: sess.ID.String(),
+			IssuedAt:  sess.UpdatedAt,
+			ExpiresAt: sess.ExpiresAt,
+		})
+		if genErr != nil {
+			return nil, fmt.Errorf("authsome: refresh session: regenerate jwt: %w", genErr)
+		}
+		sess.Token = jwtToken
+	}
+
+	rotated, err := e.store.RotateSession(ctx, sess, oldAccessToken)
+	if err != nil {
+		// The session can be concurrently deleted out from under us when a
+		// sibling refresh detects replay and revokes the whole family. That is
+		// a benign lost race for this caller — not a server error — so refuse
+		// cleanly rather than surfacing a 500.
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, account.ErrInvalidCredentials
+		}
 		return nil, fmt.Errorf("authsome: update session: %w", err)
+	}
+	if !rotated {
+		// A concurrent refresh already rotated this session between our fetch
+		// and write. Refuse this request rather than returning tokens that were
+		// never persisted (which would silently sign the client out on its next
+		// call). This is a benign race, not a token replay, so we deliberately
+		// do NOT flag the family — avoiding a revocation storm on legitimate
+		// concurrent refreshes (e.g. a page firing several XHRs near expiry).
+		return nil, account.ErrInvalidCredentials
 	}
 
 	// Record the OLD refresh-token hash as rotated. A subsequent Refresh

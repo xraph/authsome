@@ -80,26 +80,20 @@ func (a *API) handleListDevices(ctx forge.Context, _ *ListDevicesRequest) (*Devi
 }
 
 func (a *API) handleGetDevice(ctx forge.Context, _ *GetDeviceRequest) (*device.Device, error) {
-	deviceID, err := id.ParseDeviceID(ctx.Param("deviceId"))
+	d, err := a.deviceOwnedByCaller(ctx)
 	if err != nil {
-		return nil, forge.BadRequest(fmt.Sprintf("invalid device id: %v", err))
+		return nil, err
 	}
-
-	d, err := a.engine.GetDevice(ctx.Context(), deviceID)
-	if err != nil {
-		return nil, mapError(err)
-	}
-
 	return d, nil
 }
 
 func (a *API) handleDeleteDevice(ctx forge.Context, _ *DeleteDeviceRequest) (*StatusResponse, error) {
-	deviceID, err := id.ParseDeviceID(ctx.Param("deviceId"))
+	d, err := a.deviceOwnedByCaller(ctx)
 	if err != nil {
-		return nil, forge.BadRequest(fmt.Sprintf("invalid device id: %v", err))
+		return nil, err
 	}
 
-	if err := a.engine.DeleteDevice(ctx.Context(), deviceID); err != nil {
+	if err := a.engine.DeleteDevice(ctx.Context(), d.ID); err != nil {
 		return nil, mapError(err)
 	}
 
@@ -108,15 +102,37 @@ func (a *API) handleDeleteDevice(ctx forge.Context, _ *DeleteDeviceRequest) (*St
 }
 
 func (a *API) handleTrustDevice(ctx forge.Context, _ *TrustDeviceRequest) (*device.Device, error) {
+	d, err := a.deviceOwnedByCaller(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	trusted, err := a.engine.TrustDevice(ctx.Context(), d.ID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+
+	return trusted, nil
+}
+
+// deviceOwnedByCaller loads the device named by the :deviceId path parameter
+// and verifies it belongs to the authenticated caller. A missing device and a
+// device owned by another user both return 404 so the endpoint never
+// discloses the existence of another user's device.
+func (a *API) deviceOwnedByCaller(ctx forge.Context) (*device.Device, error) {
+	userID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+
 	deviceID, err := id.ParseDeviceID(ctx.Param("deviceId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid device id: %v", err))
 	}
 
-	d, err := a.engine.TrustDevice(ctx.Context(), deviceID)
-	if err != nil {
-		return nil, mapError(err)
+	d, err := a.engine.GetDevice(ctx.Context(), deviceID)
+	if err != nil || d.UserID != userID {
+		return nil, forge.NotFound("device not found")
 	}
-
 	return d, nil
 }

@@ -316,15 +316,11 @@ func IsMFATicketNotFound(err error) bool {
 	return errors.Is(err, ceremony.ErrNotFound)
 }
 
-// ceremonyStoreOrFallback returns the configured ceremony store,
-// lazily allocating a process-wide in-memory store if none was
-// configured. The lazy allocation is single-use (sync.Once-like via
-// nil check + assignment under the engine's existing serial
-// initialisation contract) so two IssueSession calls share a backing
-// map and tickets actually persist between calls.
+// ceremonyStoreOrFallback returns the configured ceremony store. The store is
+// always non-nil: NewEngine allocates an in-memory fallback at construction
+// time when no store was configured, so this accessor never mutates engine
+// state on a request goroutine (avoiding a data race between concurrent
+// MFA-gated logins).
 func (e *Engine) ceremonyStoreOrFallback() ceremony.Store {
-	if e.ceremonyStore == nil {
-		e.ceremonyStore = ceremony.NewMemory()
-	}
 	return e.ceremonyStore
 }

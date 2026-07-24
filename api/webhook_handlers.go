@@ -7,6 +7,7 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/webhook"
 )
 
@@ -15,7 +16,13 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerWebhookRoutes(router forge.Router) error {
-	g := router.Group("/v1", forge.WithGroupTags("webhooks"))
+	g := router.Group("/v1",
+		forge.WithGroupTags("webhooks"),
+		forge.WithGroupMiddleware(
+			middleware.RequireAuth(),
+			middleware.RequirePermission(a.engine, "manage", "app"),
+		),
+	)
 
 	if err := g.POST("/webhooks", a.handleCreateWebhook,
 		forge.WithSummary("Create webhook"),
@@ -80,9 +87,9 @@ func (a *API) handleCreateWebhook(ctx forge.Context, req *CreateWebhookRequest) 
 		return nil, forge.BadRequest("at least one event type is required")
 	}
 
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	w := &webhook.Webhook{
@@ -99,9 +106,9 @@ func (a *API) handleCreateWebhook(ctx forge.Context, req *CreateWebhookRequest) 
 }
 
 func (a *API) handleListWebhooks(ctx forge.Context, req *ListWebhooksRequest) (*WebhookListResponse, error) {
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	webhooks, err := a.engine.ListWebhooks(ctx.Context(), appID)
@@ -126,6 +133,9 @@ func (a *API) handleGetWebhook(ctx forge.Context, _ *GetWebhookRequest) (*webhoo
 	if err != nil {
 		return nil, mapError(err)
 	}
+	if err := a.assertAppScope(ctx, w.AppID); err != nil {
+		return nil, err
+	}
 
 	return w, nil
 }
@@ -139,6 +149,9 @@ func (a *API) handleUpdateWebhook(ctx forge.Context, req *UpdateWebhookRequest) 
 	w, err := a.engine.GetWebhook(ctx.Context(), webhookID)
 	if err != nil {
 		return nil, mapError(err)
+	}
+	if err := a.assertAppScope(ctx, w.AppID); err != nil {
+		return nil, err
 	}
 
 	if req.URL != nil {
@@ -162,6 +175,14 @@ func (a *API) handleDeleteWebhook(ctx forge.Context, _ *DeleteWebhookRequest) (*
 	webhookID, err := id.ParseWebhookID(ctx.Param("webhookId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid webhook id: %v", err))
+	}
+
+	w, err := a.engine.GetWebhook(ctx.Context(), webhookID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	if err := a.assertAppScope(ctx, w.AppID); err != nil {
+		return nil, err
 	}
 
 	if err := a.engine.DeleteWebhook(ctx.Context(), webhookID); err != nil {

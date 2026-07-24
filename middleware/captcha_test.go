@@ -484,11 +484,37 @@ func TestCaptchaMiddleware_RemoteIPExtractedFromHeader(t *testing.T) {
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	req.Header.Set("X-Captcha-Token", "t")
-	req.Header.Set("X-Forwarded-For", "203.0.113.5, 10.0.0.1")
+	// The peer must be a trusted (private) proxy for X-Forwarded-For to be
+	// honored; otherwise a direct client could spoof its IP.
+	req.RemoteAddr = "10.0.0.1:8080"
+	req.Header.Set("X-Forwarded-For", "203.0.113.5, 10.0.0.2")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "203.0.113.5", sawIP, "first XFF entry should be the original client")
+	assert.Equal(t, "203.0.113.5", sawIP, "the real client is the rightmost non-proxy XFF entry")
+}
+
+func TestCaptchaMiddleware_RemoteIPNotSpoofableByDirectClient(t *testing.T) {
+	env := newCaptchaTestEnv(t, true)
+	var sawIP string
+	stub := &stubVerifier{fn: func(_ context.Context, _, ip, _ string) (*captcha.Result, error) {
+		sawIP = ip
+		return &captcha.Result{Success: true}, nil
+	}}
+	handler := captchaTestRouter(t, middleware.CaptchaOptions{
+		Settings:    env.manager,
+		VerifierFor: func(string, string) (captcha.Verifier, error) { return stub, nil },
+	}, nil)
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
+	req.Header.Set("X-Captcha-Token", "t")
+	// Direct (public) peer: the spoofed X-Forwarded-For must be ignored.
+	req.RemoteAddr = "203.0.113.99:44321"
+	req.Header.Set("X-Forwarded-For", "1.2.3.4")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "203.0.113.99", sawIP, "a direct client must not be able to spoof its IP via X-Forwarded-For")
 }
 
 func TestCaptchaMiddleware_NoActionPassesEmptyToVerifier(t *testing.T) {

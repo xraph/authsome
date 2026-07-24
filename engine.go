@@ -150,6 +150,13 @@ func NewEngine(opts ...Option) (*Engine, error) {
 		return nil, errors.New("authsome: warden engine is required (use WithWarden option)")
 	}
 
+	// Eagerly allocate the MFA ceremony store when none was configured, so it
+	// is never lazily created on a request goroutine (which would be a data
+	// race between concurrent MFA-gated logins and could drop tickets).
+	if e.ceremonyStore == nil {
+		e.ceremonyStore = ceremony.NewMemory()
+	}
+
 	// Initialize subsystems
 	e.plugins = plugin.NewRegistry(e.logger)
 	e.hooks = hook.NewBus(e.logger)

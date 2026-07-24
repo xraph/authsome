@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -455,6 +456,35 @@ func (p *Plugin) handleACS(ctx forge.Context, req *ACSRequest) (*CallbackRespons
 }
 
 // authenticateUser processes an SSO identity and creates/links a user.
+// errUnverifiedSSOLink signals that an SSO email matched a pre-existing local
+// account whose email has never been verified. Linking in that case is an
+// account-takeover vector, so the caller refuses.
+var errUnverifiedSSOLink = errors.New("sso: refusing to link to an unverified pre-existing account")
+
+// linkableExistingUser resolves an existing local account for an SSO email and
+// verifies it is safe to link to. It returns:
+//   - (user, nil) when a matching account exists and the matched email is verified
+//   - (nil, nil)  when no account matches (the caller creates a fresh user)
+//   - (nil, errUnverifiedSSOLink) when a match exists but its email is unverified
+//   - (nil, err)  on an unexpected store error
+//
+// This mirrors the social plugin's verified-email linking rule so SSO logins
+// cannot be captured by a pre-registered unverified account.
+func (p *Plugin) linkableExistingUser(ctx context.Context, appID id.AppID, envID id.EnvironmentID, email string) (*user.User, error) {
+	u, err := p.store.GetUserByAnyEmail(ctx, appID, envID, email)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	rec, recErr := p.store.GetUserEmailRecord(ctx, appID, envID, email)
+	if recErr != nil || rec == nil || !rec.Verified {
+		return nil, errUnverifiedSSOLink
+	}
+	return u, nil
+}
+
 func (p *Plugin) authenticateUser(ctx forge.Context, provider Provider, params map[string]string) (*CallbackResponse, error) {
 	ssoUser, err := provider.HandleCallback(ctx.Context(), params)
 	if err != nil {
@@ -482,8 +512,19 @@ func (p *Plugin) authenticateUser(ctx forge.Context, provider Provider, params m
 	isNew := false
 
 	if ssoUser.Email != "" {
-		u, err = p.store.GetUserByAnyEmail(goCtx, appID, envID, strings.ToLower(ssoUser.Email))
+		email := strings.ToLower(ssoUser.Email)
+		u, err = p.linkableExistingUser(goCtx, appID, envID, email)
+		if errors.Is(err, errUnverifiedSSOLink) {
+			// A pre-existing account owns this email but has never verified it.
+			// Linking here would let an attacker who pre-registered the
+			// victim's email capture the victim's SSO login, so refuse.
+			return nil, forge.NewHTTPError(http.StatusConflict,
+				"an account with this email already exists but is not verified; verify it before signing in with SSO")
+		}
 		if err != nil {
+			return nil, forge.InternalError(fmt.Errorf("sso: resolve existing user: %w", err))
+		}
+		if u == nil {
 			// No existing user -- create one. Prefer the upstream
 			// IdP's user_id (sub claim) as the local user_id when
 			// it parses as a valid Authsome UserID. This makes the
