@@ -4,6 +4,7 @@ package postgres_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/device"
+	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/notification"
 	"github.com/xraph/authsome/organization"
@@ -68,9 +70,17 @@ func setupTestStore(t *testing.T) *pgstore.Store {
 	return s
 }
 
-// createTestApp is a convenience that creates + returns a persisted App.
+// testEnvByApp records the default environment created for each test app so
+// env-scoped rows can reference a real environment (postgres enforces the
+// users/sessions/... env_id foreign key; memory and sqlite don't).
+var testEnvByApp sync.Map // appID string -> id.EnvironmentID
+
+// createTestApp is a convenience that creates + returns a persisted App along
+// with a default environment (postgres requires env_id to reference a real
+// environment). Use testEnvID(t, app.ID) to get that environment.
 func createTestApp(t *testing.T, s *pgstore.Store, slug string) *app.App {
 	t.Helper()
+	ctx := context.Background()
 	a := &app.App{
 		ID:        id.NewAppID(),
 		Name:      "Test App " + slug,
@@ -79,16 +89,38 @@ func createTestApp(t *testing.T, s *pgstore.Store, slug string) *app.App {
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	require.NoError(t, s.CreateApp(context.Background(), a))
+	require.NoError(t, s.CreateApp(ctx, a))
+
+	env := &environment.Environment{
+		ID:        id.NewEnvironmentID(),
+		AppID:     a.ID,
+		Name:      "Production",
+		Slug:      "production",
+		Type:      environment.TypeProduction,
+		IsDefault: true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, s.CreateEnvironment(ctx, env))
+	testEnvByApp.Store(a.ID.String(), env.ID)
 	return a
+}
+
+// testEnvID returns the default environment id created by createTestApp for the
+// given app.
+func testEnvID(t *testing.T, appID id.AppID) id.EnvironmentID {
+	t.Helper()
+	v, ok := testEnvByApp.Load(appID.String())
+	require.True(t, ok, "no test environment for app %s (createTestApp must run first)", appID)
+	return v.(id.EnvironmentID)
 }
 
 // createTestUser creates + returns a persisted User scoped to the given app.
 func createTestUser(t *testing.T, s *pgstore.Store, appID id.AppID, email string) *user.User {
 	t.Helper()
 	u := &user.User{
-		ID:           id.NewUserID(),
-		AppID:        appID,
+		ID:    id.NewUserID(),
+		AppID: appID, EnvID: testEnvID(t, appID),
 		Email:        email,
 		FirstName:    "Test User",
 		Username:     email[:len(email)-len("@test.com")],
@@ -212,8 +244,8 @@ func TestUser_CRUD(t *testing.T) {
 	a := createTestApp(t, s, "user-test")
 
 	u := &user.User{
-		ID:              id.NewUserID(),
-		AppID:           a.ID,
+		ID:    id.NewUserID(),
+		AppID: a.ID, EnvID: testEnvID(t, a.ID),
 		Email:           "alice@test.com",
 		EmailVerified:   true,
 		FirstName:       "Alice",
@@ -288,8 +320,8 @@ func TestUser_UniqueEmailPerApp(t *testing.T) {
 
 	// Same email, same app -> should fail
 	dup := &user.User{
-		ID:        id.NewUserID(),
-		AppID:     a.ID,
+		ID:    id.NewUserID(),
+		AppID: a.ID, EnvID: testEnvID(t, a.ID),
 		Email:     "dup@test.com",
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -308,8 +340,8 @@ func TestUser_SameEmailDifferentApp(t *testing.T) {
 
 	// Same email, different app -> should succeed
 	u2 := &user.User{
-		ID:        id.NewUserID(),
-		AppID:     a2.ID,
+		ID:    id.NewUserID(),
+		AppID: a2.ID, EnvID: testEnvID(t, a2.ID),
 		Email:     "shared@test.com",
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -377,8 +409,8 @@ func TestSession_CRUD(t *testing.T) {
 	u := createTestUser(t, s, a.ID, "session-user@test.com")
 
 	sess := &session.Session{
-		ID:                    id.NewSessionID(),
-		AppID:                 a.ID,
+		ID:    id.NewSessionID(),
+		AppID: a.ID, EnvID: testEnvID(t, a.ID),
 		UserID:                u.ID,
 		Token:                 "tok_" + id.NewSessionID().String(),
 		RefreshToken:          "rtk_" + id.NewSessionID().String(),
@@ -420,8 +452,8 @@ func TestSession_CRUD(t *testing.T) {
 
 	// List user sessions
 	sess2 := &session.Session{
-		ID:                    id.NewSessionID(),
-		AppID:                 a.ID,
+		ID:    id.NewSessionID(),
+		AppID: a.ID, EnvID: testEnvID(t, a.ID),
 		UserID:                u.ID,
 		Token:                 "tok2_" + id.NewSessionID().String(),
 		RefreshToken:          "rtk2_" + id.NewSessionID().String(),
@@ -457,8 +489,8 @@ func TestSession_UniqueTokens(t *testing.T) {
 	sharedToken := "unique_token_" + id.NewSessionID().String()
 
 	s1 := &session.Session{
-		ID:                    id.NewSessionID(),
-		AppID:                 a.ID,
+		ID:    id.NewSessionID(),
+		AppID: a.ID, EnvID: testEnvID(t, a.ID),
 		UserID:                u.ID,
 		Token:                 sharedToken,
 		RefreshToken:          "rt1_" + id.NewSessionID().String(),
@@ -471,8 +503,8 @@ func TestSession_UniqueTokens(t *testing.T) {
 
 	// Duplicate token should fail
 	s2 := &session.Session{
-		ID:                    id.NewSessionID(),
-		AppID:                 a.ID,
+		ID:    id.NewSessionID(),
+		AppID: a.ID, EnvID: testEnvID(t, a.ID),
 		UserID:                u.ID,
 		Token:                 sharedToken,
 		RefreshToken:          "rt2_" + id.NewSessionID().String(),
@@ -502,8 +534,8 @@ func TestVerification_CRUD(t *testing.T) {
 	u := createTestUser(t, s, a.ID, "verify@test.com")
 
 	v := &account.Verification{
-		ID:        id.NewVerificationID(),
-		AppID:     a.ID,
+		ID:    id.NewVerificationID(),
+		AppID: a.ID, EnvID: testEnvID(t, a.ID),
 		UserID:    u.ID,
 		Token:     "vrf_" + id.NewVerificationID().String(),
 		Type:      account.VerificationEmail,
@@ -545,8 +577,8 @@ func TestPasswordReset_CRUD(t *testing.T) {
 	u := createTestUser(t, s, a.ID, "pwreset@test.com")
 
 	pr := &account.PasswordReset{
-		ID:        id.NewPasswordResetID(),
-		AppID:     a.ID,
+		ID:    id.NewPasswordResetID(),
+		AppID: a.ID, EnvID: testEnvID(t, a.ID),
 		UserID:    u.ID,
 		Token:     "pwr_" + id.NewPasswordResetID().String(),
 		ExpiresAt: time.Now().Add(1 * time.Hour),
@@ -579,8 +611,8 @@ func TestPasswordReset_UniqueToken(t *testing.T) {
 	sharedToken := "unique_pwr_" + id.NewPasswordResetID().String()
 
 	pr1 := &account.PasswordReset{
-		ID:        id.NewPasswordResetID(),
-		AppID:     a.ID,
+		ID:    id.NewPasswordResetID(),
+		AppID: a.ID, EnvID: testEnvID(t, a.ID),
 		UserID:    u.ID,
 		Token:     sharedToken,
 		ExpiresAt: time.Now().Add(time.Hour),
@@ -589,8 +621,8 @@ func TestPasswordReset_UniqueToken(t *testing.T) {
 	require.NoError(t, s.CreatePasswordReset(ctx, pr1))
 
 	pr2 := &account.PasswordReset{
-		ID:        id.NewPasswordResetID(),
-		AppID:     a.ID,
+		ID:    id.NewPasswordResetID(),
+		AppID: a.ID, EnvID: testEnvID(t, a.ID),
 		UserID:    u.ID,
 		Token:     sharedToken,
 		ExpiresAt: time.Now().Add(time.Hour),
@@ -611,8 +643,8 @@ func TestOrganization_CRUD(t *testing.T) {
 	u := createTestUser(t, s, a.ID, "org-owner@test.com")
 
 	org := &organization.Organization{
-		ID:        id.NewOrgID(),
-		AppID:     a.ID,
+		ID:    id.NewOrgID(),
+		AppID: a.ID, EnvID: testEnvID(t, a.ID),
 		Name:      "Acme Corp",
 		Slug:      "acme-corp",
 		Logo:      "https://acme.com/logo.png",
@@ -647,8 +679,8 @@ func TestOrganization_CRUD(t *testing.T) {
 
 	// List by app
 	org2 := &organization.Organization{
-		ID:        id.NewOrgID(),
-		AppID:     a.ID,
+		ID:    id.NewOrgID(),
+		AppID: a.ID, EnvID: testEnvID(t, a.ID),
 		Name:      "Beta Inc",
 		Slug:      "beta-inc",
 		CreatedBy: u.ID,
@@ -674,13 +706,13 @@ func TestOrganization_UniqueSlugPerApp(t *testing.T) {
 	u := createTestUser(t, s, a.ID, "slug-owner@test.com")
 
 	org1 := &organization.Organization{
-		ID: id.NewOrgID(), AppID: a.ID, Name: "Org One", Slug: "same-slug",
+		ID: id.NewOrgID(), AppID: a.ID, EnvID: testEnvID(t, a.ID), Name: "Org One", Slug: "same-slug",
 		CreatedBy: u.ID, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	require.NoError(t, s.CreateOrganization(ctx, org1))
 
 	org2 := &organization.Organization{
-		ID: id.NewOrgID(), AppID: a.ID, Name: "Org Two", Slug: "same-slug",
+		ID: id.NewOrgID(), AppID: a.ID, EnvID: testEnvID(t, a.ID), Name: "Org Two", Slug: "same-slug",
 		CreatedBy: u.ID, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	err := s.CreateOrganization(ctx, org2)
@@ -700,11 +732,11 @@ func TestOrganization_ListUserOrganizations(t *testing.T) {
 	u := createTestUser(t, s, a.ID, "multi-org@test.com")
 
 	org1 := &organization.Organization{
-		ID: id.NewOrgID(), AppID: a.ID, Name: "Org A", Slug: "org-a",
+		ID: id.NewOrgID(), AppID: a.ID, EnvID: testEnvID(t, a.ID), Name: "Org A", Slug: "org-a",
 		CreatedBy: u.ID, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	org2 := &organization.Organization{
-		ID: id.NewOrgID(), AppID: a.ID, Name: "Org B", Slug: "org-b",
+		ID: id.NewOrgID(), AppID: a.ID, EnvID: testEnvID(t, a.ID), Name: "Org B", Slug: "org-b",
 		CreatedBy: u.ID, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	require.NoError(t, s.CreateOrganization(ctx, org1))
@@ -738,7 +770,7 @@ func TestMember_CRUD(t *testing.T) {
 	u2 := createTestUser(t, s, a.ID, "member2@test.com")
 
 	org := &organization.Organization{
-		ID: id.NewOrgID(), AppID: a.ID, Name: "Members Org", Slug: "members-org",
+		ID: id.NewOrgID(), AppID: a.ID, EnvID: testEnvID(t, a.ID), Name: "Members Org", Slug: "members-org",
 		CreatedBy: u.ID, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	require.NoError(t, s.CreateOrganization(ctx, org))
@@ -786,7 +818,7 @@ func TestMember_UniqueUserOrgConstraint(t *testing.T) {
 	u := createTestUser(t, s, a.ID, "mem-uniq@test.com")
 
 	org := &organization.Organization{
-		ID: id.NewOrgID(), AppID: a.ID, Name: "Uniq Org", Slug: "uniq-org",
+		ID: id.NewOrgID(), AppID: a.ID, EnvID: testEnvID(t, a.ID), Name: "Uniq Org", Slug: "uniq-org",
 		CreatedBy: u.ID, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	require.NoError(t, s.CreateOrganization(ctx, org))
@@ -823,7 +855,7 @@ func TestInvitation_CRUD(t *testing.T) {
 	u := createTestUser(t, s, a.ID, "inviter@test.com")
 
 	org := &organization.Organization{
-		ID: id.NewOrgID(), AppID: a.ID, Name: "Inv Org", Slug: "inv-org",
+		ID: id.NewOrgID(), AppID: a.ID, EnvID: testEnvID(t, a.ID), Name: "Inv Org", Slug: "inv-org",
 		CreatedBy: u.ID, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	require.NoError(t, s.CreateOrganization(ctx, org))
@@ -863,7 +895,7 @@ func TestTeam_CRUD(t *testing.T) {
 	u := createTestUser(t, s, a.ID, "team-owner@test.com")
 
 	org := &organization.Organization{
-		ID: id.NewOrgID(), AppID: a.ID, Name: "Team Org", Slug: "team-org",
+		ID: id.NewOrgID(), AppID: a.ID, EnvID: testEnvID(t, a.ID), Name: "Team Org", Slug: "team-org",
 		CreatedBy: u.ID, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	require.NoError(t, s.CreateOrganization(ctx, org))
@@ -898,7 +930,7 @@ func TestDevice_CRUD(t *testing.T) {
 	u := createTestUser(t, s, a.ID, "device-user@test.com")
 
 	dev := &device.Device{
-		ID: id.NewDeviceID(), UserID: u.ID, AppID: a.ID,
+		ID: id.NewDeviceID(), UserID: u.ID, AppID: a.ID, EnvID: testEnvID(t, a.ID),
 		Name: "MacBook Pro", Type: "desktop", Browser: "Chrome", OS: "macOS",
 		IPAddress: "10.0.0.1", Fingerprint: "fp_abc123", Trusted: true,
 		LastSeenAt: time.Now(), CreatedAt: time.Now(), UpdatedAt: time.Now(),
@@ -930,7 +962,7 @@ func TestWebhook_CRUD(t *testing.T) {
 	a := createTestApp(t, s, "webhook-test")
 
 	wh := &webhook.Webhook{
-		ID: id.NewWebhookID(), AppID: a.ID,
+		ID: id.NewWebhookID(), AppID: a.ID, EnvID: testEnvID(t, a.ID),
 		URL: "https://example.com/webhook", Events: []string{"user.created"},
 		Secret: "wh_secret_123", Active: true,
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
@@ -958,7 +990,7 @@ func TestNotification_CRUD(t *testing.T) {
 	u := createTestUser(t, s, a.ID, "notif-user@test.com")
 
 	n := &notification.Notification{
-		ID: id.NewNotificationID(), AppID: a.ID, UserID: u.ID,
+		ID: id.NewNotificationID(), AppID: a.ID, EnvID: testEnvID(t, a.ID), UserID: u.ID,
 		Type: "welcome", Channel: notification.ChannelEmail,
 		Subject: "Welcome!", Body: "Welcome to AuthSome",
 		CreatedAt: time.Now(),
@@ -991,7 +1023,7 @@ func TestAPIKey_CRUD(t *testing.T) {
 	expires := now.Add(24 * time.Hour)
 
 	key := &apikey.APIKey{
-		ID: id.NewAPIKeyID(), AppID: a.ID, UserID: u.ID,
+		ID: id.NewAPIKeyID(), AppID: a.ID, EnvID: testEnvID(t, a.ID), UserID: u.ID,
 		Name: "Test Key", KeyHash: "sha256_testhash_abc123", KeyPrefix: "ak_test1",
 		Scopes: []string{"read", "write"}, ExpiresAt: &expires,
 		CreatedAt: now, UpdatedAt: now,
@@ -1040,7 +1072,7 @@ func TestOrganization_DeleteCascadesMembers(t *testing.T) {
 	u := createTestUser(t, s, a.ID, "cascade@test.com")
 
 	org := &organization.Organization{
-		ID: id.NewOrgID(), AppID: a.ID, Name: "Cascade Org", Slug: "cascade-org",
+		ID: id.NewOrgID(), AppID: a.ID, EnvID: testEnvID(t, a.ID), Name: "Cascade Org", Slug: "cascade-org",
 		CreatedBy: u.ID, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	require.NoError(t, s.CreateOrganization(ctx, org))

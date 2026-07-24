@@ -68,14 +68,14 @@ func TestCeremonyCookieRoundTrip(t *testing.T) {
 	setCeremonyCookie(rec, id1, time.Minute, false)
 
 	// The cookie the server set becomes the request cookie on the follow-up call.
-	req := httptest.NewRequest(http.MethodPost, "/v1/passkey/login/finish", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/passkey/login/finish", nil)
 	for _, c := range rec.Result().Cookies() {
 		req.AddCookie(c)
 	}
 	assert.Equal(t, id1, readCeremonyCookie(req), "the ceremony id must round-trip via cookie")
 
 	// A request without the cookie yields an empty id (identified flow).
-	bare := httptest.NewRequest(http.MethodPost, "/v1/passkey/login/finish", nil)
+	bare := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/passkey/login/finish", nil)
 	assert.Empty(t, readCeremonyCookie(bare))
 }
 
