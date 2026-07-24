@@ -301,7 +301,7 @@ func (a *API) handleDeleteRole(ctx forge.Context, _ *DeleteRoleRequest) (*Status
 		return nil, forge.BadRequest(fmt.Sprintf("invalid role id: %v", err))
 	}
 
-	if _, err := a.roleInCallerApp(ctx, roleID); err != nil {
+	if _, err = a.roleInCallerApp(ctx, roleID); err != nil {
 		return nil, err
 	}
 
@@ -319,7 +319,7 @@ func (a *API) handleAddPermission(ctx forge.Context, req *AddPermissionRequest) 
 		return nil, forge.BadRequest(fmt.Sprintf("invalid role id: %v", err))
 	}
 
-	if _, err := a.roleInCallerApp(ctx, roleID); err != nil {
+	if _, err = a.roleInCallerApp(ctx, roleID); err != nil {
 		return nil, err
 	}
 
@@ -350,7 +350,7 @@ func (a *API) handleListRolePermissions(ctx forge.Context, _ *ListRolePermission
 		return nil, forge.BadRequest(fmt.Sprintf("invalid role id: %v", err))
 	}
 
-	if _, err := a.roleInCallerApp(ctx, roleID); err != nil {
+	if _, err = a.roleInCallerApp(ctx, roleID); err != nil {
 		return nil, err
 	}
 
@@ -376,7 +376,7 @@ func (a *API) handleRemovePermission(ctx forge.Context, _ *RemovePermissionReque
 		return nil, forge.BadRequest(fmt.Sprintf("invalid permission id: %v", err))
 	}
 
-	if _, err := a.roleInCallerApp(ctx, roleID); err != nil {
+	if _, err = a.roleInCallerApp(ctx, roleID); err != nil {
 		return nil, err
 	}
 	// The permission must actually belong to this role, so a caller cannot
@@ -411,7 +411,7 @@ func (a *API) handleAssignRole(ctx forge.Context, req *AssignRoleRequest) (*Stat
 		return nil, forge.BadRequest(fmt.Sprintf("invalid role id: %v", err))
 	}
 
-	if _, err := a.roleInCallerApp(ctx, roleID); err != nil {
+	if _, err = a.roleInCallerApp(ctx, roleID); err != nil {
 		return nil, err
 	}
 
@@ -440,7 +440,7 @@ func (a *API) handleUnassignRole(ctx forge.Context, req *UnassignRoleRequest) (*
 		return nil, forge.BadRequest(fmt.Sprintf("invalid role id: %v", err))
 	}
 
-	if _, err := a.roleInCallerApp(ctx, roleID); err != nil {
+	if _, err = a.roleInCallerApp(ctx, roleID); err != nil {
 		return nil, err
 	}
 

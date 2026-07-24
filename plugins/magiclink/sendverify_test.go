@@ -1,6 +1,7 @@
 package magiclink_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -24,7 +25,7 @@ func TestMagicLink_SendThenVerify_Succeeds(t *testing.T) {
 	handler := mux.Handler()
 
 	// Send.
-	sendReq := httptest.NewRequest(http.MethodPost, "/v1/magic-link/send", jsonBody(t, map[string]string{"email": u.Email}))
+	sendReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/magic-link/send", jsonBody(t, map[string]string{"email": u.Email}))
 	sendReq.Header.Set("Content-Type", "application/json")
 	sendRec := httptest.NewRecorder()
 	handler.ServeHTTP(sendRec, sendReq)
@@ -34,7 +35,7 @@ func TestMagicLink_SendThenVerify_Succeeds(t *testing.T) {
 	require.NotEmpty(t, token)
 
 	// Verify.
-	verifyReq := httptest.NewRequest(http.MethodPost, "/v1/magic-link/verify", jsonBody(t, map[string]string{"token": token}))
+	verifyReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/magic-link/verify", jsonBody(t, map[string]string{"token": token}))
 	verifyReq.Header.Set("Content-Type", "application/json")
 	verifyRec := httptest.NewRecorder()
 	handler.ServeHTTP(verifyRec, verifyReq)
@@ -56,7 +57,7 @@ func TestMagicLink_Send_UnknownEmail_UniformSuccessNoLink(t *testing.T) {
 	require.NoError(t, p.RegisterRoutes(mux))
 	handler := mux.Handler()
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/magic-link/send", jsonBody(t, map[string]string{"email": "nobody@example.com"}))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/magic-link/send", jsonBody(t, map[string]string{"email": "nobody@example.com"}))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)

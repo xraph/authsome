@@ -569,7 +569,7 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 	// account.RefreshSession mutates sess in place; the new RefreshToken
 	// inherits the same FamilyID by virtue of leaving the field untouched.
 	cfg := e.sessionConfigForApp(ctx, sess.AppID, sess.EnvID)
-	if err := account.RefreshSession(sess, cfg); err != nil {
+	if err = account.RefreshSession(sess, cfg); err != nil {
 		return nil, fmt.Errorf("authsome: refresh session: %w", err)
 	}
 

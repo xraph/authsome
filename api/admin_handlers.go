@@ -333,7 +333,7 @@ func (a *API) handleAdminBanUser(ctx forge.Context, req *AdminBanUserRequest) (*
 		return nil, forge.BadRequest("cannot ban yourself")
 	}
 
-	if _, err := a.userInCallerApp(ctx, userID); err != nil {
+	if _, err = a.userInCallerApp(ctx, userID); err != nil {
 		return nil, err
 	}
 
@@ -365,7 +365,7 @@ func (a *API) handleAdminUnbanUser(ctx forge.Context, req *AdminUnbanUserRequest
 		return nil, forge.BadRequest("invalid user_id")
 	}
 
-	if _, err := a.userInCallerApp(ctx, userID); err != nil {
+	if _, err = a.userInCallerApp(ctx, userID); err != nil {
 		return nil, err
 	}
 
@@ -393,7 +393,7 @@ func (a *API) handleAdminDeleteUser(ctx forge.Context, req *AdminDeleteUserReque
 		return nil, forge.BadRequest("cannot delete yourself")
 	}
 
-	if _, err := a.userInCallerApp(ctx, userID); err != nil {
+	if _, err = a.userInCallerApp(ctx, userID); err != nil {
 		return nil, err
 	}
 
@@ -440,7 +440,7 @@ func (a *API) handleAdminImpersonate(ctx forge.Context, req *AdminImpersonateReq
 		return nil, forge.BadRequest("cannot impersonate yourself")
 	}
 
-	if _, err := a.userInCallerApp(ctx, targetID); err != nil {
+	if _, err = a.userInCallerApp(ctx, targetID); err != nil {
 		return nil, err
 	}
 
@@ -477,7 +477,7 @@ func (a *API) handleAdminUpdateUser(ctx forge.Context, req *AdminUpdateUserReque
 		return nil, forge.BadRequest("invalid user_id")
 	}
 
-	if _, err := a.userInCallerApp(ctx, userID); err != nil {
+	if _, err = a.userInCallerApp(ctx, userID); err != nil {
 		return nil, err
 	}
 

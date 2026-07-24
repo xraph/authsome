@@ -46,7 +46,7 @@ const (
 // (unix seconds / period) the code corresponds to. The step uniquely
 // identifies the code within its validity window, letting callers reject a
 // replay of the same code. Acceptance matches ValidateTOTP (±1 step).
-func ValidateTOTPStep(code, secret string) (bool, int64) {
+func ValidateTOTPStep(code, secret string) (valid bool, step int64) {
 	now := time.Now()
 	for delta := int64(-totpSkew); delta <= totpSkew; delta++ {
 		ts := now.Add(time.Duration(delta*totpPeriod) * time.Second)

@@ -274,8 +274,8 @@ func (a *API) handleCloneEnvironment(ctx forge.Context, req *CloneEnvironmentReq
 	if err != nil {
 		return nil, mapError(err)
 	}
-	if err := a.assertAppScope(ctx, srcEnv.AppID); err != nil {
-		return nil, err
+	if scopeErr := a.assertAppScope(ctx, srcEnv.AppID); scopeErr != nil {
+		return nil, scopeErr
 	}
 
 	if req.Name == "" {

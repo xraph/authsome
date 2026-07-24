@@ -64,11 +64,11 @@ func RunConformance(t *testing.T, newStore Factory) {
 
 func now() time.Time { return time.Now().UTC().Truncate(time.Millisecond) }
 
-func suffix(id string) string {
-	if len(id) <= 10 {
-		return id
+func suffix(idStr string) string {
+	if len(idStr) <= 10 {
+		return idStr
 	}
-	return id[len(id)-10:]
+	return idStr[len(idStr)-10:]
 }
 
 type tenant struct {

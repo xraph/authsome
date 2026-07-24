@@ -344,7 +344,7 @@ func (p *Plugin) handleGetOrg(ctx forge.Context, _ *GetOrgRequest) (*organizatio
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
-	if _, err := p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
 		return nil, err
 	}
 
@@ -362,7 +362,7 @@ func (p *Plugin) handleUpdateOrg(ctx forge.Context, req *UpdateOrgRequest) (*org
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
-	if _, err := p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
 		return nil, err
 	}
 
@@ -391,7 +391,7 @@ func (p *Plugin) handleDeleteOrg(ctx forge.Context, _ *DeleteOrgRequest) (*Statu
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
-	if _, err := p.requireOrgRole(ctx, orgID, organization.RoleOwner); err != nil {
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleOwner); err != nil {
 		return nil, err
 	}
 
@@ -413,7 +413,7 @@ func (p *Plugin) handleListMembers(ctx forge.Context, _ *ListMembersRequest) (*M
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
-	if _, err := p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
 		return nil, err
 	}
 
@@ -435,7 +435,7 @@ func (p *Plugin) handleAddMember(ctx forge.Context, req *AddMemberRequest) (*org
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
-	if _, err := p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
 		return nil, err
 	}
 
@@ -477,11 +477,11 @@ func (p *Plugin) handleRemoveMember(ctx forge.Context, _ *RemoveMemberRequest) (
 		return nil, forge.BadRequest(fmt.Sprintf("invalid member id: %v", err))
 	}
 
-	if _, err := p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
 		return nil, err
 	}
-	if err := p.assertMemberInOrg(ctx, memberID, orgID); err != nil {
-		return nil, err
+	if merr := p.assertMemberInOrg(ctx, memberID, orgID); merr != nil {
+		return nil, merr
 	}
 
 	if err := p.RemoveMember(ctx.Context(), memberID); err != nil {
@@ -508,11 +508,11 @@ func (p *Plugin) handleUpdateMember(ctx forge.Context, req *UpdateMemberRequest)
 
 	// Only an owner may change member roles (including granting ownership),
 	// which prevents members/admins from escalating themselves or others.
-	if _, err := p.requireOrgRole(ctx, orgID, organization.RoleOwner); err != nil {
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleOwner); err != nil {
 		return nil, err
 	}
-	if err := p.assertMemberInOrg(ctx, memberID, orgID); err != nil {
-		return nil, err
+	if merr := p.assertMemberInOrg(ctx, memberID, orgID); merr != nil {
+		return nil, merr
 	}
 
 	member, err := p.UpdateMemberRole(ctx.Context(), memberID, organization.MemberRole(req.Role))
@@ -576,7 +576,7 @@ func (p *Plugin) handleListInvitations(ctx forge.Context, _ *ListInvitationsRequ
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
-	if _, err := p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
 		return nil, err
 	}
 
@@ -628,7 +628,7 @@ func (p *Plugin) handleCreateTeam(ctx forge.Context, req *CreateTeamRequest) (*o
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
-	if _, err := p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
 		return nil, err
 	}
 
@@ -656,7 +656,7 @@ func (p *Plugin) handleListTeams(ctx forge.Context, _ *ListTeamsRequest) (*TeamL
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
-	if _, err := p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
 		return nil, err
 	}
 
@@ -682,11 +682,11 @@ func (p *Plugin) handleGetTeam(ctx forge.Context, _ *GetTeamRequest) (*organizat
 		return nil, forge.BadRequest(fmt.Sprintf("invalid team id: %v", err))
 	}
 
-	if _, err := p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
 		return nil, err
 	}
-	if err := p.assertTeamInOrg(ctx, teamID, orgID); err != nil {
-		return nil, err
+	if terr := p.assertTeamInOrg(ctx, teamID, orgID); terr != nil {
+		return nil, terr
 	}
 
 	t, err := p.GetTeam(ctx.Context(), teamID)
@@ -707,11 +707,11 @@ func (p *Plugin) handleUpdateTeam(ctx forge.Context, req *UpdateTeamRequest) (*o
 		return nil, forge.BadRequest(fmt.Sprintf("invalid team id: %v", err))
 	}
 
-	if _, err := p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
 		return nil, err
 	}
-	if err := p.assertTeamInOrg(ctx, teamID, orgID); err != nil {
-		return nil, err
+	if terr := p.assertTeamInOrg(ctx, teamID, orgID); terr != nil {
+		return nil, terr
 	}
 
 	t, err := p.GetTeam(ctx.Context(), teamID)
@@ -743,11 +743,11 @@ func (p *Plugin) handleDeleteTeam(ctx forge.Context, _ *DeleteTeamRequest) (*Sta
 		return nil, forge.BadRequest(fmt.Sprintf("invalid team id: %v", err))
 	}
 
-	if _, err := p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
 		return nil, err
 	}
-	if err := p.assertTeamInOrg(ctx, teamID, orgID); err != nil {
-		return nil, err
+	if terr := p.assertTeamInOrg(ctx, teamID, orgID); terr != nil {
+		return nil, terr
 	}
 
 	if err := p.DeleteTeam(ctx.Context(), teamID); err != nil {

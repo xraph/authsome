@@ -279,7 +279,7 @@ func (p *Plugin) handleLoginBegin(ctx forge.Context, req *LoginBeginRequest) (*L
 		}
 		sessionJSON, _ := json.Marshal(session)                                                                //nolint:errcheck // marshaling known types
 		_ = p.ceremonies.Set(ctx.Context(), discoverableKey(ceremonyID), sessionJSON, p.config.SessionTimeout) //nolint:errcheck // best-effort cache
-		setCeremonyCookie(ctx.Response(), ceremonyID, p.config.SessionTimeout)
+		setCeremonyCookie(ctx.Response(), ceremonyID, p.config.SessionTimeout, ctx.Request().TLS != nil)
 		return &LoginBeginResponse{Options: options}, nil
 	}
 

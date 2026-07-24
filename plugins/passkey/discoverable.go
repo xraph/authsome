@@ -40,13 +40,16 @@ func discoverableKey(ceremonyID string) string {
 	return "passkey:discoverable:" + ceremonyID
 }
 
-// setCeremonyCookie writes the ceremony-correlation cookie.
-func setCeremonyCookie(w http.ResponseWriter, ceremonyID string, ttl time.Duration) {
+// setCeremonyCookie writes the ceremony-correlation cookie. secure is set from
+// the request scheme (HTTPS) by the caller.
+func setCeremonyCookie(w http.ResponseWriter, ceremonyID string, ttl time.Duration, secure bool) {
+	// #nosec G124 -- HttpOnly, SameSite=Lax, and Secure (over HTTPS) are all set below.
 	http.SetCookie(w, &http.Cookie{
 		Name:     ceremonyCookieName,
 		Value:    ceremonyID,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(ttl.Seconds()),
 	})
@@ -65,12 +68,14 @@ func readCeremonyCookie(r *http.Request) string {
 }
 
 // clearCeremonyCookie expires the ceremony-correlation cookie.
-func clearCeremonyCookie(w http.ResponseWriter) {
+func clearCeremonyCookie(w http.ResponseWriter, secure bool) {
+	// #nosec G124 -- HttpOnly, SameSite=Lax, and Secure (over HTTPS) are all set below.
 	http.SetCookie(w, &http.Cookie{
 		Name:     ceremonyCookieName,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})
@@ -80,19 +85,19 @@ func clearCeremonyCookie(w http.ResponseWriter) {
 // the user and its webauthn.User view, WITHOUT requiring a pre-authenticated
 // session — this is what makes passwordless login work. Errors on an
 // unparseable handle, a missing engine, or an unknown user.
-func (p *Plugin) resolveDiscoverableUser(ctx context.Context, userHandle []byte) (*user.User, webauthn.User, error) {
-	uid, err := id.ParseUserID(string(userHandle))
-	if err != nil {
-		return nil, nil, fmt.Errorf("passkey: invalid user handle: %w", err)
+func (p *Plugin) resolveDiscoverableUser(ctx context.Context, userHandle []byte) (u *user.User, waUser webauthn.User, err error) {
+	uid, perr := id.ParseUserID(string(userHandle))
+	if perr != nil {
+		return nil, nil, fmt.Errorf("passkey: invalid user handle: %w", perr)
 	}
 	if p.engine == nil {
 		return nil, nil, fmt.Errorf("passkey: engine unavailable for passwordless login")
 	}
-	u, err := p.engine.GetUser(ctx, uid)
-	if err != nil {
-		return nil, nil, err
+	loaded, gerr := p.engine.GetUser(ctx, uid)
+	if gerr != nil {
+		return nil, nil, gerr
 	}
-	return u, p.toWebAuthnUser(ctx, u), nil
+	return loaded, p.toWebAuthnUser(ctx, loaded), nil
 }
 
 // finishDiscoverableLogin completes a passwordless WebAuthn ceremony: it loads
@@ -106,7 +111,7 @@ func (p *Plugin) finishDiscoverableLogin(ctx forge.Context, ceremonyID string) (
 		return nil, forge.BadRequest("no pending login ceremony")
 	}
 	_ = p.ceremonies.Delete(ctx.Context(), key) //nolint:errcheck // best-effort cleanup
-	clearCeremonyCookie(ctx.Response())
+	clearCeremonyCookie(ctx.Response(), ctx.Request().TLS != nil)
 
 	var waSession webauthn.SessionData
 	if unmarshalErr := json.Unmarshal(sessionJSON, &waSession); unmarshalErr != nil {

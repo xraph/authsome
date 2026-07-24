@@ -65,7 +65,7 @@ func TestCeremonyCookieRoundTrip(t *testing.T) {
 	assert.NotEqual(t, id1, id2, "each ceremony must get a distinct id")
 
 	rec := httptest.NewRecorder()
-	setCeremonyCookie(rec, id1, time.Minute)
+	setCeremonyCookie(rec, id1, time.Minute, false)
 
 	// The cookie the server set becomes the request cookie on the follow-up call.
 	req := httptest.NewRequest(http.MethodPost, "/v1/passkey/login/finish", nil)
