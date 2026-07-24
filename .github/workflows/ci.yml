@@ -60,9 +60,9 @@ jobs:
   # Runs the cross-backend store conformance suite against real Postgres
   # (testcontainers) and MongoDB (single-node replica set, so app/org cascade
   # transactions work). Scoped to `-run TestConformance` so it does NOT run the
-  # older per-backend store_test.go suites, which have pre-existing failures
-  # (postgres users.env_id FK) and a hanging mongo migration-lock test that are
-  # tracked separately.
+  # older per-backend store_test.go suites — those now pass on postgres (env_id
+  # is seeded), but the mongo suite still has a hanging migration-lock test
+  # (TestMigrate_DoesNotBreakFreshLock) tracked separately.
   #
   # BLOCKING: all four backends (memory + sqlite from the `go` job, and
   # postgres + mongo here) must pass the same store contract, so behavioral
