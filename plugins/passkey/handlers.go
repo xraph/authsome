@@ -17,6 +17,20 @@ import (
 	"github.com/xraph/authsome/user"
 )
 
+// errCloneWarning is returned when a WebAuthn assertion's sign count did not
+// increase, which indicates the authenticator may have been cloned.
+var errCloneWarning = errors.New("passkey: authenticator may be cloned (sign count did not increase)")
+
+// cloneWarningError converts go-webauthn's CloneWarning flag into a login-
+// rejecting error. go-webauthn sets the flag on FinishLogin but does not fail
+// the ceremony itself, leaving the decision to the relying party.
+func cloneWarningError(cred *webauthn.Credential) error {
+	if cred != nil && cred.Authenticator.CloneWarning {
+		return errCloneWarning
+	}
+	return nil
+}
+
 // RegisterRoutes registers passkey/WebAuthn HTTP endpoints on a forge.Router.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	g := router.Group("/v1/passkeys", forge.WithGroupTags("Passkeys"))
@@ -111,10 +125,13 @@ type LoginBeginResponse struct {
 // LoginFinishRequest is the raw assertion response from the browser.
 type LoginFinishRequest struct{}
 
-// LoginFinishResponse confirms successful authentication.
+// LoginFinishResponse confirms successful authentication. For passwordless
+// (discoverable) login it also carries the freshly-issued session tokens.
 type LoginFinishResponse struct {
-	UserID string `json:"user_id"`
-	Status string `json:"status"`
+	UserID       string `json:"user_id"`
+	Status       string `json:"status"`
+	SessionToken string `json:"session_token,omitempty"`
+	RefreshToken string `json:"refresh_token,omitempty"`
 }
 
 // ListRequest is an empty request for listing passkeys.
@@ -248,14 +265,21 @@ func (p *Plugin) handleLoginBegin(ctx forge.Context, req *LoginBeginRequest) (*L
 
 	wa := p.waForRequest(ctx.Request())
 
-	// For discoverable credentials (passkey), we can start without user identity
+	// For discoverable credentials (passkey), we can start without user identity.
+	// Each ceremony gets its own random id (stored key + correlation cookie) so
+	// concurrent passwordless logins never overwrite a single shared slot.
 	if req.Email == "" {
 		options, session, err := wa.BeginDiscoverableLogin()
 		if err != nil {
 			return nil, forge.InternalError(fmt.Errorf("passkey: begin discoverable login: %w", err))
 		}
-		sessionJSON, _ := json.Marshal(session)                                                           //nolint:errcheck // marshaling known types
-		_ = p.ceremonies.Set(ctx.Context(), "passkey:discoverable", sessionJSON, p.config.SessionTimeout) //nolint:errcheck // best-effort cache
+		ceremonyID, err := newCeremonyID()
+		if err != nil {
+			return nil, forge.InternalError(err)
+		}
+		sessionJSON, _ := json.Marshal(session)                                                                //nolint:errcheck // marshaling known types
+		_ = p.ceremonies.Set(ctx.Context(), discoverableKey(ceremonyID), sessionJSON, p.config.SessionTimeout) //nolint:errcheck // best-effort cache
+		setCeremonyCookie(ctx.Response(), ceremonyID, p.config.SessionTimeout, ctx.Request().TLS != nil)
 		return &LoginBeginResponse{Options: options}, nil
 	}
 
@@ -285,6 +309,14 @@ func (p *Plugin) handleLoginFinish(ctx forge.Context, _ *LoginFinishRequest) (*L
 		return nil, forge.InternalError(fmt.Errorf("passkey: WebAuthn not initialized"))
 	}
 
+	// Passwordless (discoverable) login: correlated by the ceremony cookie set
+	// at begin. No prior authentication is required — the user is resolved from
+	// the assertion's user handle.
+	if ceremonyID := readCeremonyCookie(ctx.Request()); ceremonyID != "" {
+		return p.finishDiscoverableLogin(ctx, ceremonyID)
+	}
+
+	// Identified / step-up flow: an already-authenticated user re-asserting.
 	u, err := p.resolveUser(ctx)
 	if err != nil {
 		return nil, err
@@ -307,6 +339,15 @@ func (p *Plugin) handleLoginFinish(ctx forge.Context, _ *LoginFinishRequest) (*L
 	cred, err := p.waForRequest(ctx.Request()).FinishLogin(wau, session, ctx.Request())
 	if err != nil {
 		return nil, forge.Unauthorized(fmt.Sprintf("passkey: finish login: %v", err))
+	}
+
+	// Clone detection: go-webauthn sets CloneWarning when the authenticator's
+	// reported sign count did not increase, but leaves it to the relying party
+	// to act on. Reject the login (and record a failure) rather than accept a
+	// possibly-duplicated authenticator.
+	if cwErr := cloneWarningError(cred); cwErr != nil {
+		p.audit(ctx.Context(), hook.ActionPasskeyLogin, hook.ResourcePasskey, "", u.ID.String(), "", bridge.OutcomeFailure)
+		return nil, forge.Unauthorized(cwErr.Error())
 	}
 
 	// Update sign count

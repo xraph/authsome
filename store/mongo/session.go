@@ -97,6 +97,24 @@ func (s *Store) UpdateSession(ctx context.Context, sess *session.Session) error 
 	return nil
 }
 
+// RotateSession atomically persists sess only if the stored access token still
+// equals expectedToken. Returns false when no document matched (a concurrent
+// refresh already rotated the session), which prevents two concurrent refreshes
+// from both winning.
+func (s *Store) RotateSession(ctx context.Context, sess *session.Session, expectedToken string) (bool, error) {
+	m := toSessionModel(sess)
+	m.UpdatedAt = now()
+
+	res, err := s.mdb.NewUpdate(m).
+		Filter(bson.M{"_id": m.ID, "token": expectedToken}).
+		Exec(ctx)
+	if err != nil {
+		return false, fmt.Errorf("authsome/mongo: rotate session: %w", err)
+	}
+
+	return res.MatchedCount() > 0, nil
+}
+
 // TouchSession performs a lightweight update of last_activity_at, expires_at, and updated_at.
 func (s *Store) TouchSession(ctx context.Context, sessionID id.SessionID, lastActivityAt, expiresAt time.Time) error {
 	res, err := s.mdb.NewUpdate((*sessionModel)(nil)).

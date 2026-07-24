@@ -131,14 +131,15 @@ func TestPlugin_RegisterInRegistry(t *testing.T) {
 // ──────────────────────────────────────────────────
 
 func TestHandleSend_Success(t *testing.T) {
-	p, _, mailer := newTestPlugin(t)
+	p, s, mailer := newTestPlugin(t)
+	u := createTestUser(t, s) // registers test@example.com
 
 	mux := forge.NewRouter()
 	err := p.RegisterRoutes(mux)
 	require.NoError(t, err)
 
 	body := jsonBody(t, map[string]string{
-		"email": "user@example.com",
+		"email": u.Email,
 	})
 
 	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/magic-link/send", body)
@@ -153,11 +154,11 @@ func TestHandleSend_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "magic link sent", resp["status"])
 
-	// Mailer should have been called
+	// Mailer should have been called for the registered user.
 	mailer.mu.Lock()
 	defer mailer.mu.Unlock()
 	assert.Len(t, mailer.sent, 1)
-	assert.Equal(t, "user@example.com", mailer.sent[0].Email)
+	assert.Equal(t, u.Email, mailer.sent[0].Email)
 	assert.NotEmpty(t, mailer.sent[0].Token)
 }
 
@@ -194,7 +195,8 @@ func TestHandleSend_InvalidJSON(t *testing.T) {
 }
 
 func TestHandleSend_MailerError(t *testing.T) {
-	p, _, mailer := newTestPlugin(t)
+	p, s, mailer := newTestPlugin(t)
+	u := createTestUser(t, s)
 	mailer.errVal = assert.AnError
 
 	mux := forge.NewRouter()
@@ -202,7 +204,7 @@ func TestHandleSend_MailerError(t *testing.T) {
 	require.NoError(t, err)
 
 	body := jsonBody(t, map[string]string{
-		"email": "user@example.com",
+		"email": u.Email,
 	})
 
 	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/magic-link/send", body)
@@ -214,14 +216,15 @@ func TestHandleSend_MailerError(t *testing.T) {
 }
 
 func TestHandleSend_WithExplicitAppID(t *testing.T) {
-	p, _, mailer := newTestPlugin(t)
+	p, s, mailer := newTestPlugin(t)
+	u := createTestUser(t, s)
 
 	mux := forge.NewRouter()
 	err := p.RegisterRoutes(mux)
 	require.NoError(t, err)
 
 	body := jsonBody(t, map[string]string{
-		"email":  "user@example.com",
+		"email":  u.Email,
 		"app_id": testAppIDStr,
 	})
 

@@ -82,6 +82,7 @@ func TestRefreshReplay_RevokeFamilyCascades(t *testing.T) {
 		return &session.Session{
 			ID:                    id.NewSessionID(),
 			AppID:                 a.ID,
+			EnvID:                 testEnvID(t, a.ID),
 			UserID:                u.ID,
 			FamilyID:              family,
 			Token:                 "tok_" + suffix,
@@ -114,15 +115,16 @@ func TestRefreshReplay_RevokeFamilyCascades(t *testing.T) {
 	require.NoError(t, err)
 
 	// Both family refresh tokens recorded as revoked.
+	var revoked bool
 	for _, rt := range []string{famSess.RefreshToken, famSess2.RefreshToken} {
 		h := hashForTest(rt)
-		revoked, err := s.IsRefreshTokenRevoked(ctx, h)
+		revoked, err = s.IsRefreshTokenRevoked(ctx, h)
 		require.NoError(t, err)
 		assert.True(t, revoked, "token %q should be revoked", rt)
 	}
 
 	// Other family's refresh token still un-revoked.
-	revoked, err := s.IsRefreshTokenRevoked(ctx, hashForTest(otherSess.RefreshToken))
+	revoked, err = s.IsRefreshTokenRevoked(ctx, hashForTest(otherSess.RefreshToken))
 	require.NoError(t, err)
 	assert.False(t, revoked)
 }

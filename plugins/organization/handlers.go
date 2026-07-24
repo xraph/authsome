@@ -344,6 +344,10 @@ func (p *Plugin) handleGetOrg(ctx forge.Context, _ *GetOrgRequest) (*organizatio
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
+		return nil, err
+	}
+
 	o, err := p.GetOrganization(ctx.Context(), orgID)
 	if err != nil {
 		return nil, mapError(err)
@@ -356,6 +360,10 @@ func (p *Plugin) handleUpdateOrg(ctx forge.Context, req *UpdateOrgRequest) (*org
 	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
+	}
+
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+		return nil, err
 	}
 
 	o, err := p.GetOrganization(ctx.Context(), orgID)
@@ -383,6 +391,10 @@ func (p *Plugin) handleDeleteOrg(ctx forge.Context, _ *DeleteOrgRequest) (*Statu
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleOwner); err != nil {
+		return nil, err
+	}
+
 	if err := p.DeleteOrganization(ctx.Context(), orgID); err != nil {
 		return nil, mapError(err)
 	}
@@ -401,6 +413,10 @@ func (p *Plugin) handleListMembers(ctx forge.Context, _ *ListMembersRequest) (*M
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
+		return nil, err
+	}
+
 	members, err := p.ListMembers(ctx.Context(), orgID)
 	if err != nil {
 		return nil, mapError(err)
@@ -417,6 +433,10 @@ func (p *Plugin) handleAddMember(ctx forge.Context, req *AddMemberRequest) (*org
 	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
+	}
+
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+		return nil, err
 	}
 
 	if req.UserID == "" {
@@ -448,9 +468,20 @@ func (p *Plugin) handleAddMember(ctx forge.Context, req *AddMemberRequest) (*org
 }
 
 func (p *Plugin) handleRemoveMember(ctx forge.Context, _ *RemoveMemberRequest) (*StatusResponse, error) {
+	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
+	if err != nil {
+		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
+	}
 	memberID, err := id.ParseMemberID(ctx.Param("memberId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid member id: %v", err))
+	}
+
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+		return nil, err
+	}
+	if merr := p.assertMemberInOrg(ctx, memberID, orgID); merr != nil {
+		return nil, merr
 	}
 
 	if err := p.RemoveMember(ctx.Context(), memberID); err != nil {
@@ -462,6 +493,10 @@ func (p *Plugin) handleRemoveMember(ctx forge.Context, _ *RemoveMemberRequest) (
 }
 
 func (p *Plugin) handleUpdateMember(ctx forge.Context, req *UpdateMemberRequest) (*organization.Member, error) {
+	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
+	if err != nil {
+		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
+	}
 	memberID, err := id.ParseMemberID(ctx.Param("memberId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid member id: %v", err))
@@ -469,6 +504,15 @@ func (p *Plugin) handleUpdateMember(ctx forge.Context, req *UpdateMemberRequest)
 
 	if req.Role == "" {
 		return nil, forge.BadRequest("role is required")
+	}
+
+	// Only an owner may change member roles (including granting ownership),
+	// which prevents members/admins from escalating themselves or others.
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleOwner); err != nil {
+		return nil, err
+	}
+	if merr := p.assertMemberInOrg(ctx, memberID, orgID); merr != nil {
+		return nil, merr
 	}
 
 	member, err := p.UpdateMemberRole(ctx.Context(), memberID, organization.MemberRole(req.Role))
@@ -489,10 +533,11 @@ func (p *Plugin) handleCreateInvitation(ctx forge.Context, req *CreateInvitation
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
-	inviterID, ok := middleware.UserIDFrom(ctx.Context())
-	if !ok {
-		return nil, forge.Unauthorized("authentication required")
+	inviter, err := p.requireOrgRole(ctx, orgID, organization.RoleAdmin)
+	if err != nil {
+		return nil, err
 	}
+	inviterID := inviter.UserID
 
 	if req.Email == "" {
 		return nil, forge.BadRequest("email is required")
@@ -529,6 +574,10 @@ func (p *Plugin) handleListInvitations(ctx forge.Context, _ *ListInvitationsRequ
 	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
+	}
+
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+		return nil, err
 	}
 
 	invitations, err := p.ListInvitations(ctx.Context(), orgID)
@@ -579,6 +628,10 @@ func (p *Plugin) handleCreateTeam(ctx forge.Context, req *CreateTeamRequest) (*o
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+		return nil, err
+	}
+
 	if req.Name == "" || req.Slug == "" {
 		return nil, forge.BadRequest("name and slug are required")
 	}
@@ -603,6 +656,10 @@ func (p *Plugin) handleListTeams(ctx forge.Context, _ *ListTeamsRequest) (*TeamL
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
+		return nil, err
+	}
+
 	teams, err := p.ListTeams(ctx.Context(), orgID)
 	if err != nil {
 		return nil, mapError(err)
@@ -616,9 +673,20 @@ func (p *Plugin) handleListTeams(ctx forge.Context, _ *ListTeamsRequest) (*TeamL
 }
 
 func (p *Plugin) handleGetTeam(ctx forge.Context, _ *GetTeamRequest) (*organization.Team, error) {
+	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
+	if err != nil {
+		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
+	}
 	teamID, err := id.ParseTeamID(ctx.Param("teamId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid team id: %v", err))
+	}
+
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
+		return nil, err
+	}
+	if terr := p.assertTeamInOrg(ctx, teamID, orgID); terr != nil {
+		return nil, terr
 	}
 
 	t, err := p.GetTeam(ctx.Context(), teamID)
@@ -630,9 +698,20 @@ func (p *Plugin) handleGetTeam(ctx forge.Context, _ *GetTeamRequest) (*organizat
 }
 
 func (p *Plugin) handleUpdateTeam(ctx forge.Context, req *UpdateTeamRequest) (*organization.Team, error) {
+	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
+	if err != nil {
+		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
+	}
 	teamID, err := id.ParseTeamID(ctx.Param("teamId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid team id: %v", err))
+	}
+
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+		return nil, err
+	}
+	if terr := p.assertTeamInOrg(ctx, teamID, orgID); terr != nil {
+		return nil, terr
 	}
 
 	t, err := p.GetTeam(ctx.Context(), teamID)
@@ -655,9 +734,20 @@ func (p *Plugin) handleUpdateTeam(ctx forge.Context, req *UpdateTeamRequest) (*o
 }
 
 func (p *Plugin) handleDeleteTeam(ctx forge.Context, _ *DeleteTeamRequest) (*StatusResponse, error) {
+	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
+	if err != nil {
+		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
+	}
 	teamID, err := id.ParseTeamID(ctx.Param("teamId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid team id: %v", err))
+	}
+
+	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+		return nil, err
+	}
+	if terr := p.assertTeamInOrg(ctx, teamID, orgID); terr != nil {
+		return nil, terr
 	}
 
 	if err := p.DeleteTeam(ctx.Context(), teamID); err != nil {
@@ -673,6 +763,10 @@ func (p *Plugin) handleDeleteTeam(ctx forge.Context, _ *DeleteTeamRequest) (*Sta
 // ──────────────────────────────────────────────────
 
 func (p *Plugin) handleCheckSlug(ctx forge.Context, req *CheckSlugRequest) (*SlugAvailableResponse, error) {
+	if _, ok := middleware.UserIDFrom(ctx.Context()); !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+
 	if req.Slug == "" {
 		return nil, forge.BadRequest("slug query parameter is required")
 	}

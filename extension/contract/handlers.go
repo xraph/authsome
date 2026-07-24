@@ -9,6 +9,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 
 	dashauth "github.com/xraph/forge/extensions/dashboard/auth"
 	"github.com/xraph/forge/extensions/dashboard/contract"
@@ -171,20 +172,9 @@ func AppIDFromPrincipal(p contract.Principal, eng *authsome.Engine) id.AppID {
 }
 
 func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if i := strings.IndexByte(xff, ','); i > 0 {
-			return strings.TrimSpace(xff[:i])
-		}
-		return strings.TrimSpace(xff)
-	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
-	addr := r.RemoteAddr
-	if i := strings.LastIndex(addr, ":"); i > 0 {
-		return addr[:i]
-	}
-	return addr
+	// Delegate to the trusted-proxy-aware resolver so forwarding headers are
+	// honored only from a trusted proxy — a direct client cannot spoof its IP.
+	return middleware.ClientIP(r)
 }
 
 func extractToken(r *http.Request) string {

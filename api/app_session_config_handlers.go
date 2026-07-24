@@ -60,9 +60,9 @@ func (a *API) registerAppSessionConfigRoutes(router forge.Router) error {
 // ──────────────────────────────────────────────────
 
 func (a *API) handleGetAppSessionConfig(ctx forge.Context, req *GetAppSessionConfigRequest) (*appsessionconfig.Config, error) {
-	appID, err := id.ParseAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	cfg, err := a.engine.Store().GetAppSessionConfig(ctx.Context(), appID)
@@ -77,9 +77,9 @@ func (a *API) handleGetAppSessionConfig(ctx forge.Context, req *GetAppSessionCon
 }
 
 func (a *API) handleSetAppSessionConfig(ctx forge.Context, req *SetAppSessionConfigRequest) (*appsessionconfig.Config, error) {
-	appID, err := id.ParseAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	now := time.Now().UTC()
@@ -118,9 +118,9 @@ func (a *API) handleSetAppSessionConfig(ctx forge.Context, req *SetAppSessionCon
 }
 
 func (a *API) handleDeleteAppSessionConfig(ctx forge.Context, req *DeleteAppSessionConfigRequest) (*StatusResponse, error) {
-	appID, err := id.ParseAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	if err := a.engine.Store().DeleteAppSessionConfig(ctx.Context(), appID); err != nil {

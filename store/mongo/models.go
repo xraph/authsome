@@ -1416,10 +1416,18 @@ func fromSettingModel(m *settingModel) (*settings.Setting, error) {
 
 // revokedRefreshTokenModel is the on-disk representation of
 // session.RevokedRefreshToken used for refresh-token replay detection.
+// revokedRefreshTokenModel stores revoked/replayed refresh-token hashes.
+//
+// NOTE: grove's mongodriver maps a pk to `_id` ONLY when the pk column is named
+// "id" (see mongodriver structToDoc). This pk column is "token_hash", so the
+// hash is stored under a "token_hash" field and _id is an auto-generated
+// ObjectID. All queries in refresh_replay.go therefore filter by "token_hash",
+// NOT "_id". Do not "simplify" those filters to `_id` — that silently breaks
+// every revocation/replay lookup on the mongo backend.
 type revokedRefreshTokenModel struct {
 	grove.BaseModel `grove:"table:authsome_revoked_refresh_tokens"`
 
-	TokenHash string    `grove:"token_hash,pk" bson:"_id"`
+	TokenHash string    `grove:"token_hash,pk" bson:"token_hash"`
 	FamilyID  string    `grove:"family_id"     bson:"family_id"`
 	RevokedAt time.Time `grove:"revoked_at"    bson:"revoked_at"`
 	Reason    string    `grove:"reason"        bson:"reason"`

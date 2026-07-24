@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/store"
 )
 
@@ -84,6 +85,47 @@ func TestRefresh_ReplayRevokesFamily(t *testing.T) {
 	_, err = eng.Refresh(ctx, rotatedToken)
 	assert.Error(t, err,
 		"rotated token belonging to a revoked family must not be usable")
+}
+
+// TestRefresh_ReplayStormEmitsAlertOnce pins the storm guard: a client stuck
+// re-presenting the same already-rotated token must trigger the replay alert
+// exactly once, not once per attempt. Regression test for the runaway
+// refresh_token_replayed audit stream.
+func TestRefresh_ReplayStormEmitsAlertOnce(t *testing.T) {
+	eng, _ := newTestEngine(t)
+	ctx := context.Background()
+	appID := testAppID(t)
+
+	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
+		AppID:     appID,
+		Email:     "storm@example.com",
+		Password:  "SecureP@ss1",
+		FirstName: "Storm User",
+	})
+	require.NoError(t, err)
+	staleToken := sess.RefreshToken
+
+	// Legitimate rotation — staleToken is now revoked with reason "rotated".
+	_, err = eng.Refresh(ctx, staleToken)
+	require.NoError(t, err)
+
+	var replayAlerts int
+	eng.Hooks().On("count-replays", func(_ context.Context, ev *hook.Event) error {
+		if ev.Action == hook.ActionRefreshTokenReplayed {
+			replayAlerts++
+		}
+		return nil
+	})
+
+	// A stuck client hammers the endpoint with the same dead token.
+	for i := 0; i < 5; i++ {
+		_, rerr := eng.Refresh(ctx, staleToken)
+		assert.ErrorIs(t, rerr, account.ErrInvalidCredentials,
+			"every replay attempt is refused")
+	}
+
+	assert.Equal(t, 1, replayAlerts,
+		"replay alert must fire once for the family, not once per attempt")
 }
 
 // TestRefresh_UnrelatedSessionUntouched ensures family cascade revocation

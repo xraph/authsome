@@ -125,7 +125,8 @@ type Plugin struct {
 	hooks        *hook.Bus
 	logger       log.Logger
 	settingsMgr  *settings.Manager
-	originWAOnce sync.Map // map[string]*webauthn.WebAuthn — per-origin webauthn cache for localhost dev
+	engine       plugin.Engine // used to resolve users and issue sessions for passwordless login
+	originWAOnce sync.Map      // map[string]*webauthn.WebAuthn — per-origin webauthn cache for localhost dev
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -217,6 +218,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.wa = wa
 
 	if engine != nil {
+		p.engine = engine
 		p.chronicle = engine.Chronicle()
 		p.relay = engine.Relay()
 		p.hooks = engine.Hooks()
@@ -497,7 +499,7 @@ func toCredential(userID id.UserID, appID id.AppID, cred *webauthn.Credential, d
 // ──────────────────────────────────────────────────
 
 // audit records an audit event to Chronicle (nil-safe).
-func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorID, tenant, outcome string) {
+func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorID, tenant, outcome string) { //nolint:unparam // resource/tenant kept general for future non-passkey callers
 	if p.chronicle == nil {
 		return
 	}
@@ -514,7 +516,7 @@ func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorI
 }
 
 // relayEvent sends a webhook event to EventRelay (nil-safe).
-func (p *Plugin) relayEvent(ctx context.Context, eventType, tenantID string, data map[string]string) {
+func (p *Plugin) relayEvent(ctx context.Context, eventType, tenantID string, data map[string]string) { //nolint:unparam // tenantID kept general
 	if p.relay == nil {
 		return
 	}
@@ -526,7 +528,7 @@ func (p *Plugin) relayEvent(ctx context.Context, eventType, tenantID string, dat
 }
 
 // emitHook fires a global hook event (nil-safe).
-func (p *Plugin) emitHook(ctx context.Context, action, resource, resourceID, actorID, tenant string) {
+func (p *Plugin) emitHook(ctx context.Context, action, resource, resourceID, actorID, tenant string) { //nolint:unparam // resource/tenant kept general
 	if p.hooks == nil {
 		return
 	}

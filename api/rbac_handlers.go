@@ -161,6 +161,24 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 // RBAC handlers
 // ──────────────────────────────────────────────────
 
+// roleInCallerApp loads a role and verifies it belongs to the caller's tenant
+// app. A missing role and a role owned by another app both return 404, so a
+// caller can neither read nor infer the existence of another tenant's roles.
+func (a *API) roleInCallerApp(ctx forge.Context, roleID id.RoleID) (*rbac.Role, error) {
+	appID, ok := a.callerAppID(ctx)
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+	r, err := a.engine.GetRole(ctx.Context(), roleID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	if r.AppID != appID.String() {
+		return nil, forge.NotFound("role not found")
+	}
+	return r, nil
+}
+
 func (a *API) handleCreateRole(ctx forge.Context, req *CreateRoleRequest) (*rbac.Role, error) {
 	if req.Name == "" {
 		return nil, forge.BadRequest("name is required")
@@ -169,9 +187,17 @@ func (a *API) handleCreateRole(ctx forge.Context, req *CreateRoleRequest) (*rbac
 		return nil, forge.BadRequest("slug is required")
 	}
 
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
+	}
+
+	// A parent role, if given, must live in the caller's app too — otherwise a
+	// new role could inherit another tenant's permissions.
+	if req.ParentID != "" {
+		if err := a.assertParentRoleInApp(ctx, req.ParentID); err != nil {
+			return nil, err
+		}
 	}
 
 	r := &rbac.Role{
@@ -190,10 +216,23 @@ func (a *API) handleCreateRole(ctx forge.Context, req *CreateRoleRequest) (*rbac
 	return nil, ctx.JSON(http.StatusCreated, r)
 }
 
-func (a *API) handleListRoles(ctx forge.Context, req *ListRolesRequest) (*RoleListResponse, error) {
-	appID, err := a.resolveAppID(req.AppID)
+// assertParentRoleInApp verifies a parent role id refers to a role in the
+// caller's app, preventing cross-tenant permission inheritance via re-parenting.
+func (a *API) assertParentRoleInApp(ctx forge.Context, parentID string) error {
+	pid, err := id.ParseRoleID(parentID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return forge.BadRequest(fmt.Sprintf("invalid parent_id: %v", err))
+	}
+	if _, err := a.roleInCallerApp(ctx, pid); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a *API) handleListRoles(ctx forge.Context, req *ListRolesRequest) (*RoleListResponse, error) {
+	appID, err := a.scopedAppID(ctx, req.AppID)
+	if err != nil {
+		return nil, err
 	}
 
 	roles, err := a.engine.ListRoles(ctx.Context(), appID)
@@ -214,9 +253,9 @@ func (a *API) handleGetRole(ctx forge.Context, _ *GetRoleRequest) (*rbac.Role, e
 		return nil, forge.BadRequest(fmt.Sprintf("invalid role id: %v", err))
 	}
 
-	r, err := a.engine.GetRole(ctx.Context(), roleID)
+	r, err := a.roleInCallerApp(ctx, roleID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 
 	return r, nil
@@ -228,9 +267,9 @@ func (a *API) handleUpdateRole(ctx forge.Context, req *UpdateRoleRequest) (*rbac
 		return nil, forge.BadRequest(fmt.Sprintf("invalid role id: %v", err))
 	}
 
-	r, err := a.engine.GetRole(ctx.Context(), roleID)
+	r, err := a.roleInCallerApp(ctx, roleID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 
 	if req.Name != nil {
@@ -240,6 +279,12 @@ func (a *API) handleUpdateRole(ctx forge.Context, req *UpdateRoleRequest) (*rbac
 		r.Description = *req.Description
 	}
 	if req.ParentID != nil {
+		// Re-parenting must stay within the caller's app.
+		if *req.ParentID != "" {
+			if err := a.assertParentRoleInApp(ctx, *req.ParentID); err != nil {
+				return nil, err
+			}
+		}
 		r.ParentID = *req.ParentID
 	}
 
@@ -256,6 +301,10 @@ func (a *API) handleDeleteRole(ctx forge.Context, _ *DeleteRoleRequest) (*Status
 		return nil, forge.BadRequest(fmt.Sprintf("invalid role id: %v", err))
 	}
 
+	if _, err = a.roleInCallerApp(ctx, roleID); err != nil {
+		return nil, err
+	}
+
 	if err := a.engine.DeleteRole(ctx.Context(), roleID); err != nil {
 		return nil, mapError(err)
 	}
@@ -268,6 +317,10 @@ func (a *API) handleAddPermission(ctx forge.Context, req *AddPermissionRequest) 
 	roleID, err := id.ParseRoleID(ctx.Param("roleId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid role id: %v", err))
+	}
+
+	if _, err = a.roleInCallerApp(ctx, roleID); err != nil {
+		return nil, err
 	}
 
 	if req.Action == "" {
@@ -297,6 +350,10 @@ func (a *API) handleListRolePermissions(ctx forge.Context, _ *ListRolePermission
 		return nil, forge.BadRequest(fmt.Sprintf("invalid role id: %v", err))
 	}
 
+	if _, err = a.roleInCallerApp(ctx, roleID); err != nil {
+		return nil, err
+	}
+
 	perms, err := a.engine.ListRolePermissions(ctx.Context(), roleID)
 	if err != nil {
 		return nil, mapError(err)
@@ -310,9 +367,34 @@ func (a *API) handleListRolePermissions(ctx forge.Context, _ *ListRolePermission
 }
 
 func (a *API) handleRemovePermission(ctx forge.Context, _ *RemovePermissionRequest) (*StatusResponse, error) {
+	roleID, err := id.ParseRoleID(ctx.Param("roleId"))
+	if err != nil {
+		return nil, forge.BadRequest(fmt.Sprintf("invalid role id: %v", err))
+	}
 	permID, err := id.ParsePermissionID(ctx.Param("permissionId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid permission id: %v", err))
+	}
+
+	if _, err = a.roleInCallerApp(ctx, roleID); err != nil {
+		return nil, err
+	}
+	// The permission must actually belong to this role, so a caller cannot
+	// detach a permission from a role they don't own by pairing it with one
+	// they do.
+	perms, err := a.engine.ListRolePermissions(ctx.Context(), roleID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	found := false
+	for _, p := range perms {
+		if p.ID == permID.String() {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, forge.NotFound("permission not found")
 	}
 
 	if err := a.engine.RemovePermission(ctx.Context(), permID); err != nil {
@@ -327,6 +409,10 @@ func (a *API) handleAssignRole(ctx forge.Context, req *AssignRoleRequest) (*Stat
 	roleID, err := id.ParseRoleID(ctx.Param("roleId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid role id: %v", err))
+	}
+
+	if _, err = a.roleInCallerApp(ctx, roleID); err != nil {
+		return nil, err
 	}
 
 	userID, err := id.ParseUserID(req.UserID)
@@ -354,6 +440,10 @@ func (a *API) handleUnassignRole(ctx forge.Context, req *UnassignRoleRequest) (*
 		return nil, forge.BadRequest(fmt.Sprintf("invalid role id: %v", err))
 	}
 
+	if _, err = a.roleInCallerApp(ctx, roleID); err != nil {
+		return nil, err
+	}
+
 	userID, err := id.ParseUserID(req.UserID)
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid user_id: %v", err))
@@ -373,21 +463,19 @@ func (a *API) handleListUserRoles(ctx forge.Context, req *ListUserRolesRequest) 
 		return nil, forge.BadRequest(fmt.Sprintf("invalid user id: %v", err))
 	}
 
-	var roles []*rbac.Role
-	if req != nil && req.AppID != "" {
-		appID, parseErr := id.ParseAppID(req.AppID)
-		if parseErr != nil {
-			return nil, forge.BadRequest(fmt.Sprintf("invalid app_id: %v", parseErr))
-		}
-		roles, err = a.engine.ListUserRolesInApp(ctx.Context(), appID, userID)
-		if err != nil {
-			return nil, mapError(err)
-		}
-	} else {
-		roles, err = a.engine.ListUserRoles(ctx.Context(), userID)
-		if err != nil {
-			return nil, mapError(err)
-		}
+	// Always scope to the caller's app so one tenant cannot enumerate a user's
+	// role assignments in other tenants.
+	appReq := ""
+	if req != nil {
+		appReq = req.AppID
+	}
+	appID, err := a.scopedAppID(ctx, appReq)
+	if err != nil {
+		return nil, err
+	}
+	roles, err := a.engine.ListUserRolesInApp(ctx.Context(), appID, userID)
+	if err != nil {
+		return nil, mapError(err)
 	}
 
 	if roles == nil {

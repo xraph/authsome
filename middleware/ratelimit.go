@@ -26,14 +26,10 @@ type RateLimitConfig struct {
 func RateLimit(limiter ratelimit.Limiter, cfg RateLimitConfig) forge.Middleware {
 	if cfg.KeyFunc == nil {
 		cfg.KeyFunc = func(ctx forge.Context) string {
-			// Check proxy headers first, then fall back to RemoteAddr.
-			if xff := ctx.Request().Header.Get("X-Forwarded-For"); xff != "" {
-				return xff
-			}
-			if xri := ctx.Request().Header.Get("X-Real-IP"); xri != "" {
-				return xri
-			}
-			return ctx.Request().RemoteAddr
+			// Trusted-proxy-aware client IP: forwarding headers are honored only
+			// when the peer is a trusted proxy, so a direct client cannot mint a
+			// fresh rate-limit bucket per request by spoofing X-Forwarded-For.
+			return ClientIP(ctx.Request())
 		}
 	}
 

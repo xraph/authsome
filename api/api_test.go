@@ -1014,6 +1014,7 @@ func TestHandleRevokeSession_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/sessions/"+sess.ID.String(), nil)
+	req = req.WithContext(middleware.WithUserID(req.Context(), sess.UserID))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1021,10 +1022,13 @@ func TestHandleRevokeSession_Success(t *testing.T) {
 }
 
 func TestHandleRevokeSession_InvalidID(t *testing.T) {
-	a, _ := newTestAPI(t)
+	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
+	_, token, _ := signUp(t, eng, "revoke-invalid@test.com", "SecureP@ss1")
+
 	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/sessions/invalid-id", nil)
+	req = req.WithContext(middleware.WithUserID(req.Context(), userIDFor(t, eng, token)))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 

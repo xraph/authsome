@@ -60,9 +60,9 @@ func (a *API) registerAppClientConfigRoutes(router forge.Router) error {
 // ──────────────────────────────────────────────────
 
 func (a *API) handleGetAppClientConfig(ctx forge.Context, req *GetAppClientConfigRequest) (*appclientconfig.Config, error) {
-	appID, err := id.ParseAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	cfg, err := a.engine.Store().GetAppClientConfig(ctx.Context(), appID)
@@ -77,9 +77,9 @@ func (a *API) handleGetAppClientConfig(ctx forge.Context, req *GetAppClientConfi
 }
 
 func (a *API) handleSetAppClientConfig(ctx forge.Context, req *SetAppClientConfigRequest) (*appclientconfig.Config, error) {
-	appID, err := id.ParseAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	now := time.Now().UTC()
@@ -125,9 +125,9 @@ func (a *API) handleSetAppClientConfig(ctx forge.Context, req *SetAppClientConfi
 }
 
 func (a *API) handleDeleteAppClientConfig(ctx forge.Context, req *DeleteAppClientConfigRequest) (*StatusResponse, error) {
-	appID, err := id.ParseAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	if err := a.engine.Store().DeleteAppClientConfig(ctx.Context(), appID); err != nil {

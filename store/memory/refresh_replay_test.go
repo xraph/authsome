@@ -134,3 +134,32 @@ func TestRefreshReplay_RevokeFamilyNoop_NilFamily(t *testing.T) {
 	s := newStore()
 	require.NoError(t, s.RevokeRefreshTokenFamily(ctx(), id.Nil, session.RevokeReasonReplayDetected))
 }
+
+// TestRefreshReplay_MarkReplayedIsIdempotent pins the storm guard at the store
+// layer: the first upgrade to replay_detected reports firstReplay=true, every
+// subsequent call reports false.
+func TestRefreshReplay_MarkReplayedIsIdempotent(t *testing.T) {
+	s := newStore()
+	fam := id.NewSessionFamilyID()
+	h := hashTok("rotated-token")
+	require.NoError(t, s.MarkRefreshTokenRevoked(ctx(), h, fam, session.RevokeReasonRotated))
+
+	first, err := s.MarkRefreshTokenReplayed(ctx(), h)
+	require.NoError(t, err)
+	assert.True(t, first, "first replay upgrade must report firstReplay=true")
+
+	for i := 0; i < 3; i++ {
+		again, aerr := s.MarkRefreshTokenReplayed(ctx(), h)
+		require.NoError(t, aerr)
+		assert.False(t, again, "repeat replay must report firstReplay=false")
+	}
+}
+
+// TestRefreshReplay_MarkReplayedUnknownToken reports false rather than
+// erroring when the hash was never revoked.
+func TestRefreshReplay_MarkReplayedUnknownToken(t *testing.T) {
+	s := newStore()
+	first, err := s.MarkRefreshTokenReplayed(ctx(), hashTok("never-seen"))
+	require.NoError(t, err)
+	assert.False(t, first)
+}

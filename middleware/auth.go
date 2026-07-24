@@ -737,23 +737,10 @@ func resolveCookieName(resolver CookieNameResolver, ctx context.Context) string 
 	return "authsome_session_token"
 }
 
-// clientIPFromRequest extracts the client IP from the request, checking
-// X-Forwarded-For and X-Real-IP headers before falling back to RemoteAddr.
+// clientIPFromRequest extracts the client IP from the request. It delegates to
+// the trusted-proxy-aware resolver so X-Forwarded-For / X-Real-IP are honored
+// only when the immediate peer is a trusted proxy (a direct client cannot spoof
+// its IP). Kept as a thin alias so existing call sites read naturally.
 func clientIPFromRequest(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first IP in the chain (client IP).
-		if i := strings.IndexByte(xff, ','); i > 0 {
-			return strings.TrimSpace(xff[:i])
-		}
-		return strings.TrimSpace(xff)
-	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
-	// RemoteAddr is "host:port"; strip the port.
-	addr := r.RemoteAddr
-	if i := strings.LastIndex(addr, ":"); i > 0 {
-		return addr[:i]
-	}
-	return addr
+	return ClientIP(r)
 }

@@ -108,6 +108,28 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	}
 	p.engine = engine
 
+	// Build a persistent, at-rest-encrypted enrollment store when one hasn't
+	// been injected (tests inject via SetStore). TOTP/SMS secrets are wrapped
+	// with the engine's token encryptor so a database leak does not expose
+	// usable MFA seeds.
+	if p.store == nil {
+		var inner Store
+		if db := engine.DB(); db != nil {
+			switch db.Driver().Name() {
+			case "pg":
+				inner = NewPostgresStore(db)
+			case "sqlite":
+				inner = NewSqliteStore(db)
+			case "mongo":
+				inner = NewMongoStore(db)
+			}
+		}
+		if inner == nil {
+			inner = NewMemoryStore()
+		}
+		p.store = NewEncryptedStore(inner, engine.TokenEncryptor())
+	}
+
 	return nil
 }
 
@@ -137,6 +159,14 @@ func (p *Plugin) SetSMSSender(s bridge.SMSSender) {
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	g := router.Group("/v1/mfa", forge.WithGroupTags("MFA"))
 
+	// withRL appends rate-limit middleware (keyed off the engine's limiter and
+	// MFAChallengeLimit) to a route's options. Applied to the code-submission
+	// endpoints so 6-digit TOTP/SMS/recovery codes cannot be brute-forced.
+	rl := p.mfaRateLimit()
+	withRL := func(opts ...forge.RouteOption) []forge.RouteOption {
+		return append(opts, rl...)
+	}
+
 	if err := g.POST("/enroll", p.handleEnroll,
 		forge.WithSummary("Enroll in MFA"),
 		forge.WithOperationID("enrollMFA"),
@@ -146,21 +176,21 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
-	if err := g.POST("/verify", p.handleVerify,
+	if err := g.POST("/verify", p.handleVerify, withRL(
 		forge.WithSummary("Verify MFA code"),
 		forge.WithOperationID("verifyMFA"),
 		forge.WithResponseSchema(http.StatusOK, "Verified", VerifyMFAResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	)...); err != nil {
 		return err
 	}
 
-	if err := g.POST("/challenge", p.handleChallenge,
+	if err := g.POST("/challenge", p.handleChallenge, withRL(
 		forge.WithSummary("MFA challenge"),
 		forge.WithOperationID("challengeMFA"),
 		forge.WithResponseSchema(http.StatusOK, "Challenge passed", ChallengeResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	)...); err != nil {
 		return err
 	}
 
@@ -174,12 +204,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	// Recovery code routes
-	if err := g.POST("/recovery/verify", p.handleRecoveryVerify,
+	if err := g.POST("/recovery/verify", p.handleRecoveryVerify, withRL(
 		forge.WithSummary("Verify MFA recovery code"),
 		forge.WithOperationID("verifyMFARecovery"),
 		forge.WithResponseSchema(http.StatusOK, "Recovery code accepted", RecoveryVerifyResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	)...); err != nil {
 		return err
 	}
 
@@ -193,21 +223,47 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	// SMS MFA routes
-	if err := g.POST("/sms/send", p.handleSMSSend,
+	if err := g.POST("/sms/send", p.handleSMSSend, withRL(
 		forge.WithSummary("Send SMS verification code"),
 		forge.WithOperationID("sendSMSCode"),
 		forge.WithResponseSchema(http.StatusOK, "SMS code sent", SMSSendResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	)...); err != nil {
 		return err
 	}
 
-	return g.POST("/sms/verify", p.handleSMSVerify,
+	return g.POST("/sms/verify", p.handleSMSVerify, withRL(
 		forge.WithSummary("Verify SMS code"),
 		forge.WithOperationID("verifySMSCode"),
 		forge.WithResponseSchema(http.StatusOK, "SMS code verified", SMSVerifyResponse{}),
 		forge.WithErrorResponses(),
-	)
+	)...)
+}
+
+// mfaRateLimit returns rate-limit middleware options for MFA code-submission
+// endpoints, keyed off the engine's limiter and the MFAChallengeLimit config.
+// Returns nil when rate limiting is disabled or the host engine isn't the
+// concrete *authsome.Engine (e.g. minimal test wiring).
+func (p *Plugin) mfaRateLimit() []forge.RouteOption {
+	eng, ok := p.engine.(*authsome.Engine)
+	if !ok || eng == nil {
+		return nil
+	}
+	rl := eng.RateLimiter()
+	cfg := eng.Config().RateLimit
+	if rl == nil || !cfg.Enabled {
+		return nil
+	}
+	limit := cfg.MFAChallengeLimit
+	if limit <= 0 {
+		return nil
+	}
+	return []forge.RouteOption{
+		forge.WithMiddleware(middleware.RateLimit(rl, middleware.RateLimitConfig{
+			Limit:  limit,
+			Window: cfg.Window(),
+		})),
+	}
 }
 
 // ──────────────────────────────────────────────────
@@ -386,6 +442,22 @@ func (p *Plugin) handleEnroll(ctx forge.Context, req *EnrollRequest) (*EnrollRes
 	}, nil
 }
 
+// totpReplayTTL bounds how long a used TOTP time-step is remembered. It must
+// exceed the acceptance window (period × (2·skew+1) ≈ 90s) with margin.
+const totpReplayTTL = 120 * time.Second
+
+// totpStepUsed reports whether the given TOTP time-step has already been
+// accepted for this enrollment, and records it as used otherwise. Backed by the
+// ephemeral ceremony store (TTL-bounded), so no persistent schema is required.
+func (p *Plugin) totpStepUsed(ctx context.Context, enrollmentID id.MFAID, step int64) bool {
+	key := fmt.Sprintf("mfa:totp:used:%s:%d", enrollmentID.String(), step)
+	if _, err := p.ceremonies.Get(ctx, key); err == nil {
+		return true
+	}
+	_ = p.ceremonies.Set(ctx, key, []byte{1}, totpReplayTTL) //nolint:errcheck // best-effort replay marker
+	return false
+}
+
 // handleVerify verifies a TOTP code against the user's enrollment.
 func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyMFARequest) (*VerifyMFAResponse, error) {
 	userID, ok := middleware.UserIDFrom(ctx.Context())
@@ -402,8 +474,12 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyMFARequest) (*Verify
 		return nil, forge.NotFound("no MFA enrollment found")
 	}
 
-	if !ValidateTOTP(req.Code, enrollment.Secret) {
+	ok2, step := ValidateTOTPStep(req.Code, enrollment.Secret)
+	if !ok2 {
 		return nil, forge.Unauthorized("invalid TOTP code")
+	}
+	if p.totpStepUsed(ctx.Context(), enrollment.ID, step) {
+		return nil, forge.Unauthorized("TOTP code already used")
 	}
 
 	// Mark as verified if this is the first successful verification
@@ -490,10 +566,14 @@ func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*Cha
 		return nil, forge.Unauthorized("MFA enrollment not yet verified")
 	}
 
-	if !ValidateTOTP(req.Code, enrollment.Secret) {
+	ok2, step := ValidateTOTPStep(req.Code, enrollment.Secret)
+	if !ok2 {
 		// Don't consume the ticket on bad code — the user retries within
 		// the 5-minute TTL. Rate-limiting prevents brute force.
 		return nil, forge.Unauthorized("invalid TOTP code")
+	}
+	if p.totpStepUsed(ctx.Context(), enrollment.ID, step) {
+		return nil, forge.Unauthorized("TOTP code already used")
 	}
 
 	// Code is good. Consume the ticket (single-use) before minting the

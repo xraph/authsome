@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store"
 )
 
@@ -132,6 +133,27 @@ func (s *Store) RevokeRefreshTokenFamily(ctx context.Context, familyID id.Sessio
 	return nil
 }
 
+// MarkRefreshTokenReplayed flips an already-revoked token's reason to
+// "replay_detected" and reports whether this call made the change. The
+// conditional UPDATE (reason <> replay_detected) is atomic, so concurrent
+// double-submits and repeated presentations resolve to exactly one
+// firstReplay=true — the engine's storm guard.
+func (s *Store) MarkRefreshTokenReplayed(ctx context.Context, tokenHash string) (bool, error) {
+	if tokenHash == "" {
+		return false, nil
+	}
+	res, err := s.pg.NewUpdate((*RevokedRefreshTokenModel)(nil)).
+		Set("reason = ?", session.RevokeReasonReplayDetected).
+		Where("token_hash = ?", tokenHash).
+		Where("reason <> ?", session.RevokeReasonReplayDetected).
+		Exec(ctx)
+	if err != nil {
+		return false, fmt.Errorf("authsome/postgres: mark refresh token replayed: %w", pgError(err))
+	}
+	n, _ := res.RowsAffected() //nolint:errcheck // driver always supports RowsAffected
+	return n > 0, nil
+}
+
 // hashRefreshTokenPg returns the hex-encoded SHA-256 of a refresh token.
 // Mirrors the canonicalisation used by the in-memory store and engine.
 func hashRefreshTokenPg(tok string) string {
@@ -146,4 +168,5 @@ var _ interface {
 	MarkRefreshTokenRevoked(context.Context, string, id.SessionFamilyID, string) error
 	GetRevokedRefreshTokenFamily(context.Context, string) (id.SessionFamilyID, error)
 	RevokeRefreshTokenFamily(context.Context, id.SessionFamilyID, string) error
+	MarkRefreshTokenReplayed(context.Context, string) (bool, error)
 } = (*Store)(nil)

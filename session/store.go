@@ -31,6 +31,13 @@ type Store interface {
 	GetSessionByToken(ctx context.Context, token string) (*Session, error)
 	GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*Session, error)
 	UpdateSession(ctx context.Context, s *Session) error
+	// RotateSession atomically persists s only if the stored row's access token
+	// still equals expectedToken. It reports true when the row was updated and
+	// false when no row matched — meaning a concurrent refresh already rotated
+	// this session. This compare-and-swap serializes concurrent refresh-token
+	// rotations so only one caller can "win"; the others are refused rather than
+	// returning tokens that were never persisted (the refresh TOCTOU fix).
+	RotateSession(ctx context.Context, s *Session, expectedToken string) (bool, error)
 	// TouchSession performs a lightweight update of last_activity_at, expires_at,
 	// and updated_at without rewriting the entire session row.
 	TouchSession(ctx context.Context, sessionID id.SessionID, lastActivityAt, expiresAt time.Time) error
@@ -59,4 +66,13 @@ type Store interface {
 	// family. Called on replay detection so a leaked token doesn't keep
 	// working through siblings.
 	RevokeRefreshTokenFamily(ctx context.Context, familyID id.SessionFamilyID, reason string) error
+
+	// MarkRefreshTokenReplayed upgrades an already-revoked token's reason to
+	// "replay_detected" and reports whether this call performed that transition
+	// (i.e. the token was not already flagged as replayed). It is the
+	// idempotency guard for replay handling: the engine cascade-revokes the
+	// family and emits the security alert only when firstReplay is true, so a
+	// client stuck re-presenting a dead token yields exactly one alert instead
+	// of one per attempt. The token must already be in the revoked set.
+	MarkRefreshTokenReplayed(ctx context.Context, tokenHash string) (firstReplay bool, err error)
 }

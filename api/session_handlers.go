@@ -57,10 +57,23 @@ func (a *API) handleListSessions(ctx forge.Context, _ *ListSessionsRequest) (*Se
 }
 
 func (a *API) handleRevokeSession(ctx forge.Context, _ *RevokeSessionRequest) (*StatusResponse, error) {
+	userID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+
 	rawID := ctx.Param("sessionId")
 	sessID, err := id.ParseSessionID(rawID)
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid session id: %v", err))
+	}
+
+	// Ownership check: a caller may only revoke their own sessions. A
+	// missing session and a session owned by another user both return 404 so
+	// the endpoint never discloses the existence of another user's session.
+	sess, err := a.engine.Store().GetSession(ctx.Context(), sessID)
+	if err != nil || sess.UserID != userID {
+		return nil, forge.NotFound("session not found")
 	}
 
 	if err := a.engine.RevokeSession(ctx.Context(), sessID); err != nil {

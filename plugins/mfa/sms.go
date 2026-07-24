@@ -3,6 +3,7 @@ package mfa
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"fmt"
 	"math/big"
 	"time"
@@ -67,5 +68,8 @@ func ValidateSMSCode(code string, challenge *SMSChallenge) bool {
 	if time.Now().After(challenge.ExpiresAt) {
 		return false
 	}
-	return code == challenge.Code
+	// Constant-time comparison so a network attacker cannot use response
+	// timing to recover the code digit by digit. ConstantTimeCompare already
+	// returns 0 for differing lengths.
+	return subtle.ConstantTimeCompare([]byte(code), []byte(challenge.Code)) == 1
 }

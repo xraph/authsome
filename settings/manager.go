@@ -104,13 +104,32 @@ func Get[T any](ctx context.Context, m *Manager, def DefinitionTyped[T], opts Re
 	var zero T
 	raw, err := m.Resolve(ctx, def.Def.Key, opts)
 	if err != nil {
-		return zero, err
+		// Fail safe: fall back to the registered code default rather than the
+		// zero value of T. Callers frequently ignore this error (e.g. cookie
+		// Secure/HttpOnly resolution), and a settings-store outage must not
+		// silently flip a default-true security flag to false.
+		return defaultOrZero(def), err
 	}
 	var val T
 	if err := json.Unmarshal(raw, &val); err != nil {
-		return zero, fmt.Errorf("settings: unmarshal %q into %T: %w", def.Def.Key, zero, err)
+		// A corrupt stored value is likewise treated as "use the default".
+		return defaultOrZero(def), fmt.Errorf("settings: unmarshal %q into %T: %w", def.Def.Key, zero, err)
 	}
 	return val, nil
+}
+
+// defaultOrZero returns the definition's registered default unmarshaled into T,
+// or the zero value of T if no default is set or it fails to decode.
+func defaultOrZero[T any](def DefinitionTyped[T]) T {
+	var val T
+	if len(def.Def.Default) > 0 {
+		if err := json.Unmarshal(def.Def.Default, &val); err == nil {
+			return val
+		}
+		var zero T
+		return zero
+	}
+	return val
 }
 
 // Set writes a setting value at the given scope. It validates the value,
