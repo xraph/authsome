@@ -32,7 +32,7 @@ func (s *Store) IsRefreshTokenRevoked(ctx context.Context, tokenHash string) (bo
 	}
 	var m revokedRefreshTokenModel
 	err := s.mdb.NewFind(&m).
-		Filter(bson.M{"_id": tokenHash}).
+		Filter(bson.M{"token_hash": tokenHash}).
 		Scan(ctx)
 	if err != nil {
 		if isNoDocuments(err) {
@@ -72,7 +72,7 @@ func (s *Store) GetRevokedRefreshTokenFamily(ctx context.Context, tokenHash stri
 	}
 	var m revokedRefreshTokenModel
 	err := s.mdb.NewFind(&m).
-		Filter(bson.M{"_id": tokenHash}).
+		Filter(bson.M{"token_hash": tokenHash}).
 		Scan(ctx)
 	if err != nil {
 		if isNoDocuments(err) {
@@ -167,7 +167,7 @@ func (s *Store) MarkRefreshTokenReplayed(ctx context.Context, tokenHash string) 
 		return false, nil
 	}
 	res, err := s.mdb.NewUpdate((*revokedRefreshTokenModel)(nil)).
-		Filter(bson.M{"_id": tokenHash, "reason": bson.M{"$ne": session.RevokeReasonReplayDetected}}).
+		Filter(bson.M{"token_hash": tokenHash, "reason": bson.M{"$ne": session.RevokeReasonReplayDetected}}).
 		Set("reason", session.RevokeReasonReplayDetected).
 		Exec(ctx)
 	if err != nil {
