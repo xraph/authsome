@@ -226,8 +226,14 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
-	// Admin endpoints for client management
-	admin := router.Group("/v1/admin/oauth", forge.WithGroupTags("OAuth2 Admin"))
+	// Admin endpoints for client management. Gated behind a session plus
+	// manage/oauth2_client — a caller who can mint clients can register an
+	// arbitrary redirect_uri and harvest codes for any user.
+	admin := router.Group("/v1/admin/oauth",
+		forge.WithGroupTags("OAuth2 Admin"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.AdminGuard(p.engine, "manage", "oauth2_client")...),
+	)
 
 	if err := admin.POST("/clients", p.handleCreateClient,
 		forge.WithSummary("Create OAuth2 client"),

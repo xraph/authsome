@@ -17,6 +17,7 @@ import (
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
@@ -96,6 +97,8 @@ type Plugin struct {
 	relay       bridge.EventRelay
 	hooks       *hook.Bus
 	logger      log.Logger
+	engine      plugin.Engine
+	permChecker plugin.PermissionChecker
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -134,6 +137,11 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.logger = engine.Logger()
 	p.resolveUser = engine.ResolveUser
 	p.defaultAppID = engine.DefaultAppID()
+	p.engine = engine
+
+	if pc, ok := engine.(plugin.PermissionChecker); ok {
+		p.permChecker = pc
+	}
 
 	return nil
 }
@@ -154,7 +162,14 @@ func (p *Plugin) StrategyPriority() int { return 100 }
 // RegisterRoutes registers API key management routes on a forge.Router.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	prefix := p.config.PathPrefix
-	g := router.Group(prefix, forge.WithGroupTags("API Keys"))
+	// Key management is session-gated. Handlers additionally confine each
+	// caller to their own keys unless they hold manage/apikey — see
+	// authorizeSubject.
+	g := router.Group(prefix,
+		forge.WithGroupTags("API Keys"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
+	)
 
 	if err := g.POST("", p.handleCreate,
 		forge.WithSummary("Create API key"),
@@ -182,13 +197,61 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 }
 
 // ──────────────────────────────────────────────────
+// Caller authorization
+// ──────────────────────────────────────────────────
+
+// callerIsKeyAdmin reports whether the caller may act on other users' keys.
+// Without an RBAC-capable engine there is no way to prove admin intent, so
+// every caller is confined to their own keys — the safe default.
+func (p *Plugin) callerIsKeyAdmin(ctx context.Context, caller id.UserID) bool {
+	if p.permChecker == nil {
+		return false
+	}
+	ok, err := p.permChecker.HasPermission(ctx, caller, "manage", "apikey")
+	if err != nil {
+		p.logger.Warn("apikey: permission check failed, denying admin scope",
+			log.String("user_id", caller.String()),
+			log.String("error", err.Error()),
+		)
+		return false
+	}
+	return ok
+}
+
+// authorizeSubject resolves whose keys a request may act on. An empty subject
+// means "my own". Naming another user requires manage/apikey — otherwise any
+// authenticated user could mint a key that authenticates as somebody else.
+func (p *Plugin) authorizeSubject(ctx forge.Context, subject string) (id.UserID, error) {
+	caller, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok || caller.IsNil() {
+		return id.UserID{}, forge.Unauthorized("authentication required")
+	}
+	if strings.TrimSpace(subject) == "" {
+		return caller, nil
+	}
+	target, err := id.ParseUserID(subject)
+	if err != nil {
+		return id.UserID{}, forge.BadRequest("invalid user_id")
+	}
+	if target == caller {
+		return caller, nil
+	}
+	if !p.callerIsKeyAdmin(ctx.Context(), caller) {
+		return id.UserID{}, forge.Forbidden("cannot manage API keys for another user")
+	}
+	return target, nil
+}
+
+// ──────────────────────────────────────────────────
 // Request/Response Types
 // ──────────────────────────────────────────────────
 
 // CreateKeyRequest is the request body for creating an API key.
 type CreateKeyRequest struct {
-	AppID  string   `json:"app_id"`
-	UserID string   `json:"user_id"`
+	AppID string `json:"app_id"`
+	// UserID names the key's owner. Optional — defaults to the authenticated
+	// caller. Naming another user requires the manage/apikey permission.
+	UserID string   `json:"user_id,omitempty"`
 	Name   string   `json:"name"`
 	Scopes []string `json:"scopes,omitempty"`
 }
@@ -241,17 +304,19 @@ type RevokeKeyRequest struct {
 // ──────────────────────────────────────────────────
 
 func (p *Plugin) handleCreate(ctx forge.Context, req *CreateKeyRequest) (*CreateKeyResponse, error) {
-	if req.AppID == "" || req.UserID == "" || req.Name == "" {
-		return nil, forge.BadRequest("app_id, user_id, and name are required")
+	if req.AppID == "" || req.Name == "" {
+		return nil, forge.BadRequest("app_id and name are required")
 	}
 
 	appID, err := id.ParseAppID(req.AppID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid app_id")
 	}
-	userID, err := id.ParseUserID(req.UserID)
+	// user_id is optional and defaults to the caller. Minting a key for
+	// another user requires manage/apikey.
+	userID, err := p.authorizeSubject(ctx, req.UserID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid user_id")
+		return nil, err
 	}
 
 	// Check max keys limit
@@ -333,18 +398,25 @@ func (p *Plugin) handleList(ctx forge.Context, req *ListKeysRequest) (*ListKeysR
 		return nil, forge.BadRequest("invalid app_id")
 	}
 
+	caller, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok || caller.IsNil() {
+		return nil, forge.Unauthorized("authentication required")
+	}
+
+	// An app-wide listing is admin-only. Everyone else — whether they asked
+	// for a specific user or omitted the filter — sees only their own keys.
 	var keys []*apikey.APIKey
-	if req.UserID != "" {
-		userID, parseErr := id.ParseUserID(req.UserID)
-		if parseErr != nil {
-			return nil, forge.BadRequest("invalid user_id")
-		}
-		keys, err = p.store.ListAPIKeysByUser(ctx.Context(), appID, userID)
+	if req.UserID == "" && p.callerIsKeyAdmin(ctx.Context(), caller) {
+		keys, err = p.store.ListAPIKeysByApp(ctx.Context(), appID)
 		if err != nil {
 			return nil, forge.InternalError(fmt.Errorf("failed to list keys: %w", err))
 		}
 	} else {
-		keys, err = p.store.ListAPIKeysByApp(ctx.Context(), appID)
+		userID, authErr := p.authorizeSubject(ctx, req.UserID)
+		if authErr != nil {
+			return nil, authErr
+		}
+		keys, err = p.store.ListAPIKeysByUser(ctx.Context(), appID, userID)
 		if err != nil {
 			return nil, forge.InternalError(fmt.Errorf("failed to list keys: %w", err))
 		}
@@ -392,6 +464,16 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeKeyRequest) (*struct
 			return nil, forge.NotFound("key not found")
 		}
 		return nil, forge.InternalError(fmt.Errorf("failed to get key: %w", err))
+	}
+
+	// Only the key's owner (or an apikey admin) may revoke it. Report a
+	// miss as 404 so key ids can't be probed for existence.
+	caller, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok || caller.IsNil() {
+		return nil, forge.Unauthorized("authentication required")
+	}
+	if key.UserID != caller && !p.callerIsKeyAdmin(ctx.Context(), caller) {
+		return nil, forge.NotFound("key not found")
 	}
 
 	key.Revoked = true

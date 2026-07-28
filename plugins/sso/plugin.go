@@ -273,9 +273,14 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	// Admin: create SSO connection scoped to a target App. Used by
 	// platform-admin clients (e.g. TwinOS studio) to register an
-	// upstream IdP per workspace App at create time. Caller must
-	// authenticate with a platform-admin API key.
-	admin := router.Group("/v1/admin/sso", forge.WithGroupTags("SSO Admin"))
+	// upstream IdP per workspace App at create time. Gated behind a
+	// session plus manage/sso_connection — registering a connection
+	// lets the holder federate identities into the target App.
+	admin := router.Group("/v1/admin/sso",
+		forge.WithGroupTags("SSO Admin"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.AdminGuard(p.engine, "manage", "sso_connection")...),
+	)
 	if err := admin.POST("/connections", p.handleAdminCreateConnection,
 		forge.WithSummary("Create SSO connection (admin)"),
 		forge.WithDescription("Registers an OIDC or SAML SSO connection on a target App. Used by platform-admin clients to provision per-tenant IdPs."),

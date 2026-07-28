@@ -3,6 +3,7 @@ package authclient_test
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/http/cookiejar"
 	"testing"
 
@@ -977,21 +978,21 @@ func TestClient_Oauth2UserInfo(t *testing.T) {
 	assert.NotNil(t, resp)
 }
 
-func TestClient_ListOAuth2Clients(t *testing.T) {
+// Listing OAuth2 clients is an admin operation: a client that can be created
+// can carry any redirect_uri, so the endpoint is gated behind
+// manage/oauth2_client. An ordinary signed-in user must be refused.
+func TestClient_ListOAuth2Clients_RequiresAdmin(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
 	client := ts.CreateUserClient(t, "oauth2clients@example.com", "SecureP@ss1")
 
-	resp, err := client.ListOAuth2Clients(ctx)
-	if err != nil {
-		var ce *authclient.ClientError
-		if errors.As(err, &ce) && (ce.StatusCode == 404 || ce.StatusCode == 400) {
-			t.Skip("OAuth2 clients: requires app_id query param not in client")
-		}
-		require.NoError(t, err)
-	}
-	assert.NotNil(t, resp)
+	_, err := client.ListOAuth2Clients(ctx)
+	require.Error(t, err, "a non-admin user must not list OAuth2 clients")
+
+	var ce *authclient.ClientError
+	require.ErrorAs(t, err, &ce)
+	assert.Equal(t, http.StatusForbidden, ce.StatusCode)
 }
 
 // ──────────────────────────────────────────────────

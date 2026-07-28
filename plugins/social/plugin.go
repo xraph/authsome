@@ -483,7 +483,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
-	admin := router.Group("/v1/admin/social", forge.WithGroupTags("Social OAuth Admin"))
+	// Admin endpoints read and write provider client secrets — session plus
+	// manage/social_provider required.
+	admin := router.Group("/v1/admin/social",
+		forge.WithGroupTags("Social OAuth Admin"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.AdminGuard(p.engine, "manage", "social_provider")...),
+	)
 	if err := admin.GET("/providers", p.handleAdminListProviders,
 		forge.WithSummary("List social providers (admin)"),
 		forge.WithDescription("Returns the social providers configured at the resolved scope. When app_id is supplied, providers are merged from global + app overrides. Client secrets are masked."),

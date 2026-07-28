@@ -23,6 +23,7 @@ import (
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	apikeyPlugin "github.com/xraph/authsome/plugins/apikey"
 	"github.com/xraph/authsome/session"
@@ -122,6 +123,79 @@ func TestPlugin_RegisterInRegistry(t *testing.T) {
 	assert.Len(t, reg.RouteProviders(), 1)
 }
 
+// authedCtx returns a context carrying a resolved identity, standing in for
+// what AuthMiddleware populates in production (the test router runs none).
+func authedCtx(userID id.UserID) context.Context {
+	return middleware.WithUserID(context.Background(), userID)
+}
+
+// postKey issues a create-key request as the given caller. A nil caller means
+// an unauthenticated request.
+func postKey(t *testing.T, mux forge.Router, caller *id.UserID, appID id.AppID, subject string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	payload := map[string]any{"app_id": appID.String(), "name": "Test Key"}
+	if subject != "" {
+		payload["user_id"] = subject
+	}
+	body, err := json.Marshal(payload)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	if caller != nil {
+		ctx = authedCtx(*caller)
+	}
+	req := httptest.NewRequestWithContext(ctx, "POST", "/v1/keys", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	return w
+}
+
+// An unauthenticated caller must not be able to mint a key. This is the hole
+// that let anyone create a credential authenticating as an arbitrary user.
+func TestPlugin_CreateKey_RejectsAnonymous(t *testing.T) {
+	p, _ := newTestPlugin()
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	w := postKey(t, mux, nil, id.NewAppID(), id.NewUserID().String())
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// Without manage/apikey, a caller may not mint a key for somebody else.
+func TestPlugin_CreateKey_RejectsOtherUserWithoutPermission(t *testing.T) {
+	p, _ := newTestPlugin()
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	caller := id.NewUserID()
+	victim := id.NewUserID()
+
+	w := postKey(t, mux, &caller, id.NewAppID(), victim.String())
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+// Omitting user_id targets the caller, so self-service needs no permission.
+func TestPlugin_CreateKey_DefaultsToCaller(t *testing.T) {
+	p, keyStore := newTestPlugin()
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	caller := id.NewUserID()
+	appID := id.NewAppID()
+
+	w := postKey(t, mux, &caller, appID, "")
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	keys, err := keyStore.ListAPIKeysByUser(context.Background(), appID, caller)
+	require.NoError(t, err)
+	require.Len(t, keys, 1, "key should be bound to the authenticated caller")
+	assert.Equal(t, caller, keys[0].UserID)
+}
+
 func TestPlugin_CreateKey(t *testing.T) {
 	p, _ := newTestPlugin()
 
@@ -139,7 +213,9 @@ func TestPlugin_CreateKey(t *testing.T) {
 		"scopes":  []string{"read", "write"},
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/keys", bytes.NewReader(body))
+	// Key routes are session-gated: authenticate as the subject of the key.
+	req := httptest.NewRequestWithContext(
+		authedCtx(userID), "POST", "/v1/keys", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -179,19 +255,21 @@ func TestPlugin_CreateKey_ValidationErrors(t *testing.T) {
 	mux := forge.NewRouter()
 	require.NoError(t, p.RegisterRoutes(mux))
 
+	// user_id is no longer required — it defaults to the authenticated
+	// caller — so only app_id and name remain mandatory.
+	caller := id.NewUserID()
 	tests := []struct {
 		name string
 		body map[string]any
 	}{
-		{"missing app_id", map[string]any{"user_id": id.NewUserID().String(), "name": "key"}},
-		{"missing user_id", map[string]any{"app_id": id.NewAppID().String(), "name": "key"}},
-		{"missing name", map[string]any{"app_id": id.NewAppID().String(), "user_id": id.NewUserID().String()}},
+		{"missing app_id", map[string]any{"user_id": caller.String(), "name": "key"}},
+		{"missing name", map[string]any{"app_id": id.NewAppID().String(), "user_id": caller.String()}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			body, _ := json.Marshal(tt.body)
-			req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/keys", bytes.NewReader(body))
+			req := httptest.NewRequestWithContext(authedCtx(caller), "POST", "/v1/keys", bytes.NewReader(body))
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
 			assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -233,7 +311,7 @@ func TestPlugin_CreateKey_MaxKeysLimit(t *testing.T) {
 		"user_id": userID.String(),
 		"name":    "One Too Many",
 	})
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/keys", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(authedCtx(userID), "POST", "/v1/keys", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -267,7 +345,7 @@ func TestPlugin_ListKeys(t *testing.T) {
 	require.NoError(t, err)
 
 	// List by app
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/keys?app_id="+appID.String(), nil)
+	req := httptest.NewRequestWithContext(authedCtx(userID), "GET", "/v1/keys?app_id="+appID.String(), nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -311,7 +389,7 @@ func TestPlugin_ListKeys_ByUser(t *testing.T) {
 	}
 
 	// List by user1 only
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/keys?app_id="+appID.String()+"&user_id="+user1.String(), nil)
+	req := httptest.NewRequestWithContext(authedCtx(user1), "GET", "/v1/keys?app_id="+appID.String()+"&user_id="+user1.String(), nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -343,7 +421,7 @@ func TestPlugin_RevokeKey(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/keys/"+keyID.String(), nil)
+	req := httptest.NewRequestWithContext(authedCtx(userID), "DELETE", "/v1/keys/"+keyID.String(), nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -362,7 +440,7 @@ func TestPlugin_RevokeKey_NotFound(t *testing.T) {
 	require.NoError(t, p.RegisterRoutes(mux))
 
 	fakeID := id.NewAPIKeyID()
-	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/keys/"+fakeID.String(), nil)
+	req := httptest.NewRequestWithContext(authedCtx(id.NewUserID()), "DELETE", "/v1/keys/"+fakeID.String(), nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -635,12 +713,13 @@ func TestPlugin_CreateKey_DefaultExpiry(t *testing.T) {
 	mux := forge.NewRouter()
 	require.NoError(t, p.RegisterRoutes(mux))
 
+	caller := id.NewUserID()
 	body, _ := json.Marshal(map[string]any{
 		"app_id":  id.NewAppID().String(),
-		"user_id": id.NewUserID().String(),
+		"user_id": caller.String(),
 		"name":    "Expiring Key",
 	})
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/keys", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(authedCtx(caller), "POST", "/v1/keys", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
