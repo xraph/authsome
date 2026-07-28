@@ -28,7 +28,34 @@ import { type NextRequest, NextResponse } from "next/server";
 export interface ProxyHandlerConfig {
   /** Base URL of the AuthSome backend API (e.g. "http://localhost:7900"). */
   baseURL: string;
+  /** Abort an upstream request after this many ms (default: 30_000). */
+  timeoutMs?: number;
 }
+
+/**
+ * Request headers relayed to the backend beyond auth.
+ *
+ * The client-identity headers matter for security, not just telemetry: the
+ * backend keys rate limiting, account lockout, geo/anomaly scoring, and its
+ * audit log off the caller's IP and user agent. Drop them and every proxied
+ * request arrives wearing this server's identity, collapsing all users into a
+ * single rate-limit bucket and disabling brute-force protection.
+ *
+ * `x-forwarded-*` is relayed as received. That is correct when this app sits
+ * behind a load balancer or CDN (Vercel, Cloudflare) that overwrites the
+ * header with the true client IP. If you expose Next.js directly to the
+ * internet, a caller can forge `X-Forwarded-For` and evade the backend's
+ * limiter — terminate on a proxy that rewrites it, or have the backend trust
+ * only its own peer address.
+ */
+const FORWARDED_REQUEST_HEADERS = [
+  "user-agent",
+  "accept-language",
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-proto",
+  "x-real-ip",
+] as const;
 
 /**
  * Forward Set-Cookie headers from the backend response to the Next.js
@@ -73,9 +100,7 @@ export function createProxyHandler(config: ProxyHandlerConfig) {
     const queryString = request.nextUrl.search;
     const target = `${config.baseURL}/${path.join("/")}${queryString}`;
 
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
+    const headers: Record<string, string> = {};
 
     const authHeader = request.headers.get("Authorization");
     if (authHeader) {
@@ -87,14 +112,32 @@ export function createProxyHandler(config: ProxyHandlerConfig) {
       headers["Cookie"] = cookie;
     }
 
+    // Relay client identity so backend rate limiting and lockout see the real
+    // caller rather than this server. See FORWARDED_REQUEST_HEADERS.
+    for (const name of FORWARDED_REQUEST_HEADERS) {
+      const value = request.headers.get(name);
+      if (value) {
+        headers[name] = value;
+      }
+    }
+
+    const hasBody = request.method !== "GET" && request.method !== "HEAD";
+    if (hasBody) {
+      // Pass the caller's own Content-Type through. Forcing application/json
+      // here corrupted multipart uploads and form posts.
+      headers["Content-Type"] =
+        request.headers.get("Content-Type") ?? "application/json";
+    }
+
+    const timeoutMs = config.timeoutMs ?? 30_000;
+    const abort = AbortSignal.timeout(timeoutMs);
+
     const res = await fetch(target, {
       method: request.method,
       headers,
-      body:
-        request.method !== "GET" && request.method !== "HEAD"
-          ? await request.text()
-          : undefined,
+      body: hasBody ? await request.text() : undefined,
       redirect: "manual",
+      signal: abort,
     });
 
     // Forward redirect responses (e.g. OAuth social login redirects).
@@ -115,10 +158,18 @@ export function createProxyHandler(config: ProxyHandlerConfig) {
 
     // Pass through non-JSON responses (e.g. HTML callback pages) with
     // the original Content-Type so the browser renders them correctly.
+    //
+    // This route is mounted on the app's own origin, so anything the backend
+    // returns as HTML executes with access to this origin's cookies and
+    // storage. nosniff stops the browser from upgrading an unlabelled or
+    // mislabelled body into HTML or script on its own.
     if (!contentType.includes("application/json")) {
       const response = new NextResponse(text, {
         status: res.status,
-        headers: { "Content-Type": contentType },
+        headers: {
+          "Content-Type": contentType || "text/plain; charset=utf-8",
+          "X-Content-Type-Options": "nosniff",
+        },
       });
       forwardSetCookies(res, response);
       return response;
@@ -127,10 +178,19 @@ export function createProxyHandler(config: ProxyHandlerConfig) {
     try {
       const data = JSON.parse(text);
       const response = NextResponse.json(data, { status: res.status });
+      response.headers.set("X-Content-Type-Options", "nosniff");
       forwardSetCookies(res, response);
       return response;
     } catch {
-      const response = new NextResponse(text, { status: res.status });
+      // Labelled JSON that isn't JSON — serve it as inert text, never as
+      // whatever the browser guesses it might be.
+      const response = new NextResponse(text, {
+        status: res.status,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
       forwardSetCookies(res, response);
       return response;
     }
