@@ -245,25 +245,9 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 // Returns nil when rate limiting is disabled or the host engine isn't the
 // concrete *authsome.Engine (e.g. minimal test wiring).
 func (p *Plugin) mfaRateLimit() []forge.RouteOption {
-	eng, ok := p.engine.(*authsome.Engine)
-	if !ok || eng == nil {
-		return nil
-	}
-	rl := eng.RateLimiter()
-	cfg := eng.Config().RateLimit
-	if rl == nil || !cfg.Enabled {
-		return nil
-	}
-	limit := cfg.MFAChallengeLimit
-	if limit <= 0 {
-		return nil
-	}
-	return []forge.RouteOption{
-		forge.WithMiddleware(middleware.RateLimit(rl, middleware.RateLimitConfig{
-			Limit:  limit,
-			Window: cfg.Window(),
-		})),
-	}
+	return authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int {
+		return c.MFAChallengeLimit
+	})
 }
 
 // ──────────────────────────────────────────────────

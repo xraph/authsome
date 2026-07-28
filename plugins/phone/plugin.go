@@ -117,7 +117,10 @@ func New(cfg ...Config) *Plugin {
 		t := true
 		c.AutoCreate = &t
 	}
-	return &Plugin{config: c}
+	// Honour an explicitly supplied sender immediately. OnInit re-applies the
+	// same precedence over the engine's bridge; doing it here too means a
+	// caller who passes one in Config isn't silently ignored before OnInit.
+	return &Plugin{config: c, sms: c.SMSSender}
 }
 
 // Name returns the plugin name.
@@ -151,23 +154,34 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	g := router.Group("/v1/phone", forge.WithGroupTags("Phone Auth"))
 
-	if err := g.POST("/start", p.handleStart,
+	// /start sends an SMS, so it's capped like resend-verification — an
+	// uncapped one bills the operator per request. /verify accepts a 6-digit
+	// code; the per-challenge attempt cap is the primary defence there, with
+	// this as defence in depth since rate limiting can be disabled.
+	startRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int {
+		return c.ResendVerificationLimit
+	})
+	verifyRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int {
+		return c.MFAChallengeLimit
+	})
+
+	if err := g.POST("/start", p.handleStart, append([]forge.RouteOption{
 		forge.WithSummary("Start phone authentication"),
 		forge.WithDescription("Sends an OTP code to the given phone number."),
 		forge.WithOperationID("phoneAuthStart"),
 		forge.WithResponseSchema(http.StatusOK, "OTP sent", StartResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, startRL...)...); err != nil {
 		return err
 	}
 
-	return g.POST("/verify", p.handleVerify,
+	return g.POST("/verify", p.handleVerify, append([]forge.RouteOption{
 		forge.WithSummary("Verify phone OTP"),
 		forge.WithDescription("Verifies the OTP code and creates or finds the user, returning a session."),
 		forge.WithOperationID("phoneAuthVerify"),
 		forge.WithResponseSchema(http.StatusOK, "Authenticated", VerifyResponse{}),
 		forge.WithErrorResponses(),
-	)
+	}, verifyRL...)...)
 }
 
 // SetStore allows direct store injection for testing.
@@ -175,6 +189,10 @@ func (p *Plugin) SetStore(s store.Store) { p.store = s }
 
 // SetAppID sets the app ID for the plugin (used in testing).
 func (p *Plugin) SetAppID(appID string) { p.appID = appID }
+
+// SetCeremonyStore injects the short-lived challenge store, which OnInit
+// otherwise resolves from the engine (used in testing).
+func (p *Plugin) SetCeremonyStore(s ceremony.Store) { p.ceremonies = s }
 
 // ──────────────────────────────────────────────────
 // Request/Response Types
@@ -208,12 +226,21 @@ type VerifyResponse struct {
 	NewUser      bool       `json:"new_user"`
 }
 
+// maxPhoneCodeAttempts caps wrong-code submissions against a single challenge
+// before it is discarded and the user must request a fresh code. A 6-digit
+// code is only 10^6 wide, so without a cap the 5-minute TTL is enough to walk
+// the whole space — and route rate limiting can be switched off by config,
+// which would leave nothing at all in the way.
+const maxPhoneCodeAttempts = 5
+
 // phoneChallenge is stored in the ceremony store.
 type phoneChallenge struct {
 	Code      string    `json:"code"`
 	Phone     string    `json:"phone"`
 	AppID     string    `json:"app_id"`
 	ExpiresAt time.Time `json:"expires_at"`
+	// Attempts counts failed code submissions against this challenge.
+	Attempts int `json:"attempts"`
 }
 
 // ──────────────────────────────────────────────────
@@ -270,6 +297,39 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 	}, nil
 }
 
+// recordFailedAttempt charges one wrong guess against a challenge, discarding
+// it once maxPhoneCodeAttempts is reached so the caller must request a fresh
+// code.
+//
+// The rewritten entry keeps the challenge's original deadline rather than a
+// full TTL — re-Setting with p.config.CodeTTL would let an attacker hold a
+// challenge open indefinitely by submitting wrong codes, which is the opposite
+// of the intent. If the remaining time is already gone, the entry is dropped.
+//
+// Best-effort by design: a ceremony-store failure here must not convert a
+// wrong-code response into a 500, which would itself leak that the code was
+// wrong via a distinguishable status.
+func (p *Plugin) recordFailedAttempt(ctx context.Context, key string, challenge *phoneChallenge) {
+	challenge.Attempts++
+
+	remaining := time.Until(challenge.ExpiresAt)
+	if challenge.Attempts >= maxPhoneCodeAttempts || remaining <= 0 {
+		_ = p.ceremonies.Delete(ctx, key) //nolint:errcheck // best-effort
+		return
+	}
+
+	data, err := json.Marshal(challenge)
+	if err != nil {
+		// Can't persist the count — drop the challenge rather than leave it
+		// standing with the attempt uncounted.
+		_ = p.ceremonies.Delete(ctx, key) //nolint:errcheck // best-effort
+		return
+	}
+	if setErr := p.ceremonies.Set(ctx, key, data, remaining); setErr != nil {
+		_ = p.ceremonies.Delete(ctx, key) //nolint:errcheck // best-effort
+	}
+}
+
 func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyResponse, error) {
 	if req.Phone == "" {
 		return nil, forge.BadRequest("phone number required")
@@ -308,6 +368,7 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 		Code:      challenge.Code,
 		ExpiresAt: challenge.ExpiresAt,
 	}) {
+		p.recordFailedAttempt(ctx.Context(), ceremonyKey, &challenge)
 		return nil, forge.Unauthorized("invalid or expired verification code")
 	}
 
