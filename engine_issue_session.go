@@ -102,7 +102,19 @@ type mfaTicketPayload struct {
 	IPAddress  string    `json:"ip_address"`
 	UserAgent  string    `json:"user_agent"`
 	IssuedAt   time.Time `json:"issued_at"`
+	// Attempts counts wrong codes submitted against this ticket.
+	Attempts int `json:"attempts"`
 }
+
+// MaxMFATicketAttempts caps wrong codes against a single ticket before it is
+// discarded and the user must sign in again.
+//
+// A ticket is partial authentication: the password leg already succeeded, so
+// the only thing between the holder and a session is a 6-digit code. Route
+// rate limiting is the other defence, but it returns no middleware at all when
+// disabled by config — so the ticket has to bound its own attempts rather than
+// rely on a limiter that may not be there.
+const MaxMFATicketAttempts = 5
 
 // MFATicketPayload is the publicly exposed shape of a loaded ticket. It
 // mirrors the on-disk form but uses typed IDs so callers can use them
@@ -307,6 +319,55 @@ func (e *Engine) ConsumeMFATicket(ctx context.Context, ticket string) error {
 		return fmt.Errorf("ceremony store not configured")
 	}
 	return store.Delete(ctx, ceremonyNamespaceMFATicket+":"+ticket)
+}
+
+// FailMFATicket charges one wrong code against a ticket and reports whether
+// that exhausted it. An exhausted ticket is deleted: the user must sign in
+// again rather than keep guessing.
+//
+// The rewritten entry keeps the ticket's original deadline. Re-Setting a full
+// MFATicketTTL would let a caller hold a ticket open indefinitely by
+// submitting wrong codes, extending the very window the counter bounds.
+//
+// Errors are returned for the caller to log, not to surface: a failed write
+// must not turn a wrong-code answer into a distinguishable 500, which would
+// itself confirm the code was wrong.
+func (e *Engine) FailMFATicket(ctx context.Context, ticket string) (exhausted bool, err error) {
+	store := e.ceremonyStoreOrFallback()
+	if store == nil {
+		return false, fmt.Errorf("ceremony store not configured")
+	}
+	key := ceremonyNamespaceMFATicket + ":" + ticket
+
+	raw, err := store.Get(ctx, key)
+	if err != nil {
+		return false, err
+	}
+	var pl mfaTicketPayload
+	if decodeErr := json.Unmarshal(raw, &pl); decodeErr != nil {
+		// Undecodable ticket is unusable — drop it.
+		_ = store.Delete(ctx, key) //nolint:errcheck // best-effort
+		return true, fmt.Errorf("authsome: decode mfa ticket: %w", decodeErr)
+	}
+
+	pl.Attempts++
+	remaining := time.Until(pl.IssuedAt.Add(MFATicketTTL))
+	if pl.Attempts >= MaxMFATicketAttempts || remaining <= 0 {
+		return true, store.Delete(ctx, key)
+	}
+
+	encoded, err := json.Marshal(pl)
+	if err != nil {
+		_ = store.Delete(ctx, key) //nolint:errcheck // best-effort
+		return true, err
+	}
+	if setErr := store.Set(ctx, key, encoded, remaining); setErr != nil {
+		// Can't persist the count — drop the ticket rather than leave it
+		// standing with the attempt uncounted.
+		_ = store.Delete(ctx, key) //nolint:errcheck // best-effort
+		return true, setErr
+	}
+	return false, nil
 }
 
 // IsMFATicketNotFound reports whether err indicates a missing or

@@ -301,7 +301,13 @@ type ChallengeResponse struct {
 }
 
 // DisableRequest is an empty request for disabling MFA.
-type DisableRequest struct{}
+type DisableRequest struct {
+	// Code re-proves possession of the second factor: a current TOTP code or
+	// an unused recovery code. Required in practice, but optional to the
+	// binder so an unauthenticated caller still gets 401 rather than a 400
+	// that reports a missing field before authentication was even checked.
+	Code string `json:"code,omitempty"`
+}
 
 // DisableResponse is returned when MFA is disabled.
 type DisableResponse struct {
@@ -550,14 +556,40 @@ func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*Cha
 		return nil, forge.Unauthorized("MFA enrollment not yet verified")
 	}
 
+	// Accept either a TOTP code or one of the user's recovery codes. Recovery
+	// codes exist precisely for the case where the authenticator is
+	// unavailable, which is this endpoint — before the fix they could only be
+	// redeemed from an already-authenticated session, i.e. never when actually
+	// needed.
+	method := "totp"
 	ok2, step := ValidateTOTPStep(req.Code, enrollment.Secret)
-	if !ok2 {
-		// Don't consume the ticket on bad code — the user retries within
-		// the 5-minute TTL. Rate-limiting prevents brute force.
-		return nil, forge.Unauthorized("invalid TOTP code")
-	}
-	if p.totpStepUsed(ctx.Context(), enrollment.ID, step) {
-		return nil, forge.Unauthorized("TOTP code already used")
+	switch {
+	case ok2:
+		if p.totpStepUsed(ctx.Context(), enrollment.ID, step) {
+			return nil, forge.Unauthorized("TOTP code already used")
+		}
+	default:
+		used, recErr := p.consumeRecoveryCode(ctx.Context(), userID, req.Code)
+		if recErr != nil {
+			return nil, recErr
+		}
+		if !used {
+			// Charge the attempt. The ticket is partial auth over a 6-digit
+			// secret, so it must bound its own guesses — the route limiter
+			// is absent entirely when rate limiting is disabled.
+			exhausted, failErr := eng.FailMFATicket(ctx.Context(), req.Ticket)
+			if failErr != nil {
+				p.logger.Warn("mfa: record failed challenge attempt",
+					log.String("ticket_prefix", safePrefix(req.Ticket)),
+					log.Error(failErr),
+				)
+			}
+			if exhausted {
+				return nil, forge.Unauthorized("too many invalid codes; sign in again")
+			}
+			return nil, forge.Unauthorized("invalid TOTP code")
+		}
+		method = "recovery"
 	}
 
 	// Code is good. Consume the ticket (single-use) before minting the
@@ -593,7 +625,7 @@ func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*Cha
 		userID.String(), appIDStr, bridge.OutcomeSuccess)
 	p.relayEvent(ctx.Context(), "auth.mfa.challenged", appIDStr, map[string]string{
 		"user_id": userID.String(),
-		"method":  "totp",
+		"method":  method,
 	})
 	p.emitHook(ctx.Context(), hook.ActionMFAChallenge, "mfa", enrollment.ID.String(),
 		userID.String(), appIDStr)
@@ -611,6 +643,61 @@ func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*Cha
 	}, nil
 }
 
+// verifyStepUp re-proves possession of the second factor for a sensitive
+// change, accepting a current TOTP code or a recovery code. Replay protection
+// applies as it does at sign-in, so the same code cannot be reused to authorise
+// a second action within its window.
+func (p *Plugin) verifyStepUp(ctx context.Context, userID id.UserID, enrollment *Enrollment, code string) error {
+	if ok, step := ValidateTOTPStep(code, enrollment.Secret); ok {
+		if p.totpStepUsed(ctx, enrollment.ID, step) {
+			return forge.Unauthorized("TOTP code already used")
+		}
+		return nil
+	}
+	used, err := p.consumeRecoveryCode(ctx, userID, code)
+	if err != nil {
+		return err
+	}
+	if !used {
+		return forge.Unauthorized("invalid code")
+	}
+	return nil
+}
+
+// consumeRecoveryCode matches plaintext against the user's unused recovery
+// codes and burns the first hit. Reports whether a code matched; a false
+// return with a nil error means "no match", not a failure.
+//
+// Every unused code is compared even after a match is found, so the work done
+// is the same whether the code was valid or not — bcrypt is slow enough that
+// short-circuiting would make "wrong code" measurably faster than "right one".
+func (p *Plugin) consumeRecoveryCode(ctx context.Context, userID id.UserID, plaintext string) (bool, error) {
+	codes, err := p.store.GetRecoveryCodes(ctx, userID)
+	if err != nil {
+		return false, forge.InternalError(fmt.Errorf("mfa: get recovery codes: %w", err))
+	}
+
+	var matched *RecoveryCode
+	for _, c := range codes {
+		if c.Used {
+			continue
+		}
+		if VerifyRecoveryCode(plaintext, c) && matched == nil {
+			matched = c
+		}
+	}
+	if matched == nil {
+		return false, nil
+	}
+
+	if consumeErr := p.store.ConsumeRecoveryCode(ctx, matched.ID); consumeErr != nil {
+		return false, forge.InternalError(fmt.Errorf("mfa: consume recovery code: %w", consumeErr))
+	}
+	p.audit(ctx, hook.ActionMFARecoveryUsed, "mfa", matched.ID.String(), userID.String(), "", bridge.OutcomeSuccess)
+	p.emitHook(ctx, hook.ActionMFARecoveryUsed, "mfa", matched.ID.String(), userID.String(), "")
+	return true, nil
+}
+
 // safePrefix returns the first 8 chars of a ticket so it can appear
 // in logs without leaking the secret in full.
 func safePrefix(s string) string {
@@ -621,7 +708,7 @@ func safePrefix(s string) string {
 }
 
 // handleDisable removes MFA enrollment for the authenticated user.
-func (p *Plugin) handleDisable(ctx forge.Context, _ *DisableRequest) (*DisableResponse, error) {
+func (p *Plugin) handleDisable(ctx forge.Context, req *DisableRequest) (*DisableResponse, error) {
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok || userID.Prefix() == "" {
 		return nil, forge.Unauthorized("authentication required")
@@ -630,6 +717,19 @@ func (p *Plugin) handleDisable(ctx forge.Context, _ *DisableRequest) (*DisableRe
 	enrollment, err := p.store.GetEnrollment(ctx.Context(), userID, "totp")
 	if err != nil {
 		return nil, forge.NotFound("no MFA enrollment found")
+	}
+
+	// Turning MFA off is exactly the action MFA exists to protect, so it needs
+	// a fresh proof of possession rather than session auth alone. Without this
+	// a stolen or hijacked session can strip the second factor silently and
+	// keep long-term access.
+	if req == nil || req.Code == "" {
+		return nil, forge.BadRequest("code required to disable MFA")
+	}
+	if enrollment.Verified {
+		if err := p.verifyStepUp(ctx.Context(), userID, enrollment, req.Code); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := p.store.DeleteEnrollment(ctx.Context(), enrollment.ID); err != nil {
