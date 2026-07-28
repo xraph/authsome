@@ -120,12 +120,20 @@ func (s *SqliteStore) GetAuthCode(ctx context.Context, code string) (*Authorizat
 	return toAuthCode(m)
 }
 
-func (s *SqliteStore) ConsumeAuthCode(ctx context.Context, code string) error {
-	_, err := s.sdb.NewUpdate((*authCodeModel)(nil)).
+func (s *SqliteStore) ConsumeAuthCode(ctx context.Context, code string) (bool, error) {
+	res, err := s.sdb.NewUpdate((*authCodeModel)(nil)).
 		Set("consumed = ?", true).
 		Where("code = ?", code).
+		Where("consumed = ?", false).
 		Exec(ctx)
-	return oauth2SqliteError(err)
+	if err != nil {
+		return false, oauth2SqliteError(err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, oauth2SqliteError(err)
+	}
+	return n > 0, nil
 }
 
 // ──────────────────────────────────────────────────

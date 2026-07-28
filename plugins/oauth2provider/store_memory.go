@@ -94,15 +94,18 @@ func (s *MemoryStore) GetAuthCode(_ context.Context, code string) (*Authorizatio
 	return c, nil
 }
 
-func (s *MemoryStore) ConsumeAuthCode(_ context.Context, code string) error {
+func (s *MemoryStore) ConsumeAuthCode(_ context.Context, code string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c, ok := s.codes[code]
 	if !ok {
-		return ErrCodeNotFound
+		return false, ErrCodeNotFound
+	}
+	if c.Consumed {
+		return false, nil
 	}
 	c.Consumed = true
-	return nil
+	return true, nil
 }
 
 // ──────────────────────────────────────────────────
