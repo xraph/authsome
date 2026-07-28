@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useClientConfig } from "@authsome/ui-react";
+import { safeRedirectTarget } from "@authsome/ui-core";
 import { SignUpForm } from "./sign-up-form";
 import { EmailVerificationForm } from "./email-verification-form";
 import type { AuthCardAlign, AuthCardVariant } from "./auth-card";
@@ -69,8 +70,11 @@ export function SignUp({
       return;
     }
     const params = new URLSearchParams(window.location.search);
-    const redirectTo = params.get("redirect");
-    window.location.href = redirectTo || "/";
+    // See sign-in.tsx — `redirect` is attacker-controllable and must resolve
+    // to this origin before we navigate a just-authenticated user to it.
+    window.location.href = safeRedirectTarget(params.get("redirect"), "/", {
+      currentOrigin: window.location.origin,
+    });
   }, [onSuccess]);
 
   const handleSignUpSuccess = React.useCallback(() => {

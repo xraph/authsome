@@ -4,6 +4,11 @@ export * from "./types";
 export * from "./client";
 export { AuthManager } from "./auth";
 export {
+  isSafeRedirect,
+  safeRedirectTarget,
+  type SafeRedirectOptions,
+} from "./redirect";
+export {
   base64urlToBuffer,
   bufferToBase64url,
   prepareCreationOptions,
