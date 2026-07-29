@@ -107,7 +107,14 @@ export interface AuthConfig {
   /** Custom fetch implementation (defaults to global fetch). */
   fetch?: typeof fetch;
 
-  /** Storage implementation for persisting tokens (defaults to localStorage). */
+  /**
+   * Storage implementation for persisting tokens.
+   *
+   * Defaults to in-memory, so tokens do not survive a reload and no other
+   * script on the page can read them. Pass createLocalStorage() to persist
+   * across reloads, accepting that an XSS can then read the refresh token;
+   * prefer backend-set httpOnly cookies where available.
+   */
   storage?: TokenStorage;
 
   /** Callback invoked when the auth state changes. */

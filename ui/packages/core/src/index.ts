@@ -2,7 +2,7 @@
 
 export * from "./types";
 export * from "./client";
-export { AuthManager, SESSION_STORAGE_KEY } from "./auth";
+export { AuthManager, createLocalStorage, SESSION_STORAGE_KEY } from "./auth";
 export {
   isSafeRedirect,
   safeRedirectTarget,

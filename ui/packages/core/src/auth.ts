@@ -25,8 +25,20 @@ const CONFIG_TTL_MS = 5 * 60_000; // Cache client config for 5 minutes.
 // Used only when a server response omits expires_at.
 const DEFAULT_SESSION_TTL_MS = 3600_000;
 
-/** Default in-memory storage (lost on page reload). */
-const memoryStorage: TokenStorage = (() => {
+/**
+ * In-memory token storage. Cleared on page reload, and unreachable to any
+ * other script on the page.
+ *
+ * This is the default. Persisting tokens in localStorage means the refresh
+ * token — good for weeks — sits somewhere any injected script can read, so a
+ * single XSS becomes long-term account access rather than a page-lifetime
+ * problem. Surviving reloads is better solved by letting the backend set
+ * httpOnly session cookies, which JavaScript cannot read at all; see
+ * createCookieStorage's notes and the Next.js proxy.
+ *
+ * If you accept the tradeoff, opt in explicitly with createLocalStorage().
+ */
+function createMemoryStorage(): TokenStorage {
   const store = new Map<string, string>();
   return {
     getItem: (key: string) => store.get(key) ?? null,
@@ -37,10 +49,19 @@ const memoryStorage: TokenStorage = (() => {
       store.delete(key);
     },
   };
-})();
+}
 
-/** Try to use localStorage, fall back to memory. */
-function defaultStorage(): TokenStorage {
+/**
+ * Token storage backed by window.localStorage, falling back to memory where
+ * localStorage is unavailable (SSR, restricted contexts).
+ *
+ * Opt in only if you understand the exposure: everything written here,
+ * including the refresh token, is readable by any script running on the page.
+ * Prefer backend-set httpOnly cookies where you can.
+ *
+ *     new AuthManager({ baseURL, storage: createLocalStorage() })
+ */
+export function createLocalStorage(): TokenStorage {
   try {
     if (typeof window !== "undefined" && window.localStorage) {
       return window.localStorage;
@@ -48,7 +69,7 @@ function defaultStorage(): TokenStorage {
   } catch {
     // SSR or restricted environments.
   }
-  return memoryStorage;
+  return createMemoryStorage();
 }
 
 /**
@@ -113,7 +134,7 @@ export class AuthManager {
 
   constructor(config: AuthConfig) {
     this.client = new AuthClient(config);
-    this.storage = config.storage ?? defaultStorage();
+    this.storage = config.storage ?? createMemoryStorage();
     this.onError = config.onError;
     this.publishableKey = config.publishableKey;
 

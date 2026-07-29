@@ -115,3 +115,45 @@ describe("createAuthMiddleware", () => {
     expect(res.headers.get("location")).toContain("/home");
   });
 });
+
+describe("path matching", () => {
+  /** A path is "public" iff the request is served without a check. */
+  async function isPublic(paths: string[], pathname: string): Promise<boolean> {
+    stubAuthAPI({ reject: true }); // any check would fail closed
+    const res = await mw({ publicPaths: paths })(req(pathname, {}));
+    return !isRedirectToSignIn(res);
+  }
+
+  // The bug: one entry exposing /api/public also exposed every sibling route
+  // sharing that prefix, invisibly.
+  it("does not let a prefix leak into a sibling route", async () => {
+    expect(await isPublic(["/api/public*"], "/api/publicadmin")).toBe(false);
+    expect(await isPublic(["/api/public*"], "/api/public-internal")).toBe(false);
+  });
+
+  it("covers the prefix itself and everything beneath it", async () => {
+    expect(await isPublic(["/api/public*"], "/api/public")).toBe(true);
+    expect(await isPublic(["/api/public*"], "/api/public/keys")).toBe(true);
+    expect(await isPublic(["/api/public*"], "/api/public/a/b")).toBe(true);
+  });
+
+  it("matches exact patterns exactly", async () => {
+    expect(await isPublic(["/health"], "/health")).toBe(true);
+    expect(await isPublic(["/health"], "/healthz")).toBe(false);
+    expect(await isPublic(["/health"], "/health/deep")).toBe(false);
+  });
+
+  it("treats trailing slashes as the same route", async () => {
+    expect(await isPublic(["/health"], "/health/")).toBe(true);
+    expect(await isPublic(["/api/public*"], "/api/public/")).toBe(true);
+  });
+
+  it("keeps the root path exact, not a prefix for everything", async () => {
+    expect(await isPublic(["/"], "/")).toBe(true);
+    expect(await isPublic(["/"], "/dashboard")).toBe(false);
+  });
+
+  it("supports a root wildcard", async () => {
+    expect(await isPublic(["/*"], "/anything/at/all")).toBe(true);
+  });
+});

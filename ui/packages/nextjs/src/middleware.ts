@@ -160,13 +160,40 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig) {
   };
 }
 
+/**
+ * Reports whether pathname is covered by one of the configured patterns.
+ *
+ * A trailing "*" matches the prefix and anything beneath it, but only at a
+ * path-segment boundary: "/api/public*" covers "/api/public" and
+ * "/api/public/keys", and does NOT cover "/api/publicadmin".
+ *
+ * Plain string containment was the earlier behaviour, and it silently widened
+ * publicPaths — one entry meant to expose "/api/public" also exposed every
+ * sibling route sharing that prefix, with no way to tell from the config that
+ * it had happened.
+ *
+ * Trailing slashes are normalized so "/dashboard" and "/dashboard/" are the
+ * same route, which is how Next.js resolves them.
+ */
 function matchesPath(pathname: string, paths: string[]): boolean {
-  return paths.some((p) => {
-    if (p.endsWith("*")) {
-      return pathname.startsWith(p.slice(0, -1));
+  const target = normalizePath(pathname);
+  return paths.some((pattern) => {
+    if (pattern.endsWith("*")) {
+      const prefix = normalizePath(pattern.slice(0, -1));
+      // A root wildcard ("*" or "/*") covers every path.
+      if (prefix === "/") {
+        return true;
+      }
+      return target === prefix || target.startsWith(prefix + "/");
     }
-    return pathname === p;
+    return target === normalizePath(pattern);
   });
+}
+
+/** Strips trailing slashes, preserving the root path as "/". */
+function normalizePath(p: string): string {
+  const trimmed = p.replace(/\/+$/, "");
+  return trimmed === "" ? "/" : trimmed;
 }
 
 function redirectToSignIn(request: NextRequest, signInPage: string): NextResponse {
