@@ -1,8 +1,14 @@
 /**
  * Cookie-based TokenStorage for Next.js client components.
  *
- * Stores the session token in a cookie so that Next.js middleware
- * and server components can read it.
+ * Persists the whole Session as a cookie so Next.js middleware and server
+ * components can read it via `readSessionToken`, which understands this shape
+ * as well as the backend's own httpOnly cookie.
+ *
+ * Prefer the backend cookie where you can. A cookie written from JavaScript
+ * cannot be httpOnly, so the refresh token it carries is readable by any
+ * script on the page — use this only when the backend is not setting session
+ * cookies for you.
  */
 
 import type { TokenStorage } from "@authsome/ui-core";

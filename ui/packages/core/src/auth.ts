@@ -9,10 +9,21 @@
 import { AuthClient, type SignInRequest, type SignUpRequest, AuthClientError } from "./client";
 import type { AuthConfig, AuthState, ClientConfig, Session, TokenStorage, User } from "./types";
 
-const SESSION_KEY = "authsome:session";
+/**
+ * Storage key under which the whole Session (tokens + expiry) is persisted.
+ *
+ * Exported because a cookie-backed TokenStorage writes it as a cookie name,
+ * and server-side readers have to know what to look for. See
+ * @authsome/ui-nextjs readSessionToken.
+ */
+export const SESSION_STORAGE_KEY = "authsome:session";
+
+const SESSION_KEY = SESSION_STORAGE_KEY;
 const CONFIG_KEY = "authsome:client_config";
 const REFRESH_BEFORE_MS = 60_000; // Refresh 60 s before expiry.
 const CONFIG_TTL_MS = 5 * 60_000; // Cache client config for 5 minutes.
+// Used only when a server response omits expires_at.
+const DEFAULT_SESSION_TTL_MS = 3600_000;
 
 /** Default in-memory storage (lost on page reload). */
 const memoryStorage: TokenStorage = (() => {
@@ -38,6 +49,27 @@ function defaultStorage(): TokenStorage {
     // SSR or restricted environments.
   }
   return memoryStorage;
+}
+
+/**
+ * Builds a Session from an auth response.
+ *
+ * The server's own `expires_at` is authoritative. Three of the four call sites
+ * used to hardcode "now + 1 hour" instead, so with any other server-side TTL
+ * the refresh timer was scheduled against a lifetime the token did not have —
+ * a shorter one left the client sitting on a dead token until minute 59.
+ * The fallback applies only when the server omits the field.
+ */
+function toSession(res: {
+  session_token: string;
+  refresh_token: string;
+  expires_at?: string;
+}): Session {
+  return {
+    session_token: res.session_token,
+    refresh_token: res.refresh_token,
+    expires_at: res.expires_at ?? new Date(Date.now() + DEFAULT_SESSION_TTL_MS).toISOString(),
+  };
 }
 
 /**
@@ -155,11 +187,7 @@ export class AuthManager {
     // on isLoading to unmount the form, losing its local state (step, fields).
     try {
       const res = await this.client.signIn(credentials);
-      const session: Session = {
-        session_token: res.session_token,
-        refresh_token: res.refresh_token,
-        expires_at: new Date(Date.now() + 3600_000).toISOString(), // fallback
-      };
+      const session: Session = toSession(res);
       await this.handleAuthResponse(res.user, session);
     } catch (err) {
       // MFA required: surface the ticket + available methods so the
@@ -291,11 +319,7 @@ export class AuthManager {
         mfa_ticket: state.mfaTicket,
         code,
       });
-      const session: Session = {
-        session_token: res.session_token,
-        refresh_token: res.refresh_token,
-        expires_at: res.expires_at ?? new Date(Date.now() + 3600_000).toISOString(),
-      };
+      const session: Session = toSession(res);
       await this.handleAuthResponse(res.user as User, session);
     } catch (err) {
       // Don't fall into the generic error handler — bad code should
@@ -324,11 +348,7 @@ export class AuthManager {
     this.setState({ status: "loading" });
     try {
       const res = await this.client.verifyRecoveryCode(code);
-      const session: Session = {
-        session_token: res.session_token,
-        refresh_token: res.refresh_token,
-        expires_at: new Date(Date.now() + 3600_000).toISOString(),
-      };
+      const session: Session = toSession(res);
       await this.handleAuthResponse(res.user, session);
     } catch (err) {
       this.handleError(err);
@@ -349,11 +369,7 @@ export class AuthManager {
       const token = this.getSessionToken();
       if (!token) throw new Error("No session token available");
       const res = await this.client.verifySMSCodeForMFA(code, token);
-      const session: Session = {
-        session_token: res.session_token,
-        refresh_token: res.refresh_token,
-        expires_at: new Date(Date.now() + 3600_000).toISOString(),
-      };
+      const session: Session = toSession(res);
       await this.handleAuthResponse(res.user, session);
     } catch (err) {
       this.handleError(err);

@@ -18,7 +18,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-const SESSION_COOKIE = "authsome_session_token";
+import { readSessionToken, SESSION_COOKIE } from "./session-cookie";
 
 /** Configuration for the auth middleware. */
 export interface AuthMiddlewareConfig {
@@ -56,7 +56,9 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig) {
 
   return async function authMiddleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
-    const sessionToken = request.cookies.get(cookieName)?.value;
+    // Accepts either the backend's httpOnly cookie or a session persisted by
+    // createCookieStorage — see readSessionToken.
+    const sessionToken = readSessionToken(request.cookies, cookieName);
 
     // If this is an auth page and user has a session token, redirect away.
     if (sessionToken && matchesPath(pathname, authPaths)) {
