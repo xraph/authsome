@@ -37,15 +37,44 @@ export interface AuthMiddlewareConfig {
   authPaths?: string[];
   /** Where to redirect authenticated users visiting auth pages (default: "/"). */
   afterSignInUrl?: string;
+  /**
+   * What to do when the session cannot be validated because the auth API is
+   * unreachable or errored — as distinct from it rejecting the session.
+   *
+   * "deny" (default) redirects to sign-in. "allow" serves the request.
+   *
+   * "allow" trades authentication for availability, and the trade is worse
+   * than it looks: a caller can set any cookie value they like, so during an
+   * outage — or against a misconfigured baseURL that 404s every request —
+   * "allow" serves protected routes to anyone. Choose it only if you have a
+   * second enforcement point behind this one.
+   */
+  onUnavailable?: "deny" | "allow";
+  /**
+   * Milliseconds to wait for the validation request (default: 5000).
+   *
+   * Middleware runs on every matched request, so an auth API that hangs
+   * without this stalls the whole site rather than failing a check.
+   */
+  timeoutMs?: number;
 }
+
+/** Outcome of validating a session token against the auth API. */
+type SessionCheck = "valid" | "rejected" | "unavailable";
 
 /**
  * Creates a Next.js Edge middleware that protects routes behind authentication.
  *
  * - Auth pages redirect authenticated users to `afterSignInUrl`.
  * - Public paths are served without checks.
- * - Other paths require a valid session token (stored in a cookie).
- * - If the token is missing or invalid the user is redirected to `signInPage`.
+ * - Other paths require a session the auth API confirms.
+ * - A missing, rejected, or unverifiable session redirects to `signInPage`.
+ *
+ * Only an explicit 2xx from the auth API counts as authenticated. Previously
+ * any response other than 401 was let through, so a 404 from a wrong baseURL,
+ * a 500, or a network error served every protected route to anyone holding an
+ * arbitrary cookie value. Set `onUnavailable: "allow"` to restore that
+ * behaviour deliberately.
  */
 export function createAuthMiddleware(config: AuthMiddlewareConfig) {
   const signInPage = config.signInPage ?? "/sign-in";
@@ -54,27 +83,58 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig) {
   const afterSignInUrl = config.afterSignInUrl ?? "/";
   const authPaths = config.authPaths ?? [signInPage, "/sign-up"];
 
+  const onUnavailable = config.onUnavailable ?? "deny";
+  const timeoutMs = config.timeoutMs ?? 5000;
+
+  /**
+   * Asks the auth API whether this token is currently good.
+   *
+   * A verdict requires an answer: 2xx is valid, 401/403 is rejected, and
+   * anything else — other statuses, a network failure, a timeout — is
+   * "unavailable", meaning no verdict was obtained. Reading a non-401 as
+   * success is what let a wrong baseURL authenticate everyone.
+   */
+  async function checkSession(token: string): Promise<SessionCheck> {
+    try {
+      const res = await fetch(`${config.baseURL}/v1/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (res.ok) {
+        return "valid";
+      }
+      if (res.status === 401 || res.status === 403) {
+        return "rejected";
+      }
+      return "unavailable";
+    } catch {
+      return "unavailable";
+    }
+  }
+
   return async function authMiddleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
     // Accepts either the backend's httpOnly cookie or a session persisted by
     // createCookieStorage — see readSessionToken.
     const sessionToken = readSessionToken(request.cookies, cookieName);
 
-    // If this is an auth page and user has a session token, redirect away.
+    // Auth pages: bounce a confirmed-signed-in user away. Only a positive
+    // verdict redirects — an unverifiable session must not eject someone from
+    // the very page they would use to sign in again.
     if (sessionToken && matchesPath(pathname, authPaths)) {
-      try {
-        const res = await fetch(`${config.baseURL}/v1/me`, {
-          headers: { Authorization: `Bearer ${sessionToken}` },
-        });
-        if (res.ok) {
-          const url = request.nextUrl.clone();
-          url.pathname = afterSignInUrl;
-          url.search = "";
-          return NextResponse.redirect(url);
-        }
-      } catch {
-        // Network error — fall through and let the page render.
+      if ((await checkSession(sessionToken)) === "valid") {
+        const url = request.nextUrl.clone();
+        url.pathname = afterSignInUrl;
+        url.search = "";
+        return NextResponse.redirect(url);
       }
+    }
+
+    // The sign-in page is always reachable, whether or not the caller listed
+    // it in publicPaths. Redirecting it to itself is an infinite loop, and it
+    // is the one page a user with an unusable session must be able to reach.
+    if (pathname === signInPage) {
+      return NextResponse.next();
     }
 
     // Allow public paths.
@@ -82,29 +142,21 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig) {
       return NextResponse.next();
     }
 
-    // Check for session cookie.
     if (!sessionToken) {
       return redirectToSignIn(request, signInPage);
     }
 
-    // Validate the token against the API.
-    try {
-      const res = await fetch(`${config.baseURL}/v1/me`, {
-        headers: { Authorization: `Bearer ${sessionToken}` },
-      });
-
-      if (res.status === 401) {
-        // Only redirect on explicit authentication rejection.
-        // Other errors (404 when portal is down, 500, etc.) should not
-        // force a logout — let the page render and retry later.
+    switch (await checkSession(sessionToken)) {
+      case "valid":
+        return NextResponse.next();
+      case "rejected":
         return redirectToSignIn(request, signInPage);
-      }
-    } catch {
-      // Network error — let the request through so the page can handle it.
-      return NextResponse.next();
+      case "unavailable":
+        // No verdict. Fail closed unless the operator opted out.
+        return onUnavailable === "allow"
+          ? NextResponse.next()
+          : redirectToSignIn(request, signInPage);
     }
-
-    return NextResponse.next();
   };
 }
 

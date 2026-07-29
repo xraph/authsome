@@ -52,6 +52,20 @@ export type AuthState =
   | { status: "authenticated"; user: User; session: Session }
   | { status: "unauthenticated" }
   /**
+   * A session exists in storage but could not be validated because the auth
+   * server was unreachable or errored — as distinct from the server rejecting
+   * it, which yields "unauthenticated".
+   *
+   * This is deliberately NOT "authenticated": nothing has proven the token is
+   * still good, so `isAuthenticated` is false and protected UI must stay
+   * hidden. The session is retained and a refresh is scheduled, so a
+   * transient outage resolves itself without signing the user out.
+   *
+   * Treat it as "signed out, but don't discard their session yet". An app that
+   * wants to render optimistically can branch on it explicitly.
+   */
+  | { status: "unknown"; session: Session }
+  /**
    * Sign-in returned the MFA gate (HTTP 403 with type:"mfa_required").
    * The user must complete the second factor against the same ticket
    * via AuthManager.submitMFAChallenge(code) — the ticket is single-

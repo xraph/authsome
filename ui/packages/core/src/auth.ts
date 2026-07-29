@@ -73,6 +73,21 @@ function toSession(res: {
 }
 
 /**
+ * Reports whether an error is the server rejecting the credential, as opposed
+ * to the request never getting a verdict.
+ *
+ * Only 401/403 count. A 404, a 5xx, a timeout or a DNS failure say nothing
+ * about whether the token is valid, and must not be read as "signed out" —
+ * a misconfigured baseURL would otherwise log out every user.
+ */
+function isAuthRejection(err: unknown): boolean {
+  if (err instanceof AuthClientError) {
+    return err.code === 401 || err.code === 403;
+  }
+  return false;
+}
+
+/**
  * AuthManager is the core state machine that drives authentication.
  *
  * Usage:
@@ -163,20 +178,49 @@ export class AuthManager {
       const user = await this.client.getMe(session.session_token);
       this.setState({ status: "authenticated", user, session });
       this.scheduleRefresh(session);
-    } catch {
-      // Never destroy the session on errors during initialization.
-      // The server may be temporarily unreachable (404/500/network) or the
-      // token might need refreshing. Only an explicit signOut() clears storage.
-      // Preserve whatever session we have and schedule a refresh attempt.
-      const stored = await this.storage.getItem(SESSION_KEY);
-      if (stored) {
-        const session: Session = JSON.parse(stored);
-        this.setState({ status: "authenticated", user: null as unknown as User, session });
-        this.scheduleRefresh(session);
-      } else {
-        this.setState({ status: "unauthenticated" });
-      }
+    } catch (err) {
+      await this.handleInitFailure(err);
     }
+  }
+
+  /**
+   * Resolves the state when hydrating a stored session failed.
+   *
+   * The two failure modes must not be conflated. A rejected credential means
+   * the user is signed out. An unreachable server means we simply do not know,
+   * and signing them out over a transient blip is its own bug — which is what
+   * the previous behaviour tried to avoid, by reporting "authenticated" with a
+   * null user. That kept people signed in through an outage but told every
+   * consumer gating on `isAuthenticated` to render protected UI for a session
+   * nothing had validated, and made `user.email` a crash.
+   *
+   * So: rejection signs out; unavailability yields "unknown", which is not
+   * authenticated but retains the session and keeps a refresh scheduled so the
+   * app recovers on its own.
+   */
+  private async handleInitFailure(err: unknown): Promise<void> {
+    const stored = await this.storage.getItem(SESSION_KEY);
+    if (!stored) {
+      this.setState({ status: "unauthenticated" });
+      return;
+    }
+
+    let session: Session;
+    try {
+      session = JSON.parse(stored);
+    } catch {
+      // Unparseable storage is not a session at all.
+      this.setState({ status: "unauthenticated" });
+      return;
+    }
+
+    if (isAuthRejection(err)) {
+      this.setState({ status: "unauthenticated" });
+      return;
+    }
+
+    this.setState({ status: "unknown", session });
+    this.scheduleRefresh(session);
   }
 
   /** Sign in with email & password. */
