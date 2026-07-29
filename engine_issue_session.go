@@ -45,6 +45,17 @@ type IssueSessionRequest struct {
 	// been validated against a ticket; bypassing without that
 	// pairing is account hijack.
 	MFAJustVerified bool
+
+	// SessionTTL and RefreshTTL let the calling auth method shorten the
+	// session it mints below the app's configured lifetime — a magic-link or
+	// SSO session need not last as long as one from an interactive password
+	// login. Zero means "use the app's configured value".
+	//
+	// These may only shorten. A plugin asking for longer than the app allows
+	// is ignored, so a per-method setting can never be used to escape the
+	// lifetime an operator set centrally.
+	SessionTTL time.Duration
+	RefreshTTL time.Duration
 }
 
 // IssueSessionResult is the gate's success output. On the
@@ -172,7 +183,9 @@ func (e *Engine) IssueSession(ctx context.Context, req *IssueSessionRequest) (*I
 		}
 	}
 
-	sess, err := e.newSession(req.AppID, req.User.ID, e.sessionConfigForApp(ctx, req.AppID, req.EnvID))
+	sessCfg := e.sessionConfigForApp(ctx, req.AppID, req.EnvID)
+	applySessionTTLOverride(&sessCfg, req.SessionTTL, req.RefreshTTL)
+	sess, err := e.newSession(req.AppID, req.User.ID, sessCfg)
 	if err != nil {
 		return nil, fmt.Errorf("authsome: build session: %w", err)
 	}
@@ -238,6 +251,20 @@ func (e *Engine) availableMFAMethods(ctx context.Context, userID id.UserID) []st
 		return []string{"totp"}
 	}
 	return out
+}
+
+// applySessionTTLOverride narrows cfg to the caller's requested lifetimes.
+//
+// Shortening only, deliberately: the app-level config is the operator's
+// ceiling, and a per-auth-method setting must not become a way around it. A
+// zero or longer request leaves the configured value in place.
+func applySessionTTLOverride(cfg *account.SessionConfig, sessionTTL, refreshTTL time.Duration) {
+	if sessionTTL > 0 && (cfg.TokenTTL <= 0 || sessionTTL < cfg.TokenTTL) {
+		cfg.TokenTTL = sessionTTL
+	}
+	if refreshTTL > 0 && (cfg.RefreshTokenTTL <= 0 || refreshTTL < cfg.RefreshTokenTTL) {
+		cfg.RefreshTokenTTL = refreshTTL
+	}
 }
 
 // persistMFATicket writes a ticket to ceremony.Store and returns the

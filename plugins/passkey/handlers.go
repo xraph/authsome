@@ -113,9 +113,15 @@ type RegisterFinishResponse struct {
 }
 
 // LoginBeginRequest initiates a WebAuthn authentication ceremony.
-type LoginBeginRequest struct {
-	Email string `json:"email,omitempty"`
-}
+// LoginBeginRequest has no fields: which ceremony to start is decided by
+// whether the caller is already authenticated, not by anything they send.
+//
+// It previously carried an Email, but nothing ever read it — resolveUser
+// resolves from the auth context — so supplying one selected the step-up
+// branch while the value itself was discarded. Email-identified passkey login
+// is not implemented; it would also disclose whether an address has passkeys
+// registered, which the discoverable flow avoids by design.
+type LoginBeginRequest struct{}
 
 // LoginBeginResponse contains the WebAuthn assertion options.
 type LoginBeginResponse struct {
@@ -258,17 +264,22 @@ func (p *Plugin) handleRegisterFinish(ctx forge.Context, _ *RegisterFinishReques
 	}, nil
 }
 
-func (p *Plugin) handleLoginBegin(ctx forge.Context, req *LoginBeginRequest) (*LoginBeginResponse, error) {
+func (p *Plugin) handleLoginBegin(ctx forge.Context, _ *LoginBeginRequest) (*LoginBeginResponse, error) {
 	if p.wa == nil {
 		return nil, forge.InternalError(fmt.Errorf("passkey: WebAuthn not initialized"))
 	}
 
 	wa := p.waForRequest(ctx.Request())
 
-	// For discoverable credentials (passkey), we can start without user identity.
-	// Each ceremony gets its own random id (stored key + correlation cookie) so
-	// concurrent passwordless logins never overwrite a single shared slot.
-	if req.Email == "" {
+	// An unauthenticated caller gets the passwordless (discoverable) ceremony;
+	// an authenticated one is re-asserting an existing identity (step-up), so
+	// the assertion is scoped to their own credentials.
+	//
+	// Each discoverable ceremony gets its own random id (stored key +
+	// correlation cookie) so concurrent passwordless logins never overwrite a
+	// single shared slot.
+	u, authErr := p.resolveUser(ctx)
+	if authErr != nil {
 		options, session, err := wa.BeginDiscoverableLogin()
 		if err != nil {
 			return nil, forge.InternalError(fmt.Errorf("passkey: begin discoverable login: %w", err))
@@ -281,13 +292,6 @@ func (p *Plugin) handleLoginBegin(ctx forge.Context, req *LoginBeginRequest) (*L
 		_ = p.ceremonies.Set(ctx.Context(), discoverableKey(ceremonyID), sessionJSON, p.config.SessionTimeout) //nolint:errcheck // best-effort cache
 		setCeremonyCookie(ctx.Response(), ceremonyID, p.config.SessionTimeout, ctx.Request().TLS != nil)
 		return &LoginBeginResponse{Options: options}, nil
-	}
-
-	// With email, resolve user and generate assertion with existing credentials
-	// For now, we require the user context to be set (e.g., by prior lookup)
-	u, err := p.resolveUser(ctx)
-	if err != nil {
-		return nil, forge.BadRequest("user not found for passkey login")
 	}
 
 	wau := p.toWebAuthnUser(ctx.Context(), u)

@@ -93,6 +93,8 @@ type Plugin struct {
 	appID     string
 	engine    plugin.Engine
 
+	settingsMgr *settings.Manager
+
 	chronicle  bridge.Chronicle
 	relay      bridge.EventRelay
 	hooks      *hook.Bus
@@ -106,6 +108,26 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 		return err
 	}
 	return settings.RegisterTyped(m, "sso", SettingSessionRefreshTTLSeconds)
+}
+
+// resolveTTL reads a duration-in-seconds setting for the app, falling back to
+// the compile-time Config value. The resolved value is passed to IssueSession,
+// which narrows the app's session lifetime to it — see
+// IssueSessionRequest.SessionTTL. Before this the settings were declared,
+// registered, and never read, so the dashboard controls did nothing.
+func (p *Plugin) resolveTTL(ctx context.Context, appID id.AppID, def settings.DefinitionTyped[int], fallback time.Duration) time.Duration {
+	if p.settingsMgr == nil {
+		return fallback
+	}
+	opts := settings.ResolveOpts{}
+	if !appID.IsNil() {
+		opts.AppID = appID.String()
+	}
+	secs, err := settings.Get(ctx, p.settingsMgr, def, opts)
+	if err != nil || secs <= 0 {
+		return fallback
+	}
+	return time.Duration(secs) * time.Second
 }
 
 // New creates a new SSO plugin.
@@ -153,6 +175,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.relay = engine.Relay()
 	p.hooks = engine.Hooks()
 	p.logger = engine.Logger()
+	p.settingsMgr = engine.Settings()
 	p.ceremonies = engine.CeremonyStore()
 	if p.ceremonies == nil {
 		p.ceremonies = ceremony.NewMemory()
@@ -585,6 +608,8 @@ func (p *Plugin) authenticateUser(ctx forge.Context, provider Provider, params m
 			AuthMethod: "sso:" + provider.Name(),
 			IPAddress:  ctx.Request().RemoteAddr,
 			UserAgent:  ctx.Request().UserAgent(),
+			SessionTTL: p.resolveTTL(goCtx, appID, SettingSessionTokenTTLSeconds, p.config.SessionTokenTTL),
+			RefreshTTL: p.resolveTTL(goCtx, appID, SettingSessionRefreshTTLSeconds, p.config.SessionRefreshTTL),
 		})
 		if issueErr != nil {
 			return nil, issueErr

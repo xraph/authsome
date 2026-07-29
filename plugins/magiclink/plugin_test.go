@@ -20,6 +20,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/magiclink"
+	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/store/memory"
 	"github.com/xraph/authsome/user"
 )
@@ -549,4 +550,39 @@ func TestHandleVerify_SixDigitGuessesNeverAuthenticate(t *testing.T) {
 
 		assert.Equal(t, http.StatusUnauthorized, rec.Code, "guess %q", guess)
 	}
+}
+
+// The Consumed check on the read and the write that sets it are two steps. The
+// store consumes only if still unconsumed, so a second redemption is refused
+// even if it read the record before the first one wrote — one link, one
+// session.
+func TestHandleVerify_ConsumeIsSingleUse(t *testing.T) {
+	p, s, _ := newTestPlugin(t)
+	u := createTestUser(t, s)
+
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+
+	v, err := account.NewVerification(context.Background(), appID, u.ID,
+		magiclink.VerificationTypeMagicLink, 5*time.Minute)
+	require.NoError(t, err)
+	require.NoError(t, s.CreateVerification(context.Background(), v))
+
+	// The store must report a replay rather than silently succeeding.
+	require.NoError(t, s.ConsumeVerification(context.Background(), v.Token))
+	assert.ErrorIs(t, s.ConsumeVerification(context.Background(), v.Token), store.ErrNotFound,
+		"a second consume must be distinguishable from the first")
+
+	// And the endpoint must surface it as a refusal, not a 500.
+	req := httptest.NewRequestWithContext(context.Background(), "POST",
+		"/v1/magic-link/verify", jsonBody(t, map[string]string{"token": v.Token}))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, "body: %s", rec.Body.String())
+	assert.NotContains(t, rec.Body.String(), "session_token")
 }
