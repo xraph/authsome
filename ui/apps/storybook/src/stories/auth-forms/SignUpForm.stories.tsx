@@ -1,6 +1,5 @@
 import React from "react";
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "@storybook/test";
 import { SignUpForm } from "@authsome/ui-components";
 import { MockAuthProvider } from "../../mocks/auth-provider";
 

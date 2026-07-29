@@ -27,7 +27,7 @@
     "build": "tsup src/index.ts --format esm --dts --clean",
     "dev": "tsup src/index.ts --format esm --dts --watch",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/",
+    "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist"

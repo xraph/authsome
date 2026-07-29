@@ -24,6 +24,10 @@ const REFRESH_BEFORE_MS = 60_000; // Refresh 60 s before expiry.
 const CONFIG_TTL_MS = 5 * 60_000; // Cache client config for 5 minutes.
 // Used only when a server response omits expires_at.
 const DEFAULT_SESSION_TTL_MS = 3600_000;
+// Bounds the refresh retry loop. Without a cap a revoked token is retried for
+// as long as the tab stays open.
+const MAX_REFRESH_ATTEMPTS = 5;
+const REFRESH_RETRY_BASE_MS = 30_000;
 
 /**
  * In-memory token storage. Cleared on page reload, and unreachable to any
@@ -554,6 +558,18 @@ export class AuthManager {
     this.scheduleRefresh(session);
   }
 
+  /**
+   * Exchanges the refresh token for a new session.
+   *
+   * On failure the two cases are separated, as they are in initialize: a
+   * rejected token means signed out, anything else means no verdict and is
+   * worth retrying.
+   *
+   * `attempt` was previously accepted and never read, and the retry path
+   * called back in without it — so a permanently-invalid token retried every
+   * 30s for as long as the tab stayed open, and the user was never signed out.
+   * It now bounds the retries and backs off between them.
+   */
   private async refreshSession(refreshToken: string, attempt = 0): Promise<void> {
     try {
       const newSession = await this.client.refresh(refreshToken);
@@ -561,14 +577,38 @@ export class AuthManager {
       await this.persistSession(newSession);
       this.setState({ status: "authenticated", user, session: newSession });
       this.scheduleRefresh(newSession);
-    } catch {
-      // Never destroy the session on refresh failure. The refresh token
-      // may still be valid — the server could be temporarily unreachable.
-      // Schedule a retry in 30 seconds. Only explicit signOut() clears storage.
+    } catch (err) {
+      // The server rejected the token: retrying cannot help.
+      if (isAuthRejection(err)) {
+        this.setState({ status: "unauthenticated" });
+        return;
+      }
+
+      if (attempt >= MAX_REFRESH_ATTEMPTS) {
+        // Out of retries without ever reaching the server. The session is
+        // retained — the token may still be good — but nothing has validated
+        // it, so we must not keep claiming authenticated.
+        const stored = await this.storage.getItem(SESSION_KEY);
+        if (stored) {
+          try {
+            this.setState({ status: "unknown", session: JSON.parse(stored) });
+            return;
+          } catch {
+            // Fall through to unauthenticated on unparseable storage.
+          }
+        }
+        this.setState({ status: "unauthenticated" });
+        return;
+      }
+
+      // No verdict — back off and try again.
       this.clearRefreshTimer();
-      this.refreshTimer = setTimeout(() => {
-        void this.refreshSession(refreshToken);
-      }, 30_000);
+      this.refreshTimer = setTimeout(
+        () => {
+          void this.refreshSession(refreshToken, attempt + 1);
+        },
+        REFRESH_RETRY_BASE_MS * 2 ** attempt,
+      );
     }
   }
 
