@@ -1749,11 +1749,21 @@ type SsoAdminCreateConnectionRequest struct {
 	OrgID        string `json:"org_id,omitempty"`
 	Protocol     string `json:"protocol"`
 	Provider     string `json:"provider"`
+
+	// SAML IdP configuration. Supply exactly one IdP source: metadata_url,
+	// idp_metadata_xml, or idp_sso_url + idp_certificate.
+	IDPMetadataXML    string            `json:"idp_metadata_xml,omitempty"`
+	IDPSSOURL         string            `json:"idp_sso_url,omitempty"`
+	IDPCertificate    string            `json:"idp_certificate,omitempty"`
+	EntityID          string            `json:"entity_id,omitempty"`
+	ACSURL            string            `json:"acs_url,omitempty"`
+	SignRequests      bool              `json:"sign_requests,omitempty"`
+	AttributeMappings map[string]string `json:"attribute_mappings,omitempty"`
 }
 
 // SsoConnection represents a stored SSO connection. Mirrors
-// plugins/sso.Connection. ClientSecret is omitted — the engine never
-// returns it on read paths.
+// plugins/sso.Connection. ClientSecret and SPPrivateKey are omitted — the
+// engine never returns secrets on read paths.
 type SsoConnection struct {
 	ID          string `json:"id"`
 	AppID       string `json:"app_id"`
@@ -1765,8 +1775,20 @@ type SsoConnection struct {
 	ClientID    string `json:"client_id,omitempty"`
 	MetadataURL string `json:"metadata_url,omitempty"`
 	Active      bool   `json:"active"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
+
+	// SAML fields surfaced for the admin UI. SPCertificate is public (goes in
+	// SP metadata); the private key is never returned.
+	IDPMetadataXML    string            `json:"idp_metadata_xml,omitempty"`
+	IDPSSOURL         string            `json:"idp_sso_url,omitempty"`
+	IDPCertificate    string            `json:"idp_certificate,omitempty"`
+	EntityID          string            `json:"entity_id,omitempty"`
+	ACSURL            string            `json:"acs_url,omitempty"`
+	SPCertificate     string            `json:"sp_certificate,omitempty"`
+	SignRequests      bool              `json:"sign_requests,omitempty"`
+	AttributeMappings map[string]string `json:"attribute_mappings,omitempty"`
+
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 // SsoAdminListConnectionsResponse is the response from SsoAdminListConnections.
@@ -1784,7 +1806,18 @@ type SsoAdminUpdateConnectionRequest struct {
 	ClientID     string `json:"client_id,omitempty"`
 	ClientSecret string `json:"client_secret,omitempty"`
 	MetadataURL  string `json:"metadata_url,omitempty"`
-	Active       *bool  `json:"active,omitempty"`
+
+	// SAML fields. Empty strings leave the stored value unchanged; pointers
+	// distinguish "unset" from an explicit false / replacement.
+	IDPMetadataXML    string            `json:"idp_metadata_xml,omitempty"`
+	IDPSSOURL         string            `json:"idp_sso_url,omitempty"`
+	IDPCertificate    string            `json:"idp_certificate,omitempty"`
+	EntityID          string            `json:"entity_id,omitempty"`
+	ACSURL            string            `json:"acs_url,omitempty"`
+	SignRequests      *bool             `json:"sign_requests,omitempty"`
+	AttributeMappings map[string]string `json:"attribute_mappings,omitempty"`
+
+	Active *bool `json:"active,omitempty"`
 }
 
 // SocialCatalogProvider is one entry in the static provider catalog.

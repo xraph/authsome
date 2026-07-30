@@ -1,6 +1,7 @@
 package sso
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/xraph/grove"
@@ -15,19 +16,32 @@ import (
 type ssoConnectionModel struct {
 	grove.BaseModel `grove:"table:authsome_sso_connections,alias:sc"`
 
-	ID           string    `grove:"id,pk"`
-	AppID        string    `grove:"app_id,notnull"`
-	OrgID        string    `grove:"org_id,notnull"`
-	Provider     string    `grove:"provider,notnull"`
-	Protocol     string    `grove:"protocol,notnull"`
-	Domain       string    `grove:"domain,notnull"`
-	MetadataURL  string    `grove:"metadata_url,notnull"`
-	ClientID     string    `grove:"client_id,notnull"`
-	ClientSecret string    `grove:"client_secret,notnull"`
-	Issuer       string    `grove:"issuer,notnull"`
-	Active       bool      `grove:"active,notnull"`
-	CreatedAt    time.Time `grove:"created_at,notnull,default:now()"`
-	UpdatedAt    time.Time `grove:"updated_at,notnull,default:now()"`
+	ID           string `grove:"id,pk"`
+	AppID        string `grove:"app_id,notnull"`
+	EnvID        string `grove:"env_id,notnull"`
+	OrgID        string `grove:"org_id,notnull"`
+	Provider     string `grove:"provider,notnull"`
+	Protocol     string `grove:"protocol,notnull"`
+	Domain       string `grove:"domain,notnull"`
+	MetadataURL  string `grove:"metadata_url,notnull"`
+	ClientID     string `grove:"client_id,notnull"`
+	ClientSecret string `grove:"client_secret,notnull"`
+	Issuer       string `grove:"issuer,notnull"`
+	Active       bool   `grove:"active,notnull"`
+
+	// SAML fields. attribute_mappings is stored as a JSON object.
+	IDPMetadataXML    string `grove:"idp_metadata_xml,notnull"`
+	IDPSSOURL         string `grove:"idp_sso_url,notnull"`
+	IDPCertificate    string `grove:"idp_certificate,notnull"`
+	EntityID          string `grove:"entity_id,notnull"`
+	ACSURL            string `grove:"acs_url,notnull"`
+	SPCertificate     string `grove:"sp_certificate,notnull"`
+	SPPrivateKey      string `grove:"sp_private_key,notnull"`
+	SignRequests      bool   `grove:"sign_requests,notnull"`
+	AttributeMappings string `grove:"attribute_mappings,notnull"`
+
+	CreatedAt time.Time `grove:"created_at,notnull,default:now()"`
+	UpdatedAt time.Time `grove:"updated_at,notnull,default:now()"`
 }
 
 // ──────────────────────────────────────────────────
@@ -47,6 +61,7 @@ func toConnection(m *ssoConnectionModel) (*Connection, error) {
 	c := &Connection{
 		ID:           connID,
 		AppID:        appID,
+		EnvID:        m.EnvID,
 		Provider:     m.Provider,
 		Protocol:     m.Protocol,
 		Domain:       m.Domain,
@@ -55,8 +70,24 @@ func toConnection(m *ssoConnectionModel) (*Connection, error) {
 		ClientSecret: m.ClientSecret,
 		Issuer:       m.Issuer,
 		Active:       m.Active,
-		CreatedAt:    m.CreatedAt,
-		UpdatedAt:    m.UpdatedAt,
+
+		IDPMetadataXML: m.IDPMetadataXML,
+		IDPSSOURL:      m.IDPSSOURL,
+		IDPCertificate: m.IDPCertificate,
+		EntityID:       m.EntityID,
+		ACSURL:         m.ACSURL,
+		SPCertificate:  m.SPCertificate,
+		SPPrivateKey:   m.SPPrivateKey,
+		SignRequests:   m.SignRequests,
+
+		CreatedAt: m.CreatedAt,
+		UpdatedAt: m.UpdatedAt,
+	}
+
+	if m.AttributeMappings != "" {
+		if err := json.Unmarshal([]byte(m.AttributeMappings), &c.AttributeMappings); err != nil {
+			return nil, err
+		}
 	}
 
 	if m.OrgID != "" {
@@ -74,6 +105,7 @@ func fromConnection(c *Connection) *ssoConnectionModel {
 	m := &ssoConnectionModel{
 		ID:           c.ID.String(),
 		AppID:        c.AppID.String(),
+		EnvID:        c.EnvID,
 		Provider:     c.Provider,
 		Protocol:     c.Protocol,
 		Domain:       c.Domain,
@@ -82,8 +114,23 @@ func fromConnection(c *Connection) *ssoConnectionModel {
 		ClientSecret: c.ClientSecret,
 		Issuer:       c.Issuer,
 		Active:       c.Active,
-		CreatedAt:    c.CreatedAt,
-		UpdatedAt:    c.UpdatedAt,
+
+		IDPMetadataXML: c.IDPMetadataXML,
+		IDPSSOURL:      c.IDPSSOURL,
+		IDPCertificate: c.IDPCertificate,
+		EntityID:       c.EntityID,
+		ACSURL:         c.ACSURL,
+		SPCertificate:  c.SPCertificate,
+		SPPrivateKey:   c.SPPrivateKey,
+		SignRequests:   c.SignRequests,
+
+		CreatedAt: c.CreatedAt,
+		UpdatedAt: c.UpdatedAt,
+	}
+	if len(c.AttributeMappings) > 0 {
+		if b, err := json.Marshal(c.AttributeMappings); err == nil {
+			m.AttributeMappings = string(b)
+		}
 	}
 	if c.OrgID.Prefix() != "" {
 		m.OrgID = c.OrgID.String()

@@ -29,6 +29,11 @@ type Config struct {
 	// a ?token= query parameter.
 	PasswordResetPath string
 
+	// SignInPath is the path (relative to BaseURL) of the sign-in page. It is
+	// used for the login_url in the welcome notification. Defaults to
+	// "/sign-in".
+	SignInPath string
+
 	// DefaultLocale is the default locale for notifications (e.g. "en").
 	// If empty, defaults to "en".
 	DefaultLocale string
