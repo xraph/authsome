@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"net/http"
-
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/forge"
@@ -60,10 +58,7 @@ func EnvironmentMiddleware(cfg EnvironmentMiddlewareConfig) forge.Middleware {
 			if headerVal := ctx.Request().Header.Get("X-Environment-ID"); headerVal != "" {
 				envID, err := id.ParseEnvironmentID(headerVal)
 				if err != nil {
-					return ctx.JSON(http.StatusBadRequest, map[string]any{
-						"error": "invalid X-Environment-ID header",
-						"code":  http.StatusBadRequest,
-					})
+					return forge.BadRequest("invalid X-Environment-ID header")
 				}
 				resolved, err := cfg.ResolveEnvironment(envID)
 				if err != nil {
@@ -71,17 +66,11 @@ func EnvironmentMiddleware(cfg EnvironmentMiddlewareConfig) forge.Middleware {
 						log.String("env_id", headerVal),
 						log.String("error", err.Error()),
 					)
-					return ctx.JSON(http.StatusNotFound, map[string]any{
-						"error": "environment not found",
-						"code":  http.StatusNotFound,
-					})
+					return forge.NotFound("environment not found")
 				}
 				// Verify the environment belongs to the current app.
 				if resolved.AppID != appID {
-					return ctx.JSON(http.StatusForbidden, map[string]any{
-						"error": "environment does not belong to this app",
-						"code":  http.StatusForbidden,
-					})
+					return forge.Forbidden("environment does not belong to this app")
 				}
 				env = resolved
 			}
@@ -142,10 +131,7 @@ func RequireEnvironment() forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
 			if _, ok := EnvIDFrom(ctx.Context()); !ok {
-				return ctx.JSON(http.StatusBadRequest, map[string]any{
-					"error": "environment context required",
-					"code":  http.StatusBadRequest,
-				})
+				return forge.BadRequest("environment context required")
 			}
 			return next(ctx)
 		}
