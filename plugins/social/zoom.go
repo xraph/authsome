@@ -11,7 +11,8 @@ import (
 )
 
 // zoomEndpoint is the OAuth2 endpoint for Zoom.
-var zoomEndpoint = oauth2.Endpoint{ //nolint:gosec // G101: not credentials, OAuth endpoint
+// #nosec G101 -- not a credential: an env var name, collection name or public OAuth2 endpoint URL.
+var zoomEndpoint = oauth2.Endpoint{
 	AuthURL:  "https://zoom.us/oauth/authorize",
 	TokenURL: "https://zoom.us/oauth/token",
 }

@@ -11,7 +11,8 @@ import (
 )
 
 // lineEndpoint is the OAuth2 endpoint for LINE.
-var lineEndpoint = oauth2.Endpoint{ //nolint:gosec // G101: not credentials, OAuth endpoint
+// #nosec G101 -- not a credential: an env var name, collection name or public OAuth2 endpoint URL.
+var lineEndpoint = oauth2.Endpoint{
 	AuthURL:  "https://access.line.me/oauth2/v2.1/authorize",
 	TokenURL: "https://api.line.me/oauth2/v2.1/token",
 }

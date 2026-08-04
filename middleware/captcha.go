@@ -20,18 +20,21 @@ import (
 // Captcha setting keys (mirror the definitions in captcha_settings.go to
 // avoid a middleware → authsome import cycle).
 const (
-	captchaSettingRequired  = "auth.captcha_required"
-	captchaSettingProvider  = "auth.captcha_provider"
-	captchaSettingSecretKey = "auth.captcha_secret_key" //nolint:gosec // this is a setting *key name*, not a credential
+	captchaSettingRequired = "auth.captcha_required"
+	captchaSettingProvider = "auth.captcha_provider"
+	// #nosec G101 -- not a credential: an env var name, collection name or public OAuth2 endpoint URL.
+	captchaSettingSecretKey = "auth.captcha_secret_key"
 )
 
 // captchaTokenHeader is the canonical header for the captcha challenge token.
 // Same name accepted by Cloudflare Turnstile and hCaptcha widget integrations.
-const captchaTokenHeader = "X-Captcha-Token" //nolint:gosec // G101: header name, not a credential
+// #nosec G101 -- not a credential: an env var name, collection name or public OAuth2 endpoint URL.
+const captchaTokenHeader = "X-Captcha-Token"
 
 // captchaTokenFormField is the form/query fallback for HTML form posts where
 // adding a custom header isn't ergonomic.
-const captchaTokenFormField = "captcha_token" //nolint:gosec // G101: form field name, not a credential
+// #nosec G101 -- not a credential: an env var name, collection name or public OAuth2 endpoint URL.
+const captchaTokenFormField = "captcha_token"
 
 // CaptchaOptions configures CaptchaMiddleware.
 type CaptchaOptions struct {

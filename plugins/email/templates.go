@@ -77,7 +77,7 @@ func VerificationEmail(name, appName, verifyURL string) (subject, html, text str
 // Password Reset Email
 // ──────────────────────────────────────────────────
 
-//nolint:gosec // G101: not credentials, HTML template variable name
+// #nosec G101 -- not a credential: an env var name, collection name or public OAuth2 endpoint URL.
 const passwordResetHTMLTmpl = `<!DOCTYPE html>
 <html>
 <body style="font-family: sans-serif; color: #333;">

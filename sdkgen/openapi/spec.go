@@ -12,6 +12,7 @@ import (
 // produced externally (e.g., by the specgen tool) rather than by the
 // hardcoded generator.
 func LoadSpecFromFile(path string) (*Spec, error) {
+	// #nosec G304 -- operator-supplied path.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read spec file: %w", err)

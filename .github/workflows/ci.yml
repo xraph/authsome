@@ -12,49 +12,19 @@ concurrency:
 
 permissions:
   contents: read
+  # required by go-ci.yml's gosec SARIF upload
+  security-events: write
 
 jobs:
   # ─── Go Build & Test ────────────────────────────────────────────────
-  go:
-    name: Go
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        go-version: ["1.25.7"]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v6
-        with:
-          go-version: ${{ matrix.go-version }}
-          cache: true
-          cache-dependency-path: go.sum
-
-      - name: Download modules
-        run: go mod download
-
-      - name: Verify module tidy
-        run: |
-          go mod tidy
-          git diff --exit-code go.mod go.sum
-
-      - name: Build
-        run: go build ./...
-
-      - name: Test
-        run: go test -race -count=1 -coverprofile=coverage.out ./...
-
-      - name: Upload coverage
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v6
-        with:
-          name: coverage-go${{ matrix.go-version }}
-          path: coverage.out
-          retention-days: 7
+  # test, lint, verify and security now come from the shared workflow. It
+  # probes for Makefile targets per step and falls back to the plain go
+  # commands these jobs used to run inline.
+  ci:
+    uses: xraph/workflows/.github/workflows/go-ci.yml@v1
+    with:
+      go-versions: '["1.26"]'
+      os: '["ubuntu-latest"]'
 
   # ─── Store Conformance (Postgres + Mongo) ───────────────────────────
   # Runs the cross-backend store conformance suite against real Postgres
@@ -70,7 +40,7 @@ jobs:
   integration:
     name: Store Conformance (pg + mongo)
     runs-on: ubuntu-latest
-    needs: go
+    needs: ci
 
     steps:
       - name: Checkout
@@ -79,7 +49,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.25.7"
+          go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
 
@@ -110,7 +80,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    needs: go
+    needs: ci
 
     steps:
       - name: Checkout
@@ -119,7 +89,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.25.7"
+          go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
 
@@ -141,7 +111,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.25.7"
+          go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
 
@@ -161,7 +131,7 @@ jobs:
   sdkgen:
     name: SDK Generation
     runs-on: ubuntu-latest
-    needs: go
+    needs: ci
 
     steps:
       - name: Checkout
@@ -170,7 +140,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.25.7"
+          go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
 

@@ -24,19 +24,20 @@ import (
 
 // Collection name constants.
 const (
-	colApps                 = "authsome_apps"
-	colUsers                = "authsome_users"
-	colSessions             = "authsome_sessions"
-	colVerifications        = "authsome_verifications"
-	colPasswordResets       = "authsome_password_resets"
-	colOrganizations        = "authsome_organizations"
-	colMembers              = "authsome_members"
-	colInvitations          = "authsome_invitations"
-	colTeams                = "authsome_teams"
-	colDevices              = "authsome_devices"
-	colWebhooks             = "authsome_webhooks"
-	colNotifications        = "authsome_notifications"
-	colAPIKeys              = "authsome_api_keys" //nolint:gosec // G101: not a credential
+	colApps           = "authsome_apps"
+	colUsers          = "authsome_users"
+	colSessions       = "authsome_sessions"
+	colVerifications  = "authsome_verifications"
+	colPasswordResets = "authsome_password_resets"
+	colOrganizations  = "authsome_organizations"
+	colMembers        = "authsome_members"
+	colInvitations    = "authsome_invitations"
+	colTeams          = "authsome_teams"
+	colDevices        = "authsome_devices"
+	colWebhooks       = "authsome_webhooks"
+	colNotifications  = "authsome_notifications"
+	// #nosec G101 -- not a credential: an env var name, collection name or public OAuth2 endpoint URL.
+	colAPIKeys              = "authsome_api_keys"
 	colEnvironments         = "authsome_environments"
 	colFormConfigs          = "authsome_form_configs"
 	colBrandingConfigs      = "authsome_branding_configs"

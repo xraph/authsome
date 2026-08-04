@@ -11,7 +11,8 @@ import (
 )
 
 // stravaEndpoint is the OAuth2 endpoint for Strava.
-var stravaEndpoint = oauth2.Endpoint{ //nolint:gosec // G101: not credentials, OAuth endpoint
+// #nosec G101 -- not a credential: an env var name, collection name or public OAuth2 endpoint URL.
+var stravaEndpoint = oauth2.Endpoint{
 	AuthURL:  "https://www.strava.com/oauth/authorize",
 	TokenURL: "https://www.strava.com/oauth/token",
 }

@@ -11,7 +11,8 @@ import (
 )
 
 // yahooEndpoint is the OAuth2 endpoint for Yahoo.
-var yahooEndpoint = oauth2.Endpoint{ //nolint:gosec // G101: not credentials, OAuth endpoint
+// #nosec G101 -- not a credential: an env var name, collection name or public OAuth2 endpoint URL.
+var yahooEndpoint = oauth2.Endpoint{
 	AuthURL:  "https://api.login.yahoo.com/oauth2/request_auth",
 	TokenURL: "https://api.login.yahoo.com/oauth2/get_token",
 }

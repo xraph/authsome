@@ -2,7 +2,8 @@ package account
 
 import (
 	"context"
-	"crypto/sha1" //nolint:gosec // SHA-1 required by HIBP k-Anonymity API
+	// #nosec G505 -- SHA-1 imported solely for the HIBP k-Anonymity protocol; see account/breach.go.
+	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -36,7 +37,8 @@ func NewBreachChecker() *BreachChecker {
 // On network errors, returns false (fail-open to avoid blocking auth).
 func (bc *BreachChecker) IsBreached(password string) (bool, error) {
 	// SHA-1 hash the password
-	h := sha1.New() //nolint:gosec // SHA-1 required by HIBP k-Anonymity API protocol
+	// #nosec G401 -- SHA-1 is mandated by the HIBP k-Anonymity range API; this is a breach lookup, not password storage.
+	h := sha1.New()
 	h.Write([]byte(password))
 	hash := strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
 

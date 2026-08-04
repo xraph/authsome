@@ -360,6 +360,7 @@ func (p *Plugin) saveDBProviderSettings(ctx context.Context, providers []Provide
 	if p.settingsMgr == nil {
 		return fmt.Errorf("social: settings manager not available")
 	}
+	// #nosec G117 -- marshalling a value this package constructed itself.
 	raw, err := json.Marshal(providers)
 	if err != nil {
 		return err
@@ -1444,6 +1445,7 @@ func (p *Plugin) writeScope(ctx context.Context, scope settings.Scope, scopeID s
 	if p.settingsMgr == nil {
 		return fmt.Errorf("social: settings manager not wired")
 	}
+	// #nosec G117 -- marshalling a value this package constructed itself.
 	raw, err := json.Marshal(providers)
 	if err != nil {
 		return err

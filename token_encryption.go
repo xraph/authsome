@@ -12,7 +12,8 @@ import (
 // envTokenEncryptionKey is the environment variable name that operators set
 // to a 64-hex-char (32-byte) key. When unset, the engine falls back to a
 // NoopEncryptor and logs a warning — production deployments MUST set this.
-const envTokenEncryptionKey = "AUTHSOME_TOKEN_ENCRYPTION_KEY" //nolint:gosec // G101: env var name, not a credential
+// #nosec G101 -- not a credential: an env var name, collection name or public OAuth2 endpoint URL.
+const envTokenEncryptionKey = "AUTHSOME_TOKEN_ENCRYPTION_KEY"
 
 // resolveTokenEncryptor reads AUTHSOME_TOKEN_ENCRYPTION_KEY and constructs
 // an AES-256-GCM Encryptor. If the env var is unset or invalid, it returns

@@ -12,7 +12,8 @@ import (
 )
 
 // dropboxEndpoint is the OAuth2 endpoint for Dropbox.
-var dropboxEndpoint = oauth2.Endpoint{ //nolint:gosec // G101: not credentials, OAuth endpoint
+// #nosec G101 -- not a credential: an env var name, collection name or public OAuth2 endpoint URL.
+var dropboxEndpoint = oauth2.Endpoint{
 	AuthURL:  "https://www.dropbox.com/oauth2/authorize",
 	TokenURL: "https://api.dropboxapi.com/oauth2/token",
 }

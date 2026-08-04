@@ -238,7 +238,8 @@ func run(outPath, title, version string) error {
 		return fmt.Errorf("marshal spec: %w", err)
 	}
 
-	if err := os.WriteFile(outPath, data, 0o644); err != nil { //nolint:gosec // G306: file permissions appropriate for generated spec
+	// #nosec G306 -- file written for the process's own data.
+	if err := os.WriteFile(outPath, data, 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", outPath, err)
 	}
 

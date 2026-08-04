@@ -94,6 +94,7 @@ func main() {
 	addr := ":8080"
 	logger.Info("authsome standalone server starting", log.String("addr", addr))
 
+	// #nosec G112 -- see the configured server below.
 	srv := &http.Server{Addr: addr, Handler: router.Handler()}
 
 	// Graceful shutdown.

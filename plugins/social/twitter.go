@@ -11,7 +11,8 @@ import (
 )
 
 // twitterEndpoint is the OAuth2 endpoint for Twitter/X.
-var twitterEndpoint = oauth2.Endpoint{ //nolint:gosec // G101: not credentials, OAuth endpoint
+// #nosec G101 -- not a credential: an env var name, collection name or public OAuth2 endpoint URL.
+var twitterEndpoint = oauth2.Endpoint{
 	AuthURL:  "https://twitter.com/i/oauth2/authorize",
 	TokenURL: "https://api.x.com/2/oauth2/token",
 }

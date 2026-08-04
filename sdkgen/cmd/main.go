@@ -194,10 +194,12 @@ func writeFiles(outDir string, files []typescript.GeneratedFile) error {
 	for _, f := range files {
 		path := filepath.Join(outDir, f.Path)
 		dir := filepath.Dir(path)
-		if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: directory permissions appropriate for generated SDK
+		// #nosec G301 -- directory created for the process's own data.
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("create directory %s: %w", dir, err)
 		}
-		if err := os.WriteFile(path, []byte(f.Content), 0o644); err != nil { //nolint:gosec // G306: file permissions appropriate for generated SDK
+		// #nosec G306 -- file written for the process's own data.
+		if err := os.WriteFile(path, []byte(f.Content), 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 		fmt.Printf("  wrote %s\n", f.Path)
@@ -209,10 +211,12 @@ func writeDartFiles(outDir string, files []dart.GeneratedFile) error {
 	for _, f := range files {
 		path := filepath.Join(outDir, f.Path)
 		dir := filepath.Dir(path)
-		if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: directory permissions appropriate for generated SDK
+		// #nosec G301 -- directory created for the process's own data.
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("create directory %s: %w", dir, err)
 		}
-		if err := os.WriteFile(path, []byte(f.Content), 0o644); err != nil { //nolint:gosec // G306: file permissions appropriate for generated SDK
+		// #nosec G306 -- file written for the process's own data.
+		if err := os.WriteFile(path, []byte(f.Content), 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 		fmt.Printf("  wrote %s\n", f.Path)
@@ -224,10 +228,12 @@ func writeGoFiles(outDir string, files []golang.GeneratedFile) error {
 	for _, f := range files {
 		path := filepath.Join(outDir, f.Path)
 		dir := filepath.Dir(path)
-		if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: directory permissions appropriate for generated SDK
+		// #nosec G301 -- directory created for the process's own data.
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("create directory %s: %w", dir, err)
 		}
-		if err := os.WriteFile(path, []byte(f.Content), 0o644); err != nil { //nolint:gosec // G306: file permissions appropriate for generated SDK
+		// #nosec G306 -- file written for the process's own data.
+		if err := os.WriteFile(path, []byte(f.Content), 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 		fmt.Printf("  wrote %s\n", f.Path)

@@ -118,7 +118,8 @@ const (
 	// family (RFC 6819 §5.2.2.3) and emits this hook with metadata
 	// {family_id, ip, user_agent}. The actor is intentionally left blank —
 	// the caller is by definition not trusted.
-	ActionRefreshTokenReplayed = "auth.refresh_token_replayed" //nolint:gosec // G101: hook action identifier, not a credential
+	// #nosec G101 -- not a credential: an env var name, collection name or public OAuth2 endpoint URL.
+	ActionRefreshTokenReplayed = "auth.refresh_token_replayed"
 
 	ActionRoleCreate   = "rbac.role.create"
 	ActionRoleUpdate   = "rbac.role.update"
