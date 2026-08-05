@@ -92,7 +92,6 @@ func jwtToJWK(jwtFmt *tokenformat.JWT) *JWK {
 		// Reading X and Y is what RFC 7518 requires for an EC JWK. Go 1.26
 		// deprecates these fields because *modifying* raw coordinates can
 		// produce invalid keys; serialising them is still correct.
-		//nolint:staticcheck // SA1019: read-only use for JWK encoding
 		bits := k.Curve.Params().BitSize
 		jwk := &JWK{
 			KTY: "EC",
