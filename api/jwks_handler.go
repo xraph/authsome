@@ -93,13 +93,14 @@ func jwtToJWK(jwtFmt *tokenformat.JWT) *JWK {
 		// deprecates these fields because *modifying* raw coordinates can
 		// produce invalid keys; serialising them is still correct.
 		//nolint:staticcheck // SA1019: read-only use for JWK encoding
+		bits := k.Curve.Params().BitSize
 		jwk := &JWK{
 			KTY: "EC",
 			Use: "sig",
 			KID: kid,
 			ALG: alg,
-			X:   base64.RawURLEncoding.EncodeToString(k.X.Bytes()),
-			Y:   base64.RawURLEncoding.EncodeToString(k.Y.Bytes()),
+			X:   ecCoordinate(k.X, bits), //nolint:staticcheck // SA1019: read-only
+			Y:   ecCoordinate(k.Y, bits), //nolint:staticcheck // SA1019: read-only
 		}
 		switch k.Curve.Params().BitSize {
 		case 256:
@@ -118,4 +119,24 @@ func jwtToJWK(jwtFmt *tokenformat.JWT) *JWK {
 	default:
 		return nil
 	}
+}
+
+// ecCoordinate encodes an elliptic-curve coordinate as an RFC 7518 §6.2.1.2
+// octet string: base64url of the coordinate left-padded to the full field
+// size of the curve — 32 bytes for P-256, 48 for P-384, 66 for P-521.
+//
+// big.Int.Bytes() returns the minimal big-endian representation, dropping
+// leading zero bytes. A coordinate whose high byte is zero would therefore
+// serialise one byte short, producing a JWK that strict verifiers reject.
+// It happens for roughly 1 key in 256 per coordinate, so it survives casual
+// testing and fails intermittently in production.
+func ecCoordinate(v *big.Int, bitSize int) string {
+	size := (bitSize + 7) / 8
+	b := v.Bytes()
+	if len(b) < size {
+		padded := make([]byte, size)
+		copy(padded[size-len(b):], b)
+		b = padded
+	}
+	return base64.RawURLEncoding.EncodeToString(b)
 }
