@@ -1,16 +1,14 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react";
 import {
   SignInForm,
   DeviceAuthorizationForm,
   DeviceList,
   UserAvatar,
-  AuthCard,
-  Button,
 } from "@authsome/ui-components";
 import { MockAuthProvider, MOCK_USER } from "../../mocks/auth-provider";
 import { CONFIG_ALL_ENABLED } from "../../mocks/client-config-presets";
-import { Check, Monitor } from "lucide-react";
+import { Check } from "lucide-react";
 
 /**
  * Interactive flow: Sign In → Device Authorization → Authenticated with Devices.

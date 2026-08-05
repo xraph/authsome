@@ -79,7 +79,8 @@ npm install @authsome/ui-vue @authsome/ui-core
 
 `AuthManager` in `@authsome/ui-core` is the framework-agnostic state machine that manages authentication lifecycle. It:
 
-- Persists session tokens to configurable storage (localStorage, cookies, custom)
+- Holds session tokens in memory by default; persistence to localStorage or
+  cookies is opt-in (see the security note below)
 - Hydrates state on page load from stored tokens
 - Automatically refreshes tokens before expiry
 - Provides a synchronous `getState()` and a subscription API for reactive frameworks
@@ -89,7 +90,10 @@ import { AuthManager } from "@authsome/ui-core";
 
 const manager = new AuthManager({
   baseURL: "https://api.example.com",
-  tokenStorage: localStorage,  // or custom TokenStorage implementation
+  // Defaults to in-memory. createLocalStorage() persists across reloads but
+  // makes the refresh token readable by any script on the page — prefer
+  // backend-set httpOnly cookies where you can.
+  storage: createLocalStorage(),
 });
 
 await manager.initialize(); // Hydrate from storage

@@ -9,13 +9,40 @@
 import { AuthClient, type SignInRequest, type SignUpRequest, AuthClientError } from "./client";
 import type { AuthConfig, AuthState, ClientConfig, Session, TokenStorage, User } from "./types";
 
-const SESSION_KEY = "authsome:session";
+/**
+ * Storage key under which the whole Session (tokens + expiry) is persisted.
+ *
+ * Exported because a cookie-backed TokenStorage writes it as a cookie name,
+ * and server-side readers have to know what to look for. See
+ * @authsome/ui-nextjs readSessionToken.
+ */
+export const SESSION_STORAGE_KEY = "authsome:session";
+
+const SESSION_KEY = SESSION_STORAGE_KEY;
 const CONFIG_KEY = "authsome:client_config";
 const REFRESH_BEFORE_MS = 60_000; // Refresh 60 s before expiry.
 const CONFIG_TTL_MS = 5 * 60_000; // Cache client config for 5 minutes.
+// Used only when a server response omits expires_at.
+const DEFAULT_SESSION_TTL_MS = 3600_000;
+// Bounds the refresh retry loop. Without a cap a revoked token is retried for
+// as long as the tab stays open.
+const MAX_REFRESH_ATTEMPTS = 5;
+const REFRESH_RETRY_BASE_MS = 30_000;
 
-/** Default in-memory storage (lost on page reload). */
-const memoryStorage: TokenStorage = (() => {
+/**
+ * In-memory token storage. Cleared on page reload, and unreachable to any
+ * other script on the page.
+ *
+ * This is the default. Persisting tokens in localStorage means the refresh
+ * token — good for weeks — sits somewhere any injected script can read, so a
+ * single XSS becomes long-term account access rather than a page-lifetime
+ * problem. Surviving reloads is better solved by letting the backend set
+ * httpOnly session cookies, which JavaScript cannot read at all; see
+ * createCookieStorage's notes and the Next.js proxy.
+ *
+ * If you accept the tradeoff, opt in explicitly with createLocalStorage().
+ */
+function createMemoryStorage(): TokenStorage {
   const store = new Map<string, string>();
   return {
     getItem: (key: string) => store.get(key) ?? null,
@@ -26,10 +53,19 @@ const memoryStorage: TokenStorage = (() => {
       store.delete(key);
     },
   };
-})();
+}
 
-/** Try to use localStorage, fall back to memory. */
-function defaultStorage(): TokenStorage {
+/**
+ * Token storage backed by window.localStorage, falling back to memory where
+ * localStorage is unavailable (SSR, restricted contexts).
+ *
+ * Opt in only if you understand the exposure: everything written here,
+ * including the refresh token, is readable by any script running on the page.
+ * Prefer backend-set httpOnly cookies where you can.
+ *
+ *     new AuthManager({ baseURL, storage: createLocalStorage() })
+ */
+export function createLocalStorage(): TokenStorage {
   try {
     if (typeof window !== "undefined" && window.localStorage) {
       return window.localStorage;
@@ -37,7 +73,43 @@ function defaultStorage(): TokenStorage {
   } catch {
     // SSR or restricted environments.
   }
-  return memoryStorage;
+  return createMemoryStorage();
+}
+
+/**
+ * Builds a Session from an auth response.
+ *
+ * The server's own `expires_at` is authoritative. Three of the four call sites
+ * used to hardcode "now + 1 hour" instead, so with any other server-side TTL
+ * the refresh timer was scheduled against a lifetime the token did not have —
+ * a shorter one left the client sitting on a dead token until minute 59.
+ * The fallback applies only when the server omits the field.
+ */
+function toSession(res: {
+  session_token: string;
+  refresh_token: string;
+  expires_at?: string;
+}): Session {
+  return {
+    session_token: res.session_token,
+    refresh_token: res.refresh_token,
+    expires_at: res.expires_at ?? new Date(Date.now() + DEFAULT_SESSION_TTL_MS).toISOString(),
+  };
+}
+
+/**
+ * Reports whether an error is the server rejecting the credential, as opposed
+ * to the request never getting a verdict.
+ *
+ * Only 401/403 count. A 404, a 5xx, a timeout or a DNS failure say nothing
+ * about whether the token is valid, and must not be read as "signed out" —
+ * a misconfigured baseURL would otherwise log out every user.
+ */
+function isAuthRejection(err: unknown): boolean {
+  if (err instanceof AuthClientError) {
+    return err.code === 401 || err.code === 403;
+  }
+  return false;
 }
 
 /**
@@ -66,7 +138,7 @@ export class AuthManager {
 
   constructor(config: AuthConfig) {
     this.client = new AuthClient(config);
-    this.storage = config.storage ?? defaultStorage();
+    this.storage = config.storage ?? createMemoryStorage();
     this.onError = config.onError;
     this.publishableKey = config.publishableKey;
 
@@ -131,20 +203,49 @@ export class AuthManager {
       const user = await this.client.getMe(session.session_token);
       this.setState({ status: "authenticated", user, session });
       this.scheduleRefresh(session);
-    } catch {
-      // Never destroy the session on errors during initialization.
-      // The server may be temporarily unreachable (404/500/network) or the
-      // token might need refreshing. Only an explicit signOut() clears storage.
-      // Preserve whatever session we have and schedule a refresh attempt.
-      const stored = await this.storage.getItem(SESSION_KEY);
-      if (stored) {
-        const session: Session = JSON.parse(stored);
-        this.setState({ status: "authenticated", user: null as unknown as User, session });
-        this.scheduleRefresh(session);
-      } else {
-        this.setState({ status: "unauthenticated" });
-      }
+    } catch (err) {
+      await this.handleInitFailure(err);
     }
+  }
+
+  /**
+   * Resolves the state when hydrating a stored session failed.
+   *
+   * The two failure modes must not be conflated. A rejected credential means
+   * the user is signed out. An unreachable server means we simply do not know,
+   * and signing them out over a transient blip is its own bug — which is what
+   * the previous behaviour tried to avoid, by reporting "authenticated" with a
+   * null user. That kept people signed in through an outage but told every
+   * consumer gating on `isAuthenticated` to render protected UI for a session
+   * nothing had validated, and made `user.email` a crash.
+   *
+   * So: rejection signs out; unavailability yields "unknown", which is not
+   * authenticated but retains the session and keeps a refresh scheduled so the
+   * app recovers on its own.
+   */
+  private async handleInitFailure(err: unknown): Promise<void> {
+    const stored = await this.storage.getItem(SESSION_KEY);
+    if (!stored) {
+      this.setState({ status: "unauthenticated" });
+      return;
+    }
+
+    let session: Session;
+    try {
+      session = JSON.parse(stored);
+    } catch {
+      // Unparseable storage is not a session at all.
+      this.setState({ status: "unauthenticated" });
+      return;
+    }
+
+    if (isAuthRejection(err)) {
+      this.setState({ status: "unauthenticated" });
+      return;
+    }
+
+    this.setState({ status: "unknown", session });
+    this.scheduleRefresh(session);
   }
 
   /** Sign in with email & password. */
@@ -155,11 +256,7 @@ export class AuthManager {
     // on isLoading to unmount the form, losing its local state (step, fields).
     try {
       const res = await this.client.signIn(credentials);
-      const session: Session = {
-        session_token: res.session_token,
-        refresh_token: res.refresh_token,
-        expires_at: new Date(Date.now() + 3600_000).toISOString(), // fallback
-      };
+      const session: Session = toSession(res);
       await this.handleAuthResponse(res.user, session);
     } catch (err) {
       // MFA required: surface the ticket + available methods so the
@@ -291,11 +388,7 @@ export class AuthManager {
         mfa_ticket: state.mfaTicket,
         code,
       });
-      const session: Session = {
-        session_token: res.session_token,
-        refresh_token: res.refresh_token,
-        expires_at: res.expires_at ?? new Date(Date.now() + 3600_000).toISOString(),
-      };
+      const session: Session = toSession(res);
       await this.handleAuthResponse(res.user as User, session);
     } catch (err) {
       // Don't fall into the generic error handler — bad code should
@@ -324,11 +417,7 @@ export class AuthManager {
     this.setState({ status: "loading" });
     try {
       const res = await this.client.verifyRecoveryCode(code);
-      const session: Session = {
-        session_token: res.session_token,
-        refresh_token: res.refresh_token,
-        expires_at: new Date(Date.now() + 3600_000).toISOString(),
-      };
+      const session: Session = toSession(res);
       await this.handleAuthResponse(res.user, session);
     } catch (err) {
       this.handleError(err);
@@ -349,11 +438,7 @@ export class AuthManager {
       const token = this.getSessionToken();
       if (!token) throw new Error("No session token available");
       const res = await this.client.verifySMSCodeForMFA(code, token);
-      const session: Session = {
-        session_token: res.session_token,
-        refresh_token: res.refresh_token,
-        expires_at: new Date(Date.now() + 3600_000).toISOString(),
-      };
+      const session: Session = toSession(res);
       await this.handleAuthResponse(res.user, session);
     } catch (err) {
       this.handleError(err);
@@ -473,6 +558,18 @@ export class AuthManager {
     this.scheduleRefresh(session);
   }
 
+  /**
+   * Exchanges the refresh token for a new session.
+   *
+   * On failure the two cases are separated, as they are in initialize: a
+   * rejected token means signed out, anything else means no verdict and is
+   * worth retrying.
+   *
+   * `attempt` was previously accepted and never read, and the retry path
+   * called back in without it — so a permanently-invalid token retried every
+   * 30s for as long as the tab stayed open, and the user was never signed out.
+   * It now bounds the retries and backs off between them.
+   */
   private async refreshSession(refreshToken: string, attempt = 0): Promise<void> {
     try {
       const newSession = await this.client.refresh(refreshToken);
@@ -480,14 +577,38 @@ export class AuthManager {
       await this.persistSession(newSession);
       this.setState({ status: "authenticated", user, session: newSession });
       this.scheduleRefresh(newSession);
-    } catch {
-      // Never destroy the session on refresh failure. The refresh token
-      // may still be valid — the server could be temporarily unreachable.
-      // Schedule a retry in 30 seconds. Only explicit signOut() clears storage.
+    } catch (err) {
+      // The server rejected the token: retrying cannot help.
+      if (isAuthRejection(err)) {
+        this.setState({ status: "unauthenticated" });
+        return;
+      }
+
+      if (attempt >= MAX_REFRESH_ATTEMPTS) {
+        // Out of retries without ever reaching the server. The session is
+        // retained — the token may still be good — but nothing has validated
+        // it, so we must not keep claiming authenticated.
+        const stored = await this.storage.getItem(SESSION_KEY);
+        if (stored) {
+          try {
+            this.setState({ status: "unknown", session: JSON.parse(stored) });
+            return;
+          } catch {
+            // Fall through to unauthenticated on unparseable storage.
+          }
+        }
+        this.setState({ status: "unauthenticated" });
+        return;
+      }
+
+      // No verdict — back off and try again.
       this.clearRefreshTimer();
-      this.refreshTimer = setTimeout(() => {
-        void this.refreshSession(refreshToken);
-      }, 30_000);
+      this.refreshTimer = setTimeout(
+        () => {
+          void this.refreshSession(refreshToken, attempt + 1);
+        },
+        REFRESH_RETRY_BASE_MS * 2 ** attempt,
+      );
     }
   }
 

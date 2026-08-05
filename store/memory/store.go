@@ -617,11 +617,15 @@ func (s *Store) GetVerification(_ context.Context, token string) (*account.Verif
 	return v, nil
 }
 
+// ConsumeVerification marks a verification consumed, returning ErrNotFound if
+// it was missing or already consumed. The already-consumed case must be
+// distinguishable so callers can reject a replay: checking Consumed on a prior
+// read and setting it here are two steps, and only the store can make them one.
 func (s *Store) ConsumeVerification(_ context.Context, token string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	v, ok := s.verifications[token]
-	if !ok {
+	if !ok || v.Consumed {
 		return store.ErrNotFound
 	}
 	v.Consumed = true

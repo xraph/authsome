@@ -66,7 +66,18 @@ func ValidateTOTPStep(code, secret string) (valid bool, step int64) {
 // GenerateTOTPCode generates a current TOTP code for a given secret.
 // Primarily useful for testing.
 func GenerateTOTPCode(secret string) (string, error) {
-	code, err := totp.GenerateCode(secret, time.Now())
+	return GenerateTOTPCodeAt(secret, time.Now())
+}
+
+// GenerateTOTPCodeAt generates the TOTP code for a given secret at a specific
+// time. Primarily useful for testing flows that need two codes from different
+// time-steps — a code is single-use within its acceptance window, so a step-up
+// check cannot reuse the code that completed an earlier step.
+//
+// Only offsets within the ±1-step acceptance window (see totpSkew) will still
+// validate; ±30s is the usable distance from now.
+func GenerateTOTPCodeAt(secret string, at time.Time) (string, error) {
+	code, err := totp.GenerateCode(secret, at)
 	if err != nil {
 		return "", fmt.Errorf("mfa: generate totp code: %w", err)
 	}

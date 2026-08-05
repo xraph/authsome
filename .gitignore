@@ -33,9 +33,21 @@ sdk/**/node_modules/
 /specgen
 /standalone
 
-# Editor / agent ephemera
-.claude/launch.json
-.claude/scheduled_tasks.lock
+# Editor / agent ephemera.
+#
+# The whole directory is ignored: alongside settings it holds .claude/worktrees,
+# which are full checkouts of this repo (100s of MB). A single `git add -A`
+# would otherwise commit a copy of the tree into itself.
+#
+# Negated below are the files that are genuinely shared configuration and
+# belong in version control.
+# Note the trailing /* rather than a bare .claude/ — git does not descend into
+# an excluded directory, so the negations below would never be reachable.
+.claude/*
+!.claude/settings.json
+!.claude/agents/
+!.claude/commands/
+!.claude/skills/
 
 # Agent workspace scratch (subagent task notes, plan drafts, etc.).
 # Not authoritative — the source of truth lives in docs/ or commit

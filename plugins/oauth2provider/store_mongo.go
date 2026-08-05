@@ -382,12 +382,15 @@ func (s *MongoStore) GetAuthCode(ctx context.Context, code string) (*Authorizati
 	return authCodeDocToModel(doc)
 }
 
-func (s *MongoStore) ConsumeAuthCode(ctx context.Context, code string) error {
-	_, err := s.mdb.Collection(oauth2AuthCodesColl).UpdateOne(ctx,
-		bson.M{"code": code},
+func (s *MongoStore) ConsumeAuthCode(ctx context.Context, code string) (bool, error) {
+	res, err := s.mdb.Collection(oauth2AuthCodesColl).UpdateOne(ctx,
+		bson.M{"code": code, "consumed": false},
 		bson.M{"$set": bson.M{"consumed": true}},
 	)
-	return oauth2MongoError(err)
+	if err != nil {
+		return false, oauth2MongoError(err)
+	}
+	return res.ModifiedCount > 0, nil
 }
 
 // ──────────────────────────────────────────────────

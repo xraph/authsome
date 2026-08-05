@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"fmt"
 
 	log "github.com/xraph/go-utils/log"
 
@@ -281,13 +282,24 @@ func (r *Registry) Plugin(name string) Plugin {
 	return nil
 }
 
-// EmitOnInit notifies all plugins that implement OnInit.
-func (r *Registry) EmitOnInit(ctx context.Context, engine Engine) {
+// EmitOnInit notifies all plugins that implement OnInit, stopping at the first
+// failure and returning it.
+//
+// Unlike the after-hooks, an OnInit error is fatal rather than logged. OnInit
+// is where a plugin resolves its store, keys, and bridges; a plugin that fails
+// here is not "degraded", it is absent. Continuing would leave the engine
+// serving traffic with a security control silently missing — an MFA plugin
+// that never wired its store enforces nothing — and a warning in the startup
+// log is not a reliable way to notice. Startup is the one point where failing
+// loudly costs nothing.
+func (r *Registry) EmitOnInit(ctx context.Context, engine Engine) error {
 	for _, e := range r.onInit {
 		if err := e.hook.OnInit(ctx, engine); err != nil {
 			r.logHookError("OnInit", e.name, err)
+			return fmt.Errorf("plugin %q: OnInit: %w", e.name, err)
 		}
 	}
+	return nil
 }
 
 // EmitOnShutdown notifies all plugins that implement OnShutdown.

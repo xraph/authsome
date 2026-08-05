@@ -378,15 +378,21 @@ func (e *Engine) ensureAuthRegistry() {
 // and calls OnInit on all registered plugins. Idempotent — safe to call
 // multiple times. The extension calls this before route registration so
 // plugins can set up dependencies that RegisterRoutes relies on.
-func (e *Engine) InitPlugins(ctx context.Context) {
+// A plugin whose OnInit fails aborts initialization: pluginsInitialized stays
+// false so a caller that recovers can retry, and the error propagates rather
+// than leaving the engine running with that plugin's control absent.
+func (e *Engine) InitPlugins(ctx context.Context) error {
 	if e.pluginsInitialized {
-		return
+		return nil
 	}
 	e.buildAuthMiddleware()
 	e.ensureAuthRegistry()
 	e.registerSessionAuthProvider()
-	e.plugins.EmitOnInit(ctx, e)
+	if err := e.plugins.EmitOnInit(ctx, e); err != nil {
+		return fmt.Errorf("authsome: init plugins: %w", err)
+	}
 	e.pluginsInitialized = true
+	return nil
 }
 
 // Start initializes the engine, runs migrations, and starts plugins.
@@ -412,7 +418,9 @@ func (e *Engine) Start(ctx context.Context) error {
 
 	// Initialize plugins (idempotent — may have been called earlier by
 	// the extension before route registration).
-	e.InitPlugins(ctx)
+	if err := e.InitPlugins(ctx); err != nil {
+		return err
+	}
 
 	// Seed per-app session configs (from code options or YAML config).
 	for _, cfg := range e.pendingAppSessCfgs {

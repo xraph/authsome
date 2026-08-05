@@ -16,7 +16,7 @@
 import { cookies } from "next/headers";
 import { AuthClient, type ClientConfig, type User } from "@authsome/ui-core";
 
-const SESSION_COOKIE = "authsome_session_token";
+import { readSessionToken, SESSION_COOKIE } from "./session-cookie";
 
 /** Server session containing the validated user. */
 export interface ServerSession {
@@ -41,7 +41,7 @@ export async function getServerSession(
 ): Promise<ServerSession | null> {
   const cookieName = opts.cookieName ?? SESSION_COOKIE;
   const cookieStore = await cookies();
-  const sessionToken = cookieStore.get(cookieName)?.value;
+  const sessionToken = readSessionToken(cookieStore, cookieName);
 
   if (!sessionToken) {
     return null;

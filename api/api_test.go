@@ -1576,3 +1576,175 @@ func TestMFAChallenge_BadCodeKeepsTicketUsable(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code,
 		"ticket must remain usable after a bad-code attempt; body=%s", rec.Body.String())
 }
+
+// ──────────────────────────────────────────────────
+// MFA challenge: recovery codes and ticket attempt cap
+// ──────────────────────────────────────────────────
+
+// mfaGateFixture wires a real engine + MFA plugin with one user enrolled in
+// TOTP and MFARequired switched on, so signin hits the gate. Returns the
+// router, the enrolled user's TOTP secret, the MFA store, and the user id.
+func mfaGateFixture(t *testing.T, email string) (http.Handler, string, mfa.Store, id.UserID) {
+	t.Helper()
+
+	mfaStore := mfa.NewMemoryStore()
+	mfaPlugin := mfa.New()
+	mfaPlugin.SetStore(mfaStore)
+
+	s := memory.New()
+	seedTestPlatformApp(t, s)
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+	eng, err := authsome.NewEngine(
+		authsome.WithStore(s),
+		authsome.WithWarden(w),
+		authsome.WithDisableMigrate(),
+		authsome.WithAppID(testAppIDStr),
+		authsome.WithPlugin(mfaPlugin),
+	)
+	require.NoError(t, err)
+	require.NoError(t, eng.Start(context.Background()))
+	secutil.RelaxAuthDefaults(t, eng)
+
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+
+	_, sessionToken, _ := signUp(t, eng, email, "SecureP@ss1")
+	require.NotEmpty(t, sessionToken)
+
+	u, err := eng.Store().GetUserByEmail(context.Background(), appID, email)
+	require.NoError(t, err)
+
+	totpKey, err := mfa.GenerateTOTPKey(mfa.TOTPConfig{Issuer: "TestApp", AccountName: email})
+	require.NoError(t, err)
+	require.NoError(t, mfaStore.CreateEnrollment(context.Background(), &mfa.Enrollment{
+		ID:        id.NewMFAID(),
+		UserID:    u.ID,
+		Method:    "totp",
+		Secret:    totpKey.Secret(),
+		Verified:  true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}))
+
+	tru := true
+	require.NoError(t, eng.Store().SetAppClientConfig(context.Background(), &appclientconfig.Config{
+		ID:          id.NewAppClientConfigID(),
+		AppID:       appID,
+		MFARequired: &tru,
+	}))
+
+	rootRouter := forge.NewRouter()
+	a := api.New(eng, rootRouter)
+	require.NoError(t, a.RegisterRoutes(rootRouter))
+	require.NoError(t, mfaPlugin.RegisterRoutes(rootRouter))
+	return withTestKey(rootRouter.Handler()), totpKey.Secret(), mfaStore, u.ID
+}
+
+// signInForTicket drives signin to the gate and returns the mfa_ticket.
+func signInForTicket(t *testing.T, router http.Handler, email string) string {
+	t.Helper()
+	body := []byte(`{"email":"` + email + `","password":"SecureP@ss1"}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signin",
+		bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusForbidden, rec.Code, "signin must hit the MFA gate; body=%s", rec.Body.String())
+
+	var gate map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&gate))
+	ticket, _ := gate["mfa_ticket"].(string)
+	require.NotEmpty(t, ticket)
+	return ticket
+}
+
+func postChallenge(t *testing.T, router http.Handler, ticket, code string) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := json.Marshal(map[string]string{"mfa_ticket": ticket, "code": code})
+	require.NoError(t, err)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost,
+		"/v1/mfa/challenge", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	return rec
+}
+
+// Recovery codes exist for the case where the authenticator is unavailable,
+// which is exactly this endpoint. Previously they could only be redeemed from
+// an already-authenticated session — i.e. never when actually needed.
+func TestMFAChallenge_AcceptsRecoveryCode(t *testing.T) {
+	t.Parallel()
+
+	const email = "mfa-recovery-challenge@example.com"
+	router, _, mfaStore, userID := mfaGateFixture(t, email)
+
+	codes, plaintexts, err := mfa.GenerateRecoveryCodes(userID, 3)
+	require.NoError(t, err)
+	require.NoError(t, mfaStore.CreateRecoveryCodes(context.Background(), codes))
+
+	ticket := signInForTicket(t, router, email)
+	rec := postChallenge(t, router, ticket, plaintexts[0])
+
+	require.Equal(t, http.StatusOK, rec.Code,
+		"a recovery code must complete the sign-in challenge; body=%s", rec.Body.String())
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	assert.NotEmpty(t, resp["session_token"], "a real session must be issued")
+
+	// The redeemed code must be burned.
+	remaining, err := mfaStore.GetRecoveryCodes(context.Background(), userID)
+	require.NoError(t, err)
+	unused := 0
+	for _, c := range remaining {
+		if !c.Used {
+			unused++
+		}
+	}
+	assert.Equal(t, 2, unused, "the redeemed recovery code must be burned")
+}
+
+// A ticket is partial authentication over a 6-digit secret. Route rate
+// limiting returns no middleware at all when disabled by config, so the ticket
+// has to bound its own attempts.
+func TestMFAChallenge_TicketAttemptsAreCapped(t *testing.T) {
+	t.Parallel()
+
+	const email = "mfa-ticket-cap@example.com"
+	router, secret, _, _ := mfaGateFixture(t, email)
+
+	ticket := signInForTicket(t, router, email)
+
+	for i := 0; i < authsome.MaxMFATicketAttempts; i++ {
+		rec := postChallenge(t, router, ticket, "000000")
+		require.Equal(t, http.StatusUnauthorized, rec.Code, "wrong guess %d", i+1)
+	}
+
+	// The ticket is spent: even the correct code cannot revive it.
+	code, err := mfa.GenerateTOTPCode(secret)
+	require.NoError(t, err)
+	rec := postChallenge(t, router, ticket, code)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code,
+		"ticket must be discarded once the attempt cap is reached; body=%s", rec.Body.String())
+	assert.NotContains(t, rec.Body.String(), "session_token")
+}
+
+// A user who mistypes once must not be locked out of a ticket they still hold.
+func TestMFAChallenge_SucceedsBelowAttemptCap(t *testing.T) {
+	t.Parallel()
+
+	const email = "mfa-ticket-below-cap@example.com"
+	router, secret, _, _ := mfaGateFixture(t, email)
+
+	ticket := signInForTicket(t, router, email)
+
+	for i := 0; i < authsome.MaxMFATicketAttempts-1; i++ {
+		require.Equal(t, http.StatusUnauthorized, postChallenge(t, router, ticket, "000000").Code)
+	}
+
+	code, err := mfa.GenerateTOTPCode(secret)
+	require.NoError(t, err)
+	rec := postChallenge(t, router, ticket, code)
+	assert.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+}

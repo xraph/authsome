@@ -480,12 +480,25 @@ func (s *Store) GetVerification(ctx context.Context, token string) (*account.Ver
 }
 
 func (s *Store) ConsumeVerification(ctx context.Context, token string) error {
-	_, err := s.sdb.NewUpdate((*VerificationModel)(nil)).
+	res, err := s.sdb.NewUpdate((*VerificationModel)(nil)).
 		Set("consumed = TRUE").
 		Where("token = ?", token).
 		Where("consumed = FALSE").
 		Exec(ctx)
-	return sqliteError(err)
+	if err != nil {
+		return sqliteError(err)
+	}
+	// Zero rows means the token was missing or already consumed. Reporting
+	// that as success let two concurrent redemptions of one token both
+	// proceed; callers rely on ErrNotFound to reject the replay.
+	n, err := res.RowsAffected()
+	if err != nil {
+		return sqliteError(err)
+	}
+	if n == 0 {
+		return store.ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) GetActiveEmailVerification(ctx context.Context, userID id.UserID) (*account.Verification, error) {

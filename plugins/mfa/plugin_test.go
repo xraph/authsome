@@ -467,11 +467,14 @@ func TestHandleDisable_Success(t *testing.T) {
 
 	userID := id.NewUserID()
 
+	key, err := mfa.GenerateTOTPKey(mfa.TOTPConfig{Issuer: "Test", AccountName: "u@example.com"})
+	require.NoError(t, err)
+
 	enrollment := &mfa.Enrollment{
 		ID:        id.NewMFAID(),
 		UserID:    userID,
 		Method:    "totp",
-		Secret:    "SECRET",
+		Secret:    key.Secret(),
 		Verified:  true,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -479,11 +482,14 @@ func TestHandleDisable_Success(t *testing.T) {
 	err = s.CreateEnrollment(context.Background(), enrollment)
 	require.NoError(t, err)
 
-	req := authedRequest(t, "DELETE", "/v1/mfa/enrollment", nil, userID)
+	// Disabling now requires a fresh proof of possession.
+	code, err := mfa.GenerateTOTPCode(key.Secret())
+	require.NoError(t, err)
+	req := authedRequest(t, "DELETE", "/v1/mfa/enrollment", jsonBody(t, map[string]string{"code": code}), userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 	// Should be gone
 	_, err = s.GetEnrollment(context.Background(), userID, "totp")
@@ -601,11 +607,16 @@ func TestFullFlow_EnrollVerifyChallengeDisable(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, noTicketRec.Code,
 		"challenge without mfa_ticket must 400; body=%s", noTicketRec.Body.String())
 
-	// Step 4: Disable
-	disableReq := authedRequest(t, "DELETE", "/v1/mfa/enrollment", nil, userID)
+	// Step 4: Disable. Requires a fresh proof of possession — a code from a
+	// later time-step, since the one used at step 2 is spent for replay
+	// purposes.
+	disableCode, err := mfa.GenerateTOTPCodeAt(secret, time.Now().Add(30*time.Second))
+	require.NoError(t, err)
+	disableBody := jsonBody(t, map[string]string{"code": disableCode})
+	disableReq := authedRequest(t, "DELETE", "/v1/mfa/enrollment", disableBody, userID)
 	disableRec := httptest.NewRecorder()
 	mux.ServeHTTP(disableRec, disableReq)
-	assert.Equal(t, http.StatusOK, disableRec.Code)
+	assert.Equal(t, http.StatusOK, disableRec.Code, "body: %s", disableRec.Body.String())
 }
 
 // ──────────────────────────────────────────────────
@@ -913,4 +924,137 @@ func TestHandleRecoveryRegenerate_NoEnrollment(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// ──────────────────────────────────────────────────
+// Step-up on disable
+// ──────────────────────────────────────────────────
+
+// enrolledUser creates a verified TOTP enrollment and returns its secret.
+func enrolledUser(t *testing.T, s mfa.Store, userID id.UserID) string {
+	t.Helper()
+	key, err := mfa.GenerateTOTPKey(mfa.TOTPConfig{Issuer: "Test", AccountName: "u@example.com"})
+	require.NoError(t, err)
+	require.NoError(t, s.CreateEnrollment(context.Background(), &mfa.Enrollment{
+		ID:        id.NewMFAID(),
+		UserID:    userID,
+		Method:    "totp",
+		Secret:    key.Secret(),
+		Verified:  true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}))
+	return key.Secret()
+}
+
+func disableWith(t *testing.T, mux forge.Router, userID id.UserID, body *bytes.Buffer) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, authedRequest(t, "DELETE", "/v1/mfa/enrollment", body, userID))
+	return rec
+}
+
+// Turning MFA off is the action MFA exists to protect. On session auth alone,
+// a stolen or hijacked session can strip the second factor silently and keep
+// long-term access.
+func TestHandleDisable_RequiresStepUpCode(t *testing.T) {
+	p, s := newTestPlugin(t)
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	userID := id.NewUserID()
+	enrolledUser(t, s, userID)
+
+	rec := disableWith(t, mux, userID, nil)
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "a session alone must not disable MFA")
+
+	_, err := s.GetEnrollment(context.Background(), userID, "totp")
+	require.NoError(t, err, "enrollment must survive a code-less disable")
+}
+
+func TestHandleDisable_RejectsWrongCode(t *testing.T) {
+	p, s := newTestPlugin(t)
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	userID := id.NewUserID()
+	enrolledUser(t, s, userID)
+
+	rec := disableWith(t, mux, userID, jsonBody(t, map[string]string{"code": "000000"}))
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+
+	_, err := s.GetEnrollment(context.Background(), userID, "totp")
+	require.NoError(t, err, "enrollment must survive a wrong-code disable")
+}
+
+// A recovery code is a valid second factor for step-up: a user whose
+// authenticator is lost still needs to be able to turn MFA off.
+func TestHandleDisable_AcceptsRecoveryCode(t *testing.T) {
+	p, s := newTestPlugin(t)
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	userID := id.NewUserID()
+	enrolledUser(t, s, userID)
+
+	codes, plaintexts, err := mfa.GenerateRecoveryCodes(userID, 3)
+	require.NoError(t, err)
+	require.NoError(t, s.CreateRecoveryCodes(context.Background(), codes))
+
+	rec := disableWith(t, mux, userID, jsonBody(t, map[string]string{"code": plaintexts[0]}))
+	assert.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	_, err = s.GetEnrollment(context.Background(), userID, "totp")
+	assert.ErrorIs(t, err, mfa.ErrEnrollmentNotFound)
+}
+
+// The recovery code must be burned, or it stays usable for a second
+// sensitive action.
+func TestHandleDisable_BurnsUsedRecoveryCode(t *testing.T) {
+	p, s := newTestPlugin(t)
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	userID := id.NewUserID()
+	enrolledUser(t, s, userID)
+
+	codes, plaintexts, err := mfa.GenerateRecoveryCodes(userID, 3)
+	require.NoError(t, err)
+	require.NoError(t, s.CreateRecoveryCodes(context.Background(), codes))
+
+	require.Equal(t, http.StatusOK,
+		disableWith(t, mux, userID, jsonBody(t, map[string]string{"code": plaintexts[0]})).Code)
+
+	remaining, err := s.GetRecoveryCodes(context.Background(), userID)
+	require.NoError(t, err)
+	unused := 0
+	for _, c := range remaining {
+		if !c.Used {
+			unused++
+		}
+	}
+	assert.Equal(t, 2, unused, "the redeemed recovery code must be burned")
+}
+
+// A TOTP code spent on one sensitive action must not authorise another within
+// its acceptance window.
+func TestHandleDisable_RejectsReplayedTOTPCode(t *testing.T) {
+	p, s := newTestPlugin(t)
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	userID := id.NewUserID()
+	secret := enrolledUser(t, s, userID)
+
+	code, err := mfa.GenerateTOTPCode(secret)
+	require.NoError(t, err)
+
+	// Spend the code on /verify first.
+	verifyRec := httptest.NewRecorder()
+	mux.ServeHTTP(verifyRec, authedRequest(t, "POST", "/v1/mfa/verify",
+		jsonBody(t, map[string]string{"code": code}), userID))
+	require.Equal(t, http.StatusOK, verifyRec.Code)
+
+	rec := disableWith(t, mux, userID, jsonBody(t, map[string]string{"code": code}))
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, "a spent TOTP code must not authorise a disable")
 }

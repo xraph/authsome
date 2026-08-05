@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -19,7 +20,6 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/account"
-	"github.com/xraph/authsome/authprovider"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
@@ -201,10 +201,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Authenticated OAuth2 endpoints — require a logged-in user.
 	// The extension's global AuthMiddleware populates the user context;
 	// RequireAuthMiddleware blocks if no user was resolved.
+	// SessionGuard rather than reaching through p.engine directly: RegisterRoutes
+	// would nil-deref when called before OnInit, which also made the plugin
+	// impossible to exercise in a test without a full engine.
 	authG := router.Group("/v1/oauth",
 		forge.WithGroupTags("OAuth2"),
 		forge.WithGroupAuth("session"),
-		forge.WithGroupMiddleware(authprovider.RegistryMiddleware(p.engine.AuthRegistry(), "session")),
+		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
 	)
 
 	if err := authG.POST("/device/complete", p.handleDeviceComplete,
@@ -226,8 +229,14 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
-	// Admin endpoints for client management
-	admin := router.Group("/v1/admin/oauth", forge.WithGroupTags("OAuth2 Admin"))
+	// Admin endpoints for client management. Gated behind a session plus
+	// manage/oauth2_client — a caller who can mint clients can register an
+	// arbitrary redirect_uri and harvest codes for any user.
+	admin := router.Group("/v1/admin/oauth",
+		forge.WithGroupTags("OAuth2 Admin"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.AdminGuard(p.engine, "manage", "oauth2_client")...),
+	)
 
 	if err := admin.POST("/clients", p.handleCreateClient,
 		forge.WithSummary("Create OAuth2 client"),
@@ -261,9 +270,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 // AuthorizeRequest is the OAuth2 authorization request.
 type AuthorizeRequest struct {
-	ResponseType        string `query:"response_type"`
-	ClientID            string `query:"client_id"`
-	RedirectURI         string `query:"redirect_uri"`
+	ResponseType string `query:"response_type"`
+	ClientID     string `query:"client_id"`
+	// Optional per RFC 6749 §4.1.1 — when omitted the client must have exactly
+	// one registered URI, which resolveRedirectURI selects. Marking it
+	// required here rejected such requests at the binder, before the handler
+	// could apply that rule.
+	RedirectURI         string `query:"redirect_uri,omitempty"`
 	Scope               string `query:"scope,omitempty"`
 	State               string `query:"state,omitempty"`
 	CodeChallenge       string `query:"code_challenge,omitempty"`
@@ -431,9 +444,42 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*str
 		return nil, forge.BadRequest("invalid client_id")
 	}
 
-	// Validate redirect URI.
-	if !p.isValidRedirectURI(client, req.RedirectURI) {
-		return nil, forge.BadRequest("invalid redirect_uri")
+	// Resolve the redirect URI. Omitting it is only legal when exactly one is
+	// registered, in which case that one is used — echoing back the empty
+	// string would produce a relative redirect that never reaches the client.
+	redirectURI, err := p.resolveRedirectURI(client, req.RedirectURI)
+	if err != nil {
+		return nil, err
+	}
+
+	// The client must be registered for this grant. GrantTypes was recorded at
+	// registration but never enforced, so any client could run any flow.
+	if !clientAllowsGrant(client, "authorization_code") {
+		return nil, forge.BadRequest("client is not authorized for the authorization_code grant")
+	}
+
+	// Confine the request to the scopes the client was registered with.
+	// Without this the code carries whatever the caller asked for, so a client
+	// limited to "profile" could mint a token for any scope it names.
+	scopes, err := resolveScopes(client, req.Scope)
+	if err != nil {
+		return nil, err
+	}
+
+	// PKCE is mandatory for public clients (RFC 8252 §8.1): they hold no
+	// secret, so an attacker who intercepts the code on the redirect — a
+	// custom-scheme hijack, a shared browser — can redeem it without one.
+	// Enforcing only when a challenge happens to be present lets a client opt
+	// out of its own protection by simply omitting it.
+	if client.Public {
+		if req.CodeChallenge == "" {
+			return nil, forge.BadRequest("code_challenge required (PKCE) for public clients")
+		}
+		// "plain" leaves the verifier recoverable anywhere the challenge is
+		// observable — the authorize URL lands in history, logs, and Referer.
+		if req.CodeChallengeMethod != "" && req.CodeChallengeMethod != "S256" {
+			return nil, forge.BadRequest("code_challenge_method must be S256 for public clients")
+		}
 	}
 
 	// Require authenticated user.
@@ -448,14 +494,13 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*str
 		return nil, forge.InternalError(fmt.Errorf("oauth2: generate auth code: %w", err))
 	}
 
-	scopes := strings.Fields(req.Scope)
 	authCode := &AuthorizationCode{
 		ID:                  id.NewAuthCodeID(),
 		Code:                codeStr,
 		ClientID:            req.ClientID,
 		UserID:              userID,
 		AppID:               client.AppID,
-		RedirectURI:         req.RedirectURI,
+		RedirectURI:         redirectURI,
 		Scopes:              scopes,
 		CodeChallenge:       req.CodeChallenge,
 		CodeChallengeMethod: req.CodeChallengeMethod,
@@ -463,17 +508,71 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*str
 		CreatedAt:           time.Now(),
 	}
 
-	if err := p.oauth2Store.CreateAuthCode(ctx.Context(), authCode); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: store auth code: %w", err))
+	if createErr := p.oauth2Store.CreateAuthCode(ctx.Context(), authCode); createErr != nil {
+		return nil, forge.InternalError(fmt.Errorf("oauth2: store auth code: %w", createErr))
 	}
 
-	// Redirect back to the client with the code.
-	redirectURL := req.RedirectURI + "?code=" + codeStr
-	if req.State != "" {
-		redirectURL += "&state=" + req.State
+	redirectURL, err := buildRedirect(redirectURI, codeStr, req.State)
+	if err != nil {
+		return nil, err
 	}
-
 	return nil, ctx.Redirect(http.StatusFound, redirectURL)
+}
+
+// buildRedirect appends the code and state to the client's redirect URI.
+//
+// Concatenating "?code=..." breaks a registered URI that already carries a
+// query string, and an unescaped state can inject further parameters, so both
+// values go through net/url.
+func buildRedirect(redirectURI, code, state string) (string, error) {
+	u, err := url.Parse(redirectURI)
+	if err != nil {
+		return "", forge.BadRequest("invalid redirect_uri")
+	}
+	q := u.Query()
+	q.Set("code", code)
+	if state != "" {
+		q.Set("state", state)
+	}
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
+// clientAllowsGrant reports whether the client is registered for grantType.
+// An empty GrantTypes list is treated as authorization_code only, matching the
+// default applied at registration.
+func clientAllowsGrant(client *OAuth2Client, grantType string) bool {
+	if len(client.GrantTypes) == 0 {
+		return grantType == "authorization_code"
+	}
+	for _, g := range client.GrantTypes {
+		if g == grantType {
+			return true
+		}
+	}
+	return false
+}
+
+// resolveScopes intersects the requested scopes with the client's registered
+// set, rejecting anything outside it (RFC 6749 §4.1.2.1 invalid_scope). An
+// empty request yields the client's full registered set.
+func resolveScopes(client *OAuth2Client, requested string) ([]string, error) {
+	fields := strings.Fields(requested)
+	if len(fields) == 0 {
+		return append([]string(nil), client.Scopes...), nil
+	}
+	allowed := make(map[string]struct{}, len(client.Scopes))
+	for _, s := range client.Scopes {
+		allowed[s] = struct{}{}
+	}
+	out := make([]string, 0, len(fields))
+	for _, s := range fields {
+		if _, ok := allowed[s]; !ok {
+			return nil, forge.BadRequest(fmt.Sprintf("scope %q is not registered for this client", s))
+		}
+		out = append(out, s)
+	}
+	return out, nil
 }
 
 func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
@@ -512,17 +611,37 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 		return nil, forge.BadRequest("invalid client")
 	}
 
+	// The presented client_id must be the one the code was issued to.
+	// Otherwise a client can redeem a code minted for a different client.
+	if req.ClientID != "" && req.ClientID != authCode.ClientID {
+		return nil, forge.BadRequest("client_id does not match the authorization code")
+	}
+
 	// Validate client authentication (confidential clients).
 	if !client.Public {
 		if req.ClientSecret == "" {
 			return nil, forge.Unauthorized("client_secret required for confidential clients")
 		}
-		if err := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(req.ClientSecret)); err != nil {
+		if cmpErr := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(req.ClientSecret)); cmpErr != nil {
 			return nil, forge.Unauthorized("invalid client_secret")
 		}
 	}
 
-	// PKCE verification (RFC 7636).
+	// The redirect_uri must match the one the code was issued against
+	// (RFC 6749 §4.1.3). Skipping this breaks the binding between the leg that
+	// obtained the code and the leg that redeems it, so a code leaked to a
+	// different registered URI — or to an attacker who got one registered —
+	// can still be exchanged here.
+	if authCode.RedirectURI != "" && req.RedirectURI != authCode.RedirectURI {
+		return nil, forge.BadRequest("redirect_uri does not match the authorization request")
+	}
+
+	// PKCE verification (RFC 7636). Public clients are required to have bound
+	// a challenge at /authorize; re-assert it here so a code minted before
+	// that rule existed, or through any other path, still cannot skip it.
+	if client.Public && authCode.CodeChallenge == "" {
+		return nil, forge.BadRequest("authorization code is not PKCE-bound")
+	}
 	if authCode.CodeChallenge != "" {
 		if req.CodeVerifier == "" {
 			return nil, forge.BadRequest("code_verifier required (PKCE)")
@@ -532,9 +651,16 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 		}
 	}
 
-	// Consume the code.
-	if err := p.oauth2Store.ConsumeAuthCode(ctx.Context(), req.Code); err != nil {
+	// Consume the code as a compare-and-set. Checking Consumed above and
+	// writing here are two statements: without the store enforcing
+	// consumed=false, two concurrent requests both pass the check and both get
+	// tokens from one code.
+	consumed, err := p.oauth2Store.ConsumeAuthCode(ctx.Context(), req.Code)
+	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("oauth2: consume auth code: %w", err))
+	}
+	if !consumed {
+		return nil, forge.BadRequest("authorization code already used")
 	}
 
 	// Generate tokens.
@@ -1049,17 +1175,25 @@ func (p *Plugin) clientSupportsGrant(client *OAuth2Client, grantType string) boo
 // Helpers
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) isValidRedirectURI(client *OAuth2Client, uri string) bool {
+// resolveRedirectURI returns the redirect URI this authorization will use.
+//
+// An omitted redirect_uri is only acceptable when the client registered
+// exactly one, and resolves to that one. Anything supplied must match a
+// registered entry exactly — no prefix or subpath matching, which would let a
+// caller redirect the code to an attacker-controlled path on the same host.
+func (p *Plugin) resolveRedirectURI(client *OAuth2Client, uri string) (string, error) {
 	if uri == "" {
-		// If only one redirect URI registered, use it.
-		return len(client.RedirectURIs) == 1
+		if len(client.RedirectURIs) == 1 {
+			return client.RedirectURIs[0], nil
+		}
+		return "", forge.BadRequest("redirect_uri required")
 	}
 	for _, u := range client.RedirectURIs {
 		if u == uri {
-			return true
+			return uri, nil
 		}
 	}
-	return false
+	return "", forge.BadRequest("invalid redirect_uri")
 }
 
 // verifyPKCE validates a PKCE code_verifier against a code_challenge.

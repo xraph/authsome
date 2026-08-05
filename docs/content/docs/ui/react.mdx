@@ -38,7 +38,7 @@ function App() {
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `baseURL` | `string` | -- | Base URL of your Authsome API |
-| `storage` | `TokenStorage` | `localStorage` | Where to persist session tokens |
+| `storage` | `TokenStorage` | in-memory | Token persistence. Defaults to memory so tokens never reach a store other scripts can read; pass `createLocalStorage()` to persist across reloads, or let the backend set httpOnly cookies (preferred) |
 | `publishableKey` | `string` | -- | Publishable key for auto-discovering enabled auth methods |
 | `initialClientConfig` | `ClientConfig` | -- | Pre-fetched client config (avoids client-side fetch on mount) |
 | `fetch` | `typeof fetch` | `globalThis.fetch` | Custom fetch implementation |

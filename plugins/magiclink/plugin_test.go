@@ -20,6 +20,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/magiclink"
+	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/store/memory"
 	"github.com/xraph/authsome/user"
 )
@@ -477,4 +478,111 @@ func TestMailerFunc(t *testing.T) {
 	assert.True(t, called)
 	assert.Equal(t, "test@example.com", capturedEmail)
 	assert.Equal(t, "abc123", capturedToken)
+}
+
+// ──────────────────────────────────────────────────
+// Verification-type confinement
+// ──────────────────────────────────────────────────
+
+// Verifications of every type live in one table and GetVerification matches on
+// token alone, so /verify must reject anything that isn't a magic link.
+// Email-verification records carry a 6-digit OTP in the same Token column: if
+// this endpoint honoured them, posting {"token":"123456"} would walk a 10^6
+// keyspace and mint a full session on a hit — with none of the attempt
+// accounting the email-verify path applies.
+func TestHandleVerify_RejectsEmailVerificationOTP(t *testing.T) {
+	p, s, _ := newTestPlugin(t)
+	u := createTestUser(t, s)
+
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+
+	// A genuine, unexpired email-verification OTP for a real user.
+	otp, err := account.NewEmailVerificationCode(appID, u.ID, 5*time.Minute)
+	require.NoError(t, err)
+	require.NoError(t, s.CreateVerification(context.Background(), otp))
+	require.Len(t, otp.Token, 6, "email verification should store a 6-digit code")
+
+	req := httptest.NewRequestWithContext(context.Background(), "POST",
+		"/v1/magic-link/verify", jsonBody(t, map[string]string{"token": otp.Token}))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code,
+		"an email-verification OTP must not be redeemable as a magic link")
+	assert.NotContains(t, rec.Body.String(), "session_token",
+		"no session may be issued for a non-magic-link token")
+
+	// The OTP must survive so the real email-verify flow can still use it.
+	stored, err := s.GetVerification(context.Background(), otp.Token)
+	require.NoError(t, err)
+	assert.False(t, stored.Consumed, "rejected token must not be consumed")
+}
+
+// Guessing a 6-digit value must never produce a session, whether or not it
+// happens to collide with a live verification of another type.
+func TestHandleVerify_SixDigitGuessesNeverAuthenticate(t *testing.T) {
+	p, s, _ := newTestPlugin(t)
+	u := createTestUser(t, s)
+
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+
+	otp, err := account.NewEmailVerificationCode(appID, u.ID, 5*time.Minute)
+	require.NoError(t, err)
+	require.NoError(t, s.CreateVerification(context.Background(), otp))
+
+	// Include the real code among the guesses — the attacker "wins" the
+	// lottery and must still be refused.
+	for _, guess := range []string{"000000", "123456", "999999", otp.Token} {
+		req := httptest.NewRequestWithContext(context.Background(), "POST",
+			"/v1/magic-link/verify", jsonBody(t, map[string]string{"token": guess}))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rec.Code, "guess %q", guess)
+	}
+}
+
+// The Consumed check on the read and the write that sets it are two steps. The
+// store consumes only if still unconsumed, so a second redemption is refused
+// even if it read the record before the first one wrote — one link, one
+// session.
+func TestHandleVerify_ConsumeIsSingleUse(t *testing.T) {
+	p, s, _ := newTestPlugin(t)
+	u := createTestUser(t, s)
+
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+
+	v, err := account.NewVerification(context.Background(), appID, u.ID,
+		magiclink.VerificationTypeMagicLink, 5*time.Minute)
+	require.NoError(t, err)
+	require.NoError(t, s.CreateVerification(context.Background(), v))
+
+	// The store must report a replay rather than silently succeeding.
+	require.NoError(t, s.ConsumeVerification(context.Background(), v.Token))
+	assert.ErrorIs(t, s.ConsumeVerification(context.Background(), v.Token), store.ErrNotFound,
+		"a second consume must be distinguishable from the first")
+
+	// And the endpoint must surface it as a refusal, not a 500.
+	req := httptest.NewRequestWithContext(context.Background(), "POST",
+		"/v1/magic-link/verify", jsonBody(t, map[string]string{"token": v.Token}))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, "body: %s", rec.Body.String())
+	assert.NotContains(t, rec.Body.String(), "session_token")
 }

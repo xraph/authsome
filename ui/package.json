@@ -10,14 +10,19 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
+    "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
     "storybook": "turbo run storybook",
     "build-storybook": "turbo run build-storybook"
   },
   "devDependencies": {
+    "@eslint/js": "^9",
+    "eslint": "^9",
+    "eslint-plugin-react-hooks": "^5",
     "turbo": "^2.4.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8"
   },
   "engines": {
     "node": ">=20"

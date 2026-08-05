@@ -26,7 +26,11 @@ type Store interface {
 	// Authorization codes
 	CreateAuthCode(ctx context.Context, code *AuthorizationCode) error
 	GetAuthCode(ctx context.Context, code string) (*AuthorizationCode, error)
-	ConsumeAuthCode(ctx context.Context, code string) error
+	// ConsumeAuthCode marks a code used and reports whether this call was the
+	// one that did so. A false return means the code was already consumed —
+	// callers must treat that as a replay, not a success. Implementations must
+	// make the test-and-set atomic.
+	ConsumeAuthCode(ctx context.Context, code string) (bool, error)
 
 	// Device codes (RFC 8628)
 	CreateDeviceCode(ctx context.Context, dc *DeviceCode) error

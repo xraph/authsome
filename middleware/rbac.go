@@ -28,10 +28,7 @@ func RequirePermission(checker PermissionChecker, action, resource string) forge
 		return func(ctx forge.Context) error {
 			userID, ok := UserIDFrom(ctx.Context())
 			if !ok {
-				return ctx.JSON(http.StatusUnauthorized, map[string]any{
-					"error": "authentication required",
-					"code":  http.StatusUnauthorized,
-				})
+				return forge.Unauthorized("authentication required")
 			}
 
 			allowed, err := checker.HasPermission(ctx.Context(), userID, action, resource)
@@ -44,6 +41,10 @@ func RequirePermission(checker PermissionChecker, action, resource string) forge
 						log.String("error", err.Error()),
 					)
 				}
+				// Written by hand rather than returned as a typed error:
+				// forge replaces the message on a 500 with a generic
+				// "Internal Server Error", which would drop the specific
+				// reason consumers currently receive.
 				return ctx.JSON(http.StatusInternalServerError, map[string]any{
 					"error": "permission check failed",
 					"code":  http.StatusInternalServerError,
@@ -58,10 +59,7 @@ func RequirePermission(checker PermissionChecker, action, resource string) forge
 						log.String("path", ctx.Request().URL.Path),
 					)
 				}
-				return ctx.JSON(http.StatusForbidden, map[string]any{
-					"error": "insufficient permissions",
-					"code":  http.StatusForbidden,
-				})
+				return forge.Forbidden("insufficient permissions")
 			}
 
 			return next(ctx)
@@ -89,14 +87,15 @@ func RequireAnyRole(checker RoleChecker, roles ...string) forge.Middleware {
 		return func(ctx forge.Context) error {
 			userID, ok := UserIDFrom(ctx.Context())
 			if !ok {
-				return ctx.JSON(http.StatusUnauthorized, map[string]any{
-					"error": "authentication required",
-					"code":  http.StatusUnauthorized,
-				})
+				return forge.Unauthorized("authentication required")
 			}
 
 			userRoles, err := checker.ListUserRoleSlugs(ctx.Context(), userID)
 			if err != nil {
+				// Written by hand rather than returned as a typed error:
+				// forge replaces the message on a 500 with a generic
+				// "Internal Server Error", which would drop the specific
+				// reason consumers currently receive.
 				return ctx.JSON(http.StatusInternalServerError, map[string]any{
 					"error": "role check failed",
 					"code":  http.StatusInternalServerError,
@@ -121,10 +120,7 @@ func RequireAnyRole(checker RoleChecker, roles ...string) forge.Middleware {
 				}
 			}
 
-			return ctx.JSON(http.StatusForbidden, map[string]any{
-				"error": "insufficient role",
-				"code":  http.StatusForbidden,
-			})
+			return forge.Forbidden("insufficient role")
 		}
 	}
 }
