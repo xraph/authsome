@@ -1233,11 +1233,18 @@
       },
       "Connection": {
         "properties": {
+          "acs_url": {
+            "type": "string"
+          },
           "active": {
             "type": "boolean"
           },
           "app_id": {
             "type": "string"
+          },
+          "attribute_mappings": {
+            "additionalProperties": true,
+            "type": "object"
           },
           "client_id": {
             "type": "string"
@@ -1249,7 +1256,19 @@
           "domain": {
             "type": "string"
           },
+          "entity_id": {
+            "type": "string"
+          },
           "id": {
+            "type": "string"
+          },
+          "idp_certificate": {
+            "type": "string"
+          },
+          "idp_metadata_xml": {
+            "type": "string"
+          },
+          "idp_sso_url": {
             "type": "string"
           },
           "issuer": {
@@ -1265,6 +1284,12 @@
             "type": "string"
           },
           "provider": {
+            "type": "string"
+          },
+          "sign_requests": {
+            "type": "boolean"
+          },
+          "sp_certificate": {
             "type": "string"
           },
           "updated_at": {
@@ -12614,9 +12639,18 @@
             "application/json": {
               "schema": {
                 "properties": {
+                  "acs_url": {
+                    "description": "SP ACS URL override; defaults to the canonical /acs route",
+                    "type": "string"
+                  },
                   "app_id": {
                     "description": "Target Application ID",
                     "type": "string"
+                  },
+                  "attribute_mappings": {
+                    "additionalProperties": true,
+                    "description": "SAML attribute name → user field (email|first_name|last_name|groups)",
+                    "type": "object"
                   },
                   "client_id": {
                     "description": "OIDC client ID",
@@ -12630,12 +12664,28 @@
                     "description": "Email-domain or IdP host this connection covers",
                     "type": "string"
                   },
+                  "entity_id": {
+                    "description": "SP EntityID override; defaults to the metadata URL",
+                    "type": "string"
+                  },
+                  "idp_certificate": {
+                    "description": "SAML IdP signing certificate (PEM)",
+                    "type": "string"
+                  },
+                  "idp_metadata_xml": {
+                    "description": "Pasted SAML IdP metadata XML",
+                    "type": "string"
+                  },
+                  "idp_sso_url": {
+                    "description": "SAML IdP SSO (redirect) URL",
+                    "type": "string"
+                  },
                   "issuer": {
                     "description": "OIDC issuer URL (required for oidc)",
                     "type": "string"
                   },
                   "metadata_url": {
-                    "description": "SAML metadata URL (required for saml)",
+                    "description": "SAML metadata URL (one IdP source for saml)",
                     "type": "string"
                   },
                   "org_id": {
@@ -12649,6 +12699,10 @@
                   "provider": {
                     "description": "Stable name for this IdP (e.g. 'studio', 'okta')",
                     "type": "string"
+                  },
+                  "sign_requests": {
+                    "description": "Sign outbound AuthnRequests with the SP key",
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -13200,9 +13254,18 @@
             "application/json": {
               "schema": {
                 "properties": {
+                  "acs_url": {
+                    "description": "SP ACS URL override",
+                    "type": "string"
+                  },
                   "active": {
                     "description": "Activate/deactivate the connection without deleting it",
                     "type": "boolean"
+                  },
+                  "attribute_mappings": {
+                    "additionalProperties": true,
+                    "description": "Replace the SAML attribute → user field map",
+                    "type": "object"
                   },
                   "client_id": {
                     "description": "OIDC client ID",
@@ -13216,6 +13279,22 @@
                     "description": "Email-domain or IdP host",
                     "type": "string"
                   },
+                  "entity_id": {
+                    "description": "SP EntityID override",
+                    "type": "string"
+                  },
+                  "idp_certificate": {
+                    "description": "SAML IdP signing certificate (PEM)",
+                    "type": "string"
+                  },
+                  "idp_metadata_xml": {
+                    "description": "Pasted SAML IdP metadata XML",
+                    "type": "string"
+                  },
+                  "idp_sso_url": {
+                    "description": "SAML IdP SSO URL",
+                    "type": "string"
+                  },
                   "issuer": {
                     "description": "OIDC issuer URL",
                     "type": "string"
@@ -13227,6 +13306,10 @@
                   "provider": {
                     "description": "Stable provider name",
                     "type": "string"
+                  },
+                  "sign_requests": {
+                    "description": "Toggle signing outbound AuthnRequests",
+                    "type": "boolean"
                   }
                 },
                 "type": "object"
@@ -32286,13 +32369,10 @@
               "schema": {
                 "properties": {
                   "refresh_token": {
-                    "description": "Refresh token to exchange for new tokens",
+                    "description": "Refresh token to exchange for new tokens (optional when a valid session cookie is present)",
                     "type": "string"
                   }
                 },
-                "required": [
-                  "refresh_token"
-                ],
                 "type": "object"
               }
             }
@@ -35843,6 +35923,192 @@
         ]
       }
     },
+    "/v1/sso/login": {
+      "post": {
+        "operationId": "startSSOLoginByDomain",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "email": {
+                    "description": "Work email; its domain routes to the matching SSO connection",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "Request body",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": "SSO login URL"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Start SSO login by email domain",
+        "tags": [
+          "SSO"
+        ]
+      }
+    },
     "/v1/sso/{provider}/acs": {
       "post": {
         "operationId": "ssoACS",
@@ -36392,6 +36658,36 @@
         ]
       }
     },
+    "/v1/sso/{provider}/metadata": {
+      "get": {
+        "operationId": "ssoSPMetadata",
+        "parameters": [
+          {
+            "description": "Path parameter: provider",
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "SAML SP metadata",
+        "tags": [
+          "SSO"
+        ]
+      }
+    },
     "/v1/users/{userId}/roles": {
       "get": {
         "description": "Returns all roles assigned to a user.",
@@ -36582,21 +36878,30 @@
     },
     "/v1/verify-email": {
       "post": {
-        "description": "Verifies a user's email address using a verification token.",
+        "description": "Verifies a user's email address using a 6-digit OTP code (per-user, attempt-limited) or a verification token.",
         "operationId": "verifyEmail",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "properties": {
+                  "app_id": {
+                    "description": "App ID (optional; resolved from publishable key when omitted)",
+                    "type": "string"
+                  },
+                  "code": {
+                    "description": "6-digit OTP code (verifies the authenticated user's email)",
+                    "type": "string"
+                  },
+                  "email": {
+                    "description": "Email to scope the OTP code to when unauthenticated (enables auto-login)",
+                    "type": "string"
+                  },
                   "token": {
-                    "description": "Email verification token",
+                    "description": "Email verification token (link-based flows)",
                     "type": "string"
                   }
                 },
-                "required": [
-                  "token"
-                ],
                 "type": "object"
               }
             }

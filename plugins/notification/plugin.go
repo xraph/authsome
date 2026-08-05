@@ -119,6 +119,9 @@ func New(cfg ...Config) *Plugin {
 	if c.PasswordResetPath == "" {
 		c.PasswordResetPath = "/reset-password"
 	}
+	if c.SignInPath == "" {
+		c.SignInPath = "/sign-in"
+	}
 
 	// Merge user-provided mappings with defaults.
 	mappings := DefaultMappings()
@@ -234,7 +237,7 @@ func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, _ *session.Ses
 		Data: map[string]any{
 			"user_name": name,
 			"app_name":  p.config.AppName,
-			"login_url": p.config.BaseURL + "/login",
+			"login_url": p.config.BaseURL + p.config.SignInPath,
 		},
 	}); err != nil {
 		p.logger.Warn("notification plugin: failed to send welcome notification",
