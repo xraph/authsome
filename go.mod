@@ -12,7 +12,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
 	github.com/xraph/chronicle v1.6.0
-	github.com/xraph/forge v1.9.5
+	github.com/xraph/forge v1.9.2
 	github.com/xraph/forgeui v1.4.1
 	github.com/xraph/grove v1.6.0
 	github.com/xraph/grove/drivers/mongodriver v1.6.0
