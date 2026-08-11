@@ -44,14 +44,19 @@ eng, err := authsome.NewEngine(
 
 `POST /v1/auth/keys`
 
+All key-management routes require an authenticated session.
+
 ```json
 {
   "app_id": "aapp_01j9...",
-  "user_id": "ausr_01j9...",
   "name": "CI/CD Pipeline",
   "scopes": ["read:users", "write:users"]
 }
 ```
+
+`user_id` is optional and defaults to the authenticated caller. Passing a
+different `user_id` mints a key that authenticates as that user, so it requires
+the `manage`/`apikey` permission and returns `403` otherwise.
 
 **Response:**
 
@@ -161,11 +166,14 @@ The `X-App-ID` header or `app_id` query parameter is required for API key authen
 
 ## API routes
 
+All routes below require an authenticated session. Callers are confined to
+their own keys unless they hold the `manage`/`apikey` permission.
+
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/v1/auth/keys` | Create a new API key |
-| `GET` | `/v1/auth/keys` | List API keys (filter by app and user) |
-| `DELETE` | `/v1/auth/keys/:keyId` | Revoke an API key |
+| `POST` | `/v1/auth/keys` | Create a new API key (defaults to the caller) |
+| `GET` | `/v1/auth/keys` | List your keys; app-wide listing requires `manage`/`apikey` |
+| `DELETE` | `/v1/auth/keys/:keyId` | Revoke one of your keys |
 
 ## Observability
 

@@ -506,7 +506,9 @@ func (e *Extension) init(fapp forge.App) error {
 		// Initialize plugins BEFORE route registration so that OnInit
 		// runs first. Plugins may set up middleware, stores, or other
 		// dependencies that RegisterRoutes relies on.
-		eng.InitPlugins(context.Background())
+		if err := eng.InitPlugins(context.Background()); err != nil {
+			return fmt.Errorf("authsome: %w", err)
+		}
 
 		e.apiHandler = api.New(eng, fapp.Router())
 

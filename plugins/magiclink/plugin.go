@@ -2,6 +2,7 @@ package magiclink
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -103,10 +104,11 @@ type Config struct {
 
 // Plugin is the magic link authentication plugin.
 type Plugin struct {
-	config Config
-	store  store.Store
-	appID  string
-	engine plugin.Engine
+	config      Config
+	store       store.Store
+	appID       string
+	engine      plugin.Engine
+	settingsMgr *settings.Manager
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -145,28 +147,60 @@ func (p *Plugin) Name() string { return "magiclink" }
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.store = engine.Store()
 	p.engine = engine
+	p.settingsMgr = engine.Settings()
 	return nil
+}
+
+// resolveTTL reads a duration-in-seconds setting for the app, falling back to
+// the compile-time Config value.
+//
+// The settings were declared and registered from the start but never read, so
+// every dashboard control for this plugin silently did nothing. Reading them
+// here is what makes DeclareSettings mean anything.
+func (p *Plugin) resolveTTL(ctx context.Context, appID id.AppID, def settings.DefinitionTyped[int], fallback time.Duration) time.Duration {
+	if p.settingsMgr == nil {
+		return fallback
+	}
+	opts := settings.ResolveOpts{}
+	if !appID.IsNil() {
+		opts.AppID = appID.String()
+	}
+	secs, err := settings.Get(ctx, p.settingsMgr, def, opts)
+	if err != nil || secs <= 0 {
+		return fallback
+	}
+	return time.Duration(secs) * time.Second
 }
 
 // RegisterRoutes registers magic link HTTP endpoints on a forge.Router.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	g := router.Group("/v1/magic-link", forge.WithGroupTags("Magic Link"))
 
-	if err := g.POST("/send", p.handleSend,
+	// /send mints a token and emails it — capped like resend-verification so
+	// it can't be used to bomb an inbox. /verify accepts a bearer-equivalent
+	// secret, so it's capped like the other token-submission endpoints.
+	sendRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int {
+		return c.ResendVerificationLimit
+	})
+	verifyRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int {
+		return c.VerifyEmailLimit
+	})
+
+	if err := g.POST("/send", p.handleSend, append([]forge.RouteOption{
 		forge.WithSummary("Send magic link"),
 		forge.WithOperationID("sendMagicLink"),
 		forge.WithResponseSchema(http.StatusOK, "Magic link sent", SendResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, sendRL...)...); err != nil {
 		return err
 	}
 
-	return g.POST("/verify", p.handleVerify,
+	return g.POST("/verify", p.handleVerify, append([]forge.RouteOption{
 		forge.WithSummary("Verify magic link"),
 		forge.WithOperationID("verifyMagicLink"),
 		forge.WithResponseSchema(http.StatusOK, "Verified", VerifyResponse{}),
 		forge.WithErrorResponses(),
-	)
+	}, verifyRL...)...)
 }
 
 // SetStore allows direct store injection for testing.
@@ -238,7 +272,8 @@ func (p *Plugin) handleSend(ctx forge.Context, req *SendRequest) (*SendResponse,
 	}
 
 	// Create verification token bound to the resolved user.
-	v, err := account.NewVerification(ctx.Context(), appID, u.ID, VerificationTypeMagicLink, p.config.TokenTTL)
+	tokenTTL := p.resolveTTL(ctx.Context(), appID, SettingTokenTTLSeconds, p.config.TokenTTL)
+	v, err := account.NewVerification(ctx.Context(), appID, u.ID, VerificationTypeMagicLink, tokenTTL)
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("failed to create magic link token: %w", err))
 	}
@@ -268,6 +303,16 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 		return nil, forge.Unauthorized("invalid or expired magic link")
 	}
 
+	// Verifications of every kind share one table and GetVerification matches
+	// on token alone, so this endpoint must confirm it was handed a magic-link
+	// token and not some other type. Email-verification records carry a
+	// 6-digit OTP in the same Token column: without this check, posting
+	// {"token":"123456"} here walks a 10^6 keyspace and mints a full session
+	// on a hit, bypassing the attempt cap the email-verify path enforces.
+	if v.Type != VerificationTypeMagicLink {
+		return nil, forge.Unauthorized("invalid or expired magic link")
+	}
+
 	// Check if expired
 	if time.Now().After(v.ExpiresAt) {
 		return nil, forge.Unauthorized("magic link expired")
@@ -278,8 +323,14 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 		return nil, forge.Unauthorized("magic link already used")
 	}
 
-	// Consume the verification
+	// Consume the verification. The store consumes only if still unconsumed,
+	// so ErrNotFound here means another request won the race — the Consumed
+	// check above and this write are two steps, and this is what makes one
+	// link yield one session.
 	if consumeErr := p.store.ConsumeVerification(ctx.Context(), req.Token); consumeErr != nil {
+		if errors.Is(consumeErr, store.ErrNotFound) {
+			return nil, forge.Unauthorized("magic link already used")
+		}
 		return nil, forge.InternalError(fmt.Errorf("failed to verify magic link: %w", consumeErr))
 	}
 
@@ -307,6 +358,8 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 			AuthMethod: "magiclink",
 			IPAddress:  ctx.Request().RemoteAddr,
 			UserAgent:  ctx.Request().UserAgent(),
+			SessionTTL: p.resolveTTL(ctx.Context(), v.AppID, SettingSessionTokenTTLSeconds, p.config.SessionTokenTTL),
+			RefreshTTL: p.resolveTTL(ctx.Context(), v.AppID, SettingSessionRefreshTTLSeconds, p.config.SessionRefreshTTL),
 		})
 		if issueErr != nil {
 			return nil, issueErr
@@ -314,8 +367,8 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 		sess = result.Session
 	} else {
 		sessCfg := account.SessionConfig{
-			TokenTTL:        p.config.SessionTokenTTL,
-			RefreshTokenTTL: p.config.SessionRefreshTTL,
+			TokenTTL:        p.resolveTTL(ctx.Context(), v.AppID, SettingSessionTokenTTLSeconds, p.config.SessionTokenTTL),
+			RefreshTokenTTL: p.resolveTTL(ctx.Context(), v.AppID, SettingSessionRefreshTTLSeconds, p.config.SessionRefreshTTL),
 		}
 		if p.engine != nil {
 			sessCfg = p.engine.SessionConfigForApp(ctx.Context(), v.AppID)

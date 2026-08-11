@@ -93,6 +93,8 @@ type Plugin struct {
 	appID     string
 	engine    plugin.Engine
 
+	settingsMgr *settings.Manager
+
 	chronicle  bridge.Chronicle
 	relay      bridge.EventRelay
 	hooks      *hook.Bus
@@ -106,6 +108,26 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 		return err
 	}
 	return settings.RegisterTyped(m, "sso", SettingSessionRefreshTTLSeconds)
+}
+
+// resolveTTL reads a duration-in-seconds setting for the app, falling back to
+// the compile-time Config value. The resolved value is passed to IssueSession,
+// which narrows the app's session lifetime to it — see
+// IssueSessionRequest.SessionTTL. Before this the settings were declared,
+// registered, and never read, so the dashboard controls did nothing.
+func (p *Plugin) resolveTTL(ctx context.Context, appID id.AppID, def settings.DefinitionTyped[int], fallback time.Duration) time.Duration {
+	if p.settingsMgr == nil {
+		return fallback
+	}
+	opts := settings.ResolveOpts{}
+	if !appID.IsNil() {
+		opts.AppID = appID.String()
+	}
+	secs, err := settings.Get(ctx, p.settingsMgr, def, opts)
+	if err != nil || secs <= 0 {
+		return fallback
+	}
+	return time.Duration(secs) * time.Second
 }
 
 // New creates a new SSO plugin.
@@ -153,6 +175,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.relay = engine.Relay()
 	p.hooks = engine.Hooks()
 	p.logger = engine.Logger()
+	p.settingsMgr = engine.Settings()
 	p.ceremonies = engine.CeremonyStore()
 	if p.ceremonies == nil {
 		p.ceremonies = ceremony.NewMemory()
@@ -273,9 +296,14 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	// Admin: create SSO connection scoped to a target App. Used by
 	// platform-admin clients (e.g. TwinOS studio) to register an
-	// upstream IdP per workspace App at create time. Caller must
-	// authenticate with a platform-admin API key.
-	admin := router.Group("/v1/admin/sso", forge.WithGroupTags("SSO Admin"))
+	// upstream IdP per workspace App at create time. Gated behind a
+	// session plus manage/sso_connection — registering a connection
+	// lets the holder federate identities into the target App.
+	admin := router.Group("/v1/admin/sso",
+		forge.WithGroupTags("SSO Admin"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.AdminGuard(p.engine, "manage", "sso_connection")...),
+	)
 	if err := admin.POST("/connections", p.handleAdminCreateConnection,
 		forge.WithSummary("Create SSO connection (admin)"),
 		forge.WithDescription("Registers an OIDC or SAML SSO connection on a target App. Used by platform-admin clients to provision per-tenant IdPs."),
@@ -580,6 +608,8 @@ func (p *Plugin) authenticateUser(ctx forge.Context, provider Provider, params m
 			AuthMethod: "sso:" + provider.Name(),
 			IPAddress:  ctx.Request().RemoteAddr,
 			UserAgent:  ctx.Request().UserAgent(),
+			SessionTTL: p.resolveTTL(goCtx, appID, SettingSessionTokenTTLSeconds, p.config.SessionTokenTTL),
+			RefreshTTL: p.resolveTTL(goCtx, appID, SettingSessionRefreshTTLSeconds, p.config.SessionRefreshTTL),
 		})
 		if issueErr != nil {
 			return nil, issueErr

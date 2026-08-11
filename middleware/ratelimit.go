@@ -51,10 +51,8 @@ func RateLimit(limiter ratelimit.Limiter, cfg RateLimitConfig) forge.Middleware 
 				ctx.Response().Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
 				ctx.Response().Header().Set("Retry-After", strconv.Itoa(retryAfter))
 
-				return ctx.JSON(http.StatusTooManyRequests, map[string]any{
-					"error": "rate limit exceeded, try again in " + strconv.Itoa(retryAfter) + " seconds",
-					"code":  http.StatusTooManyRequests,
-				})
+				return forge.NewHTTPError(http.StatusTooManyRequests,
+					"rate limit exceeded, try again in "+strconv.Itoa(retryAfter)+" seconds")
 			}
 
 			return next(ctx)

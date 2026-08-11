@@ -345,6 +345,6 @@ func TestRegistry_OnInitShutdown(_ *testing.T) {
 	// We can't easily test OnInit/OnShutdown with our mock approach since those
 	// are separate interfaces. Instead just verify EmitOnInit/EmitOnShutdown
 	// don't panic on an empty registry.
-	r.EmitOnInit(ctx, nil)
+	_ = r.EmitOnInit(ctx, nil)
 	r.EmitOnShutdown(ctx)
 }

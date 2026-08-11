@@ -192,10 +192,7 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 						log.String("client_ip", clientIP),
 						log.String("session_id", sess.ID.String()),
 					)
-					return ctx.JSON(http.StatusUnauthorized, map[string]any{
-						"error": "session bound to different IP address",
-						"code":  http.StatusUnauthorized,
-					})
+					return forge.Unauthorized("session bound to different IP address")
 				}
 			}
 			if bindCfg.BindToDevice && sess.UserAgent != "" {
@@ -206,10 +203,7 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 						log.String("client_ua", ua),
 						log.String("session_id", sess.ID.String()),
 					)
-					return ctx.JSON(http.StatusUnauthorized, map[string]any{
-						"error": "session bound to different device",
-						"code":  http.StatusUnauthorized,
-					})
+					return forge.Unauthorized("session bound to different device")
 				}
 			}
 
@@ -683,6 +677,9 @@ func RequireAuth() forge.Middleware {
 					}
 				}
 
+				// Written by hand: this envelope carries a conditional
+				// debug_reason field, which the typed constructors cannot
+				// express — they take a message only.
 				return ctx.JSON(http.StatusUnauthorized, body)
 			}
 			return next(ctx)

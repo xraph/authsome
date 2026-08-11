@@ -629,13 +629,12 @@ func (p *Plugin) resolveAppID(ctx forge.Context, reqAppID string) (id.AppID, err
 	return id.AppID{}, fmt.Errorf("no app_id available")
 }
 
+// clientIPFromRequest resolves the caller's IP for the audit record.
+//
+// Delegates to middleware.ClientIP, which honours X-Forwarded-For only when
+// the immediate peer is a trusted proxy. Reading the header unconditionally —
+// as this did — let any caller state its own IP, which is worth little in a
+// record whose purpose is to evidence who consented and from where.
 func clientIPFromRequest(ctx forge.Context) string {
-	r := ctx.Request()
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return xff
-	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return xri
-	}
-	return r.RemoteAddr
+	return middleware.ClientIP(ctx.Request())
 }

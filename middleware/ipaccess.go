@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"net"
-	"net/http"
 
 	"github.com/xraph/forge"
 )
@@ -36,19 +35,13 @@ func IPAccessMiddleware(cfg IPAccessConfig) forge.Middleware {
 
 			ip := net.ParseIP(clientIPFromRequest(ctx.Request()))
 			if ip == nil {
-				return ctx.JSON(http.StatusForbidden, map[string]any{
-					"error": "unable to determine client IP",
-					"code":  http.StatusForbidden,
-				})
+				return forge.Forbidden("unable to determine client IP")
 			}
 
 			// Block list takes precedence.
 			for _, n := range blockNets {
 				if n.Contains(ip) {
-					return ctx.JSON(http.StatusForbidden, map[string]any{
-						"error": "access denied",
-						"code":  http.StatusForbidden,
-					})
+					return forge.Forbidden("access denied")
 				}
 			}
 
@@ -62,10 +55,7 @@ func IPAccessMiddleware(cfg IPAccessConfig) forge.Middleware {
 					}
 				}
 				if !allowed {
-					return ctx.JSON(http.StatusForbidden, map[string]any{
-						"error": "access denied",
-						"code":  http.StatusForbidden,
-					})
+					return forge.Forbidden("access denied")
 				}
 			}
 

@@ -140,6 +140,7 @@ type Plugin struct {
 	logger       log.Logger
 	settings     *settings.Manager
 	defaultAppID string
+	engine       plugin.Engine
 }
 
 // Service returns the subscription service (nil until OnInit completes).
@@ -224,6 +225,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.logger = engine.Logger()
 	p.settings = engine.Settings()
 	p.defaultAppID = engine.DefaultAppID()
+	p.engine = engine
 
 	// Initialize the service layer.
 	p.service = &Service{

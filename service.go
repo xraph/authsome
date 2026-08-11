@@ -1308,7 +1308,13 @@ func (e *Engine) VerifyEmail(ctx context.Context, token string) error {
 		return account.ErrInvalidCredentials
 	}
 
+	// ErrNotFound means the token was consumed between the read above and
+	// this write — treat a lost race as an invalid token, not an internal
+	// error, so one token verifies exactly once.
 	if consumeErr := e.store.ConsumeVerification(ctx, token); consumeErr != nil {
+		if errors.Is(consumeErr, store.ErrNotFound) {
+			return account.ErrInvalidCredentials
+		}
 		return fmt.Errorf("authsome: consume verification: %w", consumeErr)
 	}
 

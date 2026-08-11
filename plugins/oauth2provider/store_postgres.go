@@ -120,12 +120,20 @@ func (s *PostgresStore) GetAuthCode(ctx context.Context, code string) (*Authoriz
 	return toAuthCode(m)
 }
 
-func (s *PostgresStore) ConsumeAuthCode(ctx context.Context, code string) error {
-	_, err := s.pg.NewUpdate((*authCodeModel)(nil)).
+func (s *PostgresStore) ConsumeAuthCode(ctx context.Context, code string) (bool, error) {
+	res, err := s.pg.NewUpdate((*authCodeModel)(nil)).
 		Set("consumed = ?", true).
 		Where("code = ?", code).
+		Where("consumed = ?", false).
 		Exec(ctx)
-	return oauth2PgError(err)
+	if err != nil {
+		return false, oauth2PgError(err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, oauth2PgError(err)
+	}
+	return n > 0, nil
 }
 
 // ──────────────────────────────────────────────────

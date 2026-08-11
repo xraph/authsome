@@ -16,14 +16,33 @@ import (
 	"github.com/xraph/ledger/types"
 
 	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/plugin"
 )
+
+// writeGuard gates a billing mutation behind manage/billing, layered on top of
+// the session requirement every billing group already carries. Reads stay at
+// session-only so end users can list plans and check their own entitlements.
+//
+// Returns a pass-through when the engine exposes no RBAC (bare test wiring),
+// leaving the group's session check as the effective bar rather than failing
+// every mutation closed.
+func (p *Plugin) writeGuard() forge.RouteOption {
+	if guards := plugin.PermissionGuard(p.engine, "manage", "billing"); len(guards) > 0 {
+		return forge.WithMiddleware(guards[0])
+	}
+	return forge.WithMiddleware(func(next forge.Handler) forge.Handler { return next })
+}
 
 // RegisterRoutes registers billing API routes on a forge.Router.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	prefix := p.config.PathPrefix
 
 	// Plan routes
-	plans := router.Group(prefix+"/plans", forge.WithGroupTags("Billing Plans"))
+	plans := router.Group(prefix+"/plans",
+		forge.WithGroupTags("Billing Plans"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
+	)
 
 	if err := plans.GET("", p.handleListPlans,
 		forge.WithSummary("List billing plans"),
@@ -48,6 +67,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithOperationID("createBillingPlan"),
 		forge.WithCreatedResponse(PlanResponse{}),
 		forge.WithErrorResponses(),
+		p.writeGuard(),
 	); err != nil {
 		return err
 	}
@@ -56,6 +76,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Archive a billing plan"),
 		forge.WithOperationID("archiveBillingPlan"),
 		forge.WithErrorResponses(),
+		p.writeGuard(),
 	); err != nil {
 		return err
 	}
@@ -64,12 +85,17 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Activate a billing plan"),
 		forge.WithOperationID("activateBillingPlan"),
 		forge.WithErrorResponses(),
+		p.writeGuard(),
 	); err != nil {
 		return err
 	}
 
 	// Subscription routes
-	subs := router.Group(prefix+"/subscriptions", forge.WithGroupTags("Billing Subscriptions"))
+	subs := router.Group(prefix+"/subscriptions",
+		forge.WithGroupTags("Billing Subscriptions"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
+	)
 
 	if err := subs.GET("", p.handleListSubscriptions,
 		forge.WithSummary("List subscriptions"),
@@ -94,6 +120,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithOperationID("createSubscription"),
 		forge.WithCreatedResponse(Response{}),
 		forge.WithErrorResponses(),
+		p.writeGuard(),
 	); err != nil {
 		return err
 	}
@@ -102,6 +129,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Change subscription plan"),
 		forge.WithOperationID("changeSubscriptionPlan"),
 		forge.WithErrorResponses(),
+		p.writeGuard(),
 	); err != nil {
 		return err
 	}
@@ -110,6 +138,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Cancel subscription"),
 		forge.WithOperationID("cancelSubscription"),
 		forge.WithErrorResponses(),
+		p.writeGuard(),
 	); err != nil {
 		return err
 	}
@@ -118,6 +147,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Pause subscription"),
 		forge.WithOperationID("pauseSubscription"),
 		forge.WithErrorResponses(),
+		p.writeGuard(),
 	); err != nil {
 		return err
 	}
@@ -126,12 +156,17 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Resume subscription"),
 		forge.WithOperationID("resumeSubscription"),
 		forge.WithErrorResponses(),
+		p.writeGuard(),
 	); err != nil {
 		return err
 	}
 
 	// Invoice routes
-	invoices := router.Group(prefix+"/invoices", forge.WithGroupTags("Billing Invoices"))
+	invoices := router.Group(prefix+"/invoices",
+		forge.WithGroupTags("Billing Invoices"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
+	)
 
 	if err := invoices.GET("", p.handleListInvoices,
 		forge.WithSummary("List invoices"),
@@ -155,6 +190,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Mark invoice as paid"),
 		forge.WithOperationID("markInvoicePaid"),
 		forge.WithErrorResponses(),
+		p.writeGuard(),
 	); err != nil {
 		return err
 	}
@@ -163,12 +199,17 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Void an invoice"),
 		forge.WithOperationID("voidInvoice"),
 		forge.WithErrorResponses(),
+		p.writeGuard(),
 	); err != nil {
 		return err
 	}
 
 	// Coupon routes
-	coupons := router.Group(prefix+"/coupons", forge.WithGroupTags("Billing Coupons"))
+	coupons := router.Group(prefix+"/coupons",
+		forge.WithGroupTags("Billing Coupons"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
+	)
 
 	if err := coupons.GET("", p.handleListCoupons,
 		forge.WithSummary("List coupons"),
@@ -184,6 +225,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithOperationID("createCoupon"),
 		forge.WithCreatedResponse(CouponResponse{}),
 		forge.WithErrorResponses(),
+		p.writeGuard(),
 	); err != nil {
 		return err
 	}
@@ -192,12 +234,17 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Delete coupon"),
 		forge.WithOperationID("deleteCoupon"),
 		forge.WithErrorResponses(),
+		p.writeGuard(),
 	); err != nil {
 		return err
 	}
 
 	// Entitlement routes
-	ent := router.Group(prefix+"/entitlements", forge.WithGroupTags("Billing Entitlements"))
+	ent := router.Group(prefix+"/entitlements",
+		forge.WithGroupTags("Billing Entitlements"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
+	)
 
 	if err := ent.GET("/:featureKey", p.handleCheckEntitlement,
 		forge.WithSummary("Check feature entitlement"),
@@ -209,7 +256,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	// Usage routes
-	usage := router.Group(prefix+"/usage", forge.WithGroupTags("Billing Usage"))
+	usage := router.Group(prefix+"/usage",
+		forge.WithGroupTags("Billing Usage"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
+	)
 
 	return usage.GET("", p.handleGetUsageSummary,
 		forge.WithSummary("Get usage summary"),

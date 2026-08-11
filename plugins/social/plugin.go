@@ -216,6 +216,26 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 	return settings.RegisterTyped(m, "social", SettingAllowedFrontendURLs)
 }
 
+// resolveTTL reads a duration-in-seconds setting for the app, falling back to
+// the compile-time Config value. The resolved value is passed to IssueSession,
+// which narrows the app's session lifetime to it — see
+// IssueSessionRequest.SessionTTL. Before this the settings were declared,
+// registered, and never read, so the dashboard controls did nothing.
+func (p *Plugin) resolveTTL(ctx context.Context, appID id.AppID, def settings.DefinitionTyped[int], fallback time.Duration) time.Duration {
+	if p.settingsMgr == nil {
+		return fallback
+	}
+	opts := settings.ResolveOpts{}
+	if !appID.IsNil() {
+		opts.AppID = appID.String()
+	}
+	secs, err := settings.Get(ctx, p.settingsMgr, def, opts)
+	if err != nil || secs <= 0 {
+		return fallback
+	}
+	return time.Duration(secs) * time.Second
+}
+
 // New creates a new social OAuth plugin.
 func New(cfg ...Config) *Plugin {
 	var c Config
@@ -483,7 +503,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
-	admin := router.Group("/v1/admin/social", forge.WithGroupTags("Social OAuth Admin"))
+	// Admin endpoints read and write provider client secrets — session plus
+	// manage/social_provider required.
+	admin := router.Group("/v1/admin/social",
+		forge.WithGroupTags("Social OAuth Admin"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.AdminGuard(p.engine, "manage", "social_provider")...),
+	)
 	if err := admin.GET("/providers", p.handleAdminListProviders,
 		forge.WithSummary("List social providers (admin)"),
 		forge.WithDescription("Returns the social providers configured at the resolved scope. When app_id is supplied, providers are merged from global + app overrides. Client secrets are masked."),
@@ -939,6 +965,8 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 			AuthMethod: "social:" + req.Provider,
 			IPAddress:  ctx.Request().RemoteAddr,
 			UserAgent:  ctx.Request().UserAgent(),
+			SessionTTL: p.resolveTTL(goCtx, appID, SettingSessionTokenTTLSeconds, p.config.SessionTokenTTL),
+			RefreshTTL: p.resolveTTL(goCtx, appID, SettingSessionRefreshTTLSeconds, p.config.SessionRefreshTTL),
 		})
 		if issueErr != nil {
 			// *authsome.MFARequiredError implements forge's
