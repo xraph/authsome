@@ -220,51 +220,27 @@ jobs:
           npm publish --provenance --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
 
   # ─── Flutter/pub.dev Release ─────────────────────────────────────────
+  # Authentication is OIDC, provisioned inside the reusable workflow -- there is
+  # no pub credential to configure here. Two consequences:
+  #
+  #   1. Each package must have tag pattern `v{{version}}` set under
+  #      Admin -> Automated publishing on pub.dev, and its `version:` in
+  #      pubspec.yaml must equal the tag's version. The versions are therefore
+  #      committed (bump them with scripts/bump-flutter-version.sh before
+  #      tagging) rather than stamped during the run.
+  #   2. pub.dev rejects automated publishing from anything but a tag push, so a
+  #      workflow_dispatch run can only ever rehearse. dry-run is forced on for
+  #      those, which is also what the dry_run input maps to on a tag push.
   flutter-release:
     name: Flutter Release
-    runs-on: ubuntu-latest
     needs: [prepare]
     if: >-
       github.event_name == 'push' ||
       github.event.inputs.modules == 'all' ||
       contains(github.event.inputs.modules, 'flutter')
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-
-      - name: Resolve workspace dependencies
-        run: cd flutter && flutter pub get
-
-      - name: Prepare Flutter packages for publishing
-        run: |
-          chmod +x scripts/prepare-flutter-publish.sh
-          ./scripts/prepare-flutter-publish.sh "${{ needs.prepare.outputs.version }}"
-
-      - name: Publish authsome_core
-        run: |
-          cd flutter/packages/authsome_core
-          dart pub publish --force ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
-
-      - name: Wait for pub.dev indexing
-        if: github.event.inputs.dry_run != 'true'
-        run: sleep 45
-
-      - name: Publish authsome_flutter
-        run: |
-          cd flutter/packages/authsome_flutter
-          dart pub publish --force ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
-
-      - name: Wait for pub.dev indexing
-        if: github.event.inputs.dry_run != 'true'
-        run: sleep 45
-
-      - name: Publish authsome_flutter_ui
-        run: |
-          cd flutter/packages/authsome_flutter_ui
-          dart pub publish --force ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+    uses: xraph/workflows/.github/workflows/pub-publish.yml@v1
+    with:
+      # Ordered: authsome_flutter depends on authsome_core, and
+      # authsome_flutter_ui depends on authsome_flutter.
+      packages: '["flutter/packages/authsome_core", "flutter/packages/authsome_flutter", "flutter/packages/authsome_flutter_ui"]'
+      dry-run: ${{ github.event_name != 'push' || github.event.inputs.dry_run == 'true' }}

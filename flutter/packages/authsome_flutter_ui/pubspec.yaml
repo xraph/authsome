@@ -1,6 +1,6 @@
 name: authsome_flutter_ui
 description: Pre-built Material Design 3 authentication UI widgets for AuthSome.
-version: 0.1.0
+version: 1.6.0
 homepage: https://github.com/xraph/authsome
 repository: https://github.com/xraph/authsome/tree/main/flutter/packages/authsome_flutter_ui
 issue_tracker: https://github.com/xraph/authsome/issues
@@ -14,7 +14,7 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
-  authsome_flutter: ^0.1.0
+  authsome_flutter: ^1.6.0
 
 dev_dependencies:
   flutter_lints: ^4.0.0
