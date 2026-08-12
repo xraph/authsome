@@ -1164,6 +1164,116 @@ func (p *Plugin) emitHook(ctx context.Context, action, resource, resourceID, act
 }
 
 // ──────────────────────────────────────────────────
+// Programmatic API
+// ──────────────────────────────────────────────────
+
+// SSOStore returns the connection store so an embedding host app can read/manage
+// connections directly (e.g. list by domain, toggle active) behind its own
+// authorization. Returns nil before OnInit has wired a store.
+func (p *Plugin) SSOStore() Store { return p.ssoStore }
+
+// CreateConnectionInput describes an SSO connection to provision. It is the
+// transport-agnostic form of AdminCreateConnectionRequest so host apps that
+// expose their own tenant-scoped admin surface (instead of the platform-admin
+// HTTP route) can create connections after their own authorization check.
+type CreateConnectionInput struct {
+	AppID    id.AppID
+	OrgID    id.OrgID // zero value = app-wide (no org scope)
+	Provider string
+	Protocol string // "oidc" | "saml"
+	Domain   string
+
+	// OIDC
+	Issuer       string
+	ClientID     string
+	ClientSecret string
+
+	// SAML — supply one IdP source: MetadataURL, IDPMetadataXML, or
+	// IDPSSOURL + IDPCertificate.
+	MetadataURL       string
+	IDPMetadataXML    string
+	IDPSSOURL         string
+	IDPCertificate    string
+	EntityID          string
+	ACSURL            string
+	SignRequests      bool
+	AttributeMappings map[string]string
+}
+
+// CreateConnection provisions an SSO connection: it resolves the app's default
+// environment (env_id is NOT NULL), validates the protocol-specific fields, and
+// for SAML derives the SP EntityID/ACS URL from PublicBaseURL and generates a
+// self-signed SP keypair when none is supplied. This is the shared core behind
+// handleAdminCreateConnection; host apps call it directly behind their own
+// authorization instead of the platform-admin HTTP route.
+func (p *Plugin) CreateConnection(ctx context.Context, in CreateConnectionInput) (*Connection, error) {
+	if p.ssoStore == nil {
+		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+	}
+	if in.AppID.IsNil() {
+		return nil, forge.BadRequest("app_id is required")
+	}
+	if strings.TrimSpace(in.Provider) == "" || strings.TrimSpace(in.Protocol) == "" || strings.TrimSpace(in.Domain) == "" {
+		return nil, forge.BadRequest("provider, protocol, and domain are required")
+	}
+	if in.Protocol != "oidc" && in.Protocol != "saml" {
+		return nil, forge.BadRequest("protocol must be 'oidc' or 'saml'")
+	}
+
+	// Scope the connection to the app's default environment. The
+	// authsome_sso_connections.env_id column is NOT NULL with an FK to
+	// authsome_environments, so a connection must carry a valid env.
+	env, err := p.store.GetDefaultEnvironment(ctx, in.AppID)
+	if err != nil || env == nil {
+		return nil, forge.InternalError(fmt.Errorf("sso: resolve default environment for app: %w", err))
+	}
+
+	now := time.Now()
+	conn := &Connection{
+		ID:        id.NewSSOConnectionID(),
+		AppID:     in.AppID,
+		EnvID:     env.ID.String(),
+		OrgID:     in.OrgID,
+		Provider:  in.Provider,
+		Protocol:  in.Protocol,
+		Domain:    in.Domain,
+		Active:    true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	switch in.Protocol {
+	case "oidc":
+		if strings.TrimSpace(in.Issuer) == "" || strings.TrimSpace(in.ClientID) == "" {
+			return nil, forge.BadRequest("OIDC connections require issuer and client_id")
+		}
+		conn.Issuer = in.Issuer
+		conn.ClientID = in.ClientID
+		conn.ClientSecret = in.ClientSecret
+	case "saml":
+		if err := applySAMLCreate(conn, in); err != nil {
+			return nil, err
+		}
+		// Persist the effective EntityID/ACS URL (derived from PublicBaseURL when
+		// not overridden) so admins can read them back to configure their IdP.
+		conn.EntityID = p.entityIDFor(conn)
+		conn.ACSURL = p.acsURLFor(conn)
+		// Generate a self-signed SP keypair when the admin supplies none, so
+		// signed AuthnRequests and SP metadata work out of the box.
+		certPEM, keyPEM, kerr := generateSPKeypair(conn.EntityID)
+		if kerr != nil {
+			return nil, forge.InternalError(fmt.Errorf("sso: generate SP keypair: %w", kerr))
+		}
+		conn.SPCertificate = certPEM
+		conn.SPPrivateKey = keyPEM
+	}
+
+	if err := p.ssoStore.CreateConnection(ctx, conn); err != nil {
+		return nil, forge.InternalError(fmt.Errorf("sso: create connection: %w", err))
+	}
+	return conn, nil
+}
+
+// ──────────────────────────────────────────────────
 // Admin endpoints
 // ──────────────────────────────────────────────────
 
@@ -1209,19 +1319,9 @@ type AdminCreateConnectionResponse struct {
 // target App. Mirrors the dashboard's connection-creation flow so
 // the same store-level invariants apply.
 func (p *Plugin) handleAdminCreateConnection(ctx forge.Context, req *AdminCreateConnectionRequest) (*AdminCreateConnectionResponse, error) {
-	if p.ssoStore == nil {
-		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
-	}
 	if strings.TrimSpace(req.AppID) == "" {
 		return nil, forge.BadRequest("app_id is required")
 	}
-	if strings.TrimSpace(req.Provider) == "" || strings.TrimSpace(req.Protocol) == "" || strings.TrimSpace(req.Domain) == "" {
-		return nil, forge.BadRequest("provider, protocol, and domain are required")
-	}
-	if req.Protocol != "oidc" && req.Protocol != "saml" {
-		return nil, forge.BadRequest("protocol must be 'oidc' or 'saml'")
-	}
-
 	appID, err := id.ParseAppID(req.AppID)
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid app_id: %v", err))
@@ -1234,55 +1334,26 @@ func (p *Plugin) handleAdminCreateConnection(ctx forge.Context, req *AdminCreate
 		}
 	}
 
-	// Scope the connection to the app's default environment. The
-	// authsome_sso_connections.env_id column is NOT NULL with an FK to
-	// authsome_environments, so a connection must carry a valid env.
-	env, err := p.store.GetDefaultEnvironment(ctx.Context(), appID)
-	if err != nil || env == nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: resolve default environment for app: %w", err))
-	}
-
-	now := time.Now()
-	conn := &Connection{
-		ID:        id.NewSSOConnectionID(),
-		AppID:     appID,
-		EnvID:     env.ID.String(),
-		OrgID:     orgID,
-		Provider:  req.Provider,
-		Protocol:  req.Protocol,
-		Domain:    req.Domain,
-		Active:    true,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-	switch req.Protocol {
-	case "oidc":
-		if strings.TrimSpace(req.Issuer) == "" || strings.TrimSpace(req.ClientID) == "" {
-			return nil, forge.BadRequest("OIDC connections require issuer and client_id")
-		}
-		conn.Issuer = req.Issuer
-		conn.ClientID = req.ClientID
-		conn.ClientSecret = req.ClientSecret
-	case "saml":
-		if err := applySAMLCreate(conn, req); err != nil {
-			return nil, err
-		}
-		// Persist the effective EntityID/ACS URL (derived from PublicBaseURL when
-		// not overridden) so admins can read them back to configure their IdP.
-		conn.EntityID = p.entityIDFor(conn)
-		conn.ACSURL = p.acsURLFor(conn)
-		// Generate a self-signed SP keypair when the admin supplies none, so
-		// signed AuthnRequests and SP metadata work out of the box.
-		certPEM, keyPEM, kerr := generateSPKeypair(conn.EntityID)
-		if kerr != nil {
-			return nil, forge.InternalError(fmt.Errorf("sso: generate SP keypair: %w", kerr))
-		}
-		conn.SPCertificate = certPEM
-		conn.SPPrivateKey = keyPEM
-	}
-
-	if err := p.ssoStore.CreateConnection(ctx.Context(), conn); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: create connection: %w", err))
+	conn, err := p.CreateConnection(ctx.Context(), CreateConnectionInput{
+		AppID:             appID,
+		OrgID:             orgID,
+		Provider:          req.Provider,
+		Protocol:          req.Protocol,
+		Domain:            req.Domain,
+		Issuer:            req.Issuer,
+		ClientID:          req.ClientID,
+		ClientSecret:      req.ClientSecret,
+		MetadataURL:       req.MetadataURL,
+		IDPMetadataXML:    req.IDPMetadataXML,
+		IDPSSOURL:         req.IDPSSOURL,
+		IDPCertificate:    req.IDPCertificate,
+		EntityID:          req.EntityID,
+		ACSURL:            req.ACSURL,
+		SignRequests:      req.SignRequests,
+		AttributeMappings: req.AttributeMappings,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return &AdminCreateConnectionResponse{
@@ -1296,22 +1367,22 @@ func (p *Plugin) handleAdminCreateConnection(ctx forge.Context, req *AdminCreate
 }
 
 // applySAMLCreate validates the IdP source and copies the SAML fields from the
-// create request onto the connection.
-func applySAMLCreate(conn *Connection, req *AdminCreateConnectionRequest) error {
-	hasMetaURL := strings.TrimSpace(req.MetadataURL) != ""
-	hasMetaXML := strings.TrimSpace(req.IDPMetadataXML) != ""
-	hasCertURL := strings.TrimSpace(req.IDPSSOURL) != "" && strings.TrimSpace(req.IDPCertificate) != ""
+// create input onto the connection.
+func applySAMLCreate(conn *Connection, in CreateConnectionInput) error {
+	hasMetaURL := strings.TrimSpace(in.MetadataURL) != ""
+	hasMetaXML := strings.TrimSpace(in.IDPMetadataXML) != ""
+	hasCertURL := strings.TrimSpace(in.IDPSSOURL) != "" && strings.TrimSpace(in.IDPCertificate) != ""
 	if !hasMetaURL && !hasMetaXML && !hasCertURL {
 		return forge.BadRequest("SAML connections require one IdP source: metadata_url, idp_metadata_xml, or idp_sso_url + idp_certificate")
 	}
-	conn.MetadataURL = req.MetadataURL
-	conn.IDPMetadataXML = req.IDPMetadataXML
-	conn.IDPSSOURL = req.IDPSSOURL
-	conn.IDPCertificate = req.IDPCertificate
-	conn.EntityID = req.EntityID
-	conn.ACSURL = req.ACSURL
-	conn.SignRequests = req.SignRequests
-	conn.AttributeMappings = req.AttributeMappings
+	conn.MetadataURL = in.MetadataURL
+	conn.IDPMetadataXML = in.IDPMetadataXML
+	conn.IDPSSOURL = in.IDPSSOURL
+	conn.IDPCertificate = in.IDPCertificate
+	conn.EntityID = in.EntityID
+	conn.ACSURL = in.ACSURL
+	conn.SignRequests = in.SignRequests
+	conn.AttributeMappings = in.AttributeMappings
 	return nil
 }
 
