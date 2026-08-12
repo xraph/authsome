@@ -1,12 +1,12 @@
 # Changelog
 
-## 1.6.0
+## 1.6.1
 
 - Release versioning is now unified across `authsome_core`, `authsome_flutter`
   and `authsome_flutter_ui`. All three publish from a single `v{{version}}` tag
   via pub.dev automated publishing.
 - Fixed the `authsome_flutter` dependency constraint, which was `^0.1.0` and so
-  could never resolve against a 1.x release. It is now `^1.6.0`.
+  could never resolve against a 1.x release. It is now `^1.6.1`.
 
 ## 1.4.0
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.6.0
+## 1.6.1
 
 - Release versioning is now unified across `authsome_core`, `authsome_flutter`
   and `authsome_flutter_ui`. All three publish from a single `v{{version}}` tag

@@ -1,6 +1,6 @@
 name: authsome_flutter
 description: AuthSome authentication SDK for Flutter — AuthProvider, SecureTokenStorage, and auto-config support.
-version: 1.6.0
+version: 1.6.1
 homepage: https://github.com/xraph/authsome
 repository: https://github.com/xraph/authsome/tree/main/flutter/packages/authsome_flutter
 issue_tracker: https://github.com/xraph/authsome/issues
@@ -14,7 +14,7 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
-  authsome_core: ^1.6.0
+  authsome_core: ^1.6.1
   flutter_secure_storage: ^9.0.0
   # Web-only typed bindings for navigator.credentials.get. The package is
   # safe to depend on cross-platform — symbols are no-ops outside of Web.
