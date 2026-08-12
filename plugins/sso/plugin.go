@@ -1024,6 +1024,7 @@ func (p *Plugin) mintOTC(ctx context.Context, appID id.AppID, r *CallbackRespons
 	if b, merr := json.Marshal(r.User); merr == nil {
 		userJSON = b
 	}
+	// #nosec G101 -- SessionToken/RefreshToken carry freshly-minted runtime session values, not hardcoded credentials. The payload is stashed single-use under a 60s app-bound OTC (mintOTC) so the browser redeems it at /v1/sso/exchange instead of receiving tokens in a redirect URL.
 	payload, err := json.Marshal(otcPayload{
 		User:         userJSON,
 		SessionToken: r.SessionToken,
