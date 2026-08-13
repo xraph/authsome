@@ -155,6 +155,17 @@ func (e *Engine) IssueSession(ctx context.Context, req *IssueSessionRequest) (*I
 		req.AppID = req.User.AppID
 	}
 
+	// Resolve the default environment when the caller didn't supply one.
+	// authsome_sessions.env_id is NOT NULL, so a session minted without an
+	// env_id fails to persist. SignUp/SignIn already do this; callers that go
+	// straight through IssueSession (email-verification auto-login, SSO) relied
+	// on it happening here.
+	if req.EnvID.IsNil() {
+		if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil { //nolint:errcheck // best-effort env lookup
+			req.EnvID = env.ID
+		}
+	}
+
 	// MFA gate. When the per-app config sets MFARequired and the
 	// caller hasn't already verified via the challenge endpoint, the
 	// gate fires regardless of whether the user has previously

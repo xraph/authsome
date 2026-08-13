@@ -2,6 +2,7 @@ package sso
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -37,19 +38,30 @@ var _ Store = (*MongoStore)(nil)
 // ──────────────────────────────────────────────────
 
 type ssoConnectionDoc struct {
-	ID           string    `bson:"_id"`
-	AppID        string    `bson:"app_id"`
-	OrgID        string    `bson:"org_id"`
-	Provider     string    `bson:"provider"`
-	Protocol     string    `bson:"protocol"`
-	Domain       string    `bson:"domain"`
-	MetadataURL  string    `bson:"metadata_url"`
-	ClientID     string    `bson:"client_id"`
-	ClientSecret string    `bson:"client_secret"`
-	Issuer       string    `bson:"issuer"`
-	Active       bool      `bson:"active"`
-	CreatedAt    time.Time `bson:"created_at"`
-	UpdatedAt    time.Time `bson:"updated_at"`
+	ID           string `bson:"_id"`
+	AppID        string `bson:"app_id"`
+	EnvID        string `bson:"env_id"`
+	OrgID        string `bson:"org_id"`
+	Provider     string `bson:"provider"`
+	Protocol     string `bson:"protocol"`
+	Domain       string `bson:"domain"`
+	MetadataURL  string `bson:"metadata_url"`
+	ClientID     string `bson:"client_id"`
+	ClientSecret string `bson:"client_secret"`
+	Issuer       string `bson:"issuer"`
+	// SAML fields. AttributeMappings is stored as a JSON object string.
+	IDPMetadataXML    string    `bson:"idp_metadata_xml"`
+	IDPSSOURL         string    `bson:"idp_sso_url"`
+	IDPCertificate    string    `bson:"idp_certificate"`
+	EntityID          string    `bson:"entity_id"`
+	ACSURL            string    `bson:"acs_url"`
+	SPCertificate     string    `bson:"sp_certificate"`
+	SPPrivateKey      string    `bson:"sp_private_key"`
+	SignRequests      bool      `bson:"sign_requests"`
+	AttributeMappings string    `bson:"attribute_mappings"`
+	Active            bool      `bson:"active"`
+	CreatedAt         time.Time `bson:"created_at"`
+	UpdatedAt         time.Time `bson:"updated_at"`
 }
 
 // ──────────────────────────────────────────────────
@@ -67,18 +79,33 @@ func ssoDocToConnection(d *ssoConnectionDoc) (*Connection, error) {
 	}
 
 	c := &Connection{
-		ID:           connID,
-		AppID:        appID,
-		Provider:     d.Provider,
-		Protocol:     d.Protocol,
-		Domain:       d.Domain,
-		MetadataURL:  d.MetadataURL,
-		ClientID:     d.ClientID,
-		ClientSecret: d.ClientSecret,
-		Issuer:       d.Issuer,
-		Active:       d.Active,
-		CreatedAt:    d.CreatedAt,
-		UpdatedAt:    d.UpdatedAt,
+		ID:             connID,
+		AppID:          appID,
+		EnvID:          d.EnvID,
+		Provider:       d.Provider,
+		Protocol:       d.Protocol,
+		Domain:         d.Domain,
+		MetadataURL:    d.MetadataURL,
+		ClientID:       d.ClientID,
+		ClientSecret:   d.ClientSecret,
+		Issuer:         d.Issuer,
+		IDPMetadataXML: d.IDPMetadataXML,
+		IDPSSOURL:      d.IDPSSOURL,
+		IDPCertificate: d.IDPCertificate,
+		EntityID:       d.EntityID,
+		ACSURL:         d.ACSURL,
+		SPCertificate:  d.SPCertificate,
+		SPPrivateKey:   d.SPPrivateKey,
+		SignRequests:   d.SignRequests,
+		Active:         d.Active,
+		CreatedAt:      d.CreatedAt,
+		UpdatedAt:      d.UpdatedAt,
+	}
+
+	if d.AttributeMappings != "" {
+		if err := json.Unmarshal([]byte(d.AttributeMappings), &c.AttributeMappings); err != nil {
+			return nil, err
+		}
 	}
 
 	if d.OrgID != "" {
@@ -94,18 +121,32 @@ func ssoDocToConnection(d *ssoConnectionDoc) (*Connection, error) {
 
 func ssoConnectionToDoc(c *Connection) *ssoConnectionDoc {
 	doc := &ssoConnectionDoc{
-		ID:           c.ID.String(),
-		AppID:        c.AppID.String(),
-		Provider:     c.Provider,
-		Protocol:     c.Protocol,
-		Domain:       c.Domain,
-		MetadataURL:  c.MetadataURL,
-		ClientID:     c.ClientID,
-		ClientSecret: c.ClientSecret,
-		Issuer:       c.Issuer,
-		Active:       c.Active,
-		CreatedAt:    c.CreatedAt,
-		UpdatedAt:    c.UpdatedAt,
+		ID:             c.ID.String(),
+		AppID:          c.AppID.String(),
+		EnvID:          c.EnvID,
+		Provider:       c.Provider,
+		Protocol:       c.Protocol,
+		Domain:         c.Domain,
+		MetadataURL:    c.MetadataURL,
+		ClientID:       c.ClientID,
+		ClientSecret:   c.ClientSecret,
+		Issuer:         c.Issuer,
+		IDPMetadataXML: c.IDPMetadataXML,
+		IDPSSOURL:      c.IDPSSOURL,
+		IDPCertificate: c.IDPCertificate,
+		EntityID:       c.EntityID,
+		ACSURL:         c.ACSURL,
+		SPCertificate:  c.SPCertificate,
+		SPPrivateKey:   c.SPPrivateKey,
+		SignRequests:   c.SignRequests,
+		Active:         c.Active,
+		CreatedAt:      c.CreatedAt,
+		UpdatedAt:      c.UpdatedAt,
+	}
+	if len(c.AttributeMappings) > 0 {
+		if b, err := json.Marshal(c.AttributeMappings); err == nil {
+			doc.AttributeMappings = string(b)
+		}
 	}
 	if c.OrgID.Prefix() != "" {
 		doc.OrgID = c.OrgID.String()
@@ -204,17 +245,26 @@ func (s *MongoStore) UpdateConnection(ctx context.Context, c *Connection) error 
 	_, err := s.mdb.Collection(ssoConnectionsColl).UpdateOne(ctx,
 		bson.M{"_id": c.ID.String()},
 		bson.M{"$set": bson.M{
-			"app_id":        doc.AppID,
-			"org_id":        doc.OrgID,
-			"provider":      doc.Provider,
-			"protocol":      doc.Protocol,
-			"domain":        doc.Domain,
-			"metadata_url":  doc.MetadataURL,
-			"client_id":     doc.ClientID,
-			"client_secret": doc.ClientSecret,
-			"issuer":        doc.Issuer,
-			"active":        doc.Active,
-			"updated_at":    doc.UpdatedAt,
+			"app_id":             doc.AppID,
+			"org_id":             doc.OrgID,
+			"provider":           doc.Provider,
+			"protocol":           doc.Protocol,
+			"domain":             doc.Domain,
+			"metadata_url":       doc.MetadataURL,
+			"client_id":          doc.ClientID,
+			"client_secret":      doc.ClientSecret,
+			"issuer":             doc.Issuer,
+			"idp_metadata_xml":   doc.IDPMetadataXML,
+			"idp_sso_url":        doc.IDPSSOURL,
+			"idp_certificate":    doc.IDPCertificate,
+			"entity_id":          doc.EntityID,
+			"acs_url":            doc.ACSURL,
+			"sp_certificate":     doc.SPCertificate,
+			"sp_private_key":     doc.SPPrivateKey,
+			"sign_requests":      doc.SignRequests,
+			"attribute_mappings": doc.AttributeMappings,
+			"active":             doc.Active,
+			"updated_at":         doc.UpdatedAt,
 		}},
 	)
 	return ssoMongoError(err)

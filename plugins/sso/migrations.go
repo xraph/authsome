@@ -71,6 +71,41 @@ ALTER TABLE authsome_sso_connections ADD COLUMN IF NOT EXISTS client_secret TEXT
 		},
 	)
 
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_saml_fields",
+			Version: "20240201000003",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sso_connections ADD COLUMN IF NOT EXISTS idp_metadata_xml    TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_sso_connections ADD COLUMN IF NOT EXISTS idp_sso_url         TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_sso_connections ADD COLUMN IF NOT EXISTS idp_certificate     TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_sso_connections ADD COLUMN IF NOT EXISTS entity_id           TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_sso_connections ADD COLUMN IF NOT EXISTS acs_url             TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_sso_connections ADD COLUMN IF NOT EXISTS sp_certificate      TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_sso_connections ADD COLUMN IF NOT EXISTS sp_private_key      TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_sso_connections ADD COLUMN IF NOT EXISTS sign_requests       BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE authsome_sso_connections ADD COLUMN IF NOT EXISTS attribute_mappings  TEXT NOT NULL DEFAULT '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sso_connections DROP COLUMN IF EXISTS idp_metadata_xml;
+ALTER TABLE authsome_sso_connections DROP COLUMN IF EXISTS idp_sso_url;
+ALTER TABLE authsome_sso_connections DROP COLUMN IF EXISTS idp_certificate;
+ALTER TABLE authsome_sso_connections DROP COLUMN IF EXISTS entity_id;
+ALTER TABLE authsome_sso_connections DROP COLUMN IF EXISTS acs_url;
+ALTER TABLE authsome_sso_connections DROP COLUMN IF EXISTS sp_certificate;
+ALTER TABLE authsome_sso_connections DROP COLUMN IF EXISTS sp_private_key;
+ALTER TABLE authsome_sso_connections DROP COLUMN IF EXISTS sign_requests;
+ALTER TABLE authsome_sso_connections DROP COLUMN IF EXISTS attribute_mappings;
+`)
+				return err
+			},
+		},
+	)
+
 	// ──────────────────────────────────────────────────
 	// SQLite migrations
 	// ──────────────────────────────────────────────────
@@ -119,6 +154,37 @@ CREATE INDEX IF NOT EXISTS idx_authsome_sso_connections_provider
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `ALTER TABLE authsome_sso_connections ADD COLUMN client_secret TEXT NOT NULL DEFAULT '';`)
 				return err
+			},
+			Down: func(_ context.Context, _ migrate.Executor) error {
+				// SQLite does not support DROP COLUMN in older versions; best-effort.
+				return nil
+			},
+		},
+	)
+
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_saml_fields",
+			Version: "20240201000003",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				// SQLite requires one ADD COLUMN per statement.
+				cols := []string{
+					`ALTER TABLE authsome_sso_connections ADD COLUMN idp_metadata_xml   TEXT NOT NULL DEFAULT '';`,
+					`ALTER TABLE authsome_sso_connections ADD COLUMN idp_sso_url        TEXT NOT NULL DEFAULT '';`,
+					`ALTER TABLE authsome_sso_connections ADD COLUMN idp_certificate    TEXT NOT NULL DEFAULT '';`,
+					`ALTER TABLE authsome_sso_connections ADD COLUMN entity_id          TEXT NOT NULL DEFAULT '';`,
+					`ALTER TABLE authsome_sso_connections ADD COLUMN acs_url            TEXT NOT NULL DEFAULT '';`,
+					`ALTER TABLE authsome_sso_connections ADD COLUMN sp_certificate     TEXT NOT NULL DEFAULT '';`,
+					`ALTER TABLE authsome_sso_connections ADD COLUMN sp_private_key     TEXT NOT NULL DEFAULT '';`,
+					`ALTER TABLE authsome_sso_connections ADD COLUMN sign_requests      INTEGER NOT NULL DEFAULT 0;`,
+					`ALTER TABLE authsome_sso_connections ADD COLUMN attribute_mappings TEXT NOT NULL DEFAULT '';`,
+				}
+				for _, stmt := range cols {
+					if _, err := exec.Exec(ctx, stmt); err != nil {
+						return err
+					}
+				}
+				return nil
 			},
 			Down: func(_ context.Context, _ migrate.Executor) error {
 				// SQLite does not support DROP COLUMN in older versions; best-effort.

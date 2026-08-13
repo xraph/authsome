@@ -53,6 +53,7 @@ type User struct {
 type Connection struct {
 	ID           id.SSOConnectionID `json:"id"`
 	AppID        id.AppID           `json:"app_id"`
+	EnvID        string             `json:"env_id,omitempty"`
 	OrgID        id.OrgID           `json:"org_id,omitempty"`
 	Provider     string             `json:"provider"`
 	Protocol     string             `json:"protocol"`
@@ -62,8 +63,20 @@ type Connection struct {
 	ClientSecret string             `json:"-"`
 	Issuer       string             `json:"issuer,omitempty"`
 	Active       bool               `json:"active"`
-	CreatedAt    time.Time          `json:"created_at"`
-	UpdatedAt    time.Time          `json:"updated_at"`
+
+	// SAML-specific configuration. Populated only for SAML connections.
+	IDPMetadataXML    string            `json:"idp_metadata_xml,omitempty"`
+	IDPSSOURL         string            `json:"idp_sso_url,omitempty"`
+	IDPCertificate    string            `json:"idp_certificate,omitempty"`
+	EntityID          string            `json:"entity_id,omitempty"`
+	ACSURL            string            `json:"acs_url,omitempty"`
+	SPCertificate     string            `json:"sp_certificate,omitempty"`
+	SPPrivateKey      string            `json:"-"` // secret — never serialized
+	SignRequests      bool              `json:"sign_requests,omitempty"`
+	AttributeMappings map[string]string `json:"attribute_mappings,omitempty"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // Store persists SSO connections.
