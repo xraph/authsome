@@ -192,6 +192,12 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		p.ssoStore = NewMemoryStore()
 	}
 
+	// Encrypt the OIDC client secret and SAML SP private key at rest. Uses the
+	// engine's token encryptor (AUTHSOME_TOKEN_ENCRYPTION_KEY) — the same key that
+	// protects social OAuth tokens. No key configured → a no-op passthrough, and
+	// existing plaintext rows keep working (Decrypt passes them through).
+	p.ssoStore = NewEncryptedStore(p.ssoStore, engine.TokenEncryptor())
+
 	return nil
 }
 
