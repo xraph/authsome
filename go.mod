@@ -10,7 +10,7 @@ require (
 	github.com/go-webauthn/webauthn v0.15.0
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/pquerna/otp v1.5.0
-	github.com/russellhaering/goxmldsig v1.4.0
+	github.com/russellhaering/goxmldsig v1.6.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
 	github.com/xraph/chronicle v1.6.0
@@ -33,7 +33,7 @@ require (
 
 require (
 	github.com/Oudwins/tailwind-merge-go v0.2.1 // indirect
-	github.com/beevik/etree v1.5.0 // indirect
+	github.com/beevik/etree v1.6.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-openapi/swag/cmdutils v0.28.0 // indirect
@@ -50,7 +50,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/hashicorp/go-metrics v0.6.1 // indirect
-	github.com/jonboulle/clockwork v0.2.2 // indirect
+	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/mattermost/xml-roundtrip-validator v0.1.0 // indirect
 	github.com/moby/moby/api v1.54.1 // indirect
 	github.com/moby/moby/client v0.4.0 // indirect
