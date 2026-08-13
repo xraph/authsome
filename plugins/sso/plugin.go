@@ -299,6 +299,10 @@ func (p *Plugin) connectionToProvider(conn *Connection) (Provider, error) {
 			Issuer:       conn.Issuer,
 			ClientID:     conn.ClientID,
 			ClientSecret: conn.ClientSecret,
+			// The IdP redirects the browser here with ?code&state after auth. It
+			// must be set (empty redirect_uri is rejected by real IdPs) and must
+			// exactly match what's registered with the IdP — see oidcRedirectURLFor.
+			RedirectURL: p.oidcRedirectURLFor(conn),
 		}), nil
 	case "saml":
 		return NewSAMLProvider(SAMLConfig{
@@ -333,6 +337,14 @@ func (p *Plugin) acsURLFor(conn *Connection) string {
 	// Embed the connection id so the IdP's top-level POST (which carries no
 	// publishable key) still lets ACS recover the connection and its app.
 	return p.publicBaseURL() + "/v1/sso/" + conn.Provider + "/acs?connection=" + conn.ID.String()
+}
+
+// oidcRedirectURLFor returns the OIDC redirect_uri for a connection: the browser
+// landing the IdP sends ?code&state to. Connection-scoped (like the ACS URL) so
+// the GET handler can recover the connection and its app without a publishable
+// key. This must be registered as an allowed redirect URI with the IdP.
+func (p *Plugin) oidcRedirectURLFor(conn *Connection) string {
+	return p.publicBaseURL() + "/v1/sso/" + conn.Provider + "/callback?connection=" + conn.ID.String()
 }
 
 // entityIDFor returns the SP EntityID for a connection: the stored override, or
@@ -385,6 +397,18 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithOperationID("ssoCallback"),
 		forge.WithResponseSchema(http.StatusOK, "Authentication result", CallbackResponse{}),
 		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	// OIDC browser redirect landing: the IdP redirects the browser here (GET) with
+	// ?code&state after auth. Raw handler because it exchanges the code, mints a
+	// one-time code, and 302-redirects to the frontend return URL — mirroring the
+	// SAML ACS — so the same frontend /sso/callback + /exchange path serves both
+	// protocols. Distinct from the POST /callback above (a JSON API variant).
+	if err := g.GET("/:provider/callback", p.handleOIDCRedirect,
+		forge.WithSummary("SSO OIDC redirect landing"),
+		forge.WithOperationID("ssoOIDCRedirect"),
 	); err != nil {
 		return err
 	}
@@ -709,6 +733,82 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	}
 
 	return p.authenticateUser(ctx, appID, provider, conn, params)
+}
+
+// handleOIDCRedirect is the browser landing for the OIDC authorization-code
+// flow. The IdP redirects here (GET) with ?code&state; this validates the CSRF
+// state, exchanges the code for the user, mints a one-time code, and 302s to the
+// frontend return URL — the same handoff the SAML ACS uses, so one frontend
+// callback serves both protocols.
+func (p *Plugin) handleOIDCRedirect(ctx forge.Context) error {
+	r := ctx.Request()
+	name := ctx.Param("provider")
+	q := r.URL.Query()
+	code := q.Get("code")
+	state := q.Get("state")
+	connID := q.Get("connection")
+	providerErr := q.Get("error")
+
+	// Validate the CSRF state and recover the frontend return URL. OIDC is always
+	// SP-initiated, so a missing/invalid state is a hard failure (loadState also
+	// consumes it — single-use).
+	st, serr := p.loadState(ctx.Context(), state, name)
+	returnURL := ""
+	if st != nil {
+		returnURL = st.ReturnURL
+	}
+
+	fail := func(reason string) error {
+		http.Redirect(ctx.Response(), r, p.errorRedirect(returnURL, reason), http.StatusFound)
+		return nil
+	}
+
+	if serr != nil {
+		return fail("invalid_state")
+	}
+	if providerErr != "" {
+		return fail(providerErr)
+	}
+
+	// Resolve the connection (and its app) from `?connection=`; fall back to
+	// provider-name under the request app for legacy/platform links.
+	var conn *Connection
+	var err error
+	if connID != "" {
+		conn, err = p.connectionByID(ctx.Context(), connID)
+	} else {
+		var appID id.AppID
+		if appID, err = p.requestAppID(ctx); err == nil {
+			_, conn, err = p.resolveProvider(ctx.Context(), appID, name)
+		}
+	}
+	if err != nil || conn == nil {
+		return fail("provider_not_found")
+	}
+	if code == "" {
+		return fail("missing_code")
+	}
+
+	provider, perr := p.connectionToProvider(conn)
+	if perr != nil {
+		return fail("provider_error")
+	}
+
+	params := map[string]string{"code": code, "state": state}
+	result, aerr := p.authenticateUser(ctx, conn.AppID, provider, conn, params)
+	if aerr != nil {
+		if p.logger != nil {
+			p.logger.Warn("sso: oidc callback authentication failed", log.String("error", aerr.Error()))
+		}
+		return fail("auth_failed")
+	}
+
+	otc, cerr := p.mintOTC(ctx.Context(), conn.AppID, result)
+	if cerr != nil {
+		return fail("handoff_failed")
+	}
+	http.Redirect(ctx.Response(), r, p.successRedirect(returnURL, otc), http.StatusFound)
+	return nil
 }
 
 // handleACS processes the SAML Assertion Consumer Service POST. It is a raw
