@@ -130,7 +130,7 @@ func (p *samlProvider) LoginURL(state string) (string, error) {
 // ParseXMLResponse can match the assertion's InResponseTo — without this the SP
 // has no request IDs to validate against and every solicited assertion is
 // rejected. Satisfies the optional requestIDProvider interface in the plugin.
-func (p *samlProvider) LoginURLWithRequestID(state string) (string, string, error) {
+func (p *samlProvider) LoginURLWithRequestID(state string) (loginURL, requestID string, err error) {
 	loc := p.sp.GetSSOBindingLocation(saml.HTTPRedirectBinding)
 	if loc == "" {
 		return "", "", fmt.Errorf("sso/saml: IdP exposes no HTTP-Redirect SSO endpoint")
@@ -174,7 +174,7 @@ func (p *samlProvider) HandleCallback(_ context.Context, params map[string]strin
 }
 
 // Metadata returns the SP metadata XML for the IdP to consume.
-func (p *samlProvider) Metadata() ([]byte, string, error) {
+func (p *samlProvider) Metadata() (metadataXML []byte, contentType string, err error) {
 	out, err := xml.MarshalIndent(p.sp.Metadata(), "", "  ")
 	if err != nil {
 		return nil, "", fmt.Errorf("sso/saml: marshal metadata: %w", err)

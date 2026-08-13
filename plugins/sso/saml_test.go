@@ -428,12 +428,12 @@ func (f *samlE2EFixture) mintResponse(t *testing.T, state string) (samlResponse,
 	}
 
 	// Replay the redirect at the IdP as an inbound AuthnRequest.
-	r := httptest.NewRequest("GET", loginURL, nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, loginURL, nil)
 	authnReq, err := saml.NewIdpAuthnRequest(f.idp, r)
 	if err != nil {
 		t.Fatalf("NewIdpAuthnRequest: %v", err)
 	}
-	if err := authnReq.Validate(); err != nil {
+	if err = authnReq.Validate(); err != nil {
 		t.Fatalf("authn request validate: %v", err)
 	}
 
@@ -444,7 +444,7 @@ func (f *samlE2EFixture) mintResponse(t *testing.T, state string) (samlResponse,
 		UserGivenName: "Ada",
 		UserSurname:   "Lovelace",
 	}
-	if err := (saml.DefaultAssertionMaker{}).MakeAssertion(authnReq, session); err != nil {
+	if err = (saml.DefaultAssertionMaker{}).MakeAssertion(authnReq, session); err != nil {
 		t.Fatalf("MakeAssertion: %v", err)
 	}
 	form, err := authnReq.PostBinding()
