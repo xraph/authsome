@@ -93,7 +93,7 @@ func TestVerifyEmailCode_MaxAttempts(t *testing.T) {
 	wrong := wrongCode(code)
 
 	// Exhaust the attempt budget with wrong codes.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		require.ErrorIs(t, eng.VerifyEmailCode(ctx, u.ID, wrong), account.ErrInvalidCredentials)
 	}
 

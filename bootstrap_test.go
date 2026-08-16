@@ -241,7 +241,7 @@ func TestBootstrap_InitialOwnerCount_PromotesFirstN(t *testing.T) {
 	}
 
 	// Users 1–3 should have platform-owner.
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		roles, err := eng.ListUserRoles(ctx, users[i])
 		require.NoError(t, err)
 		hasOwner := false

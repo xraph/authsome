@@ -47,7 +47,7 @@ var (
 		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
 		settings.WithEnforceable(),
 		settings.WithInputType(formconfig.FieldNumber),
-		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(60), Max: intPtr(86400)}),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: new(60), Max: new(86400)}),
 		settings.WithHelpText("How long access tokens remain valid. Default: 3600 (1 hour)"),
 		settings.WithOrder(10),
 		settings.WithValidation(validateTokenTTL),
@@ -61,7 +61,7 @@ var (
 		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
 		settings.WithEnforceable(),
 		settings.WithInputType(formconfig.FieldNumber),
-		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(3600), Max: intPtr(7776000)}),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: new(3600), Max: new(7776000)}),
 		settings.WithHelpText("How long refresh tokens remain valid. Default: 2592000 (30 days)"),
 		settings.WithOrder(20),
 		settings.WithValidation(validateRefreshTokenTTL),
@@ -111,7 +111,7 @@ var (
 		settings.WithCategory("Session Behavior"),
 		settings.WithScopes(settings.ScopeGlobal),
 		settings.WithInputType(formconfig.FieldNumber),
-		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(60), Max: intPtr(86400)}),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: new(60), Max: new(86400)}),
 		settings.WithHelpText("How often the engine removes expired sessions. Default: 3600 (1 hour)"),
 		settings.WithOrder(60),
 	)
@@ -139,7 +139,7 @@ var (
 		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
 		settings.WithEnforceable(),
 		settings.WithInputType(formconfig.FieldNumber),
-		settings.WithUIValidation(formconfig.Validation{Min: intPtr(0), Max: intPtr(100)}),
+		settings.WithUIValidation(formconfig.Validation{Min: new(0), Max: new(100)}),
 		settings.WithHelpText("When set, oldest sessions are evicted when the limit is reached. 0 = unlimited."),
 		settings.WithOrder(80),
 		settings.WithVisibleWhen("session.multi_session_enabled", true),
@@ -167,7 +167,7 @@ var (
 		settings.WithCategory("Auto-Refresh"),
 		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
 		settings.WithInputType(formconfig.FieldNumber),
-		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(30), Max: intPtr(3600)}),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: new(30), Max: new(3600)}),
 		settings.WithHelpText("Access tokens within this many seconds of expiry will be auto-refreshed. Default: 300 (5 minutes)"),
 		settings.WithOrder(100),
 		settings.WithVisibleWhen("session.auto_refresh_enabled", true),
@@ -223,7 +223,7 @@ var (
 		settings.WithCategory("Session Extension"),
 		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
 		settings.WithInputType(formconfig.FieldNumber),
-		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(60), Max: intPtr(2592000)}),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: new(60), Max: new(2592000)}),
 		settings.WithHelpText("The session expiry is reset to now + this value on each request. Default: 604800 (7 days)"),
 		settings.WithOrder(106),
 		settings.WithVisibleWhen("session.extend_on_activity", true),
@@ -402,7 +402,9 @@ func registerCoreSessionSettings(m *settings.Manager) error {
 }
 
 // intPtr returns a pointer to the given int.
-func intPtr(v int) *int { return &v }
+//
+//go:fix inline
+func intPtr(v int) *int { return new(v) }
 
 // ──────────────────────────────────────────────────
 // Validators

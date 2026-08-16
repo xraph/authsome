@@ -246,13 +246,13 @@ func TestHasPermission_AllFirstNUsersHavePermission(t *testing.T) {
 	ctx := context.Background()
 
 	users := make([]id.UserID, 4)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		email := "user" + string(rune('1'+i)) + "@example.com"
 		users[i] = signUpOnPlatform(t, eng, email)
 	}
 
 	// Users 0–2 (first 3) must have app:manage.
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		allowed, err := eng.HasPermission(ctx, users[i], "manage", "app")
 		require.NoError(t, err)
 		assert.True(t, allowed, "user[%d] (one of first 3) must have app:manage", i)
