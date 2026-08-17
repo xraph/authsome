@@ -244,7 +244,6 @@ func TestIssueSession_GateFiresForEveryAuthMethod(t *testing.T) {
 	}
 
 	for _, method := range cases {
-		method := method
 		t.Run(method, func(t *testing.T) {
 			t.Parallel()
 			eng, u, appID := issueSessionFixture(t)

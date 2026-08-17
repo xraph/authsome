@@ -23,6 +23,10 @@ jobs:
   ci:
     uses: xraph/workflows/.github/workflows/go-ci.yml@v1
     with:
+      # Deliberately a bare minor. The matrix job name embeds this string and the
+      # branch ruleset requires "ci / Test (ubuntu-latest, go1.26)", so pinning a
+      # patch here renames the job and that check can never report. The shared
+      # workflow sets check-latest, so this still resolves to the newest patch.
       go-versions: '["1.26"]'
       os: '["ubuntu-latest"]'
 

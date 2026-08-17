@@ -47,14 +47,12 @@ func TestCeremonyStore_ConcurrentAccessNoRace(t *testing.T) {
 	eng := newEngineForCeremonyTest(t)
 
 	var wg sync.WaitGroup
-	for i := 0; i < 64; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 64 {
+		wg.Go(func() {
 			if s := eng.ceremonyStoreOrFallback(); s == nil {
 				t.Error("ceremony store must never be nil")
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }

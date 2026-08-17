@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	log "github.com/xraph/go-utils/log"
@@ -1145,11 +1146,8 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 	}
 
 	// Device authorization: enabled when oauth2provider plugin is registered.
-	for _, name := range pluginNames {
-		if name == "oauth2provider" {
-			resp.DeviceAuthorization = &ClientConfigToggle{Enabled: true}
-			break
-		}
+	if slices.Contains(pluginNames, "oauth2provider") {
+		resp.DeviceAuthorization = &ClientConfigToggle{Enabled: true}
 	}
 
 	// Captcha: per-app setting. Always emit the section so the frontend

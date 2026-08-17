@@ -604,7 +604,7 @@ func TestSignIn_AccountLockout_LocksAfterMaxAttempts(t *testing.T) {
 	signUpTestUser(t, eng, "lockout@example.com", "SecureP@ss1")
 
 	// 3 failed attempts with wrong password
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		_, _, err := eng.SignIn(ctx, &account.SignInRequest{
 			AppID:    appID,
 			Email:    "lockout@example.com",
@@ -641,7 +641,7 @@ func TestSignIn_AccountLockout_ResetOnSuccess(t *testing.T) {
 	signUpTestUser(t, eng, "reset@example.com", "SecureP@ss1")
 
 	// 2 failed attempts (below threshold)
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		_, _, err := eng.SignIn(ctx, &account.SignInRequest{
 			AppID:    appID,
 			Email:    "reset@example.com",
@@ -659,7 +659,7 @@ func TestSignIn_AccountLockout_ResetOnSuccess(t *testing.T) {
 	require.NoError(t, err)
 
 	// Another 2 failed attempts should NOT lock (counter was reset)
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		_, _, signInErr := eng.SignIn(ctx, &account.SignInRequest{
 			AppID:    appID,
 			Email:    "reset@example.com",
@@ -685,7 +685,7 @@ func TestSignIn_NoLockout_WhenTrackerNil(t *testing.T) {
 	signUpTestUser(t, eng, "nolockout@example.com", "SecureP@ss1")
 
 	// Many failed attempts without lockout
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		_, _, err := eng.SignIn(ctx, &account.SignInRequest{
 			AppID:    appID,
 			Email:    "nolockout@example.com",

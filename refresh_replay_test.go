@@ -118,7 +118,7 @@ func TestRefresh_ReplayStormEmitsAlertOnce(t *testing.T) {
 	})
 
 	// A stuck client hammers the endpoint with the same dead token.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		_, rerr := eng.Refresh(ctx, staleToken)
 		assert.ErrorIs(t, rerr, account.ErrInvalidCredentials,
 			"every replay attempt is refused")
