@@ -401,11 +401,6 @@ func registerCoreSessionSettings(m *settings.Manager) error {
 	return settings.RegisterTyped(m, "session", SettingCookieUseHostPrefix)
 }
 
-// intPtr returns a pointer to the given int.
-//
-//go:fix inline
-func intPtr(v int) *int { return new(v) }
-
 // ──────────────────────────────────────────────────
 // Validators
 // ──────────────────────────────────────────────────

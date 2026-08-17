@@ -23,7 +23,12 @@ jobs:
   ci:
     uses: xraph/workflows/.github/workflows/go-ci.yml@v1
     with:
-      go-versions: '["1.26"]'
+      # Pinned to a patch, not '1.26'. setup-go resolves a bare minor against the
+      # runner's toolcache first, which pinned us to 1.26.5 and failed
+      # govulncheck on 7 standard-library advisories (GO-2026-5026, -5972,
+      # -6088..-6091, -6218), all fixed in 1.26.6. Bump this when a later patch
+      # carries a security fix.
+      go-versions: '["1.26.6"]'
       os: '["ubuntu-latest"]'
 
   # ─── Store Conformance (Postgres + Mongo) ───────────────────────────
