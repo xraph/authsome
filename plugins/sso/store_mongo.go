@@ -201,6 +201,20 @@ func (s *MongoStore) GetConnectionByDomain(ctx context.Context, appID id.AppID, 
 	return ssoDocToConnection(doc)
 }
 
+func (s *MongoStore) GetConnectionByDomainAndOrg(ctx context.Context, appID id.AppID, orgID id.OrgID, domain string) (*Connection, error) {
+	doc := new(ssoConnectionDoc)
+	err := s.mdb.Collection(ssoConnectionsColl).FindOne(ctx, bson.M{
+		"app_id": appID.String(),
+		"org_id": orgID.String(),
+		"domain": domain,
+		"active": true,
+	}).Decode(doc)
+	if err != nil {
+		return nil, ssoMongoError(err)
+	}
+	return ssoDocToConnection(doc)
+}
+
 func (s *MongoStore) GetConnectionByProvider(ctx context.Context, appID id.AppID, provider string) (*Connection, error) {
 	doc := new(ssoConnectionDoc)
 	err := s.mdb.Collection(ssoConnectionsColl).FindOne(ctx, bson.M{

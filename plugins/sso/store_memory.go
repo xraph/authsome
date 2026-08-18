@@ -54,6 +54,17 @@ func (s *MemoryStore) GetConnectionByDomain(_ context.Context, appID id.AppID, d
 	return nil, ErrConnectionNotFound
 }
 
+func (s *MemoryStore) GetConnectionByDomainAndOrg(_ context.Context, appID id.AppID, orgID id.OrgID, domain string) (*Connection, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, c := range s.conns {
+		if c.AppID == appID && c.OrgID == orgID && c.Domain == domain && c.Active {
+			return c, nil
+		}
+	}
+	return nil, ErrConnectionNotFound
+}
+
 func (s *MemoryStore) GetConnectionByProvider(_ context.Context, appID id.AppID, provider string) (*Connection, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

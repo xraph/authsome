@@ -159,6 +159,39 @@ func runStoreConformance(t *testing.T, newStore func(t *testing.T) Store) {
 		require.NoError(t, err)
 	})
 
+	t.Run("same domain resolves per-org and is isolated across orgs", func(t *testing.T) {
+		s := newStore(t)
+		orgA := id.NewOrgID()
+		orgB := id.NewOrgID()
+		// The same email domain configured for SSO in two different orgs — the
+		// multi-tenant case the org-scoped unique index must allow.
+		inA := samlConnection(appA, orgA, "shared.com")
+		inB := oidcConnection(appA, orgB, "shared.com")
+		require.NoError(t, s.CreateConnection(ctx, inA))
+		require.NoError(t, s.CreateConnection(ctx, inB))
+
+		gotA, err := s.GetConnectionByDomainAndOrg(ctx, appA, orgA, "shared.com")
+		require.NoError(t, err)
+		assert.Equal(t, inA.ID.String(), gotA.ID.String())
+
+		gotB, err := s.GetConnectionByDomainAndOrg(ctx, appA, orgB, "shared.com")
+		require.NoError(t, err)
+		assert.Equal(t, inB.ID.String(), gotB.ID.String())
+
+		// An org with no connection for that domain resolves to not-found.
+		_, err = s.GetConnectionByDomainAndOrg(ctx, appA, id.NewOrgID(), "shared.com")
+		assert.ErrorIs(t, err, ErrConnectionNotFound)
+
+		// Deactivating one org's connection removes only that org's row.
+		inA.Active = false
+		require.NoError(t, s.UpdateConnection(ctx, inA))
+		_, err = s.GetConnectionByDomainAndOrg(ctx, appA, orgA, "shared.com")
+		assert.ErrorIs(t, err, ErrConnectionNotFound)
+		stillB, err := s.GetConnectionByDomainAndOrg(ctx, appA, orgB, "shared.com")
+		require.NoError(t, err)
+		assert.Equal(t, inB.ID.String(), stillB.ID.String())
+	})
+
 	t.Run("list is scoped to the app", func(t *testing.T) {
 		s := newStore(t)
 		require.NoError(t, s.CreateConnection(ctx, samlConnection(appA, orgID, "one.com")))

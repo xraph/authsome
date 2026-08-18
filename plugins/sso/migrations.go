@@ -192,4 +192,61 @@ CREATE INDEX IF NOT EXISTS idx_authsome_sso_connections_provider
 			},
 		},
 	)
+
+	// ──────────────────────────────────────────────────
+	// Multi-tenant: scope the domain uniqueness by org
+	// ──────────────────────────────────────────────────
+	//
+	// The same email domain may now be configured for SSO in several orgs
+	// (workspaces), so uniqueness moves from (app_id, domain) to
+	// (app_id, org_id, domain). The drop clears whichever prior form exists —
+	// the core store used (app_id, env_id, domain); the plugin used
+	// (app_id, domain). env_id is intentionally omitted (the plugin schema has
+	// no env_id column, and org is the tenant boundary for SSO, not env).
+
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "scope_domain_index_by_org",
+			Version: "20240201000004",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_sso_connections_domain;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_sso_connections_domain
+    ON authsome_sso_connections (app_id, org_id, domain) WHERE active = TRUE;
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_sso_connections_domain;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_sso_connections_domain
+    ON authsome_sso_connections (app_id, domain) WHERE active = TRUE;
+`)
+				return err
+			},
+		},
+	)
+
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "scope_domain_index_by_org",
+			Version: "20240201000004",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_sso_connections_domain;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_sso_connections_domain
+    ON authsome_sso_connections (app_id, org_id, domain) WHERE active = 1;
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_sso_connections_domain;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_sso_connections_domain
+    ON authsome_sso_connections (app_id, domain);
+`)
+				return err
+			},
+		},
+	)
 }
