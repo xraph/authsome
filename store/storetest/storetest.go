@@ -44,6 +44,9 @@ func RunConformance(t *testing.T, newStore Factory) {
 		{"ListUsersEmailMetacharsAreSafe", testListUsersEmailMetacharsAreSafe},
 		{"SessionCRUD", testSessionCRUD},
 		{"SessionLookupByTokenIsScoped", testSessionLookupByTokenIsScoped},
+		{"SessionRolesRoundTrip", testSessionRolesRoundTrip},
+		{"SessionPrincipalKindRoundTrip", testSessionPrincipalKindRoundTrip},
+		{"ServiceAccountSessionRoundTrip", testServiceAccountSessionRoundTrip},
 		{"RotateSessionCAS", testRotateSessionCAS},
 		{"RefreshTokenRevocation", testRefreshTokenRevocation},
 		{"RefreshTokenReplayIsIdempotent", testRefreshTokenReplayIsIdempotent},
@@ -323,6 +326,153 @@ func testSessionLookupByTokenIsScoped(t *testing.T, s store.Store) {
 	assert.ErrorIs(t, err, store.ErrNotFound, "unknown token must be not-found, not another session")
 	_, err = s.GetSessionByRefreshToken(ctx, "not-a-refresh")
 	assert.ErrorIs(t, err, store.ErrNotFound)
+}
+
+// testSessionRolesRoundTrip proves a session's stamped roles survive
+// persistence on every backend.
+//
+// Roles are resolved once, when the session is issued, and read back on every
+// authenticated request to satisfy the role requirements a route declares. A
+// backend that drops the field does not fail loudly: the session still
+// authenticates, and every route declaring a role quietly refuses the user.
+// That is the failure this test exists to catch, and it is the reason the
+// empty case below is asserted as carefully as the populated one.
+func testSessionRolesRoundTrip(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "roles-"+suffix(tn.AppID.String())+"@example.com")
+
+	sess := &session.Session{
+		ID:                    id.NewSessionID(),
+		AppID:                 tn.AppID,
+		EnvID:                 tn.EnvID,
+		UserID:                u.ID,
+		Token:                 "tok-roles-" + suffix(tn.AppID.String()),
+		RefreshToken:          "ref-roles-" + suffix(tn.AppID.String()),
+		FamilyID:              id.NewSessionFamilyID(),
+		Roles:                 []string{"admin", "billing-viewer"},
+		ExpiresAt:             now().Add(time.Hour),
+		RefreshTokenExpiresAt: now().Add(24 * time.Hour),
+		CreatedAt:             now(),
+		UpdatedAt:             now(),
+	}
+	require.NoError(t, s.CreateSession(ctx, sess))
+
+	for _, tc := range []struct {
+		name string
+		get  func() (*session.Session, error)
+	}{
+		{"GetSession", func() (*session.Session, error) { return s.GetSession(ctx, sess.ID) }},
+		{"GetSessionByToken", func() (*session.Session, error) { return s.GetSessionByToken(ctx, sess.Token) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.get()
+			require.NoError(t, err)
+			assert.Equal(t, []string{"admin", "billing-viewer"}, got.Roles,
+				"stamped roles did not survive the round trip")
+		})
+	}
+
+	// A session with no roles must come back with none rather than with an
+	// empty-string member: a backend encoding []string as a delimited list
+	// gets this wrong, and "" is a role slug no principal can hold, which
+	// turns into a permanent denial rather than a visible error.
+	bare := seedSession(t, s, tn, u.ID, "tok-noroles-"+suffix(tn.AppID.String()), "ref-noroles-"+suffix(tn.AppID.String()))
+
+	got, err := s.GetSession(ctx, bare.ID)
+	require.NoError(t, err)
+	assert.Empty(t, got.Roles, "a roleless session came back carrying roles")
+}
+
+// testSessionPrincipalKindRoundTrip pins the ordinary-user half of the
+// principal contract: a session written with PrincipalKind set must come back
+// with it intact, and one written without it must stay empty rather than being
+// invented on read. Empty means "user" for backwards compatibility with rows
+// predating the field (session.Session), so the store must not normalize.
+func testSessionPrincipalKindRoundTrip(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "principal@test.com")
+
+	explicit := &session.Session{
+		ID:                    id.NewSessionID(),
+		AppID:                 tn.AppID,
+		EnvID:                 tn.EnvID,
+		UserID:                u.ID,
+		Token:                 "tok-kind",
+		RefreshToken:          "rtok-kind",
+		FamilyID:              id.NewSessionFamilyID(),
+		PrincipalKind:         "user",
+		ExpiresAt:             now().Add(time.Hour),
+		RefreshTokenExpiresAt: now().Add(24 * time.Hour),
+		CreatedAt:             now(),
+		UpdatedAt:             now(),
+	}
+	require.NoError(t, s.CreateSession(ctx, explicit))
+
+	got, err := s.GetSession(ctx, explicit.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "user", got.PrincipalKind, "PrincipalKind must survive the round trip")
+	assert.Equal(t, u.ID.String(), got.UserID.String())
+	assert.True(t, got.ServiceAccountID.IsNil(), "a user session must not gain a ServiceAccountID")
+
+	// A legacy row carries no principal kind; the store must return it as
+	// written rather than filling in a default.
+	legacy := seedSession(t, s, tn, u.ID, "tok-legacy", "rtok-legacy")
+	gotLegacy, err := s.GetSession(ctx, legacy.ID)
+	require.NoError(t, err)
+	assert.Empty(t, gotLegacy.PrincipalKind, "an unset PrincipalKind must stay unset, not be defaulted")
+}
+
+// testServiceAccountSessionRoundTrip is the regression test for
+// service-account sessions losing their principal identity in the store.
+//
+// A service-account session carries PrincipalKind="service_account" and a
+// ServiceAccountID, and leaves UserID as the zero value — there is no user
+// behind it. Everything downstream branches on PrincipalKind (see
+// middleware/auth.go), so a store that drops these two fields hands back a
+// session that is indistinguishable from an ordinary user session whose UserID
+// happens to be zero. That is not a cosmetic loss: it is an authorization
+// decision made on the wrong principal.
+func testServiceAccountSessionRoundTrip(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+
+	svcID := id.NewServiceAccountID()
+	sess := &session.Session{
+		ID:                    id.NewSessionID(),
+		AppID:                 tn.AppID,
+		EnvID:                 tn.EnvID,
+		Token:                 "tok-svc",
+		RefreshToken:          "rtok-svc",
+		FamilyID:              id.NewSessionFamilyID(),
+		PrincipalKind:         "service_account",
+		ServiceAccountID:      svcID,
+		ExpiresAt:             now().Add(time.Hour),
+		RefreshTokenExpiresAt: now().Add(24 * time.Hour),
+		CreatedAt:             now(),
+		UpdatedAt:             now(),
+	}
+	require.NoError(t, s.CreateSession(ctx, sess), "a service-account session must be persistable without a user")
+
+	// Every read path must reconstruct the principal, not just the by-id one:
+	// middleware resolves sessions by token, and refresh goes by refresh token.
+	for _, tc := range []struct {
+		name string
+		get  func() (*session.Session, error)
+	}{
+		{"GetSession", func() (*session.Session, error) { return s.GetSession(ctx, sess.ID) }},
+		{"GetSessionByToken", func() (*session.Session, error) { return s.GetSessionByToken(ctx, "tok-svc") }},
+		{"GetSessionByRefreshToken", func() (*session.Session, error) { return s.GetSessionByRefreshToken(ctx, "rtok-svc") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.get()
+			require.NoError(t, err)
+			assert.Equal(t, "service_account", got.PrincipalKind, "PrincipalKind must survive the round trip")
+			assert.Equal(t, svcID.String(), got.ServiceAccountID.String(), "ServiceAccountID must survive the round trip")
+			assert.True(t, got.UserID.IsNil(), "a service-account session must not acquire a UserID")
+		})
+	}
 }
 
 func testRotateSessionCAS(t *testing.T, s store.Store) {

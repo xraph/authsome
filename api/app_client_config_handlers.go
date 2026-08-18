@@ -10,6 +10,7 @@ import (
 	"github.com/xraph/authsome/appclientconfig"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/rbac"
 )
 
 // ──────────────────────────────────────────────────
@@ -23,11 +24,16 @@ func (a *API) registerAppClientConfigRoutes(router forge.Router) error {
 			middleware.RequireAuth(),
 			middleware.RequirePermission(a.engine, "manage", "app"),
 		),
+		// Declared so the requirement the middleware above enforces reaches
+		// the OpenAPI document and the generated clients. Declaring does not
+		// enforce: the middleware is still what refuses the request.
+		forge.WithGroupAuth("session", "session-cookie"),
+		forge.WithGroupAllPermissions(rbac.PermissionString("manage", "app")),
 	)
 
 	if err := g.GET("/apps/:appId/client-config", a.handleGetAppClientConfig,
 		forge.WithSummary("Get per-app client config overrides"),
-		forge.WithDescription("Returns the per-app client configuration overrides. Nil fields inherit from plugin defaults. Requires admin role."),
+		forge.WithDescription("Returns the per-app client configuration overrides. Nil fields inherit from plugin defaults."),
 		forge.WithOperationID("getAppClientConfig"),
 		forge.WithResponseSchema(http.StatusOK, "App client config", appclientconfig.Config{}),
 		forge.WithErrorResponses(),
@@ -37,7 +43,7 @@ func (a *API) registerAppClientConfigRoutes(router forge.Router) error {
 
 	if err := g.PUT("/apps/:appId/client-config", a.handleSetAppClientConfig,
 		forge.WithSummary("Set per-app client config overrides"),
-		forge.WithDescription("Creates or updates per-app client configuration overrides. Nil fields inherit from plugin defaults. Requires admin role."),
+		forge.WithDescription("Creates or updates per-app client configuration overrides. Nil fields inherit from plugin defaults."),
 		forge.WithOperationID("setAppClientConfig"),
 		forge.WithRequestSchema(SetAppClientConfigRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Updated app client config", appclientconfig.Config{}),
@@ -48,7 +54,7 @@ func (a *API) registerAppClientConfigRoutes(router forge.Router) error {
 
 	return g.DELETE("/apps/:appId/client-config", a.handleDeleteAppClientConfig,
 		forge.WithSummary("Delete per-app client config overrides"),
-		forge.WithDescription("Removes per-app client configuration overrides, reverting to plugin defaults. Requires admin role."),
+		forge.WithDescription("Removes per-app client configuration overrides, reverting to plugin defaults."),
 		forge.WithOperationID("deleteAppClientConfig"),
 		forge.WithResponseSchema(http.StatusOK, "Deleted", StatusResponse{}),
 		forge.WithErrorResponses(),

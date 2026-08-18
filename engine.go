@@ -151,6 +151,12 @@ func NewEngine(opts ...Option) (*Engine, error) {
 		return nil, errors.New("authsome: warden engine is required (use WithWarden option)")
 	}
 
+	// Stamp session roles on the way to the store, before any subsystem below
+	// captures a reference to it. Sessions are created from six different
+	// paths and all of them end at store.CreateSession, so this is the one
+	// place that covers every one of them. See engine_session_roles.go.
+	e.store = newRoleStampingStore(e.store, e.sessionRoleSlugs, e.logger)
+
 	// Eagerly allocate the MFA ceremony store when none was configured, so it
 	// is never lazily created on a request goroutine (which would be a data
 	// race between concurrent MFA-gated logins and could drop tickets).
@@ -317,6 +323,20 @@ func (e *Engine) registerSessionAuthProvider() {
 		)
 	} else {
 		e.logger.Info("authsome: registered 'session' auth provider with forge auth registry")
+	}
+
+	// The provider above accepts a bearer header or the session cookie, but
+	// one provider declares one security scheme, and its scheme says bearer.
+	// Registering the cookie half separately is what puts the browser flow
+	// into the OpenAPI document, and therefore into every generated client.
+	// Both delegate to the same Authenticate, so they cannot disagree about
+	// what a valid session is.
+	if err := e.authRegistry.Register(authprovider.NewCookieSessionProvider(provider)); err != nil {
+		e.logger.Warn("authsome: failed to register session-cookie auth provider",
+			log.String("error", err.Error()),
+		)
+	} else {
+		e.logger.Info("authsome: registered 'session-cookie' auth provider with forge auth registry")
 	}
 }
 

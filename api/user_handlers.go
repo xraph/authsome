@@ -15,13 +15,16 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerUserRoutes(router forge.Router) error {
-	g := router.Group("/v1", forge.WithGroupTags("user"))
+	g := router.Group("/v1", forge.WithGroupTags("user"),
+		// Every route in this group authenticates by session; the manifest in
+		// api.go has said so by hand since before routes could declare it.
+		forge.WithGroupAuth("session", "session-cookie"))
 
 	if err := g.GET("/me", a.handleGetMe,
 		forge.WithSummary("Get current user"),
-		forge.WithDescription("Returns the currently authenticated user's profile."),
+		forge.WithDescription("Returns the currently authenticated user's profile and the roles their session carries."),
 		forge.WithOperationID("getMe"),
-		forge.WithResponseSchema(http.StatusOK, "User profile", user.User{}),
+		forge.WithResponseSchema(http.StatusOK, "User profile", MeResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -72,7 +75,28 @@ func (a *API) registerUserRoutes(router forge.Router) error {
 // User handlers
 // ──────────────────────────────────────────────────
 
-func (a *API) handleGetMe(ctx forge.Context, _ *GetMeRequest) (*user.User, error) {
+// MeResponse is the authenticated user plus the roles their session carries.
+//
+// user.User is embedded rather than nested, so every field this endpoint
+// already returned keeps its place at the top level of the JSON and existing
+// consumers see no change. Roles is the addition.
+//
+// A generated client needs the principal before its capability surface can
+// answer anything: canCall reads from whatever was last handed to
+// setPrincipal, and until this endpoint returned roles, every caller had to
+// assemble them from the admin role-listing endpoints by hand.
+type MeResponse struct {
+	*user.User
+
+	// Roles are the slugs stamped onto the session at sign-in, which is what
+	// authorization is decided against for this request. Deliberately the
+	// session's roles rather than a fresh lookup: a fresh list would show a
+	// role the current session cannot actually exercise, and a client would
+	// enable a control the server then refuses.
+	Roles []string `json:"roles"`
+}
+
+func (a *API) handleGetMe(ctx forge.Context, _ *GetMeRequest) (*MeResponse, error) {
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
 		return nil, forge.Unauthorized("authentication required")
@@ -83,7 +107,12 @@ func (a *API) handleGetMe(ctx forge.Context, _ *GetMeRequest) (*user.User, error
 		return nil, mapError(err)
 	}
 
-	return u, nil
+	resp := &MeResponse{User: u}
+	if sess, ok := middleware.SessionFrom(ctx.Context()); ok && sess != nil {
+		resp.Roles = sess.Roles
+	}
+
+	return resp, nil
 }
 
 func (a *API) handleUpdateMe(ctx forge.Context, req *UpdateMeRequest) (*user.User, error) {

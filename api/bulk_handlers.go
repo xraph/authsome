@@ -8,6 +8,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/user"
 )
 
@@ -22,11 +23,16 @@ func (a *API) registerBulkRoutes(router forge.Router) error {
 			middleware.RequireAuth(),
 			middleware.RequirePermission(a.engine, "manage", "user"),
 		),
+		// Declared so the requirement the middleware above enforces reaches
+		// the OpenAPI document and the generated clients. Declaring does not
+		// enforce: the middleware is still what refuses the request.
+		forge.WithGroupAuth("session", "session-cookie"),
+		forge.WithGroupAllPermissions(rbac.PermissionString("manage", "user")),
 	)
 
 	if err := g.POST("/users/import", a.handleBulkImportUsers,
 		forge.WithSummary("Bulk import users (admin)"),
-		forge.WithDescription("Creates multiple users in a single request. Duplicate emails are skipped. Requires admin role."),
+		forge.WithDescription("Creates multiple users in a single request. Duplicate emails are skipped."),
 		forge.WithOperationID("adminBulkImportUsers"),
 		forge.WithRequestSchema(BulkImportUsersRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Import result", authsome.BulkImportResult{}),
@@ -37,7 +43,7 @@ func (a *API) registerBulkRoutes(router forge.Router) error {
 
 	return g.DELETE("/sessions", a.handleBulkRevokeSessions,
 		forge.WithSummary("Bulk revoke sessions (admin)"),
-		forge.WithDescription("Revokes all sessions for a specific user. Requires admin role."),
+		forge.WithDescription("Revokes all sessions for a specific user."),
 		forge.WithOperationID("adminBulkRevokeSessions"),
 		forge.WithResponseSchema(http.StatusOK, "Revocation result", BulkRevokeSessionsResponse{}),
 		forge.WithErrorResponses(),

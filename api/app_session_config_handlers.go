@@ -10,6 +10,7 @@ import (
 	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/rbac"
 )
 
 // ──────────────────────────────────────────────────
@@ -23,11 +24,16 @@ func (a *API) registerAppSessionConfigRoutes(router forge.Router) error {
 			middleware.RequireAuth(),
 			middleware.RequirePermission(a.engine, "manage", "app"),
 		),
+		// Declared so the requirement the middleware above enforces reaches
+		// the OpenAPI document and the generated clients. Declaring does not
+		// enforce: the middleware is still what refuses the request.
+		forge.WithGroupAuth("session", "session-cookie"),
+		forge.WithGroupAllPermissions(rbac.PermissionString("manage", "app")),
 	)
 
 	if err := g.GET("/apps/:appId/session-config", a.handleGetAppSessionConfig,
 		forge.WithSummary("Get per-app session config"),
-		forge.WithDescription("Returns the per-app session configuration overrides for the specified app. Requires admin role."),
+		forge.WithDescription("Returns the per-app session configuration overrides for the specified app."),
 		forge.WithOperationID("getAppSessionConfig"),
 		forge.WithResponseSchema(http.StatusOK, "App session config", appsessionconfig.Config{}),
 		forge.WithErrorResponses(),
@@ -37,7 +43,7 @@ func (a *API) registerAppSessionConfigRoutes(router forge.Router) error {
 
 	if err := g.PUT("/apps/:appId/session-config", a.handleSetAppSessionConfig,
 		forge.WithSummary("Set per-app session config"),
-		forge.WithDescription("Creates or updates the per-app session configuration overrides. Nil fields inherit from global/environment config. Requires admin role."),
+		forge.WithDescription("Creates or updates the per-app session configuration overrides. Nil fields inherit from global/environment config."),
 		forge.WithOperationID("setAppSessionConfig"),
 		forge.WithRequestSchema(SetAppSessionConfigRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Updated app session config", appsessionconfig.Config{}),
@@ -48,7 +54,7 @@ func (a *API) registerAppSessionConfigRoutes(router forge.Router) error {
 
 	return g.DELETE("/apps/:appId/session-config", a.handleDeleteAppSessionConfig,
 		forge.WithSummary("Delete per-app session config"),
-		forge.WithDescription("Removes the per-app session configuration overrides, reverting to global/environment defaults. Requires admin role."),
+		forge.WithDescription("Removes the per-app session configuration overrides, reverting to global/environment defaults."),
 		forge.WithOperationID("deleteAppSessionConfig"),
 		forge.WithResponseSchema(http.StatusOK, "Deleted", StatusResponse{}),
 		forge.WithErrorResponses(),
