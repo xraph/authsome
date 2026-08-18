@@ -246,9 +246,13 @@ func toSessionModel(s *session.Session) *sessionModel {
 	if s.FamilyID.Prefix() != "" {
 		m.FamilyID = s.FamilyID.String()
 	}
-	if len(s.Roles) > 0 {
-		m.Roles = append([]string(nil), s.Roles...)
-	}
+	// Always a non-nil slice. grove writes every mapped field whatever the bson
+	// omitempty tag says, so leaving this nil reaches mongo as `roles: null`
+	// and the collection's generated $jsonSchema — which declares bsonType
+	// array — rejects the entire insert, failing every session write for a
+	// principal that holds no roles. An empty slice marshals to [], which
+	// validates and decodes back to no roles.
+	m.Roles = append([]string{}, s.Roles...)
 	return m
 }
 
