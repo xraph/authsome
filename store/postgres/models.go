@@ -193,23 +193,38 @@ func fromUser(u *user.User) *UserModel {
 type SessionModel struct {
 	grove.BaseModel `grove:"table:authsome_sessions,alias:s"`
 
-	ID                    string    `grove:"id,pk"`
-	AppID                 string    `grove:"app_id,notnull"`
-	EnvID                 string    `grove:"env_id,notnull"`
-	UserID                string    `grove:"user_id,notnull"`
-	OrgID                 string    `grove:"org_id"`
-	FamilyID              string    `grove:"family_id"`
-	Token                 string    `grove:"token,notnull"`
-	RefreshToken          string    `grove:"refresh_token,notnull"`
-	IPAddress             string    `grove:"ip_address"`
-	UserAgent             string    `grove:"user_agent"`
-	DeviceID              string    `grove:"device_id"`
-	ImpersonatedBy        string    `grove:"impersonated_by"`
-	LastActivityAt        time.Time `grove:"last_activity_at"`
-	ExpiresAt             time.Time `grove:"expires_at,notnull"`
-	RefreshTokenExpiresAt time.Time `grove:"refresh_token_expires_at,notnull"`
-	CreatedAt             time.Time `grove:"created_at,notnull,default:now()"`
-	UpdatedAt             time.Time `grove:"updated_at,notnull,default:now()"`
+	ID    string `grove:"id,pk"`
+	AppID string `grove:"app_id,notnull"`
+	EnvID string `grove:"env_id,notnull"`
+	// UserID is empty for a service-account session, which has no user behind
+	// it. That is the same sentinel-empty convention every other optional id
+	// column here uses (org_id, device_id, family_id, impersonated_by).
+	UserID string `grove:"user_id,notnull"`
+	// PrincipalKind and ServiceAccountID carry which kind of principal owns the
+	// session. Empty PrincipalKind means "user" for rows written before these
+	// columns existed, so neither direction normalizes it — inventing "user" on
+	// read would make a legacy row indistinguishable from one deliberately
+	// stamped, and this value is branched on to make authorization decisions.
+	PrincipalKind    string `grove:"principal_kind"`
+	ServiceAccountID string `grove:"service_account_id"`
+	OrgID            string `grove:"org_id"`
+	FamilyID         string `grove:"family_id"`
+	Token            string `grove:"token,notnull"`
+	RefreshToken     string `grove:"refresh_token,notnull"`
+	IPAddress        string `grove:"ip_address"`
+	UserAgent        string `grove:"user_agent"`
+	DeviceID         string `grove:"device_id"`
+	ImpersonatedBy   string `grove:"impersonated_by"`
+	// Roles is JSON rather than a comma-separated list. A slug containing a
+	// comma would split into two role names nobody was ever granted, and
+	// these strings are read back as an authorization decision, so the
+	// encoding must not be able to invent a member.
+	Roles                 json.RawMessage `grove:"roles,type:jsonb"`
+	LastActivityAt        time.Time       `grove:"last_activity_at"`
+	ExpiresAt             time.Time       `grove:"expires_at,notnull"`
+	RefreshTokenExpiresAt time.Time       `grove:"refresh_token_expires_at,notnull"`
+	CreatedAt             time.Time       `grove:"created_at,notnull,default:now()"`
+	UpdatedAt             time.Time       `grove:"updated_at,notnull,default:now()"`
 }
 
 func toSession(m *SessionModel) (*session.Session, error) {
@@ -225,15 +240,11 @@ func toSession(m *SessionModel) (*session.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	userID, err := id.ParseUserID(m.UserID)
-	if err != nil {
-		return nil, err
-	}
 	s := &session.Session{
 		ID:                    sessID,
 		AppID:                 appID,
 		EnvID:                 envID,
-		UserID:                userID,
+		PrincipalKind:         m.PrincipalKind,
 		Token:                 m.Token,
 		RefreshToken:          m.RefreshToken,
 		IPAddress:             m.IPAddress,
@@ -243,6 +254,24 @@ func toSession(m *SessionModel) (*session.Session, error) {
 		RefreshTokenExpiresAt: m.RefreshTokenExpiresAt,
 		CreatedAt:             m.CreatedAt,
 		UpdatedAt:             m.UpdatedAt,
+	}
+	// Guarded like every other optional id below rather than parsed up front:
+	// a service-account session stores no user_id, and an unguarded parse
+	// rejects the whole row with `id: parse "": empty string`, which turns a
+	// readable session into a failed lookup.
+	if m.UserID != "" {
+		userID, err := id.ParseUserID(m.UserID)
+		if err != nil {
+			return nil, err
+		}
+		s.UserID = userID
+	}
+	if m.ServiceAccountID != "" {
+		svcID, err := id.ParseServiceAccountID(m.ServiceAccountID)
+		if err != nil {
+			return nil, err
+		}
+		s.ServiceAccountID = svcID
 	}
 	if m.OrgID != "" {
 		orgID, err := id.ParseOrgID(m.OrgID)
@@ -272,6 +301,9 @@ func toSession(m *SessionModel) (*session.Session, error) {
 		}
 		s.FamilyID = famID
 	}
+	if len(m.Roles) > 0 {
+		_ = json.Unmarshal(m.Roles, &s.Roles) //nolint:errcheck // best-effort decode
+	}
 	return s, nil
 }
 
@@ -281,6 +313,7 @@ func fromSession(s *session.Session) *SessionModel {
 		AppID:                 s.AppID.String(),
 		EnvID:                 s.EnvID.String(),
 		UserID:                s.UserID.String(),
+		PrincipalKind:         s.PrincipalKind,
 		Token:                 s.Token,
 		RefreshToken:          s.RefreshToken,
 		IPAddress:             s.IPAddress,
@@ -290,6 +323,9 @@ func fromSession(s *session.Session) *SessionModel {
 		RefreshTokenExpiresAt: s.RefreshTokenExpiresAt,
 		CreatedAt:             s.CreatedAt,
 		UpdatedAt:             s.UpdatedAt,
+	}
+	if !s.ServiceAccountID.IsNil() {
+		m.ServiceAccountID = s.ServiceAccountID.String()
 	}
 	if s.OrgID.Prefix() != "" {
 		m.OrgID = s.OrgID.String()
@@ -303,6 +339,10 @@ func fromSession(s *session.Session) *SessionModel {
 	if s.FamilyID.Prefix() != "" {
 		m.FamilyID = s.FamilyID.String()
 	}
+	// Always encoded, never left nil: the roles column is NOT NULL and
+	// json.RawMessage cannot scan a NULL back. nil marshals to "null", which
+	// the decode guard above reads as no roles.
+	m.Roles, _ = json.Marshal(s.Roles) //nolint:errcheck // best-effort encode
 	return m
 }
 

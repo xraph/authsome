@@ -954,5 +954,92 @@ CREATE INDEX IF NOT EXISTS idx_authsome_verifications_active
 				return err
 			},
 		},
+
+		// Migration: session roles. The role slugs a principal held when the
+		// session was issued, stamped once rather than resolved per request
+		// (see engine_session_roles.go). Stored as a JSON array in a text
+		// column: a comma-separated list would turn a slug containing a comma
+		// into two roles nobody granted, and these strings are read back as
+		// an authorization decision.
+		//
+		// NOT NULL with a default, like add_session_impersonation, because
+		// nothing in this file ever writes SQL NULL into a JSON column:
+		// fromSession always marshals, exactly as fromApp does for metadata.
+		// A nullable column would be scanned into json.RawMessage, which
+		// cannot take a nil driver value, and every pre-existing row would
+		// fail to read.
+		//
+		// Existing rows backfill to '', which decodes to no roles, so a
+		// session issued before this migration authorizes nothing it did not
+		// already authorize. Those sessions carry no roles until they are
+		// replaced, which is the same staleness the stamping design accepts
+		// everywhere else.
+		&migrate.Migration{
+			Name:    "add_session_roles",
+			Version: "20260620000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions ADD COLUMN roles TEXT NOT NULL DEFAULT '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				// SQLite gained DROP COLUMN in 3.35.0; older engines fail
+				// here, which matches how add_session_impersonation rolls back.
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions DROP COLUMN roles;
+`)
+				return err
+			},
+		},
+
+		// Migration: session principal identity. A session may be owned by a
+		// user or by a service account (session.Session), and until these
+		// columns existed the store silently dropped which one. A
+		// service-account session persisted and read back came out with no
+		// principal at all — and because toSession parsed user_id unguarded,
+		// the read failed outright with `id: parse "": empty string`.
+		//
+		// NOT NULL with an empty default, matching every other optional id
+		// column on this table (org_id, device_id, family_id,
+		// impersonated_by): empty is the absent marker, and toSession guards
+		// each one before parsing.
+		//
+		// Existing rows backfill to '', which reads back as an unset
+		// PrincipalKind. That is deliberately not normalized to "user" —
+		// empty already means user for legacy rows, and inventing the value on
+		// read would erase the difference between a row that predates the
+		// column and one deliberately stamped.
+		//
+		// Unlike postgres this carries no CHECK enforcing the
+		// user-xor-service-account invariant. SQLite cannot add a constraint
+		// to an existing table, so it would need the full table rebuild in
+		// migrations_timestamps.go, whose CREATE TABLE would have to hardcode
+		// every column added to date — coupling this migration to
+		// add_session_roles having already run. The invariant is enforced in
+		// postgres and in the store layer; see the note in the review summary.
+		&migrate.Migration{
+			Name:    "add_session_principal_identity",
+			Version: "20260620000002",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions ADD COLUMN principal_kind TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_sessions ADD COLUMN service_account_id TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_authsome_sessions_service_account_id
+    ON authsome_sessions (service_account_id);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				// SQLite gained DROP COLUMN in 3.35.0; older engines fail
+				// here, which matches how add_session_impersonation rolls back.
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_sessions_service_account_id;
+ALTER TABLE authsome_sessions DROP COLUMN service_account_id;
+ALTER TABLE authsome_sessions DROP COLUMN principal_kind;
+`)
+				return err
+			},
+		},
 	)
 }

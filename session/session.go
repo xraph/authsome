@@ -32,6 +32,20 @@ type Session struct {
 	CreatedAt             time.Time          `json:"created_at"`
 	UpdatedAt             time.Time          `json:"updated_at"`
 
+	// Roles holds the role slugs the principal held when this session was
+	// issued, stamped once on the way to the store rather than resolved per
+	// request. Forge's auth extension reads them off the AuthContext to
+	// satisfy the role requirements a route declares, and the generated
+	// clients turn the same strings into their capability surface.
+	//
+	// Stamped means stale: a role granted or revoked after sign-in does not
+	// reach an existing session, so a revocation needs the session revoked
+	// too. That is the trade this design accepts in exchange for keeping
+	// authentication free of an RBAC lookup on every request. Anything that
+	// must be current at the instant it is checked belongs in a permission
+	// check against warden, not here.
+	Roles []string `json:"roles,omitempty"`
+
 	// PrincipalKind identifies the type of principal that owns this session.
 	// Valid values are "user" and "service_account". Empty string means "user"
 	// for backwards compatibility with existing sessions.

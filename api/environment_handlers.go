@@ -9,6 +9,7 @@ import (
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/rbac"
 )
 
 // ──────────────────────────────────────────────────
@@ -22,6 +23,11 @@ func (a *API) registerEnvironmentRoutes(router forge.Router) error {
 			middleware.RequireAuth(),
 			middleware.RequirePermission(a.engine, "manage", "environment"),
 		),
+		// Declared so the requirement the middleware above enforces reaches
+		// the OpenAPI document and the generated clients. Declaring does not
+		// enforce: the middleware is still what refuses the request.
+		forge.WithGroupAuth("session", "session-cookie"),
+		forge.WithGroupAllPermissions(rbac.PermissionString("manage", "environment")),
 	)
 
 	if err := g.POST("/environments", a.handleCreateEnvironment,

@@ -8,6 +8,7 @@ import (
 
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/securityevent"
 )
 
@@ -27,11 +28,16 @@ func (a *API) registerSecurityEventRoutes(router forge.Router) error {
 			middleware.RequireAuth(),
 			middleware.RequirePermission(a.engine, "read", "security_event"),
 		),
+		// Declared so the requirement the middleware above enforces reaches
+		// the OpenAPI document and the generated clients. Declaring does not
+		// enforce: the middleware is still what refuses the request.
+		forge.WithGroupAuth("session", "session-cookie"),
+		forge.WithGroupAllPermissions(rbac.PermissionString("read", "security_event")),
 	)
 
 	return g.GET("", a.handleListSecurityEvents,
 		forge.WithSummary("List security events (admin)"),
-		forge.WithDescription("Returns a paginated list of security events. Supports filtering by user, action, and time range. Requires admin role."),
+		forge.WithDescription("Returns a paginated list of security events. Supports filtering by user, action, and time range."),
 		forge.WithOperationID("adminListSecurityEvents"),
 		forge.WithResponseSchema(http.StatusOK, "Security events", SecurityEventListResponse{}),
 		forge.WithErrorResponses(),

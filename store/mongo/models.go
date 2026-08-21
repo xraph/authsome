@@ -180,18 +180,33 @@ func fromUserModel(m *userModel) (*user.User, error) {
 type sessionModel struct {
 	grove.BaseModel `grove:"table:authsome_sessions"`
 
-	ID                    string    `grove:"id,pk"                     bson:"_id"`
-	AppID                 string    `grove:"app_id"                    bson:"app_id"`
-	EnvID                 string    `grove:"env_id"                    bson:"env_id"`
-	UserID                string    `grove:"user_id"                   bson:"user_id"`
-	OrgID                 string    `grove:"org_id"                    bson:"org_id,omitempty"`
-	FamilyID              string    `grove:"family_id"                 bson:"family_id,omitempty"`
-	Token                 string    `grove:"token"                     bson:"token"`
-	RefreshToken          string    `grove:"refresh_token"             bson:"refresh_token"`
-	IPAddress             string    `grove:"ip_address"                bson:"ip_address"`
-	UserAgent             string    `grove:"user_agent"                bson:"user_agent"`
-	DeviceID              string    `grove:"device_id"                 bson:"device_id,omitempty"`
-	ImpersonatedBy        string    `grove:"impersonated_by"           bson:"impersonated_by,omitempty"`
+	ID    string `grove:"id,pk"                     bson:"_id"`
+	AppID string `grove:"app_id"                    bson:"app_id"`
+	EnvID string `grove:"env_id"                    bson:"env_id"`
+	// UserID is empty for a service-account session, which has no user behind
+	// it. That is the same sentinel-empty convention every other optional id
+	// field here uses (org_id, device_id, family_id, impersonated_by).
+	UserID string `grove:"user_id"                   bson:"user_id"`
+	// PrincipalKind and ServiceAccountID carry which kind of principal owns the
+	// session. Empty PrincipalKind means "user" for documents written before
+	// these fields existed, so neither direction normalizes it — inventing
+	// "user" on read would make a legacy document indistinguishable from one
+	// deliberately stamped, and this value is branched on to make
+	// authorization decisions.
+	PrincipalKind    string `grove:"principal_kind"            bson:"principal_kind,omitempty"`
+	ServiceAccountID string `grove:"service_account_id"        bson:"service_account_id,omitempty"`
+	OrgID            string `grove:"org_id"                    bson:"org_id,omitempty"`
+	FamilyID         string `grove:"family_id"                 bson:"family_id,omitempty"`
+	Token            string `grove:"token"                     bson:"token"`
+	RefreshToken     string `grove:"refresh_token"             bson:"refresh_token"`
+	IPAddress        string `grove:"ip_address"                bson:"ip_address"`
+	UserAgent        string `grove:"user_agent"                bson:"user_agent"`
+	DeviceID         string `grove:"device_id"                 bson:"device_id,omitempty"`
+	ImpersonatedBy   string `grove:"impersonated_by"           bson:"impersonated_by,omitempty"`
+	// Mongo stores the slugs as a native array, the way WebhookModel.Events
+	// does. The SQL stores encode JSON into a text column because they have
+	// no array type worth using here; there is no reason to flatten it twice.
+	Roles                 []string  `grove:"roles"                     bson:"roles,omitempty"`
 	LastActivityAt        time.Time `grove:"last_activity_at"          bson:"last_activity_at,omitempty"`
 	ExpiresAt             time.Time `grove:"expires_at"                bson:"expires_at"`
 	RefreshTokenExpiresAt time.Time `grove:"refresh_token_expires_at"  bson:"refresh_token_expires_at"`
@@ -205,6 +220,7 @@ func toSessionModel(s *session.Session) *sessionModel {
 		AppID:                 s.AppID.String(),
 		EnvID:                 s.EnvID.String(),
 		UserID:                s.UserID.String(),
+		PrincipalKind:         s.PrincipalKind,
 		Token:                 s.Token,
 		RefreshToken:          s.RefreshToken,
 		IPAddress:             s.IPAddress,
@@ -214,6 +230,9 @@ func toSessionModel(s *session.Session) *sessionModel {
 		RefreshTokenExpiresAt: s.RefreshTokenExpiresAt,
 		CreatedAt:             s.CreatedAt,
 		UpdatedAt:             s.UpdatedAt,
+	}
+	if !s.ServiceAccountID.IsNil() {
+		m.ServiceAccountID = s.ServiceAccountID.String()
 	}
 	if s.OrgID.Prefix() != "" {
 		m.OrgID = s.OrgID.String()
@@ -226,6 +245,9 @@ func toSessionModel(s *session.Session) *sessionModel {
 	}
 	if s.FamilyID.Prefix() != "" {
 		m.FamilyID = s.FamilyID.String()
+	}
+	if len(s.Roles) > 0 {
+		m.Roles = append([]string(nil), s.Roles...)
 	}
 	return m
 }
@@ -240,15 +262,11 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 		return nil, err
 	}
 	envID, _ := id.ParseEnvironmentID(m.EnvID) //nolint:errcheck // best-effort parse
-	userID, err := id.ParseUserID(m.UserID)
-	if err != nil {
-		return nil, err
-	}
 	s := &session.Session{
 		ID:                    sessID,
 		AppID:                 appID,
 		EnvID:                 envID,
-		UserID:                userID,
+		PrincipalKind:         m.PrincipalKind,
 		Token:                 m.Token,
 		RefreshToken:          m.RefreshToken,
 		IPAddress:             m.IPAddress,
@@ -258,6 +276,24 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 		RefreshTokenExpiresAt: m.RefreshTokenExpiresAt,
 		CreatedAt:             m.CreatedAt,
 		UpdatedAt:             m.UpdatedAt,
+	}
+	// Guarded like every other optional id below rather than parsed up front:
+	// a service-account session stores no user_id, and an unguarded parse
+	// rejects the whole document with `id: parse "": empty string`, which turns
+	// a readable session into a failed lookup.
+	if m.UserID != "" {
+		userID, err := id.ParseUserID(m.UserID)
+		if err != nil {
+			return nil, err
+		}
+		s.UserID = userID
+	}
+	if m.ServiceAccountID != "" {
+		svcID, err := id.ParseServiceAccountID(m.ServiceAccountID)
+		if err != nil {
+			return nil, err
+		}
+		s.ServiceAccountID = svcID
 	}
 	if m.OrgID != "" {
 		orgID, err := id.ParseOrgID(m.OrgID)
@@ -286,6 +322,9 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 			return nil, err
 		}
 		s.FamilyID = famID
+	}
+	if len(m.Roles) > 0 {
+		s.Roles = append([]string(nil), m.Roles...)
 	}
 	return s, nil
 }

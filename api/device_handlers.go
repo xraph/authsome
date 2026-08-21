@@ -16,7 +16,10 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerDeviceRoutes(router forge.Router) error {
-	g := router.Group("/v1", forge.WithGroupTags("devices"))
+	g := router.Group("/v1", forge.WithGroupTags("devices"),
+		// Every route in this group authenticates by session; the manifest in
+		// api.go has said so by hand since before routes could declare it.
+		forge.WithGroupAuth("session", "session-cookie"))
 
 	if err := g.GET("/devices", a.handleListDevices,
 		forge.WithSummary("List devices"),
