@@ -61,6 +61,14 @@ func (s *EncryptedStore) GetConnectionByDomain(ctx context.Context, appID id.App
 	return s.decryptInPlace(c)
 }
 
+func (s *EncryptedStore) GetConnectionByDomainAndOrg(ctx context.Context, appID id.AppID, orgID id.OrgID, domain string) (*Connection, error) {
+	c, err := s.inner.GetConnectionByDomainAndOrg(ctx, appID, orgID, domain)
+	if err != nil {
+		return nil, err
+	}
+	return s.decryptInPlace(c)
+}
+
 func (s *EncryptedStore) GetConnectionByProvider(ctx context.Context, appID id.AppID, provider string) (*Connection, error) {
 	c, err := s.inner.GetConnectionByProvider(ctx, appID, provider)
 	if err != nil {
