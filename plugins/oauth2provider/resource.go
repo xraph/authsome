@@ -1,7 +1,10 @@
 package oauth2provider
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 )
 
 // resourceParams extracts the repeatable RFC 8707 resource parameter.
@@ -34,4 +37,65 @@ func resourceParams(r *http.Request) []string {
 	}
 
 	return out
+}
+
+// resolveResources validates the requested resource indicators against the
+// client's allowlist and returns the audience to grant.
+//
+// This mirrors resolveScopes, with one deliberate difference. An empty scope
+// request yields the client's whole registered set, because a scope names
+// something the client already holds. An empty resource request yields
+// nothing, because widening a token to every resource a client may target is
+// the opposite of what RFC 8707 is for.
+//
+// A client with an empty allowlist may target nothing. That is the state every
+// client registered before this existed is in, and it is why the deny is safe:
+// such a client has never sent a resource parameter, so it never reaches the
+// rejection.
+func resolveResources(client *OAuth2Client, requested []string) ([]string, error) {
+	if len(requested) == 0 {
+		return nil, nil
+	}
+
+	allowed := make(map[string]struct{}, len(client.Resources))
+	for _, r := range client.Resources {
+		allowed[r] = struct{}{}
+	}
+
+	seen := make(map[string]struct{}, len(requested))
+	out := make([]string, 0, len(requested))
+
+	for _, raw := range requested {
+		if raw == "" {
+			return nil, newOAuth2Error(http.StatusBadRequest, "invalid_target",
+				"resource must not be empty")
+		}
+
+		// RFC 8707 section 2: the value MUST be an absolute URI and MUST NOT
+		// carry a fragment. A fragment never reaches a server, so two values
+		// differing only after the # would name the same resource while
+		// comparing as different audiences.
+		u, err := url.Parse(raw)
+		if err != nil || !u.IsAbs() {
+			return nil, newOAuth2Error(http.StatusBadRequest, "invalid_target",
+				fmt.Sprintf("resource %q is not an absolute URI", raw))
+		}
+		if u.Fragment != "" || strings.Contains(raw, "#") {
+			return nil, newOAuth2Error(http.StatusBadRequest, "invalid_target",
+				fmt.Sprintf("resource %q must not include a fragment", raw))
+		}
+
+		if _, ok := allowed[raw]; !ok {
+			return nil, newOAuth2Error(http.StatusBadRequest, "invalid_target",
+				fmt.Sprintf("resource %q is not registered for this client", raw))
+		}
+
+		if _, dup := seen[raw]; dup {
+			continue
+		}
+		seen[raw] = struct{}{}
+		out = append(out, raw)
+	}
+
+	return out, nil
 }
