@@ -172,6 +172,19 @@ func (s *roleStampingStore) shouldRestamp(sess *session.Session) bool {
 		return false
 	case sess.PrincipalKind == principalKindServiceAccount:
 		return false
+	case sess.PrincipalKind == session.PrincipalKindAgent:
+		// Same reasoning as the identical case in shouldStamp: re-stamping
+		// here would hand an agent session the delegating human's full role
+		// set on every refresh, letting a role-gated route be satisfied
+		// straight off sess.Roles without agentauth.Authorize's scope
+		// intersection ever running. Engine.Refresh (service.go) refuses to
+		// rotate an agent-principal session at all today, so this case is
+		// currently unreachable through the generic refresh path — but this
+		// decorator is the one place every CreateSession/RotateSession call
+		// funnels through, exactly the property that makes shouldStamp's
+		// agent case effective, so it must hold here independently of
+		// whatever refuses or allows rotation upstream.
+		return false
 	case sess.AppID.IsNil() || sess.UserID.IsNil():
 		return false
 	default:

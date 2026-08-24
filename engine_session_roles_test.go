@@ -213,3 +213,32 @@ func TestRotateSessionKeepsRolesWhenRefreshFails(t *testing.T) {
 		t.Errorf("rotated roles = %v, want the previously stamped [admin]", got)
 	}
 }
+
+// TestRotateSessionSkipsAgents is the refresh-time counterpart to
+// TestCreateSessionSkipsAgents. Before this fix, an agent session presented
+// for refresh (which requires a real, non-empty RefreshToken — the very
+// thing plugins/agentauth's C1 fix supplies) would be re-stamped with the
+// delegating human's full role set on every rotation, restoring the exact
+// role-gated bypass shouldStamp closes at issue time. Engine.Refresh also
+// now refuses to rotate an agent-principal session at all (service.go), but
+// this decorator is the one place every RotateSession call funnels through
+// regardless of what calls it, so the exclusion has to hold here
+// independently of that upstream refusal.
+func TestRotateSessionSkipsAgents(t *testing.T) {
+	s, inner := stampingStore(t, func(context.Context, id.AppID, id.UserID) ([]string, error) {
+		return []string{"admin", "owner"}, nil
+	})
+
+	sess := testSession()
+	sess.PrincipalKind = session.PrincipalKindAgent
+	sess.AgentID = id.NewAgentID()
+	sess.GrantID = id.NewAgentGrantID()
+
+	if _, err := s.RotateSession(context.Background(), sess, "old-token"); err != nil {
+		t.Fatalf("RotateSession: %v", err)
+	}
+
+	if got := inner.rotated.Roles; len(got) != 0 {
+		t.Errorf("roles after rotate on agent session = %v, want none", got)
+	}
+}

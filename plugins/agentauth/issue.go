@@ -13,9 +13,11 @@ import (
 	"github.com/xraph/authsome/session"
 )
 
-// agentSessionTTL bounds an agent access token. Short by design: the refresh
-// path re-checks the grant, so a short session is what makes revocation and
-// expiry take effect quickly.
+// agentSessionTTL bounds an agent access token. Short by design: Engine.Refresh
+// (service.go) refuses to rotate an agent-principal session at all today —
+// there is no agent-aware refresh path yet, so this TTL is a hard ceiling,
+// not a value a refresh can extend. A short session is what keeps a revoked
+// or expired grant's effect prompt in the absence of any renewal.
 const agentSessionTTL = 15 * time.Minute
 
 // IssueMeta carries request-scoped metadata onto the minted session. Without

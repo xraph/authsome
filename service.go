@@ -523,6 +523,26 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 		return nil, account.ErrInvalidCredentials
 	}
 
+	// Refuse to rotate an agent-principal session. This generic path has no
+	// grant to consult: account.RefreshSession sets ExpiresAt to now plus the
+	// app's configured TokenTTL with no awareness that an agent session's
+	// lifetime is supposed to be bounded by an agentauth.AgentGrant, so a
+	// rotation here would let an agent session outlive a revoked or expired
+	// grant indefinitely — the "never outlives the grant" invariant
+	// IssueAgentSession clamps at mint time is otherwise undone by the first
+	// refresh. Reaching into agentauth's grant store from here to clamp and
+	// re-validate properly would mean this engine package importing a
+	// specific plugin's package, which is the dependency direction the
+	// plugin architecture exists to avoid: the engine does not know about
+	// individual plugins by type. Refusing outright is the safe default
+	// until a proper seam for agent-aware refresh exists (see agentauth's
+	// package docs); a refused refresh costs the caller a re-authentication,
+	// an unclamped one costs the grant model its only enforcement point on
+	// this path.
+	if sess.PrincipalKind == session.PrincipalKindAgent {
+		return nil, account.ErrInvalidCredentials
+	}
+
 	// Capture the pre-rotation access token. The rotation below is committed
 	// via a compare-and-swap keyed on this value, so two concurrent refreshes
 	// presenting the same token cannot both persist their (different) rotated
