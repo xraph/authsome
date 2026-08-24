@@ -58,6 +58,10 @@ type SignUpRequest struct {
 	Metadata  map[string]string `json:"metadata,omitempty"` // custom form fields
 	IPAddress string            `json:"ip_address,omitempty"`
 	UserAgent string            `json:"user_agent,omitempty"`
+
+	// DPoPJKT binds the newly created session to a client-held key
+	// (RFC 9449). Empty issues an ordinary unbound session.
+	DPoPJKT string `json:"-"`
 }
 
 // SignInRequest is the input for account authentication.
@@ -69,4 +73,8 @@ type SignInRequest struct {
 	Password  string           `json:"password"`
 	IPAddress string           `json:"ip_address,omitempty"`
 	UserAgent string           `json:"user_agent,omitempty"`
+
+	// DPoPJKT binds the issued session to a client-held key (RFC 9449).
+	// Empty issues an ordinary unbound session.
+	DPoPJKT string `json:"-"`
 }

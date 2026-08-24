@@ -56,6 +56,10 @@ type IssueSessionRequest struct {
 	// lifetime an operator set centrally.
 	SessionTTL time.Duration
 	RefreshTTL time.Duration
+
+	// DPoPJKT binds the issued session to a client-held key (RFC 9449).
+	// Empty issues an ordinary unbound session.
+	DPoPJKT string
 }
 
 // IssueSessionResult is the gate's success output. On the
@@ -196,7 +200,7 @@ func (e *Engine) IssueSession(ctx context.Context, req *IssueSessionRequest) (*I
 
 	sessCfg := e.sessionConfigForApp(ctx, req.AppID, req.EnvID)
 	applySessionTTLOverride(&sessCfg, req.SessionTTL, req.RefreshTTL)
-	sess, err := e.newSession(req.AppID, req.User.ID, sessCfg)
+	sess, err := e.newSession(req.AppID, req.User.ID, sessCfg, req.DPoPJKT)
 	if err != nil {
 		return nil, fmt.Errorf("authsome: build session: %w", err)
 	}
