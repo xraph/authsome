@@ -7,7 +7,9 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/base64"
 	"encoding/json"
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -83,8 +85,16 @@ func TestParseJSON_RejectsWeakRSA(t *testing.T) {
 }
 
 // TestRoundTrip proves Encode and ParseJSON agree for every supported key
-// type. Testing them as a pair catches a coordinate padding bug that testing
-// either alone would miss.
+// type: encoding a key and parsing the result back gives the same
+// crypto.PublicKey the encoder started from.
+//
+// This does NOT catch a coordinate padding regression in coordinate(): the
+// comparison is on decoded *ecdsa.PublicKey structs, whose X and Y are
+// big.Int, and big.Int.SetBytes normalises away any leading zero byte on the
+// way in. An unpadded coordinate and a correctly padded one decode to the
+// same big.Int, so this test passes either way. See
+// TestEncode_PadsShortCoordinate, which asserts on the encoded wire form
+// instead and is the one that actually catches that regression.
 func TestRoundTrip(t *testing.T) {
 	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
@@ -114,4 +124,41 @@ func TestRoundTrip(t *testing.T) {
 			assert.Equal(t, tc.pub, got)
 		})
 	}
+}
+
+// TestEncode_PadsShortCoordinate exercises the case TestRoundTrip cannot: an
+// EC coordinate whose raw big-endian bytes are shorter than the curve's field
+// size because its top byte is zero.
+//
+// k = 43 is a fixed scalar, not one found by generating keys until one
+// happened to qualify: multiplying the P-256 base point by it is deterministic,
+// so this test cannot flake. It was chosen by an offline search (multiply the
+// base point by 1, 2, 3, ... and check the coordinates) for a scalar whose
+// public key has a Y coordinate under 2^248, i.e. one whose 32-byte big-endian
+// form starts with a zero byte. k = 43 is the first such scalar; its Y is 31
+// raw bytes, not 32. The assertion below checks BitLen at test time too, so a
+// change to the elliptic implementation that shifted the result would fail
+// loudly here rather than silently stop testing anything.
+//
+// Unlike TestRoundTrip, this asserts on the encoded wire form: the raw byte
+// length behind the base64url x and y in the resulting JWK. That is what a
+// third-party verifier actually parses, and what coordinate()'s padding
+// exists to keep at exactly 32 bytes for P-256 regardless of leading zeros.
+func TestEncode_PadsShortCoordinate(t *testing.T) {
+	curve := elliptic.P256()
+	x, y := curve.ScalarBaseMult(big.NewInt(43).Bytes())
+	require.LessOrEqualf(t, y.BitLen(), 248,
+		"fixture scalar k=43 no longer produces a short Y coordinate (BitLen=%d); pick a new scalar", y.BitLen())
+
+	pub := &ecdsa.PublicKey{Curve: curve, X: x, Y: y}
+	j, err := jwkutil.Encode(pub, "", "ES256")
+	require.NoError(t, err)
+
+	xBytes, err := base64.RawURLEncoding.DecodeString(j.X)
+	require.NoError(t, err)
+	yBytes, err := base64.RawURLEncoding.DecodeString(j.Y)
+	require.NoError(t, err)
+
+	assert.Len(t, xBytes, 32, "encoded x must be exactly the P-256 field size")
+	assert.Len(t, yBytes, 32, "encoded y must be exactly the P-256 field size, even with a leading zero byte")
 }
