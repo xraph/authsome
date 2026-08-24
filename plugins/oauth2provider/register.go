@@ -348,21 +348,28 @@ type RegistrationRequest struct {
 // ClientID is tagged json:"-": without it, a body key "clientId" (matched
 // case-insensitively by encoding/json against the Go field name, not
 // against the path parameter name or the RFC wire name "client_id", which
-// binds to the separately tagged BodyClientID below) lands here and
-// overwrites the path-bound value, since BindRequest binds the path first
-// and then decodes the body on top of it. That let a caller PUT to an
-// arbitrary junk path with {"clientId": "<victim-id>"} in the body and
+// binds to the separately tagged BodyClientID below) would land here and
+// overwrite the path-bound value, since BindRequest binds the path first
+// and then decodes the body on top of it. That would let a caller PUT to
+// an arbitrary junk path with {"clientId": "<victim-id>"} in the body and
 // have the section 2.2 client_id check below compare the body against
-// itself instead of against the URL, while the route's rate limiter (keyed
-// on the path segment) charged the junk value instead of the real one.
-// Handlers below additionally never read this field — they take the
-// client_id from ctx.Param("clientId") directly, confirmed by actually
-// reverting each protection in isolation: removing only this tag leaves
-// the handler unaffected (it never consults the field either way), and
-// removing only the handler's ctx.Param read while this tag stays in
-// place is what reproduces the original bug. So the tag alone is
-// belt-and-braces; the ctx.Param read in the handler is what actually
-// carries the fix.
+// itself instead of against the URL, while the route's rate limiter
+// (keyed on the path segment) charged the junk value instead of the real
+// one.
+//
+// Two independent protections close this, either sufficient on its own,
+// confirmed by reverting each in isolation and rerunning
+// TestManage_UpdateIgnoresClientIDSmuggledInBody. With the json:"-" tag
+// removed but the handler below still reading ctx.Param("clientId")
+// instead of this field, the test still passes: encoding/json never
+// writes a json:"-" field regardless of body content, so restoring the
+// tag was not what made that direction safe, the handler simply never
+// looked here. With the tag restored but the handler changed to read this
+// field instead of ctx.Param, the test also still passes, because the tag
+// alone already keeps this field pinned to the path value. Only removing
+// both at once reproduces the original bug and makes the test fail. So
+// this tag and the handler's ctx.Param read are not a primary fix plus a
+// backup; either one alone already prevents the body from winning.
 type UpdateRegistrationRequest struct {
 	ClientID string `path:"clientId" json:"-"`
 
@@ -448,9 +455,9 @@ func (p *Plugin) handleReadRegistration(ctx forge.Context, _ *RegistrationReques
 
 func (p *Plugin) handleUpdateRegistration(ctx forge.Context, req *UpdateRegistrationRequest) (*RegisterClientResponse, error) {
 	// The client_id is read from the path directly rather than the bound
-	// request struct. See UpdateRegistrationRequest's doc comment: without
-	// this, a body key matching ClientID's field name could overwrite the
-	// path-bound value before this handler ever sees it.
+	// request struct. See UpdateRegistrationRequest's doc comment: this is
+	// one of two independent protections against a body key overwriting
+	// the path-bound value, not the only thing preventing it.
 	clientID := ctx.Param("clientId")
 	client, err := p.authenticateRegistration(ctx, clientID)
 	if err != nil {

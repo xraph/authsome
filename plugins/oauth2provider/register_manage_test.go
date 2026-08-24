@@ -297,8 +297,9 @@ func TestManage_UpdateIgnoresClientIDSmuggledInBody(t *testing.T) {
 	})
 }
 
-// PUT runs the same registration in place, so it is the same full-record
-// replace on every backend as POST is. It must be capped the same way.
+// PUT writes a full record on every backend just as POST's CreateClient
+// does (an UPDATE/ReplaceOne in place rather than an INSERT, but the same
+// whole-row write either way), so it must be capped the same way.
 func TestManage_UpdateRejectsOversizedClientName(t *testing.T) {
 	_, st, router, _ := newRegistrationFixture(t, true)
 	clientID, token := registerOne(t, router)
