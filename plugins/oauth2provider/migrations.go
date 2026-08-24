@@ -169,6 +169,10 @@ ALTER TABLE authsome_oauth2_clients
 CREATE INDEX IF NOT EXISTS idx_authsome_oauth2_clients_dynamic
     ON authsome_oauth2_clients (app_id)
     WHERE dynamically_registered;
+
+UPDATE authsome_oauth2_clients
+   SET token_endpoint_auth_method = CASE WHEN public THEN 'none' ELSE 'client_secret_basic' END
+ WHERE token_endpoint_auth_method = '';
 `)
 				return err
 			},
@@ -292,6 +296,10 @@ ALTER TABLE authsome_oauth2_clients ADD COLUMN registration_token_hash    TEXT N
 ALTER TABLE authsome_oauth2_clients ADD COLUMN dynamically_registered     BOOLEAN NOT NULL DEFAULT 0;
 ALTER TABLE authsome_oauth2_clients ADD COLUMN client_secret_expires_at   TIMESTAMP;
 ALTER TABLE authsome_oauth2_clients ADD COLUMN metadata                   TEXT NOT NULL DEFAULT '{}';
+
+UPDATE authsome_oauth2_clients
+   SET token_endpoint_auth_method = CASE WHEN public = 1 THEN 'none' ELSE 'client_secret_basic' END
+ WHERE token_endpoint_auth_method = '';
 `)
 				return err
 			},

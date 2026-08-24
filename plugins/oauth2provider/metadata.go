@@ -6,7 +6,11 @@ import (
 
 // AuthServerMetadata is the RFC 8414 authorization server metadata document.
 // It carries every field the OIDC discovery document does, plus the RFC 7591
-// registration endpoint, and one builder produces both so they cannot drift.
+// registration endpoint. handleDiscovery hand-maps buildAuthServerMetadata's
+// output onto the OIDC DiscoveryResponse struct field by field; the two are
+// not one shared type, so TestMetadata_OIDCAndAuthServerAgree compares the
+// full set of JSON keys both documents actually advertise, to catch a field
+// added to one and not the other.
 type AuthServerMetadata struct {
 	Issuer                            string   `json:"issuer"`
 	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
@@ -63,7 +67,11 @@ func (p *Plugin) buildAuthServerMetadata() *AuthServerMetadata {
 		},
 		SubjectTypesSupported:            []string{"public"},
 		IDTokenSigningAlgValuesSupported: []string{"RS256", "ES256"},
-		ScopesSupported:                  []string{"openid", "profile", "email", "phone"},
+		// The configured DynamicRegistrationScopes allowlist, not a
+		// separate hardcoded list: advertising a scope here that
+		// registration would then silently drop (or vice versa) is
+		// exactly the drift this shares a single source to avoid.
+		ScopesSupported: p.config.DynamicRegistrationScopes,
 		TokenEndpointAuthMethodsSupported: []string{
 			"client_secret_post", "client_secret_basic", "none",
 		},
@@ -91,7 +99,7 @@ func (p *Plugin) handleProtectedResourceMetadata(_ forge.Context, _ *DiscoveryRe
 	return &ProtectedResourceMetadata{
 		Resource:               issuer,
 		AuthorizationServers:   []string{issuer},
-		ScopesSupported:        []string{"openid", "profile", "email", "phone"},
+		ScopesSupported:        p.config.DynamicRegistrationScopes,
 		BearerMethodsSupported: []string{"header"},
 	}, nil
 }

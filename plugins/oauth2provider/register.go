@@ -23,19 +23,36 @@ import (
 // POST is not, but the record it writes goes through the exact same
 // full-row replace on every backend (see UpdateClient's doc comment), so
 // the cap applies just as much there.
+//
+// This caps the COUNT of redirect_uris, contacts and grant_types, the
+// LENGTH of client_name, of each individual redirect_uri, and of the scope
+// string in bytes. It does not cap the number of scopes directly: scope is
+// one space-delimited string bounded by maxRegisterScopeLen, and
+// clampScopes both intersects it against the allowlist and deduplicates,
+// so the stored scopes slice can never exceed the allowlist's size anyway.
 const (
-	maxRegisterRedirectURIs  = 20
-	maxRegisterClientNameLen = 256
-	maxRegisterContacts      = 10
+	maxRegisterRedirectURIs   = 20
+	maxRegisterRedirectURILen = 2048
+	maxRegisterClientNameLen  = 256
+	maxRegisterContacts       = 10
+	maxRegisterScopeLen       = 1024
+	maxRegisterGrantTypes     = 10
 )
 
 // checkRegistrationSizeCaps enforces maxRegisterRedirectURIs,
-// maxRegisterClientNameLen and maxRegisterContacts. Shared by registration
-// and update so the two paths cannot drift on what counts as too large.
-func checkRegistrationSizeCaps(redirectURIs []string, clientName string, contacts []string) error {
+// maxRegisterRedirectURILen, maxRegisterClientNameLen, maxRegisterContacts,
+// maxRegisterScopeLen and maxRegisterGrantTypes. Shared by registration and
+// update so the two paths cannot drift on what counts as too large.
+func checkRegistrationSizeCaps(redirectURIs []string, clientName string, contacts []string, scope string, grantTypes []string) error {
 	if len(redirectURIs) > maxRegisterRedirectURIs {
 		return regError(http.StatusBadRequest, errInvalidClientMetadata,
 			fmt.Sprintf("redirect_uris must not exceed %d entries", maxRegisterRedirectURIs))
+	}
+	for _, u := range redirectURIs {
+		if len(u) > maxRegisterRedirectURILen {
+			return regError(http.StatusBadRequest, errInvalidClientMetadata,
+				fmt.Sprintf("redirect_uris entries must not exceed %d characters", maxRegisterRedirectURILen))
+		}
 	}
 	if len(clientName) > maxRegisterClientNameLen {
 		return regError(http.StatusBadRequest, errInvalidClientMetadata,
@@ -44,6 +61,14 @@ func checkRegistrationSizeCaps(redirectURIs []string, clientName string, contact
 	if len(contacts) > maxRegisterContacts {
 		return regError(http.StatusBadRequest, errInvalidClientMetadata,
 			fmt.Sprintf("contacts must not exceed %d entries", maxRegisterContacts))
+	}
+	if len(scope) > maxRegisterScopeLen {
+		return regError(http.StatusBadRequest, errInvalidClientMetadata,
+			fmt.Sprintf("scope must not exceed %d characters", maxRegisterScopeLen))
+	}
+	if len(grantTypes) > maxRegisterGrantTypes {
+		return regError(http.StatusBadRequest, errInvalidClientMetadata,
+			fmt.Sprintf("grant_types must not exceed %d entries", maxRegisterGrantTypes))
 	}
 	return nil
 }
@@ -165,7 +190,7 @@ func (p *Plugin) handleRegisterClient(ctx forge.Context, req *RegisterClientRequ
 		return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
 			"redirect_uris is required")
 	}
-	if capErr := checkRegistrationSizeCaps(req.RedirectURIs, req.ClientName, req.Contacts); capErr != nil {
+	if capErr := checkRegistrationSizeCaps(req.RedirectURIs, req.ClientName, req.Contacts, req.Scope, req.GrantTypes); capErr != nil {
 		return nil, capErr
 	}
 	for _, u := range req.RedirectURIs {
@@ -361,15 +386,16 @@ type RegistrationRequest struct {
 // confirmed by reverting each in isolation and rerunning
 // TestManage_UpdateIgnoresClientIDSmuggledInBody. With the json:"-" tag
 // removed but the handler below still reading ctx.Param("clientId")
-// instead of this field, the test still passes: encoding/json never
-// writes a json:"-" field regardless of body content, so restoring the
-// tag was not what made that direction safe, the handler simply never
-// looked here. With the tag restored but the handler changed to read this
-// field instead of ctx.Param, the test also still passes, because the tag
-// alone already keeps this field pinned to the path value. Only removing
-// both at once reproduces the original bug and makes the test fail. So
-// this tag and the handler's ctx.Param read are not a primary fix plus a
-// backup; either one alone already prevents the body from winning.
+// instead of this field, the test still passes: the handler never looks at
+// this field at all, regardless of what body content lands in it, so
+// restoring the tag was not what made that direction safe, the handler
+// simply never looked here. With the tag restored but the handler changed
+// to read this field instead of ctx.Param, the test also still passes,
+// because the tag alone already keeps this field pinned to the path value.
+// Only removing both at once reproduces the original bug and makes the
+// test fail. So this tag and the handler's ctx.Param read are not a
+// primary fix plus a backup; either one alone already prevents the body
+// from winning.
 type UpdateRegistrationRequest struct {
 	ClientID string `path:"clientId" json:"-"`
 
@@ -487,7 +513,7 @@ func (p *Plugin) handleUpdateRegistration(ctx forge.Context, req *UpdateRegistra
 	// just as capable of ballooning the stored row, or the redirect_uris
 	// list resolveRedirectURI scans on every authorize, as an initial
 	// registration is.
-	if capErr := checkRegistrationSizeCaps(req.RedirectURIs, req.ClientName, req.Contacts); capErr != nil {
+	if capErr := checkRegistrationSizeCaps(req.RedirectURIs, req.ClientName, req.Contacts, req.Scope, req.GrantTypes); capErr != nil {
 		return nil, capErr
 	}
 	for _, u := range req.RedirectURIs {

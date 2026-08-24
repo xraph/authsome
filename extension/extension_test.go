@@ -68,3 +68,17 @@ func TestHandler_NoAPI(t *testing.T) {
 
 // Compile-time check that Extension satisfies forge.MiddlewareExtension.
 var _ forge.MiddlewareExtension = (*Extension)(nil)
+
+// WithConfig replaces the engine config wholesale (option.go WithConfig:
+// e.config = cfg), so any option carrying ProtectedResourceMetadataURL that
+// runs before authsome.WithConfig(e.buildEngineConfig()) in e.init would be
+// silently discarded. buildEngineConfig is the only place left that can carry
+// the value through, the same way it already carries BasePath.
+func TestBuildEngineConfig_ThreadsProtectedResourceMetadataURL(t *testing.T) {
+	ext := New()
+	ext.config.ProtectedResourceMetadataURL = "https://auth.example.com/.well-known/oauth-protected-resource"
+
+	cfg := ext.buildEngineConfig()
+
+	assert.Equal(t, "https://auth.example.com/.well-known/oauth-protected-resource", cfg.ProtectedResourceMetadataURL)
+}

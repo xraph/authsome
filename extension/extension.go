@@ -1279,6 +1279,9 @@ func (e *Extension) buildEngineConfig() authsome.Config {
 		cfg.BasePath = e.config.BasePath
 	}
 	cfg.Debug = e.config.Debug
+	if e.config.ProtectedResourceMetadataURL != "" {
+		cfg.ProtectedResourceMetadataURL = e.config.ProtectedResourceMetadataURL
+	}
 	cfg.DisableRoutes = e.config.DisableRoutes
 	cfg.DisableMigrate = e.config.DisableMigrate
 

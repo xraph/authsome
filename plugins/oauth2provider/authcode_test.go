@@ -267,6 +267,52 @@ func TestAuthorize_RejectsUnregisteredGrantType(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "authorization_code")
 }
 
+// handleClientCredentialsGrant never consulted the client's registered grant
+// types, so a client registered only for authorization_code (like the
+// confidential fixture client) could still walk away with a client_credentials
+// token minted for id.Nil.
+func TestClientCredentials_RejectsUnregisteredGrantType(t *testing.T) {
+	_, _, mux := newFixture(t)
+
+	rec := postToken(t, mux, map[string]string{
+		"grant_type":    "client_credentials",
+		"client_id":     confidentialID,
+		"client_secret": confidentialSecret,
+	})
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "body: %s", rec.Body.String())
+	assert.Contains(t, rec.Body.String(), "client_credentials")
+}
+
+// A client explicitly registered for client_credentials must still be able to
+// use it.
+func TestClientCredentials_SucceedsWhenGranted(t *testing.T) {
+	_, st, mux := newFixture(t)
+
+	const ccID = "cc-granted"
+	const ccSecret = "cc-granted-secret"
+	hashed, err := bcrypt.GenerateFromPassword([]byte(ccSecret), bcrypt.MinCost)
+	require.NoError(t, err)
+	require.NoError(t, st.CreateClient(context.Background(), &oauth2provider.OAuth2Client{
+		ID:           id.NewOAuth2ClientID(),
+		AppID:        id.NewAppID(),
+		ClientID:     ccID,
+		ClientSecret: string(hashed),
+		Name:         "Client credentials granted",
+		RedirectURIs: []string{registeredURI},
+		Scopes:       []string{"openid"},
+		GrantTypes:   []string{"client_credentials"},
+	}))
+
+	rec := postToken(t, mux, map[string]string{
+		"grant_type":    "client_credentials",
+		"client_id":     ccID,
+		"client_secret": ccSecret,
+	})
+
+	assert.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+}
+
 // ── single use ────────────────────────────────────────
 
 // Checking Consumed and writing it are two statements; only an atomic

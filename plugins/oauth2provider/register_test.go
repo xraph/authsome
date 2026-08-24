@@ -1,7 +1,9 @@
 package oauth2provider_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,7 +15,9 @@ import (
 	"github.com/xraph/forge"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugins/oauth2provider"
 )
 
@@ -160,6 +164,75 @@ func TestRegister_RequiresRedirectURIs(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+// checkRegistrationSizeCaps used to leave redirect URI length, scope length
+// and grant_types count completely uncapped, so a body within forge's body
+// limit could still write an unboundedly large field into the stored client.
+// These four cases each exercise one of the caps added to close that gap.
+
+func TestRegister_RejectsOversizedRedirectURI(t *testing.T) {
+	_, _, router, _ := newRegistrationFixture(t, true)
+	longURI := "https://app.example.com/" + strings.Repeat("a", 2048)
+	rec := postRegister(t, router, `{"redirect_uris":["`+longURI+`"]}`)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code, "body: %s", rec.Body.String())
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, "invalid_client_metadata", got["error"])
+	assert.Contains(t, got["error_description"], "redirect_uris")
+}
+
+func TestRegister_RejectsOversizedScope(t *testing.T) {
+	_, _, router, _ := newRegistrationFixture(t, true)
+	longScope := strings.Repeat("openid ", 200) // > 1024 bytes
+	rec := postRegister(t, router, `{
+		"redirect_uris": ["https://app.example.com/cb"],
+		"scope": "`+longScope+`"
+	}`)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code, "body: %s", rec.Body.String())
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, "invalid_client_metadata", got["error"])
+	assert.Contains(t, got["error_description"], "scope")
+}
+
+func TestRegister_RejectsTooManyGrantTypes(t *testing.T) {
+	_, _, router, _ := newRegistrationFixture(t, true)
+	grants := make([]string, 0, 11)
+	for i := 0; i < 11; i++ {
+		grants = append(grants, `"authorization_code"`)
+	}
+	rec := postRegister(t, router, `{
+		"redirect_uris": ["https://app.example.com/cb"],
+		"grant_types": [`+strings.Join(grants, ",")+`]
+	}`)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code, "body: %s", rec.Body.String())
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, "invalid_client_metadata", got["error"])
+	assert.Contains(t, got["error_description"], "grant_types")
+}
+
+// A body with a scope repeated many times used to write one slice entry per
+// repetition into the stored client's scopes column.
+func TestRegister_DedupsDuplicatedScope(t *testing.T) {
+	_, st, router, _ := newRegistrationFixture(t, true)
+	rec := postRegister(t, router, `{
+		"redirect_uris": ["https://app.example.com/cb"],
+		"scope": "openid openid openid email"
+	}`)
+
+	require.Equal(t, http.StatusCreated, rec.Code, "body: %s", rec.Body.String())
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, "openid email", got["scope"])
+
+	stored, err := st.GetClient(t.Context(), got["client_id"].(string))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"openid", "email"}, stored.Scopes)
+}
+
 // With no publishable key on the request and no configured fallback, there
 // is no app to attach the client to and the request must be refused rather
 // than pooled into somebody's tenant.
@@ -242,4 +315,112 @@ func TestRegister_RateLimitsWithoutEngineLimiter(t *testing.T) {
 
 	rec := postRegister(t, router, body)
 	assert.Equal(t, http.StatusTooManyRequests, rec.Code, "the request past the limit must be rejected")
+}
+
+// ── tenancy: publishable key resolution ────────────────
+
+// stubAppResolver satisfies middleware.AppResolver with a fixed key->app
+// map, standing in for Engine.ResolveAppByPublicKey so these tests can wire
+// a real middleware.PublishableKeyMiddleware onto the test router instead
+// of stamping middleware.WithAppID onto the context by hand.
+type stubAppResolver struct {
+	byKey map[string]*app.App
+}
+
+func (r stubAppResolver) ResolveAppByPublicKey(_ context.Context, key string) (*app.App, error) {
+	a, ok := r.byKey[key]
+	if !ok {
+		return nil, errors.New("stubAppResolver: unknown publishable key")
+	}
+	return a, nil
+}
+
+// newTenantRouter builds a router carrying middleware.PublishableKeyMiddleware
+// ahead of the plugin's routes, mirroring how api.RegisterRoutes wires it in
+// production (see api/api.go), so a request with a resolvable
+// X-Publishable-Key header reaches the handler with an app already on the
+// context.
+func newTenantRouter(t *testing.T, p *oauth2provider.Plugin, resolver middleware.AppResolver) http.Handler {
+	t.Helper()
+	router := forge.NewRouter()
+	router.Use(middleware.PublishableKeyMiddleware(resolver, nil))
+	require.NoError(t, p.RegisterRoutes(router))
+	return router
+}
+
+func postRegisterWithKey(t *testing.T, router http.Handler, key, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/v1/oauth/register", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(middleware.PublishableKeyHeader, key)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	return rec
+}
+
+// resolveRegistrationAppID checks middleware.AppIDFrom before falling back
+// to Config.RegistrationAppID. This is the branch the rest of this file
+// never exercises, because every other fixture sets RegistrationAppID and
+// sends no key: a publishable key on the request must select its own app
+// even when the plugin has no configured fallback at all.
+func TestRegister_PublishableKeySelectsApp(t *testing.T) {
+	appA := &app.App{ID: id.NewAppID(), Name: "App A"}
+	resolver := stubAppResolver{byKey: map[string]*app.App{"pk_test_a": appA}}
+
+	p := oauth2provider.New(oauth2provider.Config{
+		Issuer:              "https://auth.example.com",
+		DynamicRegistration: true,
+		// RegistrationAppID deliberately unset: the publishable key is the
+		// only thing that can resolve an app for this request.
+	})
+	st := oauth2provider.NewMemoryStore()
+	p.SetOAuth2Store(st)
+	router := newTenantRouter(t, p, resolver)
+
+	rec := postRegisterWithKey(t, router, "pk_test_a",
+		`{"redirect_uris":["https://app.example.com/cb"]}`)
+	require.Equal(t, http.StatusCreated, rec.Code, "body: %s", rec.Body.String())
+
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	stored, err := st.GetClient(t.Context(), got["client_id"].(string))
+	require.NoError(t, err)
+	assert.Equal(t, appA.ID, stored.AppID)
+}
+
+// The cross-tenant boundary: a client registered under app A's publishable
+// key must never be attached to, or visible under, app B. Before this test
+// the four tenancy cases the design called for (context AppID, config
+// fallback, publishable key selection, and this boundary) had no coverage
+// for the last two at all.
+func TestRegister_PublishableKeyDoesNotCrossTenants(t *testing.T) {
+	appA := &app.App{ID: id.NewAppID(), Name: "App A"}
+	appB := &app.App{ID: id.NewAppID(), Name: "App B"}
+	resolver := stubAppResolver{byKey: map[string]*app.App{
+		"pk_test_a": appA,
+		"pk_test_b": appB,
+	}}
+
+	p := oauth2provider.New(oauth2provider.Config{
+		Issuer:              "https://auth.example.com",
+		DynamicRegistration: true,
+	})
+	st := oauth2provider.NewMemoryStore()
+	p.SetOAuth2Store(st)
+	router := newTenantRouter(t, p, resolver)
+
+	rec := postRegisterWithKey(t, router, "pk_test_a",
+		`{"redirect_uris":["https://app.example.com/cb"]}`)
+	require.Equal(t, http.StatusCreated, rec.Code, "body: %s", rec.Body.String())
+
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	stored, err := st.GetClient(t.Context(), got["client_id"].(string))
+	require.NoError(t, err)
+	assert.Equal(t, appA.ID, stored.AppID)
+	assert.NotEqual(t, appB.ID, stored.AppID)
+
+	bClients, err := st.ListClients(t.Context(), appB.ID)
+	require.NoError(t, err)
+	assert.Empty(t, bClients, "a client registered under app A's key must not be visible under app B")
 }

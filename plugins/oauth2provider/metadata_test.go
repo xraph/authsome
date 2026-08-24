@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,6 +50,25 @@ func TestMetadata_AuthServerDocument(t *testing.T) {
 	assert.Equal(t, "https://auth.example.com/v1/oauth/register", got["registration_endpoint"])
 }
 
+// scopes_supported used to be a hardcoded literal independent of
+// Config.DynamicRegistrationScopes, so a client following discovery could
+// ask for a scope ("phone") that registration's allowlist would then
+// silently drop, and the allowlist's own "offline_access" was never
+// advertised at all. Both documents now read the same
+// p.config.DynamicRegistrationScopes value, so this asserts they agree with
+// what registration actually grants, not a hand-picked set.
+func TestMetadata_ScopesSupportedMatchesRegistrationAllowlist(t *testing.T) {
+	p, _, _, _ := newRegistrationFixture(t, true)
+	router := newWellKnownRouter(t, p)
+
+	_, as := getJSON(t, router, "/.well-known/oauth-authorization-server")
+	_, res := getJSON(t, router, "/.well-known/oauth-protected-resource")
+
+	want := []any{"openid", "profile", "email", "offline_access"}
+	assert.Equal(t, want, as["scopes_supported"])
+	assert.Equal(t, want, res["scopes_supported"])
+}
+
 // Advertising an endpoint that 404s sends a client down a dead path and
 // produces a worse error than not advertising it.
 func TestMetadata_NoRegistrationEndpointWhenDisabled(t *testing.T) {
@@ -61,7 +81,12 @@ func TestMetadata_NoRegistrationEndpointWhenDisabled(t *testing.T) {
 	assert.False(t, present)
 }
 
-// One builder feeds both documents, so they cannot drift apart.
+// AuthServerMetadata and DiscoveryResponse are two field-identical Go
+// structs joined by a hand-written 15-field mapping in handleDiscovery, not
+// one shared type: adding a field to one does not add it to the other.
+// Comparing every key both documents actually advertise, rather than a
+// hand-picked subset, is what turns "the two cannot drift" from a comment
+// into something a future field addition actually gets caught by.
 func TestMetadata_OIDCAndAuthServerAgree(t *testing.T) {
 	p, _, _, _ := newRegistrationFixture(t, true)
 	router := newWellKnownRouter(t, p)
@@ -69,13 +94,23 @@ func TestMetadata_OIDCAndAuthServerAgree(t *testing.T) {
 	_, as := getJSON(t, router, "/.well-known/oauth-authorization-server")
 	_, oidc := getJSON(t, router, "/.well-known/openid-configuration")
 
-	for _, k := range []string{
-		"issuer", "authorization_endpoint", "token_endpoint", "jwks_uri",
-		"registration_endpoint", "grant_types_supported",
-		"code_challenge_methods_supported",
-	} {
+	asKeys := jsonKeys(as)
+	oidcKeys := jsonKeys(oidc)
+	require.Equal(t, asKeys, oidcKeys,
+		"the two discovery documents must advertise the same set of fields")
+
+	for _, k := range asKeys {
 		assert.Equal(t, as[k], oidc[k], "field %q differs between the two documents", k)
 	}
+}
+
+func jsonKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func TestMetadata_ProtectedResourceDocument(t *testing.T) {

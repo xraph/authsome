@@ -69,6 +69,12 @@ func TestClampGrantTypes(t *testing.T) {
 		_, err := clampGrantTypes([]string{deviceCodeGrantType})
 		assert.Error(t, err)
 	})
+
+	t.Run("dedups, first occurrence wins", func(t *testing.T) {
+		got, err := clampGrantTypes([]string{"refresh_token", "authorization_code", "refresh_token"})
+		require.NoError(t, err)
+		assert.Equal(t, []string{"refresh_token", "authorization_code"}, got)
+	})
 }
 
 func TestClampScopes(t *testing.T) {
@@ -85,6 +91,11 @@ func TestClampScopes(t *testing.T) {
 
 	t.Run("everything dropped yields empty, not the allowlist", func(t *testing.T) {
 		assert.Empty(t, clampScopes([]string{"admin:all"}, allow))
+	})
+
+	t.Run("dedups, first occurrence wins", func(t *testing.T) {
+		got := clampScopes([]string{"openid", "email", "openid"}, allow)
+		assert.Equal(t, []string{"openid", "email"}, got)
 	})
 }
 

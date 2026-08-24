@@ -100,7 +100,7 @@ func validateRedirectURI(raw string) error {
 			return nil
 		}
 		return regError(http.StatusBadRequest, errInvalidRedirectURI,
-			"http redirect_uri is only allowed on the loopback literals 127.0.0.1 and [::1]")
+			"http redirect_uri is only allowed on a loopback address (127.0.0.0/8 or [::1])")
 
 	case "":
 		return regError(http.StatusBadRequest, errInvalidRedirectURI,
@@ -123,16 +123,23 @@ func validateRedirectURI(raw string) error {
 // path. A request naming a forbidden grant is rejected rather than trimmed:
 // the client is asking for a capability, not expressing a preference, and
 // silently handing back less would leave it broken in a confusing way.
+// Duplicates are removed, first occurrence wins, so a repeated grant_type
+// cannot inflate the stored slice.
 func clampGrantTypes(requested []string) ([]string, error) {
 	if len(requested) == 0 {
 		return []string{"authorization_code"}, nil
 	}
+	seen := make(map[string]struct{}, len(requested))
 	out := make([]string, 0, len(requested))
 	for _, g := range requested {
 		if _, ok := dynamicGrantTypes[g]; !ok {
 			return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
 				fmt.Sprintf("grant_type %q is not available to dynamically registered clients", g))
 		}
+		if _, dup := seen[g]; dup {
+			continue
+		}
+		seen[g] = struct{}{}
 		out = append(out, g)
 	}
 	return out, nil
@@ -142,7 +149,9 @@ func clampGrantTypes(requested []string) ([]string, error) {
 // anything outside it. RFC 7591 section 2 lets the server substitute, and
 // dropping beats erroring because clients tend to ask for a broad set
 // optimistically; the response echoes what was actually granted. An empty
-// request yields the full allowlist.
+// request yields the full allowlist. Duplicates in the request are removed,
+// first occurrence wins, so a repeated scope cannot inflate the stored
+// slice.
 func clampScopes(requested, allowlist []string) []string {
 	if len(requested) == 0 {
 		return append([]string(nil), allowlist...)
@@ -151,11 +160,17 @@ func clampScopes(requested, allowlist []string) []string {
 	for _, s := range allowlist {
 		allowed[s] = struct{}{}
 	}
+	seen := make(map[string]struct{}, len(requested))
 	out := make([]string, 0, len(requested))
 	for _, s := range requested {
-		if _, ok := allowed[s]; ok {
-			out = append(out, s)
+		if _, ok := allowed[s]; !ok {
+			continue
 		}
+		if _, dup := seen[s]; dup {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
 	}
 	return out
 }

@@ -54,6 +54,16 @@ type ProtectedResource struct {
 	ScopesSupported []string
 }
 
+// defaultDynamicRegistrationScopes is the default Config.DynamicRegistrationScopes
+// allowlist, applied in New when the embedder sets none. Both discovery
+// documents advertise scopes_supported straight from
+// p.config.DynamicRegistrationScopes (metadata.go), so this default is also,
+// transitively, what a stock deployment advertises there. One list feeding
+// both means a client that follows discovery never asks for a scope
+// registration silently drops, and discovery never advertises a scope
+// registration would refuse by default.
+var defaultDynamicRegistrationScopes = []string{"openid", "profile", "email", "offline_access"}
+
 // Config configures the OAuth2 provider plugin.
 type Config struct {
 	// Issuer is the OAuth2 issuer URL (e.g. "https://auth.example.com").
@@ -136,7 +146,7 @@ func New(cfg ...Config) *Plugin {
 		c.DeviceCodeInterval = 5
 	}
 	if len(c.DynamicRegistrationScopes) == 0 {
-		c.DynamicRegistrationScopes = []string{"openid", "profile", "email", "offline_access"}
+		c.DynamicRegistrationScopes = append([]string(nil), defaultDynamicRegistrationScopes...)
 	}
 	if c.RegistrationRateLimit.Limit == 0 {
 		c.RegistrationRateLimit = RateLimit{Limit: 10, Window: time.Hour}
@@ -943,6 +953,9 @@ func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenReque
 	if client.Public {
 		return nil, forge.BadRequest("client_credentials grant not allowed for public clients")
 	}
+	if !clientAllowsGrant(client, "client_credentials") {
+		return nil, forge.BadRequest("client is not registered for the client_credentials grant")
+	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(req.ClientSecret)); err != nil {
 		return nil, forge.Unauthorized("invalid client_secret")
@@ -1007,8 +1020,10 @@ func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInf
 }
 
 // handleDiscovery derives the OIDC discovery document from
-// buildAuthServerMetadata so the OIDC and RFC 8414 documents cannot drift
-// apart.
+// buildAuthServerMetadata by copying each field across by hand.
+// AuthServerMetadata and DiscoveryResponse are field-identical but distinct
+// struct types, so a field added to one is not automatically added to the
+// other; TestMetadata_OIDCAndAuthServerAgree is what actually catches that.
 func (p *Plugin) handleDiscovery(_ forge.Context, _ *DiscoveryRequest) (*DiscoveryResponse, error) {
 	m := p.buildAuthServerMetadata()
 	return &DiscoveryResponse{
