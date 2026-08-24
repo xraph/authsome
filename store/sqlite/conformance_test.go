@@ -1,5 +1,3 @@
-//go:build integration
-
 package sqlite_test
 
 import (
@@ -18,12 +16,19 @@ import (
 	"github.com/xraph/authsome/store/storetest"
 )
 
+// principalDelegationCases exercise principal and delegation persistence,
+// which sqlite stubs until Task 6 of the non-human principals plan
+// implements it. Delete this skip list then.
+var principalDelegationCases = []string{
+	"PrincipalRoundTrip",
+	"EphemeralPrincipalExpiry",
+	"DelegationLifecycle",
+	"SessionActorChainRoundTrip",
+}
+
 // TestConformance runs the shared cross-backend store contract suite against
-// the SQLite backend. SQLite itself is embedded and needs no Docker, but this
-// is gated behind the integration tag anyway (matching postgres and mongo) so
-// that shared conformance cases added ahead of a backend's own implementation
-// task, such as the principal/delegation cases added in the non-human-
-// principals work, don't turn normal CI red before that backend's task lands.
+// the SQLite backend. SQLite is embedded, so this runs in normal CI without
+// Docker — giving a real SQL backend to cross-check the in-memory store.
 func TestConformance(t *testing.T) {
 	storetest.RunConformance(t, func(t *testing.T) store.Store {
 		ctx := context.Background()
@@ -36,5 +41,5 @@ func TestConformance(t *testing.T) {
 		s := sqlitestore.New(db)
 		require.NoError(t, s.Migrate(ctx))
 		return s
-	})
+	}, principalDelegationCases...)
 }

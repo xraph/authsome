@@ -33,8 +33,16 @@ import (
 type Factory func(t *testing.T) store.Store
 
 // RunConformance runs every contract test against stores produced by newStore.
-func RunConformance(t *testing.T, newStore Factory) {
+//
+// skip names cases the backend does not yet implement. Each is still
+// registered as a subtest and calls t.Skip from inside it, so a skipped case
+// shows up in `go test -v` output rather than silently not existing.
+func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 	t.Helper()
+	skipSet := make(map[string]bool, len(skip))
+	for _, name := range skip {
+		skipSet[name] = true
+	}
 	cases := []struct {
 		name string
 		fn   func(t *testing.T, s store.Store)
@@ -62,6 +70,9 @@ func RunConformance(t *testing.T, newStore Factory) {
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			if skipSet[tc.name] {
+				t.Skip("skipped by caller")
+			}
 			tc.fn(t, newStore(t))
 		})
 	}
@@ -754,6 +765,28 @@ func testDelegationLifecycle(t *testing.T, s store.Store) {
 	// Revoking twice is not an error. Revocation is the thing you want to
 	// succeed on a retry.
 	assert.NoError(t, s.RevokeDelegation(ctx, d.ID, now()))
+
+	// A revoked grant must free the (app, actor, subject, kind) slot rather
+	// than continue occupying it. The uniqueness constraint that backs this
+	// is a partial index on live rows only, so a naive full-tuple index
+	// would reject the fresh grant below and an agent whose grant was
+	// revoked could never be re-granted.
+	second := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     tn.AppID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantDelegation,
+		Scopes:    []string{"repo:read"},
+		GrantedBy: subject,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateDelegation(ctx, second), "revoking the first grant must free the slot for a fresh one")
+
+	foundSecond, err := s.FindActiveDelegation(ctx, tn.AppID, actor, subject, principal.GrantDelegation)
+	require.NoError(t, err)
+	assert.Equal(t, second.ID.String(), foundSecond.ID.String(), "the active grant must now be the fresh one, not the revoked one")
 }
 
 // testSessionActorChainRoundTrip pins that the chain survives every session
