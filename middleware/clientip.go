@@ -3,6 +3,7 @@ package middleware
 import (
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -120,4 +121,40 @@ func ClientIP(r *http.Request) string {
 		}
 	}
 	return peer.String()
+}
+
+// RequestURL reconstructs the absolute URL the client called, for comparison
+// against a DPoP proof's htu claim.
+//
+// Behind a load balancer r.Host and r.TLS describe the hop, not the client's
+// URL, so X-Forwarded-Proto and X-Forwarded-Host are honoured only when the
+// immediate peer is a trusted proxy. That is the same rule ClientIP applies
+// and it reuses the same configuration, so there is one notion of trusted
+// proxy in this codebase rather than two.
+//
+// Query and fragment are excluded: RFC 9449 compares htu without them.
+func RequestURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	host := r.Host
+
+	if peer := peerIP(r.RemoteAddr); peer != nil && isTrustedProxy(peer) {
+		if p := r.Header.Get("X-Forwarded-Proto"); p != "" {
+			// Take the first entry: a chain of proxies appends.
+			if i := strings.IndexByte(p, ','); i >= 0 {
+				p = p[:i]
+			}
+			scheme = strings.ToLower(strings.TrimSpace(p))
+		}
+		if h := r.Header.Get("X-Forwarded-Host"); h != "" {
+			if i := strings.IndexByte(h, ','); i >= 0 {
+				h = h[:i]
+			}
+			host = strings.TrimSpace(h)
+		}
+	}
+
+	return (&url.URL{Scheme: scheme, Host: host, Path: r.URL.Path}).String()
 }

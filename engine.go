@@ -253,6 +253,28 @@ func (e *Engine) buildAuthMiddleware() {
 	bindCfg := middleware.SessionBindingConfig{
 		CookieNameResolver: e.resolveSessionCookieName,
 		JWTSessionChecker:  e.jwtSessionChecker,
+
+		// DPoP enforcement wiring (RFC 9449). The validator is always
+		// non-nil (initDPoP builds it unconditionally); the nonce signer is
+		// nil until a secret is derivable, which DPoPNonceRequiredForApp
+		// already accounts for by refusing to demand nonces it cannot mint.
+		DPoPValidator:   e.DPoPValidator(),
+		DPoPNonceSigner: e.DPoPNonceSigner(),
+		DPoPNonceRequired: func(ctx context.Context, appID string) bool {
+			parsed, err := id.Parse(appID)
+			if err != nil {
+				return false
+			}
+			return e.DPoPNonceRequiredForApp(ctx, parsed)
+		},
+		DPoPAudit: func(ctx context.Context, action string, md map[string]string) {
+			severity := bridge.SeverityInfo
+			if action == hook.ActionDPoPProofReplayed {
+				severity = bridge.SeverityWarning
+			}
+			e.audit(ctx, severity, bridge.OutcomeFailure, action, "session",
+				md["session_id"], "", md["app_id"], "auth", md)
+		},
 	}
 
 	if e.HasJWT() {
