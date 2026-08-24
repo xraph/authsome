@@ -460,3 +460,125 @@ func runAudienceProbe(t *testing.T, mw forge.Middleware, token string) bool {
 	assert.Equal(t, http.StatusOK, rec.Code, "middleware always passes through to next handler")
 	return gotUser
 }
+
+// TestAuthMiddleware_Audience_JWTRefusalIsNotRescuedBySessionLookup covers the
+// seam between the two authentication paths.
+//
+// AuthMiddlewareWithJWT tries the JWT path, and on anything other than success
+// used to try the opaque session store with the same string. That string is
+// also what lands in sess.Token, so the lookup succeeds, and the second check
+// reads sess.Audience where the first read the aud claim. A JWT the audience
+// guard had just refused came straight back authenticated.
+//
+// The two rows are not a contrived pairing. An embedder setting
+// JWTConfig.Audience gets that value baked into every core-login JWT, while
+// older session rows carry no audience at all, so the claim and the row
+// disagree on exactly the field the guard reads.
+//
+// resolveSession works here on purpose. Making it fail, which is how the
+// earlier JWT test isolated its path, is precisely what hid this.
+func TestAuthMiddleware_Audience_JWTRefusalIsNotRescuedBySessionLookup(t *testing.T) {
+	const jwtToken = "header.payload.signature"
+
+	rowAudiences := map[string][]string{
+		"session row carries no audience":           nil,
+		"session row carries a different audience":  {"https://files.example.com"},
+		"session row carries the expected audience": {"https://api.example.com"},
+	}
+
+	for name, rowAudience := range rowAudiences {
+		t.Run(name, func(t *testing.T) {
+			testUserID := id.NewUserID()
+			testAppID := id.NewAppID()
+			testSessID := id.NewSessionID()
+
+			// The claim says the token is for another resource. The row says
+			// whatever this case says. Only the claim may decide.
+			validator := &mockJWTValidator{
+				claims: &tokenformat.TokenClaims{
+					UserID:    testUserID.String(),
+					AppID:     testAppID.String(),
+					SessionID: testSessID.String(),
+					Audience:  []string{"https://other.example.com"},
+				},
+			}
+
+			backingSession := &session.Session{
+				ID:       testSessID,
+				AppID:    testAppID,
+				UserID:   testUserID,
+				Token:    jwtToken,
+				Audience: rowAudience,
+			}
+
+			var sessionLookups int
+			mw := middleware.AuthMiddlewareWithJWT(
+				func(token string) (*session.Session, error) {
+					sessionLookups++
+					if token == jwtToken {
+						return backingSession, nil
+					}
+					return nil, errors.New("not found")
+				},
+				func(_ string) (*user.User, error) {
+					return &user.User{ID: testUserID, AppID: testAppID, Email: "rescue@test.com"}, nil
+				},
+				nil,
+				validator,
+				log.NewNoopLogger(),
+				middleware.SessionBindingConfig{
+					ExpectedAudienceResolver: audienceResolverForApp(
+						testAppID.String(), []string{"https://api.example.com"}),
+				},
+			)
+
+			assert.False(t, runAudienceProbe(t, mw, jwtToken),
+				"a JWT refused on audience must stay refused even though its token string resolves to a session row")
+			assert.Zero(t, sessionLookups,
+				"a refused JWT must not reach the session store at all")
+		})
+	}
+}
+
+// TestAuthMiddleware_JWTLookalikeStillFallsThrough is the other half of the
+// fix above. Only a token that actually validates as a JWT may stop the
+// middleware; a three-part string this deployment cannot validate has to keep
+// falling through to the opaque session path, which is how any opaque token
+// containing two dots authenticates today.
+func TestAuthMiddleware_JWTLookalikeStillFallsThrough(t *testing.T) {
+	const lookalike = "not.a.jwt"
+
+	testUserID := id.NewUserID()
+	testAppID := id.NewAppID()
+
+	validator := &mockJWTValidator{err: errors.New("signature invalid")}
+
+	backingSession := &session.Session{
+		ID:     id.NewSessionID(),
+		AppID:  testAppID,
+		UserID: testUserID,
+		Token:  lookalike,
+	}
+
+	mw := middleware.AuthMiddlewareWithJWT(
+		func(token string) (*session.Session, error) {
+			if token == lookalike {
+				return backingSession, nil
+			}
+			return nil, errors.New("not found")
+		},
+		func(_ string) (*user.User, error) {
+			return &user.User{ID: testUserID, AppID: testAppID, Email: "lookalike@test.com"}, nil
+		},
+		nil,
+		validator,
+		log.NewNoopLogger(),
+		middleware.SessionBindingConfig{
+			ExpectedAudienceResolver: audienceResolverForApp(
+				testAppID.String(), []string{"https://api.example.com"}),
+		},
+	)
+
+	assert.True(t, runAudienceProbe(t, mw, lookalike),
+		"a token that does not validate as a JWT must still reach the opaque session path")
+}

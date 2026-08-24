@@ -65,6 +65,15 @@ func NewJWT(cfg JWTConfig) (*JWT, error) {
 
 func (j *JWT) Name() string { return "jwt" }
 
+// ConfiguredAudience returns the app-wide default "aud" this format stamps on
+// tokens whose claims carry no audience of their own. Empty when unset.
+//
+// Callers need it so a session row can record the same audience the minted
+// token actually carries. When the row says nothing and the claim says
+// "https://api.example.com", the two disagree, and any check that reads one
+// after the other gets two different answers about the same credential.
+func (j *JWT) ConfiguredAudience() string { return j.config.Audience }
+
 // customClaims embeds jwt.RegisteredClaims and adds our custom fields.
 type customClaims struct {
 	jwt.RegisteredClaims

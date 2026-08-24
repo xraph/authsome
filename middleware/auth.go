@@ -359,8 +359,21 @@ func AuthMiddlewareWithJWT(
 			if token != "" {
 				// JWT detection: tokens with two dots are JWTs.
 				if tokenformat.IsJWT(token) && jwtValidator != nil {
-					if resolved := tryJWTAuth(ctx, token, jwtValidator, resolveUser, logger, bindCfg); resolved {
+					switch tryJWTAuth(ctx, token, jwtValidator, resolveUser, logger, bindCfg) {
+					case jwtAuthAuthenticated:
 						return next(ctx)
+					case jwtAuthRefused:
+						// The signature verified, so this token is one of ours,
+						// and something below the signature refused it. Stop
+						// here. Access tokens are stored as sess.Token too, so
+						// falling through would look the same string up in the
+						// session store and re-run the checks against the
+						// session row instead of the claims, handing back the
+						// authentication that was just denied.
+						return next(ctx)
+					case jwtAuthNotHandled:
+						// Not a token this deployment can validate. Something
+						// else may still claim it, so carry on.
 					}
 				}
 
@@ -384,9 +397,38 @@ func AuthMiddlewareWithJWT(
 	}
 }
 
+// jwtAuthResult says what tryJWTAuth decided about a bearer token.
+//
+// A plain bool cannot carry this. "I could not validate this" and "I validated
+// this and it is refused" both used to read as false, and the caller answered
+// both by trying the opaque session store with the same string. Access tokens
+// are stored as sess.Token, so that second attempt would find the row behind
+// the very token the first attempt rejected, and check the row's audience
+// rather than the aud claim.
+type jwtAuthResult int
+
+const (
+	// jwtAuthNotHandled means the string did not validate as a JWT this
+	// deployment issued. Other authentication methods may still claim it.
+	jwtAuthNotHandled jwtAuthResult = iota
+
+	// jwtAuthAuthenticated means the claims verified and the request context
+	// now carries the identity.
+	jwtAuthAuthenticated
+
+	// jwtAuthRefused means the signature verified, so the token is one of
+	// ours, and a check below the signature rejected it. Nothing else may
+	// re-authenticate it.
+	jwtAuthRefused
+)
+
 // tryJWTAuth validates a JWT token stateless and sets context from claims.
 // When a session checker is provided, the session is cross-checked against
 // the store to support JWT revocation and IP/device binding.
+//
+// Every rejection past the signature check returns jwtAuthRefused, not
+// jwtAuthNotHandled. Once the signature verifies, this deployment minted the
+// token and this function is the authority on it.
 func tryJWTAuth(
 	ctx forge.Context,
 	token string,
@@ -394,13 +436,13 @@ func tryJWTAuth(
 	resolveUser UserResolver,
 	logger log.Logger,
 	bindCfg SessionBindingConfig,
-) bool {
+) jwtAuthResult {
 	claims, err := validator.ValidateJWT(token)
 	if err != nil {
 		logger.Debug("auth middleware: JWT validation failed",
 			log.String("error", err.Error()),
 		)
-		return false
+		return jwtAuthNotHandled
 	}
 
 	// Cross-tenant guard: a JWT minted under one app must not be honored when
@@ -409,7 +451,7 @@ func tryJWTAuth(
 		logger.Warn("auth middleware: JWT app mismatch (publishable key switched)",
 			log.String("session_id", claims.SessionID),
 		)
-		return false
+		return jwtAuthRefused
 	}
 
 	// Resource indicator guard (RFC 8707): a token audienced at a resource
@@ -421,7 +463,7 @@ func tryJWTAuth(
 			logger.Warn("auth middleware: JWT audience mismatch",
 				log.String("session_id", claims.SessionID),
 			)
-			return false
+			return jwtAuthRefused
 		}
 	}
 
@@ -434,7 +476,7 @@ func tryJWTAuth(
 			logger.Debug("auth middleware: JWT session not found in store (revoked?)",
 				log.String("session_id", claims.SessionID),
 			)
-			return false
+			return jwtAuthRefused
 		}
 
 		// sess == nil && sessErr == nil means "feature disabled, skip checks".
@@ -448,7 +490,7 @@ func tryJWTAuth(
 						log.String("client_ip", clientIP),
 						log.String("session_id", sess.ID.String()),
 					)
-					return false
+					return jwtAuthRefused
 				}
 			}
 
@@ -461,7 +503,7 @@ func tryJWTAuth(
 						log.String("client_ua", ua),
 						log.String("session_id", sess.ID.String()),
 					)
-					return false
+					return jwtAuthRefused
 				}
 			}
 		}
@@ -503,12 +545,12 @@ func tryJWTAuth(
 			log.String("error", err.Error()),
 		)
 		ctx.WithContext(goCtx)
-		return true // Authenticated via JWT even if user lookup fails
+		return jwtAuthAuthenticated // Authenticated via JWT even if user lookup fails
 	}
 	goCtx = WithUser(goCtx, u)
 
 	ctx.WithContext(goCtx)
-	return true
+	return jwtAuthAuthenticated
 }
 
 // trySessionAuth attempts to authenticate via session token resolution.

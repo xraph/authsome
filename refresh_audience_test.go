@@ -57,3 +57,69 @@ func TestRefreshPreservesAudience(t *testing.T) {
 	assert.Equal(t, []string{"https://api.example.com"}, claims.Audience,
 		"the regenerated JWT lost its aud claim, so the refresh widened the token")
 }
+
+// TestNewSessionRecordsConfiguredJWTAudience proves the session row and the
+// token it holds agree about the audience.
+//
+// A core login mints its JWT with no per-token audience, so
+// GenerateAccessToken falls back to JWTConfig.Audience. The row used to be
+// written with none. Two checks read those two places for the same credential,
+// the JWT guard reading the claim and the session guard reading the row, so
+// leaving them different is what let a refused JWT come back authenticated
+// through a session lookup.
+func TestNewSessionRecordsConfiguredJWTAudience(t *testing.T) {
+	jwtFmt, err := tokenformat.NewJWT(tokenformat.JWTConfig{
+		SigningMethod: jwt.SigningMethodHS256,
+		SigningKey:    []byte("test-signing-key-0123456789abcdef"),
+		Audience:      "https://api.example.com",
+	})
+	require.NoError(t, err)
+
+	eng, _ := newTestEngine(t, authsome.WithJWTFormat("aapp_01jf0000000000000000000000", jwtFmt))
+	ctx := context.Background()
+
+	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
+		AppID:     testAppID(t),
+		Email:     "aud-newsession@example.com",
+		Password:  "SecureP@ss1",
+		FirstName: "Aud User",
+	})
+	require.NoError(t, err)
+
+	claims, err := jwtFmt.ValidateAccessToken(sess.Token)
+	require.NoError(t, err)
+	require.Equal(t, []string{"https://api.example.com"}, claims.Audience,
+		"the minted JWT should carry the configured audience")
+
+	assert.Equal(t, claims.Audience, sess.Audience,
+		"the session row must record the same audience the token went out with")
+}
+
+// TestNewSessionWithoutConfiguredAudienceStaysUnaudienced is the
+// backwards-compatibility half. With no JWTConfig.Audience there is nothing to
+// record, and a session that has never named a resource must keep saying so:
+// an audience appearing from nowhere would start failing the guard for every
+// deployment that turns session.resource_identifier on.
+func TestNewSessionWithoutConfiguredAudienceStaysUnaudienced(t *testing.T) {
+	jwtFmt, err := tokenformat.NewJWT(tokenformat.JWTConfig{
+		SigningMethod: jwt.SigningMethodHS256,
+		SigningKey:    []byte("test-signing-key-0123456789abcdef"),
+	})
+	require.NoError(t, err)
+
+	eng, _ := newTestEngine(t, authsome.WithJWTFormat("aapp_01jf0000000000000000000000", jwtFmt))
+	ctx := context.Background()
+
+	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
+		AppID:     testAppID(t),
+		Email:     "aud-newsession-none@example.com",
+		Password:  "SecureP@ss1",
+		FirstName: "Aud User",
+	})
+	require.NoError(t, err)
+
+	claims, err := jwtFmt.ValidateAccessToken(sess.Token)
+	require.NoError(t, err)
+	assert.Empty(t, claims.Audience, "an unconfigured app must not stamp an aud claim")
+	assert.Empty(t, sess.Audience, "an unconfigured app must not stamp a session audience")
+}
