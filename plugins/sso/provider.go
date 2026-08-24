@@ -84,6 +84,10 @@ type Store interface {
 	CreateConnection(ctx context.Context, c *Connection) error
 	GetConnection(ctx context.Context, connID id.SSOConnectionID) (*Connection, error)
 	GetConnectionByDomain(ctx context.Context, appID id.AppID, domain string) (*Connection, error)
+	// GetConnectionByDomainAndOrg resolves the active connection for a domain
+	// within a specific org (workspace). Multi-tenant SSO allows the same domain
+	// in several orgs, so lookups that must land on one workspace use this.
+	GetConnectionByDomainAndOrg(ctx context.Context, appID id.AppID, orgID id.OrgID, domain string) (*Connection, error)
 	GetConnectionByProvider(ctx context.Context, appID id.AppID, provider string) (*Connection, error)
 	ListConnections(ctx context.Context, appID id.AppID) ([]*Connection, error)
 	UpdateConnection(ctx context.Context, c *Connection) error

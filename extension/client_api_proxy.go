@@ -84,14 +84,23 @@ func (e *Extension) buildClientAPIProxy() (string, *httputil.ReverseProxy, error
 	mountPrefix := basePath + "/v1/*"
 
 	proxy := &httputil.ReverseProxy{
-		Director: func(req *http.Request) {
+		// Rewrite rather than the deprecated Director. Beyond the deprecation,
+		// ReverseProxy strips Forwarded and every X-Forwarded-* header from the
+		// outbound request before calling Rewrite, so a caller can no longer
+		// hand us forwarding headers that survive to upstream. That matters
+		// here because upstream keys tenant resolution on them.
+		Rewrite: func(r *httputil.ProxyRequest) {
 			// Forward to upstream, preserving the inbound path + query.
 			// The path already begins with <basePath>/v1/... and upstream
 			// expects exactly the same prefix because authsome registers
 			// its API under <BasePath>/v1 on its own router too.
-			req.URL.Scheme = upstream.Scheme
-			req.URL.Host = upstream.Host
-			req.Host = upstream.Host
+			//
+			// Deliberately not ProxyRequest.SetURL: that joins the target's
+			// path onto the inbound path, which would duplicate the prefix
+			// the moment PortalURL carries one.
+			r.Out.URL.Scheme = upstream.Scheme
+			r.Out.URL.Host = upstream.Host
+			r.Out.Host = upstream.Host
 
 			// Promote the dashboard's auth_token cookie to Authorization:
 			// Bearer when the caller hasn't already supplied one. extractToken
@@ -100,9 +109,9 @@ func (e *Extension) buildClientAPIProxy() (string, *httputil.ReverseProxy, error
 			// upstream session token; upstream's middleware accepts both
 			// header and cookie, but stripping the cookie below means the
 			// header is what carries it across origins safely.
-			if req.Header.Get("Authorization") == "" {
-				if tok := extractToken(req); tok != "" {
-					req.Header.Set("Authorization", "Bearer "+tok)
+			if r.In.Header.Get("Authorization") == "" {
+				if tok := extractToken(r.In); tok != "" {
+					r.Out.Header.Set("Authorization", "Bearer "+tok)
 				}
 			}
 
@@ -110,23 +119,18 @@ func (e *Extension) buildClientAPIProxy() (string, *httputil.ReverseProxy, error
 			// dashboard host's domain and are meaningless (or worse,
 			// confusing) to upstream. The Authorization header above
 			// carries the auth context.
-			req.Header.Del("Cookie")
+			r.Out.Header.Del("Cookie")
 
-			// Forge's tenant resolver and CSRF middleware key on these
-			// when present; preserve the originals so upstream sees the
-			// real client, not the dashboard host loopback.
-			if req.Header.Get("X-Forwarded-Host") == "" {
-				if h := req.Host; h != "" {
-					req.Header.Set("X-Forwarded-Host", h)
-				}
-			}
-			if req.Header.Get("X-Forwarded-Proto") == "" {
-				proto := "http"
-				if req.TLS != nil {
-					proto = "https"
-				}
-				req.Header.Set("X-Forwarded-Proto", proto)
-			}
+			// Forge's tenant resolver and CSRF middleware key on these, so
+			// they have to describe the real client. SetXForwarded derives all
+			// three from the inbound request: X-Forwarded-For from its peer
+			// address, X-Forwarded-Host from its Host, X-Forwarded-Proto from
+			// whether it arrived over TLS.
+			//
+			// The previous Director set X-Forwarded-Host from req.Host after
+			// having just overwritten req.Host with the upstream host, so
+			// upstream was told its own hostname rather than the client's.
+			r.SetXForwarded()
 		},
 		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, perr error) {
 			if logger := e.Logger(); logger != nil {

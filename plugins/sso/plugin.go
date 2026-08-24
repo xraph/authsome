@@ -661,13 +661,19 @@ func providerResolveError(name string, err error) error {
 }
 
 // LoginByDomainRequest carries an email whose domain selects the IdP connection.
+// ConnectionID pins the exact connection (multi-tenant SSO: the same domain can
+// belong to several orgs, so home-realm discovery resolves the specific
+// connection and passes its id here). When empty, the domain resolves the
+// connection app-wide (single-tenant / legacy).
 type LoginByDomainRequest struct {
-	Email     string `json:"email" description:"Work email; its domain routes to the matching SSO connection"`
-	ReturnURL string `json:"return_url,omitempty" description:"Frontend URL to land on after login (must be allowlisted)"`
+	Email        string `json:"email" description:"Work email; its domain routes to the matching SSO connection"`
+	ConnectionID string `json:"connection_id,omitempty" description:"Exact SSO connection to use (from home-realm discovery); disambiguates a domain shared across orgs"`
+	ReturnURL    string `json:"return_url,omitempty" description:"Frontend URL to land on after login (must be allowlisted)"`
 }
 
-// handleLoginByDomain resolves the SSO connection from the email's domain and
-// starts the login flow, so users never have to know their provider's name.
+// handleLoginByDomain resolves the SSO connection from the email's domain (or an
+// explicit connection id) and starts the login flow, so users never have to know
+// their provider's name.
 func (p *Plugin) handleLoginByDomain(ctx forge.Context, req *LoginByDomainRequest) (*LoginResponse, error) {
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 	at := strings.LastIndexByte(email, '@')
@@ -681,9 +687,21 @@ func (p *Plugin) handleLoginByDomain(ctx forge.Context, req *LoginByDomainReques
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("invalid app_id configuration: %w", err))
 	}
-	conn, err := p.ssoStore.GetConnectionByDomain(ctx.Context(), appID, email[at+1:])
-	if err != nil || conn == nil || !conn.Active {
-		return nil, forge.BadRequest("no SSO connection for this domain")
+	domain := email[at+1:]
+	var conn *Connection
+	if req.ConnectionID != "" {
+		// Pin the exact connection chosen at discovery time. Verify it belongs to
+		// this app and that its domain matches the login email, so a connection id
+		// can't be used to sign in with an unrelated domain.
+		conn, err = p.connectionByID(ctx.Context(), req.ConnectionID)
+		if err != nil || conn == nil || conn.AppID != appID || !strings.EqualFold(conn.Domain, domain) {
+			return nil, forge.BadRequest("no SSO connection for this domain")
+		}
+	} else {
+		conn, err = p.ssoStore.GetConnectionByDomain(ctx.Context(), appID, domain)
+		if err != nil || conn == nil || !conn.Active {
+			return nil, forge.BadRequest("no SSO connection for this domain")
+		}
 	}
 	provider, err := p.connectionToProvider(conn)
 	if err != nil {

@@ -70,6 +70,20 @@ func (s *PostgresStore) GetConnectionByDomain(ctx context.Context, appID id.AppI
 	return toConnection(m)
 }
 
+func (s *PostgresStore) GetConnectionByDomainAndOrg(ctx context.Context, appID id.AppID, orgID id.OrgID, domain string) (*Connection, error) {
+	m := new(ssoConnectionModel)
+	err := s.pg.NewSelect(m).
+		Where("app_id = ?", appID.String()).
+		Where("org_id = ?", orgID.String()).
+		Where("domain = ?", domain).
+		Where("active = ?", true).
+		Scan(ctx)
+	if err != nil {
+		return nil, ssoPgError(err)
+	}
+	return toConnection(m)
+}
+
 func (s *PostgresStore) GetConnectionByProvider(ctx context.Context, appID id.AppID, provider string) (*Connection, error) {
 	m := new(ssoConnectionModel)
 	err := s.pg.NewSelect(m).

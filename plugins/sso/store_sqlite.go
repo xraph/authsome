@@ -70,6 +70,20 @@ func (s *SqliteStore) GetConnectionByDomain(ctx context.Context, appID id.AppID,
 	return toConnection(m)
 }
 
+func (s *SqliteStore) GetConnectionByDomainAndOrg(ctx context.Context, appID id.AppID, orgID id.OrgID, domain string) (*Connection, error) {
+	m := new(ssoConnectionModel)
+	err := s.sdb.NewSelect(m).
+		Where("app_id = ?", appID.String()).
+		Where("org_id = ?", orgID.String()).
+		Where("domain = ?", domain).
+		Where("active = ?", true).
+		Scan(ctx)
+	if err != nil {
+		return nil, ssoSqliteError(err)
+	}
+	return toConnection(m)
+}
+
 func (s *SqliteStore) GetConnectionByProvider(ctx context.Context, appID id.AppID, provider string) (*Connection, error) {
 	m := new(ssoConnectionModel)
 	err := s.sdb.NewSelect(m).
