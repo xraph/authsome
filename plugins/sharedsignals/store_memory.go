@@ -49,6 +49,10 @@ func cloneStream(s *InboundStream) *InboundStream {
 			out.ActionOverrides[k] = v
 		}
 	}
+	if s.LastVerifiedAt != nil {
+		t := *s.LastVerifiedAt
+		out.LastVerifiedAt = &t
+	}
 	return &out
 }
 
@@ -195,12 +199,12 @@ func (m *MemoryStore) CreateSignal(_ context.Context, s *Signal) error {
 }
 
 func (m *MemoryStore) ListActiveSignals(_ context.Context, appID id.AppID,
-	userID id.UserID, now time.Time) ([]*Signal, error) {
+	envID id.EnvironmentID, userID id.UserID, now time.Time) ([]*Signal, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	var out []*Signal
 	for _, s := range m.signals {
-		if s.AppID == appID && s.UserID == userID && s.ExpiresAt.After(now) {
+		if s.AppID == appID && s.EnvID == envID && s.UserID == userID && s.ExpiresAt.After(now) {
 			c := *s
 			out = append(out, &c)
 		}

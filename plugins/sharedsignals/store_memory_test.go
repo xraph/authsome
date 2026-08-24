@@ -154,31 +154,84 @@ func TestMemoryStore_CountActionsSince(t *testing.T) {
 	assert.Equal(t, 3, count)
 }
 
+func TestMemoryStore_StreamTimestampIsolation(t *testing.T) {
+	ctx := context.Background()
+	s := NewMemoryStore()
+	streamID := id.NewSSFStreamID()
+	now := time.Now()
+
+	stream := &InboundStream{
+		ID:              streamID,
+		AppID:           id.NewAppID(),
+		EnvID:           id.NewEnvironmentID(),
+		Name:            "test",
+		Issuer:          "https://issuer",
+		Audience:        "https://aud",
+		JWKSURI:         "https://keys",
+		LastVerifiedAt:  &now,
+		Status:          StatusEnabled,
+		EnforcementMode: EnforcementEnforce,
+	}
+	require.NoError(t, s.CreateInboundStream(ctx, stream))
+
+	// Fetch twice
+	first, err := s.GetInboundStream(ctx, streamID)
+	require.NoError(t, err)
+	require.NotNil(t, first.LastVerifiedAt)
+
+	second, err := s.GetInboundStream(ctx, streamID)
+	require.NoError(t, err)
+	require.NotNil(t, second.LastVerifiedAt)
+
+	// Mutate the pointee on the first result
+	mutated := now.Add(time.Hour)
+	*first.LastVerifiedAt = mutated
+
+	// Second result and fresh fetch should be unchanged
+	assert.Equal(t, now, *second.LastVerifiedAt)
+
+	third, err := s.GetInboundStream(ctx, streamID)
+	require.NoError(t, err)
+	assert.Equal(t, now, *third.LastVerifiedAt)
+}
+
 func TestMemoryStore_SignalsExpire(t *testing.T) {
 	ctx := context.Background()
 	s := NewMemoryStore()
 	appID, userID := id.NewAppID(), id.NewUserID()
+	envID := id.NewEnvironmentID()
 	now := time.Now()
 
 	require.NoError(t, s.CreateSignal(ctx, &Signal{
-		ID: id.NewSSFSignalID(), AppID: appID, UserID: userID,
+		ID: id.NewSSFSignalID(), AppID: appID, EnvID: envID, UserID: userID,
 		EventType: "live", Severity: 90,
 		EventAt: now, ExpiresAt: now.Add(time.Hour), CreatedAt: now,
 	}))
 	require.NoError(t, s.CreateSignal(ctx, &Signal{
-		ID: id.NewSSFSignalID(), AppID: appID, UserID: userID,
+		ID: id.NewSSFSignalID(), AppID: appID, EnvID: envID, UserID: userID,
 		EventType: "expired", Severity: 90,
 		EventAt: now.Add(-2 * time.Hour), ExpiresAt: now.Add(-time.Hour),
 		CreatedAt: now.Add(-2 * time.Hour),
 	}))
 
-	got, err := s.ListActiveSignals(ctx, appID, userID, now)
+	got, err := s.ListActiveSignals(ctx, appID, envID, userID, now)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	assert.Equal(t, "live", got[0].EventType)
 
 	// Another user's signals are not ours.
-	got, err = s.ListActiveSignals(ctx, appID, id.NewUserID(), now)
+	got, err = s.ListActiveSignals(ctx, appID, envID, id.NewUserID(), now)
 	require.NoError(t, err)
 	assert.Empty(t, got)
+
+	// Signals in a different environment are not ours.
+	require.NoError(t, s.CreateSignal(ctx, &Signal{
+		ID: id.NewSSFSignalID(), AppID: appID, EnvID: id.NewEnvironmentID(), UserID: userID,
+		EventType: "other-env", Severity: 90,
+		EventAt: now, ExpiresAt: now.Add(time.Hour), CreatedAt: now,
+	}))
+	got, err = s.ListActiveSignals(ctx, appID, envID, userID, now)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "live", got[0].EventType)
 }

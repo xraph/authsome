@@ -156,6 +156,6 @@ type Store interface {
 	CountActionsSince(ctx context.Context, streamID id.SSFStreamID, since time.Time) (int, error)
 
 	CreateSignal(ctx context.Context, s *Signal) error
-	ListActiveSignals(ctx context.Context, appID id.AppID, userID id.UserID,
-		now time.Time) ([]*Signal, error)
+	ListActiveSignals(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
+		userID id.UserID, now time.Time) ([]*Signal, error)
 }
