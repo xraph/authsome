@@ -105,6 +105,10 @@ type afterMemberAddEntry struct {
 	name string
 	hook AfterMemberAdd
 }
+type beforeMemberRemoveEntry struct {
+	name string
+	hook BeforeMemberRemove
+}
 type afterMemberRemoveEntry struct {
 	name string
 	hook AfterMemberRemove
@@ -155,6 +159,7 @@ type Registry struct {
 	afterOrgUpdate         []afterOrgUpdateEntry
 	afterOrgDelete         []afterOrgDeleteEntry
 	afterMemberAdd         []afterMemberAddEntry
+	beforeMemberRemove     []beforeMemberRemoveEntry
 	afterMemberRemove      []afterMemberRemoveEntry
 	afterMemberRoleChange  []afterMemberRoleChangeEntry
 	routeProviders         []routeProviderEntry
@@ -247,6 +252,9 @@ func (r *Registry) Register(p Plugin) {
 	}
 	if h, ok := p.(AfterMemberAdd); ok {
 		r.afterMemberAdd = append(r.afterMemberAdd, afterMemberAddEntry{name, h})
+	}
+	if h, ok := p.(BeforeMemberRemove); ok {
+		r.beforeMemberRemove = append(r.beforeMemberRemove, beforeMemberRemoveEntry{name, h})
 	}
 	if h, ok := p.(AfterMemberRemove); ok {
 		r.afterMemberRemove = append(r.afterMemberRemove, afterMemberRemoveEntry{name, h})
@@ -512,6 +520,20 @@ func (r *Registry) EmitAfterMemberAdd(ctx context.Context, m *organization.Membe
 			r.logHookError("OnAfterMemberAdd", e.name, err)
 		}
 	}
+}
+
+// EmitBeforeMemberRemove notifies all plugins that implement
+// BeforeMemberRemove. Unlike EmitAfterMemberRemove, which fires after
+// deletion and only logs a hook's error, this fires before deletion and
+// returns the first error so the caller can abort the removal, matching
+// EmitBeforeUserDelete.
+func (r *Registry) EmitBeforeMemberRemove(ctx context.Context, m *organization.Member) error {
+	for _, e := range r.beforeMemberRemove {
+		if err := e.hook.OnBeforeMemberRemove(ctx, m); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // EmitAfterMemberRemove notifies all plugins that implement AfterMemberRemove.

@@ -137,6 +137,16 @@ func (p *Plugin) AddMember(ctx context.Context, m *organization.Member) error {
 
 // RemoveMember removes a member from an organization.
 func (p *Plugin) RemoveMember(ctx context.Context, memberID id.MemberID) error {
+	// Resolved before the delete so BeforeMemberRemove subscribers can see who
+	// is leaving which org. AfterMemberRemove carries only the id, which is
+	// not enough to revoke anything scoped to the pair.
+	member, err := p.store.GetMember(ctx, memberID)
+	if err != nil {
+		return fmt.Errorf("organization: remove member: %w", err)
+	}
+	if err := p.plugins.EmitBeforeMemberRemove(ctx, member); err != nil {
+		return fmt.Errorf("organization: remove member: %w", err)
+	}
 	if err := p.store.DeleteMember(ctx, memberID); err != nil {
 		return fmt.Errorf("organization: remove member: %w", err)
 	}
