@@ -372,6 +372,20 @@ func (h *denyingPrincipalHook) OnBeforePrincipalAuth(_ context.Context, _ *princ
 	return errors.New("denied")
 }
 
+// erroringAfterPrincipalHook fails its after-hook, but must not stop the
+// hooks registered behind it: EmitAfterPrincipalAuth logs and continues.
+type erroringAfterPrincipalHook struct {
+	name        string
+	afterCalled bool
+}
+
+func (h *erroringAfterPrincipalHook) Name() string { return h.name }
+
+func (h *erroringAfterPrincipalHook) OnAfterPrincipalAuth(_ context.Context, _ *principal.AuthAttempt, _ *session.Session) error {
+	h.afterCalled = true
+	return errors.New("observer failed")
+}
+
 // A denying plugin must stop the authentication, the same way EmitBeforeSignIn
 // does. This is the whole reason these are typed hooks and not hook.Bus
 // events: Bus.Emit logs handler errors and returns nothing, so it cannot deny.
@@ -407,6 +421,29 @@ func TestEmitAfterPrincipalAuthRunsEveryHook(t *testing.T) {
 
 	assert.True(t, a.afterCalled)
 	assert.True(t, b.afterCalled)
+}
+
+// An After hook's error is logged and swallowed on purpose: EmitAfterPrincipalAuth
+// has no error return, and one plugin failing to record what it saw must not
+// make the plugins registered behind it silently stop observing. A risk plugin
+// blowing up on a malformed AuthAttempt should not blind every other plugin
+// watching the same auth event.
+func TestEmitAfterPrincipalAuthContinuesPastErroringHook(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+	first := &recordingPrincipalHook{name: "first"}
+	middle := &erroringAfterPrincipalHook{name: "middle"}
+	third := &recordingPrincipalHook{name: "third"}
+	r.Register(first)
+	r.Register(middle)
+	r.Register(third)
+
+	r.EmitAfterPrincipalAuth(context.Background(),
+		&principal.AuthAttempt{Subject: principal.Ref{Kind: principal.KindWorkload, ID: "svc_3"}},
+		&session.Session{})
+
+	assert.True(t, first.afterCalled, "hooks before the erroring one must have run")
+	assert.True(t, middle.afterCalled, "the erroring hook itself must have run")
+	assert.True(t, third.afterCalled, "hooks after the erroring one must still run")
 }
 
 func TestRegistry_OnInitShutdown(_ *testing.T) {
