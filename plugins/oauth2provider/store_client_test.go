@@ -88,14 +88,24 @@ func TestMemoryStore_UpdateClient(t *testing.T) {
 	}
 	require.NoError(t, st.CreateClient(ctx, c))
 
-	c.Name = "After"
-	c.RedirectURIs = []string{"http://127.0.0.1:9100/cb"}
-	require.NoError(t, st.UpdateClient(ctx, c))
-
+	// GetClient returns the live pointer CreateClient stored (MemoryStore
+	// keeps no separate copy). Mutating that pointer directly, as this test
+	// used to, would already leave the map's own entry reading "After"
+	// before UpdateClient ever ran, so the test would pass even if
+	// UpdateClient did nothing at all. Dereference into a fresh value
+	// instead, so "After" can only reach the store through UpdateClient's
+	// own write.
 	got, err := st.GetClient(ctx, "dyn-2")
 	require.NoError(t, err)
-	assert.Equal(t, "After", got.Name)
-	assert.Equal(t, []string{"http://127.0.0.1:9100/cb"}, got.RedirectURIs)
+	updated := *got
+	updated.Name = "After"
+	updated.RedirectURIs = []string{"http://127.0.0.1:9100/cb"}
+	require.NoError(t, st.UpdateClient(ctx, &updated))
+
+	after, err := st.GetClient(ctx, "dyn-2")
+	require.NoError(t, err)
+	assert.Equal(t, "After", after.Name)
+	assert.Equal(t, []string{"http://127.0.0.1:9100/cb"}, after.RedirectURIs)
 }
 
 func TestMemoryStore_UpdateClientMissing(t *testing.T) {

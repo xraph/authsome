@@ -19,9 +19,14 @@ type OAuth2Client struct {
 	Public       bool              `json:"public"`      // Public clients (SPAs, mobile) don't have a secret
 
 	// TokenEndpointAuthMethod is RFC 7591 token_endpoint_auth_method:
-	// "none", "client_secret_basic" or "client_secret_post". It is the
-	// source of truth for whether a client is public; Public is derived
-	// from it. Two flags that can disagree is a bug waiting to happen.
+	// "none", "client_secret_basic" or "client_secret_post". Every
+	// enforcement site (plugin.go's PKCE, client-secret and
+	// client_credentials checks) reads Public, not this field; nothing
+	// reads TokenEndpointAuthMethod to decide behaviour. The two are kept
+	// in sync at every write site instead: the admin and dashboard paths
+	// derive the method from Public, and the dynamic registration path
+	// derives Public from the method ("none" means public). Two flags that
+	// can disagree is a bug waiting to happen.
 	TokenEndpointAuthMethod string `json:"token_endpoint_auth_method,omitempty"`
 
 	// RegistrationTokenHash is the bcrypt hash of the RFC 7592 registration
@@ -44,9 +49,8 @@ type OAuth2Client struct {
 
 	// Metadata holds the RFC 7591 fields that carry no behaviour:
 	// client_uri, logo_uri, contacts, tos_uri, policy_uri, software_id,
-	// software_version, and anything unrecognised the client sent. They
-	// only need to round-trip on a 7592 read, so they do not each earn a
-	// column across four backends.
+	// software_version. They only need to round-trip on a 7592 read, so
+	// they do not each earn a column across four backends.
 	Metadata map[string]any `json:"metadata,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
