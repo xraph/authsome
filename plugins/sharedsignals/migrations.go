@@ -2,7 +2,13 @@ package sharedsignals
 
 import (
 	"context"
+	"fmt"
 
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	"github.com/xraph/grove/drivers/mongodriver/mongomigrate"
 	"github.com/xraph/grove/migrate"
 )
 
@@ -226,4 +232,75 @@ func init() {
 		},
 	})
 
+	MongoMigrations.MustRegister(&migrate.Migration{
+		Name:    "create_sharedsignals_collections",
+		Version: "20260824000001",
+		Up: func(ctx context.Context, exec migrate.Executor) error {
+			mexec, ok := exec.(*mongomigrate.Executor)
+			if !ok {
+				return fmt.Errorf("sharedsignals: expected mongomigrate executor, got %T", exec)
+			}
+			for _, model := range []any{
+				(*inboundStreamDoc)(nil), (*subjectLinkDoc)(nil),
+				(*receivedEventDoc)(nil), (*signalDoc)(nil),
+			} {
+				if err := mexec.CreateCollection(ctx, model); err != nil {
+					return err
+				}
+			}
+			if err := mexec.CreateIndexes(ctx, colInboundStreams, []mongo.IndexModel{
+				{
+					Keys:    bson.D{{Key: "push_path_hash", Value: 1}},
+					Options: options.Index().SetUnique(true),
+				},
+				{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "created_at", Value: -1}}},
+			}); err != nil {
+				return err
+			}
+			if err := mexec.CreateIndexes(ctx, colSubjectLinks, []mongo.IndexModel{
+				{
+					Keys: bson.D{
+						{Key: "app_id", Value: 1}, {Key: "env_id", Value: 1},
+						{Key: "issuer", Value: 1}, {Key: "subject", Value: 1},
+					},
+					Options: options.Index().SetUnique(true),
+				},
+				{Keys: bson.D{{Key: "user_id", Value: 1}}},
+			}); err != nil {
+				return err
+			}
+			// This unique index is the replay guard on mongo. Without it a
+			// replayed SET revokes sessions a second time.
+			if err := mexec.CreateIndexes(ctx, colReceivedEvents, []mongo.IndexModel{
+				{
+					Keys:    bson.D{{Key: "stream_id", Value: 1}, {Key: "jti", Value: 1}},
+					Options: options.Index().SetUnique(true),
+				},
+				{Keys: bson.D{{Key: "stream_id", Value: 1}, {Key: "received_at", Value: -1}}},
+			}); err != nil {
+				return err
+			}
+			return mexec.CreateIndexes(ctx, colSignals, []mongo.IndexModel{
+				{Keys: bson.D{
+					{Key: "app_id", Value: 1}, {Key: "user_id", Value: 1},
+					{Key: "expires_at", Value: -1},
+				}},
+			})
+		},
+		Down: func(ctx context.Context, exec migrate.Executor) error {
+			mexec, ok := exec.(*mongomigrate.Executor)
+			if !ok {
+				return fmt.Errorf("sharedsignals: expected mongomigrate executor, got %T", exec)
+			}
+			for _, model := range []any{
+				(*signalDoc)(nil), (*receivedEventDoc)(nil),
+				(*subjectLinkDoc)(nil), (*inboundStreamDoc)(nil),
+			} {
+				if err := mexec.DropCollection(ctx, model); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	})
 }

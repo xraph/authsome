@@ -51,8 +51,8 @@ func runStoreConformance(t *testing.T, newStore func(*testing.T) Store) {
 		in := &InboundStream{
 			ID: id.NewSSFStreamID(), AppID: appID, EnvID: id.NewEnvironmentID(),
 			Name: "okta", Issuer: "https://org.okta.com",
-			Audience: "https://authsome.example/ssf",
-			JWKSURI:  "https://org.okta.com/keys",
+			Audience:     "https://authsome.example/ssf",
+			JWKSURI:      "https://org.okta.com/keys",
 			PushPathHash: "hash-a", PushTokenHash: "tok-a",
 			AllowedEventTypes:     []string{"a", "b"},
 			AllowedSubjectFormats: []string{"iss_sub"},
