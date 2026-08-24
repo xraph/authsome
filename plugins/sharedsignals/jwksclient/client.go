@@ -32,6 +32,10 @@ type Options struct {
 	MaxResponseBytes   int64
 	MaxKeys            int
 	Now                func() time.Time
+	// ValidateURI gates every fetch. Defaults to the package-level
+	// ValidateURI. Tests substitute a permissive validator so they can serve
+	// a key set from an httptest loopback server; production must not.
+	ValidateURI func(rawURL string) error
 }
 
 func (o *Options) defaults() {
@@ -60,6 +64,9 @@ func (o *Options) defaults() {
 	}
 	if o.Now == nil {
 		o.Now = time.Now
+	}
+	if o.ValidateURI == nil {
+		o.ValidateURI = ValidateURI
 	}
 }
 
@@ -163,6 +170,9 @@ type jwk struct {
 }
 
 func (c *Client) fetch(ctx context.Context, jwksURI string) (map[string]crypto.PublicKey, error) {
+	if err := c.opts.ValidateURI(jwksURI); err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jwksURI, nil)
 	if err != nil {
 		return nil, fmt.Errorf("jwksclient: build request: %w", err)

@@ -46,6 +46,11 @@ func testOptions(srv *httptest.Server) Options {
 		MaxResponseBytes:   256 * 1024,
 		MaxKeys:            20,
 		Now:                time.Now,
+		// httptest.NewServer serves plain http on a loopback address, which
+		// the real ValidateURI correctly rejects. Substitute a permissive
+		// validator so these tests can exercise fetch/cache/single-flight
+		// behaviour without also standing up TLS on a public address.
+		ValidateURI: func(string) error { return nil },
 	}
 }
 
@@ -136,6 +141,40 @@ func TestKey_RejectsTooManyKeys(t *testing.T) {
 
 	_, err := c.Key(context.Background(), srv.URL, "k0")
 	require.Error(t, err)
+}
+
+// countingTransport counts how many times RoundTrip was invoked, so a test
+// can prove a rejected URI never reached the network.
+type countingTransport struct {
+	calls int64
+}
+
+func (t *countingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	atomic.AddInt64(&t.calls, 1)
+	return nil, fmt.Errorf("countingTransport: unexpected request to %s", req.URL)
+}
+
+// The fetch-time gate is the only runtime defence against a jwks_uri that
+// validated as public at registration but points somewhere unsafe by the
+// time it is actually fetched (e.g. DNS rebinding). Leaving Options.ValidateURI
+// at its default must still reject a loopback URI, and must do so before any
+// HTTP request is attempted.
+func TestKey_DefaultValidateURIGatesFetch(t *testing.T) {
+	transport := &countingTransport{}
+	c := New(Options{
+		HTTPClient:         &http.Client{Transport: transport},
+		MinRefetchInterval: time.Minute,
+		MaxResponseBytes:   256 * 1024,
+		MaxKeys:            20,
+		Now:                time.Now,
+		// ValidateURI left unset: must fall back to the package-level
+		// ValidateURI, which rejects http and loopback addresses.
+	})
+
+	_, err := c.Key(context.Background(), "http://127.0.0.1:1/keys", "k1")
+	require.Error(t, err)
+	assert.Equal(t, int64(0), atomic.LoadInt64(&transport.calls),
+		"rejected jwks_uri reached the network")
 }
 
 func TestValidateURI(t *testing.T) {
