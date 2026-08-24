@@ -247,6 +247,7 @@ func (e *Engine) buildAuthMiddleware() {
 	bindCfg := middleware.SessionBindingConfig{
 		CookieNameResolver: e.resolveSessionCookieName,
 		JWTSessionChecker:  e.jwtSessionChecker,
+		PrincipalResolver:  e.ResolvePrincipalByRef,
 	}
 
 	if e.HasJWT() {

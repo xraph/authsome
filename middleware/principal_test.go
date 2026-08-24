@@ -97,7 +97,7 @@ func TestSessionPathResolvesPrincipal(t *testing.T) {
 			// AuthMiddleware's bearer-session path resolves the user
 			// unconditionally, same as before this change (untouched
 			// behavior). A workload session carries no UserID, so this
-			// always misses — the assertions below only care that the
+			// always misses: the assertions below only care that the
 			// principal still lands on the context regardless.
 			return nil, errors.New("not found")
 		},

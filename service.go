@@ -749,6 +749,17 @@ func (e *Engine) ResolveUser(userIDStr string) (*user.User, error) {
 	return e.store.GetUser(ctx, userID)
 }
 
+// ResolvePrincipalByRef adapts Engine.ResolvePrincipal to
+// middleware.PrincipalResolver's no-context shape (for middleware).
+//
+// Same trade as ResolveUser above: the resolver signature this mirrors
+// (middleware.UserResolver) carries no request context, so neither does
+// this one, and a request's cancellation or deadline does not propagate
+// into the store lookup it triggers.
+func (e *Engine) ResolvePrincipalByRef(ref principal.Ref) (*principal.Principal, error) {
+	return e.ResolvePrincipal(context.Background(), ref)
+}
+
 // ──────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────
