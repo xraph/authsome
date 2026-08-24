@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	log "github.com/xraph/go-utils/log"
@@ -230,7 +231,14 @@ func run(outPath, title, version string) error {
 	}
 
 	// Post-process: add security requirements, clean up paths, fix schemas.
-	postProcess(specMap)
+	// Order matters: the body-suffix names are normalized first, so the schema
+	// patches below are keyed on the names that actually reach the document.
+	normalizeRequestBodyNames(specMap)
+
+	if patchErr := postProcess(specMap); patchErr != nil {
+		return patchErr
+	}
+
 	cleanPaths(specMap)
 
 	data, err := json.MarshalIndent(specMap, "", "  ")
@@ -247,13 +255,98 @@ func run(outPath, title, version string) error {
 	return nil
 }
 
+// normalizeRequestBodyNames renames a component called XRequestBody to
+// XRequest and moves every reference with it.
+//
+// The suffix is not ours. Forge appends "Body" when a request body is one field
+// of a larger request struct, which describes how the Go type is laid out and
+// says nothing a client author cares about: SignUpRequestBody is the type you
+// pass to signUp, and SignUpRequest is what it should be called. Before forge
+// v1.9.10 these components had no suffix, so leaving it in place would rename
+// fifty-six types across the Go, TypeScript and Dart SDKs and break every
+// caller of them for no gain.
+//
+// A name is only taken if nothing already holds it. If both XRequest and
+// XRequestBody are in the document they are two different types, and the one
+// that named itself keeps its name.
+func normalizeRequestBodyNames(spec map[string]any) {
+	components, _ := spec["components"].(map[string]any) //nolint:errcheck // type assertion
+	if components == nil {
+		return
+	}
+
+	schemas, _ := components["schemas"].(map[string]any) //nolint:errcheck // type assertion
+	if schemas == nil {
+		return
+	}
+
+	const suffix = "RequestBody"
+
+	renames := make(map[string]string)
+
+	names := make([]string, 0, len(schemas))
+	for name := range schemas {
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+
+	for _, name := range names {
+		if !strings.HasSuffix(name, suffix) {
+			continue
+		}
+
+		target := strings.TrimSuffix(name, "Body")
+		if _, taken := schemas[target]; taken {
+			continue
+		}
+
+		// Reserve it, so two components cannot both normalize onto one name.
+		schemas[target] = schemas[name]
+
+		delete(schemas, name)
+
+		renames[name] = target
+	}
+
+	if len(renames) == 0 {
+		return
+	}
+
+	rewriteRefs(spec, renames)
+}
+
+// rewriteRefs walks the whole document and repoints every $ref named in
+// renames. Refs are plain strings sitting anywhere in the tree, so the walk has
+// to cover all of it rather than the handful of places bodies usually appear.
+func rewriteRefs(node any, renames map[string]string) {
+	switch v := node.(type) {
+	case map[string]any:
+		if ref, ok := v["$ref"].(string); ok {
+			if name, found := strings.CutPrefix(ref, componentPrefix); found {
+				if target, renamed := renames[name]; renamed {
+					v["$ref"] = componentPrefix + target
+				}
+			}
+		}
+
+		for _, child := range v {
+			rewriteRefs(child, renames)
+		}
+	case []any:
+		for _, child := range v {
+			rewriteRefs(child, renames)
+		}
+	}
+}
+
 // postProcess adds security requirements to operations, removes request
 // bodies from GET operations, and fixes schema types that the Forge OpenAPI
 // generator couldn't resolve (Go interface/any fields → unknown).
-func postProcess(spec map[string]any) {
+func postProcess(spec map[string]any) error {
 	paths, ok := spec["paths"].(map[string]any)
 	if !ok {
-		return
+		return nil
 	}
 
 	bearerSecurity := []any{
@@ -291,12 +384,15 @@ func postProcess(spec map[string]any) {
 	// Fix unresolved schema types. The Forge OpenAPI generator emits fields
 	// without type/ref when the Go struct uses interface{}/any. We patch
 	// these to the correct $ref or type here.
-	patchSchemaTypes(spec)
+	return patchSchemaTypes(spec)
 }
+
+// componentPrefix is the $ref prefix every component schema reference carries.
+const componentPrefix = "#/components/schemas/"
 
 // schemaRef returns an OpenAPI $ref to a component schema.
 func schemaRef(name string) map[string]any {
-	return map[string]any{"$ref": "#/components/schemas/" + name}
+	return map[string]any{"$ref": componentPrefix + name}
 }
 
 // arrayOfRef returns an OpenAPI array schema referencing a component schema.
@@ -309,23 +405,28 @@ func arrayOfRef(name string) map[string]any {
 
 // patchSchemaTypes fixes fields that the Forge OpenAPI generator couldn't
 // resolve because the Go types use interface{} / any.
-func patchSchemaTypes(spec map[string]any) {
+func patchSchemaTypes(spec map[string]any) error {
 	components, _ := spec["components"].(map[string]any) //nolint:errcheck // type assertion
 	if components == nil {
-		return
+		return nil
 	}
 	schemas, _ := components["schemas"].(map[string]any) //nolint:errcheck // type assertion
 	if schemas == nil {
-		return
+		return nil
 	}
 
 	// Map of schema → field → corrected type spec.
 	// Values are map[string]any representing the OpenAPI field schema.
 	patches := map[string]map[string]any{
 		// User fields in auth responses
-		"AuthResponse":     {"user": schemaRef("User")},
-		"CallbackResponse": {"user": schemaRef("User"), "expires_at": map[string]any{"type": "string"}},
-		"VerifyResponse":   {"user": schemaRef("User"), "expires_at": map[string]any{"type": "string"}},
+		// The three callback/verify responses carry the same two any-typed
+		// fields. They used to share the component names CallbackResponse and
+		// VerifyResponse, which meant one entry each here; forge now keeps the
+		// magiclink, social and SSO versions apart, so each gets its own.
+		"AuthResponse":            {"user": schemaRef("User")},
+		"SocialCallbackResponse":  {"user": schemaRef("User"), "expires_at": map[string]any{"type": "string"}},
+		"SsoCallbackResponse":     {"user": schemaRef("User"), "expires_at": map[string]any{"type": "string"}},
+		"MagiclinkVerifyResponse": {"user": schemaRef("User"), "expires_at": map[string]any{"type": "string"}},
 
 		// List response arrays
 		"AdminUserListResponse":  {"users": arrayOfRef("User")},
@@ -345,9 +446,19 @@ func patchSchemaTypes(spec map[string]any) {
 		"RegisterBeginResponse": {"options": map[string]any{"type": "object"}},
 	}
 
+	// A patch keyed on a name no longer in the document is not a no-op, it is
+	// a silent hole: the field it was meant to type stays untyped and the SDKs
+	// generate an opaque blob for it. That is exactly what a forge upgrade did
+	// here, renaming VerifyResponse and CallbackResponse out from under two
+	// entries. Fail instead, so the next rename is a build error you can fix in
+	// one line rather than a regression nobody notices until a client hits it.
+	missing := make([]string, 0)
+
 	for schemaName, fieldPatches := range patches {
 		schemaAny, ok := schemas[schemaName]
 		if !ok {
+			missing = append(missing, schemaName)
+
 			continue
 		}
 		schema, ok := schemaAny.(map[string]any)
@@ -364,6 +475,17 @@ func patchSchemaTypes(spec map[string]any) {
 			}
 		}
 	}
+
+	if len(missing) > 0 {
+		sort.Strings(missing)
+
+		return fmt.Errorf(
+			"schema patches target components the spec no longer has: %s"+
+				" (a dependency probably renamed them; update the patches map in this file)",
+			strings.Join(missing, ", "))
+	}
+
+	return nil
 }
 
 // cleanPaths normalizes path keys: replaces double slashes with single,

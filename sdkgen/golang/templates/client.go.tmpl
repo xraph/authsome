@@ -252,9 +252,20 @@ func (c *Client) {{ .Name }}(ctx context.Context
 	if params != nil {
 		q := url.Values{}
 {{- range .QueryParams }}
+{{- if eq .Type "string" }}
 		if params.{{ .GoName }} != "" {
 			q.Set("{{ .Name }}", params.{{ .GoName }})
 		}
+{{- else if eq .Type "bool" }}
+		if params.{{ .GoName }} {
+			q.Set("{{ .Name }}", "true")
+		}
+{{- else }}
+		var zero{{ .GoName }} {{ .Type }}
+		if params.{{ .GoName }} != zero{{ .GoName }} {
+			q.Set("{{ .Name }}", fmt.Sprint(params.{{ .GoName }}))
+		}
+{{- end }}
 {{- end }}
 		if encoded := q.Encode(); encoded != "" {
 			path += "?" + encoded
