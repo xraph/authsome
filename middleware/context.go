@@ -71,6 +71,34 @@ func PrincipalRefFrom(ctx context.Context) (principal.Ref, bool) {
 	return principal.Ref{}, false
 }
 
+// WithPrincipal returns ctx carrying the resolved caller.
+//
+// This delegates to the principal package's own context functions rather
+// than defining a separate key, so a plugin reading through
+// principal.FromContext sees the exact value this middleware wrote, and
+// PrincipalRefFrom's first branch (above) resolves against it.
+func WithPrincipal(ctx context.Context, p *principal.Principal) context.Context {
+	return principal.NewContext(ctx, p)
+}
+
+// PrincipalFrom returns the resolved caller previously stored with
+// WithPrincipal.
+func PrincipalFrom(ctx context.Context) (*principal.Principal, bool) {
+	return principal.FromContext(ctx)
+}
+
+// WithActors returns ctx carrying the actor chain acting on the subject's
+// behalf. Delegates to the principal package's own context functions for the
+// same shared-key reason as WithPrincipal.
+func WithActors(ctx context.Context, c principal.Chain) context.Context {
+	return principal.NewActorsContext(ctx, c)
+}
+
+// ActorsFrom returns the actor chain previously stored with WithActors.
+func ActorsFrom(ctx context.Context) (principal.Chain, bool) {
+	return principal.ActorsFromContext(ctx)
+}
+
 // WithSession stores a session in the context.
 func WithSession(ctx context.Context, s *session.Session) context.Context {
 	return context.WithValue(ctx, ctxKeySession, s)
