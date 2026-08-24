@@ -10,6 +10,32 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-24-oauth2-dynamic-client-registration-design.md`
 
+## Concurrent work on the same table
+
+Three designs dated 2026-08-24 add columns to `authsome_oauth2_clients`, and
+whichever lands second will hit merge conflicts. They are not semantic
+conflicts, so resolve them by keeping both sets of columns.
+
+- `2026-08-24-rfc8707-resource-indicators-design.md` adds a `resources` column
+  and **claims migration version `20260824000001` in the same
+  `authsome-oauth2` group**. This plan therefore uses `20260824000030`. Do not
+  change it back. Two migrations sharing a version in one group is a startup
+  failure, not a merge conflict you find in review.
+- `2026-08-24-dpop-design.md` adds a `dpop_mode` column, also via an
+  `oauth2provider` migration for postgres and sqlite.
+
+Expect conflicts in `migrations.go`, in `oauth2ClientModel` and its two
+converters in `store_models.go`, and in the mongo client struct. In every case
+the resolution is the union of the columns. If you find yourself deleting
+someone else's column to make a conflict go away, stop.
+
+One thing that does not apply here: the 8707 spec warns about calling
+`RefreshValidator` after adding a mongo field. That is about `sessionModel` in
+`store/mongo`, which has a generated `$jsonSchema`. The oauth2 plugin's mongo
+store has no validators and `MigrationGroups` returns nil for mongo, so this
+plan needs no equivalent step. The empty-slice initialisation in Task 2 is
+still required, for the separate `null` marshalling reason.
+
 ## Global Constraints
 
 - Go 1.26.0. Module is `github.com/xraph/authsome`.
@@ -433,7 +459,7 @@ In `migrations.go`, register on `PostgresMigrations`:
 	PostgresMigrations.MustRegister(
 		&migrate.Migration{
 			Name:    "add_dynamic_registration_columns",
-			Version: "20260824000001",
+			Version: "20260824000030",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `
 ALTER TABLE authsome_oauth2_clients
@@ -2419,6 +2445,14 @@ func (p *Plugin) registerWellKnown(router forge.Router) error {
 	)
 }
 ```
+
+If `dpop_signing_alg_values_supported` is already on `DiscoveryResponse` when
+you get here, the DPoP work landed first. Do not drop it. Add the same field
+to `AuthServerMetadata`, populate it in `buildAuthServerMetadata`, and carry it
+through the mapping in `handleDiscovery`. Rewriting `handleDiscovery` to derive
+every field from the builder is exactly the change that would otherwise delete
+it silently, and no test would catch that unless DPoP shipped one asserting the
+field is present.
 
 The prefixed mirror in `RegisterRoutes` keeps registering only `/.well-known/openid-configuration`, with the `oidcDiscoveryPrefixed` operation ID. Do not mirror the 8414 and 9728 documents: a prefixed copy of either is not discoverable and would only add duplicate OpenAPI entries.
 
