@@ -219,8 +219,8 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 			}
 
 			// Detect impersonation
-			if sess.ImpersonatedBy.Prefix() != "" {
-				goCtx = WithImpersonator(goCtx, sess.ImpersonatedBy)
+			if imp := sess.ImpersonatedBy(); imp.Prefix() != "" {
+				goCtx = WithImpersonator(goCtx, imp)
 			}
 
 			if sess.OrgID.Prefix() != "" {
@@ -567,7 +567,7 @@ func tryStrategyAuth(
 		ctx.WithContext(withAuthDebug(ctx.Context(), "strategy: returned nil result"))
 		return false
 	}
-	isServiceAccount := result.Session != nil && result.Session.PrincipalKind == "service_account"
+	isServiceAccount := result.Session != nil && !result.Session.IsHumanPrincipal()
 	if result.User == nil && !isServiceAccount {
 		// no user and not a service account — treat as unauthenticated
 		ctx.WithContext(withAuthDebug(ctx.Context(), "strategy: returned no user (resolveUser nil or Result empty)"))
@@ -627,8 +627,8 @@ func setSessionContext(ctx forge.Context, sess *session.Session, resolveUser Use
 	if sess.EnvID.Prefix() != "" {
 		goCtx = WithEnvID(goCtx, sess.EnvID)
 	}
-	if sess.ImpersonatedBy.Prefix() != "" {
-		goCtx = WithImpersonator(goCtx, sess.ImpersonatedBy)
+	if imp := sess.ImpersonatedBy(); imp.Prefix() != "" {
+		goCtx = WithImpersonator(goCtx, imp)
 	}
 
 	if sess.OrgID.Prefix() != "" {

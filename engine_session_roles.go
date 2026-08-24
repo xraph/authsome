@@ -11,13 +11,6 @@ import (
 	"github.com/xraph/authsome/store"
 )
 
-// principalKindServiceAccount is the PrincipalKind a service-account session
-// carries. Service accounts are authorized by scope rather than by role, and
-// their UserID is the zero value, so there is nothing for the stamper to look
-// up. Spelled here as a constant because middleware/auth.go compares the same
-// literal.
-const principalKindServiceAccount = "service_account"
-
 // roleStamper resolves the role slugs a user holds within an app.
 //
 // Slugs rather than names or IDs: GetRoleBySlug and ListUsersWithRole already
@@ -170,7 +163,7 @@ func (s *roleStampingStore) shouldRestamp(sess *session.Session) bool {
 	switch {
 	case sess == nil:
 		return false
-	case sess.PrincipalKind == principalKindServiceAccount:
+	case !sess.IsHumanPrincipal():
 		return false
 	case sess.AppID.IsNil() || sess.UserID.IsNil():
 		return false
@@ -187,7 +180,7 @@ func (s *roleStampingStore) shouldStamp(sess *session.Session) bool {
 	case len(sess.Roles) > 0:
 		// Already resolved by the caller.
 		return false
-	case sess.PrincipalKind == principalKindServiceAccount:
+	case !sess.IsHumanPrincipal():
 		// Authorized by scope, and UserID is the zero value here.
 		return false
 	case sess.AppID.IsNil() || sess.UserID.IsNil():
