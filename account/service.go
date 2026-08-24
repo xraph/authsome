@@ -167,6 +167,11 @@ type SessionConfig struct {
 	RefreshTokenTTL    time.Duration
 	MaxActiveSessions  int
 	RotateRefreshToken bool
+
+	// TokenExchangeTTL caps tokens minted by the RFC 8693 token exchange
+	// grant. Short by design: an exchanged token is meant to be re-minted,
+	// not held. Zero means the caller's own default applies.
+	TokenExchangeTTL time.Duration
 }
 
 // NewSession creates a new session for a user.

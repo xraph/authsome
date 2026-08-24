@@ -772,6 +772,9 @@ func (e *Engine) sessionConfig() account.SessionConfig {
 		RefreshTokenTTL:    e.config.Session.RefreshTokenTTL,
 		MaxActiveSessions:  e.config.Session.MaxActiveSessions,
 		RotateRefreshToken: e.config.Session.ShouldRotateRefreshToken(),
+		// Short by default. An exchanged token is meant to be re-minted rather
+		// than held, and nothing in the global config surfaces this yet.
+		TokenExchangeTTL: 5 * time.Minute,
 	}
 }
 
