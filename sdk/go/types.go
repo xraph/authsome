@@ -1968,18 +1968,31 @@ type VerifySMSCodeRequest struct {
 
 // Oauth2DeviceAuthorizeRequest is the request body for Oauth2DeviceAuthorize.
 type Oauth2DeviceAuthorizeRequest struct {
+	ClientID string `json:"client_id"`
+	Scope    string `json:"scope,omitempty"`
 }
 
 // Oauth2DeviceCompleteRequest is the request body for Oauth2DeviceComplete.
 type Oauth2DeviceCompleteRequest struct {
+	Action   string `json:"action"`
+	UserCode string `json:"user_code"`
 }
 
 // Oauth2RevokeRequest is the request body for Oauth2Revoke.
 type Oauth2RevokeRequest struct {
+	Token         string `json:"token"`
+	TokenTypeHint string `json:"token_type_hint,omitempty"`
 }
 
 // Oauth2TokenRequest is the request body for Oauth2Token.
 type Oauth2TokenRequest struct {
+	ClientID     string `json:"client_id,omitempty"`
+	ClientSecret string `json:"client_secret,omitempty"`
+	Code         string `json:"code,omitempty"`
+	CodeVerifier string `json:"code_verifier,omitempty"`
+	DeviceCode   string `json:"device_code,omitempty"`
+	GrantType    string `json:"grant_type"`
+	RedirectURI  string `json:"redirect_uri,omitempty"`
 }
 
 // CreateOrganizationRequest is the request body for CreateOrganization.

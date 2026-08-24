@@ -278,8 +278,8 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 			// Determine body type
 			if pair.op.RequestBody != nil {
 				opDef.HasBody = true
-				if ct, ok := pair.op.RequestBody.Content["application/json"]; ok && ct.Schema != nil {
-					opDef.BodyType = g.schemaToDartBodyType(ct.Schema)
+				if schema := requestBodySchema(pair.op.RequestBody); schema != nil {
+					opDef.BodyType = g.schemaToDartBodyType(schema)
 				} else {
 					opDef.BodyType = "Map<String, dynamic>"
 				}
@@ -377,6 +377,36 @@ func (g *Generator) schemaToDartType(s *openapi.Schema) string {
 	default:
 		return "dynamic"
 	}
+}
+
+// requestBodySchema picks the schema describing a request body.
+//
+// JSON wins when it is offered, which is all but a handful of routes. The rest
+// are form-encoded: the OAuth2 endpoints take application/x-www-form-urlencoded
+// because RFC 6749 says so, and forge describes them that way rather than as
+// JSON. Reading only the JSON entry threw away whatever name the spec gave
+// those bodies and left the caller with an untyped map.
+//
+// Remaining content types are considered in sorted order, so a route offering
+// several does not generate a different signature from one run to the next.
+func requestBodySchema(rb *openapi.RequestBody) *openapi.Schema {
+	if ct, ok := rb.Content["application/json"]; ok && ct.Schema != nil {
+		return ct.Schema
+	}
+
+	mediaTypes := make([]string, 0, len(rb.Content))
+	for mt := range rb.Content {
+		mediaTypes = append(mediaTypes, mt)
+	}
+	sort.Strings(mediaTypes)
+
+	for _, mt := range mediaTypes {
+		if ct := rb.Content[mt]; ct.Schema != nil {
+			return ct.Schema
+		}
+	}
+
+	return nil
 }
 
 func (g *Generator) schemaToDartBodyType(s *openapi.Schema) string {

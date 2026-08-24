@@ -234,6 +234,7 @@ func run(outPath, title, version string) error {
 	// Order matters: the body-suffix names are normalized first, so the schema
 	// patches below are keyed on the names that actually reach the document.
 	normalizeRequestBodyNames(specMap)
+	normalizeFormContentTypes(specMap)
 
 	if patchErr := postProcess(specMap); patchErr != nil {
 		return patchErr
@@ -319,6 +320,110 @@ func normalizeRequestBodyNames(spec map[string]any) {
 // rewriteRefs walks the whole document and repoints every $ref named in
 // renames. Refs are plain strings sitting anywhere in the tree, so the walk has
 // to cover all of it rather than the handful of places bodies usually appear.
+// normalizeFormContentTypes rewrites form request bodies from
+// multipart/form-data to application/x-www-form-urlencoded.
+//
+// Forge describes every form-tagged struct as multipart, which is the wrong
+// half of the form family for the routes that actually have one. The OAuth2
+// endpoints are the whole population here, and RFC 6749 §4.1.3 requires
+// urlencoded; a conformant client will never send multipart to a token
+// endpoint. Left alone, the published document tells every consumer, ours and
+// anyone else's, to speak an encoding the endpoint does not want.
+//
+// A body carrying binary is a real upload and keeps its multipart, since
+// describing a file as a urlencoded scalar would be a worse lie than the one
+// being fixed. A body that already offers urlencoded is left as it is.
+func normalizeFormContentTypes(spec map[string]any) {
+	const (
+		multipart  = "multipart/form-data"
+		urlencoded = "application/x-www-form-urlencoded"
+	)
+
+	paths, ok := spec["paths"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	for _, pathItem := range paths {
+		methods, isObject := pathItem.(map[string]any)
+		if !isObject {
+			continue
+		}
+
+		for _, op := range methods {
+			operation, isOp := op.(map[string]any)
+			if !isOp {
+				continue
+			}
+
+			body, hasBody := operation["requestBody"].(map[string]any)
+			if !hasBody {
+				continue
+			}
+
+			content, hasContent := body["content"].(map[string]any)
+			if !hasContent {
+				continue
+			}
+
+			media, isMultipart := content[multipart]
+			if !isMultipart {
+				continue
+			}
+
+			if _, alreadyURLEncoded := content[urlencoded]; alreadyURLEncoded {
+				continue
+			}
+
+			if schemaCarriesBinary(media) {
+				continue
+			}
+
+			content[urlencoded] = media
+			delete(content, multipart)
+		}
+	}
+}
+
+// schemaCarriesBinary reports whether a media type describes any binary
+// property, which is what separates a file upload from a set of form scalars.
+func schemaCarriesBinary(media any) bool {
+	entry, ok := media.(map[string]any)
+	if !ok {
+		return false
+	}
+
+	schema, hasSchema := entry["schema"].(map[string]any)
+	if !hasSchema {
+		return false
+	}
+
+	props, hasProps := schema["properties"].(map[string]any)
+	if !hasProps {
+		return false
+	}
+
+	for _, prop := range props {
+		field, isObject := prop.(map[string]any)
+		if !isObject {
+			continue
+		}
+
+		if field["format"] == "binary" {
+			return true
+		}
+
+		// An array of files is still a file upload.
+		if items, isArray := field["items"].(map[string]any); isArray {
+			if items["format"] == "binary" {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func rewriteRefs(node any, renames map[string]string) {
 	switch v := node.(type) {
 	case map[string]any:

@@ -253,3 +253,55 @@ func TestGenerate_FilesNotEmpty(t *testing.T) {
 		assert.True(t, len(f.Content) > 10, "file %s should have meaningful content", f.Path)
 	}
 }
+
+// formBodySpec mirrors how forge describes the OAuth2 token endpoint: the body
+// is application/x-www-form-urlencoded, per RFC 6749, rather than JSON.
+func formBodySpec() *openapi.Spec {
+	return &openapi.Spec{
+		OpenAPI: "3.0.3",
+		Info:    openapi.Info{Title: "Test API", Version: "1"},
+		Paths: map[string]*openapi.PathItem{
+			"/v1/oauth/token": {
+				Post: &openapi.Operation{
+					OperationID: "oauth2Token",
+					Summary:     "Token",
+					RequestBody: &openapi.RequestBody{
+						Required: true,
+						Content: map[string]openapi.MediaType{
+							"application/x-www-form-urlencoded": {
+								Schema: &openapi.Schema{
+									Type:     "object",
+									Required: []string{"grant_type"},
+									Properties: map[string]*openapi.Schema{
+										"grant_type": {Type: "string"},
+										"code":       {Type: "string"},
+									},
+								},
+							},
+						},
+					},
+					Responses: map[string]*openapi.Response{},
+				},
+			},
+		},
+	}
+}
+
+func TestGenerate_FormEncodedBodyKeepsItsFields(t *testing.T) {
+	gen := typescript.NewGenerator(typescript.GeneratorConfig{})
+	files, err := gen.Generate(formBodySpec())
+	require.NoError(t, err)
+
+	var typesContent string
+	for _, f := range files {
+		if strings.HasSuffix(f.Path, "types.ts") {
+			typesContent = f.Content
+			break
+		}
+	}
+	require.NotEmpty(t, typesContent)
+
+	assert.Contains(t, typesContent, "grant_type: string")
+	assert.Contains(t, typesContent, "code?: string")
+	assert.NotContains(t, typesContent, "Oauth2TokenRequest = Record<string, unknown>")
+}
