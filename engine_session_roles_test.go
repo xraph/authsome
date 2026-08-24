@@ -141,6 +141,34 @@ func TestCreateSessionSkipsServiceAccounts(t *testing.T) {
 	}
 }
 
+// TestCreateSessionSkipsAgents guards the other non-human principal kind
+// that still carries a delegating human's UserID: agentauth.Authorize
+// enforces the grant's scope intersected with that human's own permission,
+// and stamping the human's full role set onto the session would let a
+// role-gated route's requirement be satisfied straight off sess.Roles,
+// bypassing the scope half of that intersection without agentauth.Authorize
+// ever being consulted.
+func TestCreateSessionSkipsAgents(t *testing.T) {
+	s, inner := stampingStore(t, func(context.Context, id.AppID, id.UserID) ([]string, error) {
+		t.Error("stamper ran for an agent session")
+
+		return nil, errors.New("should not be called")
+	})
+
+	sess := testSession()
+	sess.PrincipalKind = session.PrincipalKindAgent
+	sess.AgentID = id.NewAgentID()
+	sess.GrantID = id.NewAgentGrantID()
+
+	if err := s.CreateSession(context.Background(), sess); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	if len(inner.created.Roles) != 0 {
+		t.Errorf("agent session carried roles: %v", inner.created.Roles)
+	}
+}
+
 // TestRotateSessionReStampsRoles is why rotation is decorated at all: without
 // it, a role granted after sign-in waits for the user to sign out and back in.
 func TestRotateSessionReStampsRoles(t *testing.T) {

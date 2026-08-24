@@ -190,6 +190,17 @@ func (s *roleStampingStore) shouldStamp(sess *session.Session) bool {
 	case sess.PrincipalKind == principalKindServiceAccount:
 		// Authorized by scope, and UserID is the zero value here.
 		return false
+	case sess.PrincipalKind == session.PrincipalKindAgent:
+		// agentauth.Authorize enforces the intersection of the grant's scope
+		// and the delegating human's own permission — an agent may do
+		// something only if both allow it. Stamping the human's full role
+		// set here would let forge's auth extension satisfy a route's role
+		// requirement straight off sess.Roles without ever calling
+		// agentauth.Authorize, silently dropping the scope half of that
+		// intersection on every role-gated route. Same reasoning as the
+		// service-account case above, applied to the other non-human
+		// principal kind that carries a UserID.
+		return false
 	case sess.AppID.IsNil() || sess.UserID.IsNil():
 		// Nothing to scope a lookup by. Reached by fixtures and by the
 		// synthetic sessions the apikey plugin builds.
