@@ -1294,5 +1294,166 @@ ALTER TABLE authsome_sessions
 				return err
 			},
 		},
+
+		// Migration: the non-human principal table. postgres never had one:
+		// the store methods were stubs, so no rows exist to preserve and this
+		// creates the current shape directly rather than in two steps.
+		&migrate.Migration{
+			Name:    "create_authsome_service_accounts",
+			Version: "20260824000050",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS authsome_service_accounts (
+    id            TEXT PRIMARY KEY,
+    app_id        TEXT NOT NULL REFERENCES authsome_apps(id) ON DELETE CASCADE,
+    env_id        TEXT NOT NULL DEFAULT '',
+    org_id        TEXT NOT NULL DEFAULT '',
+    kind          TEXT NOT NULL DEFAULT 'service_account',
+    name          TEXT NOT NULL,
+    description   TEXT NOT NULL DEFAULT '',
+    scopes        JSONB,
+    owner_user_id TEXT NOT NULL DEFAULT '',
+    parent_id     TEXT NOT NULL DEFAULT '',
+    expires_at    TIMESTAMPTZ,
+    active        BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT authsome_service_accounts_kind_check
+        CHECK (kind IN ('agent', 'workload', 'service_account'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_service_accounts_app_name
+    ON authsome_service_accounts (app_id, name);
+CREATE INDEX IF NOT EXISTS idx_authsome_service_accounts_owner
+    ON authsome_service_accounts (owner_user_id)
+    WHERE owner_user_id <> '';
+-- Ephemeral children are reaped by parent and by expiry, so both are indexed.
+CREATE INDEX IF NOT EXISTS idx_authsome_service_accounts_parent
+    ON authsome_service_accounts (parent_id)
+    WHERE parent_id <> '';
+CREATE INDEX IF NOT EXISTS idx_authsome_service_accounts_expires
+    ON authsome_service_accounts (expires_at)
+    WHERE expires_at IS NOT NULL;
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_service_accounts`)
+				return err
+			},
+		},
+
+		// Migration: delegation grants. The partial unique index is what makes
+		// revocation work: a revoked row keeps its identity for audit while
+		// freeing the slot for a fresh grant between the same two principals.
+		&migrate.Migration{
+			Name:    "create_authsome_delegations",
+			Version: "20260824000051",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS authsome_delegations (
+    id              TEXT PRIMARY KEY,
+    app_id          TEXT NOT NULL REFERENCES authsome_apps(id) ON DELETE CASCADE,
+    org_id          TEXT NOT NULL DEFAULT '',
+    actor_kind      TEXT NOT NULL,
+    actor_id        TEXT NOT NULL,
+    subject_kind    TEXT NOT NULL,
+    subject_id      TEXT NOT NULL,
+    grant_kind      TEXT NOT NULL,
+    scopes          JSONB,
+    granted_by_kind TEXT NOT NULL DEFAULT '',
+    granted_by_id   TEXT NOT NULL DEFAULT '',
+    expires_at      TIMESTAMPTZ,
+    revoked_at      TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT authsome_delegations_grant_kind_check
+        CHECK (grant_kind IN ('delegation', 'impersonation'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_delegations_live
+    ON authsome_delegations (app_id, actor_kind, actor_id, subject_kind, subject_id, grant_kind)
+    WHERE revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_authsome_delegations_subject
+    ON authsome_delegations (app_id, subject_kind, subject_id);
+CREATE INDEX IF NOT EXISTS idx_authsome_delegations_actor
+    ON authsome_delegations (app_id, actor_kind, actor_id);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_delegations`)
+				return err
+			},
+		},
+
+		// Migration: the actor chain on sessions, and the widened principal
+		// check.
+		//
+		// The existing check admits only '' , 'user' and 'service_account'. A
+		// delegated session still carries 'user' with a real user_id, because
+		// the subject is the human and the agent is in the chain, so the check
+		// only widens for standalone agent and workload sessions.
+		//
+		// impersonated_by stays. It is backfilled into actors here and dropped
+		// in a later change, once the backfill has proven itself.
+		&migrate.Migration{
+			Name:    "add_session_actor_chain",
+			Version: "20260824000052",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions
+    ADD COLUMN IF NOT EXISTS actors        JSONB,
+    ADD COLUMN IF NOT EXISTS actor_grant   TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS delegation_id TEXT NOT NULL DEFAULT '';
+
+UPDATE authsome_sessions
+   SET actors = jsonb_build_array(jsonb_build_object('kind', 'user', 'id', impersonated_by)),
+       actor_grant = 'impersonation'
+ WHERE impersonated_by <> ''
+   AND actors IS NULL;
+
+ALTER TABLE authsome_sessions
+    DROP CONSTRAINT IF EXISTS authsome_sessions_principal_check;
+ALTER TABLE authsome_sessions
+    ADD CONSTRAINT authsome_sessions_principal_check CHECK (
+        (principal_kind IN ('service_account', 'agent', 'workload')
+             AND service_account_id <> '' AND user_id = '')
+        OR (principal_kind IN ('', 'user')
+             AND user_id <> '' AND service_account_id = '')
+    );
+
+CREATE INDEX IF NOT EXISTS idx_authsome_sessions_delegation_id
+    ON authsome_sessions (delegation_id)
+    WHERE delegation_id <> '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				// Rows written for an agent or workload subject violate the
+				// narrower check, so they go before it is restored. They are
+				// unreachable under the old schema anyway.
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_sessions_delegation_id;
+DELETE FROM authsome_sessions WHERE principal_kind IN ('agent', 'workload');
+
+ALTER TABLE authsome_sessions
+    DROP CONSTRAINT IF EXISTS authsome_sessions_principal_check;
+ALTER TABLE authsome_sessions
+    ADD CONSTRAINT authsome_sessions_principal_check CHECK (
+        (principal_kind = 'service_account'
+             AND service_account_id <> '' AND user_id = '')
+        OR (principal_kind IN ('', 'user')
+             AND user_id <> '' AND service_account_id = '')
+    );
+
+ALTER TABLE authsome_sessions
+    DROP COLUMN IF EXISTS delegation_id,
+    DROP COLUMN IF EXISTS actor_grant,
+    DROP COLUMN IF EXISTS actors;
+`)
+				return err
+			},
+		},
 	)
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/xraph/authsome/notification"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/serviceaccount"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
@@ -224,7 +225,13 @@ type SessionModel struct {
 	// Scopes is JSON for the same reason Roles is: these strings are read back
 	// as an authorization decision, so the encoding must not be able to invent
 	// or merge a member.
-	Scopes                json.RawMessage `grove:"scopes,type:jsonb"`
+	Scopes json.RawMessage `grove:"scopes,type:jsonb"`
+	// Actors is JSON for the same reason Roles is: a chain element carries a
+	// kind and an id, and both are compared to make authorization decisions,
+	// so the encoding must not be able to invent or merge a member.
+	Actors                json.RawMessage `grove:"actors,type:jsonb"`
+	ActorGrant            string          `grove:"actor_grant"`
+	DelegationID          string          `grove:"delegation_id"`
 	LastActivityAt        time.Time       `grove:"last_activity_at"`
 	ExpiresAt             time.Time       `grove:"expires_at,notnull"`
 	RefreshTokenExpiresAt time.Time       `grove:"refresh_token_expires_at,notnull"`
@@ -312,6 +319,17 @@ func toSession(m *SessionModel) (*session.Session, error) {
 	if len(m.Scopes) > 0 {
 		_ = json.Unmarshal(m.Scopes, &s.Scopes) //nolint:errcheck // best-effort decode
 	}
+	if len(m.Actors) > 0 {
+		_ = json.Unmarshal(m.Actors, &s.Actors) //nolint:errcheck // best-effort decode
+	}
+	s.ActorGrant = principal.GrantKind(m.ActorGrant)
+	if m.DelegationID != "" {
+		delID, err := id.ParseDelegationID(m.DelegationID)
+		if err != nil {
+			return nil, err
+		}
+		s.DelegationID = delID
+	}
 	return s, nil
 }
 
@@ -354,6 +372,16 @@ func fromSession(s *session.Session) *SessionModel {
 	// Always encoded for the same reason Roles is: the column is NOT NULL and
 	// json.RawMessage cannot scan a NULL back.
 	m.Scopes, _ = json.Marshal(s.Scopes) //nolint:errcheck // best-effort encode
+	// Unlike Roles and Scopes, the actors column is nullable: an empty chain
+	// leaves m.Actors nil so it writes SQL NULL rather than a "[]" that would
+	// read back indistinguishably from an ordinary sign-in with no chain.
+	if len(s.Actors) > 0 {
+		m.Actors, _ = json.Marshal(s.Actors) //nolint:errcheck // best-effort encode
+	}
+	m.ActorGrant = string(s.ActorGrant)
+	if !s.DelegationID.IsNil() {
+		m.DelegationID = s.DelegationID.String()
+	}
 	return m
 }
 
@@ -1020,6 +1048,216 @@ func fromAPIKey(k *apikey.APIKey) *APIKeyModel {
 	}
 	if k.LastUsedAt != nil {
 		m.LastUsedAt = sql.NullTime{Time: *k.LastUsedAt, Valid: true}
+	}
+	return m
+}
+
+// ──────────────────────────────────────────────────
+// Service account model
+// ──────────────────────────────────────────────────
+
+type ServiceAccountModel struct {
+	grove.BaseModel `grove:"table:authsome_service_accounts,alias:sa"`
+
+	ID    string `grove:"id,pk"`
+	AppID string `grove:"app_id,notnull"`
+	EnvID string `grove:"env_id"`
+	OrgID string `grove:"org_id"`
+	// Kind is empty on no row postgres writes, but stays nullable-tolerant so
+	// a row inserted by hand without it still reads as a service account.
+	Kind        string          `grove:"kind"`
+	Name        string          `grove:"name,notnull"`
+	Description string          `grove:"description"`
+	Scopes      json.RawMessage `grove:"scopes,type:jsonb"`
+	OwnerUserID string          `grove:"owner_user_id"`
+	ParentID    string          `grove:"parent_id"`
+	ExpiresAt   *time.Time      `grove:"expires_at"`
+	Active      bool            `grove:"active,notnull"`
+	CreatedAt   time.Time       `grove:"created_at,notnull,default:now()"`
+	UpdatedAt   time.Time       `grove:"updated_at,notnull,default:now()"`
+}
+
+func toServiceAccount(m *ServiceAccountModel) (*serviceaccount.ServiceAccount, error) {
+	svcID, err := id.ParseServiceAccountID(m.ID)
+	if err != nil {
+		return nil, err
+	}
+	appID, err := id.ParseAppID(m.AppID)
+	if err != nil {
+		return nil, err
+	}
+	svc := &serviceaccount.ServiceAccount{
+		ID:          svcID,
+		AppID:       appID,
+		Kind:        principal.Kind(m.Kind),
+		Name:        m.Name,
+		Description: m.Description,
+		Active:      m.Active,
+		CreatedAt:   m.CreatedAt,
+		UpdatedAt:   m.UpdatedAt,
+	}
+	if m.EnvID != "" {
+		envID, err := id.ParseEnvironmentID(m.EnvID)
+		if err != nil {
+			return nil, err
+		}
+		svc.EnvID = envID
+	}
+	if m.OrgID != "" {
+		orgID, err := id.ParseOrgID(m.OrgID)
+		if err != nil {
+			return nil, err
+		}
+		svc.OrgID = orgID
+	}
+	if m.OwnerUserID != "" {
+		ownerID, err := id.ParseUserID(m.OwnerUserID)
+		if err != nil {
+			return nil, err
+		}
+		svc.OwnerUserID = ownerID
+	}
+	if m.ParentID != "" {
+		parentID, err := id.ParseServiceAccountID(m.ParentID)
+		if err != nil {
+			return nil, err
+		}
+		svc.ParentID = parentID
+	}
+	if len(m.Scopes) > 0 {
+		_ = json.Unmarshal(m.Scopes, &svc.Scopes) //nolint:errcheck // best-effort decode
+	}
+	svc.ExpiresAt = m.ExpiresAt
+	return svc, nil
+}
+
+func fromServiceAccount(svc *serviceaccount.ServiceAccount) *ServiceAccountModel {
+	// The kind column carries a CHECK restricting it to the three known
+	// values, so a row this store writes must never leave it blank the way
+	// ToPrincipal tolerates on read. Every row postgres inserts or updates
+	// gets a concrete kind; the empty-Kind fallback stays a read-time-only
+	// concern, for a row some other tool wrote directly.
+	kind := svc.Kind
+	if kind == "" {
+		kind = principal.KindService
+	}
+	m := &ServiceAccountModel{
+		ID:          svc.ID.String(),
+		AppID:       svc.AppID.String(),
+		Kind:        string(kind),
+		Name:        svc.Name,
+		Description: svc.Description,
+		Active:      svc.Active,
+		ExpiresAt:   svc.ExpiresAt,
+		CreatedAt:   svc.CreatedAt,
+		UpdatedAt:   svc.UpdatedAt,
+	}
+	if svc.EnvID.Prefix() != "" {
+		m.EnvID = svc.EnvID.String()
+	}
+	if svc.OrgID.Prefix() != "" {
+		m.OrgID = svc.OrgID.String()
+	}
+	if !svc.OwnerUserID.IsNil() {
+		m.OwnerUserID = svc.OwnerUserID.String()
+	}
+	if !svc.ParentID.IsNil() {
+		m.ParentID = svc.ParentID.String()
+	}
+	if len(svc.Scopes) > 0 {
+		m.Scopes, _ = json.Marshal(svc.Scopes) //nolint:errcheck // best-effort encode
+	}
+	return m
+}
+
+// ──────────────────────────────────────────────────
+// Delegation model
+// ──────────────────────────────────────────────────
+
+type DelegationModel struct {
+	grove.BaseModel `grove:"table:authsome_delegations,alias:dl"`
+
+	ID            string          `grove:"id,pk"`
+	AppID         string          `grove:"app_id,notnull"`
+	OrgID         string          `grove:"org_id"`
+	ActorKind     string          `grove:"actor_kind,notnull"`
+	ActorID       string          `grove:"actor_id,notnull"`
+	SubjectKind   string          `grove:"subject_kind,notnull"`
+	SubjectID     string          `grove:"subject_id,notnull"`
+	GrantKind     string          `grove:"grant_kind,notnull"`
+	Scopes        json.RawMessage `grove:"scopes,type:jsonb"`
+	GrantedByKind string          `grove:"granted_by_kind"`
+	GrantedByID   string          `grove:"granted_by_id"`
+	ExpiresAt     *time.Time      `grove:"expires_at"`
+	RevokedAt     *time.Time      `grove:"revoked_at"`
+	CreatedAt     time.Time       `grove:"created_at,notnull,default:now()"`
+	UpdatedAt     time.Time       `grove:"updated_at,notnull,default:now()"`
+}
+
+func toDelegation(m *DelegationModel) (*principal.Delegation, error) {
+	delID, err := id.ParseDelegationID(m.ID)
+	if err != nil {
+		return nil, err
+	}
+	appID, err := id.ParseAppID(m.AppID)
+	if err != nil {
+		return nil, err
+	}
+	d := &principal.Delegation{
+		ID:    delID,
+		AppID: appID,
+		Actor: principal.Ref{
+			Kind: principal.Kind(m.ActorKind),
+			ID:   m.ActorID,
+		},
+		Subject: principal.Ref{
+			Kind: principal.Kind(m.SubjectKind),
+			ID:   m.SubjectID,
+		},
+		GrantKind: principal.GrantKind(m.GrantKind),
+		GrantedBy: principal.Ref{
+			Kind: principal.Kind(m.GrantedByKind),
+			ID:   m.GrantedByID,
+		},
+		ExpiresAt: m.ExpiresAt,
+		RevokedAt: m.RevokedAt,
+		CreatedAt: m.CreatedAt,
+		UpdatedAt: m.UpdatedAt,
+	}
+	if m.OrgID != "" {
+		orgID, err := id.ParseOrgID(m.OrgID)
+		if err != nil {
+			return nil, err
+		}
+		d.OrgID = orgID
+	}
+	if len(m.Scopes) > 0 {
+		_ = json.Unmarshal(m.Scopes, &d.Scopes) //nolint:errcheck // best-effort decode
+	}
+	return d, nil
+}
+
+func fromDelegation(d *principal.Delegation) *DelegationModel {
+	m := &DelegationModel{
+		ID:            d.ID.String(),
+		AppID:         d.AppID.String(),
+		ActorKind:     string(d.Actor.Kind),
+		ActorID:       d.Actor.ID,
+		SubjectKind:   string(d.Subject.Kind),
+		SubjectID:     d.Subject.ID,
+		GrantKind:     string(d.GrantKind),
+		GrantedByKind: string(d.GrantedBy.Kind),
+		GrantedByID:   d.GrantedBy.ID,
+		ExpiresAt:     d.ExpiresAt,
+		RevokedAt:     d.RevokedAt,
+		CreatedAt:     d.CreatedAt,
+		UpdatedAt:     d.UpdatedAt,
+	}
+	if d.OrgID.Prefix() != "" {
+		m.OrgID = d.OrgID.String()
+	}
+	if len(d.Scopes) > 0 {
+		m.Scopes, _ = json.Marshal(d.Scopes) //nolint:errcheck // best-effort encode
 	}
 	return m
 }
