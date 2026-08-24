@@ -357,9 +357,13 @@ In `plugins/oauth2provider/models.go`, extend `OAuth2Client` after `Public`:
 	// dashboard tell the two populations apart.
 	DynamicallyRegistered bool `json:"dynamically_registered"`
 
-	// ClientSecretExpiresAt is RFC 7591 client_secret_expires_at. The zero
-	// value means the secret never expires and serialises as 0.
-	ClientSecretExpiresAt time.Time `json:"client_secret_expires_at,omitempty"`
+	// ClientSecretExpiresAt is RFC 7591 client_secret_expires_at. Nil means
+	// the secret never expires.
+	//
+	// A pointer, not a bare time.Time: encoding/json never treats a struct as
+	// empty, so omitempty would not fire and every client serialised through
+	// ListClientsResponse would carry "0001-01-01T00:00:00Z".
+	ClientSecretExpiresAt *time.Time `json:"client_secret_expires_at,omitempty"`
 
 	// Metadata holds the RFC 7591 fields that carry no behaviour:
 	// client_uri, logo_uri, contacts, tos_uri, policy_uri, software_id,
@@ -1545,7 +1549,10 @@ func (p *Plugin) handleRegisterClient(ctx forge.Context, req *RegisterClientRequ
 // token on the one response that is allowed to carry them.
 func (p *Plugin) clientInfoResponse(c *OAuth2Client) *RegisterClientResponse {
 	var secretExpires int64
-	if !c.ClientSecretExpiresAt.IsZero() {
+	// Nil means the secret never expires, which RFC 7591 represents as 0.
+	// The field is a pointer because encoding/json never omits a struct, so
+	// a bare time.Time would put a zero timestamp into every response.
+	if c.ClientSecretExpiresAt != nil && !c.ClientSecretExpiresAt.IsZero() {
 		secretExpires = c.ClientSecretExpiresAt.Unix()
 	}
 	str := func(k string) string {
