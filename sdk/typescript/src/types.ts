@@ -922,6 +922,7 @@ export interface LoginBeginResponse {
 }
 
 export interface LoginByDomainRequest {
+  connection_id?: string;
   email: string;
   return_url?: string;
 }

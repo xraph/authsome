@@ -3302,6 +3302,10 @@
       },
       "LoginByDomainRequest": {
         "properties": {
+          "connection_id": {
+            "description": "Exact SSO connection to use (from home-realm discovery); disambiguates a domain shared across orgs",
+            "type": "string"
+          },
           "email": {
             "description": "Work email; its domain routes to the matching SSO connection",
             "type": "string"

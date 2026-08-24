@@ -4561,16 +4561,19 @@ class LoginBeginResponse {
 }
 
 class LoginByDomainRequest {
+  final String? connectionId;
   final String email;
   final String? returnUrl;
 
   const LoginByDomainRequest({
+    this.connectionId,
     required this.email,
     this.returnUrl,
   });
 
   factory LoginByDomainRequest.fromJson(Map<String, dynamic> json) {
     return LoginByDomainRequest(
+      connectionId: json['connection_id'] as String?,
       email: json['email'] as String,
       returnUrl: json['return_url'] as String?,
     );
@@ -4578,6 +4581,7 @@ class LoginByDomainRequest {
 
   Map<String, dynamic> toJson() {
     return {
+      if (connectionId != null) 'connection_id': connectionId,
       'email': email,
       if (returnUrl != null) 'return_url': returnUrl,
     };
