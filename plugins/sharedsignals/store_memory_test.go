@@ -158,7 +158,7 @@ func TestMemoryStore_StreamTimestampIsolation(t *testing.T) {
 	ctx := context.Background()
 	s := NewMemoryStore()
 	streamID := id.NewSSFStreamID()
-	now := time.Now()
+	verified := time.Now()
 
 	stream := &InboundStream{
 		ID:              streamID,
@@ -168,11 +168,14 @@ func TestMemoryStore_StreamTimestampIsolation(t *testing.T) {
 		Issuer:          "https://issuer",
 		Audience:        "https://aud",
 		JWKSURI:         "https://keys",
-		LastVerifiedAt:  &now,
+		LastVerifiedAt:  &verified,
 		Status:          StatusEnabled,
 		EnforcementMode: EnforcementEnforce,
 	}
 	require.NoError(t, s.CreateInboundStream(ctx, stream))
+
+	// Capture the expected value as an independent copy before any mutation
+	want := verified
 
 	// Fetch twice
 	first, err := s.GetInboundStream(ctx, streamID)
@@ -184,15 +187,17 @@ func TestMemoryStore_StreamTimestampIsolation(t *testing.T) {
 	require.NotNil(t, second.LastVerifiedAt)
 
 	// Mutate the pointee on the first result
-	mutated := now.Add(time.Hour)
-	*first.LastVerifiedAt = mutated
+	*first.LastVerifiedAt = want.Add(time.Hour)
 
-	// Second result and fresh fetch should be unchanged
-	assert.Equal(t, now, *second.LastVerifiedAt)
+	// A second clone must not see a mutation made through the first
+	assert.True(t, second.LastVerifiedAt.Equal(want),
+		"a second clone must not see a mutation made through the first")
 
+	// The stored row must not see a mutation made through a clone
 	third, err := s.GetInboundStream(ctx, streamID)
 	require.NoError(t, err)
-	assert.Equal(t, now, *third.LastVerifiedAt)
+	assert.True(t, third.LastVerifiedAt.Equal(want),
+		"the stored row must not see a mutation made through a clone")
 }
 
 func TestMemoryStore_SignalsExpire(t *testing.T) {
