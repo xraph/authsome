@@ -37,17 +37,24 @@ var _ Store = (*MongoStore)(nil)
 // ──────────────────────────────────────────────────
 
 type oauth2ClientDoc struct {
-	ID           string    `bson:"_id"`
-	AppID        string    `bson:"app_id"`
-	Name         string    `bson:"name"`
-	ClientID     string    `bson:"client_id"`
-	ClientSecret string    `bson:"client_secret"`
-	RedirectURIs []string  `bson:"redirect_uris"`
-	Scopes       []string  `bson:"scopes"`
-	GrantTypes   []string  `bson:"grant_types"`
-	Public       bool      `bson:"public"`
-	CreatedAt    time.Time `bson:"created_at"`
-	UpdatedAt    time.Time `bson:"updated_at"`
+	ID           string   `bson:"_id"`
+	AppID        string   `bson:"app_id"`
+	Name         string   `bson:"name"`
+	ClientID     string   `bson:"client_id"`
+	ClientSecret string   `bson:"client_secret"`
+	RedirectURIs []string `bson:"redirect_uris"`
+	Scopes       []string `bson:"scopes"`
+	GrantTypes   []string `bson:"grant_types"`
+	Public       bool     `bson:"public"`
+
+	TokenEndpointAuthMethod string         `bson:"token_endpoint_auth_method"`
+	RegistrationTokenHash   string         `bson:"registration_token_hash"`
+	DynamicallyRegistered   bool           `bson:"dynamically_registered"`
+	ClientSecretExpiresAt   *time.Time     `bson:"client_secret_expires_at,omitempty"`
+	Metadata                map[string]any `bson:"metadata"`
+
+	CreatedAt time.Time `bson:"created_at"`
+	UpdatedAt time.Time `bson:"updated_at"`
 }
 
 type authCodeDoc struct {
@@ -92,18 +99,33 @@ func oauth2ClientDocToModel(d *oauth2ClientDoc) (*OAuth2Client, error) {
 		grantTypes = []string{}
 	}
 
+	metadata := d.Metadata
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+
+	var secretExpires time.Time
+	if d.ClientSecretExpiresAt != nil {
+		secretExpires = *d.ClientSecretExpiresAt
+	}
+
 	return &OAuth2Client{
-		ID:           clientID,
-		AppID:        appID,
-		Name:         d.Name,
-		ClientID:     d.ClientID,
-		ClientSecret: d.ClientSecret,
-		RedirectURIs: redirectURIs,
-		Scopes:       scopes,
-		GrantTypes:   grantTypes,
-		Public:       d.Public,
-		CreatedAt:    d.CreatedAt,
-		UpdatedAt:    d.UpdatedAt,
+		ID:                      clientID,
+		AppID:                   appID,
+		Name:                    d.Name,
+		ClientID:                d.ClientID,
+		ClientSecret:            d.ClientSecret,
+		RedirectURIs:            redirectURIs,
+		Scopes:                  scopes,
+		GrantTypes:              grantTypes,
+		Public:                  d.Public,
+		TokenEndpointAuthMethod: d.TokenEndpointAuthMethod,
+		RegistrationTokenHash:   d.RegistrationTokenHash,
+		DynamicallyRegistered:   d.DynamicallyRegistered,
+		ClientSecretExpiresAt:   secretExpires,
+		Metadata:                metadata,
+		CreatedAt:               d.CreatedAt,
+		UpdatedAt:               d.UpdatedAt,
 	}, nil
 }
 
@@ -121,18 +143,34 @@ func oauth2ClientToDoc(c *OAuth2Client) *oauth2ClientDoc {
 		grantTypes = []string{}
 	}
 
+	metadata := c.Metadata
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+
+	var secretExpires *time.Time
+	if !c.ClientSecretExpiresAt.IsZero() {
+		t := c.ClientSecretExpiresAt
+		secretExpires = &t
+	}
+
 	return &oauth2ClientDoc{
-		ID:           c.ID.String(),
-		AppID:        c.AppID.String(),
-		Name:         c.Name,
-		ClientID:     c.ClientID,
-		ClientSecret: c.ClientSecret,
-		RedirectURIs: redirectURIs,
-		Scopes:       scopes,
-		GrantTypes:   grantTypes,
-		Public:       c.Public,
-		CreatedAt:    c.CreatedAt,
-		UpdatedAt:    c.UpdatedAt,
+		ID:                      c.ID.String(),
+		AppID:                   c.AppID.String(),
+		Name:                    c.Name,
+		ClientID:                c.ClientID,
+		ClientSecret:            c.ClientSecret,
+		RedirectURIs:            redirectURIs,
+		Scopes:                  scopes,
+		GrantTypes:              grantTypes,
+		Public:                  c.Public,
+		TokenEndpointAuthMethod: c.TokenEndpointAuthMethod,
+		RegistrationTokenHash:   c.RegistrationTokenHash,
+		DynamicallyRegistered:   c.DynamicallyRegistered,
+		ClientSecretExpiresAt:   secretExpires,
+		Metadata:                metadata,
+		CreatedAt:               c.CreatedAt,
+		UpdatedAt:               c.UpdatedAt,
 	}
 }
 

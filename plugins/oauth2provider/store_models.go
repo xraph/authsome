@@ -25,8 +25,15 @@ type oauth2ClientModel struct {
 	Scopes       json.RawMessage `grove:"scopes,type:jsonb"`
 	GrantTypes   json.RawMessage `grove:"grant_types,type:jsonb"`
 	Public       bool            `grove:"public,notnull"`
-	CreatedAt    time.Time       `grove:"created_at,notnull,default:now()"`
-	UpdatedAt    time.Time       `grove:"updated_at,notnull,default:now()"`
+
+	TokenEndpointAuthMethod string          `grove:"token_endpoint_auth_method,notnull"`
+	RegistrationTokenHash   string          `grove:"registration_token_hash,notnull"`
+	DynamicallyRegistered   bool            `grove:"dynamically_registered,notnull"`
+	ClientSecretExpiresAt   *time.Time      `grove:"client_secret_expires_at"`
+	Metadata                json.RawMessage `grove:"metadata,type:jsonb"`
+
+	CreatedAt time.Time `grove:"created_at,notnull,default:now()"`
+	UpdatedAt time.Time `grove:"updated_at,notnull,default:now()"`
 }
 
 // ──────────────────────────────────────────────────
@@ -99,18 +106,32 @@ func toOAuth2Client(m *oauth2ClientModel) (*OAuth2Client, error) {
 		_ = json.Unmarshal(m.GrantTypes, &grantTypes) //nolint:errcheck // best-effort decode
 	}
 
+	var metadata map[string]any
+	if len(m.Metadata) > 0 {
+		_ = json.Unmarshal(m.Metadata, &metadata) //nolint:errcheck // best-effort decode
+	}
+	var secretExpires time.Time
+	if m.ClientSecretExpiresAt != nil {
+		secretExpires = *m.ClientSecretExpiresAt
+	}
+
 	return &OAuth2Client{
-		ID:           clientID,
-		AppID:        appID,
-		Name:         m.Name,
-		ClientID:     m.ClientID,
-		ClientSecret: m.ClientSecret,
-		RedirectURIs: redirectURIs,
-		Scopes:       scopes,
-		GrantTypes:   grantTypes,
-		Public:       m.Public,
-		CreatedAt:    m.CreatedAt,
-		UpdatedAt:    m.UpdatedAt,
+		ID:                      clientID,
+		AppID:                   appID,
+		Name:                    m.Name,
+		ClientID:                m.ClientID,
+		ClientSecret:            m.ClientSecret,
+		RedirectURIs:            redirectURIs,
+		Scopes:                  scopes,
+		GrantTypes:              grantTypes,
+		Public:                  m.Public,
+		TokenEndpointAuthMethod: m.TokenEndpointAuthMethod,
+		RegistrationTokenHash:   m.RegistrationTokenHash,
+		DynamicallyRegistered:   m.DynamicallyRegistered,
+		ClientSecretExpiresAt:   secretExpires,
+		Metadata:                metadata,
+		CreatedAt:               m.CreatedAt,
+		UpdatedAt:               m.UpdatedAt,
 	}, nil
 }
 
@@ -128,18 +149,33 @@ func fromOAuth2Client(c *OAuth2Client) *oauth2ClientModel {
 		grantTypes = []byte("[]")
 	}
 
+	metadata, _ := json.Marshal(c.Metadata) //nolint:errcheck // marshaling known types
+	if len(metadata) == 0 || string(metadata) == "null" {
+		metadata = []byte("{}")
+	}
+	var secretExpires *time.Time
+	if !c.ClientSecretExpiresAt.IsZero() {
+		t := c.ClientSecretExpiresAt
+		secretExpires = &t
+	}
+
 	return &oauth2ClientModel{
-		ID:           c.ID.String(),
-		AppID:        c.AppID.String(),
-		Name:         c.Name,
-		ClientID:     c.ClientID,
-		ClientSecret: c.ClientSecret,
-		RedirectURIs: redirectURIs,
-		Scopes:       scopes,
-		GrantTypes:   grantTypes,
-		Public:       c.Public,
-		CreatedAt:    c.CreatedAt,
-		UpdatedAt:    c.UpdatedAt,
+		ID:                      c.ID.String(),
+		AppID:                   c.AppID.String(),
+		Name:                    c.Name,
+		ClientID:                c.ClientID,
+		ClientSecret:            c.ClientSecret,
+		RedirectURIs:            redirectURIs,
+		Scopes:                  scopes,
+		GrantTypes:              grantTypes,
+		Public:                  c.Public,
+		TokenEndpointAuthMethod: c.TokenEndpointAuthMethod,
+		RegistrationTokenHash:   c.RegistrationTokenHash,
+		DynamicallyRegistered:   c.DynamicallyRegistered,
+		ClientSecretExpiresAt:   secretExpires,
+		Metadata:                metadata,
+		CreatedAt:               c.CreatedAt,
+		UpdatedAt:               c.UpdatedAt,
 	}
 }
 

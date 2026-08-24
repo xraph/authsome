@@ -559,6 +559,15 @@ func buildRedirect(redirectURI, code, state string) (string, error) {
 	return u.String(), nil
 }
 
+// authMethodForPublic maps the admin surface's Public bool onto the RFC 7591
+// token_endpoint_auth_method that is the source of truth everywhere else.
+func authMethodForPublic(public bool) string {
+	if public {
+		return "none"
+	}
+	return "client_secret_basic"
+}
+
 // clientAllowsGrant reports whether the client is registered for grantType.
 // An empty GrantTypes list is treated as authorization_code only, matching the
 // default applied at registration.
@@ -822,17 +831,18 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 	}
 
 	client := &OAuth2Client{
-		ID:           id.NewOAuth2ClientID(),
-		AppID:        appID,
-		Name:         req.Name,
-		ClientID:     clientIDStr,
-		ClientSecret: hashedSecret,
-		RedirectURIs: req.RedirectURIs,
-		Scopes:       scopes,
-		GrantTypes:   grantTypes,
-		Public:       req.Public,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:                      id.NewOAuth2ClientID(),
+		AppID:                   appID,
+		Name:                    req.Name,
+		ClientID:                clientIDStr,
+		ClientSecret:            hashedSecret,
+		RedirectURIs:            req.RedirectURIs,
+		Scopes:                  scopes,
+		GrantTypes:              grantTypes,
+		Public:                  req.Public,
+		TokenEndpointAuthMethod: authMethodForPublic(req.Public),
+		CreatedAt:               time.Now(),
+		UpdatedAt:               time.Now(),
 	}
 
 	if err := p.oauth2Store.CreateClient(ctx.Context(), client); err != nil {

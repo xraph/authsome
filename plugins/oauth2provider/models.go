@@ -17,8 +17,36 @@ type OAuth2Client struct {
 	Scopes       []string          `json:"scopes"`
 	GrantTypes   []string          `json:"grant_types"` // "authorization_code", "client_credentials"
 	Public       bool              `json:"public"`      // Public clients (SPAs, mobile) don't have a secret
-	CreatedAt    time.Time         `json:"created_at"`
-	UpdatedAt    time.Time         `json:"updated_at"`
+
+	// TokenEndpointAuthMethod is RFC 7591 token_endpoint_auth_method:
+	// "none", "client_secret_basic" or "client_secret_post". It is the
+	// source of truth for whether a client is public; Public is derived
+	// from it. Two flags that can disagree is a bug waiting to happen.
+	TokenEndpointAuthMethod string `json:"token_endpoint_auth_method,omitempty"`
+
+	// RegistrationTokenHash is the bcrypt hash of the RFC 7592 registration
+	// access token. Empty for admin-created clients, which is what makes
+	// them unreachable over the 7592 routes.
+	RegistrationTokenHash string `json:"-"`
+
+	// DynamicallyRegistered records that this client came in over RFC 7591
+	// rather than the admin surface. It gates the 7592 routes and lets the
+	// dashboard tell the two populations apart.
+	DynamicallyRegistered bool `json:"dynamically_registered"`
+
+	// ClientSecretExpiresAt is RFC 7591 client_secret_expires_at. The zero
+	// value means the secret never expires and serialises as 0.
+	ClientSecretExpiresAt time.Time `json:"client_secret_expires_at,omitempty"`
+
+	// Metadata holds the RFC 7591 fields that carry no behaviour:
+	// client_uri, logo_uri, contacts, tos_uri, policy_uri, software_id,
+	// software_version, and anything unrecognised the client sent. They
+	// only need to round-trip on a 7592 read, so they do not each earn a
+	// column across four backends.
+	Metadata map[string]any `json:"metadata,omitempty"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // AuthorizationCode represents a short-lived authorization code.
