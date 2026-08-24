@@ -234,13 +234,17 @@ func toSubjectLink(m *subjectLinkModel) (*SubjectLink, error) {
 	if err != nil {
 		return nil, err
 	}
+	appID, err := id.Parse(m.AppID)
+	if err != nil {
+		return nil, err
+	}
 	userID, err := id.Parse(m.UserID)
 	if err != nil {
 		return nil, err
 	}
 	return &SubjectLink{
 		ID:         linkID,
-		AppID:      parseOptionalID(m.AppID),
+		AppID:      appID,
 		EnvID:      parseOptionalID(m.EnvID),
 		Issuer:     m.Issuer,
 		Subject:    m.Subject,
@@ -275,9 +279,16 @@ func toReceivedEvent(m *receivedEventModel) (*ReceivedEvent, error) {
 	if err != nil {
 		return nil, err
 	}
+	// StreamID is half the (stream_id, jti) replay-guard tuple, so a
+	// corrupt value must fail loudly rather than silently becoming "no
+	// stream".
+	streamID, err := id.Parse(m.StreamID)
+	if err != nil {
+		return nil, err
+	}
 	return &ReceivedEvent{
 		ID:             eventID,
-		StreamID:       parseOptionalID(m.StreamID),
+		StreamID:       streamID,
 		JTI:            m.JTI,
 		EventType:      m.EventType,
 		SubjectJSON:    m.SubjectJSON,
@@ -310,11 +321,19 @@ func toSignal(m *signalModel) (*Signal, error) {
 	if err != nil {
 		return nil, err
 	}
+	appID, err := id.Parse(m.AppID)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := id.Parse(m.UserID)
+	if err != nil {
+		return nil, err
+	}
 	return &Signal{
 		ID:        signalID,
-		AppID:     parseOptionalID(m.AppID),
+		AppID:     appID,
 		EnvID:     parseOptionalID(m.EnvID),
-		UserID:    parseOptionalID(m.UserID),
+		UserID:    userID,
 		StreamID:  parseOptionalID(m.StreamID),
 		EventType: m.EventType,
 		Severity:  m.Severity,
