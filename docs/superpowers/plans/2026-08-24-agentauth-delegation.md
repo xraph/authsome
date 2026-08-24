@@ -1232,7 +1232,9 @@ This is the only change permitted to `plugins/oauth2provider`. Keep it additive.
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
-- Produces: `oauth2provider.ConsentGate` interface with the single method `Evaluate(ctx context.Context, clientID string, userID id.UserID, orgID id.OrgID, scopes []string) error`, and `oauth2provider.WithConsentGate(g ConsentGate) Option`.
+- Produces: `oauth2provider.ConsentGate` interface with the single method `Evaluate(ctx context.Context, clientID string, userID id.UserID, orgID id.OrgID, scopes []string) error`; a `ConsentGate ConsentGate` field on the existing `oauth2provider.Config`; and the setter `(*Plugin).SetConsentGate(g ConsentGate)`.
+
+Note on idiom: `oauth2provider.New` takes `cfg ...Config`, not functional options, and this package has no `Option` type. Do not invent one. Configuration goes on `Config`, and post-construction wiring uses a `SetX` method, matching `SetConsentStore` in `plugins/consent/plugin.go`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1267,9 +1269,9 @@ func (g *recordingGate) Evaluate(_ context.Context, clientID string, _ id.UserID
 	return g.err
 }
 
-func TestWithConsentGate_GateIsConsulted(t *testing.T) {
+func TestConsentGate_GateIsConsulted(t *testing.T) {
 	gate := &recordingGate{}
-	p := oauth2provider.New(oauth2provider.WithConsentGate(gate))
+	p := oauth2provider.New(oauth2provider.Config{ConsentGate: gate})
 
 	err := p.EvaluateConsent(context.Background(), "client_abc", id.NewUserID(), id.NewOrgID(), []string{"invoices:read"})
 
@@ -1279,9 +1281,9 @@ func TestWithConsentGate_GateIsConsulted(t *testing.T) {
 	assert.Equal(t, []string{"invoices:read"}, gate.scopes)
 }
 
-func TestWithConsentGate_RefusalPropagates(t *testing.T) {
+func TestConsentGate_RefusalPropagates(t *testing.T) {
 	denied := errors.New("org policy blocks this agent")
-	p := oauth2provider.New(oauth2provider.WithConsentGate(&recordingGate{err: denied}))
+	p := oauth2provider.New(oauth2provider.Config{ConsentGate: &recordingGate{err: denied}})
 
 	err := p.EvaluateConsent(context.Background(), "client_abc", id.NewUserID(), id.NewOrgID(), nil)
 
@@ -1289,6 +1291,15 @@ func TestWithConsentGate_RefusalPropagates(t *testing.T) {
 }
 
 // Without a gate the provider must behave exactly as it does today.
+func TestConsentGate_SetterWiresGate(t *testing.T) {
+	gate := &recordingGate{}
+	p := oauth2provider.New()
+	p.SetConsentGate(gate)
+
+	require.NoError(t, p.EvaluateConsent(context.Background(), "client_abc", id.NewUserID(), id.NewOrgID(), nil))
+	assert.True(t, gate.called, "the setter must wire the gate as effectively as Config does")
+}
+
 func TestEvaluateConsent_NoGateAllows(t *testing.T) {
 	p := oauth2provider.New()
 
@@ -1301,7 +1312,7 @@ func TestEvaluateConsent_NoGateAllows(t *testing.T) {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `go test ./plugins/oauth2provider/ -run ConsentGate -v`
-Expected: FAIL, compile error `undefined: oauth2provider.WithConsentGate`.
+Expected: FAIL, compile error `unknown field ConsentGate in struct literal`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -1330,11 +1341,10 @@ type ConsentGate interface {
 	Evaluate(ctx context.Context, clientID string, userID id.UserID, orgID id.OrgID, scopes []string) error
 }
 
-// WithConsentGate registers a gate consulted before every authorization code
-// is issued.
-func WithConsentGate(g ConsentGate) Option {
-	return func(p *Plugin) { p.consentGate = g }
-}
+// SetConsentGate registers a gate consulted before every authorization code is
+// issued. Use it when the gate is only available after the provider has been
+// constructed; otherwise set Config.ConsentGate.
+func (p *Plugin) SetConsentGate(g ConsentGate) { p.consentGate = g }
 
 // EvaluateConsent runs the registered gate, if any.
 func (p *Plugin) EvaluateConsent(ctx context.Context, clientID string, userID id.UserID, orgID id.OrgID, scopes []string) error {
@@ -1345,7 +1355,7 @@ func (p *Plugin) EvaluateConsent(ctx context.Context, clientID string, userID id
 }
 ```
 
-Add the field `consentGate ConsentGate` to the `Plugin` struct in `plugins/oauth2provider/plugin.go`.
+Add the field `consentGate ConsentGate` to the `Plugin` struct in `plugins/oauth2provider/plugin.go`, add `ConsentGate ConsentGate` to the `Config` struct there, and carry it across in `New` alongside the existing default-filling (`p.consentGate = c.ConsentGate`).
 
 In the authorize handler, immediately before the authorization code is created, insert:
 
@@ -3429,14 +3439,15 @@ agents := agentauth.New(
 engine, err := authsome.NewEngine(
     authsome.WithStore(store),
     authsome.WithWarden(wardenEngine),
-    authsome.WithPlugin(oauth2provider.New(
-        oauth2provider.WithConsentGate(agents),
-    )),
+    authsome.WithPlugin(oauth2provider.New(oauth2provider.Config{
+        Issuer:       "https://auth.example.com",
+        ConsentGate:  agents,
+    })),
     authsome.WithPlugin(agents),
 )
 ```
 
-`oauth2provider` must be registered before `agentauth`, since the gate is read at construction.
+Build `agents` before the provider, since the provider's `Config` holds the gate. If your wiring makes that awkward, construct the provider first and call `provider.SetConsentGate(agents)` instead.
 
 ## Deferred, and why
 
