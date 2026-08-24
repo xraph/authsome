@@ -355,6 +355,37 @@ func TestCreateGrant_NonPositiveDefaultTTLFallsBackToPackageDefault(t *testing.T
 		"a non-positive default TTL must not produce a grant that is born expired")
 }
 
+// A zero plugin default combined with a real org ceiling must still clamp to
+// that ceiling, not silently expand past it. Flooring the *result* of the
+// fold instead of the *base* let a zero default skip both fold comparisons
+// (0 is not less than anything positive) and return the unclamped package
+// default, bypassing the org ceiling entirely — the exact regression the
+// previous fix round introduced while fixing the "born expired" bug.
+func TestCreateGrant_ZeroDefaultStillClampsToOrgCeiling(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(
+		agentauth.WithStore(store),
+		agentauth.WithDefaultGrantTTL(0),
+		agentauth.WithScope("invoices:read", agentauth.Grants("read", "invoice")),
+	)
+	org := id.NewOrgID()
+	agent := approvedAgent(t, store, org, "client_zerodefault_ceiling")
+	require.NoError(t, store.PutOrgPolicy(context.Background(), &agentauth.OrgAgentPolicy{
+		OrgID: org, Mode: agentauth.ModeOpen, MaxGrantTTL: time.Hour,
+	}))
+
+	// No RequestedTTL, so the only thing standing between a zero default and
+	// the full (floored) package default is the org ceiling.
+	g, err := p.CreateGrant(context.Background(), agentauth.CreateGrantInput{
+		AppID: agent.AppID, AgentID: agent.ID, UserID: id.NewUserID(),
+		OrgID: org, Scopes: []string{"invoices:read"},
+	})
+
+	require.NoError(t, err)
+	assert.WithinDuration(t, time.Now().Add(time.Hour), g.ExpiresAt, time.Minute,
+		"a zero plugin default must not bypass a real org ceiling")
+}
+
 // CreateGrant must derive the TTL ceiling from the agent's actual org, not
 // merely from whatever OrgID the caller happens to pass — a zero caller OrgID
 // must not bypass an org ceiling that genuinely applies to this agent.
@@ -380,6 +411,41 @@ func TestCreateGrant_UsesAgentOrgCeilingRegardlessOfRequestOrgID(t *testing.T) {
 	require.NoError(t, err)
 	assert.WithinDuration(t, time.Now().Add(time.Hour), g.ExpiresAt, time.Minute,
 		"the agent's own org ceiling must apply even when the caller passes a zero org id")
+}
+
+// A grant created with a zero caller OrgID under an org-registered agent must
+// still be stored under that agent's org, not org-less — otherwise the org's
+// own offboarding sweep (RevokeGrantsByUserOrg) can never find it, and the
+// grant survives its delegating user leaving the org. The second assertion
+// below is the one that actually matters: it proves the property, not just
+// the field.
+func TestCreateGrant_StoresAgentOrgWhenCallerOrgIsZero(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(
+		agentauth.WithStore(store),
+		agentauth.WithScope("invoices:read", agentauth.Grants("read", "invoice")),
+	)
+	org := id.NewOrgID()
+	agent := approvedAgent(t, store, org, "client_orphanorg")
+	require.NoError(t, store.PutOrgPolicy(context.Background(), &agentauth.OrgAgentPolicy{
+		OrgID: org, Mode: agentauth.ModeOpen,
+	}))
+	userID := id.NewUserID()
+
+	g, err := p.CreateGrant(context.Background(), agentauth.CreateGrantInput{
+		AppID: agent.AppID, AgentID: agent.ID, UserID: userID,
+		OrgID:  id.OrgID{}, // caller passes no org context
+		Scopes: []string{"invoices:read"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, org.String(), g.OrgID.String(),
+		"a grant under an org-registered agent must never be stored org-less")
+
+	require.NoError(t, store.RevokeGrantsByUserOrg(context.Background(), userID, org))
+	got, err := store.GetAgentGrant(context.Background(), g.ID)
+	require.NoError(t, err)
+	assert.False(t, got.IsActive(time.Now()),
+		"the org's own offboarding sweep must find and revoke a grant stored under it")
 }
 
 // An unmapped scope must never reach a stored grant. This must hold as a

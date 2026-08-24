@@ -99,13 +99,30 @@ func (p *Plugin) CreateGrant(ctx context.Context, in CreateGrantInput) (*AgentGr
 		ttl = p.clampTTL(policy, ttl)
 	}
 
+	// This is a different question from governingOrgs above: that decides
+	// which orgs' policies must permit the delegation, and both can apply at
+	// once. This picks the single org value to stamp on the stored record,
+	// which offboarding sweeps like RevokeGrantsByUserOrg key on later. The
+	// session org wins when present because offboarding keys on the org the
+	// user was acting in when they authorized the agent — that is the
+	// membership being severed. When the session carried no org (an
+	// app-scoped consent), the agent's own org is still a far better tag
+	// than none: storing a zero org here would let a delegation under an
+	// org-registered agent silently escape that org's offboarding sweep
+	// entirely. The precedence is deliberately the reverse of governingOrgs,
+	// which prefers the agent's org first for policy enforcement.
+	grantOrg := in.OrgID
+	if grantOrg.IsNil() {
+		grantOrg = agent.OrgID
+	}
+
 	now := time.Now()
 	g := &AgentGrant{
 		ID:        id.NewAgentGrantID(),
 		AppID:     in.AppID,
 		AgentID:   in.AgentID,
 		UserID:    in.UserID,
-		OrgID:     in.OrgID,
+		OrgID:     grantOrg,
 		Scopes:    in.Scopes,
 		ConsentID: in.ConsentID,
 		ExpiresAt: now.Add(ttl),
@@ -154,20 +171,25 @@ func (p *Plugin) checkPolicy(agent *Agent, policy *OrgAgentPolicy, scopes []stri
 }
 
 // clampTTL takes the shortest of the request, the org ceiling and the plugin
-// default. A zero request means "use the default". If every input folds to a
-// non-positive duration — for example WithDefaultGrantTTL(0) with no org
-// ceiling to save it — it falls back to the package default rather than
-// producing a grant that is born expired.
+// default. A zero request means "use the default". A non-positive plugin
+// default (e.g. WithDefaultGrantTTL(0), a misconfiguration) is floored to the
+// package default before either fold below runs, not after: flooring the
+// *result* instead lets a non-positive base skip both comparisons (0 fails
+// `requested < ttl` and fails `MaxGrantTTL < ttl` alike, since neither
+// duration is less than a value that isn't positive), so the floor would
+// return the unclamped package default and silently bypass a real org
+// ceiling. Flooring the base first means both folds always run against a
+// positive starting value, so a real ceiling still narrows it.
 func (p *Plugin) clampTTL(policy *OrgAgentPolicy, requested time.Duration) time.Duration {
 	ttl := p.grantTTL
+	if ttl <= 0 {
+		ttl = defaultGrantTTL
+	}
 	if requested > 0 && requested < ttl {
 		ttl = requested
 	}
 	if policy != nil && policy.MaxGrantTTL > 0 && policy.MaxGrantTTL < ttl {
 		ttl = policy.MaxGrantTTL
-	}
-	if ttl <= 0 {
-		ttl = defaultGrantTTL
 	}
 	return ttl
 }
