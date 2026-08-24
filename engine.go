@@ -245,8 +245,9 @@ func (e *Engine) buildAuthMiddleware() {
 	var inner forge.Middleware
 
 	bindCfg := middleware.SessionBindingConfig{
-		CookieNameResolver: e.resolveSessionCookieName,
-		JWTSessionChecker:  e.jwtSessionChecker,
+		CookieNameResolver:       e.resolveSessionCookieName,
+		JWTSessionChecker:        e.jwtSessionChecker,
+		ExpectedAudienceResolver: e.resolveExpectedAudience,
 	}
 
 	if e.HasJWT() {
@@ -357,6 +358,31 @@ func (e *Engine) resolveSessionCookieName(ctx context.Context) string {
 		return "authsome_session_token"
 	}
 	return name
+}
+
+// resolveExpectedAudience returns the resource identifiers this deployment
+// answers to for the request's app, or nil to disable the check.
+//
+// This mirrors resolveSessionCookieName exactly, including the fail-open on a
+// settings error. Failing closed here would turn a settings outage into a
+// total authentication outage across every app, and the audience check is a
+// second line of defence sitting behind the token's own signature, which has
+// already been verified by the time this runs. Do not "harden" this into a
+// fail-closed check without understanding that trade.
+func (e *Engine) resolveExpectedAudience(ctx context.Context) []string {
+	mgr := e.Settings()
+	if mgr == nil {
+		return nil
+	}
+	opts := settings.ResolveOpts{}
+	if appID, ok := middleware.AppIDFrom(ctx); ok {
+		opts.AppID = appID.String()
+	}
+	identifier, err := settings.Get(ctx, mgr, SettingResourceIdentifier, opts)
+	if err != nil || identifier == "" {
+		return nil
+	}
+	return []string{identifier}
 }
 
 // jwtSessionChecker checks whether a JWT's session ID still exists in the

@@ -200,6 +200,24 @@ var (
 		settings.WithHelpText("When enabled, JWT tokens are validated against the session store on each request. This adds a DB lookup but enables instant revocation and IP/device binding for JWT tokens."),
 		settings.WithOrder(55),
 	)
+
+	// SettingResourceIdentifier is the resource identifier this app answers to
+	// as an OAuth2 resource server (RFC 8707). Empty disables the audience
+	// check, which is the default and preserves existing behaviour.
+	//
+	// Per app rather than per deployment: two apps in one deployment are two
+	// different resources, and a token minted for one must not authenticate at
+	// the other.
+	SettingResourceIdentifier = settings.Define("session.resource_identifier", "",
+		settings.WithDisplayName("Resource Identifier"),
+		settings.WithDescription("Absolute URI this app answers to as an OAuth2 resource server. Empty disables audience checking."),
+		settings.WithCategory("JWT Security"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithInputType(formconfig.FieldText),
+		settings.WithHelpText("When set, a token whose aud names a different resource is refused. Example: https://api.example.com"),
+		settings.WithOrder(56),
+	)
 )
 
 // Category: Session Extension
@@ -372,6 +390,9 @@ func registerCoreSessionSettings(m *settings.Manager) error {
 		return err
 	}
 	if err := settings.RegisterTyped(m, "session", SettingJWTRequireActiveSession); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingResourceIdentifier); err != nil {
 		return err
 	}
 	if err := settings.RegisterTyped(m, "session", SettingExtendOnActivity); err != nil {
