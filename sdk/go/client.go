@@ -645,7 +645,7 @@ func (c *Client) CreateOAuth2Client(ctx context.Context, req *CreateOAuth2Client
 }
 
 // DeleteOAuth2Client — Delete OAuth2 client
-func (c *Client) DeleteOAuth2Client(ctx context.Context, clientId string, req *DeleteOAuth2ClientRequest) (error) {
+func (c *Client) DeleteOAuth2Client(ctx context.Context, clientId string, req *DeleteOAuth2ClientRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1255,7 +1255,7 @@ func (c *Client) CreateCoupon(ctx context.Context, req *CreateCouponRequest) (*C
 }
 
 // DeleteCoupon — Delete coupon
-func (c *Client) DeleteCoupon(ctx context.Context, couponId string) (error) {
+func (c *Client) DeleteCoupon(ctx context.Context, couponId string) error {
 	path := "/v1/billing/coupons/{couponId}"
 	path = strings.Replace(path, "{couponId}", couponId, 1)
 	return c.do(ctx, "DELETE", path, nil, nil)
@@ -1306,7 +1306,7 @@ func (c *Client) GetInvoice(ctx context.Context, invoiceId string) (*InvoiceResp
 }
 
 // MarkInvoicePaid — Mark invoice as paid
-func (c *Client) MarkInvoicePaid(ctx context.Context, invoiceId string, req *MarkInvoicePaidRequest) (error) {
+func (c *Client) MarkInvoicePaid(ctx context.Context, invoiceId string, req *MarkInvoicePaidRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1317,7 +1317,7 @@ func (c *Client) MarkInvoicePaid(ctx context.Context, invoiceId string, req *Mar
 }
 
 // VoidInvoice — Void an invoice
-func (c *Client) VoidInvoice(ctx context.Context, invoiceId string, req *VoidInvoiceRequest) (error) {
+func (c *Client) VoidInvoice(ctx context.Context, invoiceId string, req *VoidInvoiceRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1372,14 +1372,14 @@ func (c *Client) GetBillingPlan(ctx context.Context, planId string) (*PlanRespon
 }
 
 // ActivateBillingPlan — Activate a billing plan
-func (c *Client) ActivateBillingPlan(ctx context.Context, planId string) (error) {
+func (c *Client) ActivateBillingPlan(ctx context.Context, planId string) error {
 	path := "/v1/billing/plans/{planId}/activate"
 	path = strings.Replace(path, "{planId}", planId, 1)
 	return c.do(ctx, "POST", path, nil, nil)
 }
 
 // ArchiveBillingPlan — Archive a billing plan
-func (c *Client) ArchiveBillingPlan(ctx context.Context, planId string) (error) {
+func (c *Client) ArchiveBillingPlan(ctx context.Context, planId string) error {
 	path := "/v1/billing/plans/{planId}/archive"
 	path = strings.Replace(path, "{planId}", planId, 1)
 	return c.do(ctx, "POST", path, nil, nil)
@@ -1447,7 +1447,7 @@ func (c *Client) GetActiveSubscription(ctx context.Context, params *GetActiveSub
 }
 
 // CancelSubscription — Cancel subscription
-func (c *Client) CancelSubscription(ctx context.Context, subId string, req *CancelSubscriptionRequest) (error) {
+func (c *Client) CancelSubscription(ctx context.Context, subId string, req *CancelSubscriptionRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1458,7 +1458,7 @@ func (c *Client) CancelSubscription(ctx context.Context, subId string, req *Canc
 }
 
 // ChangeSubscriptionPlan — Change subscription plan
-func (c *Client) ChangeSubscriptionPlan(ctx context.Context, subId string, req *ChangeSubscriptionPlanRequest) (error) {
+func (c *Client) ChangeSubscriptionPlan(ctx context.Context, subId string, req *ChangeSubscriptionPlanRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1469,14 +1469,14 @@ func (c *Client) ChangeSubscriptionPlan(ctx context.Context, subId string, req *
 }
 
 // PauseSubscription — Pause subscription
-func (c *Client) PauseSubscription(ctx context.Context, subId string) (error) {
+func (c *Client) PauseSubscription(ctx context.Context, subId string) error {
 	path := "/v1/billing/subscriptions/{subId}/pause"
 	path = strings.Replace(path, "{subId}", subId, 1)
 	return c.do(ctx, "POST", path, nil, nil)
 }
 
 // ResumeSubscription — Resume subscription
-func (c *Client) ResumeSubscription(ctx context.Context, subId string) (error) {
+func (c *Client) ResumeSubscription(ctx context.Context, subId string) error {
 	path := "/v1/billing/subscriptions/{subId}/resume"
 	path = strings.Replace(path, "{subId}", subId, 1)
 	return c.do(ctx, "POST", path, nil, nil)
@@ -1831,7 +1831,7 @@ func (c *Client) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*C
 }
 
 // RevokeAPIKey — Revoke API key
-func (c *Client) RevokeAPIKey(ctx context.Context, keyId string) (error) {
+func (c *Client) RevokeAPIKey(ctx context.Context, keyId string) error {
 	path := "/v1/keys/{keyId}"
 	path = strings.Replace(path, "{keyId}", keyId, 1)
 	return c.do(ctx, "DELETE", path, nil, nil)
@@ -2057,7 +2057,7 @@ func (c *Client) VerifyMFA(ctx context.Context, req *VerifyMFARequest) (*VerifyM
 }
 
 // Oauth2Authorize — OAuth2 Authorization
-func (c *Client) Oauth2Authorize(ctx context.Context, params *Oauth2AuthorizeParams) (error) {
+func (c *Client) Oauth2Authorize(ctx context.Context, params *Oauth2AuthorizeParams) error {
 	path := "/v1/oauth/authorize"
 	if params != nil {
 		q := url.Values{}
@@ -2118,7 +2118,7 @@ func (c *Client) Oauth2DeviceComplete(ctx context.Context, req *Oauth2DeviceComp
 }
 
 // Oauth2Revoke — Revoke token
-func (c *Client) Oauth2Revoke(ctx context.Context, req *Oauth2RevokeRequest) (error) {
+func (c *Client) Oauth2Revoke(ctx context.Context, req *Oauth2RevokeRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -2804,14 +2804,14 @@ func (c *Client) StartSSOLoginByDomain(ctx context.Context, req *StartSSOLoginBy
 }
 
 // SsoACS — SSO SAML ACS endpoint
-func (c *Client) SsoACS(ctx context.Context, provider string) (error) {
+func (c *Client) SsoACS(ctx context.Context, provider string) error {
 	path := "/v1/sso/{provider}/acs"
 	path = strings.Replace(path, "{provider}", provider, 1)
 	return c.do(ctx, "POST", path, nil, nil)
 }
 
 // SsoOIDCRedirect — SSO OIDC redirect landing
-func (c *Client) SsoOIDCRedirect(ctx context.Context, provider string) (error) {
+func (c *Client) SsoOIDCRedirect(ctx context.Context, provider string) error {
 	path := "/v1/sso/{provider}/callback"
 	path = strings.Replace(path, "{provider}", provider, 1)
 	return c.do(ctx, "GET", path, nil, nil)
@@ -2864,7 +2864,7 @@ func (c *Client) StartSSOLogin(ctx context.Context, provider string, params *Sta
 }
 
 // SsoSPMetadata — SAML SP metadata
-func (c *Client) SsoSPMetadata(ctx context.Context, provider string) (error) {
+func (c *Client) SsoSPMetadata(ctx context.Context, provider string) error {
 	path := "/v1/sso/{provider}/metadata"
 	path = strings.Replace(path, "{provider}", provider, 1)
 	return c.do(ctx, "GET", path, nil, nil)
@@ -2988,7 +2988,6 @@ func (c *Client) DeleteWebhook(ctx context.Context, webhookId string) (*ApiStatu
 	return &result, nil
 }
 
-
 // ──────────────────────────────────────────────────
 // Query parameter types
 // ──────────────────────────────────────────────────
@@ -3010,41 +3009,41 @@ type AdminListOrgsParams struct {
 
 // AdminListServiceAccountsParams holds optional query parameters for AdminListServiceAccounts.
 type AdminListServiceAccountsParams struct {
-	AppID string `json:"app_id,omitempty"`
-	Limit int64 `json:"limit,omitempty"`
+	AppID  string `json:"app_id,omitempty"`
+	Limit  int64  `json:"limit,omitempty"`
 	Cursor string `json:"cursor,omitempty"`
 }
 
 // ListSettingsDefinitionsParams holds optional query parameters for ListSettingsDefinitions.
 type ListSettingsDefinitionsParams struct {
 	Namespace string `json:"namespace,omitempty"`
-	Category string `json:"category,omitempty"`
+	Category  string `json:"category,omitempty"`
 }
 
 // UnenforceSettingParams holds optional query parameters for UnenforceSetting.
 type UnenforceSettingParams struct {
-	Scope string `json:"scope,omitempty"`
+	Scope   string `json:"scope,omitempty"`
 	ScopeID string `json:"scope_id,omitempty"`
 }
 
 // ResolveSettingsParams holds optional query parameters for ResolveSettings.
 type ResolveSettingsParams struct {
 	Namespace string `json:"namespace,omitempty"`
-	AppID string `json:"app_id,omitempty"`
-	OrgID string `json:"org_id,omitempty"`
-	UserID string `json:"user_id,omitempty"`
+	AppID     string `json:"app_id,omitempty"`
+	OrgID     string `json:"org_id,omitempty"`
+	UserID    string `json:"user_id,omitempty"`
 }
 
 // ResolveSettingParams holds optional query parameters for ResolveSetting.
 type ResolveSettingParams struct {
-	AppID string `json:"app_id,omitempty"`
-	OrgID string `json:"org_id,omitempty"`
+	AppID  string `json:"app_id,omitempty"`
+	OrgID  string `json:"org_id,omitempty"`
 	UserID string `json:"user_id,omitempty"`
 }
 
 // DeleteSettingParams holds optional query parameters for DeleteSetting.
 type DeleteSettingParams struct {
-	Scope string `json:"scope,omitempty"`
+	Scope   string `json:"scope,omitempty"`
 	ScopeID string `json:"scope_id,omitempty"`
 }
 
@@ -3075,10 +3074,10 @@ type AdminGetStatsParams struct {
 
 // AdminListUsersParams holds optional query parameters for AdminListUsers.
 type AdminListUsersParams struct {
-	AppID string `json:"app_id,omitempty"`
-	Email string `json:"email,omitempty"`
+	AppID  string `json:"app_id,omitempty"`
+	Email  string `json:"email,omitempty"`
 	Cursor string `json:"cursor,omitempty"`
-	Limit int64 `json:"limit,omitempty"`
+	Limit  int64  `json:"limit,omitempty"`
 }
 
 // ListCouponsParams holds optional query parameters for ListCoupons.
@@ -3088,7 +3087,7 @@ type ListCouponsParams struct {
 
 // ListInvoicesParams holds optional query parameters for ListInvoices.
 type ListInvoicesParams struct {
-	AppID string `json:"app_id,omitempty"`
+	AppID    string `json:"app_id,omitempty"`
 	TenantID string `json:"tenant_id,omitempty"`
 }
 
@@ -3099,20 +3098,20 @@ type ListBillingPlansParams struct {
 
 // ListSubscriptionsParams holds optional query parameters for ListSubscriptions.
 type ListSubscriptionsParams struct {
-	AppID string `json:"app_id,omitempty"`
+	AppID    string `json:"app_id,omitempty"`
 	TenantID string `json:"tenant_id,omitempty"`
-	Status string `json:"status,omitempty"`
+	Status   string `json:"status,omitempty"`
 }
 
 // GetActiveSubscriptionParams holds optional query parameters for GetActiveSubscription.
 type GetActiveSubscriptionParams struct {
-	AppID string `json:"app_id,omitempty"`
+	AppID    string `json:"app_id,omitempty"`
 	TenantID string `json:"tenant_id,omitempty"`
 }
 
 // GetUsageSummaryParams holds optional query parameters for GetUsageSummary.
 type GetUsageSummaryParams struct {
-	AppID string `json:"app_id,omitempty"`
+	AppID    string `json:"app_id,omitempty"`
 	TenantID string `json:"tenant_id,omitempty"`
 }
 
@@ -3124,8 +3123,8 @@ type GetClientConfigParams struct {
 // ListConsentsParams holds optional query parameters for ListConsents.
 type ListConsentsParams struct {
 	Purpose string `json:"purpose,omitempty"`
-	Cursor string `json:"cursor,omitempty"`
-	Limit int64 `json:"limit,omitempty"`
+	Cursor  string `json:"cursor,omitempty"`
+	Limit   int64  `json:"limit,omitempty"`
 }
 
 // ListEnvironmentsParams holds optional query parameters for ListEnvironments.
@@ -3135,25 +3134,25 @@ type ListEnvironmentsParams struct {
 
 // ListAPIKeysParams holds optional query parameters for ListAPIKeys.
 type ListAPIKeysParams struct {
-	AppID string `json:"app_id,omitempty"`
+	AppID  string `json:"app_id,omitempty"`
 	UserID string `json:"user_id,omitempty"`
 }
 
 // Oauth2AuthorizeParams holds optional query parameters for Oauth2Authorize.
 type Oauth2AuthorizeParams struct {
-	ResponseType string `json:"response_type,omitempty"`
-	ClientID string `json:"client_id,omitempty"`
-	RedirectURI string `json:"redirect_uri,omitempty"`
-	Scope string `json:"scope,omitempty"`
-	State string `json:"state,omitempty"`
-	CodeChallenge string `json:"code_challenge,omitempty"`
+	ResponseType        string `json:"response_type,omitempty"`
+	ClientID            string `json:"client_id,omitempty"`
+	RedirectURI         string `json:"redirect_uri,omitempty"`
+	Scope               string `json:"scope,omitempty"`
+	State               string `json:"state,omitempty"`
+	CodeChallenge       string `json:"code_challenge,omitempty"`
 	CodeChallengeMethod string `json:"code_challenge_method,omitempty"`
 }
 
 // CheckOrgSlugParams holds optional query parameters for CheckOrgSlug.
 type CheckOrgSlugParams struct {
 	AppID string `json:"app_id,omitempty"`
-	Slug string `json:"slug,omitempty"`
+	Slug  string `json:"slug,omitempty"`
 }
 
 // AuthsomeListRolesParams holds optional query parameters for AuthsomeListRoles.
@@ -3170,14 +3169,14 @@ type StartOAuthParams struct {
 // OauthCallbackParams holds optional query parameters for OauthCallback.
 type OauthCallbackParams struct {
 	State string `json:"state,omitempty"`
-	Code string `json:"code,omitempty"`
+	Code  string `json:"code,omitempty"`
 	Error string `json:"error,omitempty"`
 }
 
 // SsoCallbackParams holds optional query parameters for SsoCallback.
 type SsoCallbackParams struct {
 	State string `json:"state,omitempty"`
-	Code string `json:"code,omitempty"`
+	Code  string `json:"code,omitempty"`
 	Error string `json:"error,omitempty"`
 }
 
@@ -3195,7 +3194,6 @@ type AuthsomeListUserRolesParams struct {
 type ListWebhooksParams struct {
 	AppID string `json:"app_id,omitempty"`
 }
-
 
 // ──────────────────────────────────────────────────
 // Internal HTTP helper

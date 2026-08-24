@@ -9,35 +9,35 @@ type AcceptInvitationRequest struct {
 
 // AddMemberRequest represents the AddMemberRequest schema.
 type AddMemberRequest struct {
-	Role string `json:"role,omitempty"`
+	Role   string `json:"role,omitempty"`
 	UserID string `json:"user_id"`
 }
 
 // AddPermissionRequest represents the AddPermissionRequest schema.
 type AddPermissionRequest struct {
-	Action string `json:"action"`
+	Action   string `json:"action"`
 	Resource string `json:"resource"`
 }
 
 // AdminAppResponse represents the AdminAppResponse schema.
 type AdminAppResponse struct {
-	ID string `json:"id"`
-	IsPlatform bool `json:"is_platform"`
-	Logo string `json:"logo,omitempty"`
-	Name string `json:"name"`
+	ID             string `json:"id"`
+	IsPlatform     bool   `json:"is_platform"`
+	Logo           string `json:"logo,omitempty"`
+	Name           string `json:"name"`
 	PublishableKey string `json:"publishable_key,omitempty"`
-	Slug string `json:"slug"`
+	Slug           string `json:"slug"`
 }
 
 // AdminBanUserRequest represents the AdminBanUserRequest schema.
 type AdminBanUserRequest struct {
 	ExpiresAt string `json:"expires_at,omitempty"`
-	Reason string `json:"reason,omitempty"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 // AdminCatalogProvider represents the AdminCatalogProvider schema.
 type AdminCatalogProvider struct {
-	ID string `json:"id"`
+	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
@@ -48,9 +48,9 @@ type AdminCatalogResponse struct {
 
 // AdminCopyUserRequest represents the AdminCopyUserRequest schema.
 type AdminCopyUserRequest struct {
-	EnvID string `json:"env_id,omitempty"`
+	EnvID        string `json:"env_id,omitempty"`
 	SourceUserID string `json:"source_user_id"`
-	TargetAppID string `json:"target_app_id"`
+	TargetAppID  string `json:"target_app_id"`
 }
 
 // AdminCreateAppRequest represents the AdminCreateAppRequest schema.
@@ -62,57 +62,57 @@ type AdminCreateAppRequest struct {
 
 // AdminCreateConnectionRequest represents the AdminCreateConnectionRequest schema.
 type AdminCreateConnectionRequest struct {
-	AcsURL string `json:"acs_url,omitempty"`
-	AppID string `json:"app_id"`
+	AcsURL            string         `json:"acs_url,omitempty"`
+	AppID             string         `json:"app_id"`
 	AttributeMappings map[string]any `json:"attribute_mappings,omitempty"`
-	ClientID string `json:"client_id,omitempty"`
-	ClientSecret string `json:"client_secret,omitempty"`
-	Domain string `json:"domain"`
-	EntityID string `json:"entity_id,omitempty"`
-	IdpCertificate string `json:"idp_certificate,omitempty"`
-	IdpMetadataXML string `json:"idp_metadata_xml,omitempty"`
-	IdpSsoURL string `json:"idp_sso_url,omitempty"`
-	Issuer string `json:"issuer,omitempty"`
-	MetadataURL string `json:"metadata_url,omitempty"`
-	OrgID string `json:"org_id,omitempty"`
-	Protocol string `json:"protocol"`
-	Provider string `json:"provider"`
-	SignRequests bool `json:"sign_requests,omitempty"`
+	ClientID          string         `json:"client_id,omitempty"`
+	ClientSecret      string         `json:"client_secret,omitempty"`
+	Domain            string         `json:"domain"`
+	EntityID          string         `json:"entity_id,omitempty"`
+	IdpCertificate    string         `json:"idp_certificate,omitempty"`
+	IdpMetadataXML    string         `json:"idp_metadata_xml,omitempty"`
+	IdpSsoURL         string         `json:"idp_sso_url,omitempty"`
+	Issuer            string         `json:"issuer,omitempty"`
+	MetadataURL       string         `json:"metadata_url,omitempty"`
+	OrgID             string         `json:"org_id,omitempty"`
+	Protocol          string         `json:"protocol"`
+	Provider          string         `json:"provider"`
+	SignRequests      bool           `json:"sign_requests,omitempty"`
 }
 
 // AdminCreateConnectionResponse represents the AdminCreateConnectionResponse schema.
 type AdminCreateConnectionResponse struct {
-	Active bool `json:"active"`
-	AppID string `json:"app_id"`
-	Domain string `json:"domain"`
-	ID string `json:"id"`
+	Active   bool   `json:"active"`
+	AppID    string `json:"app_id"`
+	Domain   string `json:"domain"`
+	ID       string `json:"id"`
 	Protocol string `json:"protocol"`
 	Provider string `json:"provider"`
 }
 
 // AdminCreateServiceAccountAPIKeyRequest represents the AdminCreateServiceAccountAPIKeyRequest schema.
 type AdminCreateServiceAccountAPIKeyRequest struct {
-	ExpiresAt string `json:"expires_at,omitempty"`
-	Name string `json:"name"`
-	Scopes []string `json:"scopes,omitempty"`
+	ExpiresAt string   `json:"expires_at,omitempty"`
+	Name      string   `json:"name"`
+	Scopes    []string `json:"scopes,omitempty"`
 }
 
 // AdminCreateServiceAccountRequest represents the AdminCreateServiceAccountRequest schema.
 type AdminCreateServiceAccountRequest struct {
-	AppID string `json:"app_id,omitempty"`
-	Description string `json:"description,omitempty"`
-	Name string `json:"name"`
-	Scopes []string `json:"scopes,omitempty"`
+	AppID       string   `json:"app_id,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Name        string   `json:"name"`
+	Scopes      []string `json:"scopes,omitempty"`
 }
 
 // AdminCreateUserRequest represents the AdminCreateUserRequest schema.
 type AdminCreateUserRequest struct {
-	AppID string `json:"app_id,omitempty"`
-	Email string `json:"email"`
+	AppID     string `json:"app_id,omitempty"`
+	Email     string `json:"email"`
 	FirstName string `json:"first_name,omitempty"`
-	LastName string `json:"last_name,omitempty"`
-	Password string `json:"password"`
-	Username string `json:"username,omitempty"`
+	LastName  string `json:"last_name,omitempty"`
+	Password  string `json:"password"`
+	Username  string `json:"username,omitempty"`
 }
 
 // AdminDeleteConnectionResponse represents the AdminDeleteConnectionResponse schema.
@@ -127,7 +127,7 @@ type AdminDeleteProviderResponse struct {
 
 // AdminGrantPlatformOwnerRequest represents the AdminGrantPlatformOwnerRequest schema.
 type AdminGrantPlatformOwnerRequest struct {
-	Email string `json:"email,omitempty"`
+	Email  string `json:"email,omitempty"`
 	UserID string `json:"user_id,omitempty"`
 }
 
@@ -150,13 +150,13 @@ type AdminPlatformOwnerResponse struct {
 
 // AdminProvider represents the AdminProvider schema.
 type AdminProvider struct {
-	ClientID string `json:"client_id"`
-	ClientSecret string `json:"client_secret,omitempty"`
-	Enabled bool `json:"enabled"`
-	HasSecret bool `json:"has_secret"`
-	Name string `json:"name"`
-	RedirectURL string `json:"redirect_url,omitempty"`
-	Scopes []string `json:"scopes,omitempty"`
+	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret,omitempty"`
+	Enabled      bool     `json:"enabled"`
+	HasSecret    bool     `json:"has_secret"`
+	Name         string   `json:"name"`
+	RedirectURL  string   `json:"redirect_url,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
 }
 
 // AdminProviderResponse represents the AdminProviderResponse schema.
@@ -166,34 +166,34 @@ type AdminProviderResponse struct {
 
 // AdminServiceAccountAPIKeyResponse represents the AdminServiceAccountAPIKeyResponse schema.
 type AdminServiceAccountAPIKeyResponse struct {
-	CreatedAt string `json:"created_at"`
-	ExpiresAt string `json:"expires_at,omitempty"`
-	ID string `json:"id"`
-	Key string `json:"key"`
-	KeyPrefix string `json:"key_prefix"`
-	Name string `json:"name"`
-	PublicKey string `json:"public_key,omitempty"`
-	PublicKeyPrefix string `json:"public_key_prefix,omitempty"`
-	Scopes []string `json:"scopes,omitempty"`
+	CreatedAt       string   `json:"created_at"`
+	ExpiresAt       string   `json:"expires_at,omitempty"`
+	ID              string   `json:"id"`
+	Key             string   `json:"key"`
+	KeyPrefix       string   `json:"key_prefix"`
+	Name            string   `json:"name"`
+	PublicKey       string   `json:"public_key,omitempty"`
+	PublicKeyPrefix string   `json:"public_key_prefix,omitempty"`
+	Scopes          []string `json:"scopes,omitempty"`
 }
 
 // AdminServiceAccountListResponse represents the AdminServiceAccountListResponse schema.
 type AdminServiceAccountListResponse struct {
-	NextCursor string `json:"next_cursor,omitempty"`
+	NextCursor      string                         `json:"next_cursor,omitempty"`
 	ServiceAccounts []*AdminServiceAccountResponse `json:"service_accounts"`
-	Total int64 `json:"total"`
+	Total           int64                          `json:"total"`
 }
 
 // AdminServiceAccountResponse represents the AdminServiceAccountResponse schema.
 type AdminServiceAccountResponse struct {
-	Active bool `json:"active"`
-	AppID string `json:"app_id"`
-	CreatedAt string `json:"created_at"`
-	Description string `json:"description,omitempty"`
-	ID string `json:"id"`
-	Name string `json:"name"`
-	Scopes []string `json:"scopes,omitempty"`
-	UpdatedAt string `json:"updated_at"`
+	Active      bool     `json:"active"`
+	AppID       string   `json:"app_id"`
+	CreatedAt   string   `json:"created_at"`
+	Description string   `json:"description,omitempty"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Scopes      []string `json:"scopes,omitempty"`
+	UpdatedAt   string   `json:"updated_at"`
 }
 
 // AdminStatsResponse represents the AdminStatsResponse schema.
@@ -203,44 +203,44 @@ type AdminStatsResponse struct {
 
 // AdminUpdateConnectionRequest represents the AdminUpdateConnectionRequest schema.
 type AdminUpdateConnectionRequest struct {
-	AcsURL string `json:"acs_url,omitempty"`
-	Active bool `json:"active,omitempty"`
+	AcsURL            string         `json:"acs_url,omitempty"`
+	Active            bool           `json:"active,omitempty"`
 	AttributeMappings map[string]any `json:"attribute_mappings,omitempty"`
-	ClientID string `json:"client_id,omitempty"`
-	ClientSecret string `json:"client_secret,omitempty"`
-	Domain string `json:"domain,omitempty"`
-	EntityID string `json:"entity_id,omitempty"`
-	IdpCertificate string `json:"idp_certificate,omitempty"`
-	IdpMetadataXML string `json:"idp_metadata_xml,omitempty"`
-	IdpSsoURL string `json:"idp_sso_url,omitempty"`
-	Issuer string `json:"issuer,omitempty"`
-	MetadataURL string `json:"metadata_url,omitempty"`
-	Provider string `json:"provider,omitempty"`
-	SignRequests bool `json:"sign_requests,omitempty"`
+	ClientID          string         `json:"client_id,omitempty"`
+	ClientSecret      string         `json:"client_secret,omitempty"`
+	Domain            string         `json:"domain,omitempty"`
+	EntityID          string         `json:"entity_id,omitempty"`
+	IdpCertificate    string         `json:"idp_certificate,omitempty"`
+	IdpMetadataXML    string         `json:"idp_metadata_xml,omitempty"`
+	IdpSsoURL         string         `json:"idp_sso_url,omitempty"`
+	Issuer            string         `json:"issuer,omitempty"`
+	MetadataURL       string         `json:"metadata_url,omitempty"`
+	Provider          string         `json:"provider,omitempty"`
+	SignRequests      bool           `json:"sign_requests,omitempty"`
 }
 
 // AdminUpdateUserRequest represents the AdminUpdateUserRequest schema.
 type AdminUpdateUserRequest struct {
-	EmailVerified bool `json:"email_verified,omitempty"`
-	FirstName string `json:"first_name,omitempty"`
-	LastName string `json:"last_name,omitempty"`
-	Username string `json:"username,omitempty"`
+	EmailVerified bool   `json:"email_verified,omitempty"`
+	FirstName     string `json:"first_name,omitempty"`
+	LastName      string `json:"last_name,omitempty"`
+	Username      string `json:"username,omitempty"`
 }
 
 // AdminUpsertProviderRequest represents the AdminUpsertProviderRequest schema.
 type AdminUpsertProviderRequest struct {
-	ClientID string `json:"client_id"`
-	ClientSecret string `json:"client_secret"`
-	Enabled bool `json:"enabled,omitempty"`
-	RedirectURL string `json:"redirect_url,omitempty"`
-	Scopes []string `json:"scopes,omitempty"`
+	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret"`
+	Enabled      bool     `json:"enabled,omitempty"`
+	RedirectURL  string   `json:"redirect_url,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
 }
 
 // AdminUserListResponse represents the AdminUserListResponse schema.
 type AdminUserListResponse struct {
-	NextCursor string `json:"next_cursor,omitempty"`
-	Total int64 `json:"total"`
-	Users []*User `json:"users"`
+	NextCursor string  `json:"next_cursor,omitempty"`
+	Total      int64   `json:"total"`
+	Users      []*User `json:"users"`
 }
 
 // ApiStatusResponse represents the ApiStatusResponse schema.
@@ -250,94 +250,94 @@ type ApiStatusResponse struct {
 
 // ApiTokenResponse represents the ApiTokenResponse schema.
 type ApiTokenResponse struct {
-	ExpiresAt string `json:"expires_at"`
+	ExpiresAt    string `json:"expires_at"`
 	RefreshToken string `json:"refresh_token"`
 	SessionToken string `json:"session_token"`
 }
 
 // AppclientconfigConfig represents the AppclientconfigConfig schema.
 type AppclientconfigConfig struct {
-	AppID string `json:"app_id"`
-	AppName string `json:"app_name,omitempty"`
-	CreatedAt string `json:"created_at"`
-	ID string `json:"id"`
-	LogoURL string `json:"logo_url,omitempty"`
-	MagicLinkEnabled bool `json:"magic_link_enabled,omitempty"`
-	MFAEnabled bool `json:"mfa_enabled,omitempty"`
-	MFAMethods []string `json:"mfa_methods,omitempty"`
-	MFARequired bool `json:"mfa_required,omitempty"`
-	PasskeyEnabled bool `json:"passkey_enabled,omitempty"`
-	PasswordEnabled bool `json:"password_enabled,omitempty"`
-	RequireEmailVerification bool `json:"require_email_verification,omitempty"`
-	SignupEnabled bool `json:"signup_enabled,omitempty"`
-	SocialEnabled bool `json:"social_enabled,omitempty"`
-	SocialProviders []string `json:"social_providers,omitempty"`
-	SsoEnabled bool `json:"sso_enabled,omitempty"`
-	UpdatedAt string `json:"updated_at"`
-	WaitlistEnabled bool `json:"waitlist_enabled,omitempty"`
+	AppID                    string   `json:"app_id"`
+	AppName                  string   `json:"app_name,omitempty"`
+	CreatedAt                string   `json:"created_at"`
+	ID                       string   `json:"id"`
+	LogoURL                  string   `json:"logo_url,omitempty"`
+	MagicLinkEnabled         bool     `json:"magic_link_enabled,omitempty"`
+	MFAEnabled               bool     `json:"mfa_enabled,omitempty"`
+	MFAMethods               []string `json:"mfa_methods,omitempty"`
+	MFARequired              bool     `json:"mfa_required,omitempty"`
+	PasskeyEnabled           bool     `json:"passkey_enabled,omitempty"`
+	PasswordEnabled          bool     `json:"password_enabled,omitempty"`
+	RequireEmailVerification bool     `json:"require_email_verification,omitempty"`
+	SignupEnabled            bool     `json:"signup_enabled,omitempty"`
+	SocialEnabled            bool     `json:"social_enabled,omitempty"`
+	SocialProviders          []string `json:"social_providers,omitempty"`
+	SsoEnabled               bool     `json:"sso_enabled,omitempty"`
+	UpdatedAt                string   `json:"updated_at"`
+	WaitlistEnabled          bool     `json:"waitlist_enabled,omitempty"`
 }
 
 // AppsessionconfigConfig represents the AppsessionconfigConfig schema.
 type AppsessionconfigConfig struct {
-	AppID string `json:"app_id"`
-	BindToDevice bool `json:"bind_to_device,omitempty"`
-	BindToIP bool `json:"bind_to_ip,omitempty"`
-	CreatedAt string `json:"created_at"`
-	ID string `json:"id"`
-	MaxActiveSessions int64 `json:"max_active_sessions,omitempty"`
-	RefreshTokenTtlSeconds int64 `json:"refresh_token_ttl_seconds,omitempty"`
-	RotateRefreshToken bool `json:"rotate_refresh_token,omitempty"`
-	TokenFormat string `json:"token_format,omitempty"`
-	TokenTtlSeconds int64 `json:"token_ttl_seconds,omitempty"`
-	UpdatedAt string `json:"updated_at"`
+	AppID                  string `json:"app_id"`
+	BindToDevice           bool   `json:"bind_to_device,omitempty"`
+	BindToIP               bool   `json:"bind_to_ip,omitempty"`
+	CreatedAt              string `json:"created_at"`
+	ID                     string `json:"id"`
+	MaxActiveSessions      int64  `json:"max_active_sessions,omitempty"`
+	RefreshTokenTtlSeconds int64  `json:"refresh_token_ttl_seconds,omitempty"`
+	RotateRefreshToken     bool   `json:"rotate_refresh_token,omitempty"`
+	TokenFormat            string `json:"token_format,omitempty"`
+	TokenTtlSeconds        int64  `json:"token_ttl_seconds,omitempty"`
+	UpdatedAt              string `json:"updated_at"`
 }
 
 // AssignRoleRequest represents the AssignRoleRequest schema.
 type AssignRoleRequest struct {
-	OrgID string `json:"org_id,omitempty"`
+	OrgID  string `json:"org_id,omitempty"`
 	UserID string `json:"user_id"`
 }
 
 // AuthMethod represents the AuthMethod schema.
 type AuthMethod struct {
-	Label string `json:"label"`
+	Label    string `json:"label"`
 	LinkedAt string `json:"linked_at,omitempty"`
 	Provider string `json:"provider"`
-	Type string `json:"type"`
+	Type     string `json:"type"`
 }
 
 // AuthResponse represents the AuthResponse schema.
 type AuthResponse struct {
-	ExpiresAt string `json:"expires_at"`
+	ExpiresAt    string `json:"expires_at"`
 	RefreshToken string `json:"refresh_token"`
 	SessionToken string `json:"session_token"`
-	User *User `json:"user"`
+	User         *User  `json:"user"`
 }
 
 // BulkError represents the BulkError schema.
 type BulkError struct {
 	Email string `json:"email,omitempty"`
 	Error string `json:"error"`
-	Index int64 `json:"index"`
+	Index int64  `json:"index"`
 }
 
 // BulkImportResult represents the BulkImportResult schema.
 type BulkImportResult struct {
-	Created int64 `json:"created"`
-	Errors []*BulkError `json:"errors,omitempty"`
-	Skipped int64 `json:"skipped"`
+	Created int64        `json:"created"`
+	Errors  []*BulkError `json:"errors,omitempty"`
+	Skipped int64        `json:"skipped"`
 }
 
 // BulkImportUsersRequest represents the BulkImportUsersRequest schema.
 type BulkImportUsersRequest struct {
-	AppID string `json:"app_id,omitempty"`
+	AppID string           `json:"app_id,omitempty"`
 	Users []map[string]any `json:"users"`
 }
 
 // BulkRevokeSessionsResponse represents the BulkRevokeSessionsResponse schema.
 type BulkRevokeSessionsResponse struct {
-	Revoked int64 `json:"revoked"`
-	UserID string `json:"user_id"`
+	Revoked int64  `json:"revoked"`
+	UserID  string `json:"user_id"`
 }
 
 // CancelSubscriptionRequest represents the CancelSubscriptionRequest schema.
@@ -347,22 +347,22 @@ type CancelSubscriptionRequest struct {
 
 // ChallengeRequest represents the ChallengeRequest schema.
 type ChallengeRequest struct {
-	Code string `json:"code"`
+	Code      string `json:"code"`
 	MFATicket string `json:"mfa_ticket"`
 }
 
 // ChallengeResponse represents the ChallengeResponse schema.
 type ChallengeResponse struct {
-	ExpiresAt string `json:"expires_at"`
+	ExpiresAt    string `json:"expires_at"`
 	RefreshToken string `json:"refresh_token"`
 	SessionToken string `json:"session_token"`
-	User any `json:"user"`
+	User         any    `json:"user"`
 }
 
 // ChangePasswordRequest represents the ChangePasswordRequest schema.
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
-	NewPassword string `json:"new_password"`
+	NewPassword     string `json:"new_password"`
 }
 
 // ChangePlanRequest represents the ChangePlanRequest schema.
@@ -379,62 +379,62 @@ type ClientConfigBranding struct {
 // ClientConfigCaptcha represents the ClientConfigCaptcha schema.
 type ClientConfigCaptcha struct {
 	Provider string `json:"provider,omitempty"`
-	Required bool `json:"required"`
-	SiteKey string `json:"site_key,omitempty"`
+	Required bool   `json:"required"`
+	SiteKey  string `json:"site_key,omitempty"`
 }
 
 // ClientConfigEmailVerification represents the ClientConfigEmailVerification schema.
 type ClientConfigEmailVerification struct {
-	Enabled bool `json:"enabled"`
+	Enabled  bool `json:"enabled"`
 	Required bool `json:"required"`
 }
 
 // ClientConfigFieldValidation represents the ClientConfigFieldValidation schema.
 type ClientConfigFieldValidation struct {
-	Max int64 `json:"max,omitempty"`
-	MaxLen int64 `json:"max_len,omitempty"`
-	Min int64 `json:"min,omitempty"`
-	MinLen int64 `json:"min_len,omitempty"`
-	Pattern string `json:"pattern,omitempty"`
-	Required bool `json:"required,omitempty"`
+	Max      int64  `json:"max,omitempty"`
+	MaxLen   int64  `json:"max_len,omitempty"`
+	Min      int64  `json:"min,omitempty"`
+	MinLen   int64  `json:"min_len,omitempty"`
+	Pattern  string `json:"pattern,omitempty"`
+	Required bool   `json:"required,omitempty"`
 }
 
 // ClientConfigMFA represents the ClientConfigMFA schema.
 type ClientConfigMFA struct {
-	Enabled bool `json:"enabled"`
-	Methods []string `json:"methods"`
-	Required bool `json:"required"`
+	Enabled  bool     `json:"enabled"`
+	Methods  []string `json:"methods"`
+	Required bool     `json:"required"`
 }
 
 // ClientConfigResponse represents the ClientConfigResponse schema.
 type ClientConfigResponse struct {
-	AppID string `json:"app_id"`
-	Branding *ClientConfigBranding `json:"branding,omitempty"`
-	Captcha *ClientConfigCaptcha `json:"captcha,omitempty"`
-	DeviceAuthorization *ClientConfigToggle `json:"device_authorization,omitempty"`
-	EmailVerification *ClientConfigEmailVerification `json:"email_verification,omitempty"`
-	Magiclink *ClientConfigToggle `json:"magiclink,omitempty"`
-	MFA *ClientConfigMFA `json:"mfa,omitempty"`
-	Passkey *ClientConfigToggle `json:"passkey,omitempty"`
-	Password *ClientConfigToggle `json:"password,omitempty"`
-	SignupEnabled bool `json:"signup_enabled"`
-	SignupFields []*ClientConfigSignupField `json:"signup_fields,omitempty"`
-	Social *ClientConfigSocial `json:"social,omitempty"`
-	Sso *ClientConfigSSO `json:"sso,omitempty"`
-	SupportedPlugins []string `json:"supported_plugins"`
-	Version string `json:"version"`
-	Waitlist *ClientConfigToggle `json:"waitlist,omitempty"`
+	AppID               string                         `json:"app_id"`
+	Branding            *ClientConfigBranding          `json:"branding,omitempty"`
+	Captcha             *ClientConfigCaptcha           `json:"captcha,omitempty"`
+	DeviceAuthorization *ClientConfigToggle            `json:"device_authorization,omitempty"`
+	EmailVerification   *ClientConfigEmailVerification `json:"email_verification,omitempty"`
+	Magiclink           *ClientConfigToggle            `json:"magiclink,omitempty"`
+	MFA                 *ClientConfigMFA               `json:"mfa,omitempty"`
+	Passkey             *ClientConfigToggle            `json:"passkey,omitempty"`
+	Password            *ClientConfigToggle            `json:"password,omitempty"`
+	SignupEnabled       bool                           `json:"signup_enabled"`
+	SignupFields        []*ClientConfigSignupField     `json:"signup_fields,omitempty"`
+	Social              *ClientConfigSocial            `json:"social,omitempty"`
+	Sso                 *ClientConfigSSO               `json:"sso,omitempty"`
+	SupportedPlugins    []string                       `json:"supported_plugins"`
+	Version             string                         `json:"version"`
+	Waitlist            *ClientConfigToggle            `json:"waitlist,omitempty"`
 }
 
 // ClientConfigSSO represents the ClientConfigSSO schema.
 type ClientConfigSSO struct {
 	Connections []*ClientConfigSSOConnection `json:"connections"`
-	Enabled bool `json:"enabled"`
+	Enabled     bool                         `json:"enabled"`
 }
 
 // ClientConfigSSOConnection represents the ClientConfigSSOConnection schema.
 type ClientConfigSSOConnection struct {
-	ID string `json:"id"`
+	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
@@ -446,26 +446,26 @@ type ClientConfigSelectOption struct {
 
 // ClientConfigSignupField represents the ClientConfigSignupField schema.
 type ClientConfigSignupField struct {
-	Default string `json:"default,omitempty"`
-	Description string `json:"description,omitempty"`
-	Key string `json:"key"`
-	Label string `json:"label"`
-	Options []*ClientConfigSelectOption `json:"options,omitempty"`
-	Order int64 `json:"order"`
-	Placeholder string `json:"placeholder,omitempty"`
-	Type string `json:"type"`
-	Validation *ClientConfigFieldValidation `json:"validation,omitempty"`
+	Default     string                       `json:"default,omitempty"`
+	Description string                       `json:"description,omitempty"`
+	Key         string                       `json:"key"`
+	Label       string                       `json:"label"`
+	Options     []*ClientConfigSelectOption  `json:"options,omitempty"`
+	Order       int64                        `json:"order"`
+	Placeholder string                       `json:"placeholder,omitempty"`
+	Type        string                       `json:"type"`
+	Validation  *ClientConfigFieldValidation `json:"validation,omitempty"`
 }
 
 // ClientConfigSocial represents the ClientConfigSocial schema.
 type ClientConfigSocial struct {
-	Enabled bool `json:"enabled"`
+	Enabled   bool                          `json:"enabled"`
 	Providers []*ClientConfigSocialProvider `json:"providers"`
 }
 
 // ClientConfigSocialProvider represents the ClientConfigSocialProvider schema.
 type ClientConfigSocialProvider struct {
-	ID string `json:"id"`
+	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
@@ -476,67 +476,67 @@ type ClientConfigToggle struct {
 
 // CloneEnvironmentRequest represents the CloneEnvironmentRequest schema.
 type CloneEnvironmentRequest struct {
-	Description string `json:"description,omitempty"`
-	Name string `json:"name"`
-	Settings map[string]any `json:"settings,omitempty"`
-	Slug string `json:"slug"`
-	Type string `json:"type"`
-	WebhookURLOverride string `json:"webhook_url_override,omitempty"`
+	Description        string         `json:"description,omitempty"`
+	Name               string         `json:"name"`
+	Settings           map[string]any `json:"settings,omitempty"`
+	Slug               string         `json:"slug"`
+	Type               string         `json:"type"`
+	WebhookURLOverride string         `json:"webhook_url_override,omitempty"`
 }
 
 // CloneEnvironmentResponse represents the CloneEnvironmentResponse schema.
 type CloneEnvironmentResponse struct {
-	Environment any `json:"environment"`
-	PermissionsCloned int64 `json:"permissions_cloned"`
-	RoleIDMap map[string]any `json:"role_id_map"`
-	RolesCloned int64 `json:"roles_cloned"`
-	WebhooksCloned int64 `json:"webhooks_cloned"`
+	Environment       any            `json:"environment"`
+	PermissionsCloned int64          `json:"permissions_cloned"`
+	RoleIDMap         map[string]any `json:"role_id_map"`
+	RolesCloned       int64          `json:"roles_cloned"`
+	WebhooksCloned    int64          `json:"webhooks_cloned"`
 }
 
 // Connection represents the Connection schema.
 type Connection struct {
-	AcsURL string `json:"acs_url,omitempty"`
-	Active bool `json:"active"`
-	AppID string `json:"app_id"`
+	AcsURL            string         `json:"acs_url,omitempty"`
+	Active            bool           `json:"active"`
+	AppID             string         `json:"app_id"`
 	AttributeMappings map[string]any `json:"attribute_mappings,omitempty"`
-	ClientID string `json:"client_id,omitempty"`
-	CreatedAt string `json:"created_at"`
-	Domain string `json:"domain"`
-	EntityID string `json:"entity_id,omitempty"`
-	EnvID string `json:"env_id,omitempty"`
-	ID string `json:"id"`
-	IdpCertificate string `json:"idp_certificate,omitempty"`
-	IdpMetadataXML string `json:"idp_metadata_xml,omitempty"`
-	IdpSsoURL string `json:"idp_sso_url,omitempty"`
-	Issuer string `json:"issuer,omitempty"`
-	MetadataURL string `json:"metadata_url,omitempty"`
-	OrgID string `json:"org_id,omitempty"`
-	Protocol string `json:"protocol"`
-	Provider string `json:"provider"`
-	SignRequests bool `json:"sign_requests,omitempty"`
-	SpCertificate string `json:"sp_certificate,omitempty"`
-	UpdatedAt string `json:"updated_at"`
+	ClientID          string         `json:"client_id,omitempty"`
+	CreatedAt         string         `json:"created_at"`
+	Domain            string         `json:"domain"`
+	EntityID          string         `json:"entity_id,omitempty"`
+	EnvID             string         `json:"env_id,omitempty"`
+	ID                string         `json:"id"`
+	IdpCertificate    string         `json:"idp_certificate,omitempty"`
+	IdpMetadataXML    string         `json:"idp_metadata_xml,omitempty"`
+	IdpSsoURL         string         `json:"idp_sso_url,omitempty"`
+	Issuer            string         `json:"issuer,omitempty"`
+	MetadataURL       string         `json:"metadata_url,omitempty"`
+	OrgID             string         `json:"org_id,omitempty"`
+	Protocol          string         `json:"protocol"`
+	Provider          string         `json:"provider"`
+	SignRequests      bool           `json:"sign_requests,omitempty"`
+	SpCertificate     string         `json:"sp_certificate,omitempty"`
+	UpdatedAt         string         `json:"updated_at"`
 }
 
 // Consent represents the Consent schema.
 type Consent struct {
-	AppID string `json:"app_id"`
+	AppID     string `json:"app_id"`
 	CreatedAt string `json:"created_at"`
-	Granted bool `json:"granted"`
+	Granted   bool   `json:"granted"`
 	GrantedAt string `json:"granted_at"`
-	ID string `json:"id"`
+	ID        string `json:"id"`
 	IPAddress string `json:"ip_address"`
-	Purpose string `json:"purpose"`
+	Purpose   string `json:"purpose"`
 	RevokedAt string `json:"revoked_at,omitempty"`
 	UpdatedAt string `json:"updated_at"`
-	UserID string `json:"user_id"`
-	Version string `json:"version"`
+	UserID    string `json:"user_id"`
+	Version   string `json:"version"`
 }
 
 // ConsentListResponse represents the ConsentListResponse schema.
 type ConsentListResponse struct {
-	Consents []*Consent `json:"consents"`
-	NextCursor string `json:"next_cursor,omitempty"`
+	Consents   []*Consent `json:"consents"`
+	NextCursor string     `json:"next_cursor,omitempty"`
 }
 
 // ConsentStatusResponse represents the ConsentStatusResponse schema.
@@ -546,130 +546,130 @@ type ConsentStatusResponse struct {
 
 // CouponResponse represents the CouponResponse schema.
 type CouponResponse struct {
-	Amount string `json:"amount,omitempty"`
-	AppID string `json:"app_id"`
-	Code string `json:"code"`
-	Currency string `json:"currency"`
-	ID string `json:"id"`
-	MaxRedemptions int64 `json:"max_redemptions"`
-	Name string `json:"name"`
-	Percentage int64 `json:"percentage,omitempty"`
-	TimesRedeemed int64 `json:"times_redeemed"`
-	Type string `json:"type"`
-	ValidFrom string `json:"valid_from,omitempty"`
-	ValidUntil string `json:"valid_until,omitempty"`
+	Amount         string `json:"amount,omitempty"`
+	AppID          string `json:"app_id"`
+	Code           string `json:"code"`
+	Currency       string `json:"currency"`
+	ID             string `json:"id"`
+	MaxRedemptions int64  `json:"max_redemptions"`
+	Name           string `json:"name"`
+	Percentage     int64  `json:"percentage,omitempty"`
+	TimesRedeemed  int64  `json:"times_redeemed"`
+	Type           string `json:"type"`
+	ValidFrom      string `json:"valid_from,omitempty"`
+	ValidUntil     string `json:"valid_until,omitempty"`
 }
 
 // CreateClientRequest represents the CreateClientRequest schema.
 type CreateClientRequest struct {
-	AppID string `json:"app_id"`
-	GrantTypes []string `json:"grant_types,omitempty"`
-	Name string `json:"name"`
-	Public bool `json:"public,omitempty"`
+	AppID        string   `json:"app_id"`
+	GrantTypes   []string `json:"grant_types,omitempty"`
+	Name         string   `json:"name"`
+	Public       bool     `json:"public,omitempty"`
 	RedirectUris []string `json:"redirect_uris"`
-	Scopes []string `json:"scopes,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
 }
 
 // CreateClientResponse represents the CreateClientResponse schema.
 type CreateClientResponse struct {
-	ClientID string `json:"client_id"`
-	ClientSecret string `json:"client_secret,omitempty"`
-	GrantTypes []string `json:"grant_types"`
-	ID string `json:"id"`
-	Name string `json:"name"`
-	Public bool `json:"public"`
+	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret,omitempty"`
+	GrantTypes   []string `json:"grant_types"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Public       bool     `json:"public"`
 	RedirectUris []string `json:"redirect_uris"`
-	Scopes []string `json:"scopes"`
+	Scopes       []string `json:"scopes"`
 }
 
 // CreateCouponRequest represents the CreateCouponRequest schema.
 type CreateCouponRequest struct {
-	Amount int64 `json:"amount"`
-	AppID string `json:"app_id"`
-	Code string `json:"code"`
-	Currency string `json:"currency"`
-	MaxRedemptions int64 `json:"max_redemptions"`
-	Name string `json:"name"`
-	Percentage int64 `json:"percentage"`
-	Type string `json:"type"`
-	ValidFrom string `json:"valid_from,omitempty"`
-	ValidUntil string `json:"valid_until,omitempty"`
+	Amount         int64  `json:"amount"`
+	AppID          string `json:"app_id"`
+	Code           string `json:"code"`
+	Currency       string `json:"currency"`
+	MaxRedemptions int64  `json:"max_redemptions"`
+	Name           string `json:"name"`
+	Percentage     int64  `json:"percentage"`
+	Type           string `json:"type"`
+	ValidFrom      string `json:"valid_from,omitempty"`
+	ValidUntil     string `json:"valid_until,omitempty"`
 }
 
 // CreateEnvironmentRequest represents the CreateEnvironmentRequest schema.
 type CreateEnvironmentRequest struct {
-	AppID string `json:"app_id,omitempty"`
-	Color string `json:"color,omitempty"`
-	Description string `json:"description,omitempty"`
-	Name string `json:"name"`
-	Settings map[string]any `json:"settings,omitempty"`
-	Slug string `json:"slug"`
-	Type string `json:"type"`
+	AppID       string         `json:"app_id,omitempty"`
+	Color       string         `json:"color,omitempty"`
+	Description string         `json:"description,omitempty"`
+	Name        string         `json:"name"`
+	Settings    map[string]any `json:"settings,omitempty"`
+	Slug        string         `json:"slug"`
+	Type        string         `json:"type"`
 }
 
 // CreateInvitationRequest represents the CreateInvitationRequest schema.
 type CreateInvitationRequest struct {
 	Email string `json:"email"`
-	Role string `json:"role,omitempty"`
+	Role  string `json:"role,omitempty"`
 }
 
 // CreateKeyRequest represents the CreateKeyRequest schema.
 type CreateKeyRequest struct {
-	AppID string `json:"app_id"`
-	Name string `json:"name"`
+	AppID  string   `json:"app_id"`
+	Name   string   `json:"name"`
 	Scopes []string `json:"scopes,omitempty"`
-	UserID string `json:"user_id,omitempty"`
+	UserID string   `json:"user_id,omitempty"`
 }
 
 // CreateKeyResponse represents the CreateKeyResponse schema.
 type CreateKeyResponse struct {
-	CreatedAt string `json:"created_at"`
-	ExpiresAt string `json:"expires_at,omitempty"`
-	ID string `json:"id"`
-	Key string `json:"key"`
-	KeyPrefix string `json:"key_prefix"`
-	Name string `json:"name"`
-	PublicKey string `json:"public_key"`
-	PublicKeyPrefix string `json:"public_key_prefix"`
-	Scopes []string `json:"scopes,omitempty"`
+	CreatedAt       string   `json:"created_at"`
+	ExpiresAt       string   `json:"expires_at,omitempty"`
+	ID              string   `json:"id"`
+	Key             string   `json:"key"`
+	KeyPrefix       string   `json:"key_prefix"`
+	Name            string   `json:"name"`
+	PublicKey       string   `json:"public_key"`
+	PublicKeyPrefix string   `json:"public_key_prefix"`
+	Scopes          []string `json:"scopes,omitempty"`
 }
 
 // CreateOrgRequest represents the CreateOrgRequest schema.
 type CreateOrgRequest struct {
 	AppID string `json:"app_id,omitempty"`
-	Logo string `json:"logo,omitempty"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
+	Logo  string `json:"logo,omitempty"`
+	Name  string `json:"name"`
+	Slug  string `json:"slug"`
 }
 
 // CreatePlanRequest represents the CreatePlanRequest schema.
 type CreatePlanRequest struct {
-	AppID string `json:"app_id"`
-	BaseAmount int64 `json:"base_amount"`
-	Currency string `json:"currency"`
-	Description string `json:"description"`
-	Features []*FeatureInput `json:"features,omitempty"`
-	IsAddon bool `json:"is_addon"`
-	Metadata map[string]any `json:"metadata,omitempty"`
-	Name string `json:"name"`
-	Period string `json:"period"`
-	Slug string `json:"slug"`
-	TrialDays int64 `json:"trial_days"`
+	AppID       string          `json:"app_id"`
+	BaseAmount  int64           `json:"base_amount"`
+	Currency    string          `json:"currency"`
+	Description string          `json:"description"`
+	Features    []*FeatureInput `json:"features,omitempty"`
+	IsAddon     bool            `json:"is_addon"`
+	Metadata    map[string]any  `json:"metadata,omitempty"`
+	Name        string          `json:"name"`
+	Period      string          `json:"period"`
+	Slug        string          `json:"slug"`
+	TrialDays   int64           `json:"trial_days"`
 }
 
 // CreateRoleRequest represents the CreateRoleRequest schema.
 type CreateRoleRequest struct {
-	AppID string `json:"app_id,omitempty"`
+	AppID       string `json:"app_id,omitempty"`
 	Description string `json:"description,omitempty"`
-	Name string `json:"name"`
-	ParentID string `json:"parent_id,omitempty"`
-	Slug string `json:"slug"`
+	Name        string `json:"name"`
+	ParentID    string `json:"parent_id,omitempty"`
+	Slug        string `json:"slug"`
 }
 
 // CreateSubscriptionRequest represents the CreateSubscriptionRequest schema.
 type CreateSubscriptionRequest struct {
-	AppID string `json:"app_id"`
-	PlanID string `json:"plan_id"`
+	AppID    string `json:"app_id"`
+	PlanID   string `json:"plan_id"`
 	TenantID string `json:"tenant_id"`
 }
 
@@ -681,17 +681,17 @@ type CreateTeamRequest struct {
 
 // CreateWebhookRequest represents the CreateWebhookRequest schema.
 type CreateWebhookRequest struct {
-	AppID string `json:"app_id,omitempty"`
+	AppID  string   `json:"app_id,omitempty"`
 	Events []string `json:"events"`
-	URL string `json:"url"`
+	URL    string   `json:"url"`
 }
 
 // CredentialInfo represents the CredentialInfo schema.
 type CredentialInfo struct {
-	CreatedAt string `json:"created_at"`
-	DisplayName string `json:"display_name"`
-	ID string `json:"id"`
-	Transport []string `json:"transport"`
+	CreatedAt   string   `json:"created_at"`
+	DisplayName string   `json:"display_name"`
+	ID          string   `json:"id"`
+	Transport   []string `json:"transport"`
 }
 
 // DeclineInvitationRequest represents the DeclineInvitationRequest schema.
@@ -701,24 +701,24 @@ type DeclineInvitationRequest struct {
 
 // Definition represents the Definition schema.
 type Definition struct {
-	Category string `json:"category"`
-	Default string `json:"default"`
-	Description string `json:"description"`
-	DisplayName string `json:"display_name"`
-	Enforceable bool `json:"enforceable"`
-	Key string `json:"key"`
-	Namespace string `json:"namespace"`
-	Scopes []string `json:"scopes"`
-	Sensitive bool `json:"sensitive"`
-	Type string `json:"type"`
-	Ui *UIMetadata `json:"ui,omitempty"`
+	Category    string      `json:"category"`
+	Default     string      `json:"default"`
+	Description string      `json:"description"`
+	DisplayName string      `json:"display_name"`
+	Enforceable bool        `json:"enforceable"`
+	Key         string      `json:"key"`
+	Namespace   string      `json:"namespace"`
+	Scopes      []string    `json:"scopes"`
+	Sensitive   bool        `json:"sensitive"`
+	Type        string      `json:"type"`
+	Ui          *UIMetadata `json:"ui,omitempty"`
 }
 
 // DefinitionGroup represents the DefinitionGroup schema.
 type DefinitionGroup struct {
-	Category string `json:"category"`
+	Category    string        `json:"category"`
 	Definitions []*Definition `json:"definitions"`
-	Namespace string `json:"namespace"`
+	Namespace   string        `json:"namespace"`
 }
 
 // DeleteClientRequest represents the DeleteClientRequest schema.
@@ -733,30 +733,30 @@ type DeleteResponse struct {
 
 // Device represents the Device schema.
 type Device struct {
-	AppID string `json:"app_id"`
-	Browser string `json:"browser,omitempty"`
-	CreatedAt string `json:"created_at"`
-	EnvID string `json:"env_id"`
-	Fingerprint string `json:"fingerprint,omitempty"`
-	ID string `json:"id"`
-	IPAddress string `json:"ip_address,omitempty"`
-	LastSeenAt string `json:"last_seen_at"`
-	Name string `json:"name,omitempty"`
-	Os string `json:"os,omitempty"`
-	Trusted bool `json:"trusted"`
+	AppID        string `json:"app_id"`
+	Browser      string `json:"browser,omitempty"`
+	CreatedAt    string `json:"created_at"`
+	EnvID        string `json:"env_id"`
+	Fingerprint  string `json:"fingerprint,omitempty"`
+	ID           string `json:"id"`
+	IPAddress    string `json:"ip_address,omitempty"`
+	LastSeenAt   string `json:"last_seen_at"`
+	Name         string `json:"name,omitempty"`
+	Os           string `json:"os,omitempty"`
+	Trusted      bool   `json:"trusted"`
 	TrustedUntil string `json:"trusted_until,omitempty"`
-	Type string `json:"type,omitempty"`
-	UpdatedAt string `json:"updated_at"`
-	UserID string `json:"user_id"`
+	Type         string `json:"type,omitempty"`
+	UpdatedAt    string `json:"updated_at"`
+	UserID       string `json:"user_id"`
 }
 
 // DeviceAuthResponse represents the DeviceAuthResponse schema.
 type DeviceAuthResponse struct {
-	DeviceCode string `json:"device_code"`
-	ExpiresIn int64 `json:"expires_in"`
-	Interval int64 `json:"interval"`
-	UserCode string `json:"user_code"`
-	VerificationURI string `json:"verification_uri"`
+	DeviceCode              string `json:"device_code"`
+	ExpiresIn               int64  `json:"expires_in"`
+	Interval                int64  `json:"interval"`
+	UserCode                string `json:"user_code"`
+	VerificationURI         string `json:"verification_uri"`
 	VerificationURIComplete string `json:"verification_uri_complete,omitempty"`
 }
 
@@ -782,27 +782,27 @@ type DisableResponse struct {
 
 // DiscoveryResponse represents the DiscoveryResponse schema.
 type DiscoveryResponse struct {
-	AuthorizationEndpoint string `json:"authorization_endpoint"`
-	CodeChallengeMethodsSupported []string `json:"code_challenge_methods_supported"`
-	DeviceAuthorizationEndpoint string `json:"device_authorization_endpoint"`
-	GrantTypesSupported []string `json:"grant_types_supported"`
-	IDTokenSigningAlgValuesSupported []string `json:"id_token_signing_alg_values_supported"`
-	Issuer string `json:"issuer"`
-	JwksURI string `json:"jwks_uri"`
-	ResponseTypesSupported []string `json:"response_types_supported"`
-	RevocationEndpoint string `json:"revocation_endpoint"`
-	ScopesSupported []string `json:"scopes_supported"`
-	SubjectTypesSupported []string `json:"subject_types_supported"`
-	TokenEndpoint string `json:"token_endpoint"`
+	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
+	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
+	DeviceAuthorizationEndpoint       string   `json:"device_authorization_endpoint"`
+	GrantTypesSupported               []string `json:"grant_types_supported"`
+	IDTokenSigningAlgValuesSupported  []string `json:"id_token_signing_alg_values_supported"`
+	Issuer                            string   `json:"issuer"`
+	JwksURI                           string   `json:"jwks_uri"`
+	ResponseTypesSupported            []string `json:"response_types_supported"`
+	RevocationEndpoint                string   `json:"revocation_endpoint"`
+	ScopesSupported                   []string `json:"scopes_supported"`
+	SubjectTypesSupported             []string `json:"subject_types_supported"`
+	TokenEndpoint                     string   `json:"token_endpoint"`
 	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
-	UserinfoEndpoint string `json:"userinfo_endpoint"`
+	UserinfoEndpoint                  string   `json:"userinfo_endpoint"`
 }
 
 // Email represents the Email schema.
 type Email struct {
-	Primary bool `json:"primary"`
-	Type string `json:"type,omitempty"`
-	Value string `json:"value"`
+	Primary bool   `json:"primary"`
+	Type    string `json:"type,omitempty"`
+	Value   string `json:"value"`
 }
 
 // Empty represents the Empty schema.
@@ -811,64 +811,64 @@ type Empty struct {
 
 // EnforceSettingRequest represents the EnforceSettingRequest schema.
 type EnforceSettingRequest struct {
-	AppID string `json:"app_id,omitempty"`
-	OrgID string `json:"org_id,omitempty"`
-	Scope string `json:"scope"`
+	AppID   string `json:"app_id,omitempty"`
+	OrgID   string `json:"org_id,omitempty"`
+	Scope   string `json:"scope"`
 	ScopeID string `json:"scope_id,omitempty"`
-	Value string `json:"value"`
+	Value   string `json:"value"`
 }
 
 // EnrollRequest represents the EnrollRequest schema.
 type EnrollRequest struct {
 	Method string `json:"method,omitempty"`
-	Phone string `json:"phone,omitempty"`
+	Phone  string `json:"phone,omitempty"`
 }
 
 // EnrollResponse represents the EnrollResponse schema.
 type EnrollResponse struct {
-	ID string `json:"id"`
-	Method string `json:"method"`
+	ID         string `json:"id"`
+	Method     string `json:"method"`
 	OtpauthURL string `json:"otpauth_url"`
-	Secret string `json:"secret"`
+	Secret     string `json:"secret"`
 }
 
 // EntitlementResponse represents the EntitlementResponse schema.
 type EntitlementResponse struct {
-	Allowed bool `json:"allowed"`
-	Feature string `json:"feature"`
-	Limit int64 `json:"limit"`
-	Reason string `json:"reason,omitempty"`
-	Remaining int64 `json:"remaining"`
-	Used int64 `json:"used"`
+	Allowed   bool   `json:"allowed"`
+	Feature   string `json:"feature"`
+	Limit     int64  `json:"limit"`
+	Reason    string `json:"reason,omitempty"`
+	Remaining int64  `json:"remaining"`
+	Used      int64  `json:"used"`
 }
 
 // Environment represents the Environment schema.
 type Environment struct {
-	AppID string `json:"app_id"`
-	ClonedFrom string `json:"cloned_from,omitempty"`
-	Color string `json:"color,omitempty"`
-	CreatedAt string `json:"created_at"`
-	Description string `json:"description,omitempty"`
-	ID string `json:"id"`
-	IsDefault bool `json:"is_default"`
-	Metadata map[string]any `json:"metadata,omitempty"`
-	Name string `json:"name"`
-	Settings *Settings `json:"settings,omitempty"`
-	Slug string `json:"slug"`
-	Type string `json:"type"`
-	UpdatedAt string `json:"updated_at"`
+	AppID       string         `json:"app_id"`
+	ClonedFrom  string         `json:"cloned_from,omitempty"`
+	Color       string         `json:"color,omitempty"`
+	CreatedAt   string         `json:"created_at"`
+	Description string         `json:"description,omitempty"`
+	ID          string         `json:"id"`
+	IsDefault   bool           `json:"is_default"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	Name        string         `json:"name"`
+	Settings    *Settings      `json:"settings,omitempty"`
+	Slug        string         `json:"slug"`
+	Type        string         `json:"type"`
+	UpdatedAt   string         `json:"updated_at"`
 }
 
 // EnvironmentListResponse represents the EnvironmentListResponse schema.
 type EnvironmentListResponse struct {
-	Environments any `json:"environments"`
-	Total int64 `json:"total"`
+	Environments any   `json:"environments"`
+	Total        int64 `json:"total"`
 }
 
 // EnvironmentSettingsResponse represents the EnvironmentSettingsResponse schema.
 type EnvironmentSettingsResponse struct {
-	Overrides *Settings `json:"overrides,omitempty"`
-	Settings *Settings `json:"settings,omitempty"`
+	Overrides    *Settings `json:"overrides,omitempty"`
+	Settings     *Settings `json:"settings,omitempty"`
 	TypeDefaults *Settings `json:"type_defaults,omitempty"`
 }
 
@@ -879,12 +879,12 @@ type ExchangeRequest struct {
 
 // FeatureInput represents the FeatureInput schema.
 type FeatureInput struct {
-	Key string `json:"key"`
-	Limit int64 `json:"limit"`
-	Name string `json:"name"`
-	Period string `json:"period"`
-	SoftLimit bool `json:"soft_limit"`
-	Type string `json:"type"`
+	Key       string `json:"key"`
+	Limit     int64  `json:"limit"`
+	Name      string `json:"name"`
+	Period    string `json:"period"`
+	SoftLimit bool   `json:"soft_limit"`
+	Type      string `json:"type"`
 }
 
 // ForgotPasswordRequest represents the ForgotPasswordRequest schema.
@@ -900,31 +900,31 @@ type ForgotPasswordResponse struct {
 
 // GrantConsentRequest represents the GrantConsentRequest schema.
 type GrantConsentRequest struct {
-	AppID string `json:"app_id,omitempty"`
+	AppID   string `json:"app_id,omitempty"`
 	Purpose string `json:"purpose"`
 	Version string `json:"version,omitempty"`
 }
 
 // GroupRef represents the GroupRef schema.
 type GroupRef struct {
-	Ref string `json:"$ref,omitempty"`
+	Ref     string `json:"$ref,omitempty"`
 	Display string `json:"display,omitempty"`
-	Value string `json:"value"`
+	Value   string `json:"value"`
 }
 
 // GroupResource represents the GroupResource schema.
 type GroupResource struct {
-	DisplayName string `json:"display_name"`
-	ExternalId string `json:"external_id,omitempty"`
-	ID string `json:"id,omitempty"`
-	Members []*MemberRef `json:"members,omitempty"`
-	Meta *Meta `json:"meta,omitempty"`
-	Schemas []string `json:"schemas"`
+	DisplayName string       `json:"display_name"`
+	ExternalId  string       `json:"external_id,omitempty"`
+	ID          string       `json:"id,omitempty"`
+	Members     []*MemberRef `json:"members,omitempty"`
+	Meta        *Meta        `json:"meta,omitempty"`
+	Schemas     []string     `json:"schemas"`
 }
 
 // HealthResponse represents the HealthResponse schema.
 type HealthResponse struct {
-	Error string `json:"error,omitempty"`
+	Error  string `json:"error,omitempty"`
 	Status string `json:"status"`
 }
 
@@ -935,35 +935,35 @@ type IntrospectRequest struct {
 
 // IntrospectResponse represents the IntrospectResponse schema.
 type IntrospectResponse struct {
-	Active bool `json:"active"`
-	AppID string `json:"app_id,omitempty"`
-	EnvID string `json:"env_id,omitempty"`
-	ExpiresAt string `json:"expires_at,omitempty"`
-	OrgID string `json:"org_id,omitempty"`
-	SessionID string `json:"session_id,omitempty"`
-	User *IntrospectUser `json:"user,omitempty"`
-	UserID string `json:"user_id,omitempty"`
+	Active    bool            `json:"active"`
+	AppID     string          `json:"app_id,omitempty"`
+	EnvID     string          `json:"env_id,omitempty"`
+	ExpiresAt string          `json:"expires_at,omitempty"`
+	OrgID     string          `json:"org_id,omitempty"`
+	SessionID string          `json:"session_id,omitempty"`
+	User      *IntrospectUser `json:"user,omitempty"`
+	UserID    string          `json:"user_id,omitempty"`
 }
 
 // IntrospectUser represents the IntrospectUser schema.
 type IntrospectUser struct {
-	Email string `json:"email"`
+	Email     string `json:"email"`
 	FirstName string `json:"first_name,omitempty"`
-	ID string `json:"id"`
-	LastName string `json:"last_name,omitempty"`
-	Username string `json:"username,omitempty"`
+	ID        string `json:"id"`
+	LastName  string `json:"last_name,omitempty"`
+	Username  string `json:"username,omitempty"`
 }
 
 // Invitation represents the Invitation schema.
 type Invitation struct {
 	CreatedAt string `json:"created_at"`
-	Email string `json:"email"`
+	Email     string `json:"email"`
 	ExpiresAt string `json:"expires_at"`
-	ID string `json:"id"`
+	ID        string `json:"id"`
 	InviterID string `json:"inviter_id"`
-	OrgID string `json:"org_id"`
-	Role string `json:"role"`
-	Status string `json:"status"`
+	OrgID     string `json:"org_id"`
+	Role      string `json:"role"`
+	Status    string `json:"status"`
 }
 
 // InvitationListResponse represents the InvitationListResponse schema.
@@ -973,27 +973,27 @@ type InvitationListResponse struct {
 
 // InvoiceResponse represents the InvoiceResponse schema.
 type InvoiceResponse struct {
-	Currency string `json:"currency"`
-	ID string `json:"id"`
-	PeriodEnd string `json:"period_end"`
-	PeriodStart string `json:"period_start"`
-	Status string `json:"status"`
+	Currency       string `json:"currency"`
+	ID             string `json:"id"`
+	PeriodEnd      string `json:"period_end"`
+	PeriodStart    string `json:"period_start"`
+	Status         string `json:"status"`
 	SubscriptionID string `json:"subscription_id"`
-	TenantID string `json:"tenant_id"`
-	Total string `json:"total"`
+	TenantID       string `json:"tenant_id"`
+	Total          string `json:"total"`
 }
 
 // KeyListItem represents the KeyListItem schema.
 type KeyListItem struct {
-	CreatedAt string `json:"created_at"`
-	ExpiresAt string `json:"expires_at,omitempty"`
-	ID string `json:"id"`
-	KeyPrefix string `json:"key_prefix"`
-	LastUsedAt string `json:"last_used_at,omitempty"`
-	Name string `json:"name"`
-	PublicKeyPrefix string `json:"public_key_prefix,omitempty"`
-	Revoked bool `json:"revoked"`
-	Scopes []string `json:"scopes,omitempty"`
+	CreatedAt       string   `json:"created_at"`
+	ExpiresAt       string   `json:"expires_at,omitempty"`
+	ID              string   `json:"id"`
+	KeyPrefix       string   `json:"key_prefix"`
+	LastUsedAt      string   `json:"last_used_at,omitempty"`
+	Name            string   `json:"name"`
+	PublicKeyPrefix string   `json:"public_key_prefix,omitempty"`
+	Revoked         bool     `json:"revoked"`
+	Scopes          []string `json:"scopes,omitempty"`
 }
 
 // ListAuthMethodsResponse represents the ListAuthMethodsResponse schema.
@@ -1009,37 +1009,37 @@ type ListClientsResponse struct {
 // ListCouponsResponse represents the ListCouponsResponse schema.
 type ListCouponsResponse struct {
 	Coupons []*CouponResponse `json:"coupons"`
-	Total int64 `json:"total"`
+	Total   int64             `json:"total"`
 }
 
 // ListDefinitionsResponse represents the ListDefinitionsResponse schema.
 type ListDefinitionsResponse struct {
 	Groups []*DefinitionGroup `json:"groups"`
-	Total int64 `json:"total"`
+	Total  int64              `json:"total"`
 }
 
 // ListInvoicesResponse represents the ListInvoicesResponse schema.
 type ListInvoicesResponse struct {
 	Invoices []*InvoiceResponse `json:"invoices"`
-	Total int64 `json:"total"`
+	Total    int64              `json:"total"`
 }
 
 // ListKeysResponse represents the ListKeysResponse schema.
 type ListKeysResponse struct {
-	Keys []*KeyListItem `json:"keys"`
-	Total int64 `json:"total"`
+	Keys  []*KeyListItem `json:"keys"`
+	Total int64          `json:"total"`
 }
 
 // ListPlansResponse represents the ListPlansResponse schema.
 type ListPlansResponse struct {
 	Plans []*PlanResponse `json:"plans"`
-	Total int64 `json:"total"`
+	Total int64           `json:"total"`
 }
 
 // ListSubscriptionsResponse represents the ListSubscriptionsResponse schema.
 type ListSubscriptionsResponse struct {
 	Subscriptions []*Response `json:"subscriptions"`
-	Total int64 `json:"total"`
+	Total         int64       `json:"total"`
 }
 
 // LoginBeginResponse represents the LoginBeginResponse schema.
@@ -1049,7 +1049,7 @@ type LoginBeginResponse struct {
 
 // LoginByDomainRequest represents the LoginByDomainRequest schema.
 type LoginByDomainRequest struct {
-	Email string `json:"email"`
+	Email     string `json:"email"`
 	ReturnURL string `json:"return_url,omitempty"`
 }
 
@@ -1057,14 +1057,14 @@ type LoginByDomainRequest struct {
 type LoginFinishResponse struct {
 	RefreshToken string `json:"refresh_token,omitempty"`
 	SessionToken string `json:"session_token,omitempty"`
-	Status string `json:"status"`
-	UserID string `json:"user_id"`
+	Status       string `json:"status"`
+	UserID       string `json:"user_id"`
 }
 
 // LoginResponse represents the LoginResponse schema.
 type LoginResponse struct {
 	LoginURL string `json:"login_url"`
-	State string `json:"state"`
+	State    string `json:"state"`
 }
 
 // MagiclinkVerifyRequest represents the MagiclinkVerifyRequest schema.
@@ -1075,10 +1075,10 @@ type MagiclinkVerifyRequest struct {
 
 // MagiclinkVerifyResponse represents the MagiclinkVerifyResponse schema.
 type MagiclinkVerifyResponse struct {
-	ExpiresAt string `json:"expires_at"`
+	ExpiresAt    string `json:"expires_at"`
 	RefreshToken string `json:"refresh_token"`
 	SessionToken string `json:"session_token"`
-	User *User `json:"user"`
+	User         *User  `json:"user"`
 }
 
 // MarkInvoicePaidRequest represents the MarkInvoicePaidRequest schema.
@@ -1088,37 +1088,37 @@ type MarkInvoicePaidRequest struct {
 
 // MeResponse represents the MeResponse schema.
 type MeResponse struct {
-	AppID string `json:"app_id"`
-	BanExpires string `json:"ban_expires,omitempty"`
-	BanReason string `json:"ban_reason,omitempty"`
-	Banned bool `json:"banned"`
-	CreatedAt string `json:"created_at"`
-	DeletedAt string `json:"deleted_at,omitempty"`
-	DisplayUsername string `json:"display_username,omitempty"`
-	Email string `json:"email"`
-	EmailVerified bool `json:"email_verified"`
-	EnvID string `json:"env_id"`
-	FirstName string `json:"first_name"`
-	ID string `json:"id"`
-	Image string `json:"image,omitempty"`
-	LastName string `json:"last_name"`
-	Metadata map[string]any `json:"metadata,omitempty"`
-	PasswordChangedAt string `json:"password_changed_at,omitempty"`
-	Phone string `json:"phone,omitempty"`
-	PhoneVerified bool `json:"phone_verified"`
-	Roles []string `json:"roles"`
-	UpdatedAt string `json:"updated_at"`
-	Username string `json:"username,omitempty"`
+	AppID             string         `json:"app_id"`
+	BanExpires        string         `json:"ban_expires,omitempty"`
+	BanReason         string         `json:"ban_reason,omitempty"`
+	Banned            bool           `json:"banned"`
+	CreatedAt         string         `json:"created_at"`
+	DeletedAt         string         `json:"deleted_at,omitempty"`
+	DisplayUsername   string         `json:"display_username,omitempty"`
+	Email             string         `json:"email"`
+	EmailVerified     bool           `json:"email_verified"`
+	EnvID             string         `json:"env_id"`
+	FirstName         string         `json:"first_name"`
+	ID                string         `json:"id"`
+	Image             string         `json:"image,omitempty"`
+	LastName          string         `json:"last_name"`
+	Metadata          map[string]any `json:"metadata,omitempty"`
+	PasswordChangedAt string         `json:"password_changed_at,omitempty"`
+	Phone             string         `json:"phone,omitempty"`
+	PhoneVerified     bool           `json:"phone_verified"`
+	Roles             []string       `json:"roles"`
+	UpdatedAt         string         `json:"updated_at"`
+	Username          string         `json:"username,omitempty"`
 }
 
 // Member represents the Member schema.
 type Member struct {
 	CreatedAt string `json:"created_at"`
-	ID string `json:"id"`
-	OrgID string `json:"org_id"`
-	Role string `json:"role"`
+	ID        string `json:"id"`
+	OrgID     string `json:"org_id"`
+	Role      string `json:"role"`
 	UpdatedAt string `json:"updated_at"`
-	UserID string `json:"user_id"`
+	UserID    string `json:"user_id"`
 }
 
 // MemberListResponse represents the MemberListResponse schema.
@@ -1128,59 +1128,59 @@ type MemberListResponse struct {
 
 // MemberRef represents the MemberRef schema.
 type MemberRef struct {
-	Ref string `json:"$ref,omitempty"`
+	Ref     string `json:"$ref,omitempty"`
 	Display string `json:"display,omitempty"`
-	Value string `json:"value"`
+	Value   string `json:"value"`
 }
 
 // Meta represents the Meta schema.
 type Meta struct {
-	Created string `json:"created,omitempty"`
+	Created      string `json:"created,omitempty"`
 	LastModified string `json:"last_modified,omitempty"`
-	Location string `json:"location,omitempty"`
+	Location     string `json:"location,omitempty"`
 	ResourceType string `json:"resource_type"`
 }
 
 // Name represents the Name schema.
 type Name struct {
 	FamilyName string `json:"family_name"`
-	Formatted string `json:"formatted,omitempty"`
-	GivenName string `json:"given_name"`
+	Formatted  string `json:"formatted,omitempty"`
+	GivenName  string `json:"given_name"`
 }
 
 // OAuth2Client represents the OAuth2Client schema.
 type OAuth2Client struct {
-	AppID string `json:"app_id"`
-	ClientID string `json:"client_id"`
-	CreatedAt string `json:"created_at"`
-	GrantTypes []string `json:"grant_types"`
-	ID string `json:"id"`
-	Name string `json:"name"`
-	Public bool `json:"public"`
+	AppID        string   `json:"app_id"`
+	ClientID     string   `json:"client_id"`
+	CreatedAt    string   `json:"created_at"`
+	GrantTypes   []string `json:"grant_types"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Public       bool     `json:"public"`
 	RedirectUris []string `json:"redirect_uris"`
-	Scopes []string `json:"scopes"`
-	UpdatedAt string `json:"updated_at"`
+	Scopes       []string `json:"scopes"`
+	UpdatedAt    string   `json:"updated_at"`
 }
 
 // Oauth2providerTokenResponse represents the Oauth2providerTokenResponse schema.
 type Oauth2providerTokenResponse struct {
-	AccessToken string `json:"access_token"`
-	ExpiresIn int64 `json:"expires_in"`
+	AccessToken  string `json:"access_token"`
+	ExpiresIn    int64  `json:"expires_in"`
 	RefreshToken string `json:"refresh_token,omitempty"`
-	Scope string `json:"scope,omitempty"`
-	TokenType string `json:"token_type"`
+	Scope        string `json:"scope,omitempty"`
+	TokenType    string `json:"token_type"`
 }
 
 // ObjectFieldDef represents the ObjectFieldDef schema.
 type ObjectFieldDef struct {
-	DisplayName string `json:"display_name"`
-	HelpText string `json:"help_text,omitempty"`
-	InputType string `json:"input_type"`
-	Key string `json:"key"`
-	Options []*SelectOption `json:"options,omitempty"`
-	Placeholder string `json:"placeholder,omitempty"`
-	Required bool `json:"required,omitempty"`
-	Sensitive bool `json:"sensitive,omitempty"`
+	DisplayName string          `json:"display_name"`
+	HelpText    string          `json:"help_text,omitempty"`
+	InputType   string          `json:"input_type"`
+	Key         string          `json:"key"`
+	Options     []*SelectOption `json:"options,omitempty"`
+	Placeholder string          `json:"placeholder,omitempty"`
+	Required    bool            `json:"required,omitempty"`
+	Sensitive   bool            `json:"sensitive,omitempty"`
 }
 
 // OrgListResponse represents the OrgListResponse schema.
@@ -1190,16 +1190,16 @@ type OrgListResponse struct {
 
 // Organization represents the Organization schema.
 type Organization struct {
-	AppID string `json:"app_id"`
-	CreatedAt string `json:"created_at"`
-	CreatedBy string `json:"created_by"`
-	EnvID string `json:"env_id"`
-	ID string `json:"id"`
-	Logo string `json:"logo,omitempty"`
-	Metadata map[string]any `json:"metadata,omitempty"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-	UpdatedAt string `json:"updated_at"`
+	AppID     string         `json:"app_id"`
+	CreatedAt string         `json:"created_at"`
+	CreatedBy string         `json:"created_by"`
+	EnvID     string         `json:"env_id"`
+	ID        string         `json:"id"`
+	Logo      string         `json:"logo,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
+	Name      string         `json:"name"`
+	Slug      string         `json:"slug"`
+	UpdatedAt string         `json:"updated_at"`
 }
 
 // OrganizationStatusResponse represents the OrganizationStatusResponse schema.
@@ -1214,10 +1214,10 @@ type PasskeyListResponse struct {
 
 // Permission represents the Permission schema.
 type Permission struct {
-	Action string `json:"action"`
-	ID string `json:"id"`
+	Action   string `json:"action"`
+	ID       string `json:"id"`
 	Resource string `json:"resource"`
-	RoleID string `json:"role_id"`
+	RoleID   string `json:"role_id"`
 }
 
 // PermissionListResponse represents the PermissionListResponse schema.
@@ -1227,41 +1227,41 @@ type PermissionListResponse struct {
 
 // PhoneStartResponse represents the PhoneStartResponse schema.
 type PhoneStartResponse struct {
-	ExpiresIn int64 `json:"expires_in"`
-	Status string `json:"status"`
+	ExpiresIn int64  `json:"expires_in"`
+	Status    string `json:"status"`
 }
 
 // PhoneVerifyRequest represents the PhoneVerifyRequest schema.
 type PhoneVerifyRequest struct {
 	AppID string `json:"app_id,omitempty"`
-	Code string `json:"code"`
+	Code  string `json:"code"`
 	Phone string `json:"phone"`
 }
 
 // PhoneVerifyResponse represents the PhoneVerifyResponse schema.
 type PhoneVerifyResponse struct {
-	ExpiresAt string `json:"expires_at"`
-	NewUser bool `json:"new_user"`
+	ExpiresAt    string `json:"expires_at"`
+	NewUser      bool   `json:"new_user"`
 	RefreshToken string `json:"refresh_token"`
 	SessionToken string `json:"session_token"`
-	User *User `json:"user,omitempty"`
+	User         *User  `json:"user,omitempty"`
 }
 
 // PlanResponse represents the PlanResponse schema.
 type PlanResponse struct {
-	AppID string `json:"app_id"`
-	BaseAmount string `json:"base_amount,omitempty"`
-	BillingPeriod string `json:"billing_period,omitempty"`
-	Currency string `json:"currency"`
-	Description string `json:"description"`
-	FeaturesCount int64 `json:"features_count"`
-	ID string `json:"id"`
-	IsAddon bool `json:"is_addon"`
-	Metadata map[string]any `json:"metadata,omitempty"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-	Status string `json:"status"`
-	TrialDays int64 `json:"trial_days"`
+	AppID         string         `json:"app_id"`
+	BaseAmount    string         `json:"base_amount,omitempty"`
+	BillingPeriod string         `json:"billing_period,omitempty"`
+	Currency      string         `json:"currency"`
+	Description   string         `json:"description"`
+	FeaturesCount int64          `json:"features_count"`
+	ID            string         `json:"id"`
+	IsAddon       bool           `json:"is_addon"`
+	Metadata      map[string]any `json:"metadata,omitempty"`
+	Name          string         `json:"name"`
+	Slug          string         `json:"slug"`
+	Status        string         `json:"status"`
+	TrialDays     int64          `json:"trial_days"`
 }
 
 // RecoveryRegenerateResponse represents the RecoveryRegenerateResponse schema.
@@ -1276,8 +1276,8 @@ type RecoveryVerifyRequest struct {
 
 // RecoveryVerifyResponse represents the RecoveryVerifyResponse schema.
 type RecoveryVerifyResponse struct {
-	ChallengePassed bool `json:"challenge_passed"`
-	CodesRemaining int64 `json:"codes_remaining"`
+	ChallengePassed bool  `json:"challenge_passed"`
+	CodesRemaining  int64 `json:"codes_remaining"`
 }
 
 // RefreshRequest represents the RefreshRequest schema.
@@ -1298,8 +1298,8 @@ type RegisterBeginResponse struct {
 // RegisterFinishResponse represents the RegisterFinishResponse schema.
 type RegisterFinishResponse struct {
 	DisplayName string `json:"display_name"`
-	ID string `json:"id"`
-	Status string `json:"status"`
+	ID          string `json:"id"`
+	Status      string `json:"status"`
 }
 
 // ResendVerificationRequest represents the ResendVerificationRequest schema.
@@ -1311,16 +1311,16 @@ type ResendVerificationRequest struct {
 // ResetPasswordRequest represents the ResetPasswordRequest schema.
 type ResetPasswordRequest struct {
 	NewPassword string `json:"new_password"`
-	Token string `json:"token"`
+	Token       string `json:"token"`
 }
 
 // ResolvedSetting represents the ResolvedSetting schema.
 type ResolvedSetting struct {
-	CanOverride bool `json:"can_override"`
-	Definition *Definition `json:"definition,omitempty"`
-	EffectiveValue string `json:"effective_value"`
-	EnforcedAt string `json:"enforced_at,omitempty"`
-	ScopeValues []*ScopeValue `json:"scope_values"`
+	CanOverride    bool          `json:"can_override"`
+	Definition     *Definition   `json:"definition,omitempty"`
+	EffectiveValue string        `json:"effective_value"`
+	EnforcedAt     string        `json:"enforced_at,omitempty"`
+	ScopeValues    []*ScopeValue `json:"scope_values"`
 }
 
 // ResolvedSettingResponse represents the ResolvedSettingResponse schema.
@@ -1339,35 +1339,35 @@ type ResourceTypeList struct {
 
 // Response represents the Response schema.
 type Response struct {
-	AppID string `json:"app_id"`
-	CanceledAt string `json:"canceled_at,omitempty"`
-	CurrentPeriodEnd string `json:"current_period_end"`
+	AppID              string `json:"app_id"`
+	CanceledAt         string `json:"canceled_at,omitempty"`
+	CurrentPeriodEnd   string `json:"current_period_end"`
 	CurrentPeriodStart string `json:"current_period_start"`
-	ID string `json:"id"`
-	PlanID string `json:"plan_id"`
-	Status string `json:"status"`
-	TenantID string `json:"tenant_id"`
-	TrialEnd string `json:"trial_end,omitempty"`
-	TrialStart string `json:"trial_start,omitempty"`
+	ID                 string `json:"id"`
+	PlanID             string `json:"plan_id"`
+	Status             string `json:"status"`
+	TenantID           string `json:"tenant_id"`
+	TrialEnd           string `json:"trial_end,omitempty"`
+	TrialStart         string `json:"trial_start,omitempty"`
 }
 
 // RevokeConsentRequest represents the RevokeConsentRequest schema.
 type RevokeConsentRequest struct {
-	AppID string `json:"app_id,omitempty"`
+	AppID   string `json:"app_id,omitempty"`
 	Purpose string `json:"purpose"`
 }
 
 // Role represents the Role schema.
 type Role struct {
-	AppID string `json:"app_id"`
-	CreatedAt string `json:"created_at"`
+	AppID       string `json:"app_id"`
+	CreatedAt   string `json:"created_at"`
 	Description string `json:"description,omitempty"`
-	EnvID string `json:"env_id"`
-	ID string `json:"id"`
-	Name string `json:"name"`
-	ParentID string `json:"parent_id,omitempty"`
-	Slug string `json:"slug"`
-	UpdatedAt string `json:"updated_at"`
+	EnvID       string `json:"env_id"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	ParentID    string `json:"parent_id,omitempty"`
+	Slug        string `json:"slug"`
+	UpdatedAt   string `json:"updated_at"`
 }
 
 // RoleListResponse represents the RoleListResponse schema.
@@ -1382,9 +1382,9 @@ type SMSSendRequest struct {
 
 // SMSSendResponse represents the SMSSendResponse schema.
 type SMSSendResponse struct {
-	ExpiresInSeconds int64 `json:"expires_in_seconds"`
-	PhoneMasked string `json:"phone_masked"`
-	Sent bool `json:"sent"`
+	ExpiresInSeconds int64  `json:"expires_in_seconds"`
+	PhoneMasked      string `json:"phone_masked"`
+	Sent             bool   `json:"sent"`
 }
 
 // SMSVerifyRequest represents the SMSVerifyRequest schema.
@@ -1394,8 +1394,8 @@ type SMSVerifyRequest struct {
 
 // SMSVerifyResponse represents the SMSVerifyResponse schema.
 type SMSVerifyResponse struct {
-	Method string `json:"method"`
-	Verified bool `json:"verified"`
+	Method   string `json:"method"`
+	Verified bool   `json:"verified"`
 }
 
 // SchemaList represents the SchemaList schema.
@@ -1404,22 +1404,22 @@ type SchemaList struct {
 
 // ScimListResponse represents the ScimListResponse schema.
 type ScimListResponse struct {
-	Resources []any `json:"resources"`
-	ItemsPerPage int64 `json:"items_per_page"`
-	Schemas []string `json:"schemas"`
-	StartIndex int64 `json:"start_index"`
-	TotalResults int64 `json:"total_results"`
+	Resources    []any    `json:"resources"`
+	ItemsPerPage int64    `json:"items_per_page"`
+	Schemas      []string `json:"schemas"`
+	StartIndex   int64    `json:"start_index"`
+	TotalResults int64    `json:"total_results"`
 }
 
 // ScopeValue represents the ScopeValue schema.
 type ScopeValue struct {
-	Enforced bool `json:"enforced"`
-	Scope string `json:"scope"`
-	ScopeID string `json:"scope_id,omitempty"`
+	Enforced  bool   `json:"enforced"`
+	Scope     string `json:"scope"`
+	ScopeID   string `json:"scope_id,omitempty"`
 	UpdatedAt string `json:"updated_at,omitempty"`
 	UpdatedBy string `json:"updated_by,omitempty"`
-	Value string `json:"value"`
-	Version int64 `json:"version,omitempty"`
+	Value     string `json:"value"`
+	Version   int64  `json:"version,omitempty"`
 }
 
 // SelectOption represents the SelectOption schema.
@@ -1450,88 +1450,88 @@ type SessionListResponse struct {
 
 // SetAppClientConfigRequest represents the SetAppClientConfigRequest schema.
 type SetAppClientConfigRequest struct {
-	AppName string `json:"app_name,omitempty"`
-	LogoURL string `json:"logo_url,omitempty"`
-	MagicLinkEnabled bool `json:"magic_link_enabled,omitempty"`
-	MFAEnabled bool `json:"mfa_enabled,omitempty"`
-	MFAMethods []string `json:"mfa_methods,omitempty"`
-	MFARequired bool `json:"mfa_required,omitempty"`
-	PasskeyEnabled bool `json:"passkey_enabled,omitempty"`
-	PasswordEnabled bool `json:"password_enabled,omitempty"`
-	RequireEmailVerification bool `json:"require_email_verification,omitempty"`
-	SignupEnabled bool `json:"signup_enabled,omitempty"`
-	SocialEnabled bool `json:"social_enabled,omitempty"`
-	SocialProviders []string `json:"social_providers,omitempty"`
-	SsoEnabled bool `json:"sso_enabled,omitempty"`
-	WaitlistEnabled bool `json:"waitlist_enabled,omitempty"`
+	AppName                  string   `json:"app_name,omitempty"`
+	LogoURL                  string   `json:"logo_url,omitempty"`
+	MagicLinkEnabled         bool     `json:"magic_link_enabled,omitempty"`
+	MFAEnabled               bool     `json:"mfa_enabled,omitempty"`
+	MFAMethods               []string `json:"mfa_methods,omitempty"`
+	MFARequired              bool     `json:"mfa_required,omitempty"`
+	PasskeyEnabled           bool     `json:"passkey_enabled,omitempty"`
+	PasswordEnabled          bool     `json:"password_enabled,omitempty"`
+	RequireEmailVerification bool     `json:"require_email_verification,omitempty"`
+	SignupEnabled            bool     `json:"signup_enabled,omitempty"`
+	SocialEnabled            bool     `json:"social_enabled,omitempty"`
+	SocialProviders          []string `json:"social_providers,omitempty"`
+	SsoEnabled               bool     `json:"sso_enabled,omitempty"`
+	WaitlistEnabled          bool     `json:"waitlist_enabled,omitempty"`
 }
 
 // SetAppSessionConfigRequest represents the SetAppSessionConfigRequest schema.
 type SetAppSessionConfigRequest struct {
-	BindToDevice bool `json:"bind_to_device,omitempty"`
-	BindToIP bool `json:"bind_to_ip,omitempty"`
-	MaxActiveSessions int64 `json:"max_active_sessions,omitempty"`
-	RefreshTokenTtlSeconds int64 `json:"refresh_token_ttl_seconds,omitempty"`
-	RotateRefreshToken bool `json:"rotate_refresh_token,omitempty"`
-	TokenFormat string `json:"token_format,omitempty"`
-	TokenTtlSeconds int64 `json:"token_ttl_seconds,omitempty"`
+	BindToDevice           bool   `json:"bind_to_device,omitempty"`
+	BindToIP               bool   `json:"bind_to_ip,omitempty"`
+	MaxActiveSessions      int64  `json:"max_active_sessions,omitempty"`
+	RefreshTokenTtlSeconds int64  `json:"refresh_token_ttl_seconds,omitempty"`
+	RotateRefreshToken     bool   `json:"rotate_refresh_token,omitempty"`
+	TokenFormat            string `json:"token_format,omitempty"`
+	TokenTtlSeconds        int64  `json:"token_ttl_seconds,omitempty"`
 }
 
 // SetSettingRequest represents the SetSettingRequest schema.
 type SetSettingRequest struct {
-	AppID string `json:"app_id,omitempty"`
-	OrgID string `json:"org_id,omitempty"`
-	Scope string `json:"scope"`
+	AppID   string `json:"app_id,omitempty"`
+	OrgID   string `json:"org_id,omitempty"`
+	Scope   string `json:"scope"`
 	ScopeID string `json:"scope_id,omitempty"`
-	Value string `json:"value"`
+	Value   string `json:"value"`
 }
 
 // SettingValueResponse represents the SettingValueResponse schema.
 type SettingValueResponse struct {
-	Key string `json:"key"`
-	Scope string `json:"scope"`
+	Key     string `json:"key"`
+	Scope   string `json:"scope"`
 	ScopeID string `json:"scope_id,omitempty"`
-	Status string `json:"status"`
-	Value string `json:"value"`
+	Status  string `json:"status"`
+	Value   string `json:"value"`
 }
 
 // Settings represents the Settings schema.
 type Settings struct {
-	AllowTestCredentials bool `json:"allow_test_credentials,omitempty"`
-	CheckBreached bool `json:"check_breached,omitempty"`
-	LockoutEnabled bool `json:"lockout_enabled,omitempty"`
-	LockoutMaxAttempts int64 `json:"lockout_max_attempts,omitempty"`
-	OauthOverrides map[string]any `json:"oauth_overrides,omitempty"`
-	PasswordMinLength int64 `json:"password_min_length,omitempty"`
-	RateLimitEnabled bool `json:"rate_limit_enabled,omitempty"`
-	RateLimitWindowSeconds int64 `json:"rate_limit_window_seconds,omitempty"`
-	RefreshTokenTtlSeconds int64 `json:"refresh_token_ttl_seconds,omitempty"`
-	SigninRateLimit int64 `json:"signin_rate_limit,omitempty"`
-	SignupRateLimit int64 `json:"signup_rate_limit,omitempty"`
-	SkipEmailVerification bool `json:"skip_email_verification,omitempty"`
-	TokenTtlSeconds int64 `json:"token_ttl_seconds,omitempty"`
-	WebhookURLOverride string `json:"webhook_url_override,omitempty"`
+	AllowTestCredentials   bool           `json:"allow_test_credentials,omitempty"`
+	CheckBreached          bool           `json:"check_breached,omitempty"`
+	LockoutEnabled         bool           `json:"lockout_enabled,omitempty"`
+	LockoutMaxAttempts     int64          `json:"lockout_max_attempts,omitempty"`
+	OauthOverrides         map[string]any `json:"oauth_overrides,omitempty"`
+	PasswordMinLength      int64          `json:"password_min_length,omitempty"`
+	RateLimitEnabled       bool           `json:"rate_limit_enabled,omitempty"`
+	RateLimitWindowSeconds int64          `json:"rate_limit_window_seconds,omitempty"`
+	RefreshTokenTtlSeconds int64          `json:"refresh_token_ttl_seconds,omitempty"`
+	SigninRateLimit        int64          `json:"signin_rate_limit,omitempty"`
+	SignupRateLimit        int64          `json:"signup_rate_limit,omitempty"`
+	SkipEmailVerification  bool           `json:"skip_email_verification,omitempty"`
+	TokenTtlSeconds        int64          `json:"token_ttl_seconds,omitempty"`
+	WebhookURLOverride     string         `json:"webhook_url_override,omitempty"`
 }
 
 // SignInRequest represents the SignInRequest schema.
 type SignInRequest struct {
-	AppID string `json:"app_id,omitempty"`
+	AppID        string `json:"app_id,omitempty"`
 	CaptchaToken string `json:"captcha_token,omitempty"`
-	Email string `json:"email,omitempty"`
-	Password string `json:"password"`
-	Username string `json:"username,omitempty"`
+	Email        string `json:"email,omitempty"`
+	Password     string `json:"password"`
+	Username     string `json:"username,omitempty"`
 }
 
 // SignUpRequest represents the SignUpRequest schema.
 type SignUpRequest struct {
-	AppID string `json:"app_id,omitempty"`
-	CaptchaToken string `json:"captcha_token,omitempty"`
-	Email string `json:"email"`
-	FirstName string `json:"first_name,omitempty"`
-	LastName string `json:"last_name,omitempty"`
-	Metadata map[string]any `json:"metadata,omitempty"`
-	Password string `json:"password"`
-	Username string `json:"username,omitempty"`
+	AppID        string         `json:"app_id,omitempty"`
+	CaptchaToken string         `json:"captcha_token,omitempty"`
+	Email        string         `json:"email"`
+	FirstName    string         `json:"first_name,omitempty"`
+	LastName     string         `json:"last_name,omitempty"`
+	Metadata     map[string]any `json:"metadata,omitempty"`
+	Password     string         `json:"password"`
+	Username     string         `json:"username,omitempty"`
 }
 
 // SlugAvailableResponse represents the SlugAvailableResponse schema.
@@ -1541,14 +1541,14 @@ type SlugAvailableResponse struct {
 
 // SocialCallbackResponse represents the SocialCallbackResponse schema.
 type SocialCallbackResponse struct {
-	ExpiresAt string `json:"expires_at"`
-	FrontendURL string `json:"frontend_url,omitempty"`
-	IsNewUser bool `json:"is_new_user"`
-	Provider string `json:"provider"`
-	RedirectURL string `json:"redirect_url,omitempty"`
+	ExpiresAt    string `json:"expires_at"`
+	FrontendURL  string `json:"frontend_url,omitempty"`
+	IsNewUser    bool   `json:"is_new_user"`
+	Provider     string `json:"provider"`
+	RedirectURL  string `json:"redirect_url,omitempty"`
 	RefreshToken string `json:"refresh_token"`
 	SessionToken string `json:"session_token"`
-	User *User `json:"user"`
+	User         *User  `json:"user"`
 }
 
 // SocialStartResponse represents the SocialStartResponse schema.
@@ -1558,12 +1558,12 @@ type SocialStartResponse struct {
 
 // SsoCallbackResponse represents the SsoCallbackResponse schema.
 type SsoCallbackResponse struct {
-	ExpiresAt string `json:"expires_at"`
-	IsNewUser bool `json:"is_new_user"`
-	Provider string `json:"provider"`
+	ExpiresAt    string `json:"expires_at"`
+	IsNewUser    bool   `json:"is_new_user"`
+	Provider     string `json:"provider"`
 	RefreshToken string `json:"refresh_token"`
 	SessionToken string `json:"session_token"`
-	User *User `json:"user"`
+	User         *User  `json:"user"`
 }
 
 // StartRequest represents the StartRequest schema.
@@ -1579,17 +1579,17 @@ type SwitchOrgRequest struct {
 
 // SwitchOrgResponse represents the SwitchOrgResponse schema.
 type SwitchOrgResponse struct {
-	OrgID string `json:"org_id,omitempty"`
+	OrgID     string `json:"org_id,omitempty"`
 	SessionID string `json:"session_id"`
 }
 
 // Team represents the Team schema.
 type Team struct {
 	CreatedAt string `json:"created_at"`
-	ID string `json:"id"`
-	Name string `json:"name"`
-	OrgID string `json:"org_id"`
-	Slug string `json:"slug"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	OrgID     string `json:"org_id"`
+	Slug      string `json:"slug"`
 	UpdatedAt string `json:"updated_at"`
 }
 
@@ -1600,16 +1600,16 @@ type TeamListResponse struct {
 
 // UIMetadata represents the UIMetadata schema.
 type UIMetadata struct {
-	Condition *VisibilityCondition `json:"condition,omitempty"`
-	HelpText string `json:"help_text,omitempty"`
-	InputType string `json:"input_type"`
-	ObjectFields []*ObjectFieldDef `json:"object_fields,omitempty"`
-	Options []*SelectOption `json:"options,omitempty"`
-	Order int64 `json:"order"`
-	Placeholder string `json:"placeholder,omitempty"`
-	ReadOnly bool `json:"read_only,omitempty"`
-	Section string `json:"section,omitempty"`
-	Validation *Validation `json:"validation,omitempty"`
+	Condition    *VisibilityCondition `json:"condition,omitempty"`
+	HelpText     string               `json:"help_text,omitempty"`
+	InputType    string               `json:"input_type"`
+	ObjectFields []*ObjectFieldDef    `json:"object_fields,omitempty"`
+	Options      []*SelectOption      `json:"options,omitempty"`
+	Order        int64                `json:"order"`
+	Placeholder  string               `json:"placeholder,omitempty"`
+	ReadOnly     bool                 `json:"read_only,omitempty"`
+	Section      string               `json:"section,omitempty"`
+	Validation   *Validation          `json:"validation,omitempty"`
 }
 
 // UnassignRoleRequest represents the UnassignRoleRequest schema.
@@ -1629,35 +1629,35 @@ type UnlinkAuthMethodResponse struct {
 
 // UpdateEnvironmentRequest represents the UpdateEnvironmentRequest schema.
 type UpdateEnvironmentRequest struct {
-	Color string `json:"color,omitempty"`
+	Color       string `json:"color,omitempty"`
 	Description string `json:"description,omitempty"`
-	Name string `json:"name,omitempty"`
+	Name        string `json:"name,omitempty"`
 }
 
 // UpdateEnvironmentSettingsRequest represents the UpdateEnvironmentSettingsRequest schema.
 type UpdateEnvironmentSettingsRequest struct {
-	AllowTestCredentials bool `json:"allow_test_credentials,omitempty"`
-	CheckBreached bool `json:"check_breached,omitempty"`
-	LockoutEnabled bool `json:"lockout_enabled,omitempty"`
-	LockoutMaxAttempts int64 `json:"lockout_max_attempts,omitempty"`
-	OauthOverrides map[string]any `json:"oauth_overrides,omitempty"`
-	PasswordMinLength int64 `json:"password_min_length,omitempty"`
-	RateLimitEnabled bool `json:"rate_limit_enabled,omitempty"`
-	RateLimitWindowSeconds int64 `json:"rate_limit_window_seconds,omitempty"`
-	RefreshTokenTtlSeconds int64 `json:"refresh_token_ttl_seconds,omitempty"`
-	SigninRateLimit int64 `json:"signin_rate_limit,omitempty"`
-	SignupRateLimit int64 `json:"signup_rate_limit,omitempty"`
-	SkipEmailVerification bool `json:"skip_email_verification,omitempty"`
-	TokenTtlSeconds int64 `json:"token_ttl_seconds,omitempty"`
-	WebhookURLOverride string `json:"webhook_url_override,omitempty"`
+	AllowTestCredentials   bool           `json:"allow_test_credentials,omitempty"`
+	CheckBreached          bool           `json:"check_breached,omitempty"`
+	LockoutEnabled         bool           `json:"lockout_enabled,omitempty"`
+	LockoutMaxAttempts     int64          `json:"lockout_max_attempts,omitempty"`
+	OauthOverrides         map[string]any `json:"oauth_overrides,omitempty"`
+	PasswordMinLength      int64          `json:"password_min_length,omitempty"`
+	RateLimitEnabled       bool           `json:"rate_limit_enabled,omitempty"`
+	RateLimitWindowSeconds int64          `json:"rate_limit_window_seconds,omitempty"`
+	RefreshTokenTtlSeconds int64          `json:"refresh_token_ttl_seconds,omitempty"`
+	SigninRateLimit        int64          `json:"signin_rate_limit,omitempty"`
+	SignupRateLimit        int64          `json:"signup_rate_limit,omitempty"`
+	SkipEmailVerification  bool           `json:"skip_email_verification,omitempty"`
+	TokenTtlSeconds        int64          `json:"token_ttl_seconds,omitempty"`
+	WebhookURLOverride     string         `json:"webhook_url_override,omitempty"`
 }
 
 // UpdateMeRequest represents the UpdateMeRequest schema.
 type UpdateMeRequest struct {
 	FirstName string `json:"first_name,omitempty"`
-	Image string `json:"image,omitempty"`
-	LastName string `json:"last_name,omitempty"`
-	Username string `json:"username,omitempty"`
+	Image     string `json:"image,omitempty"`
+	LastName  string `json:"last_name,omitempty"`
+	Username  string `json:"username,omitempty"`
 }
 
 // UpdateMemberRequest represents the UpdateMemberRequest schema.
@@ -1674,8 +1674,8 @@ type UpdateOrgRequest struct {
 // UpdateRoleRequest represents the UpdateRoleRequest schema.
 type UpdateRoleRequest struct {
 	Description string `json:"description,omitempty"`
-	Name string `json:"name,omitempty"`
-	ParentID string `json:"parent_id,omitempty"`
+	Name        string `json:"name,omitempty"`
+	ParentID    string `json:"parent_id,omitempty"`
 }
 
 // UpdateTeamRequest represents the UpdateTeamRequest schema.
@@ -1686,20 +1686,20 @@ type UpdateTeamRequest struct {
 
 // UpdateWebhookRequest represents the UpdateWebhookRequest schema.
 type UpdateWebhookRequest struct {
-	Active bool `json:"active,omitempty"`
+	Active bool     `json:"active,omitempty"`
 	Events []string `json:"events,omitempty"`
-	URL string `json:"url,omitempty"`
+	URL    string   `json:"url,omitempty"`
 }
 
 // UsageItemResponse represents the UsageItemResponse schema.
 type UsageItemResponse struct {
-	FeatureKey string `json:"feature_key"`
+	FeatureKey  string `json:"feature_key"`
 	FeatureName string `json:"feature_name"`
 	FeatureType string `json:"feature_type"`
-	Limit int64 `json:"limit"`
-	Period string `json:"period"`
-	Remaining int64 `json:"remaining"`
-	Used int64 `json:"used"`
+	Limit       int64  `json:"limit"`
+	Period      string `json:"period"`
+	Remaining   int64  `json:"remaining"`
+	Used        int64  `json:"used"`
 }
 
 // UsageSummaryResponse represents the UsageSummaryResponse schema.
@@ -1709,48 +1709,48 @@ type UsageSummaryResponse struct {
 
 // User represents the User schema.
 type User struct {
-	AppID string `json:"app_id"`
-	BanExpires string `json:"ban_expires,omitempty"`
-	BanReason string `json:"ban_reason,omitempty"`
-	Banned bool `json:"banned"`
-	CreatedAt string `json:"created_at"`
-	DeletedAt string `json:"deleted_at,omitempty"`
-	DisplayUsername string `json:"display_username,omitempty"`
-	Email string `json:"email"`
-	EmailVerified bool `json:"email_verified"`
-	EnvID string `json:"env_id"`
-	FirstName string `json:"first_name"`
-	ID string `json:"id"`
-	Image string `json:"image,omitempty"`
-	LastName string `json:"last_name"`
-	Metadata map[string]any `json:"metadata,omitempty"`
-	PasswordChangedAt string `json:"password_changed_at,omitempty"`
-	Phone string `json:"phone,omitempty"`
-	PhoneVerified bool `json:"phone_verified"`
-	UpdatedAt string `json:"updated_at"`
-	Username string `json:"username,omitempty"`
+	AppID             string         `json:"app_id"`
+	BanExpires        string         `json:"ban_expires,omitempty"`
+	BanReason         string         `json:"ban_reason,omitempty"`
+	Banned            bool           `json:"banned"`
+	CreatedAt         string         `json:"created_at"`
+	DeletedAt         string         `json:"deleted_at,omitempty"`
+	DisplayUsername   string         `json:"display_username,omitempty"`
+	Email             string         `json:"email"`
+	EmailVerified     bool           `json:"email_verified"`
+	EnvID             string         `json:"env_id"`
+	FirstName         string         `json:"first_name"`
+	ID                string         `json:"id"`
+	Image             string         `json:"image,omitempty"`
+	LastName          string         `json:"last_name"`
+	Metadata          map[string]any `json:"metadata,omitempty"`
+	PasswordChangedAt string         `json:"password_changed_at,omitempty"`
+	Phone             string         `json:"phone,omitempty"`
+	PhoneVerified     bool           `json:"phone_verified"`
+	UpdatedAt         string         `json:"updated_at"`
+	Username          string         `json:"username,omitempty"`
 }
 
 // UserInfo represents the UserInfo schema.
 type UserInfo struct {
-	Email string `json:"email,omitempty"`
-	EmailVerified bool `json:"email_verified,omitempty"`
-	Name string `json:"name,omitempty"`
-	PhoneNumber string `json:"phone_number,omitempty"`
-	Sub string `json:"sub"`
+	Email         string `json:"email,omitempty"`
+	EmailVerified bool   `json:"email_verified,omitempty"`
+	Name          string `json:"name,omitempty"`
+	PhoneNumber   string `json:"phone_number,omitempty"`
+	Sub           string `json:"sub"`
 }
 
 // UserResource represents the UserResource schema.
 type UserResource struct {
-	Active bool `json:"active"`
-	Emails []*Email `json:"emails,omitempty"`
-	ExternalId string `json:"external_id,omitempty"`
-	Groups []*GroupRef `json:"groups,omitempty"`
-	ID string `json:"id,omitempty"`
-	Meta *Meta `json:"meta,omitempty"`
-	Name *Name `json:"name"`
-	Schemas []string `json:"schemas"`
-	UserName string `json:"user_name"`
+	Active     bool        `json:"active"`
+	Emails     []*Email    `json:"emails,omitempty"`
+	ExternalId string      `json:"external_id,omitempty"`
+	Groups     []*GroupRef `json:"groups,omitempty"`
+	ID         string      `json:"id,omitempty"`
+	Meta       *Meta       `json:"meta,omitempty"`
+	Name       *Name       `json:"name"`
+	Schemas    []string    `json:"schemas"`
+	UserName   string      `json:"user_name"`
 }
 
 // UserRoleListResponse represents the UserRoleListResponse schema.
@@ -1760,18 +1760,18 @@ type UserRoleListResponse struct {
 
 // Validation represents the Validation schema.
 type Validation struct {
-	Max int64 `json:"max,omitempty"`
-	MaxLen int64 `json:"max_len,omitempty"`
-	Min int64 `json:"min,omitempty"`
-	MinLen int64 `json:"min_len,omitempty"`
-	Pattern string `json:"pattern,omitempty"`
-	Required bool `json:"required,omitempty"`
+	Max      int64  `json:"max,omitempty"`
+	MaxLen   int64  `json:"max_len,omitempty"`
+	Min      int64  `json:"min,omitempty"`
+	MinLen   int64  `json:"min_len,omitempty"`
+	Pattern  string `json:"pattern,omitempty"`
+	Required bool   `json:"required,omitempty"`
 }
 
 // VerifyEmailRequest represents the VerifyEmailRequest schema.
 type VerifyEmailRequest struct {
 	AppID string `json:"app_id,omitempty"`
-	Code string `json:"code,omitempty"`
+	Code  string `json:"code,omitempty"`
 	Email string `json:"email,omitempty"`
 	Token string `json:"token,omitempty"`
 }
@@ -1783,16 +1783,16 @@ type VerifyMFARequest struct {
 
 // VerifyMFAResponse represents the VerifyMFAResponse schema.
 type VerifyMFAResponse struct {
-	Method string `json:"method"`
+	Method        string   `json:"method"`
 	RecoveryCodes []string `json:"recovery_codes,omitempty"`
-	Verified bool `json:"verified"`
+	Verified      bool     `json:"verified"`
 }
 
 // VisibilityCondition represents the VisibilityCondition schema.
 type VisibilityCondition struct {
-	Key string `json:"key"`
+	Key      string `json:"key"`
 	Operator string `json:"operator,omitempty"`
-	Value string `json:"value"`
+	Value    string `json:"value"`
 }
 
 // VoidInvoiceRequest represents the VoidInvoiceRequest schema.
@@ -1802,14 +1802,14 @@ type VoidInvoiceRequest struct {
 
 // Webhook represents the Webhook schema.
 type Webhook struct {
-	Active bool `json:"active"`
-	AppID string `json:"app_id"`
-	CreatedAt string `json:"created_at"`
-	EnvID string `json:"env_id"`
-	Events []string `json:"events"`
-	ID string `json:"id"`
-	UpdatedAt string `json:"updated_at"`
-	URL string `json:"url"`
+	Active    bool     `json:"active"`
+	AppID     string   `json:"app_id"`
+	CreatedAt string   `json:"created_at"`
+	EnvID     string   `json:"env_id"`
+	Events    []string `json:"events"`
+	ID        string   `json:"id"`
+	UpdatedAt string   `json:"updated_at"`
+	URL       string   `json:"url"`
 }
 
 // WebhookListResponse represents the WebhookListResponse schema.
@@ -1821,21 +1821,20 @@ type WebhookListResponse struct {
 // Request types
 // ──────────────────────────────────────────────────
 
-
 // AdminBulkImportUsersRequest is the request body for AdminBulkImportUsers.
 type AdminBulkImportUsersRequest struct {
-	AppID string `json:"app_id,omitempty"`
+	AppID string           `json:"app_id,omitempty"`
 	Users []map[string]any `json:"users"`
 }
 
 // CreateOAuth2ClientRequest is the request body for CreateOAuth2Client.
 type CreateOAuth2ClientRequest struct {
-	AppID string `json:"app_id"`
-	GrantTypes []string `json:"grant_types,omitempty"`
-	Name string `json:"name"`
-	Public bool `json:"public,omitempty"`
+	AppID        string   `json:"app_id"`
+	GrantTypes   []string `json:"grant_types,omitempty"`
+	Name         string   `json:"name"`
+	Public       bool     `json:"public,omitempty"`
 	RedirectUris []string `json:"redirect_uris"`
-	Scopes []string `json:"scopes,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
 }
 
 // DeleteOAuth2ClientRequest is the request body for DeleteOAuth2Client.
@@ -1845,64 +1844,64 @@ type DeleteOAuth2ClientRequest struct {
 
 // SocialAdminUpsertProviderRequest is the request body for SocialAdminUpsertProvider.
 type SocialAdminUpsertProviderRequest struct {
-	ClientID string `json:"client_id"`
-	ClientSecret string `json:"client_secret"`
-	Enabled bool `json:"enabled,omitempty"`
-	RedirectURL string `json:"redirect_url,omitempty"`
-	Scopes []string `json:"scopes,omitempty"`
+	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret"`
+	Enabled      bool     `json:"enabled,omitempty"`
+	RedirectURL  string   `json:"redirect_url,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
 }
 
 // SsoAdminCreateConnectionRequest is the request body for SsoAdminCreateConnection.
 type SsoAdminCreateConnectionRequest struct {
-	AcsURL string `json:"acs_url,omitempty"`
-	AppID string `json:"app_id"`
+	AcsURL            string         `json:"acs_url,omitempty"`
+	AppID             string         `json:"app_id"`
 	AttributeMappings map[string]any `json:"attribute_mappings,omitempty"`
-	ClientID string `json:"client_id,omitempty"`
-	ClientSecret string `json:"client_secret,omitempty"`
-	Domain string `json:"domain"`
-	EntityID string `json:"entity_id,omitempty"`
-	IdpCertificate string `json:"idp_certificate,omitempty"`
-	IdpMetadataXML string `json:"idp_metadata_xml,omitempty"`
-	IdpSsoURL string `json:"idp_sso_url,omitempty"`
-	Issuer string `json:"issuer,omitempty"`
-	MetadataURL string `json:"metadata_url,omitempty"`
-	OrgID string `json:"org_id,omitempty"`
-	Protocol string `json:"protocol"`
-	Provider string `json:"provider"`
-	SignRequests bool `json:"sign_requests,omitempty"`
+	ClientID          string         `json:"client_id,omitempty"`
+	ClientSecret      string         `json:"client_secret,omitempty"`
+	Domain            string         `json:"domain"`
+	EntityID          string         `json:"entity_id,omitempty"`
+	IdpCertificate    string         `json:"idp_certificate,omitempty"`
+	IdpMetadataXML    string         `json:"idp_metadata_xml,omitempty"`
+	IdpSsoURL         string         `json:"idp_sso_url,omitempty"`
+	Issuer            string         `json:"issuer,omitempty"`
+	MetadataURL       string         `json:"metadata_url,omitempty"`
+	OrgID             string         `json:"org_id,omitempty"`
+	Protocol          string         `json:"protocol"`
+	Provider          string         `json:"provider"`
+	SignRequests      bool           `json:"sign_requests,omitempty"`
 }
 
 // SsoAdminUpdateConnectionRequest is the request body for SsoAdminUpdateConnection.
 type SsoAdminUpdateConnectionRequest struct {
-	AcsURL string `json:"acs_url,omitempty"`
-	Active bool `json:"active,omitempty"`
+	AcsURL            string         `json:"acs_url,omitempty"`
+	Active            bool           `json:"active,omitempty"`
 	AttributeMappings map[string]any `json:"attribute_mappings,omitempty"`
-	ClientID string `json:"client_id,omitempty"`
-	ClientSecret string `json:"client_secret,omitempty"`
-	Domain string `json:"domain,omitempty"`
-	EntityID string `json:"entity_id,omitempty"`
-	IdpCertificate string `json:"idp_certificate,omitempty"`
-	IdpMetadataXML string `json:"idp_metadata_xml,omitempty"`
-	IdpSsoURL string `json:"idp_sso_url,omitempty"`
-	Issuer string `json:"issuer,omitempty"`
-	MetadataURL string `json:"metadata_url,omitempty"`
-	Provider string `json:"provider,omitempty"`
-	SignRequests bool `json:"sign_requests,omitempty"`
+	ClientID          string         `json:"client_id,omitempty"`
+	ClientSecret      string         `json:"client_secret,omitempty"`
+	Domain            string         `json:"domain,omitempty"`
+	EntityID          string         `json:"entity_id,omitempty"`
+	IdpCertificate    string         `json:"idp_certificate,omitempty"`
+	IdpMetadataXML    string         `json:"idp_metadata_xml,omitempty"`
+	IdpSsoURL         string         `json:"idp_sso_url,omitempty"`
+	Issuer            string         `json:"issuer,omitempty"`
+	MetadataURL       string         `json:"metadata_url,omitempty"`
+	Provider          string         `json:"provider,omitempty"`
+	SignRequests      bool           `json:"sign_requests,omitempty"`
 }
 
 // CreateBillingPlanRequest is the request body for CreateBillingPlan.
 type CreateBillingPlanRequest struct {
-	AppID string `json:"app_id"`
-	BaseAmount int64 `json:"base_amount"`
-	Currency string `json:"currency"`
-	Description string `json:"description"`
-	Features []*FeatureInput `json:"features,omitempty"`
-	IsAddon bool `json:"is_addon"`
-	Metadata map[string]any `json:"metadata,omitempty"`
-	Name string `json:"name"`
-	Period string `json:"period"`
-	Slug string `json:"slug"`
-	TrialDays int64 `json:"trial_days"`
+	AppID       string          `json:"app_id"`
+	BaseAmount  int64           `json:"base_amount"`
+	Currency    string          `json:"currency"`
+	Description string          `json:"description"`
+	Features    []*FeatureInput `json:"features,omitempty"`
+	IsAddon     bool            `json:"is_addon"`
+	Metadata    map[string]any  `json:"metadata,omitempty"`
+	Name        string          `json:"name"`
+	Period      string          `json:"period"`
+	Slug        string          `json:"slug"`
+	TrialDays   int64           `json:"trial_days"`
 }
 
 // ChangeSubscriptionPlanRequest is the request body for ChangeSubscriptionPlan.
@@ -1917,10 +1916,10 @@ type IntrospectTokenRequest struct {
 
 // CreateAPIKeyRequest is the request body for CreateAPIKey.
 type CreateAPIKeyRequest struct {
-	AppID string `json:"app_id"`
-	Name string `json:"name"`
+	AppID  string   `json:"app_id"`
+	Name   string   `json:"name"`
 	Scopes []string `json:"scopes,omitempty"`
-	UserID string `json:"user_id,omitempty"`
+	UserID string   `json:"user_id,omitempty"`
 }
 
 // SendMagicLinkRequest is the request body for SendMagicLink.
@@ -1937,14 +1936,14 @@ type VerifyMagicLinkRequest struct {
 
 // ChallengeMFARequest is the request body for ChallengeMFA.
 type ChallengeMFARequest struct {
-	Code string `json:"code"`
+	Code      string `json:"code"`
 	MFATicket string `json:"mfa_ticket"`
 }
 
 // EnrollMFARequest is the request body for EnrollMFA.
 type EnrollMFARequest struct {
 	Method string `json:"method,omitempty"`
-	Phone string `json:"phone,omitempty"`
+	Phone  string `json:"phone,omitempty"`
 }
 
 // DisableMFARequest is the request body for DisableMFA.
@@ -1986,9 +1985,9 @@ type Oauth2TokenRequest struct {
 // CreateOrganizationRequest is the request body for CreateOrganization.
 type CreateOrganizationRequest struct {
 	AppID string `json:"app_id,omitempty"`
-	Logo string `json:"logo,omitempty"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
+	Logo  string `json:"logo,omitempty"`
+	Name  string `json:"name"`
+	Slug  string `json:"slug"`
 }
 
 // UpdateOrganizationRequest is the request body for UpdateOrganization.
@@ -2011,7 +2010,7 @@ type PhoneAuthStartRequest struct {
 // PhoneAuthVerifyRequest is the request body for PhoneAuthVerify.
 type PhoneAuthVerifyRequest struct {
 	AppID string `json:"app_id,omitempty"`
-	Code string `json:"code"`
+	Code  string `json:"code"`
 	Phone string `json:"phone"`
 }
 
@@ -2022,29 +2021,29 @@ type RefreshTokensRequest struct {
 
 // AuthsomeCreateRoleRequest is the request body for AuthsomeCreateRole.
 type AuthsomeCreateRoleRequest struct {
-	AppID string `json:"app_id,omitempty"`
+	AppID       string `json:"app_id,omitempty"`
 	Description string `json:"description,omitempty"`
-	Name string `json:"name"`
-	ParentID string `json:"parent_id,omitempty"`
-	Slug string `json:"slug"`
+	Name        string `json:"name"`
+	ParentID    string `json:"parent_id,omitempty"`
+	Slug        string `json:"slug"`
 }
 
 // AuthsomeUpdateRoleRequest is the request body for AuthsomeUpdateRole.
 type AuthsomeUpdateRoleRequest struct {
 	Description string `json:"description,omitempty"`
-	Name string `json:"name,omitempty"`
-	ParentID string `json:"parent_id,omitempty"`
+	Name        string `json:"name,omitempty"`
+	ParentID    string `json:"parent_id,omitempty"`
 }
 
 // AuthsomeAssignRoleRequest is the request body for AuthsomeAssignRole.
 type AuthsomeAssignRoleRequest struct {
-	OrgID string `json:"org_id,omitempty"`
+	OrgID  string `json:"org_id,omitempty"`
 	UserID string `json:"user_id"`
 }
 
 // AuthsomeAddPermissionRequest is the request body for AuthsomeAddPermission.
 type AuthsomeAddPermissionRequest struct {
-	Action string `json:"action"`
+	Action   string `json:"action"`
 	Resource string `json:"resource"`
 }
 
@@ -2060,7 +2059,7 @@ type SsoExchangeRequest struct {
 
 // StartSSOLoginByDomainRequest is the request body for StartSSOLoginByDomain.
 type StartSSOLoginByDomainRequest struct {
-	Email string `json:"email"`
+	Email     string `json:"email"`
 	ReturnURL string `json:"return_url,omitempty"`
 }
 

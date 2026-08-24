@@ -4,7 +4,10 @@ package golang
 import (
 	"bytes"
 	"embed"
+	"errors"
 	"fmt"
+	"go/format"
+	"go/scanner"
 	"sort"
 	"strings"
 	"text/template"
@@ -423,7 +426,40 @@ func (g *Generator) renderTemplate(name string, data *TemplateData) (string, err
 		return "", err
 	}
 
-	return buf.String(), nil
+	// Templates emit Go that is correct but not gofmt-clean: struct tags do
+	// not line up, and a lone `error` return comes out wrapped in parens.
+	// Formatting here rather than in the templates keeps the templates
+	// readable and makes the output match what `gofmt -l` expects, so the
+	// committed SDK stays clean without anyone remembering to run gofmt.
+	src := buf.Bytes()
+	formatted, err := format.Source(src)
+	if err != nil {
+		return "", fmt.Errorf("format %s: %w%s", tmplName, err, offendingLine(src, err))
+	}
+
+	return string(formatted), nil
+}
+
+// offendingLine quotes the line format.Source choked on, when it says which.
+//
+// The rendered source only ever exists in memory, so on its own a parse error
+// names a line in a file nobody can open. Quoting the line is what turns the
+// error into something a template author can act on. An error that carries no
+// position, or points past the end of the render, adds nothing and is left
+// alone.
+func offendingLine(src []byte, err error) string {
+	var list scanner.ErrorList
+	if !errors.As(err, &list) || len(list) == 0 {
+		return ""
+	}
+
+	lines := strings.Split(string(src), "\n")
+	n := list[0].Pos.Line
+	if n < 1 || n > len(lines) {
+		return ""
+	}
+
+	return fmt.Sprintf("\n\t%d: %s", n, strings.TrimSpace(lines[n-1]))
 }
 
 // unexportedName returns a Go unexported (camelCase) version of a name.

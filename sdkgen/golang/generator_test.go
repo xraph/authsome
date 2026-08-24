@@ -1,6 +1,7 @@
 package golang_test
 
 import (
+	"go/format"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -256,4 +257,19 @@ func TestGenerate_ContextInMethods(t *testing.T) {
 	// All methods should accept context.Context
 	assert.Contains(t, clientContent, "ctx context.Context")
 	assert.Contains(t, clientContent, `"context"`)
+}
+
+func TestGenerate_OutputIsGofmtClean(t *testing.T) {
+	gen := golang.NewGenerator(golang.GeneratorConfig{})
+	files, err := gen.Generate(testSpec())
+	require.NoError(t, err)
+
+	// The generated SDK is committed, so anything the templates emit that
+	// gofmt would rewrite shows up as noise in every regeneration diff.
+	// Formatting the render is what keeps `gofmt -l sdk/go` quiet.
+	for _, f := range files {
+		formatted, err := format.Source([]byte(f.Content))
+		require.NoErrorf(t, err, "%s does not parse", f.Path)
+		assert.Equalf(t, string(formatted), f.Content, "%s is not gofmt-clean", f.Path)
+	}
 }
