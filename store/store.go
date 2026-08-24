@@ -18,6 +18,7 @@ import (
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/notification"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/serviceaccount"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
@@ -60,6 +61,7 @@ type Store interface {
 	appclientconfig.Store
 	settings.Store
 	serviceaccount.Store
+	principal.Store
 
 	// Migrate runs all schema migrations. Extra migration groups (e.g. from
 	// plugins) are appended to the core group and orchestrated together.

@@ -23,6 +23,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/serviceaccount"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
@@ -53,6 +54,10 @@ func RunConformance(t *testing.T, newStore Factory) {
 		{"RefreshTokenReplayIsIdempotent", testRefreshTokenReplayIsIdempotent},
 		{"OrgMemberLookupAndCascade", testOrgMemberLookupAndCascade},
 		{"ListUserSessionsIsScopedToUser", testListUserSessionsIsScopedToUser},
+		{"PrincipalRoundTrip", testPrincipalRoundTrip},
+		{"EphemeralPrincipalExpiry", testEphemeralPrincipalExpiry},
+		{"DelegationLifecycle", testDelegationLifecycle},
+		{"SessionActorChainRoundTrip", testSessionActorChainRoundTrip},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -589,4 +594,227 @@ func testOrgMemberLookupAndCascade(t *testing.T, s store.Store) {
 	members, err := s.ListMembers(ctx, org.ID)
 	require.NoError(t, err)
 	assert.Empty(t, members, "members must be cascaded with the org")
+}
+
+// ──────────────────────────────────────────────────
+// Principals and delegations
+// ──────────────────────────────────────────────────
+
+// seedPrincipal creates a non-human principal of the given kind.
+func seedPrincipal(t *testing.T, s store.Store, tn tenant, kind principal.Kind, name string) *serviceaccount.ServiceAccount { //nolint:unparam // kind kept parameterised for future non-agent conformance cases
+	t.Helper()
+	svc := &serviceaccount.ServiceAccount{
+		ID:        id.NewServiceAccountID(),
+		AppID:     tn.AppID,
+		EnvID:     tn.EnvID,
+		Kind:      kind,
+		Name:      name,
+		Scopes:    []string{"repo:read"},
+		Active:    true,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateServiceAccount(context.Background(), svc))
+	return svc
+}
+
+// testPrincipalRoundTrip pins that the kind and owner survive persistence and
+// that GetPrincipal resolves a stored row into the same ref it was written
+// under. A backend that drops Kind hands back a principal that every
+// authorization decision then treats as a plain service account.
+func testPrincipalRoundTrip(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	owner := seedUser(t, s, tn, "owner@test.com")
+
+	svc := seedPrincipal(t, s, tn, principal.KindAgent, "agent-one")
+	svc.OwnerUserID = owner.ID
+	require.NoError(t, s.UpdateServiceAccount(ctx, svc))
+
+	got, err := s.GetPrincipal(ctx, principal.Ref{Kind: principal.KindAgent, ID: svc.ID.String()})
+	require.NoError(t, err)
+	assert.Equal(t, principal.KindAgent, got.Kind)
+	assert.Equal(t, svc.ID.String(), got.ID)
+	assert.Equal(t, tn.AppID.String(), got.AppID.String())
+	require.NotNil(t, got.Owner, "the owning user must survive the round trip")
+	assert.Equal(t, principal.UserRef(owner.ID), *got.Owner)
+	assert.True(t, got.IsActive(now()))
+
+	// A user ref resolves too, out of the user table rather than this one.
+	gotUser, err := s.GetPrincipal(ctx, principal.UserRef(owner.ID))
+	require.NoError(t, err)
+	assert.Equal(t, principal.KindUser, gotUser.Kind)
+	assert.Equal(t, owner.ID.String(), gotUser.ID)
+
+	// A row written with no kind at all reads as a service account, which is
+	// what every row predating the column is.
+	legacy := &serviceaccount.ServiceAccount{
+		ID: id.NewServiceAccountID(), AppID: tn.AppID, Name: "legacy",
+		Active: true, CreatedAt: now(), UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateServiceAccount(ctx, legacy))
+	gotLegacy, err := s.GetPrincipal(ctx, principal.Ref{Kind: principal.KindService, ID: legacy.ID.String()})
+	require.NoError(t, err)
+	assert.Equal(t, principal.KindService, gotLegacy.Kind)
+}
+
+// testEphemeralPrincipalExpiry pins the JIT-minted child contract: the parent
+// link survives, and a lapsed child is excluded from an active-only listing
+// rather than silently continuing to authenticate.
+func testEphemeralPrincipalExpiry(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	parent := seedPrincipal(t, s, tn, principal.KindAgent, "parent-agent")
+
+	past := now().Add(-time.Hour)
+	future := now().Add(time.Hour)
+
+	lapsed := seedPrincipal(t, s, tn, principal.KindAgent, "lapsed-child")
+	lapsed.ParentID = parent.ID
+	lapsed.ExpiresAt = &past
+	require.NoError(t, s.UpdateServiceAccount(ctx, lapsed))
+
+	live := seedPrincipal(t, s, tn, principal.KindAgent, "live-child")
+	live.ParentID = parent.ID
+	live.ExpiresAt = &future
+	require.NoError(t, s.UpdateServiceAccount(ctx, live))
+
+	gotLapsed, err := s.GetPrincipal(ctx, principal.Ref{Kind: principal.KindAgent, ID: lapsed.ID.String()})
+	require.NoError(t, err, "an expired principal must still be readable, so callers can report why")
+	require.NotNil(t, gotLapsed.Parent)
+	assert.Equal(t, parent.ID.String(), gotLapsed.Parent.ID)
+	assert.False(t, gotLapsed.IsActive(now()), "an expired principal must not read as active")
+
+	active, err := s.ListPrincipals(ctx, &principal.Query{
+		AppID: tn.AppID, Kind: principal.KindAgent, ActiveOnly: true, ActiveAsOf: now(),
+	})
+	require.NoError(t, err)
+	ids := make([]string, 0, len(active))
+	for _, p := range active {
+		ids = append(ids, p.ID)
+	}
+	assert.Contains(t, ids, live.ID.String())
+	assert.Contains(t, ids, parent.ID.String())
+	assert.NotContains(t, ids, lapsed.ID.String(), "an active-only listing must exclude the lapsed child")
+}
+
+// testDelegationLifecycle pins create, lookup and revoke. The revoke half is
+// the one that matters: a grant that stays findable after revocation is a
+// credential nobody can take away.
+func testDelegationLifecycle(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "delegator@test.com")
+	agent := seedPrincipal(t, s, tn, principal.KindAgent, "delegated-agent")
+
+	actor := principal.Ref{Kind: principal.KindAgent, ID: agent.ID.String()}
+	subject := principal.UserRef(u.ID)
+
+	d := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     tn.AppID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantDelegation,
+		Scopes:    []string{"repo:read"},
+		GrantedBy: subject,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateDelegation(ctx, d))
+
+	got, err := s.GetDelegation(ctx, d.ID)
+	require.NoError(t, err)
+	assert.Equal(t, actor, got.Actor)
+	assert.Equal(t, subject, got.Subject)
+	assert.Equal(t, []string{"repo:read"}, got.Scopes)
+	assert.True(t, got.IsActive(now()))
+
+	found, err := s.FindActiveDelegation(ctx, tn.AppID, actor, subject, principal.GrantDelegation)
+	require.NoError(t, err)
+	assert.Equal(t, d.ID.String(), found.ID.String())
+
+	// The wrong grant kind must not match. Impersonation and delegation are
+	// evaluated differently, so crossing them changes the decision.
+	_, err = s.FindActiveDelegation(ctx, tn.AppID, actor, subject, principal.GrantImpersonation)
+	assert.ErrorIs(t, err, principal.ErrNotFound)
+
+	listed, err := s.ListDelegations(ctx, &principal.DelegationQuery{AppID: tn.AppID, Subject: &subject})
+	require.NoError(t, err)
+	assert.Len(t, listed, 1, "the subject must be able to see what may act for them")
+
+	require.NoError(t, s.RevokeDelegation(ctx, d.ID, now()))
+	_, err = s.FindActiveDelegation(ctx, tn.AppID, actor, subject, principal.GrantDelegation)
+	assert.ErrorIs(t, err, principal.ErrNotFound, "a revoked grant must stop being findable")
+
+	afterRevoke, err := s.GetDelegation(ctx, d.ID)
+	require.NoError(t, err, "a revoked grant stays readable for audit")
+	assert.NotNil(t, afterRevoke.RevokedAt)
+
+	// Revoking twice is not an error. Revocation is the thing you want to
+	// succeed on a retry.
+	assert.NoError(t, s.RevokeDelegation(ctx, d.ID, now()))
+}
+
+// testSessionActorChainRoundTrip pins that the chain survives every session
+// read path, not only the by-id one. Middleware resolves by token and refresh
+// resolves by refresh token, and a chain lost on either of those is an
+// authorization decision made against the wrong set of principals.
+func testSessionActorChainRoundTrip(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "chained@test.com")
+
+	delID := id.NewDelegationID()
+	chain := principal.Chain{
+		{Kind: principal.KindAgent, ID: "svc_child"},
+		{Kind: principal.KindAgent, ID: "svc_parent"},
+	}
+	sess := &session.Session{
+		ID:                    id.NewSessionID(),
+		AppID:                 tn.AppID,
+		EnvID:                 tn.EnvID,
+		UserID:                u.ID,
+		PrincipalKind:         principal.KindUser,
+		Token:                 "tok-chain",
+		RefreshToken:          "rtok-chain",
+		FamilyID:              id.NewSessionFamilyID(),
+		Actors:                chain,
+		ActorGrant:            principal.GrantDelegation,
+		DelegationID:          delID,
+		ExpiresAt:             now().Add(time.Hour),
+		RefreshTokenExpiresAt: now().Add(24 * time.Hour),
+		CreatedAt:             now(),
+		UpdatedAt:             now(),
+	}
+	require.NoError(t, s.CreateSession(ctx, sess))
+
+	for _, tc := range []struct {
+		name string
+		get  func() (*session.Session, error)
+	}{
+		{"GetSession", func() (*session.Session, error) { return s.GetSession(ctx, sess.ID) }},
+		{"GetSessionByToken", func() (*session.Session, error) { return s.GetSessionByToken(ctx, "tok-chain") }},
+		{"GetSessionByRefreshToken", func() (*session.Session, error) { return s.GetSessionByRefreshToken(ctx, "rtok-chain") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.get()
+			require.NoError(t, err)
+			assert.Equal(t, chain, got.Actors, "the actor chain must survive the round trip")
+			assert.Equal(t, principal.GrantDelegation, got.ActorGrant)
+			assert.Equal(t, delID.String(), got.DelegationID.String())
+			assert.True(t, got.ImpersonatedBy().IsNil(), "a delegation must not read back as impersonation")
+		})
+	}
+
+	// The impersonation shape must round-trip too, through whichever column
+	// the backend uses for it.
+	admin := seedUser(t, s, tn, "admin@test.com")
+	imp := seedSession(t, s, tn, u.ID, "tok-imp", "rtok-imp")
+	imp.SetImpersonatedBy(admin.ID)
+	require.NoError(t, s.UpdateSession(ctx, imp))
+
+	gotImp, err := s.GetSession(ctx, imp.ID)
+	require.NoError(t, err)
+	assert.Equal(t, admin.ID.String(), gotImp.ImpersonatedBy().String())
 }
