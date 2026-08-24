@@ -3395,6 +3395,7 @@ class DiscoveryResponse {
   final List<String> idTokenSigningAlgValuesSupported;
   final String issuer;
   final String jwksUri;
+  final String? registrationEndpoint;
   final List<String> responseTypesSupported;
   final String revocationEndpoint;
   final List<String> scopesSupported;
@@ -3411,6 +3412,7 @@ class DiscoveryResponse {
     required this.idTokenSigningAlgValuesSupported,
     required this.issuer,
     required this.jwksUri,
+    this.registrationEndpoint,
     required this.responseTypesSupported,
     required this.revocationEndpoint,
     required this.scopesSupported,
@@ -3429,6 +3431,7 @@ class DiscoveryResponse {
       idTokenSigningAlgValuesSupported: (json['id_token_signing_alg_values_supported'] as List).map((e) => e as String).toList(),
       issuer: json['issuer'] as String,
       jwksUri: json['jwks_uri'] as String,
+      registrationEndpoint: json['registration_endpoint'] as String?,
       responseTypesSupported: (json['response_types_supported'] as List).map((e) => e as String).toList(),
       revocationEndpoint: json['revocation_endpoint'] as String,
       scopesSupported: (json['scopes_supported'] as List).map((e) => e as String).toList(),
@@ -3448,6 +3451,7 @@ class DiscoveryResponse {
       'id_token_signing_alg_values_supported': idTokenSigningAlgValuesSupported,
       'issuer': issuer,
       'jwks_uri': jwksUri,
+      if (registrationEndpoint != null) 'registration_endpoint': registrationEndpoint,
       'response_types_supported': responseTypesSupported,
       'revocation_endpoint': revocationEndpoint,
       'scopes_supported': scopesSupported,

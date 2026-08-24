@@ -695,6 +695,7 @@ export interface DiscoveryResponse {
   id_token_signing_alg_values_supported: string[];
   issuer: string;
   jwks_uri: string;
+  registration_endpoint?: string;
   response_types_supported: string[];
   revocation_endpoint: string;
   scopes_supported: string[];

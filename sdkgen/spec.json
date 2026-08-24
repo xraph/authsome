@@ -2518,6 +2518,9 @@
           "jwks_uri": {
             "type": "string"
           },
+          "registration_endpoint": {
+            "type": "string"
+          },
           "response_types_supported": {
             "items": {
               "type": "string"
