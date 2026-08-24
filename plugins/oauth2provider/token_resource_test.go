@@ -65,8 +65,8 @@ func tokenFixture(t *testing.T) (*oauth2provider.Plugin, oauth2provider.Store, a
 
 // postTokenJSON posts an arbitrary JSON body to /v1/oauth/token. Unlike
 // postToken (map[string]string), this accepts the "resource" field as a
-// []string, and — because the body is JSON, not form-encoded — resourceParams
-// finds nothing in the query or the form, so any resource value here can only
+// []string. The body is JSON, not form-encoded, so resourceParams finds
+// nothing in the query or the form, so any resource value here can only
 // have reached the grant through TokenRequest.Resource's encoding/json tag.
 func postTokenJSON(t *testing.T, mux forge.Router, body map[string]any) *httptest.ResponseRecorder {
 	t.Helper()
@@ -82,7 +82,7 @@ func postTokenJSON(t *testing.T, mux forge.Router, body map[string]any) *httptes
 
 // postDeviceAuthorize posts a JSON body carrying client_id to
 // /v1/oauth/device/authorize, with the resource indicator on the query
-// string. DeviceAuthRequest has no field for "resource" — it is read
+// string. DeviceAuthRequest has no field for "resource": it is read
 // straight off the request by resourceParams, which checks the query string
 // on every method, so putting it there exercises that path without touching
 // the JSON-bound client_id.
@@ -117,7 +117,7 @@ func audienceFor(t *testing.T, acct authstore.Store, accessToken string) []strin
 func TestTokenResource(t *testing.T) {
 	// Case 1: authorize with two resources, redeem with one. The token's
 	// audience must be exactly the one requested at the token endpoint, not
-	// the full granted set — this is what proves narrowing (not just
+	// the full granted set. That is what proves narrowing (not just
 	// pass-through) is happening.
 	t.Run("redemption narrows to the resource requested at the token endpoint", func(t *testing.T) {
 		_, st, acct, mux := tokenFixture(t)
@@ -143,7 +143,7 @@ func TestTokenResource(t *testing.T) {
 
 	// Case 2: authorize with one resource, redeem asking for a different one.
 	// Must be refused, and refused specifically because it was never granted
-	// — narrowResources' rejection message — not because it is unregistered
+	// (narrowResources' rejection message), not because it is unregistered
 	// with the client, which is resolveResources' rejection message. The two
 	// checks share the invalid_target code, so only the wording tells them
 	// apart.
@@ -172,7 +172,7 @@ func TestTokenResource(t *testing.T) {
 	})
 
 	// Case 3: authorize with two resources, redeem with no resource field.
-	// The token must carry both — omission inherits the whole granted set
+	// The token must carry both. Omission inherits the whole granted set
 	// rather than clearing it.
 	t.Run("omitting resource at redemption inherits the whole granted set", func(t *testing.T) {
 		_, st, acct, mux := tokenFixture(t)
@@ -219,7 +219,7 @@ func TestTokenResource(t *testing.T) {
 	// the allowlist rule (resolveResources' wording), not the narrowing rule
 	// (narrowResources' wording). A client-credentials path wrongly wired
 	// through narrowResources(nil, requested) would also reject the request,
-	// but with the wrong message — this is what catches that.
+	// but with the wrong message. This is what catches that.
 	t.Run("client credentials refuses an unregistered resource via the allowlist rule", func(t *testing.T) {
 		_, st, _, mux := tokenFixture(t)
 		grantResources(t, st, resAPI)
@@ -240,7 +240,7 @@ func TestTokenResource(t *testing.T) {
 	// Case 5: device authorize with a resource, then poll after approval. The
 	// polled token must carry it. Approval is applied directly on the store
 	// rather than through /device/complete, which sits behind session
-	// middleware this fixture does not wire up — the polling path under test
+	// middleware this fixture does not wire up. The polling path under test
 	// is the token endpoint, not the completion endpoint.
 	t.Run("device flow carries the resource through to the polled token", func(t *testing.T) {
 		_, st, acct, mux := tokenFixture(t)
