@@ -20,6 +20,7 @@
 - Do not modify `rbac/warden_store.go`. The service-account TODO at line 326 is out of scope.
 - Agent session issuance must emit `BeforeSessionCreate` and `AfterSignIn`. Never hand-build a `session.Session` the way `plugins/apikey/plugin.go:567` does.
 - Test command is `go test ./... ` scoped to the package under test. Lint with `make lint` before each commit.
+- Migration versions are fixed: `20260824000060` for the core `authsome` group change to `authsome_sessions` (Task 5), and `20260824000061` for the `authsome-agentauth` group (Task 13). Do not renumber them. Six sibling branches dated today register migrations, and `20260824000001` through `20260824000003`, `20260824000030`, `20260824000040` and `20260824000050` through `20260824000052` are already claimed. Two migrations sharing a version inside one group fails at startup.
 
 ## File structure
 
@@ -1130,7 +1131,7 @@ Add a postgres migration in `store/postgres/migrations.go`. The constraint rewri
 ```go
 		&migrate.Migration{
 			Name:    "add_session_agent_principal",
-			Version: "20260824000001",
+			Version: "20260824000060",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				// The principal CHECK added in 20260620000002 admits only a
 				// service-account session (no user) or a user session (no
@@ -1188,7 +1189,7 @@ Add the sqlite counterpart in `store/sqlite/migrations.go`, matching the style a
 ```go
 		&migrate.Migration{
 			Name:    "add_session_agent_principal",
-			Version: "20260824000001",
+			Version: "20260824000060",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `
 ALTER TABLE authsome_sessions ADD COLUMN agent_id TEXT NOT NULL DEFAULT '';
@@ -3104,7 +3105,7 @@ func init() {
 	PostgresMigrations.MustRegister(
 		&migrate.Migration{
 			Name:    "create_agentauth_tables",
-			Version: "20260824000002",
+			Version: "20260824000061",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `
 CREATE TABLE IF NOT EXISTS authsome_agents (
