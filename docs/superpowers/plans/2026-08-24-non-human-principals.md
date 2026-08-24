@@ -12,6 +12,21 @@
 
 ## Global constraints
 
+**Coordination.** Several designs landed on this repo the same day and some
+touch the same tables. Read this before writing a migration.
+
+- Migration versions for this plan are `20260824000050`, `20260824000051` and
+  `20260824000052`, in every backend. `20260824000001` through `000003` are
+  contested by at least three other plans, and `000030` and `000040` are taken
+  by dynamic client registration, DPoP and resource indicators.
+- `docs/superpowers/plans/2026-08-24-token-exchange-rfc8693.md` also puts an
+  actor chain and a scope list on `session.Session`, and
+  `docs/superpowers/plans/2026-08-24-agentauth-delegation.md` also adds agent
+  delegation with `PrincipalKind = "agent"`. Whichever lands second must build
+  on the first rather than adding a second mechanism. See the note at the end
+  of this plan.
+
+
 - Go 1.26.0, module `github.com/xraph/authsome`.
 - Warden is `github.com/xraph/warden v1.6.0`. Subject kinds available: `SubjectUser`, `SubjectAPIKey`, `SubjectService`, `SubjectServiceAcct`.
 - Assertions use `github.com/stretchr/testify` (`assert` for soft checks, `require` where a failure makes the rest of the test meaningless). Match the surrounding file.
@@ -1741,7 +1756,7 @@ Append to the migration list in `store/postgres/migrations.go`:
 		// creates the current shape directly rather than in two steps.
 		&migrate.Migration{
 			Name:    "create_authsome_service_accounts",
-			Version: "20260824000001",
+			Version: "20260824000050",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `
 CREATE TABLE IF NOT EXISTS authsome_service_accounts (
@@ -1789,7 +1804,7 @@ CREATE INDEX IF NOT EXISTS idx_authsome_service_accounts_expires
 		// freeing the slot for a fresh grant between the same two principals.
 		&migrate.Migration{
 			Name:    "create_authsome_delegations",
-			Version: "20260824000002",
+			Version: "20260824000051",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `
 CREATE TABLE IF NOT EXISTS authsome_delegations (
@@ -1840,7 +1855,7 @@ CREATE INDEX IF NOT EXISTS idx_authsome_delegations_actor
 		// in a later change, once the backfill has proven itself.
 		&migrate.Migration{
 			Name:    "add_session_actor_chain",
-			Version: "20260824000003",
+			Version: "20260824000052",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `
 ALTER TABLE authsome_sessions
@@ -2062,10 +2077,10 @@ Expected: FAIL with `not implemented` on the service-account and principal cases
 
 - [ ] **Step 2: Add the migrations**
 
-Append three migrations at versions `20260824000001`, `20260824000002` and `20260824000003`, mirroring Task 5's DDL with these substitutions:
+Append three migrations at versions `20260824000050`, `20260824000051` and `20260824000052`, mirroring Task 5's DDL with these substitutions:
 
 ```sql
--- 20260824000001
+-- 20260824000050
 CREATE TABLE IF NOT EXISTS authsome_service_accounts (
     id            TEXT PRIMARY KEY,
     app_id        TEXT NOT NULL,
@@ -2090,7 +2105,7 @@ CREATE INDEX IF NOT EXISTS idx_authsome_service_accounts_parent
 CREATE INDEX IF NOT EXISTS idx_authsome_service_accounts_expires
     ON authsome_service_accounts (expires_at) WHERE expires_at IS NOT NULL;
 
--- 20260824000002
+-- 20260824000051
 CREATE TABLE IF NOT EXISTS authsome_delegations (
     id              TEXT PRIMARY KEY,
     app_id          TEXT NOT NULL,
@@ -2117,7 +2132,7 @@ CREATE INDEX IF NOT EXISTS idx_authsome_delegations_subject
 CREATE INDEX IF NOT EXISTS idx_authsome_delegations_actor
     ON authsome_delegations (app_id, actor_kind, actor_id);
 
--- 20260824000003
+-- 20260824000052
 ALTER TABLE authsome_sessions ADD COLUMN actors TEXT NOT NULL DEFAULT '';
 ALTER TABLE authsome_sessions ADD COLUMN actor_grant TEXT NOT NULL DEFAULT '';
 ALTER TABLE authsome_sessions ADD COLUMN delegation_id TEXT NOT NULL DEFAULT '';
@@ -2235,14 +2250,14 @@ Add `delegationModel` mirroring Task 5's `DelegationModel` with bson tags, and
 
 - [ ] **Step 3: Add the migrations**
 
-Append to `store/mongo/migrations.go` at versions `20260824000001` and
-`20260824000002`, following the shape of `create_authsome_service_accounts`
+Append to `store/mongo/migrations.go` at versions `20260824000050` and
+`20260824000051`, following the shape of `create_authsome_service_accounts`
 already in that file:
 
 ```go
 		&migrate.Migration{
 			Name:    "create_authsome_delegations",
-			Version: "20260824000001",
+			Version: "20260824000050",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				mexec, ok := exec.(*mongomigrate.Executor)
 				if !ok {
@@ -4628,3 +4643,36 @@ make check
 Every one of those must pass. The integration run is the one that matters most
 here, because it is the only thing that proves postgres and sqlite actually
 implement what they previously stubbed.
+
+---
+
+## Overlap with the sibling designs
+
+Two other plans written the same day cover part of this ground. This is not a
+merge conflict you can resolve by taking both.
+
+**`2026-08-24-token-exchange-rfc8693.md`** puts an actor chain and a scope list
+on `session.Session` and implements RFC 8693 inside the `oauth2provider`
+plugin. Task 3 here puts the same actor chain on the same struct, and Task 14
+implements the same exchange in the core engine.
+
+**`2026-08-24-agentauth-delegation.md`** models an agent as an OAuth client
+registered in `oauth2provider`, joined to a delegating user by an `AgentGrant`
+row, with `PrincipalKind = "agent"` and the human left in `Session.UserID`.
+That last part matches this design exactly. What differs is where the agent
+identity lives: an OAuth client there, a row in the principal table here.
+
+Pick one owner for each shared piece before starting:
+
+- The actor chain on `session.Session` should be added once. This plan's Task 3
+  is the more general version, since it also subsumes `ImpersonatedBy`. If the
+  token-exchange plan lands first, Task 3 becomes a much smaller change that
+  adds `ActorGrant` and the `ImpersonatedBy` method on top of the chain that
+  already exists.
+- The delegation grant table and the `AgentGrant` table are the same table
+  under two names. Running both gives you two places to revoke an agent's
+  authority and no way to know you have missed one.
+- Token exchange should have one endpoint. Whether it lives in the core engine
+  (Task 14) or in `oauth2provider` is a real choice: the plugin gets you OAuth
+  client authentication for free, the core engine works for callers who are not
+  OAuth clients at all, such as a CI workload holding an API key.
