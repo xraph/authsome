@@ -89,3 +89,27 @@ func TestNonceSigner_NeedsRefresh(t *testing.T) {
 	assert.False(t, s.NeedsRefresh(s.Issue("jkt-abc")), "a fresh nonce does not need rotating")
 	assert.True(t, s.NeedsRefresh("garbage"), "an unparseable nonce always needs rotating")
 }
+
+// TestNonceSigner_NeedsRefresh_Boundary pins the half-TTL crossover with a
+// real clock instead of just the two endpoints above.
+//
+// Issue encodes the timestamp as whole Unix seconds, so up to ~1s of the
+// current second is truncated away before NeedsRefresh ever sees it: right
+// after issuing a nonce, now().Sub(issued) can already read close to 1s even
+// though no real time has passed. A short TTL (say, low hundreds of ms)
+// would make that truncation noise bigger than the boundary itself, so this
+// uses a TTL long enough that the noise is a small fraction of the halfway
+// point, plus a sleep well clear of it in both directions, to stay
+// deterministic under ordinary scheduling jitter without an injectable
+// clock.
+func TestNonceSigner_NeedsRefresh_Boundary(t *testing.T) {
+	const ttl = 4 * time.Second
+	s, err := dpop.NewNonceSigner(nonceSecret, ttl)
+	require.NoError(t, err)
+
+	n := s.Issue("jkt-abc")
+	assert.False(t, s.NeedsRefresh(n), "immediately after issue, well inside the first half of the TTL")
+
+	time.Sleep(2500 * time.Millisecond)
+	assert.True(t, s.NeedsRefresh(n), "past the halfway point, comfortably clear of the 2s boundary")
+}
