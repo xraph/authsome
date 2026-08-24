@@ -463,9 +463,9 @@ func (g *Generator) renderTemplate(name string, data *TemplateData) (string, err
 	// readable and makes the output match what `gofmt -l` expects, so the
 	// committed SDK stays clean without anyone remembering to run gofmt.
 	src := buf.Bytes()
-	formatted, err := format.Source(src)
-	if err != nil {
-		return "", fmt.Errorf("format %s: %w%s", tmplName, err, offendingLine(src, err))
+	formatted, formatErr := format.Source(src)
+	if formatErr != nil {
+		return "", fmt.Errorf("format %s: %w%s", tmplName, formatErr, offendingLine(src, formatErr))
 	}
 
 	return string(formatted), nil
