@@ -3,6 +3,7 @@ package sharedsignals
 import (
 	"context"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -93,6 +94,14 @@ func runStoreConformance(t *testing.T, newStore func(*testing.T) Store) {
 		require.NoError(t, s.DeleteInboundStream(ctx, in.ID))
 		_, err = s.GetInboundStream(ctx, in.ID)
 		require.ErrorIs(t, err, ErrNotFound)
+
+		// A zero-result list must be a non-nil, zero-length slice, not
+		// nil: callers marshal this straight to JSON, where nil and an
+		// empty slice serialize differently (null vs []).
+		empty, err := s.ListInboundStreams(ctx, appID)
+		require.NoError(t, err)
+		assert.NotNil(t, empty)
+		assert.Len(t, empty, 0)
 	})
 
 	t.Run("subject link upsert is scoped", func(t *testing.T) {
@@ -128,6 +137,63 @@ func runStoreConformance(t *testing.T, newStore func(*testing.T) Store) {
 		require.ErrorIs(t, err, ErrNotFound)
 	})
 
+	t.Run("subject link upsert is concurrency safe", func(t *testing.T) {
+		// A later task writes a subject link on every SSO sign-in, so
+		// concurrent upserts of the same (app_id, env_id, issuer, subject)
+		// tuple are the normal case, not the edge case. A read-then-write
+		// implementation loses this race: both readers see "not found" and
+		// both insert, so the loser hits the unique index and must surface
+		// that as a raw constraint error instead of succeeding. Every call
+		// here must return nil, and exactly one row must remain afterward.
+		ctx := context.Background()
+		s := newStore(t)
+		appID, envID := id.NewAppID(), id.NewEnvironmentID()
+		now := time.Now().UTC().Truncate(time.Second)
+
+		const n = 30
+		userIDs := make([]id.UserID, n)
+		for i := range userIDs {
+			userIDs[i] = id.NewUserID()
+		}
+
+		errs := make([]error, n)
+		var wg sync.WaitGroup
+		wg.Add(n)
+		for i := 0; i < n; i++ {
+			go func(i int) {
+				defer wg.Done()
+				errs[i] = s.UpsertSubjectLink(ctx, &SubjectLink{
+					ID: id.NewSSFLinkID(), AppID: appID, EnvID: envID,
+					Issuer: "https://race", Subject: "shared", UserID: userIDs[i],
+					Source: SourceSSO, CreatedAt: now, LastSeenAt: now,
+				})
+			}(i)
+		}
+		wg.Wait()
+
+		for i, err := range errs {
+			assert.NoError(t, err, "concurrent upsert %d must not surface a constraint error", i)
+		}
+
+		// The storm above proves no writer ever surfaces a raw constraint
+		// error, but true concurrency leaves no way to know which of the
+		// n writes actually lands last. Issue one more, deterministic
+		// write after the storm settles and confirm it — and only it — is
+		// what GetSubjectLink returns, proving both that exactly one row
+		// survives and that the operation is genuinely last-write-wins.
+		last := id.NewUserID()
+		require.NoError(t, s.UpsertSubjectLink(ctx, &SubjectLink{
+			ID: id.NewSSFLinkID(), AppID: appID, EnvID: envID,
+			Issuer: "https://race", Subject: "shared", UserID: last,
+			Source: SourceSSO, CreatedAt: now, LastSeenAt: now,
+		}))
+
+		got, err := s.GetSubjectLink(ctx, appID, envID, "https://race", "shared")
+		require.NoError(t, err)
+		assert.Equal(t, last, got.UserID,
+			"exactly one row must survive the race, holding the last-written UserID")
+	})
+
 	t.Run("received event dedupe", func(t *testing.T) {
 		ctx := context.Background()
 		s := newStore(t)
@@ -147,9 +213,14 @@ func runStoreConformance(t *testing.T, newStore func(*testing.T) Store) {
 		require.ErrorIs(t, err, ErrDuplicateJTI,
 			"a replayed jti must be reported as a duplicate, not a generic write error")
 
+		// This event lives on a DIFFERENT stream and already carries an
+		// ActionTaken, so a backend that dropped the stream_id filter in
+		// CountActionsSince would count it too and the assertion below
+		// would see 2 instead of 1.
 		require.NoError(t, s.InsertReceivedEvent(ctx, &ReceivedEvent{
 			ID: id.NewSSFEventID(), StreamID: id.NewSSFStreamID(), JTI: "jti-1",
-			EventType: "e", Outcome: OutcomePending, ReceivedAt: now,
+			EventType: "e", Outcome: OutcomeApplied, ActionTaken: "revoked_all",
+			ReceivedAt: now,
 		}))
 
 		ev.Outcome = OutcomeApplied
@@ -158,7 +229,7 @@ func runStoreConformance(t *testing.T, newStore func(*testing.T) Store) {
 
 		count, err := s.CountActionsSince(ctx, streamID, now.Add(-time.Hour))
 		require.NoError(t, err)
-		assert.Equal(t, 1, count)
+		assert.Equal(t, 1, count, "CountActionsSince must be scoped to stream_id")
 	})
 
 	t.Run("signals expire", func(t *testing.T) {
@@ -189,7 +260,10 @@ func runStoreConformance(t *testing.T, newStore func(*testing.T) Store) {
 
 		got, err = s.ListActiveSignals(ctx, appID, envID, id.NewUserID(), now)
 		require.NoError(t, err)
-		assert.Empty(t, got)
+		// Non-nil, zero-length: assert.Empty cannot tell a nil slice from
+		// an empty one, and callers marshal this straight to JSON.
+		assert.NotNil(t, got)
+		assert.Len(t, got, 0)
 	})
 
 	t.Run("signals are scoped to environment", func(t *testing.T) {
@@ -211,7 +285,8 @@ func runStoreConformance(t *testing.T, newStore func(*testing.T) Store) {
 
 		got, err := s.ListActiveSignals(ctx, appID, devEnv, userID, now)
 		require.NoError(t, err)
-		assert.Empty(t, got, "a signal from a different environment must not leak in")
+		assert.NotNil(t, got, "a signal from a different environment must not leak in")
+		assert.Len(t, got, 0, "a signal from a different environment must not leak in")
 
 		got, err = s.ListActiveSignals(ctx, appID, prodEnv, userID, now)
 		require.NoError(t, err)

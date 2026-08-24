@@ -120,6 +120,13 @@ func (s *PostgresStore) DeleteInboundStream(ctx context.Context, streamID id.SSF
 	return nil
 }
 
+// subjectLinkOnConflict is the upsert clause shared by both SQL backends.
+// It leaves id and created_at untouched on a conflicting row, so a losing
+// concurrent writer never clobbers the winner's identity or creation time,
+// only the fields that are meant to move: user_id, source, last_seen_at.
+const subjectLinkOnConflict = "(app_id, env_id, issuer, subject) DO UPDATE SET " +
+	"user_id = EXCLUDED.user_id, source = EXCLUDED.source, last_seen_at = EXCLUDED.last_seen_at"
+
 func (s *PostgresStore) UpsertSubjectLink(ctx context.Context, l *SubjectLink) error {
 	now := time.Now()
 	if l.CreatedAt.IsZero() {
@@ -127,20 +134,14 @@ func (s *PostgresStore) UpsertSubjectLink(ctx context.Context, l *SubjectLink) e
 	}
 	l.LastSeenAt = now
 
-	existing, err := s.GetSubjectLink(ctx, l.AppID, l.EnvID, l.Issuer, l.Subject)
-	switch {
-	case err == nil:
-		l.ID = existing.ID
-		l.CreatedAt = existing.CreatedAt
-		_, uerr := s.pg.NewUpdate(fromSubjectLink(l)).
-			Where("id = ?", l.ID.String()).Exec(ctx)
-		return sqlErr(uerr)
-	case errors.Is(err, ErrNotFound):
-		_, ierr := s.pg.NewInsert(fromSubjectLink(l)).Exec(ctx)
-		return sqlErr(ierr)
-	default:
-		return err
-	}
+	// A single INSERT ... ON CONFLICT DO UPDATE is atomic, so concurrent
+	// upserts of the same (app_id, env_id, issuer, subject) tuple never
+	// race a read-then-write: the database serializes them and the loser
+	// updates instead of colliding on the unique index.
+	_, err := s.pg.NewInsert(fromSubjectLink(l)).
+		OnConflict(subjectLinkOnConflict).
+		Exec(ctx)
+	return sqlErr(err)
 }
 
 func (s *PostgresStore) GetSubjectLink(ctx context.Context, appID id.AppID,

@@ -2,7 +2,6 @@ package sharedsignals
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/xraph/grove"
@@ -101,20 +100,13 @@ func (s *SqliteStore) UpsertSubjectLink(ctx context.Context, l *SubjectLink) err
 	}
 	l.LastSeenAt = now
 
-	existing, err := s.GetSubjectLink(ctx, l.AppID, l.EnvID, l.Issuer, l.Subject)
-	switch {
-	case err == nil:
-		l.ID = existing.ID
-		l.CreatedAt = existing.CreatedAt
-		_, uerr := s.sdb.NewUpdate(fromSubjectLink(l)).
-			Where("id = ?", l.ID.String()).Exec(ctx)
-		return sqlErr(uerr)
-	case errors.Is(err, ErrNotFound):
-		_, ierr := s.sdb.NewInsert(fromSubjectLink(l)).Exec(ctx)
-		return sqlErr(ierr)
-	default:
-		return err
-	}
+	// See PostgresStore.UpsertSubjectLink: a single INSERT ... ON CONFLICT
+	// DO UPDATE makes this atomic, so it stays idempotent under concurrent
+	// upserts of the same tuple instead of racing a read-then-write.
+	_, err := s.sdb.NewInsert(fromSubjectLink(l)).
+		OnConflict(subjectLinkOnConflict).
+		Exec(ctx)
+	return sqlErr(err)
 }
 
 func (s *SqliteStore) GetSubjectLink(ctx context.Context, appID id.AppID,

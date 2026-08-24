@@ -92,7 +92,7 @@ func (m *MemoryStore) GetInboundStreamByPushPathHash(_ context.Context, hash str
 func (m *MemoryStore) ListInboundStreams(_ context.Context, appID id.AppID) ([]*InboundStream, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	var out []*InboundStream
+	out := make([]*InboundStream, 0, len(m.streams))
 	for _, s := range m.streams {
 		if s.AppID == appID {
 			out = append(out, cloneStream(s))
@@ -202,7 +202,7 @@ func (m *MemoryStore) ListActiveSignals(_ context.Context, appID id.AppID,
 	envID id.EnvironmentID, userID id.UserID, now time.Time) ([]*Signal, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	var out []*Signal
+	out := make([]*Signal, 0, len(m.signals))
 	for _, s := range m.signals {
 		if s.AppID == appID && s.EnvID == envID && s.UserID == userID && s.ExpiresAt.After(now) {
 			c := *s
