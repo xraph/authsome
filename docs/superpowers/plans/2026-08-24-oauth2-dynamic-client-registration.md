@@ -532,18 +532,25 @@ func authMethodForPublic(public bool) string {
 }
 ```
 
-Add a test for it in `plugins/oauth2provider/store_client_test.go`:
+The helper stays unexported. Nothing outside the package needs it, and
+exporting a two-line mapping only to reach it from a test widens the public
+surface for no benefit. Its test therefore goes in a new in-package file,
+`plugins/oauth2provider/authmethod_test.go`:
 
 ```go
+package oauth2provider
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
 func TestAuthMethodForPublicMatchesTheFlag(t *testing.T) {
-	assert.Equal(t, "none", oauth2provider.AuthMethodForPublic(true))
-	assert.Equal(t, "client_secret_basic", oauth2provider.AuthMethodForPublic(false))
+	assert.Equal(t, "none", authMethodForPublic(true))
+	assert.Equal(t, "client_secret_basic", authMethodForPublic(false))
 }
 ```
-
-The test is in the external package, so export the helper as
-`AuthMethodForPublic` and use that name in both places, or move this one
-test into the in-package file from Task 4. Pick one and be consistent.
 
 - [ ] **Step 8: Run the tests and confirm they pass**
 
@@ -1298,7 +1305,9 @@ func TestRegister_RoundTripsInformationalMetadata(t *testing.T) {
 }
 ```
 
-Write two helpers in the same file. `newTestRouter(t, p)` builds a `forge` router and calls `p.RegisterRoutes(router)`, mirroring however `authcode_test.go` already stands a router up; read that file and reuse its approach rather than inventing a second one. `newRegistrationFixture(t, enabled bool)` returns `(*oauth2provider.Plugin, oauth2provider.Store, http.Handler, id.AppID)`, creating an `id.NewAppID()` and passing it as `RegistrationAppID`.
+Write two helpers in the same file. `newTestRouter(t, p)` builds a `forge` router and calls **both** `p.RegisterRoutes(router)` and `p.RegisterRootRoutes(router)`, mirroring however `authcode_test.go` already stands a router up; read that file and reuse its approach rather than inventing a second one.
+
+Both calls are required even though this task only exercises `/v1/oauth/register`. Task 1 already landed `RegisterRootRoutes`, and Task 7's metadata tests reuse this exact helper to reach `/.well-known/...`. Wiring it once here avoids Task 7 having to retrofit a helper it did not write. Standalone mode registers the prefixed OIDC mirror on the same router, so if the two calls collide on a duplicate path, register the root routes on a second router instance and return whichever the test needs. `newRegistrationFixture(t, enabled bool)` returns `(*oauth2provider.Plugin, oauth2provider.Store, http.Handler, id.AppID)`, creating an `id.NewAppID()` and passing it as `RegistrationAppID`.
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
@@ -1606,11 +1615,11 @@ In `plugins/oauth2provider/plugin.go`, inside `RegisterRoutes` after the device 
 	}
 ```
 
-If `forge.WithMiddleware` is not the right route option name, read the other route registrations and the forge router package for the correct one, then use that. Do not silently drop the rate limit.
+`forge.WithMiddleware` is confirmed present in forge v1.9.10 (`router.go`), so use it as written.
 
 `p.engine.RateLimiter()` needs to exist on the `plugin.Engine` interface. Check `plugin/plugin.go` around line 121; if `RateLimiter()` is absent, add it to the interface (the concrete `*Engine` already has it at `engine.go:822`).
 
-Also set the created status. If forge derives 201 from the response schema option above, nothing more is needed; if it defaults to 200, find the route option that sets the success status and add it, and assert the code in the test.
+Add `forge.WithCreatedResponse()` to `regOpts` as well. It is confirmed present in forge v1.9.10 and is what makes the endpoint answer 201 rather than 200, which `TestRegister_HappyPathPublicClient` asserts.
 
 - [ ] **Step 6: Run the tests and confirm they pass**
 
@@ -2098,7 +2107,7 @@ In `RegisterRoutes`, after the `/register` route. These stay live regardless of 
 	}
 ```
 
-Confirm `c.Param` is the right accessor for a path parameter on `forge.Context`; read another handler that reads one, and match it.
+`c.Param("clientId")` is confirmed correct: it is what `plugins/organization/handlers.go:342` and its neighbours use.
 
 - [ ] **Step 6: Run the tests and confirm they pass**
 
@@ -2250,7 +2259,7 @@ func TestMetadata_UnknownExtraResourceIs404(t *testing.T) {
 }
 ```
 
-`newTestRouter` must call both `RegisterRoutes` and `RegisterRootRoutes` so the well-known paths resolve in the test. Update the helper from Task 5 accordingly and note it there.
+`newTestRouter` already calls both `RegisterRoutes` and `RegisterRootRoutes`, as Task 5 specified, so the well-known paths resolve without changing the helper.
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
