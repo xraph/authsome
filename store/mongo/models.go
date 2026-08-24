@@ -208,6 +208,7 @@ type sessionModel struct {
 	// does. The SQL stores encode JSON into a text column because they have
 	// no array type worth using here; there is no reason to flatten it twice.
 	Roles                 []string  `grove:"roles"                     bson:"roles,omitempty"`
+	Audience              []string  `grove:"audience"                  bson:"audience,omitempty"`
 	LastActivityAt        time.Time `grove:"last_activity_at"          bson:"last_activity_at,omitempty"`
 	ExpiresAt             time.Time `grove:"expires_at"                bson:"expires_at"`
 	RefreshTokenExpiresAt time.Time `grove:"refresh_token_expires_at"  bson:"refresh_token_expires_at"`
@@ -254,6 +255,11 @@ func toSessionModel(s *session.Session) *sessionModel {
 	// principal that holds no roles. An empty slice marshals to [], which
 	// validates and decodes back to no roles.
 	m.Roles = append([]string{}, s.Roles...)
+	// Always a non-nil slice, for the same reason as Roles above: grove writes
+	// every mapped field regardless of the bson omitempty tag, so nil reaches
+	// mongo as `audience: null` and the generated $jsonSchema rejects the
+	// whole insert.
+	m.Audience = append([]string{}, s.Audience...)
 	return m
 }
 
@@ -330,6 +336,9 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 	}
 	if len(m.Roles) > 0 {
 		s.Roles = append([]string(nil), m.Roles...)
+	}
+	if len(m.Audience) > 0 {
+		s.Audience = append([]string(nil), m.Audience...)
 	}
 	return s, nil
 }

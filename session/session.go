@@ -48,6 +48,17 @@ type Session struct {
 	// check against warden, not here.
 	Roles []string `json:"roles,omitempty"`
 
+	// Audience holds the resource identifiers this session's access token was
+	// granted for (RFC 8707). Empty means unrestricted, which is what every
+	// session issued before resource indicators existed carries, and what any
+	// client that sends no `resource` parameter still gets.
+	//
+	// This is the opaque-token half of the `aud` claim. A JWT carries its
+	// audience inside the token and is checked without a store read, while an
+	// opaque token is only a session lookup key, so the same value has to live
+	// here for introspection and for the middleware audience check to see it.
+	Audience []string `json:"aud,omitempty"`
+
 	// PrincipalKind identifies the type of principal that owns this session.
 	// Valid values are "user" and "service_account". Empty string means "user"
 	// for backwards compatibility with existing sessions.
