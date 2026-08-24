@@ -53,6 +53,35 @@ below are additive and leave room for both.
   Dynamic Client Registration extensions beyond what 7591 defines.
 - Sweeping unused dynamic registrations on a TTL.
 
+## Configuration
+
+Five new fields on the plugin's existing `Config`:
+
+```go
+// DynamicRegistration enables RFC 7591 registration. Off by default: an
+// upgrade must never open a public registration endpoint on its own.
+DynamicRegistration bool
+
+// RegistrationAppID is the app dynamic clients belong to when the request
+// carries no resolvable publishable key. Leave empty on a multi-tenant
+// deployment so an unkeyed request is refused rather than pooled.
+RegistrationAppID string
+
+// DynamicRegistrationScopes is the allowlist a dynamic client's requested
+// scopes are intersected against. Defaults to openid, profile, email and
+// offline_access.
+DynamicRegistrationScopes []string
+
+// RegistrationRateLimit caps POST /register per client IP.
+// Defaults to 10 per hour.
+RegistrationRateLimit RateLimit
+
+// ProtectedResources declares additional RFC 9728 resource identifiers,
+// keyed by the path suffix they are served under. AuthSome always
+// describes itself at the unsuffixed path regardless of this map.
+ProtectedResources map[string]ProtectedResource
+```
+
 ## Security decisions
 
 These were settled during brainstorming and are recorded as decisions rather
@@ -172,6 +201,11 @@ public, with the existing `Public` bool derived from it (`none` means public).
 Two independent flags that can disagree is a bug waiting to happen. The admin
 create path writes both.
 
+Types in that table are the postgres ones. SQLite has neither, so it takes
+`TEXT` for `metadata` (which is what the existing `redirect_uris`, `scopes` and
+`grant_types` columns already do there) and `TIMESTAMP` for
+`client_secret_expires_at`.
+
 One migration at version `20260824000001` for postgres and sqlite, every column
 defaulted so existing rows stay valid. Mongo and memory need no schema step.
 
@@ -223,6 +257,13 @@ rotation, and rotation strands any client that doesn't persist the new value,
 which in practice is most of them.
 
 DELETE removes the client and returns 204.
+
+Unlike `POST /register`, these three routes stay live when
+`Config.DynamicRegistration` is false. Turning the feature off closes the door
+to new registrations, and it shouldn't strand the clients that registered while
+it was open: an operator who wants them gone needs DELETE to keep working, and
+a client that can no longer read its own registration has no way to find out it
+was revoked.
 
 ## Discovery
 
@@ -365,4 +406,8 @@ Four PRs, each standing alone.
 4. RFC 8414 and RFC 9728 documents, `registration_endpoint` advertisement, and
    the 401 challenge middleware.
 
-Phase 1 has to land before phase 4. Phases 2 and 3 are independent of both.
+Phase 1 has to land before phase 4, because the 8414 and 9728 documents need
+the root router to be reachable at all. Phase 2 has to land before phase 3,
+since the registration handlers write `registration_token_hash` and
+`dynamically_registered`. Phase 1 is independent of phases 2 and 3, so it can
+go first or in parallel.
