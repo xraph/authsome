@@ -90,6 +90,21 @@ func TestNonceSigner_NeedsRefresh(t *testing.T) {
 	assert.True(t, s.NeedsRefresh("garbage"), "an unparseable nonce always needs rotating")
 }
 
+// TestNonceSigner_NilReceiverFailsClosed pins down what happens when a
+// caller assigns a still-nil *NonceSigner into an interface field (e.g.
+// dpop.Config.Nonce) before a real signer has been derived. The interface
+// value produced that way is not == nil, so a `cfg.Nonce == nil` guard at
+// the call site does not save you: the method actually gets invoked on a
+// nil receiver. These three methods must not panic when that happens, and
+// must return the answer that reads as "no nonce support", not a crash.
+func TestNonceSigner_NilReceiverFailsClosed(t *testing.T) {
+	var s *dpop.NonceSigner
+
+	assert.Equal(t, "", s.Issue("jkt-abc"), "a nil signer cannot mint a nonce")
+	assert.False(t, s.Verify("jkt-abc", "anything"), "a nil signer cannot verify a nonce")
+	assert.True(t, s.NeedsRefresh("anything"), "a nil signer can't vouch that a nonce is still fresh")
+}
+
 // TestNonceSigner_NeedsRefresh_Boundary pins the half-TTL crossover with a
 // real clock instead of just the two endpoints above.
 //

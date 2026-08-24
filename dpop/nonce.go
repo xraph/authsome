@@ -56,7 +56,7 @@ func NewNonceSigner(secret []byte, ttl time.Duration) (*NonceSigner, error) {
 
 // Issue returns a nonce bound to jkt at the current time.
 func (s *NonceSigner) Issue(jkt string) string {
-	if jkt == "" {
+	if s == nil || jkt == "" {
 		return ""
 	}
 	tsBytes := make([]byte, 8)
@@ -69,7 +69,19 @@ func (s *NonceSigner) Issue(jkt string) string {
 // Verify reports whether nonce was issued by this signer for jkt and is still
 // inside its TTL. It does not consume the nonce, so it may return true many
 // times for the same value.
+//
+// Guarded against a nil receiver on purpose. Config.Nonce is a NonceVerifier
+// interface; assigning a nil *NonceSigner into it produces a non-nil
+// interface wrapping a nil pointer, so a caller's `cfg.Nonce == nil` check
+// sees a value and calls Verify anyway. Without this guard that call
+// dereferences s.secret in sign() and panics on every nonce-required
+// request. With it, a nil signer just fails the check, which is what "no
+// nonce support configured" is supposed to look like.
 func (s *NonceSigner) Verify(jkt, nonce string) bool {
+	if s == nil {
+		return false
+	}
+
 	tsBytes, macBytes, ok := splitNonce(nonce)
 	if !ok || jkt == "" {
 		return false
@@ -89,8 +101,13 @@ func (s *NonceSigner) Verify(jkt, nonce string) bool {
 
 // NeedsRefresh reports whether a nonce is past half its TTL, so responses can
 // carry a replacement before the client's current one expires. An unparseable
-// nonce always needs replacing.
+// nonce always needs replacing. A nil signer can verify nothing, so it can't
+// claim a nonce is still fresh either; it always needs replacing too.
 func (s *NonceSigner) NeedsRefresh(nonce string) bool {
+	if s == nil {
+		return true
+	}
+
 	tsBytes, _, ok := splitNonce(nonce)
 	if !ok {
 		return true
