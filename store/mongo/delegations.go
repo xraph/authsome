@@ -137,7 +137,19 @@ func (s *Store) ListPrincipals(ctx context.Context, q *principal.Query) ([]*prin
 
 func (s *Store) CreateDelegation(ctx context.Context, d *principal.Delegation) error {
 	m := toDelegationModel(d)
-	_, err := s.mdb.Collection(colDelegations).InsertOne(ctx, m)
+	// NewInsert, not a raw driver InsertOne, matching CreateServiceAccount in
+	// this same package. Grove's insert path writes every mapped field
+	// regardless of a bson omitempty tag, so a nil RevokedAt still reaches
+	// mongo as an explicit revoked_at: null. The delegation partial unique
+	// index (create_authsome_delegations) filters on {"revoked_at": {"$type":
+	// "null"}} for exactly that reason: a raw InsertOne goes through the
+	// standard driver encoder instead, which DOES honour omitempty, so a nil
+	// RevokedAt would be omitted from the document entirely and $type: "null"
+	// would never match, leaving the unique index unable to catch a second
+	// live grant for the same (app, actor, subject, kind). NewInsert also
+	// runs grove's model and store hook pipeline, which the sibling
+	// Create* methods all get.
+	_, err := s.mdb.NewInsert(m).Exec(ctx)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			return store.ErrConflict

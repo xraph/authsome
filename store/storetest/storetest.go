@@ -844,6 +844,26 @@ func testDelegationLifecycle(t *testing.T, s store.Store) {
 	require.NoError(t, err)
 	assert.Len(t, listed, 1, "the subject must be able to see what may act for them")
 
+	// A second live grant for the same (app, actor, subject, kind) must be
+	// rejected, not silently accepted alongside the first. Uniqueness here is
+	// enforced by a partial index on live rows in the SQL backends and by an
+	// explicit check in memory; a backend where this silently succeeds would
+	// let one actor hold two live grants over the same subject, so revoking
+	// the grant an admin can see would leave the other one still working.
+	dupe := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     tn.AppID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantDelegation,
+		GrantedBy: subject,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	err = s.CreateDelegation(ctx, dupe)
+	assert.ErrorIs(t, err, store.ErrConflict,
+		"a true duplicate live grant must be rejected: memory checks explicitly, and every other backend maps its duplicate-key error to store.ErrConflict the same way")
+
 	require.NoError(t, s.RevokeDelegation(ctx, d.ID, now()))
 	_, err = s.FindActiveDelegation(ctx, tn.AppID, actor, subject, principal.GrantDelegation)
 	assert.ErrorIs(t, err, principal.ErrNotFound, "a revoked grant must stop being findable")
