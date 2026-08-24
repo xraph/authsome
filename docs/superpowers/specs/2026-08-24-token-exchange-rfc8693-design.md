@@ -457,3 +457,30 @@ comment on `Session.Roles` already documents that trade, and this extends it.
   test for it.
 - The `refresh_token`, `id_token` and SAML subject token types.
 - Exchanging API keys, which are not sessions and never reach this endpoint.
+- Externally-signed tokens, which belong to workload identity federation. See
+  the boundary note below.
+
+## Boundary with workload identity federation
+
+Added 2026-08-24 by the session designing
+`2026-08-24-workload-identity-federation-design.md`, so this spec carries a
+record of it.
+
+That plugin also does an RFC 8693 shaped exchange, on its own endpoint at
+`/v1/workload/token`, and the two are deliberately separate. The line between
+them is the subject token. A subject token that is an authsome session, sent by
+a registered client narrowing what it already holds, is this endpoint and is
+governed by a policy row. A subject token signed by GitHub or Google or an EKS
+OIDC provider, sent by a caller holding no secret at all, is that endpoint and
+is governed by an issuer trust config and a claim rule. Neither endpoint should
+grow the other's case, because doing so puts two disjoint authorization models
+behind one URL and makes client authentication conditional on the token type.
+
+A workload that wants a narrower credential exchanges there first and narrows
+here second, and both hops land in the audit trail.
+
+One merge to watch. That spec's prerequisite,
+`2026-08-24-non-human-principal-enforcement-design.md`, adds `pk` and
+`ServiceAccountID` fields to `tokenformat.TokenClaims`, which is the same struct
+this spec adds `Act *ActClaim` to. Nothing conflicts and every field is
+`omitempty`. Whoever implements second should add both sets in one pass.

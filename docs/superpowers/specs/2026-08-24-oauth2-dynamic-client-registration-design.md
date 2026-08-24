@@ -206,8 +206,14 @@ Types in that table are the postgres ones. SQLite has neither, so it takes
 `grant_types` columns already do there) and `TIMESTAMP` for
 `client_secret_expires_at`.
 
-One migration at version `20260824000001` for postgres and sqlite, every column
+One migration at version `20260824000030` for postgres and sqlite, every column
 defaulted so existing rows stay valid. Mongo and memory need no schema step.
+
+The version is deliberately not `20260824000001`: the RFC 8707 resource
+indicators design claims that one in the same `authsome-oauth2` group, and two
+migrations sharing a version in one group fails at startup. The DPoP design
+adds a `dpop_mode` column to this same table, so expect to merge rather than
+choose.
 
 ## Endpoints
 
