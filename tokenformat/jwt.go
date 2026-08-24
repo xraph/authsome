@@ -73,6 +73,9 @@ type customClaims struct {
 	OrgID     string   `json:"org_id,omitempty"`
 	SessionID string   `json:"sid,omitempty"`
 	Scopes    []string `json:"scopes,omitempty"`
+	// Act is the RFC 8693 delegation claim. Omitted entirely for an
+	// impersonated token, which is how the RFC encodes that case.
+	Act *ActClaim `json:"act,omitempty"`
 }
 
 func (j *JWT) GenerateAccessToken(claims TokenClaims) (string, error) {
@@ -89,6 +92,7 @@ func (j *JWT) GenerateAccessToken(claims TokenClaims) (string, error) {
 		OrgID:     claims.OrgID,
 		SessionID: claims.SessionID,
 		Scopes:    claims.Scopes,
+		Act:       claims.Act,
 	}
 
 	if j.config.Issuer != "" {
@@ -147,6 +151,7 @@ func (j *JWT) ValidateAccessToken(tokenStr string) (*TokenClaims, error) {
 		OrgID:     claims.OrgID,
 		SessionID: claims.SessionID,
 		Scopes:    claims.Scopes,
+		Act:       claims.Act,
 		IssuedAt:  issuedAt,
 		ExpiresAt: expiresAt,
 	}, nil

@@ -14,6 +14,15 @@ var (
 	ErrUnsignedToken = errors.New("tokenformat: unsigned or tampered token")
 )
 
+// ActClaim is the RFC 8693 `act` claim: the party acting on behalf of the
+// subject. It nests, so a chain of delegations is a chain of ActClaims with
+// the immediate actor outermost. Subject carries a principal.Ref in its
+// "kind:id" string form.
+type ActClaim struct {
+	Subject string    `json:"sub"`
+	Act     *ActClaim `json:"act,omitempty"`
+}
+
 // TokenClaims carries the identity payload embedded in an access token.
 type TokenClaims struct {
 	UserID    string   `json:"sub"`
@@ -24,6 +33,11 @@ type TokenClaims struct {
 	Scopes    []string `json:"scopes,omitempty"`
 	IssuedAt  time.Time
 	ExpiresAt time.Time
+
+	// Act is present for a delegated token and nil otherwise. Impersonation
+	// emits no act claim at all (RFC 8693 section 1.1), which is why the full
+	// record lives on the session row rather than in the token.
+	Act *ActClaim `json:"act,omitempty"`
 }
 
 // Format generates and validates access tokens. Refresh tokens are always
