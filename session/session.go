@@ -107,6 +107,20 @@ func (s *Session) IsHumanPrincipal() bool {
 	return s.PrincipalKind == "" || s.PrincipalKind == principal.KindUser
 }
 
+// AuthzActors returns the actors Warden must independently authorize.
+//
+// Empty for an impersonation, and that is the point. Impersonating somebody is
+// precisely the request to evaluate as them, so the admin's own permissions
+// are not intersected in. The gate for impersonation sits on Engine.Impersonate,
+// which is where an admin is checked once, rather than on every subsequent
+// permission check made while impersonating.
+func (s *Session) AuthzActors() principal.Chain {
+	if s.ActorGrant == principal.GrantImpersonation {
+		return nil
+	}
+	return s.Actors
+}
+
 // ImpersonatedBy returns the admin acting as this session's user, or the zero
 // ID when nobody is.
 //
