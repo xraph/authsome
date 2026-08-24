@@ -42,6 +42,46 @@ func TestDelegationChainIsNotImpersonation(t *testing.T) {
 	assert.True(t, s.ImpersonatedBy().IsNil(), "a delegation must not read as impersonation")
 }
 
+// AuthzActors is the single deliberate security exception in the whole
+// actor-chain design, so it gets its own tests rather than relying on
+// coverage from the impersonation/delegation tests above.
+//
+// For impersonation, AuthzActors must return nil: the admin's own chain is
+// withheld from Engine.Can on purpose. Impersonating a user is the request to
+// be evaluated as that user, not as the admin acting on the user's behalf. If
+// the admin's chain were intersected in, an admin impersonating a user could
+// do LESS than that user can do on their own, which inverts what
+// impersonation is for and defeats its entire purpose ("see exactly what
+// this user sees"). The one-time admin authorization check for entering
+// impersonation lives on Engine.Impersonate; it is deliberately not repeated
+// on every subsequent permission check made while impersonating.
+func TestAuthzActorsWithholdsTheAdminDuringImpersonation(t *testing.T) {
+	admin := id.NewUserID()
+	s := &session.Session{
+		UserID:     id.NewUserID(),
+		ActorGrant: principal.GrantImpersonation,
+		Actors:     principal.Chain{{Kind: principal.KindUser, ID: admin.String()}},
+	}
+
+	assert.Nil(t, s.AuthzActors(),
+		"impersonation must not intersect the admin's own permissions into the check")
+}
+
+// For delegation, AuthzActors must return the chain unchanged: every actor in
+// it is a real party Engine.Can has to independently authorize, and dropping
+// any of them would let delegation widen instead of only narrowing.
+func TestAuthzActorsReturnsTheChainForDelegation(t *testing.T) {
+	chain := principal.Chain{{Kind: principal.KindAgent, ID: "svc_1"}}
+	s := &session.Session{
+		UserID:     id.NewUserID(),
+		ActorGrant: principal.GrantDelegation,
+		Actors:     chain,
+	}
+
+	assert.Equal(t, chain, s.AuthzActors(),
+		"delegation must hand every actor to the check, unmodified")
+}
+
 func TestSubjectDerivesFromPrincipalKind(t *testing.T) {
 	uid := id.NewUserID()
 	human := &session.Session{UserID: uid}

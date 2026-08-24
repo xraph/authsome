@@ -28,6 +28,20 @@ func wardenSubjectKind(k principal.Kind) warden.SubjectKind {
 // onBehalfOf is set when ref is an actor rather than the subject, so a policy
 // can deny an agent an action it would allow the same agent calling for
 // itself.
+//
+// WARNING: warden's cache key (cache/memory.go) is built from
+// tenant:kind:id:action:resource:resID:namespace and does not include
+// Subject.Attributes. That means on_behalf_of and actor_kind, set below, do
+// not participate in cache keying. If a warden cache is ever configured, two
+// checks for the same agent that differ only in on_behalf_of hash to the SAME
+// cache entry: agent X checked "on behalf of user A" and agent X checked
+// "on behalf of user B" collide, and whichever runs second is served the
+// first's verdict rather than being evaluated against its own ABAC policy.
+// Concretely, an ALLOW computed for one user gets silently reused for a
+// different user the same agent is acting for. This is inert today because
+// authsome configures no warden cache and ships no ABAC policy keyed on
+// on_behalf_of, but it is armed the moment either changes. Fixing it means
+// changing warden's cache key, which is out of this package's reach.
 func wardenSubject(ref principal.Ref, onBehalfOf *principal.Ref) warden.Subject {
 	attrs := map[string]any{"principal_kind": string(ref.Kind)}
 	if onBehalfOf != nil {
@@ -63,7 +77,16 @@ func (e *Engine) Can(
 		return false, err
 	}
 	if !result.Allowed {
-		e.logger.Warn("authsome: Can denied by subject",
+		// Debug, not Warn: a subject-only denial is exactly the case
+		// HasPermission's own wrapper already logs at Warn with tenant and
+		// scope diagnostics attached, and permission checks are a
+		// high-volume hot path. Doubling every denial into two Warn lines
+		// would double the operational log cost for no new information at
+		// the subject-only call site. The actor-hop case below stays at
+		// Warn: that is the case a plain subject-only caller like
+		// HasPermission can never produce, and its decision/reason are not
+		// available anywhere else.
+		e.logger.Debug("authsome: Can denied by subject",
 			log.String("subject", subject.String()),
 			log.String("action", action),
 			log.String("resource", resource),

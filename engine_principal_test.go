@@ -113,7 +113,7 @@ func newActorRef(kind principal.Kind) principal.Ref {
 // an engine built by newTestEngine.
 //
 // newTestEngine wires WithAppID but never a bootstrap config, so
-// Engine.PlatformAppID stays nil — ensureWardenScope's platform-app branch
+// Engine.PlatformAppID stays nil: ensureWardenScope's platform-app branch
 // never fires and it falls through to e.config.AppID instead. Fixtures must
 // grant roles under that same app ID or they grant them in a tenant Can never
 // looks at.
