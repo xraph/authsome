@@ -11,6 +11,7 @@ import (
 	"github.com/xraph/forge"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/xraph/authsome/apitypes"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 )
@@ -312,4 +313,176 @@ func (p *Plugin) clientInfoResponse(c *OAuth2Client) *RegisterClientResponse {
 		SoftwareVersion:         str("software_version"),
 		Contacts:                contacts,
 	}
+}
+
+// RegistrationRequest addresses one registration by its client_id.
+type RegistrationRequest struct {
+	ClientID string `path:"clientId"`
+}
+
+// UpdateRegistrationRequest is an RFC 7592 client update. The body repeats
+// the full registration; anything omitted is cleared, per RFC 7592
+// section 2.2, which specifies a replacement and not a merge.
+type UpdateRegistrationRequest struct {
+	ClientID string `path:"clientId"`
+
+	BodyClientID     string   `json:"client_id,omitempty"`
+	BodyClientSecret string   `json:"client_secret,omitempty"`
+	RedirectURIs     []string `json:"redirect_uris"`
+	ClientName       string   `json:"client_name,omitempty"`
+	GrantTypes       []string `json:"grant_types,omitempty"`
+	Scope            string   `json:"scope,omitempty"`
+
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method,omitempty"`
+	ClientURI               string   `json:"client_uri,omitempty"`
+	LogoURI                 string   `json:"logo_uri,omitempty"`
+	TOSURI                  string   `json:"tos_uri,omitempty"`
+	PolicyURI               string   `json:"policy_uri,omitempty"`
+	SoftwareID              string   `json:"software_id,omitempty"`
+	SoftwareVersion         string   `json:"software_version,omitempty"`
+	Contacts                []string `json:"contacts,omitempty"`
+}
+
+// authenticateRegistration resolves the client named in the path and checks
+// the bearer registration access token against its stored hash.
+//
+// Every failure returns the same 401 so the endpoint does not tell an
+// unauthenticated caller which client_ids exist. Admin-created clients have
+// an empty hash and are rejected before the compare, which is what keeps
+// them off these routes entirely.
+func (p *Plugin) authenticateRegistration(ctx forge.Context, clientID string) (*OAuth2Client, error) {
+	unauthorized := func() error {
+		ctx.SetHeader("WWW-Authenticate", `Bearer realm="registration"`)
+		return regError(http.StatusUnauthorized, "invalid_token",
+			"a valid registration access token is required")
+	}
+
+	raw := ctx.Request().Header.Get("Authorization")
+	const prefix = "Bearer "
+	if len(raw) <= len(prefix) || !strings.EqualFold(raw[:len(prefix)], prefix) {
+		return nil, unauthorized()
+	}
+	token := strings.TrimSpace(raw[len(prefix):])
+	if token == "" {
+		return nil, unauthorized()
+	}
+
+	client, err := p.oauth2Store.GetClient(ctx.Context(), clientID)
+	if err != nil {
+		return nil, unauthorized()
+	}
+	if !client.DynamicallyRegistered || client.RegistrationTokenHash == "" {
+		return nil, unauthorized()
+	}
+	if err := bcrypt.CompareHashAndPassword(
+		[]byte(client.RegistrationTokenHash), []byte(token)); err != nil {
+		return nil, unauthorized()
+	}
+	return client, nil
+}
+
+func (p *Plugin) handleReadRegistration(ctx forge.Context, req *RegistrationRequest) (*RegisterClientResponse, error) {
+	client, err := p.authenticateRegistration(ctx, req.ClientID)
+	if err != nil {
+		return nil, err
+	}
+	// The registration access token is not rotated on read. RFC 7592
+	// permits rotation, and it strands any client that does not persist
+	// the new value, which in practice is most of them.
+	return p.clientInfoResponse(client), nil
+}
+
+func (p *Plugin) handleUpdateRegistration(ctx forge.Context, req *UpdateRegistrationRequest) (*RegisterClientResponse, error) {
+	client, err := p.authenticateRegistration(ctx, req.ClientID)
+	if err != nil {
+		return nil, err
+	}
+
+	// RFC 7592 section 2.2: a client_id in the body must match the one
+	// being updated, and a client_secret must match the current one.
+	if req.BodyClientID != "" && req.BodyClientID != client.ClientID {
+		return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
+			"client_id in the body does not match the registration being updated")
+	}
+	if req.BodyClientSecret != "" {
+		if bcrypt.CompareHashAndPassword(
+			[]byte(client.ClientSecret), []byte(req.BodyClientSecret)) != nil {
+			return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
+				"client_secret in the body does not match the current secret")
+		}
+	}
+
+	if len(req.RedirectURIs) == 0 {
+		return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
+			"redirect_uris is required")
+	}
+	for _, u := range req.RedirectURIs {
+		if uriErr := validateRedirectURI(u); uriErr != nil {
+			return nil, uriErr
+		}
+	}
+
+	// Same clamps as registration. An update must not be able to buy a
+	// capability that registration refused.
+	grantTypes, err := clampGrantTypes(req.GrantTypes)
+	if err != nil {
+		return nil, err
+	}
+	scopes := clampScopes(strings.Fields(req.Scope), p.config.DynamicRegistrationScopes)
+
+	authMethod := req.TokenEndpointAuthMethod
+	if authMethod == "" {
+		authMethod = client.TokenEndpointAuthMethod
+	}
+	switch authMethod {
+	case "none", "client_secret_basic", "client_secret_post":
+	default:
+		return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
+			fmt.Sprintf("token_endpoint_auth_method %q is not supported", authMethod))
+	}
+
+	client.Name = req.ClientName
+	client.RedirectURIs = req.RedirectURIs
+	client.GrantTypes = grantTypes
+	client.Scopes = scopes
+	client.TokenEndpointAuthMethod = authMethod
+	client.Public = authMethod == "none"
+	client.Metadata = metadataFromRequest(&RegisterClientRequest{
+		ClientURI:       req.ClientURI,
+		LogoURI:         req.LogoURI,
+		TOSURI:          req.TOSURI,
+		PolicyURI:       req.PolicyURI,
+		SoftwareID:      req.SoftwareID,
+		SoftwareVersion: req.SoftwareVersion,
+		Contacts:        req.Contacts,
+	})
+
+	if err := p.oauth2Store.UpdateClient(ctx.Context(), client); err != nil {
+		return nil, forge.InternalError(fmt.Errorf("oauth2: update registration: %w", err))
+	}
+	return p.clientInfoResponse(client), nil
+}
+
+// handleDeleteRegistration answers 204 on success. forge's typed-handler
+// adapter only ever writes a response when the handler returns a non-nil
+// value, and when it does it hardcodes 200 (see handleRegisterClient's 201
+// for the same constraint on the create path) — WithNoContentResponse is
+// OpenAPI documentation only and has no effect on what status is actually
+// written. So the 204 has to be written here directly, and the nil, nil
+// return tells the adapter not to write anything on top of it.
+func (p *Plugin) handleDeleteRegistration(ctx forge.Context, req *RegistrationRequest) (*apitypes.Empty, error) {
+	client, err := p.authenticateRegistration(ctx, req.ClientID)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.oauth2Store.DeleteClient(ctx.Context(), client.ID); err != nil {
+		return nil, forge.InternalError(fmt.Errorf("oauth2: delete registration: %w", err))
+	}
+	p.logger.Info("oauth2: dynamic client deleted",
+		log.String("client_id", client.ClientID))
+
+	if noContentErr := ctx.NoContent(http.StatusNoContent); noContentErr != nil {
+		p.logger.Warn("oauth2: write delete registration response", log.Error(noContentErr))
+	}
+	return nil, nil
 }

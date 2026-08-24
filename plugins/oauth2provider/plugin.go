@@ -228,6 +228,13 @@ func (p *Plugin) SetStore(s store.Store) { p.store = s }
 // SetOAuth2Store allows direct OAuth2 store injection for testing.
 func (p *Plugin) SetOAuth2Store(s Store) { p.oauth2Store = s }
 
+// SetDynamicRegistrationForTest toggles RFC 7591 registration after
+// construction. Tests use it to prove the 7592 routes keep working once
+// registration itself is closed.
+func (p *Plugin) SetDynamicRegistrationForTest(enabled bool) {
+	p.config.DynamicRegistration = enabled
+}
+
 // RegisterRoutes registers OAuth2 provider HTTP endpoints.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Public OAuth2 endpoints
@@ -301,6 +308,51 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		})),
 	}
 	if err := g.POST("/register", p.handleRegisterClient, regOpts...); err != nil {
+		return err
+	}
+
+	// RFC 7592 registration management. Registered unconditionally: turning
+	// registration off must not strand clients that already registered.
+	// The limiter always comes from registrationLimiter, for the same
+	// reason POST /register does above — an engine-less test or a stock
+	// deployment that never configures a shared limiter must still get
+	// one, rather than these routes going unlimited.
+	manageOpts := func(extra ...forge.RouteOption) []forge.RouteOption {
+		base := []forge.RouteOption{
+			forge.WithErrorResponses(),
+			forge.WithMiddleware(middleware.RateLimit(p.registrationLimiter(), middleware.RateLimitConfig{
+				Limit:  p.config.RegistrationRateLimit.Limit * 6,
+				Window: p.config.RegistrationRateLimit.Window,
+				KeyFunc: func(c forge.Context) string {
+					return "oauth2-reg-manage:" + c.Param("clientId")
+				},
+			})),
+		}
+		return append(base, extra...)
+	}
+
+	if err := g.GET("/register/:clientId", p.handleReadRegistration, manageOpts(
+		forge.WithSummary("Read OAuth2 client registration"),
+		forge.WithOperationID("oauth2ReadRegistration"),
+		forge.WithResponseSchema(http.StatusOK, "Client information", RegisterClientResponse{}),
+	)...); err != nil {
+		return err
+	}
+
+	if err := g.PUT("/register/:clientId", p.handleUpdateRegistration, manageOpts(
+		forge.WithSummary("Update OAuth2 client registration"),
+		forge.WithOperationID("oauth2UpdateRegistration"),
+		forge.WithRequestSchema(UpdateRegistrationRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Client information", RegisterClientResponse{}),
+	)...); err != nil {
+		return err
+	}
+
+	if err := g.DELETE("/register/:clientId", p.handleDeleteRegistration, manageOpts(
+		forge.WithSummary("Delete OAuth2 client registration"),
+		forge.WithOperationID("oauth2DeleteRegistration"),
+		forge.WithNoContentResponse(),
+	)...); err != nil {
 		return err
 	}
 
