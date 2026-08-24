@@ -25,10 +25,18 @@ registers. Today the server publishes `/.well-known/openid-configuration` and
 nothing else, so the middle link is missing and 9728 on its own would dead-end
 on the very first hop that matters.
 
-RFC 8707 resource indicators and DPoP are not started. Grepping for `8707`,
-`dpop` and `resource_indicator` turns up nothing anywhere in the OAuth path, so
-there's no in-flight client model work to coordinate with. The model changes
-below are additive and leave room for both.
+RFC 8707 resource indicators and DPoP have no code yet, but both have designs
+dated the same day as this one, and both add columns to
+`authsome_oauth2_clients`. The resource indicators design also claims migration
+version `20260824000001` in the `authsome-oauth2` group, so this one takes
+`20260824000030` instead. The model changes below are additive and sit
+alongside theirs; see the data model section for what to expect when two of
+these land in either order.
+
+DPoP names the missing RFC 8414 endpoint as a known gap and leaves it to its
+own change. This is that change, so landing the metadata work here unblocks
+DPoP advertising `dpop_signing_alg_values_supported` where a client will
+actually look for it.
 
 ## Goals
 
