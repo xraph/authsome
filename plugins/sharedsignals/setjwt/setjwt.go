@@ -129,6 +129,14 @@ func Validate(ctx context.Context, raw []byte, opts Options) (*Token, error) {
 	)
 	if _, err := parser.ParseWithClaims(string(raw), &claims,
 		func(*jwt.Token) (any, error) { return key, nil }); err != nil {
+		// jwt/v5 decodes the claims JSON before it verifies the signature, so
+		// a claim with the wrong JSON shape (events as an array, iat as a
+		// string, ...) surfaces here as ErrTokenMalformed rather than a
+		// signature failure. That is a caller mistake, not a key problem, so
+		// it must map to invalid_request rather than invalid_key.
+		if errors.Is(err, jwt.ErrTokenMalformed) {
+			return nil, fmt.Errorf("%w: malformed claims: %v", ErrInvalidRequest, err)
+		}
 		return nil, fmt.Errorf("%w: signature verification failed", ErrInvalidKey)
 	}
 

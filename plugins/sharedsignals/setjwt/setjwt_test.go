@@ -23,11 +23,15 @@ const (
 var testNow = time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
 
 type staticKeys struct {
-	key crypto.PublicKey
-	err error
+	key   crypto.PublicKey
+	err   error
+	calls *int // when set, incremented on every Key call so tests can prove it was never invoked
 }
 
 func (s staticKeys) Key(_ context.Context, _ string) (crypto.PublicKey, error) {
+	if s.calls != nil {
+		*s.calls++
+	}
 	return s.key, s.err
 }
 
@@ -102,7 +106,10 @@ func TestHeader_ReadsKidAndAlg(t *testing.T) {
 	assert.Equal(t, "secevent+jwt", typ)
 }
 
-// alg:none is the oldest JWT attack there is.
+// alg:none is the oldest JWT attack there is. It must be rejected by the
+// allow-list before the key resolver is ever consulted: a real KeyResolver
+// does network fetches and cache lookups keyed on an attacker-controlled kid
+// header, and a disallowed algorithm should never trigger that work.
 func TestValidate_RejectsAlgNone(t *testing.T) {
 	key := newTestKey(t)
 	tok := jwt.NewWithClaims(jwt.SigningMethodNone, jwt.MapClaims{
@@ -113,20 +120,31 @@ func TestValidate_RejectsAlgNone(t *testing.T) {
 	s, err := tok.SignedString(jwt.UnsafeAllowNoneSignatureType)
 	require.NoError(t, err)
 
-	_, err = Validate(context.Background(), []byte(s), baseOpts(key))
+	calls := 0
+	opts := baseOpts(key)
+	opts.Keys = staticKeys{key: key.Public(), calls: &calls}
+
+	_, err = Validate(context.Background(), []byte(s), opts)
 	require.ErrorIs(t, err, ErrInvalidKey)
+	assert.Equal(t, 0, calls, "alg allow-list must reject alg:none before any key resolution")
 }
 
 // Algorithm confusion: sign with HMAC using the issuer's PUBLIC key as the
-// shared secret. If we accepted HS*, this forgery would verify.
+// shared secret. If we accepted HS*, this forgery would verify. Like
+// alg:none, this must be rejected before the key resolver runs.
 func TestValidate_RejectsHMACConfusion(t *testing.T) {
 	key := newTestKey(t)
 	pubDER, err := json.Marshal(testKID) // any attacker-known bytes work
 	require.NoError(t, err)
 	raw := signSET(t, key, "secevent+jwt", jwt.SigningMethodHS256, pubDER)
 
-	_, err = Validate(context.Background(), raw, baseOpts(key))
+	calls := 0
+	opts := baseOpts(key)
+	opts.Keys = staticKeys{key: key.Public(), calls: &calls}
+
+	_, err = Validate(context.Background(), raw, opts)
 	require.ErrorIs(t, err, ErrInvalidKey)
+	assert.Equal(t, 0, calls, "alg allow-list must reject HMAC before any key resolution")
 }
 
 func TestValidate_RejectsWrongTyp(t *testing.T) {
@@ -248,6 +266,31 @@ func TestValidate_RejectsWrongSigningKey(t *testing.T) {
 
 	_, err := Validate(context.Background(), raw, opts)
 	require.ErrorIs(t, err, ErrInvalidKey)
+}
+
+// events must be a JSON object keyed by event type URI. A malformed body
+// (wrong JSON shape) is a caller mistake, not a key problem, so it must map
+// to invalid_request rather than invalid_key.
+func TestValidate_RejectsEventsAsArray(t *testing.T) {
+	key := newTestKey(t)
+	raw := signSET(t, key, "secevent+jwt", jwt.SigningMethodRS256, nil,
+		func(c jwt.MapClaims) { c["events"] = []any{"not-an-object"} })
+
+	_, err := Validate(context.Background(), raw, baseOpts(key))
+	require.ErrorIs(t, err, ErrInvalidRequest)
+	assert.Equal(t, "invalid_request", ErrCode(err))
+}
+
+// iat must be a JSON number. A string in its place is malformed input, not a
+// key problem, so it must map to invalid_request rather than invalid_key.
+func TestValidate_RejectsIATAsString(t *testing.T) {
+	key := newTestKey(t)
+	raw := signSET(t, key, "secevent+jwt", jwt.SigningMethodRS256, nil,
+		func(c jwt.MapClaims) { c["iat"] = "not-a-number" })
+
+	_, err := Validate(context.Background(), raw, baseOpts(key))
+	require.ErrorIs(t, err, ErrInvalidRequest)
+	assert.Equal(t, "invalid_request", ErrCode(err))
 }
 
 type assertKeyMiss struct{}
