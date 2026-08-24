@@ -18,41 +18,42 @@ precisely which workload is running. GitHub tells you the repository, the ref,
 the workflow and the run. EKS tells you the namespace and the service account.
 The token is free, it expires in minutes, and nobody has to store it.
 
-This plugin trusts those tokens. An org admin registers an external issuer,
-writes rules about which claims map to which internal principal, and a workload
-exchanges its platform token for a short-lived authsome credential. No secret
-lives in CI.
+This plugin trusts those tokens. An org admin registers an external issuer and
+writes rules about which claims map to which internal principal, then a workload
+presents its platform token and gets back a short-lived authsome credential
+scoped to what that rule allows. No secret lives in CI.
 
 ## What already exists, and what doesn't
 
 Two things were worth checking before designing anything.
 
-**Non-human principals: already here.** `serviceaccount.ServiceAccount` is a
+Non-human principals are already here. `serviceaccount.ServiceAccount` is a
 first-class entity, `session.Session` carries `PrincipalKind` and
-`ServiceAccountID`, and the apikey plugin mints service-account sessions today.
-The credential this plugin issues is that principal. Nothing synthetic, no fake
-user rows.
+`ServiceAccountID`, and the apikey plugin mints service-account sessions today,
+so the credential this plugin issues is that principal and there is nothing
+synthetic about it and no fake user row anywhere.
 
 What is missing is the enforcement path, so a service-account session currently
 gets rejected by every guard it meets. That's the prerequisite spec and it has
 to land first.
 
-**RFC 8693 token exchange: designed, and it does not fit.** No code exists yet,
-but `2026-08-24-token-exchange-rfc8693-design.md` landed the same day as this
+RFC 8693 token exchange has been designed, and it does not fit. No code exists
+yet, but `2026-08-24-token-exchange-rfc8693-design.md` landed the same day as this
 one. Read it before you read the endpoint decision below, because the obvious
 question is why this plugin does not simply use that grant, and the answer is
 that the grant supports exactly two subject token types and both of them mean
 "an authsome session token". An `id_token` gets you `unsupported_token_type`,
 external JWTs are listed under out-of-scope, the caller has to present
 `client_id` and `client_secret`, and every exchange needs a matching row in
-`authsome_oauth2_exchange_policies`. That design is aimed at narrowing a
-credential you already hold. This one starts from a credential somebody else
-signed.
+`authsome_oauth2_exchange_policies`. That design starts from a credential you already hold and trades it for a
+narrower one, where this plugin starts from a credential somebody else signed
+and has to decide whether to believe it at all.
 
-**Remote JWKS verification: doesn't exist.** `api/jwks_handler.go` publishes our
-keys. `plugins/sso/oidc.go` fetches a discovery document for its endpoints and
-does not verify ID token signatures at all. Verifying an externally-signed token
-is new code.
+Remote JWKS verification does not exist anywhere in the tree. What we have is
+`api/jwks_handler.go`, which publishes our own keys, and `plugins/sso/oidc.go`,
+which fetches a discovery document to find endpoints and then never verifies an
+ID token signature with what it found. Verifying a token somebody else signed is
+new code.
 
 ## Decisions
 
@@ -77,8 +78,10 @@ become one. Its token endpoint also assumes registered clients throughout:
 client's grant list (`plugins/oauth2provider/plugin.go:546`). Threading a
 secretless caller through that is not a small carve-out.
 
-So: `POST /v1/workload/token`, RFC 8693 wire format, no client authentication.
-Two endpoints, one boundary, written down in both specs so neither drifts.
+So this plugin gets `POST /v1/workload/token` in RFC 8693 wire format with no
+client authentication, and the boundary between the two endpoints is written
+down in both specs so that neither one drifts into the other's territory as
+people forget why they were separated.
 
 The rest, briefly. A rule binds to a service account you created beforehand, so
 a bad rule grants an existing scoped identity rather than conjuring a new one.
@@ -150,41 +153,44 @@ has.
 
 Seven steps, ordered so the cheapest and most restrictive gates run first.
 
-**1. Parse without verifying**, to read `iss` and `kid` and nothing else. Refuse
-`alg: none`. Refuse any algorithm outside the trust config's
-`allowed_algorithms`.
+1. Parse the token without verifying it, reading `iss` and `kid` and nothing
+   else. Refuse `alg: none`, and refuse any algorithm outside the trust config's
+   `allowed_algorithms`.
 
-**2. Resolve the trust config by exact `iss` match**, scoped to
-`(app_id, env_id)`. This step matters more than its size suggests. Key
-resolution means an outbound HTTPS fetch, and if an unregistered `iss` could
-reach that step, anyone holding a token could make the server fetch a URL of
-their choosing. Resolving registered trust first means we only ever fetch from
-URLs an admin put there. Exact string equality after trailing-slash
-normalisation, no prefix logic.
+2. Resolve the trust config by exact `iss` match, scoped to `(app_id, env_id)`.
+   This step matters far more than its size suggests, because key resolution
+   means an outbound HTTPS fetch, and if an unregistered `iss` could reach that
+   fetch then anyone holding a token could make the server request a URL of
+   their choosing. Resolving registered trust first means we only ever fetch
+   from URLs an admin put there. Exact string equality after trailing-slash
+   normalisation, and no prefix logic.
 
-**3. Resolve the JWKS URI**, from either an explicit `jwks_uri` or discovery at
-`{issuer}/.well-known/openid-configuration`. Three constraints on what comes
-back: HTTPS only, the document's own `issuer` must equal the registered issuer,
-and the `jwks_uri` host must match the issuer host. Skip the last two and a
-discovery document served through a hijacked path can point key resolution
-anywhere. Use a dedicated `http.Client` with an explicit timeout and a response
-size cap, not `http.DefaultClient` the way `plugins/sso/oidc.go:178` does.
+3. Resolve the JWKS URI, from either an explicit `jwks_uri` or discovery at
+   `{issuer}/.well-known/openid-configuration`. Three constraints on what comes
+   back: HTTPS only, the document's own `issuer` must equal the registered
+   issuer, and the `jwks_uri` host must match the issuer host. Skip the last two
+   and a discovery document served through a hijacked path points key resolution
+   wherever it likes. Use a dedicated `http.Client` with an explicit timeout and
+   a response size cap, not `http.DefaultClient` the way `plugins/sso/oidc.go`
+   does at line 178.
 
-**4. Fetch and cache keys** by `(issuer_id, kid)` with a TTL, plus negative
-caching for a `kid` the issuer doesn't have. An unknown `kid` triggers at most
-one refresh per issuer per cooldown window, so a flood of tokens carrying random
-`kid` values can't be turned into an amplifier against the issuer or against us.
+4. Fetch and cache keys by `(issuer_id, kid)` with a TTL, plus negative caching
+   for a `kid` the issuer does not have. An unknown `kid` triggers at most one
+   refresh per issuer per cooldown window, so a flood of tokens carrying random
+   `kid` values cannot be turned into an amplifier against the issuer or against
+   us.
 
-**5. Verify the signature.**
+5. Verify the signature.
 
-**6. Validate claims, now that they're authenticated.** `exp` is mandatory and a
-token without it is refused, never defaulted. `nbf` and `iat` get a small
-fixed skew allowance. `aud` must contain the configured audience by exact match
-against each array element. `iss` is rechecked. A maximum token age is enforced
-separately from `exp`, because some platforms issue long-lived OIDC tokens and
-the exchange window shouldn't be whatever they picked.
+6. Validate the claims, now that they are authenticated. `exp` is mandatory and
+   a token without one is refused, never defaulted. `nbf` and `iat` get a small
+   fixed skew allowance. `aud` must contain the configured audience by exact
+   match against each array element, and `iss` is rechecked. Maximum token age
+   is enforced separately from `exp`, because some platforms issue long-lived
+   OIDC tokens and the exchange window should not be whatever they happened to
+   pick.
 
-**7. Replay**, handled by the exchange record insert described above.
+7. Refuse replays, which the exchange record insert handles as described above.
 
 Step 2 is the one that's easy to misorder. The intuitive pipeline is "verify the
 token, then look up who issued it", which feels safer because verification comes
@@ -428,8 +434,8 @@ Six designs went into `docs/superpowers/specs/` on 2026-08-24 and three of them
 touch this one. None of the three is implemented yet, so the seams below are
 cheap to agree on now and expensive to discover later.
 
-**Token exchange (RFC 8693).** Two endpoints, and the boundary is the subject
-token. If the subject token is an authsome session and the caller is a
+Token exchange, RFC 8693. Two endpoints, and the boundary between them is the
+subject token. If the subject token is an authsome session and the caller is a
 registered client narrowing what it already holds, that is `/v1/oauth/token` and
 it is governed by an exchange policy row. If the subject token was signed by
 somebody else and the caller holds no secret at all, that is
@@ -438,13 +444,13 @@ rule. Neither endpoint should ever grow the other's case. A workload that wants
 a narrower credential exchanges here first, then narrows there, and the audit
 trail shows both hops.
 
-**Agent delegation.** That spec adds `PrincipalKind = "agent"` and is explicit
+Agent delegation. That spec adds `PrincipalKind = "agent"` and is explicit
 that autonomous agents with no human behind them stay service accounts, which is
 exactly the principal this plugin issues. The two do not overlap. They do share
 the enforcement prerequisite, so the `principalFrom` helper in that spec is
 written for any non-user principal and not for service accounts specifically.
 
-**DPoP.** The 8693 draft already writes down the rule that an exchange must
+DPoP. The 8693 draft already writes down the rule that an exchange must
 never turn a bound token into an unbound one. The same rule applies here with
 one wrinkle worth naming: a workload's platform token is not DPoP-bound and
 never will be, since GitHub and GCP do not issue bound tokens, so an exchange
