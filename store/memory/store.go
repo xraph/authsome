@@ -295,13 +295,17 @@ func (s *Store) GetUserByEmail(_ context.Context, appID id.AppID, email string) 
 	return nil, store.ErrNotFound
 }
 
-func (s *Store) GetUserByPhone(_ context.Context, appID id.AppID, phone string) (*user.User, error) {
+func (s *Store) GetUserByPhone(_ context.Context, appID id.AppID, envID id.EnvironmentID, phone string) (*user.User, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, u := range s.users {
-		if u.AppID.String() == appID.String() && u.Phone == phone {
-			return u, nil
+		if u.AppID.String() != appID.String() || u.Phone != phone {
+			continue
 		}
+		if !envID.IsNil() && u.EnvID.String() != envID.String() {
+			continue
+		}
+		return u, nil
 	}
 	return nil, store.ErrNotFound
 }

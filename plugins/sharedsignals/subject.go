@@ -206,16 +206,15 @@ func (p *Plugin) resolveSimpleSubject(ctx context.Context, s *InboundStream,
 		if !isPlausibleE164(subj.PhoneNumber) {
 			return rejected(), nil
 		}
-		// GetUserByPhone is not environment-scoped in the core store
-		// interface (it takes appID only), so a phone number could match a
-		// user in a sibling environment of the same app. A staging stream
-		// must not be able to revoke a production user's sessions just
-		// because it learned their phone number, so the environment is
-		// re-checked here after the lookup.
-		u, err := p.authStore.GetUserByPhone(ctx, s.AppID, subj.PhoneNumber)
+		u, err := p.authStore.GetUserByPhone(ctx, s.AppID, s.EnvID, subj.PhoneNumber)
 		if err != nil {
 			return unresolved(), nil //nolint:nilerr // a miss is not a failure
 		}
+		// Belt and braces, exactly as in the email branch above. The store is
+		// now env-scoped, but a nil envID means "match app-wide" there, so a
+		// stream that somehow carried no environment would be handed a user
+		// from any of them. A staging stream must never revoke a production
+		// user's sessions just because it learned their phone number.
 		if u.EnvID != s.EnvID {
 			return rejected(), nil
 		}

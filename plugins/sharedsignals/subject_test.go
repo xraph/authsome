@@ -218,16 +218,16 @@ func TestResolveSubject_AliasesDisagreeingRejected(t *testing.T) {
 // ── Fix round 1 ──────────────────────────────────────────────────
 //
 // ITEM 1: phone_number and email must not resolve across environments of the
-// same app. GetUserByPhone is not env-scoped in the core store interface, so
-// without a post-check a staging stream could resolve (and revoke) a
-// production user just by knowing their phone number.
+// same app, or a staging stream could resolve (and revoke) a production user
+// just by knowing their phone number. The core store is env-scoped now, and
+// the resolver re-checks the environment on top of it; this covers both.
 
 func TestResolveSubject_PhoneCrossEnvironmentRejected(t *testing.T) {
 	f := newResolveFixture(t, true)
 
 	// Same app, different environment than the user who owns this phone
-	// number. GetUserByPhone has no envID parameter and will find the user
-	// regardless; the resolver must refuse to act on the mismatch itself.
+	// number. Whether the store filters it out or hands the user back, the
+	// resolver must not act on the mismatch.
 	otherStream := *f.stream
 	otherStream.EnvID = id.NewEnvironmentID()
 

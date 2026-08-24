@@ -50,6 +50,7 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"AppCRUD", testAppCRUD},
 		{"DeleteAppCascade", testDeleteAppCascade},
 		{"UserEmailIsAppScoped", testUserEmailIsAppScoped},
+		{"UserPhoneLookupIsEnvScoped", testUserPhoneLookupIsEnvScoped},
 		{"ListUsersTotalAndFilter", testListUsersTotalAndFilter},
 		{"ListUsersEmailMetacharsAreSafe", testListUsersEmailMetacharsAreSafe},
 		{"SessionCRUD", testSessionCRUD},
@@ -135,6 +136,39 @@ func seedUser(t *testing.T, s store.Store, tn tenant, email string) *user.User {
 		Email:     email,
 		CreatedAt: now(),
 		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateUser(context.Background(), u))
+	return u
+}
+
+// seedSiblingEnv adds another environment to an existing app, so a test can
+// exercise the boundary between two environments of the same tenant.
+func seedSiblingEnv(t *testing.T, s store.Store, tn tenant) tenant {
+	t.Helper()
+	env := &environment.Environment{
+		ID:        id.NewEnvironmentID(),
+		AppID:     tn.AppID,
+		Name:      "Staging",
+		Slug:      "staging-" + suffix(id.NewEnvironmentID().String()),
+		Type:      environment.TypeStaging,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateEnvironment(context.Background(), env))
+	return tenant{AppID: tn.AppID, EnvID: env.ID}
+}
+
+func seedUserWithPhone(t *testing.T, s store.Store, tn tenant, email, phone string) *user.User {
+	t.Helper()
+	u := &user.User{
+		ID:            id.NewUserID(),
+		AppID:         tn.AppID,
+		EnvID:         tn.EnvID,
+		Email:         email,
+		Phone:         phone,
+		PhoneVerified: true,
+		CreatedAt:     now(),
+		UpdatedAt:     now(),
 	}
 	require.NoError(t, s.CreateUser(context.Background(), u))
 	return u
@@ -261,6 +295,53 @@ func testUserEmailIsAppScoped(t *testing.T, s store.Store) {
 	empty := seedTenant(t, s)
 	_, err = s.GetUserByEmail(ctx, empty.AppID, "shared@test.com")
 	assert.ErrorIs(t, err, store.ErrNotFound, "email lookup must not cross tenants")
+}
+
+// testUserPhoneLookupIsEnvScoped proves a phone lookup cannot reach across
+// environments of the same app. Two environments of one app may legitimately
+// hold different people behind the same number (a staging fixture and a real
+// production account), and a caller scoped to one environment must never be
+// handed the other's user. That is the hole that would let a staging Shared
+// Signals stream revoke a production user's sessions.
+func testUserPhoneLookupIsEnvScoped(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	prod := seedTenant(t, s)
+	staging := seedSiblingEnv(t, s, prod)
+
+	const phone = "+15550001111"
+	prodUser := seedUserWithPhone(t, s, prod, "prod@test.com", phone)
+	stagingUser := seedUserWithPhone(t, s, staging, "staging@test.com", phone)
+	require.NotEqual(t, prodUser.ID.String(), stagingUser.ID.String())
+
+	gotProd, err := s.GetUserByPhone(ctx, prod.AppID, prod.EnvID, phone)
+	require.NoError(t, err)
+	assert.Equal(t, prodUser.ID.String(), gotProd.ID.String(),
+		"lookup must return this environment's user")
+
+	gotStaging, err := s.GetUserByPhone(ctx, staging.AppID, staging.EnvID, phone)
+	require.NoError(t, err)
+	assert.Equal(t, stagingUser.ID.String(), gotStaging.ID.String(),
+		"lookup must be scoped per environment, not merely per app")
+
+	// An environment holding no such user must not be handed one from a
+	// sibling environment of the same app.
+	bare := seedSiblingEnv(t, s, prod)
+	_, err = s.GetUserByPhone(ctx, bare.AppID, bare.EnvID, phone)
+	assert.ErrorIs(t, err, store.ErrNotFound,
+		"phone lookup must not cross environments within an app")
+
+	// A nil environment keeps the historical app-wide behaviour, matching
+	// GetUserByAnyEmail, so a caller with no environment in hand still
+	// resolves rather than silently finding nothing.
+	anyEnv, err := s.GetUserByPhone(ctx, prod.AppID, id.Nil, phone)
+	require.NoError(t, err)
+	assert.Contains(t, []string{prodUser.ID.String(), stagingUser.ID.String()},
+		anyEnv.ID.String(), "a nil env must still match app-wide")
+
+	// The app boundary still holds alongside the new environment boundary.
+	other := seedTenant(t, s)
+	_, err = s.GetUserByPhone(ctx, other.AppID, other.EnvID, phone)
+	assert.ErrorIs(t, err, store.ErrNotFound, "phone lookup must not cross apps")
 }
 
 func testListUsersTotalAndFilter(t *testing.T, s store.Store) {
