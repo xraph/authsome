@@ -220,7 +220,11 @@ type SessionModel struct {
 	// uses. A slug containing a comma would split into two role names nobody
 	// was ever granted, and these strings are read back as an authorization
 	// decision, so the encoding must not be able to invent a member.
-	Roles                 json.RawMessage `grove:"roles,type:jsonb"`
+	Roles json.RawMessage `grove:"roles,type:jsonb"`
+	// Scopes is JSON for the same reason Roles is: these strings are read back
+	// as an authorization decision, so the encoding must not be able to invent
+	// or merge a member.
+	Scopes                json.RawMessage `grove:"scopes,type:jsonb"`
 	LastActivityAt        time.Time       `grove:"last_activity_at"`
 	ExpiresAt             time.Time       `grove:"expires_at,notnull"`
 	RefreshTokenExpiresAt time.Time       `grove:"refresh_token_expires_at,notnull"`
@@ -305,6 +309,9 @@ func toSession(m *SessionModel) (*session.Session, error) {
 	if len(m.Roles) > 0 {
 		_ = json.Unmarshal(m.Roles, &s.Roles) //nolint:errcheck // best-effort decode
 	}
+	if len(m.Scopes) > 0 {
+		_ = json.Unmarshal(m.Scopes, &s.Scopes) //nolint:errcheck // best-effort decode
+	}
 	return s, nil
 }
 
@@ -344,6 +351,9 @@ func fromSession(s *session.Session) *SessionModel {
 	// json.RawMessage cannot scan a NULL back. nil marshals to "null", which
 	// the decode guard above reads as no roles.
 	m.Roles, _ = json.Marshal(s.Roles) //nolint:errcheck // best-effort encode
+	// Always encoded for the same reason Roles is: the column is NOT NULL and
+	// json.RawMessage cannot scan a NULL back.
+	m.Scopes, _ = json.Marshal(s.Scopes) //nolint:errcheck // best-effort encode
 	return m
 }
 

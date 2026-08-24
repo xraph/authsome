@@ -1193,6 +1193,23 @@ ALTER TABLE authsome_sessions DROP COLUMN IF EXISTS roles;
 				return err
 			},
 		},
+		&migrate.Migration{
+			Name:    "add_session_scopes",
+			Version: "20260824000060",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions
+    ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]'::jsonb;
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions DROP COLUMN IF EXISTS scopes;
+`)
+				return err
+			},
+		},
 
 		// Migration: session principal identity. A session may be owned by a
 		// user or by a service account (session.Session), and until these

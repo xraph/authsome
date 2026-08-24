@@ -992,6 +992,24 @@ ALTER TABLE authsome_sessions DROP COLUMN roles;
 				return err
 			},
 		},
+		&migrate.Migration{
+			Name:    "add_session_scopes",
+			Version: "20260824000060",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions ADD COLUMN scopes TEXT NOT NULL DEFAULT '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				// SQLite gained DROP COLUMN in 3.35.0; older engines fail here,
+				// matching how add_session_roles rolls back.
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions DROP COLUMN scopes;
+`)
+				return err
+			},
+		},
 
 		// Migration: session principal identity. A session may be owned by a
 		// user or by a service account (session.Session), and until these
