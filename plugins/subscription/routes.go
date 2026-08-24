@@ -15,6 +15,7 @@ import (
 	lsub "github.com/xraph/ledger/subscription"
 	"github.com/xraph/ledger/types"
 
+	"github.com/xraph/authsome/apitypes"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/plugin"
 )
@@ -605,7 +606,7 @@ func (p *Plugin) handleCreatePlan(ctx forge.Context, req *CreatePlanRequest) (*P
 	return nil, ctx.JSON(http.StatusCreated, resp)
 }
 
-func (p *Plugin) handleArchivePlan(ctx forge.Context, req *PlanIDRequest) (*struct{}, error) {
+func (p *Plugin) handleArchivePlan(ctx forge.Context, req *PlanIDRequest) (*apitypes.Empty, error) {
 	planID, err := ledgerid.ParsePlanID(req.PlanID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid plan_id")
@@ -619,7 +620,7 @@ func (p *Plugin) handleArchivePlan(ctx forge.Context, req *PlanIDRequest) (*stru
 	return nil, ctx.NoContent(http.StatusNoContent)
 }
 
-func (p *Plugin) handleActivatePlan(ctx forge.Context, req *PlanIDRequest) (*struct{}, error) {
+func (p *Plugin) handleActivatePlan(ctx forge.Context, req *PlanIDRequest) (*apitypes.Empty, error) {
 	planID, err := ledgerid.ParsePlanID(req.PlanID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid plan_id")
@@ -693,7 +694,7 @@ func (p *Plugin) handleCreateSubscription(ctx forge.Context, req *CreateSubscrip
 	return nil, ctx.JSON(http.StatusCreated, resp)
 }
 
-func (p *Plugin) handleChangePlan(ctx forge.Context, req *ChangePlanRequest) (*struct{}, error) {
+func (p *Plugin) handleChangePlan(ctx forge.Context, req *ChangePlanRequest) (*apitypes.Empty, error) {
 	subID, err := ledgerid.ParseSubscriptionID(req.SubID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid subscription id")
@@ -714,7 +715,7 @@ func (p *Plugin) handleChangePlan(ctx forge.Context, req *ChangePlanRequest) (*s
 	return nil, ctx.NoContent(http.StatusNoContent)
 }
 
-func (p *Plugin) handleCancelSubscription(ctx forge.Context, req *CancelSubscriptionRequest) (*struct{}, error) {
+func (p *Plugin) handleCancelSubscription(ctx forge.Context, req *CancelSubscriptionRequest) (*apitypes.Empty, error) {
 	subID, err := ledgerid.ParseSubscriptionID(req.SubID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid subscription id")
@@ -732,7 +733,7 @@ func (p *Plugin) handleCancelSubscription(ctx forge.Context, req *CancelSubscrip
 	return nil, ctx.NoContent(http.StatusNoContent)
 }
 
-func (p *Plugin) handlePauseSubscription(ctx forge.Context, req *SubIDRequest) (*struct{}, error) {
+func (p *Plugin) handlePauseSubscription(ctx forge.Context, req *SubIDRequest) (*apitypes.Empty, error) {
 	subID, err := ledgerid.ParseSubscriptionID(req.SubID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid subscription id")
@@ -746,7 +747,7 @@ func (p *Plugin) handlePauseSubscription(ctx forge.Context, req *SubIDRequest) (
 	return nil, ctx.NoContent(http.StatusNoContent)
 }
 
-func (p *Plugin) handleResumeSubscription(ctx forge.Context, req *SubIDRequest) (*struct{}, error) {
+func (p *Plugin) handleResumeSubscription(ctx forge.Context, req *SubIDRequest) (*apitypes.Empty, error) {
 	subID, err := ledgerid.ParseSubscriptionID(req.SubID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid subscription id")
@@ -811,7 +812,7 @@ func (p *Plugin) handleGetInvoice(ctx forge.Context, req *GetInvoiceRequest) (*I
 	}, nil
 }
 
-func (p *Plugin) handleMarkInvoicePaid(ctx forge.Context, req *MarkInvoicePaidRequest) (*struct{}, error) {
+func (p *Plugin) handleMarkInvoicePaid(ctx forge.Context, req *MarkInvoicePaidRequest) (*apitypes.Empty, error) {
 	invID, err := ledgerid.ParseInvoiceID(req.InvoiceID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid invoice_id")
@@ -832,7 +833,7 @@ func (p *Plugin) handleMarkInvoicePaid(ctx forge.Context, req *MarkInvoicePaidRe
 	return nil, ctx.NoContent(http.StatusNoContent)
 }
 
-func (p *Plugin) handleVoidInvoice(ctx forge.Context, req *VoidInvoiceRequest) (*struct{}, error) {
+func (p *Plugin) handleVoidInvoice(ctx forge.Context, req *VoidInvoiceRequest) (*apitypes.Empty, error) {
 	invID, err := ledgerid.ParseInvoiceID(req.InvoiceID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid invoice_id")
@@ -915,7 +916,7 @@ func (p *Plugin) handleCreateCoupon(ctx forge.Context, req *CreateCouponRequest)
 	return nil, ctx.JSON(http.StatusCreated, resp)
 }
 
-func (p *Plugin) handleDeleteCoupon(ctx forge.Context, req *DeleteCouponRequest) (*struct{}, error) {
+func (p *Plugin) handleDeleteCoupon(ctx forge.Context, req *DeleteCouponRequest) (*apitypes.Empty, error) {
 	couponID, err := ledgerid.ParseCouponID(req.CouponID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid coupon_id")

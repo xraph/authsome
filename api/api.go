@@ -11,6 +11,7 @@ import (
 	log "github.com/xraph/go-utils/log"
 
 	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/apitypes"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/sdkgen/openapi"
 )
@@ -163,7 +164,7 @@ func (a *API) registerWellKnownRoutes(router forge.Router) error {
 		forge.WithSummary("Get AuthSome manifest"),
 		forge.WithDescription("Returns service manifest with version, base path, and available endpoints."),
 		forge.WithOperationID("getManifest"),
-		forge.WithResponseSchema(http.StatusOK, "Manifest", map[string]any{}),
+		forge.WithResponseSchema(http.StatusOK, "Manifest", Manifest{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -173,12 +174,12 @@ func (a *API) registerWellKnownRoutes(router forge.Router) error {
 		forge.WithSummary("Get OpenAPI specification"),
 		forge.WithDescription("Returns the OpenAPI 3.0 specification for the AuthSome API."),
 		forge.WithOperationID("getOpenAPI"),
-		forge.WithResponseSchema(http.StatusOK, "OpenAPI spec", map[string]any{}),
+		forge.WithResponseSchema(http.StatusOK, "OpenAPI spec", OpenAPIDocument{}),
 		forge.WithErrorResponses(),
 	)
 }
 
-func (a *API) handleManifest(ctx forge.Context, _ *struct{}) (*map[string]any, error) { //nolint:gocritic // Forge requires pointer return type for handler detection
+func (a *API) handleManifest(ctx forge.Context, _ *apitypes.Empty) (*Manifest, error) {
 	manifest := map[string]any{
 		"version":   "0.5.0",
 		"base_path": a.engine.Config().BasePath,
@@ -214,7 +215,7 @@ func (a *API) handleManifest(ctx forge.Context, _ *struct{}) (*map[string]any, e
 	return nil, ctx.JSON(http.StatusOK, manifest)
 }
 
-func (a *API) handleOpenAPI(ctx forge.Context, _ *struct{}) (*map[string]any, error) { //nolint:gocritic // Forge requires pointer return type for handler detection
+func (a *API) handleOpenAPI(ctx forge.Context, _ *apitypes.Empty) (*OpenAPIDocument, error) {
 	// Prefer the Forge router's dynamically-generated spec when available.
 	// This spec is built from the actual registered routes and their OpenAPI
 	// metadata, so it always reflects the true API surface.
@@ -258,7 +259,7 @@ func (a *API) registerHealthRoutes(router forge.Router) error {
 	)
 }
 
-func (a *API) handleHealth(ctx forge.Context, _ *struct{}) (*HealthResponse, error) {
+func (a *API) handleHealth(ctx forge.Context, _ *apitypes.Empty) (*HealthResponse, error) {
 	if err := a.engine.Store().Ping(ctx.Context()); err != nil {
 		resp := &HealthResponse{Status: "unhealthy", Error: err.Error()}
 		return nil, ctx.JSON(http.StatusServiceUnavailable, resp)

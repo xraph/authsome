@@ -66,7 +66,7 @@ func (a *API) registerUserRoutes(router forge.Router) error {
 		forge.WithSummary("Export user data"),
 		forge.WithDescription("Returns all data associated with the authenticated user for GDPR data portability."),
 		forge.WithOperationID("exportUserData"),
-		forge.WithResponseSchema(http.StatusOK, "User data export", map[string]any{}),
+		forge.WithResponseSchema(http.StatusOK, "User data export", UserDataExport{}),
 		forge.WithErrorResponses(),
 	)
 }
@@ -189,7 +189,7 @@ func (a *API) handleDeleteAccount(ctx forge.Context, _ *DeleteAccountRequest) (*
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
-func (a *API) handleExportData(ctx forge.Context, _ *ExportDataRequest) (*map[string]any, error) { //nolint:gocritic // Forge requires pointer return type for handler detection
+func (a *API) handleExportData(ctx forge.Context, _ *ExportDataRequest) (*UserDataExport, error) {
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
 		return nil, forge.Unauthorized("authentication required")

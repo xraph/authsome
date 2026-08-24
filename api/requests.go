@@ -228,6 +228,24 @@ type HealthResponse struct {
 	Error  string `json:"error,omitempty" description:"Error details if unhealthy"`
 }
 
+// The three endpoints below answer with JSON whose shape is decided at runtime,
+// so there is no struct to describe them with. A named map type closes that
+// gap. It marshals exactly as the bare map does, and unlike an anonymous
+// map[string]any it gives the OpenAPI generator a name to put on the component,
+// which is what the SDK generators turn into a type you can hold.
+
+// Manifest is the discovery document served at the API root: version, base
+// path, endpoint list, and the platform app identifiers when there is a
+// platform app to report.
+type Manifest map[string]any
+
+// OpenAPIDocument is the OpenAPI spec this API serves for itself.
+type OpenAPIDocument map[string]any
+
+// UserDataExport is everything held about one user, assembled at export time.
+// The keys follow whatever the engine has stored, so they are not fixed here.
+type UserDataExport map[string]any
+
 // ---------------------------------------------------------------------------
 // RBAC requests
 // ---------------------------------------------------------------------------

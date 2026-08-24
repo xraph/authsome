@@ -21,6 +21,7 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/apitypes"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/formconfig"
@@ -1361,7 +1362,7 @@ func (p *Plugin) handleAdminListProviders(ctx forge.Context, req *AdminListProvi
 }
 
 // handleAdminCatalog returns the static provider catalog.
-func (p *Plugin) handleAdminCatalog(_ forge.Context, _ *struct{}) (*AdminCatalogResponse, error) {
+func (p *Plugin) handleAdminCatalog(_ forge.Context, _ *apitypes.Empty) (*AdminCatalogResponse, error) {
 	out := make([]AdminCatalogProvider, len(supportedProviderCatalog))
 	copy(out, supportedProviderCatalog)
 	return &AdminCatalogResponse{Providers: out}, nil
