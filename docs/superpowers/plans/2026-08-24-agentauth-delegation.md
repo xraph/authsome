@@ -1995,11 +1995,15 @@ import (
 	"github.com/xraph/authsome/user"
 )
 
-// recordingHooks captures which lifecycle hooks fired during issuance.
+// recordingHooks is a plugin that records which lifecycle hooks fired during
+// issuance. It is registered on a plugin.Registry, which is what carries the
+// Emit* methods.
 type recordingHooks struct {
 	beforeSessionCreate int
 	afterSignIn         int
 }
+
+func (h *recordingHooks) Name() string { return "recording-hooks" }
 
 func (h *recordingHooks) OnBeforeSessionCreate(_ context.Context, _ *session.Session) error {
 	h.beforeSessionCreate++
@@ -2062,34 +2066,27 @@ func TestIssueAgentSession_RefusesInactiveGrant(t *testing.T) {
 	require.ErrorIs(t, err, agentauth.ErrGrantInactive)
 }
 
-// issuanceSetup builds a plugin wired to a test engine that registers hooks
-// and persists sessions to memory. Implement the engine stub in this file
-// against plugin.Engine, returning a memory store from Store() and a hook.Bus
-// from Hooks() with hooks registered on it.
-func issuanceSetup(t *testing.T, hooks *recordingHooks) (*agentauth.Plugin, *agentauth.AgentGrant) {
-	t.Helper()
-	// See Step 3 for the engine stub this helper constructs.
-	p, grant := newIssuanceHarness(t, hooks)
-	return p, grant
-}
+// issuanceSetup is implemented in Step 3, below. It builds a plugin wired to
+// a stub plugin.Engine whose Plugins() returns a registry with the recording
+// plugin on it, and whose Store() returns a memory store.
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `go test ./plugins/agentauth/ -run TestIssueAgentSession -v`
-Expected: FAIL, compile error `undefined: newIssuanceHarness`.
+Expected: FAIL, compile error `undefined: issuanceSetup`.
 
 - [ ] **Step 3: Write minimal implementation**
 
-First add the test harness at the bottom of `plugins/agentauth/issue_test.go`. It builds a `plugin.Engine` whose `Hooks()` returns a bus with the recording hooks registered, and whose `Store()` returns `memory.New()`:
+First add the test harness at the bottom of `plugins/agentauth/issue_test.go`. It builds a `plugin.Engine` whose `Plugins()` returns a registry carrying the recording plugin, and whose `Store()` returns `memory.New()`:
 
 ```go
-func newIssuanceHarness(t *testing.T, hooks *recordingHooks) (*agentauth.Plugin, *agentauth.AgentGrant) {
+func issuanceSetup(t *testing.T, hooks *recordingHooks) (*agentauth.Plugin, *agentauth.AgentGrant) {
 	t.Helper()
-	bus := hook.NewBus(log.NewNoopLogger())
-	bus.Register(hooks)
+	reg := plugin.NewRegistry(log.NewNoopLogger())
+	reg.Register(hooks)
 
-	eng := &stubEngine{store: memory.New(), bus: bus}
+	eng := &stubEngine{store: memory.New(), registry: reg, bus: hook.NewBus(log.NewNoopLogger())}
 	store := agentauth.NewMemoryStore()
 	p := agentauth.New(agentauth.WithStore(store))
 	require.NoError(t, p.OnInit(context.Background(), eng))
@@ -2109,7 +2106,7 @@ func newIssuanceHarness(t *testing.T, hooks *recordingHooks) (*agentauth.Plugin,
 }
 ```
 
-Implement `stubEngine` in the same test file satisfying `plugin.Engine`. Return real values from `Store()`, `Hooks()` and `Logger()`, and zero values from the rest. Copy the method set from `plugin/plugin.go:52`.
+Implement `stubEngine` in the same test file satisfying `plugin.Engine`. Return real values from `Store()`, `Plugins()`, `Hooks()`, `Logger()` and `GetUser()`, and zero values from the rest. Copy the method set from `plugin/plugin.go:52`. `Plugins()` is the one that matters here: it must return the registry built above, or no hook fires and the test fails for the wrong reason.
 
 Now create `plugins/agentauth/issue.go`:
 
@@ -2162,7 +2159,14 @@ func (p *Plugin) IssueAgentSession(ctx context.Context, grant *AgentGrant) (*ses
 		UpdatedAt:     now,
 	}
 
-	if err := p.hooks.EmitBeforeSessionCreate(ctx, sess); err != nil {
+	// The Emit* methods live on *plugin.Registry, reached through
+	// engine.Plugins(). engine.Hooks() returns a *hook.Bus, which is a
+	// different type and has no Emit methods on it.
+	reg := p.engine.Plugins()
+
+	// BeforeSessionCreate returns an error and can veto. riskengine uses it to
+	// block a session outright when the score is high enough.
+	if err := reg.EmitBeforeSessionCreate(ctx, sess); err != nil {
 		return nil, fmt.Errorf("agentauth: before session create: %w", err)
 	}
 	if err := p.engine.Store().CreateSession(ctx, sess); err != nil {
@@ -2173,9 +2177,9 @@ func (p *Plugin) IssueAgentSession(ctx context.Context, grant *AgentGrant) (*ses
 	if err != nil {
 		return nil, fmt.Errorf("agentauth: resolve delegating user: %w", err)
 	}
-	if err := p.hooks.EmitAfterSignIn(ctx, u, sess); err != nil {
-		p.logger.Warn("agentauth: after sign in hook failed", log.Error(err))
-	}
+	// EmitAfterSignIn returns nothing. Notification hooks are fire-and-forget
+	// by design, so there is no error to handle here.
+	reg.EmitAfterSignIn(ctx, u, sess)
 
 	stamp := now
 	grant.LastUsedAt = &stamp
@@ -2187,7 +2191,7 @@ func (p *Plugin) IssueAgentSession(ctx context.Context, grant *AgentGrant) (*ses
 }
 ```
 
-Check the exact emit method names on `hook.Bus` in `hook/` and adjust if they differ from `EmitBeforeSessionCreate` / `EmitAfterSignIn`. Add the `log` import used above.
+Note the asymmetry, since it is easy to get wrong: `EmitBeforeSessionCreate` returns an `error` (`plugin/registry.go:441`) and `EmitAfterSignIn` returns nothing (`plugin/registry.go:348`). Writing `if err := reg.EmitAfterSignIn(...)` will not compile.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -2404,3 +2408,1037 @@ Expected: PASS, the whole package including every earlier task's tests.
 git add plugins/agentauth/cache.go plugins/agentauth/cache_test.go plugins/agentauth/middleware.go plugins/agentauth/grant.go
 git commit -m "feat(agentauth): cache grants with explicit invalidation on revoke"
 ```
+
+---
+
+### Task 11: Offboarding lifecycle
+
+Read this task fully before starting. The member-removal hook as it exists today cannot support org-scoped revocation, so this task widens it first.
+
+`OnAfterMemberRemove(ctx, memberID)` carries only a `MemberID`, and `plugins/organization/service.go:140` calls `DeleteMember` before emitting. By the time any plugin sees the hook, the member row is gone and there is no way to learn which user left which org. So this task adds a `BeforeMemberRemove` hook carrying the full member, matching the `BeforeUserDelete` precedent already in `plugin/plugin.go:246`.
+
+**Files:**
+- Modify: `plugin/plugin.go` (add the `BeforeMemberRemove` interface)
+- Modify: `plugin/registry.go` (add `EmitBeforeMemberRemove`)
+- Modify: `plugins/organization/service.go:139-145`
+- Create: `plugins/agentauth/lifecycle.go`
+- Test: `plugins/agentauth/lifecycle_test.go`
+
+**Interfaces:**
+- Consumes: `Store` revocation methods (Task 2); `Plugin` (Task 4); `RevokeGrant` (Task 10).
+- Produces: `plugin.BeforeMemberRemove` with `OnBeforeMemberRemove(ctx context.Context, m *organization.Member) error`; `(*Registry).EmitBeforeMemberRemove(ctx context.Context, m *organization.Member) error`; and on the plugin, `OnAfterUserUpdate`, `OnAfterUserDelete`, `OnBeforeMemberRemove`.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `plugins/agentauth/lifecycle_test.go`:
+
+```go
+package agentauth_test
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/plugins/agentauth"
+	"github.com/xraph/authsome/user"
+)
+
+func grantFor(t *testing.T, s agentauth.Store, userID id.UserID, orgID id.OrgID) *agentauth.AgentGrant {
+	t.Helper()
+	g := &agentauth.AgentGrant{
+		ID: id.NewAgentGrantID(), AppID: id.NewAppID(), AgentID: id.NewAgentID(),
+		UserID: userID, OrgID: orgID, Scopes: []string{"invoices:read"},
+		ExpiresAt: time.Now().Add(90 * 24 * time.Hour),
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	require.NoError(t, s.CreateAgentGrant(context.Background(), g))
+	return g
+}
+
+func assertRevoked(t *testing.T, s agentauth.Store, gid id.AgentGrantID) {
+	t.Helper()
+	g, err := s.GetAgentGrant(context.Background(), gid)
+	require.NoError(t, err)
+	assert.NotNil(t, g.RevokedAt, "grant %s should be revoked", gid)
+}
+
+// Banning a user must disarm every agent acting for them. Killing sessions
+// alone is not enough: the next refresh would mint a fresh one, because the
+// grant is what keeps authorizing.
+func TestOnAfterUserUpdate_BannedUserLosesGrants(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(agentauth.WithStore(store))
+	userID := id.NewUserID()
+	g := grantFor(t, store, userID, id.NewOrgID())
+
+	require.NoError(t, p.OnAfterUserUpdate(context.Background(), &user.User{ID: userID, Banned: true}))
+
+	assertRevoked(t, store, g.ID)
+}
+
+func TestOnAfterUserUpdate_ActiveUserKeepsGrants(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(agentauth.WithStore(store))
+	userID := id.NewUserID()
+	g := grantFor(t, store, userID, id.NewOrgID())
+
+	require.NoError(t, p.OnAfterUserUpdate(context.Background(), &user.User{ID: userID, Banned: false}))
+
+	got, err := store.GetAgentGrant(context.Background(), g.ID)
+	require.NoError(t, err)
+	assert.Nil(t, got.RevokedAt, "an ordinary profile update must not disarm agents")
+}
+
+func TestOnAfterUserDelete_RevokesGrants(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(agentauth.WithStore(store))
+	userID := id.NewUserID()
+	g := grantFor(t, store, userID, id.NewOrgID())
+
+	require.NoError(t, p.OnAfterUserDelete(context.Background(), userID))
+
+	assertRevoked(t, store, g.ID)
+}
+
+// Leaving one org must not disarm the user's agents in their other orgs.
+func TestOnBeforeMemberRemove_RevokesOnlyThatOrg(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(agentauth.WithStore(store))
+	userID := id.NewUserID()
+	leaving, staying := id.NewOrgID(), id.NewOrgID()
+	gone := grantFor(t, store, userID, leaving)
+	kept := grantFor(t, store, userID, staying)
+
+	require.NoError(t, p.OnBeforeMemberRemove(context.Background(), &organization.Member{
+		ID: id.NewMemberID(), OrgID: leaving, UserID: userID,
+	}))
+
+	assertRevoked(t, store, gone.ID)
+	survivor, err := store.GetAgentGrant(context.Background(), kept.ID)
+	require.NoError(t, err)
+	assert.Nil(t, survivor.RevokedAt, "grants in the user's other orgs must survive")
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `go test ./plugins/agentauth/ -run "TestOnAfter|TestOnBefore" -v`
+Expected: FAIL, compile error `p.OnAfterUserUpdate undefined`.
+
+- [ ] **Step 3: Write minimal implementation**
+
+In `plugin/plugin.go`, add next to `AfterMemberRemove`:
+
+```go
+// BeforeMemberRemove is called before a member is removed from an
+// organization, while the member record can still be read. AfterMemberRemove
+// carries only the id and fires after deletion, so a plugin that needs to know
+// which user left which org has to use this hook.
+type BeforeMemberRemove interface {
+	OnBeforeMemberRemove(ctx context.Context, m *organization.Member) error
+}
+```
+
+In `plugin/registry.go`, add `EmitBeforeMemberRemove` following the exact shape of the existing `EmitAfterMemberRemove`, including the same type-cache registration.
+
+In `plugins/organization/service.go`, rewrite `RemoveMember` so the member is resolved before deletion:
+
+```go
+// RemoveMember removes a member from an organization.
+func (p *Plugin) RemoveMember(ctx context.Context, memberID id.MemberID) error {
+	// Resolved before the delete so BeforeMemberRemove subscribers can see who
+	// is leaving which org. AfterMemberRemove carries only the id, which is
+	// not enough to revoke anything scoped to the pair.
+	member, err := p.store.GetMember(ctx, memberID)
+	if err != nil {
+		return fmt.Errorf("organization: remove member: %w", err)
+	}
+	if err := p.plugins.EmitBeforeMemberRemove(ctx, member); err != nil {
+		return fmt.Errorf("organization: remove member: %w", err)
+	}
+	if err := p.store.DeleteMember(ctx, memberID); err != nil {
+		return fmt.Errorf("organization: remove member: %w", err)
+	}
+	p.plugins.EmitAfterMemberRemove(ctx, memberID)
+	return nil
+}
+```
+
+Create `plugins/agentauth/lifecycle.go`:
+
+```go
+package agentauth
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/user"
+)
+
+// Compile-time interface checks.
+var (
+	_ plugin.AfterUserUpdate    = (*Plugin)(nil)
+	_ plugin.AfterUserDelete    = (*Plugin)(nil)
+	_ plugin.BeforeMemberRemove = (*Plugin)(nil)
+)
+
+// OnAfterUserUpdate revokes every grant a user issued once they are banned.
+// Sessions die separately through DeleteUserSessions; the grant has to go too,
+// or the next refresh mints a replacement session.
+func (p *Plugin) OnAfterUserUpdate(ctx context.Context, u *user.User) error {
+	if u == nil || !u.Banned {
+		return nil
+	}
+	return p.revokeUserGrants(ctx, u.ID)
+}
+
+// OnAfterUserDelete revokes every grant a deleted user issued.
+func (p *Plugin) OnAfterUserDelete(ctx context.Context, userID id.UserID) error {
+	return p.revokeUserGrants(ctx, userID)
+}
+
+// OnBeforeMemberRemove revokes the leaving member's grants in that org only.
+// Their grants in other orgs are untouched.
+func (p *Plugin) OnBeforeMemberRemove(ctx context.Context, m *organization.Member) error {
+	if m == nil {
+		return nil
+	}
+	grants, err := p.store.ListGrantsByUser(ctx, m.UserID)
+	if err != nil {
+		return fmt.Errorf("agentauth: list grants: %w", err)
+	}
+	if err := p.store.RevokeGrantsByUserOrg(ctx, m.UserID, m.OrgID); err != nil {
+		return fmt.Errorf("agentauth: revoke org grants: %w", err)
+	}
+	for _, g := range grants {
+		if g.OrgID.String() == m.OrgID.String() {
+			p.cache.invalidate(g.ID)
+		}
+	}
+	return nil
+}
+
+// revokeUserGrants revokes all of a user's grants and clears them from cache.
+func (p *Plugin) revokeUserGrants(ctx context.Context, userID id.UserID) error {
+	grants, err := p.store.ListGrantsByUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("agentauth: list grants: %w", err)
+	}
+	if err := p.store.RevokeGrantsByUser(ctx, userID); err != nil {
+		return fmt.Errorf("agentauth: revoke user grants: %w", err)
+	}
+	for _, g := range grants {
+		p.cache.invalidate(g.ID)
+	}
+	return nil
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `go test ./plugins/agentauth/ ./plugins/organization/ ./plugin/ -v`
+Expected: PASS. The organization suite must show no regressions from the `RemoveMember` rewrite.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add plugin/plugin.go plugin/registry.go plugins/organization/service.go plugins/agentauth/lifecycle.go plugins/agentauth/lifecycle_test.go
+git commit -m "feat(agentauth): revoke grants on ban, delete and org departure"
+```
+
+---
+
+### Task 12: User and admin HTTP surfaces
+
+**Files:**
+- Create: `plugins/agentauth/handlers.go`
+- Modify: `plugins/agentauth/plugin.go` (add `RegisterRoutes`)
+- Test: `plugins/agentauth/handlers_test.go`
+
+**Interfaces:**
+- Consumes: everything from Tasks 2, 4, 7, 10, 11.
+- Produces: `(*Plugin).RegisterRoutes(router forge.Router) error` satisfying `plugin.RouteProvider`, and the response types `agentauth.GrantView` with fields `ID string`, `AgentID string`, `AgentName string`, `Scopes []string`, `ExpiresAt time.Time`, `LastUsedAt *time.Time`; plus `agentauth.ListGrantsResponse` with `Grants []GrantView`.
+
+Routes:
+
+| Method | Path | Guard |
+|---|---|---|
+| `GET` | `/v1/me/agents` | `plugin.SessionGuard` |
+| `DELETE` | `/v1/me/agents/:id` | `plugin.SessionGuard` |
+| `GET` | `/v1/admin/agents` | `plugin.AdminGuard(engine, "read", "agent")` |
+| `POST` | `/v1/admin/agents` | `plugin.AdminGuard(engine, "write", "agent")` |
+| `PATCH` | `/v1/admin/agents/:id/status` | `plugin.AdminGuard(engine, "write", "agent")` |
+| `PUT` | `/v1/admin/agents/policy` | `plugin.AdminGuard(engine, "write", "agent")` |
+
+- [ ] **Step 1: Write the failing test**
+
+Create `plugins/agentauth/handlers_test.go`:
+
+```go
+package agentauth_test
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/plugins/agentauth"
+)
+
+// A user must be able to see every agent acting for them, and only theirs.
+func TestListMyGrants_ShowsOnlyTheCallersGrants(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(agentauth.WithStore(store))
+	me, someoneElse := id.NewUserID(), id.NewUserID()
+	agent := &agentauth.Agent{
+		ID: id.NewAgentID(), AppID: id.NewAppID(), ClientID: "client_x", Name: "Invoice Reader",
+		Origin: agentauth.OriginSelfRegistered, Status: agentauth.StatusApproved,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	require.NoError(t, store.CreateAgent(context.Background(), agent))
+	mine := &agentauth.AgentGrant{
+		ID: id.NewAgentGrantID(), AppID: agent.AppID, AgentID: agent.ID, UserID: me,
+		OrgID: id.NewOrgID(), Scopes: []string{"invoices:read"},
+		ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	theirs := &agentauth.AgentGrant{
+		ID: id.NewAgentGrantID(), AppID: agent.AppID, AgentID: agent.ID, UserID: someoneElse,
+		OrgID: id.NewOrgID(), Scopes: []string{"invoices:read"},
+		ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	require.NoError(t, store.CreateAgentGrant(context.Background(), mine))
+	require.NoError(t, store.CreateAgentGrant(context.Background(), theirs))
+
+	resp, err := p.ListMyGrants(context.Background(), me)
+
+	require.NoError(t, err)
+	require.Len(t, resp.Grants, 1)
+	assert.Equal(t, mine.ID.String(), resp.Grants[0].ID)
+	assert.Equal(t, "Invoice Reader", resp.Grants[0].AgentName)
+}
+
+// A user must not be able to revoke somebody else's delegation.
+func TestRevokeMyGrant_RefusesAnotherUsersGrant(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(agentauth.WithStore(store))
+	me, owner := id.NewUserID(), id.NewUserID()
+	theirs := &agentauth.AgentGrant{
+		ID: id.NewAgentGrantID(), AppID: id.NewAppID(), AgentID: id.NewAgentID(), UserID: owner,
+		OrgID: id.NewOrgID(), Scopes: []string{"invoices:read"},
+		ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	require.NoError(t, store.CreateAgentGrant(context.Background(), theirs))
+
+	err := p.RevokeMyGrant(context.Background(), me, theirs.ID)
+
+	require.Error(t, err)
+	got, gerr := store.GetAgentGrant(context.Background(), theirs.ID)
+	require.NoError(t, gerr)
+	assert.Nil(t, got.RevokedAt, "the grant must survive an unauthorized revoke attempt")
+}
+
+func TestRevokeMyGrant_RevokesOwnGrant(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(agentauth.WithStore(store))
+	me := id.NewUserID()
+	mine := &agentauth.AgentGrant{
+		ID: id.NewAgentGrantID(), AppID: id.NewAppID(), AgentID: id.NewAgentID(), UserID: me,
+		OrgID: id.NewOrgID(), Scopes: []string{"invoices:read"},
+		ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	require.NoError(t, store.CreateAgentGrant(context.Background(), mine))
+
+	require.NoError(t, p.RevokeMyGrant(context.Background(), me, mine.ID))
+
+	got, err := store.GetAgentGrant(context.Background(), mine.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, got.RevokedAt)
+}
+
+// Blocking an agent must disarm it across the org in one action.
+func TestBlockAgent_RevokesItsGrants(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(agentauth.WithStore(store))
+	org := id.NewOrgID()
+	agent := &agentauth.Agent{
+		ID: id.NewAgentID(), AppID: id.NewAppID(), OrgID: org, ClientID: "client_bad",
+		Name: "Rogue", Origin: agentauth.OriginSelfRegistered, Status: agentauth.StatusApproved,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	require.NoError(t, store.CreateAgent(context.Background(), agent))
+	g := &agentauth.AgentGrant{
+		ID: id.NewAgentGrantID(), AppID: agent.AppID, AgentID: agent.ID, UserID: id.NewUserID(),
+		OrgID: org, Scopes: []string{"invoices:read"},
+		ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	require.NoError(t, store.CreateAgentGrant(context.Background(), g))
+
+	require.NoError(t, p.SetAgentStatus(context.Background(), agent.ID, org, agentauth.StatusBlocked))
+
+	got, err := store.GetAgentGrant(context.Background(), g.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, got.RevokedAt, "blocking an agent must revoke the grants it holds")
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `go test ./plugins/agentauth/ -run "TestListMyGrants|TestRevokeMyGrant|TestBlockAgent" -v`
+Expected: FAIL, compile error `p.ListMyGrants undefined`.
+
+- [ ] **Step 3: Write minimal implementation**
+
+Create `plugins/agentauth/handlers.go`:
+
+```go
+package agentauth
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/xraph/forge"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/plugin"
+)
+
+// Compile-time interface check.
+var _ plugin.RouteProvider = (*Plugin)(nil)
+
+// GrantView is one delegation as the granting user sees it.
+type GrantView struct {
+	ID         string     `json:"id"`
+	AgentID    string     `json:"agent_id"`
+	AgentName  string     `json:"agent_name"`
+	Scopes     []string   `json:"scopes"`
+	ExpiresAt  time.Time  `json:"expires_at"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+}
+
+// ListGrantsResponse is the /v1/me/agents payload.
+type ListGrantsResponse struct {
+	Grants []GrantView `json:"grants"`
+}
+
+// ListMyGrants returns every active delegation the user has issued.
+func (p *Plugin) ListMyGrants(ctx context.Context, userID id.UserID) (*ListGrantsResponse, error) {
+	grants, err := p.store.ListGrantsByUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("agentauth: list grants: %w", err)
+	}
+	now := time.Now()
+	out := &ListGrantsResponse{Grants: []GrantView{}}
+	for _, g := range grants {
+		if !g.IsActive(now) {
+			continue
+		}
+		view := GrantView{
+			ID: g.ID.String(), AgentID: g.AgentID.String(),
+			Scopes: g.Scopes, ExpiresAt: g.ExpiresAt, LastUsedAt: g.LastUsedAt,
+		}
+		if a, aerr := p.store.GetAgent(ctx, g.AgentID); aerr == nil {
+			view.AgentName = a.Name
+		}
+		out.Grants = append(out.Grants, view)
+	}
+	return out, nil
+}
+
+// RevokeMyGrant revokes one of the caller's own delegations. It refuses a
+// grant belonging to anybody else, so a grant id is not an authorization.
+func (p *Plugin) RevokeMyGrant(ctx context.Context, userID id.UserID, grantID id.AgentGrantID) error {
+	g, err := p.store.GetAgentGrant(ctx, grantID)
+	if errors.Is(err, ErrNotFound) {
+		return forge.NotFound("grant not found")
+	}
+	if err != nil {
+		return fmt.Errorf("agentauth: load grant: %w", err)
+	}
+	if g.UserID.String() != userID.String() {
+		// Same response as a missing grant, so the endpoint does not confirm
+		// that somebody else's grant id exists.
+		return forge.NotFound("grant not found")
+	}
+	return p.RevokeGrant(ctx, grantID)
+}
+
+// SetAgentStatus changes an agent's approval state. Blocking also revokes
+// every grant the agent holds in that org, since leaving them live would mean
+// a blocked agent kept working until its sessions aged out.
+func (p *Plugin) SetAgentStatus(ctx context.Context, agentID id.AgentID, orgID id.OrgID, status AgentStatus) error {
+	a, err := p.store.GetAgent(ctx, agentID)
+	if errors.Is(err, ErrNotFound) {
+		return forge.NotFound("agent not found")
+	}
+	if err != nil {
+		return fmt.Errorf("agentauth: load agent: %w", err)
+	}
+
+	a.Status = status
+	a.UpdatedAt = time.Now()
+	if err := p.store.UpdateAgent(ctx, a); err != nil {
+		return fmt.Errorf("agentauth: update agent: %w", err)
+	}
+
+	if status != StatusBlocked {
+		return nil
+	}
+	if err := p.store.RevokeGrantsByAgent(ctx, agentID, orgID); err != nil {
+		return fmt.Errorf("agentauth: revoke agent grants: %w", err)
+	}
+	// The cache is keyed by grant id and the revoked grants are not enumerated
+	// here, so clear it wholesale. Blocking an agent is a rare admin action,
+	// so the cost of a cold cache does not matter.
+	p.cache = newGrantCache(grantCacheTTL)
+	return nil
+}
+```
+
+Add `RegisterRoutes` to `plugins/agentauth/plugin.go`, following the group and guard pattern in `plugins/consent/plugin.go`:
+
+```go
+// RegisterRoutes registers the user and admin surfaces.
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
+	me := router.Group(p.basePath+"/me/agents",
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
+	)
+	me.GET("", p.handleListMyGrants, forge.WithSummary("List agents acting on my behalf"))
+	me.DELETE("/:id", p.handleRevokeMyGrant, forge.WithSummary("Revoke an agent's delegation"))
+
+	admin := router.Group(p.basePath+"/admin/agents",
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.AdminGuard(p.engine, "read", "agent")...),
+	)
+	admin.GET("", p.handleListAgents, forge.WithSummary("List registered agents"))
+	admin.POST("", p.handleRegisterAgent,
+		append([]forge.RouteOption{forge.WithSummary("Register an agent")},
+			plugin.PermissionRouteOptions(p.engine, "write", "agent")...)...)
+	admin.PATCH("/:id/status", p.handleSetAgentStatus,
+		append([]forge.RouteOption{forge.WithSummary("Approve or block an agent")},
+			plugin.PermissionRouteOptions(p.engine, "write", "agent")...)...)
+	admin.PUT("/policy", p.handlePutOrgPolicy,
+		append([]forge.RouteOption{forge.WithSummary("Set the org's agent delegation policy")},
+			plugin.PermissionRouteOptions(p.engine, "write", "agent")...)...)
+	return nil
+}
+```
+
+Write the six thin `handleX` methods in `handlers.go`. Each resolves the caller from `middleware` context, parses path params with the `id.ParseAgentGrantID` / `id.ParseAgentID` helpers from Task 1, and delegates to the service methods above. Follow the handler signatures used in `plugins/consent/plugin.go`.
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `go test ./plugins/agentauth/ -v`
+Expected: PASS, whole package.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add plugins/agentauth/handlers.go plugins/agentauth/handlers_test.go plugins/agentauth/plugin.go
+git commit -m "feat(agentauth): add user grant listing and admin agent management"
+```
+
+---
+
+### Task 13: Persistent stores and migrations
+
+**Files:**
+- Create: `plugins/agentauth/store_models.go`, `store_postgres.go`, `store_sqlite.go`, `store_mongo.go`, `migrations.go`
+- Test: `plugins/agentauth/store_conformance_test.go`
+
+**Interfaces:**
+- Consumes: the `Store` interface and all domain types (Task 2).
+- Produces: `agentauth.NewPostgresStore(db *grove.DB) *PostgresStore`, `agentauth.NewSqliteStore(db *grove.DB) *SqliteStore`, `agentauth.NewMongoStore(db *grove.DB) *MongoStore`, `agentauth.PostgresMigrations`, `agentauth.SqliteMigrations`, and `(*Plugin).MigrationGroups(driverName string) []*migrate.Group`.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `plugins/agentauth/store_conformance_test.go`. One suite, run against every backend, so a backend cannot drift:
+
+```go
+package agentauth_test
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/plugins/agentauth"
+)
+
+// runStoreConformance is the single suite every backend must satisfy.
+func runStoreConformance(t *testing.T, newStore func(t *testing.T) agentauth.Store) {
+	t.Run("grant round trips", func(t *testing.T) {
+		s := newStore(t)
+		g := &agentauth.AgentGrant{
+			ID: id.NewAgentGrantID(), AppID: id.NewAppID(), AgentID: id.NewAgentID(),
+			UserID: id.NewUserID(), OrgID: id.NewOrgID(),
+			Scopes: []string{"invoices:read", "invoices:write"},
+			ExpiresAt: time.Now().Add(time.Hour).UTC(),
+			CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+		}
+		require.NoError(t, s.CreateAgentGrant(context.Background(), g))
+
+		got, err := s.GetAgentGrant(context.Background(), g.ID)
+		require.NoError(t, err)
+		assert.Equal(t, g.UserID.String(), got.UserID.String())
+		assert.ElementsMatch(t, g.Scopes, got.Scopes, "the scope list must survive serialization")
+		assert.WithinDuration(t, g.ExpiresAt, got.ExpiresAt, time.Second)
+	})
+
+	t.Run("agent lookup by client id", func(t *testing.T) {
+		s := newStore(t)
+		a := &agentauth.Agent{
+			ID: id.NewAgentID(), AppID: id.NewAppID(), ClientID: "client_lookup",
+			Name: "Lookup", Origin: agentauth.OriginSelfRegistered,
+			Status: agentauth.StatusPending, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		}
+		require.NoError(t, s.CreateAgent(context.Background(), a))
+
+		got, err := s.GetAgentByClientID(context.Background(), "client_lookup")
+		require.NoError(t, err)
+		assert.Equal(t, a.ID.String(), got.ID.String())
+	})
+
+	t.Run("revoke by user org is scoped", func(t *testing.T) {
+		s := newStore(t)
+		user := id.NewUserID()
+		leaving, staying := id.NewOrgID(), id.NewOrgID()
+		mk := func(org id.OrgID) *agentauth.AgentGrant {
+			g := &agentauth.AgentGrant{
+				ID: id.NewAgentGrantID(), AppID: id.NewAppID(), AgentID: id.NewAgentID(),
+				UserID: user, OrgID: org, Scopes: []string{"invoices:read"},
+				ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now(), UpdatedAt: time.Now(),
+			}
+			require.NoError(t, s.CreateAgentGrant(context.Background(), g))
+			return g
+		}
+		gone, kept := mk(leaving), mk(staying)
+
+		require.NoError(t, s.RevokeGrantsByUserOrg(context.Background(), user, leaving))
+
+		g1, err := s.GetAgentGrant(context.Background(), gone.ID)
+		require.NoError(t, err)
+		assert.NotNil(t, g1.RevokedAt)
+		g2, err := s.GetAgentGrant(context.Background(), kept.ID)
+		require.NoError(t, err)
+		assert.Nil(t, g2.RevokedAt)
+	})
+
+	t.Run("org policy round trips", func(t *testing.T) {
+		s := newStore(t)
+		org := id.NewOrgID()
+		require.NoError(t, s.PutOrgPolicy(context.Background(), &agentauth.OrgAgentPolicy{
+			OrgID: org, Mode: agentauth.ModeAllowlist,
+			MaxGrantTTL: 48 * time.Hour, AllowedScopes: []string{"invoices:read"},
+		}))
+
+		got, err := s.GetOrgPolicy(context.Background(), org)
+		require.NoError(t, err)
+		assert.Equal(t, agentauth.ModeAllowlist, got.Mode)
+		assert.Equal(t, 48*time.Hour, got.MaxGrantTTL, "a duration must survive the round trip")
+		assert.Equal(t, []string{"invoices:read"}, got.AllowedScopes)
+	})
+}
+
+func TestMemoryStore_Conformance(t *testing.T) {
+	runStoreConformance(t, func(t *testing.T) agentauth.Store {
+		return agentauth.NewMemoryStore()
+	})
+}
+
+func TestSqliteStore_Conformance(t *testing.T) {
+	runStoreConformance(t, func(t *testing.T) agentauth.Store {
+		return agentauth.NewSqliteStore(newTestSqliteDB(t))
+	})
+}
+```
+
+Implement `newTestSqliteDB(t *testing.T) *grove.DB` in this file, opening an in-memory sqlite database and running `agentauth.SqliteMigrations`. Copy the setup used by an existing plugin's sqlite test.
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `go test ./plugins/agentauth/ -run Conformance -v`
+Expected: FAIL, compile error `undefined: agentauth.NewSqliteStore`.
+
+- [ ] **Step 3: Write minimal implementation**
+
+Create `plugins/agentauth/migrations.go`, following `plugins/consent/migrations.go` exactly:
+
+```go
+package agentauth
+
+import (
+	"context"
+
+	"github.com/xraph/grove/migrate"
+)
+
+// PostgresMigrations is the postgres migration group for the agentauth plugin.
+var PostgresMigrations = migrate.NewGroup("authsome-agentauth", migrate.DependsOn("authsome"))
+
+// SqliteMigrations is the SQLite migration group for the agentauth plugin.
+var SqliteMigrations = migrate.NewGroup("authsome-agentauth", migrate.DependsOn("authsome"))
+
+func init() {
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "create_agentauth_tables",
+			Version: "20260824000002",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS authsome_agents (
+    id          TEXT PRIMARY KEY,
+    app_id      TEXT NOT NULL REFERENCES authsome_apps(id),
+    org_id      TEXT NOT NULL DEFAULT '',
+    client_id   TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    logo_uri    TEXT NOT NULL DEFAULT '',
+    origin      TEXT NOT NULL,
+    status      TEXT NOT NULL,
+    created_by  TEXT NOT NULL DEFAULT '',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_agents_client_id
+    ON authsome_agents (client_id);
+
+CREATE TABLE IF NOT EXISTS authsome_agent_grants (
+    id           TEXT PRIMARY KEY,
+    app_id       TEXT NOT NULL REFERENCES authsome_apps(id),
+    agent_id     TEXT NOT NULL REFERENCES authsome_agents(id),
+    user_id      TEXT NOT NULL,
+    org_id       TEXT NOT NULL DEFAULT '',
+    scopes       TEXT NOT NULL DEFAULT '[]',
+    consent_id   TEXT NOT NULL DEFAULT '',
+    expires_at   TIMESTAMPTZ NOT NULL,
+    last_used_at TIMESTAMPTZ,
+    revoked_at   TIMESTAMPTZ,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- Every grant names the human who authorized it. The intersection model
+    -- has no meaning without one, so this is enforced rather than assumed.
+    CONSTRAINT authsome_agent_grants_user_required CHECK (user_id <> '')
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_agent_grants_active
+    ON authsome_agent_grants (agent_id, user_id, org_id)
+    WHERE revoked_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_authsome_agent_grants_user
+    ON authsome_agent_grants (user_id);
+
+CREATE TABLE IF NOT EXISTS authsome_agent_policies (
+    org_id         TEXT PRIMARY KEY,
+    mode           TEXT NOT NULL,
+    max_grant_ttl  BIGINT NOT NULL DEFAULT 0,
+    allowed_scopes TEXT NOT NULL DEFAULT '[]',
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP TABLE IF EXISTS authsome_agent_policies;
+DROP TABLE IF EXISTS authsome_agent_grants;
+DROP TABLE IF EXISTS authsome_agents;
+`)
+				return err
+			},
+		},
+	)
+
+	// The SQLite group mirrors the above with TEXT timestamps, INTEGER for
+	// max_grant_ttl, and no partial-index WHERE clause on the active-grant
+	// index. Register it here following the same shape.
+}
+
+// MigrationGroups returns the agentauth migration groups for the driver.
+func (p *Plugin) MigrationGroups(driverName string) []*migrate.Group {
+	switch driverName {
+	case "pg", "postgres":
+		return []*migrate.Group{PostgresMigrations}
+	case "sqlite", "sqlite3":
+		return []*migrate.Group{SqliteMigrations}
+	default:
+		return nil
+	}
+}
+```
+
+Add `_ plugin.MigrationProvider = (*Plugin)(nil)` to the compile-time checks in `plugin.go`.
+
+Create `store_models.go` with the row structs. `Scopes` and `AllowedScopes` serialize as JSON text; `MaxGrantTTL` stores as an integer count of nanoseconds so the duration round-trips exactly. Then create `store_postgres.go`, `store_sqlite.go` and `store_mongo.go` implementing every `Store` method, following the query style in `plugins/consent/store_postgres.go`.
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `go test ./plugins/agentauth/ -v`
+Expected: PASS. Both conformance suites green, with all four subtests each.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add plugins/agentauth/
+git commit -m "feat(agentauth): add persistent stores and migrations"
+```
+
+---
+
+---
+
+### Task 14: HTTP error mapping
+
+Task 8 produces sentinel errors. This turns them into the responses the spec's error table specifies, including the `WWW-Authenticate` headers an agent developer needs to tell "re-authorize" apart from "ask for more scope".
+
+**Files:**
+- Create: `plugins/agentauth/errors.go`
+- Test: `plugins/agentauth/errors_test.go`
+
+**Interfaces:**
+- Consumes: `ErrInsufficientScope`, `ErrGrantInactive`, `ErrNoPermissionChecker` (Task 8); `ScopeRegistry` (Task 3).
+- Produces: `(*Plugin).AuthorizeHTTP(ctx context.Context, sess *session.Session, action, resource string) error`, which wraps `Authorize` and returns a forge HTTP error carrying the right status and headers.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `plugins/agentauth/errors_test.go`:
+
+```go
+package agentauth_test
+
+import (
+	"context"
+	"net/http"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/xraph/authsome/plugins/agentauth"
+)
+
+// An expired or revoked grant is 401, not 403. The distinction is what tells
+// an agent to re-authorize instead of giving up.
+func TestAuthorizeHTTP_InactiveGrantIs401(t *testing.T) {
+	p, _, sess, userID := agentSetup(t, []string{"invoices:read"}, time.Now().Add(-time.Hour))
+	p.SetPermissionChecker(&stubChecker{allow: map[string]bool{
+		userID.String() + "|read|invoice": true,
+	}})
+
+	err := p.AuthorizeHTTP(context.Background(), sess, "read", "invoice")
+
+	require.Error(t, err)
+	assert.Equal(t, http.StatusUnauthorized, agentauth.StatusOf(err))
+	assert.Contains(t, agentauth.HeaderOf(err, "WWW-Authenticate"), `error="invalid_token"`)
+}
+
+// A missing scope is 403 and must name the scope the agent needs, so a
+// developer can fix their authorization request without guesswork.
+func TestAuthorizeHTTP_MissingScopeIs403WithScopeNamed(t *testing.T) {
+	p, _, sess, userID := agentSetup(t, []string{"invoices:read"}, time.Now().Add(time.Hour))
+	p.SetPermissionChecker(&stubChecker{allow: map[string]bool{
+		userID.String() + "|write|invoice": true,
+	}})
+
+	err := p.AuthorizeHTTP(context.Background(), sess, "write", "invoice")
+
+	require.Error(t, err)
+	assert.Equal(t, http.StatusForbidden, agentauth.StatusOf(err))
+	header := agentauth.HeaderOf(err, "WWW-Authenticate")
+	assert.Contains(t, header, `error="insufficient_scope"`)
+	assert.Contains(t, header, `scope="invoices:write"`, "the response must name the scope that would satisfy the route")
+}
+
+// A user-gate failure must NOT name a scope. Reporting it the same way as a
+// scope failure would let an agent enumerate its owner's permissions.
+func TestAuthorizeHTTP_UserGateFailureIsOpaque(t *testing.T) {
+	p, _, sess, _ := agentSetup(t, []string{"invoices:read"}, time.Now().Add(time.Hour))
+	p.SetPermissionChecker(&stubChecker{allow: map[string]bool{}})
+
+	err := p.AuthorizeHTTP(context.Background(), sess, "read", "invoice")
+
+	require.Error(t, err)
+	assert.Equal(t, http.StatusForbidden, agentauth.StatusOf(err))
+	assert.NotContains(t, agentauth.HeaderOf(err, "WWW-Authenticate"), "insufficient_scope",
+		"a user-gate failure must not be reported as a scope problem")
+}
+
+func TestAuthorizeHTTP_NoPermissionCheckerIs403(t *testing.T) {
+	p, _, sess, _ := agentSetup(t, []string{"invoices:read"}, time.Now().Add(time.Hour))
+
+	err := p.AuthorizeHTTP(context.Background(), sess, "read", "invoice")
+
+	require.Error(t, err)
+	assert.Equal(t, http.StatusForbidden, agentauth.StatusOf(err))
+}
+
+func TestAuthorizeHTTP_AllowedReturnsNil(t *testing.T) {
+	p, _, sess, userID := agentSetup(t, []string{"invoices:read"}, time.Now().Add(time.Hour))
+	p.SetPermissionChecker(&stubChecker{allow: map[string]bool{
+		userID.String() + "|read|invoice": true,
+	}})
+
+	require.NoError(t, p.AuthorizeHTTP(context.Background(), sess, "read", "invoice"))
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `go test ./plugins/agentauth/ -run TestAuthorizeHTTP -v`
+Expected: FAIL, compile error `p.AuthorizeHTTP undefined`.
+
+- [ ] **Step 3: Write minimal implementation**
+
+Create `plugins/agentauth/errors.go`:
+
+```go
+package agentauth
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+
+	"github.com/xraph/forge"
+
+	"github.com/xraph/authsome/session"
+)
+
+// AuthorizeHTTP wraps Authorize and maps its sentinels onto the responses an
+// agent developer can act on.
+//
+// The scope case names the scope that would satisfy the route, which is safe
+// because it describes the route rather than the owner. The user-gate case
+// stays opaque on purpose: reporting it in the same shape would let an agent
+// enumerate its owner's permissions one request at a time.
+func (p *Plugin) AuthorizeHTTP(ctx context.Context, sess *session.Session, action, resource string) error {
+	err := p.Authorize(ctx, sess, action, resource)
+	switch {
+	case err == nil:
+		return nil
+
+	case errors.Is(err, ErrGrantInactive):
+		return forge.NewHTTPError(http.StatusUnauthorized, "agent grant is no longer valid").
+			WithHeader("WWW-Authenticate",
+				`Bearer error="invalid_token", error_description="agent grant revoked or expired"`)
+
+	case errors.Is(err, ErrInsufficientScope):
+		return forge.NewHTTPError(http.StatusForbidden, "insufficient scope").
+			WithHeader("WWW-Authenticate", fmt.Sprintf(
+				`Bearer error="insufficient_scope", scope=%q`, p.scopeFor(action, resource)))
+
+	case errors.Is(err, ErrNoPermissionChecker):
+		// Fail closed. Do not tell the caller why: an RBAC outage is not an
+		// agent's business, and the answer is the same either way.
+		return forge.Forbidden("insufficient permissions")
+
+	default:
+		// The user gate refused. Same body as any other RBAC refusal, matching
+		// middleware/rbac.go:62.
+		return forge.Forbidden("insufficient permissions")
+	}
+}
+
+// scopeFor returns the registered scope that confers a permission, so the
+// insufficient_scope response can name it. Falls back to "action:resource"
+// when the host app registered no scope for it.
+func (p *Plugin) scopeFor(action, resource string) string {
+	p.scopes.mu.RLock()
+	defer p.scopes.mu.RUnlock()
+	for scope, perm := range p.scopes.scopes {
+		if perm.Action == action && perm.Resource == resource {
+			return scope
+		}
+	}
+	return action + ":" + resource
+}
+```
+
+Add the two test-facing helpers to the same file so the tests can assert without reaching into forge internals:
+
+```go
+// StatusOf returns the HTTP status an error carries, or 0.
+func StatusOf(err error) int { ... }
+
+// HeaderOf returns a response header the error carries, or "".
+func HeaderOf(err error, name string) string { ... }
+```
+
+Implement both against forge's HTTP error type. Check the constructor and header API in `forge` before writing these: if `forge.NewHTTPError(...).WithHeader(...)` does not exist, use whatever forge provides for a status-plus-header error and adjust the two helpers to match. The behavior the tests assert is the contract; the constructor is not.
+
+Finally, wire `AuthorizeHTTP` into the guard the plugin exposes to host apps, so a route declaring a permission gets agent enforcement automatically. Add to `middleware.go`:
+
+```go
+// Guard returns middleware enforcing the agent intersection for a route that
+// requires action on resource. A human session passes through untouched.
+func (p *Plugin) Guard(action, resource string) forge.Middleware { ... }
+```
+
+Follow the middleware shape in `middleware/rbac.go:77` for resolving the session from context.
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `go test ./plugins/agentauth/ -v`
+Expected: PASS, whole package.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add plugins/agentauth/errors.go plugins/agentauth/errors_test.go plugins/agentauth/middleware.go
+git commit -m "feat(agentauth): map authorization failures to scoped http responses"
+```
+
+
+## Wiring it up
+
+After Task 13, a host app enables the plugin like this. Add this snippet to `README.md` under Plugins as part of Task 13's commit:
+
+```go
+agents := agentauth.New(
+    agentauth.WithScope("invoices:read",  agentauth.Grants("read",  "invoice")),
+    agentauth.WithScope("invoices:write", agentauth.Grants("write", "invoice")),
+    agentauth.WithDefaultGrantTTL(90 * 24 * time.Hour),
+)
+
+engine, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithWarden(wardenEngine),
+    authsome.WithPlugin(oauth2provider.New(
+        oauth2provider.WithConsentGate(agents),
+    )),
+    authsome.WithPlugin(agents),
+)
+```
+
+`oauth2provider` must be registered before `agentauth`, since the gate is read at construction.
+
+## Deferred, and why
+
+- **Refresh honoring `grant.ExpiresAt`.** The spec requires it. Agent sessions are capped at the grant expiry in Task 9, so a session can never outlive its grant, but the refresh endpoint itself still needs the check. It lives in the core refresh path rather than this plugin, so it is a separate change against `service.go`. Do it immediately after Task 13 and do not ship without it.
+- **Self-registration through RFC 7591.** Task 12 ships admin registration only. Self-registration depends on the dynamic client registration work happening on its own branch. Org-registered agents are a complete, usable v1 without it.
+- **Dashboard contract surface.** Every other plugin ships one. Add it once the API stabilizes.
