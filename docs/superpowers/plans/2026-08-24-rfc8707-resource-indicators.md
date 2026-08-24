@@ -13,8 +13,20 @@
 ## Global Constraints
 
 - Go 1.26.0. Module is `github.com/xraph/authsome`.
-- Core migration group `authsome`: use version `20260824000040`, name `add_session_audience`. Do **not** use `20260824000001` in this group. Three other plans dated today (DPoP `add_session_dpop_jkt`, agentauth `add_session_agent_principal`, token-exchange `add_session_scopes_and_actors`) each claim `20260824000001` in this same group and already collide with one another. Two migrations sharing a version in one group fails at startup.
-- Plugin migration group `authsome-oauth2`: use version `20260824000001`, name `add_oauth2_resources`. This number is reserved for this work; dynamic client registration moved to `20260824000030` in commit `a8489d8` to clear it.
+### Migration coordination
+
+Several designs dated 2026-08-24 add columns to the same two tables, and two migrations sharing a version inside one group fail at startup. This plan claims:
+
+| Group | Version | Migration | Table |
+|---|---|---|---|
+| `authsome` | `20260824000060` | `add_session_audience` | `authsome_sessions` |
+| `authsome-oauth2` | `20260824000001` | `add_oauth2_resources` | `authsome_oauth2_clients`, `authsome_oauth2_auth_codes`, `authsome_oauth2_device_codes` |
+
+Both numbers were checked against every plan and spec in `docs/superpowers/` and neither is claimed elsewhere. The oauth2 number is the one dynamic client registration vacated in commit `a8489d8`; DPoP holds `20260824000040` and `20260824000041`, and this plan moved off `000040` after DPoP published its claim table.
+
+Do not use `20260824000001` in the `authsome` group. As of writing, the agentauth delegation plan (`add_session_agent_principal`) and the token-exchange plan (`add_session_scopes_and_actors`) both still claim it there and collide with each other. That is not this plan's problem to fix, but do not add a third.
+
+If you hit a clash, the resolution is always the union of the columns and a fresh unused version number, never dropping somebody else's column.
 - Every new field is `[]string` and defaults to empty. An empty audience means an unrestricted token, which is what every existing token is.
 - Mongo: never write a nil slice to a grove-mapped array field. `toSessionModel` must assign `[]string{}` when the source slice is empty, or the collection's generated `$jsonSchema` rejects the write. See commit `9116564`.
 - Backwards compatibility is not optional. A client that sends no `resource` must behave exactly as it does today, and a deployment that configures no expected audience must see no behaviour change.
@@ -190,7 +202,7 @@ In `store/postgres/migrations.go`, in the same `init()` block that holds `add_se
 ```go
 		&migrate.Migration{
 			Name:    "add_session_audience",
-			Version: "20260824000040",
+			Version: "20260824000060",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `
 ALTER TABLE authsome_sessions
@@ -214,7 +226,7 @@ In `store/sqlite/migrations.go`, in the same `init()` block:
 ```go
 		&migrate.Migration{
 			Name:    "add_session_audience",
-			Version: "20260824000040",
+			Version: "20260824000060",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `
 ALTER TABLE authsome_sessions ADD COLUMN audience TEXT NOT NULL DEFAULT '[]';
@@ -237,7 +249,7 @@ In `store/mongo/migrations.go`, following the shape of `add_session_principal_id
 ```go
 		&migrate.Migration{
 			Name:    "add_session_audience",
-			Version: "20260824000040",
+			Version: "20260824000060",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				mexec, ok := exec.(*mongomigrate.Executor)
 				if !ok {
@@ -2079,4 +2091,4 @@ After Task 12, confirm the whole feature end to end before calling it done.
 - [ ] `go vet ./...` is clean.
 - [ ] Point `AUTHSOME_MONGO_URI` at a live mongo and run `go test ./store/mongo/ -run 'TestStore/SessionAudienceRoundTrip' -v`. This is the only way the null-array trap surfaces, and skipping it is how `9116564` reached main.
 - [ ] Confirm no `[]string` field anywhere in the diff carries a `query:` or `form:` struct tag.
-- [ ] Confirm migration versions: `20260824000040` in the core group, `20260824000001` in `authsome-oauth2`, and neither duplicated. Run `grep -rn '20260824' store/*/migrations.go plugins/*/migrations.go` and read the result.
+- [ ] Confirm migration versions: `20260824000060` in the core group, `20260824000001` in `authsome-oauth2`, and neither duplicated. Run `grep -rn '20260824' store/*/migrations.go plugins/*/migrations.go` and read the result.
