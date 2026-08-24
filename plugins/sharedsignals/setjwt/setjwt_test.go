@@ -249,7 +249,7 @@ func TestValidate_RejectsUnknownKid(t *testing.T) {
 	raw := signSET(t, key, "secevent+jwt", jwt.SigningMethodRS256, nil)
 
 	opts := baseOpts(key)
-	opts.Keys = staticKeys{err: assertKeyMiss{}}
+	opts.Keys = staticKeys{err: assertKeyMissError{}}
 
 	_, err := Validate(context.Background(), raw, opts)
 	require.ErrorIs(t, err, ErrInvalidKey)
@@ -293,14 +293,14 @@ func TestValidate_RejectsIATAsString(t *testing.T) {
 	assert.Equal(t, "invalid_request", ErrCode(err))
 }
 
-type assertKeyMiss struct{}
+type assertKeyMissError struct{}
 
-func (assertKeyMiss) Error() string { return "no such kid" }
+func (assertKeyMissError) Error() string { return "no such kid" }
 
 func TestErrCode(t *testing.T) {
 	assert.Equal(t, "invalid_request", ErrCode(ErrInvalidRequest))
 	assert.Equal(t, "invalid_key", ErrCode(ErrInvalidKey))
 	assert.Equal(t, "invalid_issuer", ErrCode(ErrInvalidIssuer))
 	assert.Equal(t, "invalid_audience", ErrCode(ErrInvalidAudience))
-	assert.Equal(t, "invalid_request", ErrCode(assertKeyMiss{}))
+	assert.Equal(t, "invalid_request", ErrCode(assertKeyMissError{}))
 }

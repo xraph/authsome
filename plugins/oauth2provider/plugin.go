@@ -354,7 +354,8 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// would let a direct, untrusted client mint a fresh bucket per
 	// request by spoofing it.
 	manageOpts := func(extra ...forge.RouteOption) []forge.RouteOption {
-		base := []forge.RouteOption{
+		base := make([]forge.RouteOption, 0, 2+len(extra))
+		base = append(base,
 			forge.WithErrorResponses(),
 			forge.WithMiddleware(middleware.RateLimit(p.registrationLimiter(), middleware.RateLimitConfig{
 				Limit:  p.config.RegistrationRateLimit.Limit * 6,
@@ -363,7 +364,8 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 					return "oauth2-reg-manage:" + middleware.ClientIP(c.Request()) + ":" + c.Param("clientId")
 				},
 			})),
-		}
+		)
+
 		return append(base, extra...)
 	}
 

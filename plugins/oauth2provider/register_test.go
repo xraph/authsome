@@ -60,7 +60,7 @@ func newRegistrationFixture(t *testing.T, enabled bool) (*oauth2provider.Plugin,
 
 func postRegister(t *testing.T, router http.Handler, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/v1/oauth/register", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/oauth/register", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -350,7 +350,7 @@ func newTenantRouter(t *testing.T, p *oauth2provider.Plugin, resolver middleware
 
 func postRegisterWithKey(t *testing.T, router http.Handler, key, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/v1/oauth/register", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/oauth/register", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(middleware.PublishableKeyHeader, key)
 	rec := httptest.NewRecorder()

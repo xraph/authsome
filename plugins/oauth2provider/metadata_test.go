@@ -30,7 +30,7 @@ func newWellKnownRouter(t *testing.T, p *oauth2provider.Plugin) http.Handler {
 func getJSON(t *testing.T, router http.Handler, path string) (int, map[string]any) {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	router.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
 	if rec.Code != http.StatusOK {
 		return rec.Code, nil
 	}

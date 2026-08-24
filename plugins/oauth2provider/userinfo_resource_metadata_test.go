@@ -40,7 +40,7 @@ func newUserInfoRouter(t *testing.T, engineMetaURL string) http.Handler {
 func TestUserInfo_MissingAuthCarriesResourceMetadataHint(t *testing.T) {
 	router := newUserInfoRouter(t, "https://engine-configured.example.com/should-not-appear")
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/oauth/userinfo", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/oauth/userinfo", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -65,7 +65,7 @@ func TestUserInfo_ResourceMetadataChallengeDoesNotOverwriteHandlerHeader(t *test
 	const engineMetaURL = "https://engine-configured.example.com/should-not-appear"
 	router := newUserInfoRouter(t, engineMetaURL)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/oauth/userinfo", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/oauth/userinfo", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

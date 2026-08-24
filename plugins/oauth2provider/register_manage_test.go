@@ -36,9 +36,9 @@ func manageReq(t *testing.T, router http.Handler, method, clientID, token, body 
 	t.Helper()
 	var r *http.Request
 	if body == "" {
-		r = httptest.NewRequest(method, "/v1/oauth/register/"+clientID, nil)
+		r = httptest.NewRequestWithContext(t.Context(), method, "/v1/oauth/register/"+clientID, nil)
 	} else {
-		r = httptest.NewRequest(method, "/v1/oauth/register/"+clientID, strings.NewReader(body))
+		r = httptest.NewRequestWithContext(t.Context(), method, "/v1/oauth/register/"+clientID, strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
 	}
 	if token != "" {
@@ -583,7 +583,7 @@ func TestManage_RateLimitKeyIncludesCallerIP(t *testing.T) {
 
 	getFrom := func(remoteAddr string) *httptest.ResponseRecorder {
 		t.Helper()
-		r := httptest.NewRequest(http.MethodGet, "/v1/oauth/register/"+clientID, nil)
+		r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/oauth/register/"+clientID, nil)
 		r.Header.Set("Authorization", "Bearer "+token)
 		r.RemoteAddr = remoteAddr
 		rec := httptest.NewRecorder()
