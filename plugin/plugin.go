@@ -178,6 +178,22 @@ type LedgerStoreProvider interface {
 	LedgerStore() any
 }
 
+// SessionRevoker is optionally implemented by engines that can revoke a
+// single session by ID. Revoking through this rather than deleting rows
+// directly keeps the AfterSessionRevoke hooks, the hook bus and the outbound
+// relay firing. *authsome.Engine already satisfies it.
+type SessionRevoker interface {
+	RevokeSession(ctx context.Context, sessionID id.SessionID) error
+}
+
+// DispatcherProvider is optionally implemented by engines that expose a
+// background job queue. A plugin that needs deferred work should fall back to
+// its own goroutine when the host returns nil. *authsome.Engine already
+// satisfies it.
+type DispatcherProvider interface {
+	Dispatcher() bridge.Dispatcher
+}
+
 // ──────────────────────────────────────────────────
 // Lifecycle hooks
 // ──────────────────────────────────────────────────
