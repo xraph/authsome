@@ -91,7 +91,7 @@ class AuthClient {
 
   /// OpenID Connect Discovery
   /// GET /.well-known/openid-configuration
-  Future<DiscoveryResponse> oidcDiscovery({required String token}) async {
+  Future<DiscoveryResponse> oidcDiscoveryPrefixed({required String token}) async {
     final path = '/.well-known/openid-configuration';
     final res = await _request(
 'GET',
@@ -1744,6 +1744,55 @@ class AuthClient {
       body: body.toJson(),
     );
     return DeviceCompleteResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Register OAuth2 client
+  /// POST /v1/oauth/register
+  Future<RegisterClientResponse> oauth2RegisterClient({required RegisterClientRequest body, required String token}) async {
+    final path = '/v1/oauth/register';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return RegisterClientResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Read OAuth2 client registration
+  /// GET /v1/oauth/register/{clientId}
+  Future<RegisterClientResponse> oauth2ReadRegistration({required String clientId, required String token}) async {
+    final path = '/v1/oauth/register/$clientId';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return RegisterClientResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Update OAuth2 client registration
+  /// PUT /v1/oauth/register/{clientId}
+  Future<RegisterClientResponse> oauth2UpdateRegistration({required String clientId, required UpdateRegistrationRequest body, required String token}) async {
+    final path = '/v1/oauth/register/$clientId';
+    final res = await _request(
+'PUT',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return RegisterClientResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete OAuth2 client registration
+  /// DELETE /v1/oauth/register/{clientId}
+  Future<void> oauth2DeleteRegistration({required String clientId, required String token}) async {
+    final path = '/v1/oauth/register/$clientId';
+    await _request(
+'DELETE',
+      path,
+      token: token,
+    );
   }
 
   /// Revoke token
