@@ -16,6 +16,7 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
@@ -61,3 +62,10 @@ func (stubEngine) ResolveSessionByToken(string) (*session.Session, error) { retu
 func (stubEngine) ResolveUser(string) (*user.User, error)                 { return nil, nil }
 func (stubEngine) GetUser(context.Context, id.UserID) (*user.User, error) { return nil, nil }
 func (stubEngine) EnsureDefaultRole(context.Context, id.AppID, id.UserID) {}
+func (stubEngine) ResolvePrincipal(context.Context, principal.Ref) (*principal.Principal, error) {
+	return nil, principal.ErrNotFound
+}
+func (stubEngine) PrincipalStore() principal.Store { return nil }
+func (stubEngine) Can(context.Context, principal.Ref, principal.Chain, string, string) (bool, error) {
+	return false, nil
+}

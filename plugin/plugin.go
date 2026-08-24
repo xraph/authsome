@@ -22,6 +22,7 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
@@ -124,6 +125,21 @@ type Engine interface {
 
 	// EnsureDefaultRole assigns the default role to a user if none is set.
 	EnsureDefaultRole(ctx context.Context, appID id.AppID, userID id.UserID)
+
+	// ── Principals ──
+
+	// ResolvePrincipal resolves any caller, human or otherwise, by ref.
+	// Use this rather than ResolveUser when a plugin must work for agents and
+	// workloads as well as people.
+	ResolvePrincipal(ctx context.Context, ref principal.Ref) (*principal.Principal, error)
+
+	// PrincipalStore returns the principal and delegation store.
+	PrincipalStore() principal.Store
+
+	// Can is the chain-aware authorization check. Pass an empty chain for an
+	// ordinary single-subject check.
+	Can(ctx context.Context, subject principal.Ref, actors principal.Chain,
+		action, resource string) (bool, error)
 
 	// ── Auth ──
 

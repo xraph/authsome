@@ -26,6 +26,7 @@ import (
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	apikeyPlugin "github.com/xraph/authsome/plugins/apikey"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
@@ -75,11 +76,18 @@ func (m *mockEngine) GetUser(_ context.Context, _ id.UserID) (*user.User, error)
 	return nil, errors.New("not implemented")
 }
 func (m *mockEngine) EnsureDefaultRole(_ context.Context, _ id.AppID, _ id.UserID) {}
-func (m *mockEngine) AuthMiddleware() forge.Middleware                             { return nil }
-func (m *mockEngine) AuthRegistry() auth.Registry                                  { return nil }
-func (m *mockEngine) PlatformAppID() id.AppID                                      { return id.AppID{} }
-func (m *mockEngine) DefaultAppID() string                                         { return "" }
-func (m *mockEngine) BasePath() string                                             { return "" }
+func (m *mockEngine) ResolvePrincipal(_ context.Context, _ principal.Ref) (*principal.Principal, error) {
+	return nil, principal.ErrNotFound
+}
+func (m *mockEngine) PrincipalStore() principal.Store { return nil }
+func (m *mockEngine) Can(_ context.Context, _ principal.Ref, _ principal.Chain, _, _ string) (bool, error) {
+	return false, nil
+}
+func (m *mockEngine) AuthMiddleware() forge.Middleware { return nil }
+func (m *mockEngine) AuthRegistry() auth.Registry      { return nil }
+func (m *mockEngine) PlatformAppID() id.AppID          { return id.AppID{} }
+func (m *mockEngine) DefaultAppID() string             { return "" }
+func (m *mockEngine) BasePath() string                 { return "" }
 func (m *mockEngine) ResolveUser(userID string) (*user.User, error) {
 	uid, err := id.ParseUserID(userID)
 	if err != nil {
