@@ -13,6 +13,7 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/apikey"
+	"github.com/xraph/authsome/apitypes"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
@@ -448,7 +449,7 @@ func (p *Plugin) handleList(ctx forge.Context, req *ListKeysRequest) (*ListKeysR
 	return resp, nil
 }
 
-func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeKeyRequest) (*struct{}, error) {
+func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeKeyRequest) (*apitypes.Empty, error) {
 	if req.KeyID == "" {
 		return nil, forge.BadRequest("key id is required")
 	}

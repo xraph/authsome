@@ -13,6 +13,7 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/apitypes"
 	"github.com/xraph/authsome/authprovider"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
@@ -542,7 +543,7 @@ func (p *Plugin) handleReject(ctx forge.Context, req *RejectRequest) (*WaitlistE
 	return nil, ctx.JSON(http.StatusOK, entry)
 }
 
-func (p *Plugin) handleDelete(ctx forge.Context, req *DeleteRequest) (*struct{}, error) {
+func (p *Plugin) handleDelete(ctx forge.Context, req *DeleteRequest) (*apitypes.Empty, error) {
 	entryID, err := id.ParseWaitlistID(req.EntryID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid entry ID")

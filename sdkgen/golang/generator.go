@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
+	"go/format"
 	"sort"
 	"strings"
 	"text/template"
@@ -66,7 +67,38 @@ func (g *Generator) Generate(spec *openapi.Spec) ([]GeneratedFile, error) {
 	}
 	files = append(files, GeneratedFile{Path: "client.go", Content: content})
 
+	for i := range files {
+		formatted, fmtErr := gofmt(files[i].Content)
+		if fmtErr != nil {
+			return nil, fmt.Errorf("format %s: %w", files[i].Path, fmtErr)
+		}
+
+		files[i].Content = formatted
+	}
+
 	return files, nil
+}
+
+// gofmt runs the output through go/format, which is the same pass `gofmt`
+// makes.
+//
+// A template cannot align a struct field against fields it has not rendered
+// yet, and it writes whatever the surrounding text says even where Go has a
+// shorter spelling for it: a lone return type comes out as `(error)` because
+// the parentheses are in the template. CI checks the tree with goimports and
+// fails on both. Formatting here means generated code is formatted the moment
+// it is written, and nobody has to remember to run gofmt over sdk/ afterwards.
+//
+// A parse failure is returned, not swallowed. Unformattable output means the
+// template produced something that is not Go, and writing it out to be
+// discovered at build time helps nobody.
+func gofmt(src string) (string, error) {
+	out, err := format.Source([]byte(src))
+	if err != nil {
+		return "", err
+	}
+
+	return string(out), nil
 }
 
 // TemplateData holds all data passed to templates.
@@ -240,7 +272,7 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 			if pair.op.RequestBody != nil {
 				opDef.HasBody = true
 				if ct, ok := pair.op.RequestBody.Content["application/json"]; ok && ct.Schema != nil {
-					opDef.BodyFields = g.schemaToGoFields(ct.Schema)
+					opDef.BodyFields = g.schemaToGoFields(resolveSchemaRef(spec, ct.Schema))
 				}
 			}
 
@@ -311,6 +343,44 @@ func (g *Generator) schemaToGoType(s *openapi.Schema) string {
 	default:
 		return "any"
 	}
+}
+
+// resolveSchemaRef follows a $ref to the component it names, so callers get a
+// schema with properties on it rather than an empty shell.
+//
+// A request body may be written either way. Inline, its properties sit right
+// there; as a $ref, the schema carries nothing but the reference. The request
+// struct is named after the operation and the component is named after the Go
+// type, so the two names usually differ (refreshTokens against RefreshRequest)
+// and the struct cannot simply be dropped in favour of the component. Reading
+// the fields through the reference is what lets the generated struct keep its
+// own name and still have the fields in it.
+//
+// Anything that is not a component reference comes back untouched, including a
+// dangling ref, which is left for the caller to notice rather than papered over
+// with an empty struct.
+func resolveSchemaRef(spec *openapi.Spec, s *openapi.Schema) *openapi.Schema {
+	const prefix = "#/components/schemas/"
+
+	seen := make(map[string]bool)
+
+	for s != nil && s.Ref != "" {
+		name, ok := strings.CutPrefix(s.Ref, prefix)
+		if !ok || seen[name] || spec.Components == nil {
+			return s
+		}
+
+		seen[name] = true
+
+		target, found := spec.Components.Schemas[name]
+		if !found || target == nil {
+			return s
+		}
+
+		s = target
+	}
+
+	return s
 }
 
 func (g *Generator) schemaToGoFields(s *openapi.Schema) []FieldDef {

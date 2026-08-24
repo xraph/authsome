@@ -223,9 +223,14 @@ func RelaxAuthDefaults(t *testing.T, eng *authsome.Engine) {
 // call against the underlying memory store. Test-only.
 func InjectStoreFault(t *testing.T, eng *authsome.Engine, method string, err error) {
 	t.Helper()
-	memStore, ok := eng.Store().(*memory.Store)
+	// The engine decorates the store it was handed, so Store() gives back a
+	// wrapper rather than the backend. Unwrap before asserting, or this reads
+	// a role-stamping decorator and reports the memory store as missing.
+	backend := authsome.UnwrapStore(eng.Store())
+
+	memStore, ok := backend.(*memory.Store)
 	if !ok {
-		t.Fatalf("InjectStoreFault requires the memory store; got %T", eng.Store())
+		t.Fatalf("InjectStoreFault requires the memory store; got %T", backend)
 	}
 	memStore.InjectOneShotFault(method, err)
 }

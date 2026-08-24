@@ -119,7 +119,10 @@ func TestEngine_Accessors(t *testing.T) {
 	eng, s := newTestEngine(t)
 
 	assert.NotNil(t, eng.Store())
-	assert.Equal(t, s, eng.Store())
+	// The engine decorates the store it was given (session roles are stamped
+	// on the way to CreateSession), so the accessor hands back a wrapper.
+	// Unwrap to assert it is still the backend this test passed in.
+	assert.Equal(t, s, authsome.UnwrapStore(eng.Store()))
 	assert.NotNil(t, eng.Plugins())
 	assert.NotNil(t, eng.Hooks())
 	assert.NotNil(t, eng.Strategies())
@@ -198,7 +201,8 @@ func TestEngine_APIKeyStore_FallbackToComposite(t *testing.T) {
 	// APIKeyStore should return the composite store (which implements apikey.Store)
 	store := eng.APIKeyStore()
 	assert.NotNil(t, store)
-	assert.Equal(t, s, store, "APIKeyStore should return composite store when Keysmith is absent")
+	assert.Equal(t, s, authsome.UnwrapStore(store),
+		"APIKeyStore should return composite store when Keysmith is absent")
 }
 
 // ──────────────────────────────────────────────────

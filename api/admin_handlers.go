@@ -28,12 +28,17 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 			middleware.RequireAuth(),
 			middleware.RequirePermission(a.engine, "manage", "user"),
 		),
+		// Declared so the requirement the middleware above enforces reaches
+		// the OpenAPI document and the generated clients. Declaring does not
+		// enforce: the middleware is still what refuses the request.
+		forge.WithGroupAuth("session", "session-cookie"),
+		forge.WithGroupAllPermissions(rbac.PermissionString("manage", "user")),
 	)
 
 	// Users
 	if err := g.GET("/users", a.handleAdminListUsers,
 		forge.WithSummary("List users (admin)"),
-		forge.WithDescription("Returns a paginated list of all users. Requires admin role."),
+		forge.WithDescription("Returns a paginated list of all users."),
 		forge.WithOperationID("adminListUsers"),
 		forge.WithResponseSchema(http.StatusOK, "User list", AdminUserListResponse{}),
 		forge.WithErrorResponses(),
@@ -43,7 +48,7 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 
 	if err := g.GET("/users/:userId", a.handleAdminGetUser,
 		forge.WithSummary("Get user (admin)"),
-		forge.WithDescription("Returns a user by ID. Requires admin role."),
+		forge.WithDescription("Returns a user by ID."),
 		forge.WithOperationID("adminGetUser"),
 		forge.WithResponseSchema(http.StatusOK, "User", user.User{}),
 		forge.WithErrorResponses(),
@@ -53,7 +58,7 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 
 	if err := g.POST("/users/:userId/ban", a.handleAdminBanUser,
 		forge.WithSummary("Ban user (admin)"),
-		forge.WithDescription("Bans a user and revokes all active sessions. Requires admin role."),
+		forge.WithDescription("Bans a user and revokes all active sessions."),
 		forge.WithOperationID("adminBanUser"),
 		forge.WithRequestSchema(AdminBanUserRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Banned", StatusResponse{}),
@@ -64,7 +69,7 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 
 	if err := g.POST("/users/:userId/unban", a.handleAdminUnbanUser,
 		forge.WithSummary("Unban user (admin)"),
-		forge.WithDescription("Removes a ban from a user account. Requires admin role."),
+		forge.WithDescription("Removes a ban from a user account."),
 		forge.WithOperationID("adminUnbanUser"),
 		forge.WithResponseSchema(http.StatusOK, "Unbanned", StatusResponse{}),
 		forge.WithErrorResponses(),
@@ -74,7 +79,7 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 
 	if err := g.DELETE("/users/:userId", a.handleAdminDeleteUser,
 		forge.WithSummary("Delete user (admin)"),
-		forge.WithDescription("Permanently deletes a user and all associated data. Requires admin role."),
+		forge.WithDescription("Permanently deletes a user and all associated data."),
 		forge.WithOperationID("adminDeleteUser"),
 		forge.WithResponseSchema(http.StatusOK, "Deleted", StatusResponse{}),
 		forge.WithErrorResponses(),
@@ -84,7 +89,7 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 
 	if err := g.PATCH("/users/:userId", a.handleAdminUpdateUser,
 		forge.WithSummary("Update user (admin)"),
-		forge.WithDescription("Updates a user's profile fields. Requires admin role."),
+		forge.WithDescription("Updates a user's profile fields."),
 		forge.WithOperationID("adminUpdateUser"),
 		forge.WithRequestSchema(AdminUpdateUserRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Updated user", user.User{}),
@@ -95,7 +100,7 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 
 	if err := g.POST("/users/create", a.handleAdminCreateUser,
 		forge.WithSummary("Create user (admin)"),
-		forge.WithDescription("Creates a new user without going through the signup flow. The user is created with email verified. Requires admin role."),
+		forge.WithDescription("Creates a new user without going through the signup flow. The user is created with email verified."),
 		forge.WithOperationID("adminCreateUser"),
 		forge.WithRequestSchema(AdminCreateUserRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Created user", user.User{}),
@@ -106,7 +111,7 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 
 	if err := g.POST("/users/copy", a.handleAdminCopyUser,
 		forge.WithSummary("Copy user to another app (admin)"),
-		forge.WithDescription("Provisions a new user record in target_app_id reusing the source user's email, profile, and stored password hash. The duplicated user can authenticate with their original password. 409 when the target app already has a user with the same email. Requires platform-admin role."),
+		forge.WithDescription("Provisions a new user record in target_app_id reusing the source user's email, profile, and stored password hash. The duplicated user can authenticate with their original password. 409 when the target app already has a user with the same email."),
 		forge.WithOperationID("adminCopyUser"),
 		forge.WithRequestSchema(AdminCopyUserRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Copied user", user.User{}),
@@ -118,7 +123,7 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 	// Stats
 	if err := g.GET("/stats", a.handleAdminStats,
 		forge.WithSummary("Get stats (admin)"),
-		forge.WithDescription("Returns basic analytics for the application. Requires admin role."),
+		forge.WithDescription("Returns basic analytics for the application."),
 		forge.WithOperationID("adminGetStats"),
 		forge.WithResponseSchema(http.StatusOK, "Stats", AdminStatsResponse{}),
 		forge.WithErrorResponses(),
@@ -129,7 +134,7 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 	// Impersonation
 	if err := g.POST("/impersonate/:userId", a.handleAdminImpersonate,
 		forge.WithSummary("Impersonate user (admin)"),
-		forge.WithDescription("Creates a short-lived session as the target user. The session carries an audit trail of the impersonating admin. Requires admin role."),
+		forge.WithDescription("Creates a short-lived session as the target user. The session carries an audit trail of the impersonating admin."),
 		forge.WithOperationID("adminImpersonate"),
 		forge.WithResponseSchema(http.StatusOK, "Impersonation session", AuthResponse{}),
 		forge.WithErrorResponses(),
@@ -177,7 +182,11 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 	// Platform owner management
 	if err := g.POST("/platform/owners", a.handleGrantPlatformOwner,
 		forge.WithSummary("Grant platform-owner role (admin)"),
-		forge.WithDescription("Grants the platform-owner role to a user identified by user_id or email. Requires platform-owner role."),
+		forge.WithDescription("Grants the platform-owner role to a user identified by user_id or email."),
+		// This one is real: handleGrantPlatformOwner checks the caller holds
+		// PlatformOwnerSlug itself, unlike its neighbours in this group,
+		// which are gated only by the group's manage:user permission.
+		forge.WithAnyRole(rbac.PlatformOwnerSlug),
 		forge.WithOperationID("adminGrantPlatformOwner"),
 		forge.WithRequestSchema(AdminGrantPlatformOwnerRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Granted", AdminPlatformOwnerResponse{}),
@@ -199,7 +208,7 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 	// Service Accounts
 	if err := g.POST("/service-accounts", a.handleAdminCreateServiceAccount,
 		forge.WithSummary("Create service account (admin)"),
-		forge.WithDescription("Creates a new service account for machine-to-machine authentication. Requires admin role."),
+		forge.WithDescription("Creates a new service account for machine-to-machine authentication."),
 		forge.WithOperationID("adminCreateServiceAccount"),
 		forge.WithRequestSchema(AdminCreateServiceAccountRequest{}),
 		forge.WithCreatedResponse(AdminServiceAccountResponse{}),
@@ -210,7 +219,7 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 
 	if err := g.GET("/service-accounts", a.handleAdminListServiceAccounts,
 		forge.WithSummary("List service accounts (admin)"),
-		forge.WithDescription("Returns a list of all service accounts for the app. Requires admin role."),
+		forge.WithDescription("Returns a list of all service accounts for the app."),
 		forge.WithOperationID("adminListServiceAccounts"),
 		forge.WithResponseSchema(http.StatusOK, "Service account list", AdminServiceAccountListResponse{}),
 		forge.WithErrorResponses(),
@@ -220,7 +229,7 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 
 	if err := g.GET("/service-accounts/:serviceAccountId", a.handleAdminGetServiceAccount,
 		forge.WithSummary("Get service account (admin)"),
-		forge.WithDescription("Returns a service account by ID. Requires admin role."),
+		forge.WithDescription("Returns a service account by ID."),
 		forge.WithOperationID("adminGetServiceAccount"),
 		forge.WithResponseSchema(http.StatusOK, "Service account", AdminServiceAccountResponse{}),
 		forge.WithErrorResponses(),
@@ -230,7 +239,7 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 
 	if err := g.DELETE("/service-accounts/:serviceAccountId", a.handleAdminDeleteServiceAccount,
 		forge.WithSummary("Delete service account (admin)"),
-		forge.WithDescription("Permanently deletes a service account. Requires admin role."),
+		forge.WithDescription("Permanently deletes a service account."),
 		forge.WithOperationID("adminDeleteServiceAccount"),
 		forge.WithResponseSchema(http.StatusOK, "Deleted", StatusResponse{}),
 		forge.WithErrorResponses(),
@@ -240,7 +249,7 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 
 	return g.POST("/service-accounts/:serviceAccountId/api-keys", a.handleAdminCreateServiceAccountAPIKey,
 		forge.WithSummary("Create service account API key (admin)"),
-		forge.WithDescription("Mints an API key for a service account. The plaintext secret is returned only once. Requires admin role."),
+		forge.WithDescription("Mints an API key for a service account. The plaintext secret is returned only once."),
 		forge.WithOperationID("adminCreateServiceAccountAPIKey"),
 		forge.WithRequestSchema(AdminCreateServiceAccountAPIKeyRequest{}),
 		forge.WithCreatedResponse(AdminServiceAccountAPIKeyResponse{}),

@@ -10,6 +10,7 @@ import (
 
 	"github.com/xraph/forge"
 
+	"github.com/xraph/authsome/apitypes"
 	"github.com/xraph/authsome/tokenformat"
 )
 
@@ -47,7 +48,7 @@ func (a *API) registerJWKSRoutes(router forge.Router) error {
 }
 
 // handleJWKS serves the public keys for JWT verification.
-func (a *API) handleJWKS(_ forge.Context, _ *struct{}) (*JWKSResponse, error) {
+func (a *API) handleJWKS(_ forge.Context, _ *apitypes.Empty) (*JWKSResponse, error) {
 	var keys []JWK
 
 	// Collect keys from per-app JWT formats.

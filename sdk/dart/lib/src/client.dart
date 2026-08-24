@@ -103,24 +103,23 @@ class AuthClient {
 
   /// List SCIM Groups
   /// GET /scim/v2/Groups
-  Future<ListResponse> scimListGroups({required String token}) async {
+  Future<ScimListResponse> scimListGroups({required String token}) async {
     final path = '/scim/v2/Groups';
     final res = await _request(
 'GET',
       path,
       token: token,
     );
-    return ListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ScimListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Create SCIM Group
   /// POST /scim/v2/Groups
-  Future<GroupResource> scimCreateGroup({required Object body, required String token}) async {
+  Future<GroupResource> scimCreateGroup({required String token}) async {
     final path = '/scim/v2/Groups';
     final res = await _request(
 'POST',
       path,
-      body: body is Map<String, dynamic> ? body : (body as dynamic).toJson(),
       token: token,
     );
     return GroupResource.fromJson(Map<String, dynamic>.from(res as Map));
@@ -140,12 +139,11 @@ class AuthClient {
 
   /// Replace SCIM Group
   /// PUT /scim/v2/Groups/{groupId}
-  Future<GroupResource> scimReplaceGroup({required String groupId, required scimGroupPathParam body, required String token}) async {
+  Future<GroupResource> scimReplaceGroup({required String groupId, required String token}) async {
     final path = '/scim/v2/Groups/$groupId';
     final res = await _request(
 'PUT',
       path,
-      body: body.toJson(),
       token: token,
     );
     return GroupResource.fromJson(Map<String, dynamic>.from(res as Map));
@@ -153,12 +151,11 @@ class AuthClient {
 
   /// Patch SCIM Group
   /// PATCH /scim/v2/Groups/{groupId}
-  Future<GroupResource> scimPatchGroup({required String groupId, required scimGroupPathParam body, required String token}) async {
+  Future<GroupResource> scimPatchGroup({required String groupId, required String token}) async {
     final path = '/scim/v2/Groups/$groupId';
     final res = await _request(
 'PATCH',
       path,
-      body: body.toJson(),
       token: token,
     );
     return GroupResource.fromJson(Map<String, dynamic>.from(res as Map));
@@ -166,12 +163,11 @@ class AuthClient {
 
   /// Delete SCIM Group
   /// DELETE /scim/v2/Groups/{groupId}
-  Future<Map<String, dynamic>> scimDeleteGroup({required String groupId, required scimGroupPathParam body, required String token}) async {
+  Future<Map<String, dynamic>> scimDeleteGroup({required String groupId, required String token}) async {
     final path = '/scim/v2/Groups/$groupId';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
       token: token,
     );
     return Map<String, dynamic>.from(res as Map);
@@ -215,24 +211,23 @@ class AuthClient {
 
   /// List SCIM Users
   /// GET /scim/v2/Users
-  Future<ListResponse> scimListUsers({required String token}) async {
+  Future<ScimListResponse> scimListUsers({required String token}) async {
     final path = '/scim/v2/Users';
     final res = await _request(
 'GET',
       path,
       token: token,
     );
-    return ListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ScimListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Create SCIM User
   /// POST /scim/v2/Users
-  Future<UserResource> scimCreateUser({required Object body, required String token}) async {
+  Future<UserResource> scimCreateUser({required String token}) async {
     final path = '/scim/v2/Users';
     final res = await _request(
 'POST',
       path,
-      body: body is Map<String, dynamic> ? body : (body as dynamic).toJson(),
       token: token,
     );
     return UserResource.fromJson(Map<String, dynamic>.from(res as Map));
@@ -252,12 +247,11 @@ class AuthClient {
 
   /// Replace SCIM User
   /// PUT /scim/v2/Users/{userId}
-  Future<UserResource> scimReplaceUser({required String userId, required scimUserPathParam body, required String token}) async {
+  Future<UserResource> scimReplaceUser({required String userId, required String token}) async {
     final path = '/scim/v2/Users/$userId';
     final res = await _request(
 'PUT',
       path,
-      body: body.toJson(),
       token: token,
     );
     return UserResource.fromJson(Map<String, dynamic>.from(res as Map));
@@ -265,12 +259,11 @@ class AuthClient {
 
   /// Patch SCIM User
   /// PATCH /scim/v2/Users/{userId}
-  Future<UserResource> scimPatchUser({required String userId, required scimUserPathParam body, required String token}) async {
+  Future<UserResource> scimPatchUser({required String userId, required String token}) async {
     final path = '/scim/v2/Users/$userId';
     final res = await _request(
 'PATCH',
       path,
-      body: body.toJson(),
       token: token,
     );
     return UserResource.fromJson(Map<String, dynamic>.from(res as Map));
@@ -278,12 +271,11 @@ class AuthClient {
 
   /// Delete SCIM User
   /// DELETE /scim/v2/Users/{userId}
-  Future<Map<String, dynamic>> scimDeleteUser({required String userId, required scimUserPathParam body, required String token}) async {
+  Future<Map<String, dynamic>> scimDeleteUser({required String userId, required String token}) async {
     final path = '/scim/v2/Users/$userId';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
       token: token,
     );
     return Map<String, dynamic>.from(res as Map);
@@ -291,302 +283,300 @@ class AuthClient {
 
   /// Create application (admin)
   /// POST /v1/admin/apps
-  Future<AdminAppResponse> adminCreateApp({required Map<String, dynamic> body, required String token}) async {
+  Future<AdminAppResponse> adminCreateApp({required AdminCreateAppRequest body}) async {
     final path = '/v1/admin/apps';
     final res = await _request(
 'POST',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return AdminAppResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Delete application (admin)
   /// DELETE /v1/admin/apps/{appId}
-  Future<StatusResponse> adminDeleteApp({required String appId, required AdminDeleteAppRequest body, required String token}) async {
+  Future<ApiStatusResponse> adminDeleteApp({required String appId}) async {
     final path = '/v1/admin/apps/$appId';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
-      token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get per-app client config overrides
   /// GET /v1/admin/apps/{appId}/client-config
-  Future<Config> getAppClientConfig({required String appId, required String token}) async {
+  Future<AppclientconfigConfig> getAppClientConfig({required String appId}) async {
     final path = '/v1/admin/apps/$appId/client-config';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
-    return Config.fromJson(Map<String, dynamic>.from(res as Map));
+    return AppclientconfigConfig.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Set per-app client config overrides
   /// PUT /v1/admin/apps/{appId}/client-config
-  Future<Config> setAppClientConfig({required String appId, required Map<String, dynamic> body, required String token}) async {
+  Future<AppclientconfigConfig> setAppClientConfig({required String appId, required SetAppClientConfigRequest body}) async {
     final path = '/v1/admin/apps/$appId/client-config';
     final res = await _request(
 'PUT',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
-    return Config.fromJson(Map<String, dynamic>.from(res as Map));
+    return AppclientconfigConfig.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Delete per-app client config overrides
   /// DELETE /v1/admin/apps/{appId}/client-config
-  Future<StatusResponse> deleteAppClientConfig({required String appId, required DeleteAppClientConfigRequest body, required String token}) async {
+  Future<ApiStatusResponse> deleteAppClientConfig({required String appId}) async {
     final path = '/v1/admin/apps/$appId/client-config';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
-      token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get per-app session config
   /// GET /v1/admin/apps/{appId}/session-config
-  Future<Config> getAppSessionConfig({required String appId, required String token}) async {
+  Future<AppsessionconfigConfig> getAppSessionConfig({required String appId}) async {
     final path = '/v1/admin/apps/$appId/session-config';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
-    return Config.fromJson(Map<String, dynamic>.from(res as Map));
+    return AppsessionconfigConfig.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Set per-app session config
   /// PUT /v1/admin/apps/{appId}/session-config
-  Future<Config> setAppSessionConfig({required String appId, required Map<String, dynamic> body, required String token}) async {
+  Future<AppsessionconfigConfig> setAppSessionConfig({required String appId, required SetAppSessionConfigRequest body}) async {
     final path = '/v1/admin/apps/$appId/session-config';
     final res = await _request(
 'PUT',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
-    return Config.fromJson(Map<String, dynamic>.from(res as Map));
+    return AppsessionconfigConfig.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Delete per-app session config
   /// DELETE /v1/admin/apps/{appId}/session-config
-  Future<StatusResponse> deleteAppSessionConfig({required String appId, required DeleteAppSessionConfigRequest body, required String token}) async {
+  Future<ApiStatusResponse> deleteAppSessionConfig({required String appId}) async {
     final path = '/v1/admin/apps/$appId/session-config';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
-      token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Bulk revoke sessions (admin)
   /// DELETE /v1/admin/bulk/sessions
-  Future<BulkRevokeSessionsResponse> adminBulkRevokeSessions({required BulkRevokeSessionsRequest body, required String token}) async {
+  Future<BulkRevokeSessionsResponse> adminBulkRevokeSessions({required String userId}) async {
     final path = '/v1/admin/bulk/sessions';
+    final queryParams = <String, String>{};
+    queryParams['user_id'] = userId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'DELETE',
-      path,
-      body: body.toJson(),
-      token: token,
+      '$path$queryString',
     );
     return BulkRevokeSessionsResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Bulk import users (admin)
   /// POST /v1/admin/bulk/users/import
-  Future<BulkImportResult> adminBulkImportUsers({required Map<String, dynamic> body, required String token}) async {
+  Future<BulkImportResult> adminBulkImportUsers({required BulkImportUsersRequest body}) async {
     final path = '/v1/admin/bulk/users/import';
     final res = await _request(
 'POST',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return BulkImportResult.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Stop impersonation (admin)
   /// POST /v1/admin/impersonate/stop
-  Future<StatusResponse> adminStopImpersonation({required AdminStopImpersonationRequest body, required String token}) async {
+  Future<ApiStatusResponse> adminStopImpersonation() async {
     final path = '/v1/admin/impersonate/stop';
     final res = await _request(
 'POST',
       path,
-      body: body.toJson(),
-      token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Impersonate user (admin)
   /// POST /v1/admin/impersonate/{userId}
-  Future<AuthResponse> adminImpersonate({required String userId, required AdminImpersonateRequest body, required String token}) async {
+  Future<AuthResponse> adminImpersonate({required String userId}) async {
     final path = '/v1/admin/impersonate/$userId';
     final res = await _request(
 'POST',
       path,
-      body: body.toJson(),
-      token: token,
     );
     return AuthResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List OAuth2 clients
   /// GET /v1/admin/oauth/clients
-  Future<ListClientsResponse> listOAuth2Clients({required String token}) async {
+  Future<ListClientsResponse> listOAuth2Clients({required String appId}) async {
     final path = '/v1/admin/oauth/clients';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
-      token: token,
+      '$path$queryString',
     );
     return ListClientsResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Create OAuth2 client
   /// POST /v1/admin/oauth/clients
-  Future<CreateClientResponse> createOAuth2Client({required Map<String, dynamic> body, required String token}) async {
+  Future<CreateClientResponse> createOAuth2Client({required CreateClientRequest body}) async {
     final path = '/v1/admin/oauth/clients';
     final res = await _request(
 'POST',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return CreateClientResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Delete OAuth2 client
   /// DELETE /v1/admin/oauth/clients/{clientId}
-  Future<void> deleteOAuth2Client({required String clientId, required DeleteClientRequest body, required String token}) async {
+  Future<void> deleteOAuth2Client({required String clientId, required DeleteClientRequest body}) async {
     final path = '/v1/admin/oauth/clients/$clientId';
     await _request(
 'DELETE',
       path,
       body: body.toJson(),
-      token: token,
     );
   }
 
   /// List organizations (admin)
   /// GET /v1/admin/orgs
-  Future<OrgListResponse> adminListOrgs() async {
+  Future<OrgListResponse> adminListOrgs({required String appId}) async {
     final path = '/v1/admin/orgs';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
     );
     return OrgListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Grant platform-owner role (admin)
   /// POST /v1/admin/platform/owners
-  Future<AdminPlatformOwnerResponse> adminGrantPlatformOwner({required Map<String, dynamic> body, required String token}) async {
+  Future<AdminPlatformOwnerResponse> adminGrantPlatformOwner({required AdminGrantPlatformOwnerRequest body}) async {
     final path = '/v1/admin/platform/owners';
     final res = await _request(
 'POST',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return AdminPlatformOwnerResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Revoke platform-owner role (admin)
   /// DELETE /v1/admin/platform/owners/{userID}
-  Future<AdminPlatformOwnerResponse> adminRevokePlatformOwner({required String userID, required AdminRevokePlatformOwnerRequest body, required String token}) async {
+  Future<AdminPlatformOwnerResponse> adminRevokePlatformOwner({required String userID}) async {
     final path = '/v1/admin/platform/owners/$userID';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
-      token: token,
     );
     return AdminPlatformOwnerResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List service accounts (admin)
   /// GET /v1/admin/service-accounts
-  Future<AdminServiceAccountListResponse> adminListServiceAccounts({required String token}) async {
+  Future<AdminServiceAccountListResponse> adminListServiceAccounts({required String appId, int? limit, String? cursor}) async {
     final path = '/v1/admin/service-accounts';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    if (limit != null) queryParams['limit'] = limit.toString();
+    if (cursor != null) queryParams['cursor'] = cursor.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
-      token: token,
+      '$path$queryString',
     );
     return AdminServiceAccountListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Create service account (admin)
   /// POST /v1/admin/service-accounts
-  Future<AdminServiceAccountResponse> adminCreateServiceAccount({required Map<String, dynamic> body, required String token}) async {
+  Future<AdminServiceAccountResponse> adminCreateServiceAccount({required AdminCreateServiceAccountRequest body}) async {
     final path = '/v1/admin/service-accounts';
     final res = await _request(
 'POST',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return AdminServiceAccountResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get service account (admin)
   /// GET /v1/admin/service-accounts/{serviceAccountId}
-  Future<AdminServiceAccountResponse> adminGetServiceAccount({required String serviceAccountId, required String token}) async {
+  Future<AdminServiceAccountResponse> adminGetServiceAccount({required String serviceAccountId}) async {
     final path = '/v1/admin/service-accounts/$serviceAccountId';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
     return AdminServiceAccountResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Delete service account (admin)
   /// DELETE /v1/admin/service-accounts/{serviceAccountId}
-  Future<StatusResponse> adminDeleteServiceAccount({required String serviceAccountId, required AdminDeleteServiceAccountRequest body, required String token}) async {
+  Future<ApiStatusResponse> adminDeleteServiceAccount({required String serviceAccountId}) async {
     final path = '/v1/admin/service-accounts/$serviceAccountId';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
-      token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Create service account API key (admin)
   /// POST /v1/admin/service-accounts/{serviceAccountId}/api-keys
-  Future<AdminServiceAccountAPIKeyResponse> adminCreateServiceAccountAPIKey({required String serviceAccountId, required Map<String, dynamic> body, required String token}) async {
+  Future<AdminServiceAccountAPIKeyResponse> adminCreateServiceAccountAPIKey({required String serviceAccountId, required AdminCreateServiceAccountAPIKeyRequest body}) async {
     final path = '/v1/admin/service-accounts/$serviceAccountId/api-keys';
     final res = await _request(
 'POST',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return AdminServiceAccountAPIKeyResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List all setting definitions
   /// GET /v1/admin/settings/definitions
-  Future<ListDefinitionsResponse> listSettingsDefinitions({required String token}) async {
+  Future<ListDefinitionsResponse> listSettingsDefinitions({required String namespace, required String category, required String token}) async {
     final path = '/v1/admin/settings/definitions';
+    final queryParams = <String, String>{};
+    queryParams['namespace'] = namespace.toString();
+    queryParams['category'] = category.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
       token: token,
     );
     return ListDefinitionsResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -606,12 +596,12 @@ class AuthClient {
 
   /// Enforce a setting value at a scope
   /// PUT /v1/admin/settings/enforce/{key}
-  Future<SettingValueResponse> enforceSetting({required String key, required Map<String, dynamic> body, required String token}) async {
+  Future<SettingValueResponse> enforceSetting({required String key, required EnforceSettingRequest body, required String token}) async {
     final path = '/v1/admin/settings/enforce/$key';
     final res = await _request(
 'PUT',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
     return SettingValueResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -619,24 +609,37 @@ class AuthClient {
 
   /// Remove enforcement from a setting
   /// DELETE /v1/admin/settings/enforce/{key}
-  Future<StatusResponse> unenforceSetting({required String key, required UnenforceSettingRequest body, required String token}) async {
+  Future<ApiStatusResponse> unenforceSetting({required String key, required String scope, required String scopeId, required String token}) async {
     final path = '/v1/admin/settings/enforce/$key';
+    final queryParams = <String, String>{};
+    queryParams['scope'] = scope.toString();
+    queryParams['scope_id'] = scopeId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'DELETE',
-      path,
-      body: body.toJson(),
+      '$path$queryString',
       token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Resolve all settings at a scope
   /// GET /v1/admin/settings/resolve
-  Future<ResolvedSettingsResponse> resolveSettings({required String token}) async {
+  Future<ResolvedSettingsResponse> resolveSettings({required String namespace, required String appId, required String orgId, required String userId, required String token}) async {
     final path = '/v1/admin/settings/resolve';
+    final queryParams = <String, String>{};
+    queryParams['namespace'] = namespace.toString();
+    queryParams['app_id'] = appId.toString();
+    queryParams['org_id'] = orgId.toString();
+    queryParams['user_id'] = userId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
       token: token,
     );
     return ResolvedSettingsResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -644,11 +647,18 @@ class AuthClient {
 
   /// Resolve one setting with cascade details
   /// GET /v1/admin/settings/resolve/{key}
-  Future<ResolvedSettingResponse> resolveSetting({required String key, required String token}) async {
+  Future<ResolvedSettingResponse> resolveSetting({required String key, required String appId, required String orgId, required String userId, required String token}) async {
     final path = '/v1/admin/settings/resolve/$key';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    queryParams['org_id'] = orgId.toString();
+    queryParams['user_id'] = userId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
       token: token,
     );
     return ResolvedSettingResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -656,12 +666,12 @@ class AuthClient {
 
   /// Set a setting value at a scope
   /// PUT /v1/admin/settings/values/{key}
-  Future<SettingValueResponse> setSetting({required String key, required Map<String, dynamic> body, required String token}) async {
+  Future<SettingValueResponse> setSetting({required String key, required SetSettingRequest body, required String token}) async {
     final path = '/v1/admin/settings/values/$key';
     final res = await _request(
 'PUT',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
     return SettingValueResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -669,20 +679,25 @@ class AuthClient {
 
   /// Delete a setting override at a scope
   /// DELETE /v1/admin/settings/values/{key}
-  Future<StatusResponse> deleteSetting({required String key, required DeleteSettingRequest body, required String token}) async {
+  Future<ApiStatusResponse> deleteSetting({required String key, required String scope, required String scopeId, required String token}) async {
     final path = '/v1/admin/settings/values/$key';
+    final queryParams = <String, String>{};
+    queryParams['scope'] = scope.toString();
+    queryParams['scope_id'] = scopeId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'DELETE',
-      path,
-      body: body.toJson(),
+      '$path$queryString',
       token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List social providers (admin)
   /// GET /v1/admin/social/providers
-  Future<AdminListProvidersResponse> socialAdminListProviders({required String appId, required String token}) async {
+  Future<AdminListProvidersResponse> socialAdminListProviders({required String appId}) async {
     final path = '/v1/admin/social/providers';
     final queryParams = <String, String>{};
     queryParams['app_id'] = appId.toString();
@@ -692,26 +707,24 @@ class AuthClient {
     final res = await _request(
 'GET',
       '$path$queryString',
-      token: token,
     );
     return AdminListProvidersResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List supported social providers
   /// GET /v1/admin/social/providers/catalog
-  Future<AdminCatalogResponse> socialAdminCatalog({required String token}) async {
+  Future<AdminCatalogResponse> socialAdminCatalog() async {
     final path = '/v1/admin/social/providers/catalog';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
     return AdminCatalogResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Configure a social provider (admin)
   /// PUT /v1/admin/social/providers/{provider}
-  Future<AdminProviderResponse> socialAdminUpsertProvider({required String provider, required Map<String, dynamic> body, required String appId, required String token}) async {
+  Future<AdminProviderResponse> socialAdminUpsertProvider({required String provider, required AdminUpsertProviderRequest body, required String appId}) async {
     final path = '/v1/admin/social/providers/$provider';
     final queryParams = <String, String>{};
     queryParams['app_id'] = appId.toString();
@@ -721,15 +734,14 @@ class AuthClient {
     final res = await _request(
 'PUT',
       '$path$queryString',
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return AdminProviderResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Delete a social provider (admin)
   /// DELETE /v1/admin/social/providers/{provider}
-  Future<AdminDeleteProviderResponse> socialAdminDeleteProvider({required String provider, required String appId, required String token}) async {
+  Future<AdminDeleteProviderResponse> socialAdminDeleteProvider({required String provider, required String appId}) async {
     final path = '/v1/admin/social/providers/$provider';
     final queryParams = <String, String>{};
     queryParams['app_id'] = appId.toString();
@@ -739,14 +751,13 @@ class AuthClient {
     final res = await _request(
 'DELETE',
       '$path$queryString',
-      token: token,
     );
     return AdminDeleteProviderResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List SSO connections for an app (admin)
   /// GET /v1/admin/sso/connections
-  Future<AdminListConnectionsResponse> ssoAdminListConnections({required String appId, required String token}) async {
+  Future<AdminListConnectionsResponse> ssoAdminListConnections({required String appId}) async {
     final path = '/v1/admin/sso/connections';
     final queryParams = <String, String>{};
     queryParams['app_id'] = appId.toString();
@@ -756,450 +767,461 @@ class AuthClient {
     final res = await _request(
 'GET',
       '$path$queryString',
-      token: token,
     );
     return AdminListConnectionsResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Create SSO connection (admin)
   /// POST /v1/admin/sso/connections
-  Future<AdminCreateConnectionResponse> ssoAdminCreateConnection({required Map<String, dynamic> body, required String token}) async {
+  Future<AdminCreateConnectionResponse> ssoAdminCreateConnection({required AdminCreateConnectionRequest body}) async {
     final path = '/v1/admin/sso/connections';
     final res = await _request(
 'POST',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return AdminCreateConnectionResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get SSO connection (admin)
   /// GET /v1/admin/sso/connections/{connectionId}
-  Future<Connection> ssoAdminGetConnection({required String connectionId, required String token}) async {
+  Future<Connection> ssoAdminGetConnection({required String connectionId}) async {
     final path = '/v1/admin/sso/connections/$connectionId';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
     return Connection.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Update SSO connection (admin)
   /// PUT /v1/admin/sso/connections/{connectionId}
-  Future<Connection> ssoAdminUpdateConnection({required String connectionId, required Map<String, dynamic> body, required String token}) async {
+  Future<Connection> ssoAdminUpdateConnection({required String connectionId, required AdminUpdateConnectionRequest body}) async {
     final path = '/v1/admin/sso/connections/$connectionId';
     final res = await _request(
 'PUT',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return Connection.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Delete SSO connection (admin)
   /// DELETE /v1/admin/sso/connections/{connectionId}
-  Future<AdminDeleteConnectionResponse> ssoAdminDeleteConnection({required String connectionId, required String token}) async {
+  Future<AdminDeleteConnectionResponse> ssoAdminDeleteConnection({required String connectionId}) async {
     final path = '/v1/admin/sso/connections/$connectionId';
     final res = await _request(
 'DELETE',
       path,
-      token: token,
     );
     return AdminDeleteConnectionResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get stats (admin)
   /// GET /v1/admin/stats
-  Future<AdminStatsResponse> adminGetStats({required String token}) async {
+  Future<AdminStatsResponse> adminGetStats({required String appId}) async {
     final path = '/v1/admin/stats';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
-      token: token,
+      '$path$queryString',
     );
     return AdminStatsResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List users (admin)
   /// GET /v1/admin/users
-  Future<AdminUserListResponse> adminListUsers({required String token}) async {
+  Future<AdminUserListResponse> adminListUsers({required String appId, String? email, String? cursor, int? limit}) async {
     final path = '/v1/admin/users';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    if (email != null) queryParams['email'] = email.toString();
+    if (cursor != null) queryParams['cursor'] = cursor.toString();
+    if (limit != null) queryParams['limit'] = limit.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
-      token: token,
+      '$path$queryString',
     );
     return AdminUserListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Copy user to another app (admin)
   /// POST /v1/admin/users/copy
-  Future<User> adminCopyUser({required Map<String, dynamic> body, required String token}) async {
+  Future<User> adminCopyUser({required AdminCopyUserRequest body}) async {
     final path = '/v1/admin/users/copy';
     final res = await _request(
 'POST',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return User.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Create user (admin)
   /// POST /v1/admin/users/create
-  Future<User> adminCreateUser({required Map<String, dynamic> body, required String token}) async {
+  Future<User> adminCreateUser({required AdminCreateUserRequest body}) async {
     final path = '/v1/admin/users/create';
     final res = await _request(
 'POST',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return User.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get user (admin)
   /// GET /v1/admin/users/{userId}
-  Future<User> adminGetUser({required String userId, required String token}) async {
+  Future<User> adminGetUser({required String userId}) async {
     final path = '/v1/admin/users/$userId';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
     return User.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Update user (admin)
   /// PATCH /v1/admin/users/{userId}
-  Future<User> adminUpdateUser({required String userId, required Map<String, dynamic> body, required String token}) async {
+  Future<User> adminUpdateUser({required String userId, required AdminUpdateUserRequest body}) async {
     final path = '/v1/admin/users/$userId';
     final res = await _request(
 'PATCH',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return User.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Delete user (admin)
   /// DELETE /v1/admin/users/{userId}
-  Future<StatusResponse> adminDeleteUser({required String userId, required AdminDeleteUserRequest body, required String token}) async {
+  Future<ApiStatusResponse> adminDeleteUser({required String userId}) async {
     final path = '/v1/admin/users/$userId';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
-      token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Ban user (admin)
   /// POST /v1/admin/users/{userId}/ban
-  Future<StatusResponse> adminBanUser({required String userId, required Map<String, dynamic> body, required String token}) async {
+  Future<ApiStatusResponse> adminBanUser({required String userId, required AdminBanUserRequest body}) async {
     final path = '/v1/admin/users/$userId/ban';
     final res = await _request(
 'POST',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Unban user (admin)
   /// POST /v1/admin/users/{userId}/unban
-  Future<StatusResponse> adminUnbanUser({required String userId, required AdminUnbanUserRequest body, required String token}) async {
+  Future<ApiStatusResponse> adminUnbanUser({required String userId}) async {
     final path = '/v1/admin/users/$userId/unban';
     final res = await _request(
 'POST',
       path,
-      body: body.toJson(),
-      token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List coupons
   /// GET /v1/billing/coupons
-  Future<ListCouponsResponse> listCoupons({required String token}) async {
+  Future<ListCouponsResponse> listCoupons({required String appId}) async {
     final path = '/v1/billing/coupons';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
-      token: token,
+      '$path$queryString',
     );
     return ListCouponsResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Create coupon
   /// POST /v1/billing/coupons
-  Future<CouponResponse> createCoupon({required CreateCouponRequest body, required String token}) async {
+  Future<CouponResponse> createCoupon({required CreateCouponRequest body}) async {
     final path = '/v1/billing/coupons';
     final res = await _request(
 'POST',
       path,
       body: body.toJson(),
-      token: token,
     );
     return CouponResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Delete coupon
   /// DELETE /v1/billing/coupons/{couponId}
-  Future<void> deleteCoupon({required String couponId, required DeleteCouponRequest body, required String token}) async {
+  Future<void> deleteCoupon({required String couponId}) async {
     final path = '/v1/billing/coupons/$couponId';
     await _request(
 'DELETE',
       path,
-      body: body.toJson(),
-      token: token,
     );
   }
 
   /// Check feature entitlement
   /// GET /v1/billing/entitlements/{featureKey}
-  Future<EntitlementResponse> checkEntitlement({required String featureKey, required String token}) async {
+  Future<EntitlementResponse> checkEntitlement({required String featureKey}) async {
     final path = '/v1/billing/entitlements/$featureKey';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
     return EntitlementResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List invoices
   /// GET /v1/billing/invoices
-  Future<ListInvoicesResponse> listInvoices({required String token}) async {
+  Future<ListInvoicesResponse> listInvoices({required String appId, required String tenantId}) async {
     final path = '/v1/billing/invoices';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    queryParams['tenant_id'] = tenantId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
-      token: token,
+      '$path$queryString',
     );
     return ListInvoicesResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get invoice
   /// GET /v1/billing/invoices/{invoiceId}
-  Future<InvoiceResponse> getInvoice({required String invoiceId, required String token}) async {
+  Future<InvoiceResponse> getInvoice({required String invoiceId}) async {
     final path = '/v1/billing/invoices/$invoiceId';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
     return InvoiceResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Mark invoice as paid
   /// POST /v1/billing/invoices/{invoiceId}/pay
-  Future<void> markInvoicePaid({required String invoiceId, required MarkInvoicePaidRequest body, required String token}) async {
+  Future<void> markInvoicePaid({required String invoiceId, required MarkInvoicePaidRequest body}) async {
     final path = '/v1/billing/invoices/$invoiceId/pay';
     await _request(
 'POST',
       path,
       body: body.toJson(),
-      token: token,
     );
   }
 
   /// Void an invoice
   /// POST /v1/billing/invoices/{invoiceId}/void
-  Future<void> voidInvoice({required String invoiceId, required VoidInvoiceRequest body, required String token}) async {
+  Future<void> voidInvoice({required String invoiceId, required VoidInvoiceRequest body}) async {
     final path = '/v1/billing/invoices/$invoiceId/void';
     await _request(
 'POST',
       path,
       body: body.toJson(),
-      token: token,
     );
   }
 
   /// List billing plans
   /// GET /v1/billing/plans
-  Future<ListPlansResponse> listBillingPlans({required String token}) async {
+  Future<ListPlansResponse> listBillingPlans({required String appId}) async {
     final path = '/v1/billing/plans';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
-      token: token,
+      '$path$queryString',
     );
     return ListPlansResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Create billing plan
   /// POST /v1/billing/plans
-  Future<PlanResponse> createBillingPlan({required CreatePlanRequest body, required String token}) async {
+  Future<PlanResponse> createBillingPlan({required CreatePlanRequest body}) async {
     final path = '/v1/billing/plans';
     final res = await _request(
 'POST',
       path,
       body: body.toJson(),
-      token: token,
     );
     return PlanResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get billing plan
   /// GET /v1/billing/plans/{planId}
-  Future<PlanResponse> getBillingPlan({required String planId, required String token}) async {
+  Future<PlanResponse> getBillingPlan({required String planId}) async {
     final path = '/v1/billing/plans/$planId';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
     return PlanResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Activate a billing plan
   /// POST /v1/billing/plans/{planId}/activate
-  Future<void> activateBillingPlan({required String planId, required PlanIDRequest body, required String token}) async {
+  Future<void> activateBillingPlan({required String planId}) async {
     final path = '/v1/billing/plans/$planId/activate';
     await _request(
 'POST',
       path,
-      body: body.toJson(),
-      token: token,
     );
   }
 
   /// Archive a billing plan
   /// POST /v1/billing/plans/{planId}/archive
-  Future<void> archiveBillingPlan({required String planId, required PlanIDRequest body, required String token}) async {
+  Future<void> archiveBillingPlan({required String planId}) async {
     final path = '/v1/billing/plans/$planId/archive';
     await _request(
 'POST',
       path,
-      body: body.toJson(),
-      token: token,
     );
   }
 
   /// List subscriptions
   /// GET /v1/billing/subscriptions
-  Future<ListSubscriptionsResponse> listSubscriptions({required String token}) async {
+  Future<ListSubscriptionsResponse> listSubscriptions({required String appId, required String tenantId, String? status}) async {
     final path = '/v1/billing/subscriptions';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    queryParams['tenant_id'] = tenantId.toString();
+    if (status != null) queryParams['status'] = status.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
-      token: token,
+      '$path$queryString',
     );
     return ListSubscriptionsResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Create subscription
   /// POST /v1/billing/subscriptions
-  Future<Response> createSubscription({required CreateSubscriptionRequest body, required String token}) async {
+  Future<Response> createSubscription({required CreateSubscriptionRequest body}) async {
     final path = '/v1/billing/subscriptions';
     final res = await _request(
 'POST',
       path,
       body: body.toJson(),
-      token: token,
     );
     return Response.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get active subscription
   /// GET /v1/billing/subscriptions/active
-  Future<Response> getActiveSubscription({required String token}) async {
+  Future<Response> getActiveSubscription({required String appId, required String tenantId}) async {
     final path = '/v1/billing/subscriptions/active';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    queryParams['tenant_id'] = tenantId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
-      token: token,
+      '$path$queryString',
     );
     return Response.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Cancel subscription
   /// POST /v1/billing/subscriptions/{subId}/cancel
-  Future<void> cancelSubscription({required String subId, required CancelSubscriptionRequest body, required String token}) async {
+  Future<void> cancelSubscription({required String subId, required CancelSubscriptionRequest body}) async {
     final path = '/v1/billing/subscriptions/$subId/cancel';
     await _request(
 'POST',
       path,
       body: body.toJson(),
-      token: token,
     );
   }
 
   /// Change subscription plan
   /// POST /v1/billing/subscriptions/{subId}/change-plan
-  Future<void> changeSubscriptionPlan({required String subId, required ChangePlanRequest body, required String token}) async {
+  Future<void> changeSubscriptionPlan({required String subId, required ChangePlanRequest body}) async {
     final path = '/v1/billing/subscriptions/$subId/change-plan';
     await _request(
 'POST',
       path,
       body: body.toJson(),
-      token: token,
     );
   }
 
   /// Pause subscription
   /// POST /v1/billing/subscriptions/{subId}/pause
-  Future<void> pauseSubscription({required String subId, required SubIDRequest body, required String token}) async {
+  Future<void> pauseSubscription({required String subId}) async {
     final path = '/v1/billing/subscriptions/$subId/pause';
     await _request(
 'POST',
       path,
-      body: body.toJson(),
-      token: token,
     );
   }
 
   /// Resume subscription
   /// POST /v1/billing/subscriptions/{subId}/resume
-  Future<void> resumeSubscription({required String subId, required SubIDRequest body, required String token}) async {
+  Future<void> resumeSubscription({required String subId}) async {
     final path = '/v1/billing/subscriptions/$subId/resume';
     await _request(
 'POST',
       path,
-      body: body.toJson(),
-      token: token,
     );
   }
 
   /// Get usage summary
   /// GET /v1/billing/usage
-  Future<UsageSummaryResponse> getUsageSummary({required String token}) async {
+  Future<UsageSummaryResponse> getUsageSummary({required String appId, required String tenantId}) async {
     final path = '/v1/billing/usage';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    queryParams['tenant_id'] = tenantId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
-      token: token,
+      '$path$queryString',
     );
     return UsageSummaryResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Change password
   /// POST /v1/change-password
-  Future<StatusResponse> changePassword({required Map<String, dynamic> body, required String token}) async {
+  Future<ApiStatusResponse> changePassword({required ChangePasswordRequest body, required String token}) async {
     final path = '/v1/change-password';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get client configuration
   /// GET /v1/client-config
-  Future<ClientConfigResponse> getClientConfig({required String token}) async {
+  Future<ClientConfigResponse> getClientConfig({required String token, String? key}) async {
     final path = '/v1/client-config';
+    final queryParams = <String, String>{};
+    if (key != null) queryParams['key'] = key.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
       token: token,
     );
     return ClientConfigResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -1207,209 +1229,206 @@ class AuthClient {
 
   /// List consents
   /// GET /v1/consent
-  Future<ListResponse> listConsents() async {
+  Future<ConsentListResponse> listConsents({required String purpose, required String cursor, required int limit}) async {
     final path = '/v1/consent';
+    final queryParams = <String, String>{};
+    queryParams['purpose'] = purpose.toString();
+    queryParams['cursor'] = cursor.toString();
+    queryParams['limit'] = limit.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
     );
-    return ListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ConsentListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Grant consent
   /// POST /v1/consent/grant
-  Future<Consent> grantConsent({required Map<String, dynamic> body}) async {
+  Future<Consent> grantConsent({required GrantConsentRequest body}) async {
     final path = '/v1/consent/grant';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
     return Consent.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Revoke consent
   /// POST /v1/consent/revoke
-  Future<StatusResponse> revokeConsent({required Map<String, dynamic> body}) async {
+  Future<ConsentStatusResponse> revokeConsent({required RevokeConsentRequest body}) async {
     final path = '/v1/consent/revoke';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ConsentStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List devices
   /// GET /v1/devices
-  Future<DeviceListResponse> listDevices({required String token}) async {
+  Future<DeviceListResponse> listDevices() async {
     final path = '/v1/devices';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
     return DeviceListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get device
   /// GET /v1/devices/{deviceId}
-  Future<Device> getDevice({required String deviceId, required String token}) async {
+  Future<Device> getDevice({required String deviceId}) async {
     final path = '/v1/devices/$deviceId';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
     return Device.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Delete device
   /// DELETE /v1/devices/{deviceId}
-  Future<StatusResponse> deleteDevice({required String deviceId, required DeleteDeviceRequest body, required String token}) async {
+  Future<ApiStatusResponse> deleteDevice({required String deviceId}) async {
     final path = '/v1/devices/$deviceId';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
-      token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Trust device
   /// PATCH /v1/devices/{deviceId}/trust
-  Future<Device> trustDevice({required String deviceId, required TrustDeviceRequest body, required String token}) async {
+  Future<Device> trustDevice({required String deviceId}) async {
     final path = '/v1/devices/$deviceId/trust';
     final res = await _request(
 'PATCH',
       path,
-      body: body.toJson(),
-      token: token,
     );
     return Device.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List environments
   /// GET /v1/environments
-  Future<EnvironmentListResponse> listEnvironments({required String token}) async {
+  Future<EnvironmentListResponse> listEnvironments({required String appId}) async {
     final path = '/v1/environments';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
-      token: token,
+      '$path$queryString',
     );
     return EnvironmentListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Create environment
   /// POST /v1/environments
-  Future<Environment> createEnvironment({required Map<String, dynamic> body, required String token}) async {
+  Future<Environment> createEnvironment({required CreateEnvironmentRequest body}) async {
     final path = '/v1/environments';
     final res = await _request(
 'POST',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return Environment.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get environment
   /// GET /v1/environments/{envId}
-  Future<Environment> getEnvironment({required String envId, required String token}) async {
+  Future<Environment> getEnvironment({required String envId}) async {
     final path = '/v1/environments/$envId';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
     return Environment.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Update environment
   /// PATCH /v1/environments/{envId}
-  Future<Environment> updateEnvironment({required String envId, required Map<String, dynamic> body, required String token}) async {
+  Future<Environment> updateEnvironment({required String envId, required UpdateEnvironmentRequest body}) async {
     final path = '/v1/environments/$envId';
     final res = await _request(
 'PATCH',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return Environment.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Delete environment
   /// DELETE /v1/environments/{envId}
-  Future<StatusResponse> deleteEnvironment({required String envId, required String token}) async {
+  Future<ApiStatusResponse> deleteEnvironment({required String envId}) async {
     final path = '/v1/environments/$envId';
     final res = await _request(
 'DELETE',
       path,
-      token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Clone environment
   /// POST /v1/environments/{envId}/clone
-  Future<CloneEnvironmentResponse> cloneEnvironment({required String envId, required Map<String, dynamic> body, required String token}) async {
+  Future<CloneEnvironmentResponse> cloneEnvironment({required String envId, required CloneEnvironmentRequest body}) async {
     final path = '/v1/environments/$envId/clone';
     final res = await _request(
 'POST',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return CloneEnvironmentResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Set default environment
   /// POST /v1/environments/{envId}/set-default
-  Future<StatusResponse> setDefaultEnvironment({required String envId, required String token}) async {
+  Future<ApiStatusResponse> setDefaultEnvironment({required String envId}) async {
     final path = '/v1/environments/$envId/set-default';
     final res = await _request(
 'POST',
       path,
-      token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get environment settings
   /// GET /v1/environments/{envId}/settings
-  Future<EnvironmentSettingsResponse> getEnvironmentSettings({required String envId, required String token}) async {
+  Future<EnvironmentSettingsResponse> getEnvironmentSettings({required String envId}) async {
     final path = '/v1/environments/$envId/settings';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
     return EnvironmentSettingsResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Update environment settings
   /// PATCH /v1/environments/{envId}/settings
-  Future<Environment> updateEnvironmentSettings({required String envId, required Map<String, dynamic> body, required String token}) async {
+  Future<Environment> updateEnvironmentSettings({required String envId, required UpdateEnvironmentSettingsRequest body}) async {
     final path = '/v1/environments/$envId/settings';
     final res = await _request(
 'PATCH',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return Environment.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Forgot password
   /// POST /v1/forgot-password
-  Future<ForgotPasswordResponse> forgotPassword({required Map<String, dynamic> body}) async {
+  Future<ForgotPasswordResponse> forgotPassword({required ForgotPasswordRequest body}) async {
     final path = '/v1/forgot-password';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
     return ForgotPasswordResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
@@ -1427,50 +1446,52 @@ class AuthClient {
 
   /// Introspect token
   /// POST /v1/introspect
-  Future<IntrospectResponse> introspectToken({required Map<String, dynamic> body}) async {
+  Future<IntrospectResponse> introspectToken({required IntrospectRequest body}) async {
     final path = '/v1/introspect';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
     return IntrospectResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List API keys
   /// GET /v1/keys
-  Future<ListKeysResponse> listAPIKeys({required String token}) async {
+  Future<ListKeysResponse> listAPIKeys({required String appId, String? userId}) async {
     final path = '/v1/keys';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    if (userId != null) queryParams['user_id'] = userId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
-      token: token,
+      '$path$queryString',
     );
     return ListKeysResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Create API key
   /// POST /v1/keys
-  Future<CreateKeyResponse> createAPIKey({required CreateKeyRequest body, required String token}) async {
+  Future<CreateKeyResponse> createAPIKey({required CreateKeyRequest body}) async {
     final path = '/v1/keys';
     final res = await _request(
 'POST',
       path,
       body: body.toJson(),
-      token: token,
     );
     return CreateKeyResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Revoke API key
   /// DELETE /v1/keys/{keyId}
-  Future<void> revokeAPIKey({required String keyId, required RevokeKeyRequest body, required String token}) async {
+  Future<void> revokeAPIKey({required String keyId}) async {
     final path = '/v1/keys/$keyId';
     await _request(
 'DELETE',
       path,
-      body: body.toJson(),
-      token: token,
     );
   }
 
@@ -1488,52 +1509,48 @@ class AuthClient {
 
   /// Verify magic link
   /// POST /v1/magic-link/verify
-  Future<VerifyResponse> verifyMagicLink({required VerifyRequest body}) async {
+  Future<MagiclinkVerifyResponse> verifyMagicLink({required MagiclinkVerifyRequest body}) async {
     final path = '/v1/magic-link/verify';
     final res = await _request(
 'POST',
       path,
       body: body.toJson(),
     );
-    return VerifyResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return MagiclinkVerifyResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get current user
   /// GET /v1/me
-  Future<User> getMe({required String token}) async {
+  Future<MeResponse> getMe() async {
     final path = '/v1/me';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
-    return User.fromJson(Map<String, dynamic>.from(res as Map));
+    return MeResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Update current user
   /// PATCH /v1/me
-  Future<User> updateMe({required Map<String, dynamic> body, required String token}) async {
+  Future<User> updateMe({required UpdateMeRequest body}) async {
     final path = '/v1/me';
     final res = await _request(
 'PATCH',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return User.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Delete account
   /// DELETE /v1/me
-  Future<StatusResponse> deleteAccount({required DeleteAccountRequest body, required String token}) async {
+  Future<ApiStatusResponse> deleteAccount() async {
     final path = '/v1/me';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
-      token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List linked auth methods
@@ -1563,25 +1580,23 @@ class AuthClient {
 
   /// Export user data
   /// GET /v1/me/export
-  Future<Map<String, dynamic>> exportUserData({required String token}) async {
+  Future<Map<String, dynamic>> exportUserData() async {
     final path = '/v1/me/export';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
     return Map<String, dynamic>.from(res as Map);
   }
 
   /// Switch active organization
   /// POST /v1/me/switch-org
-  Future<SwitchOrgResponse> switchOrg({required Map<String, dynamic> body, required String token}) async {
+  Future<SwitchOrgResponse> switchOrg({required SwitchOrgRequest body}) async {
     final path = '/v1/me/switch-org';
     final res = await _request(
 'POST',
       path,
-      body: body,
-      token: token,
+      body: body.toJson(),
     );
     return SwitchOrgResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
@@ -1626,12 +1641,11 @@ class AuthClient {
 
   /// Regenerate MFA recovery codes
   /// POST /v1/mfa/recovery/regenerate
-  Future<RecoveryRegenerateResponse> regenerateMFARecoveryCodes({required RecoveryRegenerateRequest body, required String token}) async {
+  Future<RecoveryRegenerateResponse> regenerateMFARecoveryCodes({required String token}) async {
     final path = '/v1/mfa/recovery/regenerate';
     final res = await _request(
 'POST',
       path,
-      body: body.toJson(),
       token: token,
     );
     return RecoveryRegenerateResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -1689,60 +1703,71 @@ class AuthClient {
 
   /// OAuth2 Authorization
   /// GET /v1/oauth/authorize
-  Future<void> oauth2Authorize() async {
+  Future<void> oauth2Authorize({required String responseType, required String clientId, String? redirectUri, String? scope, String? state, String? codeChallenge, String? codeChallengeMethod}) async {
     final path = '/v1/oauth/authorize';
+    final queryParams = <String, String>{};
+    queryParams['response_type'] = responseType.toString();
+    queryParams['client_id'] = clientId.toString();
+    if (redirectUri != null) queryParams['redirect_uri'] = redirectUri.toString();
+    if (scope != null) queryParams['scope'] = scope.toString();
+    if (state != null) queryParams['state'] = state.toString();
+    if (codeChallenge != null) queryParams['code_challenge'] = codeChallenge.toString();
+    if (codeChallengeMethod != null) queryParams['code_challenge_method'] = codeChallengeMethod.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     await _request(
 'GET',
-      path,
+      '$path$queryString',
     );
   }
 
   /// Device Authorization
   /// POST /v1/oauth/device/authorize
-  Future<DeviceAuthResponse> oauth2DeviceAuthorize({required DeviceAuthRequest body}) async {
+  Future<DeviceAuthResponse> oauth2DeviceAuthorize({required Map<String, dynamic> body}) async {
     final path = '/v1/oauth/device/authorize';
     final res = await _request(
 'POST',
       path,
-      body: body.toJson(),
+      body: body,
     );
     return DeviceAuthResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Complete device authorization
   /// POST /v1/oauth/device/complete
-  Future<DeviceCompleteResponse> oauth2DeviceComplete({required DeviceCompleteRequest body}) async {
+  Future<DeviceCompleteResponse> oauth2DeviceComplete({required Map<String, dynamic> body}) async {
     final path = '/v1/oauth/device/complete';
     final res = await _request(
 'POST',
       path,
-      body: body.toJson(),
+      body: body,
     );
     return DeviceCompleteResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Revoke token
   /// POST /v1/oauth/revoke
-  Future<void> oauth2Revoke({required RevokeRequest body, required String token}) async {
+  Future<void> oauth2Revoke({required Map<String, dynamic> body, required String token}) async {
     final path = '/v1/oauth/revoke';
     await _request(
 'POST',
       path,
-      body: body.toJson(),
+      body: body,
       token: token,
     );
   }
 
   /// OAuth2 Token
   /// POST /v1/oauth/token
-  Future<TokenResponse> oauth2Token({required TokenRequest body}) async {
+  Future<Oauth2providerTokenResponse> oauth2Token({required Map<String, dynamic> body}) async {
     final path = '/v1/oauth/token';
     final res = await _request(
 'POST',
       path,
-      body: body.toJson(),
+      body: body,
     );
-    return TokenResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return Oauth2providerTokenResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// OIDC UserInfo
@@ -1771,12 +1796,12 @@ class AuthClient {
 
   /// Create organization
   /// POST /v1/orgs
-  Future<Organization> createOrganization({required Map<String, dynamic> body, required String token}) async {
+  Future<Organization> createOrganization({required CreateOrgRequest body, required String token}) async {
     final path = '/v1/orgs';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
     return Organization.fromJson(Map<String, dynamic>.from(res as Map));
@@ -1784,11 +1809,17 @@ class AuthClient {
 
   /// Check slug availability
   /// GET /v1/orgs/check-slug
-  Future<SlugAvailableResponse> checkOrgSlug({required String token}) async {
+  Future<SlugAvailableResponse> checkOrgSlug({required String appId, required String slug, required String token}) async {
     final path = '/v1/orgs/check-slug';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    queryParams['slug'] = slug.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
       token: token,
     );
     return SlugAvailableResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -1796,12 +1827,12 @@ class AuthClient {
 
   /// Accept invitation
   /// POST /v1/orgs/invitations/accept
-  Future<Member> acceptInvitation({required Map<String, dynamic> body, required String token}) async {
+  Future<Member> acceptInvitation({required AcceptInvitationRequest body, required String token}) async {
     final path = '/v1/orgs/invitations/accept';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
     return Member.fromJson(Map<String, dynamic>.from(res as Map));
@@ -1809,15 +1840,15 @@ class AuthClient {
 
   /// Decline invitation
   /// POST /v1/orgs/invitations/decline
-  Future<StatusResponse> declineInvitation({required Map<String, dynamic> body, required String token}) async {
+  Future<OrganizationStatusResponse> declineInvitation({required DeclineInvitationRequest body, required String token}) async {
     final path = '/v1/orgs/invitations/decline';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return OrganizationStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get organization
@@ -1834,12 +1865,12 @@ class AuthClient {
 
   /// Update organization
   /// PATCH /v1/orgs/{orgId}
-  Future<Organization> updateOrganization({required String orgId, required Map<String, dynamic> body, required String token}) async {
+  Future<Organization> updateOrganization({required String orgId, required UpdateOrgRequest body, required String token}) async {
     final path = '/v1/orgs/$orgId';
     final res = await _request(
 'PATCH',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
     return Organization.fromJson(Map<String, dynamic>.from(res as Map));
@@ -1847,15 +1878,14 @@ class AuthClient {
 
   /// Delete organization
   /// DELETE /v1/orgs/{orgId}
-  Future<StatusResponse> deleteOrganization({required String orgId, required DeleteOrgRequest body, required String token}) async {
+  Future<OrganizationStatusResponse> deleteOrganization({required String orgId, required String token}) async {
     final path = '/v1/orgs/$orgId';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
       token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return OrganizationStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List invitations
@@ -1872,12 +1902,12 @@ class AuthClient {
 
   /// Create invitation
   /// POST /v1/orgs/{orgId}/invitations
-  Future<Invitation> createInvitation({required String orgId, required Map<String, dynamic> body, required String token}) async {
+  Future<Invitation> createInvitation({required String orgId, required CreateInvitationRequest body, required String token}) async {
     final path = '/v1/orgs/$orgId/invitations';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
     return Invitation.fromJson(Map<String, dynamic>.from(res as Map));
@@ -1897,12 +1927,12 @@ class AuthClient {
 
   /// Add member
   /// POST /v1/orgs/{orgId}/members
-  Future<Member> addMember({required String orgId, required Map<String, dynamic> body, required String token}) async {
+  Future<Member> addMember({required String orgId, required AddMemberRequest body, required String token}) async {
     final path = '/v1/orgs/$orgId/members';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
     return Member.fromJson(Map<String, dynamic>.from(res as Map));
@@ -1910,12 +1940,12 @@ class AuthClient {
 
   /// Update member role
   /// PATCH /v1/orgs/{orgId}/members/{memberId}
-  Future<Member> updateMember({required String orgId, required String memberId, required Map<String, dynamic> body, required String token}) async {
+  Future<Member> updateMember({required String orgId, required String memberId, required UpdateMemberRequest body, required String token}) async {
     final path = '/v1/orgs/$orgId/members/$memberId';
     final res = await _request(
 'PATCH',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
     return Member.fromJson(Map<String, dynamic>.from(res as Map));
@@ -1923,15 +1953,14 @@ class AuthClient {
 
   /// Remove member
   /// DELETE /v1/orgs/{orgId}/members/{memberId}
-  Future<StatusResponse> removeMember({required String orgId, required String memberId, required RemoveMemberRequest body, required String token}) async {
+  Future<OrganizationStatusResponse> removeMember({required String orgId, required String memberId, required String token}) async {
     final path = '/v1/orgs/$orgId/members/$memberId';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
       token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return OrganizationStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List teams
@@ -1948,12 +1977,12 @@ class AuthClient {
 
   /// Create team
   /// POST /v1/orgs/{orgId}/teams
-  Future<Team> createTeam({required String orgId, required Map<String, dynamic> body, required String token}) async {
+  Future<Team> createTeam({required String orgId, required CreateTeamRequest body, required String token}) async {
     final path = '/v1/orgs/$orgId/teams';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
     return Team.fromJson(Map<String, dynamic>.from(res as Map));
@@ -1973,12 +2002,12 @@ class AuthClient {
 
   /// Update team
   /// PATCH /v1/orgs/{orgId}/teams/{teamId}
-  Future<Team> updateTeam({required String orgId, required String teamId, required Map<String, dynamic> body, required String token}) async {
+  Future<Team> updateTeam({required String orgId, required String teamId, required UpdateTeamRequest body, required String token}) async {
     final path = '/v1/orgs/$orgId/teams/$teamId';
     final res = await _request(
 'PATCH',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
     return Team.fromJson(Map<String, dynamic>.from(res as Map));
@@ -1986,49 +2015,46 @@ class AuthClient {
 
   /// Delete team
   /// DELETE /v1/orgs/{orgId}/teams/{teamId}
-  Future<StatusResponse> deleteTeam({required String orgId, required String teamId, required DeleteTeamRequest body, required String token}) async {
+  Future<OrganizationStatusResponse> deleteTeam({required String orgId, required String teamId, required String token}) async {
     final path = '/v1/orgs/$orgId/teams/$teamId';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
       token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return OrganizationStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List passkeys
   /// GET /v1/passkeys
-  Future<ListResponse> listPasskeys({required String token}) async {
+  Future<PasskeyListResponse> listPasskeys({required String token}) async {
     final path = '/v1/passkeys';
     final res = await _request(
 'GET',
       path,
       token: token,
     );
-    return ListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return PasskeyListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Begin passkey login
   /// POST /v1/passkeys/login/begin
-  Future<LoginBeginResponse> passkeyLoginBegin({required LoginBeginRequest body}) async {
+  Future<LoginBeginResponse> passkeyLoginBegin() async {
     final path = '/v1/passkeys/login/begin';
     final res = await _request(
 'POST',
       path,
-      body: body.toJson(),
     );
     return LoginBeginResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Complete passkey login
   /// POST /v1/passkeys/login/finish
-  Future<LoginFinishResponse> passkeyLoginFinish({required LoginFinishRequest body}) async {
+  Future<LoginFinishResponse> passkeyLoginFinish() async {
     final path = '/v1/passkeys/login/finish';
     final res = await _request(
 'POST',
       path,
-      body: body.toJson(),
     );
     return LoginFinishResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
@@ -2048,12 +2074,11 @@ class AuthClient {
 
   /// Complete passkey registration
   /// POST /v1/passkeys/register/finish
-  Future<RegisterFinishResponse> passkeyRegisterFinish({required RegisterFinishRequest body, required String token}) async {
+  Future<RegisterFinishResponse> passkeyRegisterFinish({required String token}) async {
     final path = '/v1/passkeys/register/finish';
     final res = await _request(
 'POST',
       path,
-      body: body.toJson(),
       token: token,
     );
     return RegisterFinishResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -2061,12 +2086,11 @@ class AuthClient {
 
   /// Delete passkey
   /// DELETE /v1/passkeys/{credentialId}
-  Future<DeleteResponse> deletePasskey({required String credentialId, required DeleteRequest body, required String token}) async {
+  Future<DeleteResponse> deletePasskey({required String credentialId, required String token}) async {
     final path = '/v1/passkeys/$credentialId';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
       token: token,
     );
     return DeleteResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -2074,59 +2098,64 @@ class AuthClient {
 
   /// Start phone authentication
   /// POST /v1/phone/start
-  Future<StartResponse> phoneAuthStart({required StartRequest body}) async {
+  Future<PhoneStartResponse> phoneAuthStart({required StartRequest body}) async {
     final path = '/v1/phone/start';
     final res = await _request(
 'POST',
       path,
       body: body.toJson(),
     );
-    return StartResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return PhoneStartResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Verify phone OTP
   /// POST /v1/phone/verify
-  Future<VerifyResponse> phoneAuthVerify({required VerifyRequest body}) async {
+  Future<PhoneVerifyResponse> phoneAuthVerify({required PhoneVerifyRequest body}) async {
     final path = '/v1/phone/verify';
     final res = await _request(
 'POST',
       path,
       body: body.toJson(),
     );
-    return VerifyResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return PhoneVerifyResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Refresh tokens
   /// POST /v1/refresh
-  Future<TokenResponse> refreshTokens({required Map<String, dynamic> body}) async {
+  Future<ApiTokenResponse> refreshTokens({required RefreshRequest body}) async {
     final path = '/v1/refresh';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
-    return TokenResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiTokenResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Reset password
   /// POST /v1/reset-password
-  Future<StatusResponse> resetPassword({required Map<String, dynamic> body}) async {
+  Future<ApiStatusResponse> resetPassword({required ResetPasswordRequest body}) async {
     final path = '/v1/reset-password';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List roles
   /// GET /v1/roles
-  Future<RoleListResponse> authsomeListRoles({required String token}) async {
+  Future<RoleListResponse> authsomeListRoles({required String appId, required String token}) async {
     final path = '/v1/roles';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
       token: token,
     );
     return RoleListResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -2134,12 +2163,12 @@ class AuthClient {
 
   /// Create role
   /// POST /v1/roles
-  Future<Role> authsomeCreateRole({required Map<String, dynamic> body, required String token}) async {
+  Future<Role> authsomeCreateRole({required CreateRoleRequest body, required String token}) async {
     final path = '/v1/roles';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
     return Role.fromJson(Map<String, dynamic>.from(res as Map));
@@ -2159,12 +2188,12 @@ class AuthClient {
 
   /// Update role
   /// PATCH /v1/roles/{roleId}
-  Future<Role> authsomeUpdateRole({required String roleId, required Map<String, dynamic> body, required String token}) async {
+  Future<Role> authsomeUpdateRole({required String roleId, required UpdateRoleRequest body, required String token}) async {
     final path = '/v1/roles/$roleId';
     final res = await _request(
 'PATCH',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
     return Role.fromJson(Map<String, dynamic>.from(res as Map));
@@ -2172,27 +2201,27 @@ class AuthClient {
 
   /// Delete role
   /// DELETE /v1/roles/{roleId}
-  Future<StatusResponse> authsomeDeleteRole({required String roleId, required String token}) async {
+  Future<ApiStatusResponse> authsomeDeleteRole({required String roleId, required String token}) async {
     final path = '/v1/roles/$roleId';
     final res = await _request(
 'DELETE',
       path,
       token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Assign role to user
   /// POST /v1/roles/{roleId}/assign
-  Future<StatusResponse> authsomeAssignRole({required String roleId, required Map<String, dynamic> body, required String token}) async {
+  Future<ApiStatusResponse> authsomeAssignRole({required String roleId, required AssignRoleRequest body, required String token}) async {
     final path = '/v1/roles/$roleId/assign';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List role permissions
@@ -2209,12 +2238,12 @@ class AuthClient {
 
   /// Add permission to role
   /// POST /v1/roles/{roleId}/permissions
-  Future<Permission> authsomeAddPermission({required String roleId, required Map<String, dynamic> body, required String token}) async {
+  Future<Permission> authsomeAddPermission({required String roleId, required AddPermissionRequest body, required String token}) async {
     final path = '/v1/roles/$roleId/permissions';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
     return Permission.fromJson(Map<String, dynamic>.from(res as Map));
@@ -2222,27 +2251,27 @@ class AuthClient {
 
   /// Remove permission from role
   /// DELETE /v1/roles/{roleId}/permissions/{permissionId}
-  Future<StatusResponse> authsomeRemovePermission({required String roleId, required String permissionId, required String token}) async {
+  Future<ApiStatusResponse> authsomeRemovePermission({required String roleId, required String permissionId, required String token}) async {
     final path = '/v1/roles/$roleId/permissions/$permissionId';
     final res = await _request(
 'DELETE',
       path,
       token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Unassign role from user
   /// POST /v1/roles/{roleId}/unassign
-  Future<StatusResponse> authsomeUnassignRole({required String roleId, required Map<String, dynamic> body, required String token}) async {
+  Future<ApiStatusResponse> authsomeUnassignRole({required String roleId, required UnassignRoleRequest body, required String token}) async {
     final path = '/v1/roles/$roleId/unassign';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List sessions
@@ -2259,111 +2288,177 @@ class AuthClient {
 
   /// Revoke session
   /// DELETE /v1/sessions/{sessionId}
-  Future<StatusResponse> revokeSession({required String sessionId, required RevokeSessionRequest body, required String token}) async {
+  Future<ApiStatusResponse> revokeSession({required String sessionId, required String token}) async {
     final path = '/v1/sessions/$sessionId';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
       token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Sign in
   /// POST /v1/signin
-  Future<AuthResponse> signIn({required Map<String, dynamic> body}) async {
+  Future<AuthResponse> signIn({required SignInRequest body}) async {
     final path = '/v1/signin';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
     return AuthResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Sign out
   /// POST /v1/signout
-  Future<StatusResponse> signOut({required SignOutRequest body, required String token}) async {
+  Future<ApiStatusResponse> signOut({required String token}) async {
     final path = '/v1/signout';
     final res = await _request(
 'POST',
       path,
-      body: body.toJson(),
       token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Sign up
   /// POST /v1/signup
-  Future<AuthResponse> signUp({required Map<String, dynamic> body}) async {
+  Future<AuthResponse> signUp({required SignUpRequest body}) async {
     final path = '/v1/signup';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
     return AuthResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Start OAuth flow
   /// POST /v1/social/{provider}
-  Future<StartResponse> startOAuth({required String provider, required StartRequest body}) async {
+  Future<SocialStartResponse> startOAuth({required String provider, String? frontendUrl, String? redirectUrl}) async {
     final path = '/v1/social/$provider';
+    final queryParams = <String, String>{};
+    if (frontendUrl != null) queryParams['frontend_url'] = frontendUrl.toString();
+    if (redirectUrl != null) queryParams['redirect_url'] = redirectUrl.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'POST',
-      path,
-      body: body.toJson(),
+      '$path$queryString',
     );
-    return StartResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return SocialStartResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// OAuth callback
   /// GET /v1/social/{provider}/callback
-  Future<CallbackResponse> oauthCallback({required String provider}) async {
+  Future<SocialCallbackResponse> oauthCallback({required String provider, String? state, String? code, String? error}) async {
     final path = '/v1/social/$provider/callback';
+    final queryParams = <String, String>{};
+    if (state != null) queryParams['state'] = state.toString();
+    if (code != null) queryParams['code'] = code.toString();
+    if (error != null) queryParams['error'] = error.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
     );
-    return CallbackResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return SocialCallbackResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Exchange SSO one-time code for a session
+  /// POST /v1/sso/exchange
+  Future<SsoCallbackResponse> ssoExchange({required ExchangeRequest body, required String token}) async {
+    final path = '/v1/sso/exchange';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return SsoCallbackResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Start SSO login by email domain
+  /// POST /v1/sso/login
+  Future<LoginResponse> startSSOLoginByDomain({required LoginByDomainRequest body, required String token}) async {
+    final path = '/v1/sso/login';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return LoginResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// SSO SAML ACS endpoint
   /// POST /v1/sso/{provider}/acs
-  Future<CallbackResponse> ssoACS({required String provider, required ACSRequest body}) async {
+  Future<void> ssoACS({required String provider}) async {
     final path = '/v1/sso/$provider/acs';
-    final res = await _request(
+    await _request(
 'POST',
       path,
-      body: body.toJson(),
     );
-    return CallbackResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// SSO OIDC redirect landing
+  /// GET /v1/sso/{provider}/callback
+  Future<void> ssoOIDCRedirect({required String provider, required String token}) async {
+    final path = '/v1/sso/$provider/callback';
+    await _request(
+'GET',
+      path,
+      token: token,
+    );
   }
 
   /// SSO callback (OIDC)
   /// POST /v1/sso/{provider}/callback
-  Future<CallbackResponse> ssoCallback({required String provider, required CallbackRequest body}) async {
+  Future<SsoCallbackResponse> ssoCallback({required String provider, String? state, String? code, String? error}) async {
     final path = '/v1/sso/$provider/callback';
+    final queryParams = <String, String>{};
+    if (state != null) queryParams['state'] = state.toString();
+    if (code != null) queryParams['code'] = code.toString();
+    if (error != null) queryParams['error'] = error.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'POST',
-      path,
-      body: body.toJson(),
+      '$path$queryString',
     );
-    return CallbackResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return SsoCallbackResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Start SSO login flow
   /// POST /v1/sso/{provider}/login
-  Future<LoginResponse> startSSOLogin({required String provider, required LoginRequest body}) async {
+  Future<LoginResponse> startSSOLogin({required String provider, String? returnUrl}) async {
     final path = '/v1/sso/$provider/login';
+    final queryParams = <String, String>{};
+    if (returnUrl != null) queryParams['return_url'] = returnUrl.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'POST',
-      path,
-      body: body.toJson(),
+      '$path$queryString',
     );
     return LoginResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// SAML SP metadata
+  /// GET /v1/sso/{provider}/metadata
+  Future<void> ssoSPMetadata({required String provider, required String token}) async {
+    final path = '/v1/sso/$provider/metadata';
+    await _request(
+'GET',
+      path,
+      token: token,
+    );
   }
 
   /// List user roles
@@ -2385,35 +2480,40 @@ class AuthClient {
 
   /// Verify email
   /// POST /v1/verify-email
-  Future<StatusResponse> verifyEmail({required Map<String, dynamic> body}) async {
+  Future<ApiStatusResponse> verifyEmail({required VerifyEmailRequest body}) async {
     final path = '/v1/verify-email';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Resend email verification
   /// POST /v1/verify-email/resend
-  Future<StatusResponse> resendEmailVerification({required Map<String, dynamic> body}) async {
+  Future<ApiStatusResponse> resendEmailVerification({required ResendVerificationRequest body}) async {
     final path = '/v1/verify-email/resend';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List webhooks
   /// GET /v1/webhooks
-  Future<WebhookListResponse> listWebhooks({required String token}) async {
+  Future<WebhookListResponse> listWebhooks({required String appId, required String token}) async {
     final path = '/v1/webhooks';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
       token: token,
     );
     return WebhookListResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -2421,12 +2521,12 @@ class AuthClient {
 
   /// Create webhook
   /// POST /v1/webhooks
-  Future<Webhook> createWebhook({required Map<String, dynamic> body, required String token}) async {
+  Future<Webhook> createWebhook({required CreateWebhookRequest body, required String token}) async {
     final path = '/v1/webhooks';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
     return Webhook.fromJson(Map<String, dynamic>.from(res as Map));
@@ -2446,12 +2546,12 @@ class AuthClient {
 
   /// Update webhook
   /// PATCH /v1/webhooks/{webhookId}
-  Future<Webhook> updateWebhook({required String webhookId, required Map<String, dynamic> body, required String token}) async {
+  Future<Webhook> updateWebhook({required String webhookId, required UpdateWebhookRequest body, required String token}) async {
     final path = '/v1/webhooks/$webhookId';
     final res = await _request(
 'PATCH',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
     return Webhook.fromJson(Map<String, dynamic>.from(res as Map));
@@ -2459,15 +2559,14 @@ class AuthClient {
 
   /// Delete webhook
   /// DELETE /v1/webhooks/{webhookId}
-  Future<StatusResponse> deleteWebhook({required String webhookId, required DeleteWebhookRequest body, required String token}) async {
+  Future<ApiStatusResponse> deleteWebhook({required String webhookId, required String token}) async {
     final path = '/v1/webhooks/$webhookId';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
       token: token,
     );
-    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   // ──────────────────────────────────────────────────

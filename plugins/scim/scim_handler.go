@@ -8,6 +8,7 @@ import (
 
 	"github.com/xraph/forge"
 
+	"github.com/xraph/authsome/apitypes"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/user"
@@ -29,8 +30,8 @@ type scimGroupPathParam struct {
 // SCIM Discovery endpoints
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) handleServiceProviderConfig(_ forge.Context, _ *struct{}) (*map[string]any, error) { //nolint:gocritic // ptrToRefParam: framework requires pointer return
-	config := map[string]any{
+func (p *Plugin) handleServiceProviderConfig(_ forge.Context, _ *apitypes.Empty) (*ServiceProviderConfig, error) {
+	config := ServiceProviderConfig{
 		"schemas": []string{SchemaServiceConfig},
 		"patch": map[string]any{
 			"supported": true,
@@ -63,8 +64,8 @@ func (p *Plugin) handleServiceProviderConfig(_ forge.Context, _ *struct{}) (*map
 	return &config, nil
 }
 
-func (p *Plugin) handleSchemas(_ forge.Context, _ *struct{}) (*map[string]any, error) { //nolint:gocritic // ptrToRefParam: framework requires pointer return
-	schemas := map[string]any{
+func (p *Plugin) handleSchemas(_ forge.Context, _ *apitypes.Empty) (*SchemaList, error) {
+	schemas := SchemaList{
 		"schemas":      []string{SchemaListResponse},
 		"totalResults": 2,
 		"Resources": []map[string]any{
@@ -81,8 +82,8 @@ func (p *Plugin) handleSchemas(_ forge.Context, _ *struct{}) (*map[string]any, e
 	return &schemas, nil
 }
 
-func (p *Plugin) handleResourceTypes(_ forge.Context, _ *struct{}) (*map[string]any, error) { //nolint:gocritic // ptrToRefParam: framework requires pointer return
-	types := map[string]any{
+func (p *Plugin) handleResourceTypes(_ forge.Context, _ *apitypes.Empty) (*ResourceTypeList, error) {
+	types := ResourceTypeList{
 		"schemas":      []string{SchemaListResponse},
 		"totalResults": 2,
 		"Resources": []map[string]any{
@@ -109,7 +110,7 @@ func (p *Plugin) handleResourceTypes(_ forge.Context, _ *struct{}) (*map[string]
 // User SCIM endpoints
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) handleListUsers(ctx forge.Context, _ *struct{}) (*ListResponse, error) {
+func (p *Plugin) handleListUsers(ctx forge.Context, _ *apitypes.Empty) (*ListResponse, error) {
 	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
@@ -176,7 +177,7 @@ func (p *Plugin) handleGetUser(ctx forge.Context, req *scimUserPathParam) (*User
 	return UserToSCIM(u, p.config.BasePath), nil
 }
 
-func (p *Plugin) handleCreateUser(ctx forge.Context, _ *struct{}) (*UserResource, error) {
+func (p *Plugin) handleCreateUser(ctx forge.Context, _ *apitypes.Empty) (*UserResource, error) {
 	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
@@ -269,7 +270,7 @@ func (p *Plugin) handlePatchUser(ctx forge.Context, req *scimUserPathParam) (*Us
 	return UserToSCIM(u, p.config.BasePath), nil
 }
 
-func (p *Plugin) handleDeleteUser(ctx forge.Context, req *scimUserPathParam) (*struct{}, error) {
+func (p *Plugin) handleDeleteUser(ctx forge.Context, req *scimUserPathParam) (*apitypes.Empty, error) {
 	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
@@ -295,7 +296,7 @@ func (p *Plugin) handleDeleteUser(ctx forge.Context, req *scimUserPathParam) (*s
 // Group SCIM endpoints
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) handleListGroups(ctx forge.Context, _ *struct{}) (*ListResponse, error) {
+func (p *Plugin) handleListGroups(ctx forge.Context, _ *apitypes.Empty) (*ListResponse, error) {
 	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
@@ -350,7 +351,7 @@ func (p *Plugin) handleGetGroup(ctx forge.Context, req *scimGroupPathParam) (*Gr
 	return TeamToSCIMGroup(team, nil, p.config.BasePath), nil
 }
 
-func (p *Plugin) handleCreateGroup(ctx forge.Context, _ *struct{}) (*GroupResource, error) {
+func (p *Plugin) handleCreateGroup(ctx forge.Context, _ *apitypes.Empty) (*GroupResource, error) {
 	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
@@ -438,7 +439,7 @@ func (p *Plugin) handlePatchGroup(ctx forge.Context, req *scimGroupPathParam) (*
 	return TeamToSCIMGroup(team, nil, p.config.BasePath), nil
 }
 
-func (p *Plugin) handleDeleteGroup(ctx forge.Context, req *scimGroupPathParam) (*struct{}, error) {
+func (p *Plugin) handleDeleteGroup(ctx forge.Context, req *scimGroupPathParam) (*apitypes.Empty, error) {
 	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err

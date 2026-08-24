@@ -112,6 +112,12 @@ func (p *SessionProvider) Authenticate(ctx context.Context, r *http.Request) (*a
 	return &auth.AuthContext{
 		Subject:      u.ID.String(),
 		ProviderName: "session",
+		// Roles were stamped onto the session when it was issued (see
+		// engine_session_roles.go). Forge's authorizer does set membership
+		// over exactly this field, and its RequireRole interceptors read the
+		// same strings from "auth.subject.roles", so a route declaring
+		// forge.WithAnyRole("admin") denies everyone until this is populated.
+		Roles: sess.Roles,
 		Data: &SessionData{
 			Session: sess,
 			User:    u,
@@ -226,4 +232,53 @@ func extractBearerToken(r *http.Request) string {
 		return h[len(prefix):]
 	}
 	return ""
+}
+
+// DefaultSessionCookieName is the cookie SessionProvider falls back to when no
+// resolver is configured, and the name the cookie security scheme declares.
+//
+// Deployments can rename it through the session.cookie_name setting, which is
+// why Authenticate resolves it per request. An OpenAPI document has nowhere to
+// put "whatever this app configured", so the scheme below declares the default
+// and a renamed deployment regenerates its clients.
+const DefaultSessionCookieName = "authsome_session_token"
+
+// CookieSessionProvider declares the cookie half of session authentication.
+//
+// SessionProvider accepts either an Authorization: Bearer header or the
+// session cookie, but a single provider yields a single OpenAPI security
+// scheme, and its scheme says bearer. A generated client therefore only ever
+// sent the header, and the browser flow the server has always supported was
+// invisible to every client built from the document.
+//
+// Registering this alongside SessionProvider declares the other half:
+// {apiKey, cookie, authsome_session_token}. Forge's Go generator turns that
+// into a typed AuthConfig field plus an opt-in cookie jar, and the TypeScript
+// generator into a credentials-carrying transport.
+//
+// It delegates authentication wholesale, so there is one implementation and
+// the two schemes cannot drift into disagreeing about what a valid session is.
+type CookieSessionProvider struct {
+	*SessionProvider
+}
+
+// NewCookieSessionProvider wraps p to declare its cookie scheme.
+func NewCookieSessionProvider(p *SessionProvider) *CookieSessionProvider {
+	return &CookieSessionProvider{SessionProvider: p}
+}
+
+// Name returns the provider name used in forge.WithAuth("session-cookie").
+func (p *CookieSessionProvider) Name() string { return "session-cookie" }
+
+// Type returns the OpenAPI security scheme type.
+func (p *CookieSessionProvider) Type() auth.SecuritySchemeType { return auth.SecurityTypeAPIKey }
+
+// OpenAPIScheme declares the session cookie by name and location.
+func (p *CookieSessionProvider) OpenAPIScheme() auth.SecurityScheme {
+	return auth.SecurityScheme{
+		Type:        string(auth.SecurityTypeAPIKey),
+		Description: "Session authentication via the session cookie set at sign-in.",
+		In:          "cookie",
+		Name:        DefaultSessionCookieName,
+	}
 }

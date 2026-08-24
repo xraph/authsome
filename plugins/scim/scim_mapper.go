@@ -191,3 +191,19 @@ func NewSCIMError(status int, detail string) *SCIMError {
 		Status:  strconv.Itoa(status),
 	}
 }
+
+// The discovery endpoints answer with documents whose shape RFC 7644 fixes but
+// Go does not, so they are assembled as maps. A named map type marshals exactly
+// as the bare map does and gives the OpenAPI generator a name for the
+// component, which an anonymous map[string]any cannot supply.
+
+// ServiceProviderConfig is the /ServiceProviderConfig document: which parts of
+// SCIM this server implements.
+type ServiceProviderConfig map[string]any
+
+// SchemaList is the /Schemas document: the resource schemas on offer.
+type SchemaList map[string]any
+
+// ResourceTypeList is the /ResourceTypes document: the resource types on offer
+// and the endpoint each one lives at.
+type ResourceTypeList map[string]any

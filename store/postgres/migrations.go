@@ -1160,5 +1160,122 @@ ALTER TABLE %[1]s ADD CONSTRAINT %[1]s_app_id_fkey
 				return nil
 			},
 		},
+
+		// Migration: session roles. The role slugs a principal held when the
+		// session was issued, stamped once rather than resolved per request
+		// (see engine_session_roles.go). Stored as JSONB: a comma-separated
+		// list would turn a slug containing a comma into two roles nobody
+		// granted, and these strings are read back as an authorization
+		// decision.
+		//
+		// NOT NULL with a default: fromSession always marshals, the way
+		// fromApp does for metadata, so no NULL is ever written. A nullable
+		// column would also have to survive a scan into json.RawMessage,
+		// which cannot take a nil driver value.
+		//
+		// Existing rows backfill to '[]', which decodes to no roles, so a
+		// session issued before this migration authorizes nothing it did not
+		// already authorize.
+		&migrate.Migration{
+			Name:    "add_session_roles",
+			Version: "20260620000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions
+    ADD COLUMN IF NOT EXISTS roles JSONB NOT NULL DEFAULT '[]'::jsonb;
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions DROP COLUMN IF EXISTS roles;
+`)
+				return err
+			},
+		},
+
+		// Migration: session principal identity. A session may be owned by a
+		// user or by a service account (session.Session), and until these
+		// columns existed the store silently dropped which one — a
+		// service-account session came back looking like an ordinary user
+		// session whose user_id happened to be empty.
+		//
+		// Three things change together, and none works without the others:
+		//
+		//  1. principal_kind / service_account_id are added, NOT NULL with an
+		//     empty default, matching every other optional id column on this
+		//     table. Existing rows backfill to '', which reads back as an
+		//     unset PrincipalKind. That is deliberately not normalized to
+		//     "user": empty already means user for legacy rows, and inventing
+		//     the value on read would erase the difference between a row that
+		//     predates the column and one deliberately stamped.
+		//
+		//  2. The user_id foreign key is dropped. A service-account session has
+		//     no user, so the FK rejected the insert outright with SQLSTATE
+		//     23503 — a user-less session was simply not persistable here. The
+		//     FK's only live job was rejecting inserts naming a nonexistent
+		//     user: DeleteUser is a soft delete (sets deleted_at), so it never
+		//     fired on user removal and never protected against dangling refs.
+		//
+		//  3. A CHECK replaces it, enforcing the invariant that actually
+		//     matters and that this bug violated: a session has exactly one
+		//     principal, never zero and never both. That is a stronger guard on
+		//     the thing being read for authorization than an insert-time
+		//     existence check on user_id.
+		//
+		// The CHECK validates existing rows when added. None can fail: until
+		// now user_id was NOT NULL REFERENCES authsome_users(id), so every
+		// stored row names a real user, and service_account_id did not exist.
+		&migrate.Migration{
+			Name:    "add_session_principal_identity",
+			Version: "20260620000002",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions
+    ADD COLUMN IF NOT EXISTS principal_kind TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS service_account_id TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE authsome_sessions
+    DROP CONSTRAINT IF EXISTS authsome_sessions_user_id_fkey;
+
+ALTER TABLE authsome_sessions
+    DROP CONSTRAINT IF EXISTS authsome_sessions_principal_check;
+ALTER TABLE authsome_sessions
+    ADD CONSTRAINT authsome_sessions_principal_check CHECK (
+        (principal_kind = 'service_account'
+             AND service_account_id <> '' AND user_id = '')
+        OR (principal_kind IN ('', 'user')
+             AND user_id <> '' AND service_account_id = '')
+    );
+
+CREATE INDEX IF NOT EXISTS idx_authsome_sessions_service_account_id
+    ON authsome_sessions (service_account_id)
+    WHERE service_account_id <> '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				// Restoring the FK would fail against any service-account
+				// session written since this migration ran, so those rows are
+				// removed first. They are unreadable without principal_kind
+				// anyway, which is the bug this migration fixes.
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_sessions_service_account_id;
+ALTER TABLE authsome_sessions
+    DROP CONSTRAINT IF EXISTS authsome_sessions_principal_check;
+
+DELETE FROM authsome_sessions WHERE user_id = '';
+
+ALTER TABLE authsome_sessions
+    ADD CONSTRAINT authsome_sessions_user_id_fkey
+    FOREIGN KEY (user_id) REFERENCES authsome_users(id);
+
+ALTER TABLE authsome_sessions
+    DROP COLUMN IF EXISTS service_account_id,
+    DROP COLUMN IF EXISTS principal_kind;
+`)
+				return err
+			},
+		},
 	)
 }

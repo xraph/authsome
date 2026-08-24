@@ -20,6 +20,7 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/apitypes"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
@@ -430,7 +431,7 @@ func newOAuth2Error(status int, errorCode, description string) *OAuth2HTTPError 
 // Handlers
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*struct{}, error) {
+func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*apitypes.Empty, error) {
 	if req.ResponseType != "code" {
 		return nil, forge.BadRequest("unsupported response_type; use 'code'")
 	}
@@ -688,7 +689,7 @@ func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenReque
 	return p.issueClientToken(ctx.Context(), client)
 }
 
-func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeRequest) (*struct{}, error) {
+func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeRequest) (*apitypes.Empty, error) {
 	if req.Token == "" {
 		return nil, forge.BadRequest("token required")
 	}

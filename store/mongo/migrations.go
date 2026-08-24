@@ -852,5 +852,53 @@ func init() {
 				return mexec.DropCollection(ctx, (*userEmailModel)(nil))
 			},
 		},
+
+		// Migration: session principal identity. A session may be owned by a
+		// user or by a service account (session.Session), and until
+		// sessionModel carried these fields the store silently dropped which
+		// one — a service-account session came back looking like an ordinary
+		// user session whose user_id happened to be empty.
+		//
+		// Mongo needs no column added, but the collection's $jsonSchema
+		// validator is generated from the model struct, so an existing
+		// deployment's validator does not know principal_kind or
+		// service_account_id. RefreshValidator reapplies the schema via
+		// collMod, the same way refresh_validators_for_nullable_pointers does.
+		// Fresh installs are unaffected: they pick up the current schema when
+		// the collection is created.
+		//
+		// The index is partial on {$gt: ""} rather than sparse. Sparse would be
+		// pointless here: grove writes every mapped field whatever the bson
+		// omitempty tag says, so a user session stores service_account_id: ""
+		// rather than omitting it, and a sparse index would cover every session
+		// in the collection. $gt: "" selects the non-empty values — the
+		// service-account sessions — and is one of the operators
+		// partialFilterExpression actually accepts ($ne is not). This mirrors
+		// the postgres partial index on service_account_id <> ''.
+		&migrate.Migration{
+			Name:    "add_session_principal_identity",
+			Version: "20260620000002",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				if err := mexec.RefreshValidator(ctx, (*sessionModel)(nil)); err != nil {
+					return fmt.Errorf("refresh session validator: %w", err)
+				}
+				return mexec.CreateIndexes(ctx, colSessions, []mongo.IndexModel{
+					{
+						Keys: bson.D{{Key: "service_account_id", Value: 1}},
+						Options: options.Index().SetPartialFilterExpression(
+							bson.D{{Key: "service_account_id", Value: bson.D{{Key: "$gt", Value: ""}}}},
+						),
+					},
+				})
+			},
+			// Forward-only: rolling the validator back would reject the
+			// service-account sessions this migration makes storable, and
+			// dropping the index only costs a scan.
+			Down: func(_ context.Context, _ migrate.Executor) error { return nil },
+		},
 	)
 }
