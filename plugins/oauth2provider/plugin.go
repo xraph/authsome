@@ -457,12 +457,43 @@ func (p *Plugin) RegisterRootRoutes(router forge.Router) error {
 }
 
 // registerWellKnown mounts the discovery documents on the given router.
-// Called for the origin root, and again on the grouped router so clients
-// configured with a prefixed base URL keep working.
+// Only the OIDC document is also mirrored onto the grouped router (see
+// RegisterRoutes); the RFC 8414 and RFC 9728 documents are not, since a
+// prefixed copy of either is undiscoverable and would only add duplicate
+// OpenAPI entries.
 func (p *Plugin) registerWellKnown(router forge.Router) error {
-	return router.GET("/.well-known/openid-configuration", p.handleDiscovery,
+	if err := router.GET("/.well-known/openid-configuration", p.handleDiscovery,
 		forge.WithSummary("OpenID Connect Discovery"),
 		forge.WithOperationID("oidcDiscovery"),
+		forge.WithTags("OAuth2"),
+	); err != nil {
+		return err
+	}
+
+	if err := router.GET("/.well-known/oauth-authorization-server", p.handleAuthServerMetadata,
+		forge.WithSummary("OAuth2 Authorization Server Metadata"),
+		forge.WithDescription("RFC 8414 authorization server metadata."),
+		forge.WithOperationID("oauth2AuthServerMetadata"),
+		forge.WithResponseSchema(http.StatusOK, "Metadata", AuthServerMetadata{}),
+		forge.WithTags("OAuth2"),
+	); err != nil {
+		return err
+	}
+
+	if err := router.GET("/.well-known/oauth-protected-resource", p.handleProtectedResourceMetadata,
+		forge.WithSummary("OAuth2 Protected Resource Metadata"),
+		forge.WithDescription("RFC 9728 protected resource metadata."),
+		forge.WithOperationID("oauth2ProtectedResourceMetadata"),
+		forge.WithResponseSchema(http.StatusOK, "Metadata", ProtectedResourceMetadata{}),
+		forge.WithTags("OAuth2"),
+	); err != nil {
+		return err
+	}
+
+	return router.GET("/.well-known/oauth-protected-resource/:resourcePath", p.handleScopedProtectedResourceMetadata,
+		forge.WithSummary("OAuth2 Protected Resource Metadata (scoped)"),
+		forge.WithOperationID("oauth2ScopedProtectedResourceMetadata"),
+		forge.WithResponseSchema(http.StatusOK, "Metadata", ProtectedResourceMetadata{}),
 		forge.WithTags("OAuth2"),
 	)
 }
@@ -517,6 +548,7 @@ type DiscoveryResponse struct {
 	UserinfoEndpoint                  string   `json:"userinfo_endpoint"`
 	RevocationEndpoint                string   `json:"revocation_endpoint"`
 	DeviceAuthorizationEndpoint       string   `json:"device_authorization_endpoint"`
+	RegistrationEndpoint              string   `json:"registration_endpoint,omitempty"`
 	JWKSURI                           string   `json:"jwks_uri"`
 	ResponseTypesSupported            []string `json:"response_types_supported"`
 	GrantTypesSupported               []string `json:"grant_types_supported"`
@@ -939,24 +971,27 @@ func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInf
 	}, nil
 }
 
+// handleDiscovery derives the OIDC discovery document from
+// buildAuthServerMetadata so the OIDC and RFC 8414 documents cannot drift
+// apart.
 func (p *Plugin) handleDiscovery(_ forge.Context, _ *DiscoveryRequest) (*DiscoveryResponse, error) {
-	issuer := p.issuerURL()
-
+	m := p.buildAuthServerMetadata()
 	return &DiscoveryResponse{
-		Issuer:                            issuer,
-		AuthorizationEndpoint:             issuer + "/v1/oauth/authorize",
-		TokenEndpoint:                     issuer + "/v1/oauth/token",
-		UserinfoEndpoint:                  issuer + "/v1/oauth/userinfo",
-		RevocationEndpoint:                issuer + "/v1/oauth/revoke",
-		DeviceAuthorizationEndpoint:       issuer + "/v1/oauth/device/authorize",
-		JWKSURI:                           issuer + "/.well-known/jwks.json",
-		ResponseTypesSupported:            []string{"code"},
-		GrantTypesSupported:               []string{"authorization_code", "client_credentials", "urn:ietf:params:oauth:grant-type:device_code"},
-		SubjectTypesSupported:             []string{"public"},
-		IDTokenSigningAlgValuesSupported:  []string{"RS256", "ES256"},
-		ScopesSupported:                   []string{"openid", "profile", "email", "phone"},
-		TokenEndpointAuthMethodsSupported: []string{"client_secret_post", "client_secret_basic"},
-		CodeChallengeMethodsSupported:     []string{"S256", "plain"},
+		Issuer:                            m.Issuer,
+		AuthorizationEndpoint:             m.AuthorizationEndpoint,
+		TokenEndpoint:                     m.TokenEndpoint,
+		UserinfoEndpoint:                  m.UserinfoEndpoint,
+		RevocationEndpoint:                m.RevocationEndpoint,
+		DeviceAuthorizationEndpoint:       m.DeviceAuthorizationEndpoint,
+		RegistrationEndpoint:              m.RegistrationEndpoint,
+		JWKSURI:                           m.JWKSURI,
+		ResponseTypesSupported:            m.ResponseTypesSupported,
+		GrantTypesSupported:               m.GrantTypesSupported,
+		SubjectTypesSupported:             m.SubjectTypesSupported,
+		IDTokenSigningAlgValuesSupported:  m.IDTokenSigningAlgValuesSupported,
+		ScopesSupported:                   m.ScopesSupported,
+		TokenEndpointAuthMethodsSupported: m.TokenEndpointAuthMethodsSupported,
+		CodeChallengeMethodsSupported:     m.CodeChallengeMethodsSupported,
 	}, nil
 }
 

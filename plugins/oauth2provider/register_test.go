@@ -17,31 +17,29 @@ import (
 	"github.com/xraph/authsome/plugins/oauth2provider"
 )
 
-// newTestRouter builds a forge router with both RegisterRoutes and
-// RegisterRootRoutes exercised, mirroring how the real engine wires the
-// plugin. In standalone mode RegisterRoutes already mirrors the discovery
-// document onto the grouped router (see plugin.go), so calling
-// RegisterRootRoutes on that same router panics on a duplicate route.
-// RegisterRootRoutes is therefore mounted on a second router instance; this
-// test router returns the one that carries /v1/oauth/register, which is
-// what every case here needs. Task 7's metadata tests reach the
-// /.well-known/... paths through RegisterRootRoutes directly instead.
+// newTestRouter builds a forge router with RegisterRoutes exercised,
+// mirroring how the real engine wires the plugin's grouped endpoints. It
+// returns the router that carries /v1/oauth/register, which is what every
+// case here needs.
+//
+// It does not exercise RegisterRootRoutes: in standalone mode RegisterRoutes
+// already mirrors the discovery document onto this same router (see
+// plugin.go), so calling RegisterRootRoutes here too would panic on a
+// duplicate route. RegisterRootRoutes is exercised on its own router
+// instance instead, by newWellKnownRouter in metadata_test.go.
 func newTestRouter(t *testing.T, p *oauth2provider.Plugin) http.Handler {
 	t.Helper()
 	router := forge.NewRouter()
 	require.NoError(t, p.RegisterRoutes(router))
-	rootRouter := forge.NewRouter()
-	require.NoError(t, p.RegisterRootRoutes(rootRouter))
 	return router
 }
 
 // newRegistrationFixture builds a plugin wired to an in-memory store with
 // dynamic registration either enabled or disabled, using a freshly minted
 // app as the registration fallback. The plugin is part of the returned
-// tuple (even though no case here needs it) because Task 7's metadata
-// tests reuse this exact helper and do need it.
-//
-//nolint:unparam // shape shared with Task 7, see above
+// tuple so metadata_test.go can build its own root router from it via
+// newWellKnownRouter, alongside the store, grouped router, and app ID the
+// registration tests here use directly.
 func newRegistrationFixture(t *testing.T, enabled bool) (*oauth2provider.Plugin, oauth2provider.Store, http.Handler, id.AppID) {
 	t.Helper()
 	appID := id.NewAppID()
