@@ -299,13 +299,6 @@ func toSession(m *SessionModel) (*session.Session, error) {
 		}
 		s.DeviceID = devID
 	}
-	if m.ImpersonatedBy != "" {
-		impID, err := id.ParseUserID(m.ImpersonatedBy)
-		if err != nil {
-			return nil, err
-		}
-		s.SetImpersonatedBy(impID)
-	}
 	if m.FamilyID != "" {
 		famID, err := id.ParseSessionFamilyID(m.FamilyID)
 		if err != nil {
@@ -319,16 +312,38 @@ func toSession(m *SessionModel) (*session.Session, error) {
 	if len(m.Scopes) > 0 {
 		_ = json.Unmarshal(m.Scopes, &s.Scopes) //nolint:errcheck // best-effort decode
 	}
+	// Actors/ActorGrant/DelegationID are the authoritative actor chain and
+	// must be read before the impersonated_by fallback below runs, and
+	// ActorGrant is only assigned when the column is non-empty. impersonated_by
+	// is the legacy column: a session written before the actor-chain columns
+	// existed, or one the 20260824000052 backfill has not reached yet, carries
+	// impersonated_by set with actor_grant still empty. Reversing this order,
+	// or assigning ActorGrant unconditionally, would let that empty actor_grant
+	// clobber the impersonation SetImpersonatedBy is about to derive, and the
+	// row would read back as an ordinary user session: no impersonation
+	// banner, no admin-severity audit record.
 	if len(m.Actors) > 0 {
 		_ = json.Unmarshal(m.Actors, &s.Actors) //nolint:errcheck // best-effort decode
 	}
-	s.ActorGrant = principal.GrantKind(m.ActorGrant)
+	if m.ActorGrant != "" {
+		s.ActorGrant = principal.GrantKind(m.ActorGrant)
+	}
 	if m.DelegationID != "" {
 		delID, err := id.ParseDelegationID(m.DelegationID)
 		if err != nil {
 			return nil, err
 		}
 		s.DelegationID = delID
+	}
+	// Legacy fallback: only consulted when the authoritative columns above
+	// left ActorGrant unset, so a row that already carries a real actor chain
+	// is never overwritten by a stale impersonated_by value.
+	if m.ImpersonatedBy != "" && s.ActorGrant == "" {
+		impID, err := id.ParseUserID(m.ImpersonatedBy)
+		if err != nil {
+			return nil, err
+		}
+		s.SetImpersonatedBy(impID)
 	}
 	return s, nil
 }

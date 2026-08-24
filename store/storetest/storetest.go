@@ -66,6 +66,7 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"EphemeralPrincipalExpiry", testEphemeralPrincipalExpiry},
 		{"DelegationLifecycle", testDelegationLifecycle},
 		{"SessionActorChainRoundTrip", testSessionActorChainRoundTrip},
+		{"ServiceAccountKindDefaultsToService", testServiceAccountKindDefaultsToService},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -669,6 +670,37 @@ func testPrincipalRoundTrip(t *testing.T, s store.Store) {
 	assert.Equal(t, principal.KindService, gotLegacy.Kind)
 }
 
+// testServiceAccountKindDefaultsToService pins that every backend answers
+// GetServiceAccount the same way for a row created with no Kind set.
+// ToPrincipal's empty-Kind-means-service_account fallback covers a row some
+// other tool wrote directly, but the store's own write path must not rely on
+// it: Kind carries `json:"kind,omitempty"`, so a handler serializing the
+// account would emit the key on a backend that normalizes at write time and
+// omit it on one that stores the blank straight through. Without this pinned
+// here, the two round trips already tested (ToPrincipal in
+// testPrincipalRoundTrip, GetPrincipal's own fallback) can each pass while
+// GetServiceAccount itself still disagrees across backends.
+func testServiceAccountKindDefaultsToService(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+
+	svc := &serviceaccount.ServiceAccount{
+		ID:        id.NewServiceAccountID(),
+		AppID:     tn.AppID,
+		EnvID:     tn.EnvID,
+		Name:      "no-kind-set",
+		Active:    true,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateServiceAccount(ctx, svc))
+
+	got, err := s.GetServiceAccount(ctx, svc.ID)
+	require.NoError(t, err)
+	assert.Equal(t, principal.KindService, got.Kind,
+		"a service account created with no Kind must read back as service_account on every backend")
+}
+
 // testEphemeralPrincipalExpiry pins the JIT-minted child contract: the parent
 // link survives, and a lapsed child is excluded from an active-only listing
 // rather than silently continuing to authenticate.
@@ -707,6 +739,34 @@ func testEphemeralPrincipalExpiry(t *testing.T, s store.Store) {
 	assert.Contains(t, ids, live.ID.String())
 	assert.Contains(t, ids, parent.ID.String())
 	assert.NotContains(t, ids, lapsed.ID.String(), "an active-only listing must exclude the lapsed child")
+
+	// The Parent filter itself: unexercised above, and easy for a backend to
+	// get subtly wrong by comparing only the id half of the ref. ToPrincipal
+	// stamps a child's Parent ref with the child's own Kind, so the query
+	// below must match both children of `parent` and reject a ref that
+	// carries the right id under the wrong kind.
+	unrelated := seedPrincipal(t, s, tn, principal.KindAgent, "unrelated-agent")
+
+	byParent, err := s.ListPrincipals(ctx, &principal.Query{
+		AppID:  tn.AppID,
+		Parent: &principal.Ref{Kind: principal.KindAgent, ID: parent.ID.String()},
+	})
+	require.NoError(t, err)
+	byParentIDs := make([]string, 0, len(byParent))
+	for _, p := range byParent {
+		byParentIDs = append(byParentIDs, p.ID)
+	}
+	assert.Contains(t, byParentIDs, live.ID.String(), "the parent filter must return this child")
+	assert.Contains(t, byParentIDs, lapsed.ID.String(), "the parent filter is not an active filter, so the lapsed child must still appear")
+	assert.NotContains(t, byParentIDs, parent.ID.String(), "the parent itself must not appear as its own child")
+	assert.NotContains(t, byParentIDs, unrelated.ID.String(), "a principal with a different parent must not appear")
+
+	wrongKind, err := s.ListPrincipals(ctx, &principal.Query{
+		AppID:  tn.AppID,
+		Parent: &principal.Ref{Kind: principal.KindWorkload, ID: parent.ID.String()},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, wrongKind, "a parent ref naming the wrong kind must match nothing, even with a matching id")
 }
 
 // testDelegationLifecycle pins create, lookup and revoke. The revoke half is

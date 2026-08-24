@@ -99,7 +99,7 @@ func (s *Store) DeleteServiceAccount(ctx context.Context, svcID id.ServiceAccoun
 
 // GetPrincipal resolves any principal by ref. A user ref is assembled from
 // authsome_users; every other kind comes from authsome_service_accounts,
-// looked up by ID alone — the ref's Kind only routes which table to read,
+// looked up by ID alone: the ref's Kind only routes which table to read,
 // matching how the memory backend resolves a principal.
 func (s *Store) GetPrincipal(ctx context.Context, ref principal.Ref) (*principal.Principal, error) {
 	if ref.Kind == principal.KindUser {
@@ -151,7 +151,16 @@ func (s *Store) ListPrincipals(ctx context.Context, q *principal.Query) ([]*prin
 		query = query.Where("owner_user_id = ?", q.OwnerUser.String())
 	}
 	if q.Parent != nil {
-		query = query.Where("parent_id = ?", q.Parent.ID)
+		// ToPrincipal stamps the parent ref's Kind from the child row's own
+		// kind (a child is always minted by a principal of its own kind), so
+		// matching on parent_id alone would let a Ref naming a different kind
+		// match a row it should not, and a Ref with an empty ID match every
+		// row that merely has a parent. Comparing the whole ref, the way
+		// store/memory does, is what makes those two cases behave the same
+		// on both backends.
+		query = query.
+			Where("parent_id = ?", q.Parent.ID).
+			Where("kind = ?", string(q.Parent.Kind))
 	}
 	if q.ActiveOnly {
 		query = query.
@@ -201,6 +210,14 @@ func (s *Store) GetDelegation(ctx context.Context, delID id.DelegationID) (*prin
 // Active is evaluated in SQL rather than by loading and filtering in Go: this
 // runs on the authentication path for every delegated request, and the partial
 // unique index means at most one row can match.
+//
+// The interface takes no time argument (unlike ListDelegations, which is
+// given q.ActiveAsOf as a bound parameter), so the expiry check has to name a
+// SQL clock rather than pass one in. That has to be clock_timestamp(), not
+// NOW(): NOW() is transaction_timestamp(), frozen for the life of the calling
+// transaction, so inside a long-lived transaction a grant would stay usable
+// past its expires_at for the transaction's whole life. clock_timestamp()
+// reads the wall clock at the moment this statement runs instead.
 func (s *Store) FindActiveDelegation(
 	ctx context.Context, appID id.AppID, actor, subject principal.Ref, grantKind principal.GrantKind,
 ) (*principal.Delegation, error) {
@@ -213,7 +230,7 @@ func (s *Store) FindActiveDelegation(
 		Where("subject_id = ?", subject.ID).
 		Where("grant_kind = ?", string(grantKind)).
 		Where("revoked_at IS NULL").
-		Where("(expires_at IS NULL OR expires_at > NOW())").
+		Where("(expires_at IS NULL OR expires_at > clock_timestamp())").
 		Scan(ctx)
 	if err != nil {
 		if errors.Is(pgError(err), store.ErrNotFound) {

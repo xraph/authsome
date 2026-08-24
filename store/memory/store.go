@@ -1746,6 +1746,16 @@ func (s *Store) CreateServiceAccount(_ context.Context, svc *serviceaccount.Serv
 		svc.CreatedAt = time.Now()
 	}
 	svc.UpdatedAt = svc.CreatedAt
+	// Every row this store writes gets a concrete Kind, matching postgres's
+	// fromServiceAccount: postgres's CHECK constraint on the kind column
+	// cannot admit an empty string, and leaving the backends to disagree here
+	// means a handler serializing a legacy row (Kind carries
+	// `json:"kind,omitempty"`) would emit the key on one backend and omit it
+	// on the other. The empty-Kind fallback stays available for a row some
+	// other tool wrote directly: ToPrincipal() still tolerates it on read.
+	if svc.Kind == "" {
+		svc.Kind = principal.KindService
+	}
 	// Enforce unique (app_id, name).
 	for _, existing := range s.serviceAccounts {
 		if existing.AppID.String() == svc.AppID.String() && existing.Name == svc.Name {

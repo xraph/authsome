@@ -1433,6 +1433,21 @@ CREATE INDEX IF NOT EXISTS idx_authsome_sessions_delegation_id
 				// Rows written for an agent or workload subject violate the
 				// narrower check, so they go before it is restored. They are
 				// unreachable under the old schema anyway.
+				//
+				// That DELETE does not cover every loss this Down causes. A
+				// delegated session (principal_kind='user', a real user_id, with
+				// actors/actor_grant/delegation_id describing the agent acting for
+				// them) satisfies the narrower check fine and is left in place, but
+				// the DROP COLUMN below still takes its actors, actor_grant and
+				// delegation_id with it. That session comes back as an ordinary,
+				// full-authority user session with no record an agent was ever
+				// involved. Re-running Up does not recover it either: the backfill
+				// only reconstructs a chain from impersonated_by, and a delegation
+				// (as opposed to an impersonation) never set that column, so there
+				// is nothing to backfill from. A column drop cannot preserve data
+				// it is dropping; this is not something to fix here, only
+				// something an operator running this Down needs to know before
+				// they do it.
 				_, err := exec.Exec(ctx, `
 DROP INDEX IF EXISTS idx_authsome_sessions_delegation_id;
 DELETE FROM authsome_sessions WHERE principal_kind IN ('agent', 'workload');

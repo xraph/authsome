@@ -24,6 +24,7 @@ var principalDelegationCases = []string{
 	"EphemeralPrincipalExpiry",
 	"DelegationLifecycle",
 	"SessionActorChainRoundTrip",
+	"ServiceAccountKindDefaultsToService",
 }
 
 // TestConformance runs the shared cross-backend store contract suite against
