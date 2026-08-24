@@ -1724,48 +1724,48 @@ class AuthClient {
 
   /// Device Authorization
   /// POST /v1/oauth/device/authorize
-  Future<DeviceAuthResponse> oauth2DeviceAuthorize({required Map<String, dynamic> body}) async {
+  Future<DeviceAuthResponse> oauth2DeviceAuthorize({required Oauth2DeviceAuthorizeRequest body}) async {
     final path = '/v1/oauth/device/authorize';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
     return DeviceAuthResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Complete device authorization
   /// POST /v1/oauth/device/complete
-  Future<DeviceCompleteResponse> oauth2DeviceComplete({required Map<String, dynamic> body}) async {
+  Future<DeviceCompleteResponse> oauth2DeviceComplete({required Oauth2DeviceCompleteRequest body}) async {
     final path = '/v1/oauth/device/complete';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
     return DeviceCompleteResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Revoke token
   /// POST /v1/oauth/revoke
-  Future<void> oauth2Revoke({required Map<String, dynamic> body, required String token}) async {
+  Future<void> oauth2Revoke({required Oauth2RevokeRequest body, required String token}) async {
     final path = '/v1/oauth/revoke';
     await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
   }
 
   /// OAuth2 Token
   /// POST /v1/oauth/token
-  Future<Oauth2providerTokenResponse> oauth2Token({required Map<String, dynamic> body}) async {
+  Future<Oauth2providerTokenResponse> oauth2Token({required Oauth2TokenRequest body}) async {
     final path = '/v1/oauth/token';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
     return Oauth2providerTokenResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }

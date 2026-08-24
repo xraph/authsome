@@ -7920,3 +7920,131 @@ class WebhookListResponse {
   @override
   String toString() => 'WebhookListResponse(${toJson()})';
 }
+
+class Oauth2DeviceAuthorizeRequest {
+  final String clientId;
+  final String? scope;
+
+  const Oauth2DeviceAuthorizeRequest({
+    required this.clientId,
+    this.scope,
+  });
+
+  factory Oauth2DeviceAuthorizeRequest.fromJson(Map<String, dynamic> json) {
+    return Oauth2DeviceAuthorizeRequest(
+      clientId: json['client_id'] as String,
+      scope: json['scope'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'client_id': clientId,
+      if (scope != null) 'scope': scope,
+    };
+  }
+
+  @override
+  String toString() => 'Oauth2DeviceAuthorizeRequest(${toJson()})';
+}
+
+class Oauth2DeviceCompleteRequest {
+  final String action;
+  final String userCode;
+
+  const Oauth2DeviceCompleteRequest({
+    required this.action,
+    required this.userCode,
+  });
+
+  factory Oauth2DeviceCompleteRequest.fromJson(Map<String, dynamic> json) {
+    return Oauth2DeviceCompleteRequest(
+      action: json['action'] as String,
+      userCode: json['user_code'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'action': action,
+      'user_code': userCode,
+    };
+  }
+
+  @override
+  String toString() => 'Oauth2DeviceCompleteRequest(${toJson()})';
+}
+
+class Oauth2RevokeRequest {
+  final String token;
+  final String? tokenTypeHint;
+
+  const Oauth2RevokeRequest({
+    required this.token,
+    this.tokenTypeHint,
+  });
+
+  factory Oauth2RevokeRequest.fromJson(Map<String, dynamic> json) {
+    return Oauth2RevokeRequest(
+      token: json['token'] as String,
+      tokenTypeHint: json['token_type_hint'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'token': token,
+      if (tokenTypeHint != null) 'token_type_hint': tokenTypeHint,
+    };
+  }
+
+  @override
+  String toString() => 'Oauth2RevokeRequest(${toJson()})';
+}
+
+class Oauth2TokenRequest {
+  final String? clientId;
+  final String? clientSecret;
+  final String? code;
+  final String? codeVerifier;
+  final String? deviceCode;
+  final String grantType;
+  final String? redirectUri;
+
+  const Oauth2TokenRequest({
+    this.clientId,
+    this.clientSecret,
+    this.code,
+    this.codeVerifier,
+    this.deviceCode,
+    required this.grantType,
+    this.redirectUri,
+  });
+
+  factory Oauth2TokenRequest.fromJson(Map<String, dynamic> json) {
+    return Oauth2TokenRequest(
+      clientId: json['client_id'] as String?,
+      clientSecret: json['client_secret'] as String?,
+      code: json['code'] as String?,
+      codeVerifier: json['code_verifier'] as String?,
+      deviceCode: json['device_code'] as String?,
+      grantType: json['grant_type'] as String,
+      redirectUri: json['redirect_uri'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (clientId != null) 'client_id': clientId,
+      if (clientSecret != null) 'client_secret': clientSecret,
+      if (code != null) 'code': code,
+      if (codeVerifier != null) 'code_verifier': codeVerifier,
+      if (deviceCode != null) 'device_code': deviceCode,
+      'grant_type': grantType,
+      if (redirectUri != null) 'redirect_uri': redirectUri,
+    };
+  }
+
+  @override
+  String toString() => 'Oauth2TokenRequest(${toJson()})';
+}
