@@ -900,5 +900,50 @@ func init() {
 			// dropping the index only costs a scan.
 			Down: func(_ context.Context, _ migrate.Executor) error { return nil },
 		},
+
+		// Migration: session actor chain. sessionModel gained actors,
+		// actor_grant and delegation_id, which carry the principals acting on
+		// the subject's behalf. Only impersonated_by was stored before, and
+		// that is a projection of the chain that is empty for a delegation, so
+		// a delegated session round-tripped with no actors at all.
+		//
+		// Mongo adds no columns, but the collection's $jsonSchema validator is
+		// generated from the model struct, so an existing deployment's
+		// validator does not know the three new fields. RefreshValidator
+		// reapplies the schema through collMod, the same way
+		// add_session_principal_identity does.
+		//
+		// No backfill of actors from impersonated_by. fromSessionModel rebuilds
+		// the impersonation chain from that field whenever actors is absent, so
+		// documents written before this migration already read back correctly;
+		// backfilling them is Task 7's job, alongside the delegation collection.
+		//
+		// The index is over actors.kind and actors.id, which mongo applies to
+		// each subdocument in the array. That answers "what has this agent
+		// acted on", which is the question the chain exists to make answerable.
+		&migrate.Migration{
+			Name:    "add_session_actor_chain",
+			Version: "20260824000049",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				if err := mexec.RefreshValidator(ctx, (*sessionModel)(nil)); err != nil {
+					return fmt.Errorf("refresh session validator: %w", err)
+				}
+				return mexec.CreateIndexes(ctx, colSessions, []mongo.IndexModel{
+					{Keys: bson.D{
+						{Key: "actors.kind", Value: 1},
+						{Key: "actors.id", Value: 1},
+					}},
+					{Keys: bson.D{{Key: "delegation_id", Value: 1}}},
+				})
+			},
+			// Forward-only, matching add_session_principal_identity: rolling the
+			// validator back would reject the delegated sessions this makes
+			// storable.
+			Down: func(_ context.Context, _ migrate.Executor) error { return nil },
+		},
 	)
 }

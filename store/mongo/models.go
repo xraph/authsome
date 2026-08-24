@@ -178,6 +178,12 @@ func fromUserModel(m *userModel) (*user.User, error) {
 // Session model
 // ──────────────────────────────────────────────────
 
+// actorModel is one hop of a session's actor chain.
+type actorModel struct {
+	Kind string `bson:"kind"`
+	ID   string `bson:"id"`
+}
+
 type sessionModel struct {
 	grove.BaseModel `grove:"table:authsome_sessions"`
 
@@ -204,6 +210,19 @@ type sessionModel struct {
 	UserAgent        string `grove:"user_agent"                bson:"user_agent"`
 	DeviceID         string `grove:"device_id"                 bson:"device_id,omitempty"`
 	ImpersonatedBy   string `grove:"impersonated_by"           bson:"impersonated_by,omitempty"`
+	// Actors is the chain of principals acting on the subject's behalf, and
+	// ActorGrant says what put them there. Session.ImpersonatedBy is derived
+	// from both, so impersonated_by above is now a projection of this chain
+	// kept for readers outside this repository, not the source of truth. A
+	// delegation chain has no impersonator at all, which is why storing only
+	// impersonated_by dropped delegated sessions entirely.
+	//
+	// Held as a subdocument array rather than an encoded string so a chain
+	// element can be queried on directly, which is what an operator asking
+	// "what did this agent touch" needs.
+	Actors       []actorModel `grove:"actors"        bson:"actors,omitempty"`
+	ActorGrant   string       `grove:"actor_grant"   bson:"actor_grant,omitempty"`
+	DelegationID string       `grove:"delegation_id" bson:"delegation_id,omitempty"`
 	// Mongo stores the slugs as a native array, the way WebhookModel.Events
 	// does. The SQL stores encode JSON into a text column because they have
 	// no array type worth using here; there is no reason to flatten it twice.
@@ -255,6 +274,17 @@ func toSessionModel(s *session.Session) *sessionModel {
 	// principal that holds no roles. An empty slice marshals to [], which
 	// validates and decodes back to no roles.
 	m.Roles = append([]string{}, s.Roles...)
+	// Non-nil for the same reason, and doubly load-bearing here: an empty
+	// chain is the common case, so a nil would fail the great majority of
+	// session writes rather than an unlucky few.
+	m.Actors = make([]actorModel, 0, len(s.Actors))
+	for _, a := range s.Actors {
+		m.Actors = append(m.Actors, actorModel{Kind: string(a.Kind), ID: a.ID})
+	}
+	m.ActorGrant = string(s.ActorGrant)
+	if !s.DelegationID.IsNil() {
+		m.DelegationID = s.DelegationID.String()
+	}
 	// Non-nil for the same reason Roles is: grove writes every mapped field
 	// whatever the bson omitempty tag says, so a nil slice reaches mongo as
 	// null and fails to decode on the way back. See commit 9116564.
@@ -332,6 +362,28 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 			return nil, err
 		}
 		s.FamilyID = famID
+	}
+	// After the impersonated_by fallback above on purpose: a document that
+	// carries both is one written since the chain landed, and there the chain
+	// is authoritative. A document carrying only impersonated_by predates it
+	// and keeps the rebuilt impersonation chain. Same precedence as
+	// Session.UnmarshalJSON and store/postgres.
+	if len(m.Actors) > 0 {
+		chain := make(principal.Chain, 0, len(m.Actors))
+		for _, a := range m.Actors {
+			chain = append(chain, principal.Ref{Kind: principal.Kind(a.Kind), ID: a.ID})
+		}
+		s.Actors = chain
+	}
+	if m.ActorGrant != "" {
+		s.ActorGrant = principal.GrantKind(m.ActorGrant)
+	}
+	if m.DelegationID != "" {
+		delID, err := id.ParseDelegationID(m.DelegationID)
+		if err != nil {
+			return nil, err
+		}
+		s.DelegationID = delID
 	}
 	if len(m.Roles) > 0 {
 		s.Roles = append([]string(nil), m.Roles...)
