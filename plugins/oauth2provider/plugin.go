@@ -717,7 +717,14 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		}
 	}
 
-	// Require authenticated user.
+	// Require authenticated user. No resource_metadata hint here, unlike
+	// handleUserInfo: this 401 means the end user is not signed in, not
+	// that a client failed to authenticate, and the response goes to a
+	// browser in the middle of a redirect, not to a machine parsing a
+	// WWW-Authenticate header. A login redirect is the correct response;
+	// a discovery hint would be read by nobody. See
+	// middleware.ResourceMetadataChallenge's doc comment for the other two
+	// endpoints in this group and why each is or isn't covered.
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
 		return nil, forge.Unauthorized("authentication required to authorize")

@@ -38,15 +38,40 @@ import (
 // A route handler that wants the hint on its own 401s has to set the
 // header itself before returning. plugins/oauth2provider/register.go's
 // authenticateRegistration already did this, for a different reason (it
-// sets its own realm on ctx before returning). plugins/oauth2provider
-// handleUserInfo (GET /v1/oauth/userinfo) does the same for this hint
-// specifically, because AuthMiddleware only soft-resolves the bearer token
-// (middleware/auth.go) rather than rejecting, so handleUserInfo's own
-// forge.Unauthorized is the actual point of enforcement and this
-// middleware never sees it. handleToken's client-authentication 401s
-// (POST /v1/oauth/token) are also route-handler errors this middleware
-// cannot see, and are left without the header deliberately rather than
-// fixed the same way; see the comment on handleToken for why.
+// sets its own realm on ctx before returning).
+//
+// plugins/oauth2provider registers three route-handler 401s in the same
+// group; each is handled differently, and the difference is deliberate:
+//
+//   - handleUserInfo (GET /v1/oauth/userinfo) sets its own hint the same
+//     way authenticateRegistration does. AuthMiddleware only soft-resolves
+//     the bearer token (middleware/auth.go) rather than rejecting, so
+//     handleUserInfo's own forge.Unauthorized is the actual point of
+//     enforcement on this endpoint, and this middleware never sees it.
+//     userinfo is the one protected-resource endpoint in the group, which
+//     is exactly what RFC 9728 discovery is for, so it gets the hint.
+//   - handleToken's client-authentication 401s (POST /v1/oauth/token) are
+//     left without the hint on purpose: a client at the token endpoint
+//     already holds the authorization server's URL, since it just called
+//     it, so the hint would tell it nothing new. See the comment on
+//     handleToken.
+//   - handleAuthorize's 401 (GET /v1/oauth/authorize) is left without the
+//     hint for a different reason again: it fires because the end user is
+//     not signed in, not because a client failed to authenticate, and the
+//     response goes to a browser mid-redirect, not to a machine parsing a
+//     challenge header. The correct response there is a login redirect;
+//     resource_metadata would be read by nobody. See the comment on
+//     handleAuthorize.
+//
+// Known limit: this only sees a 401 that comes back as a Go error at all.
+// plugin.SessionGuard (plugin/authz.go) gates /v1/oauth/device/complete in
+// this plugin, and routes in plugins/subscription and plugins/apikey
+// elsewhere. It is backed by forge's auth registry middleware
+// (forge/extensions/auth registry.go), which on failure calls
+// ctx.String(http.StatusUnauthorized, "Unauthorized") directly and returns
+// that call's result, not a typed error. A route behind SessionGuard gets
+// no hint either, for the same underlying reason a route handler's 401
+// does not: nothing reaches this middleware as an error for it to inspect.
 func ResourceMetadataChallenge(metadataURL string) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		if metadataURL == "" {
