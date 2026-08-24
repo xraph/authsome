@@ -38,18 +38,21 @@ so `issueTokens` in `plugins/oauth2provider/plugin.go` writes them into the JWT
 claims and the response body and then drops them. On an opaque token they are
 gone for good. Scopes get a column, the same way `Roles` did in `ba629bd`.
 
-**`ImpersonatedBy` is absorbed into the actor chain.** The existing field models
-admin-acting-as-user, the chain generalises it, and running two mechanisms side
-by side means every future auditor has to know about both. So we migrate. This
-is the most invasive part of the work and the section below is honest about what
-it costs.
+**The actor chain comes from the non-human principals design.** An earlier
+draft of this spec defined its own `session.Actor` type and folded
+`ImpersonatedBy` into it. That duplicated
+`2026-08-24-non-human-principals-design.md`, which models the same thing more
+thoroughly as `principal.Chain` plus a per-session `ActorGrant`. This spec now
+depends on that one rather than competing with it, and the sections below say
+which side owns what.
 
-**Every exchange needs an explicit policy row.** Holding a subject token is not
-authorization to trade it. A new `authsome_oauth2_exchange_policies` table
-declares which client may exchange for which principals, in which mode, up to
-which scopes, and anything without a matching row is refused. RFC 8693 leaves
-this question to the deployment, and the deployment should not answer it with
-"whoever holds the token wins".
+**The authority for an exchange is a delegation grant.** Holding a subject
+token is not permission to trade it. A `principal.Delegation` names an actor, a
+subject, a grant kind and a scope filter, and an exchange with no live matching
+grant is refused. An earlier draft built a separate
+`authsome_oauth2_exchange_policies` table for this. The delegation record is
+the same idea with a lifecycle, a revocation surface and a listing API already
+attached, so the table is gone.
 
 **An exchanged token keeps the subject's roles.** This one is a compromise.
 Scopes and roles are separate enforcement paths here, so a scope-narrowed token
@@ -110,136 +113,57 @@ nothing enforces them yet. That's the seam RFC 8707 lands in.
 
 ## Changes to session.Session
 
-Two fields arrive and one leaves.
+One field, and it is the only core schema change this design owns.
 
 ```go
 // Scopes holds the OAuth scopes this session was issued with. Stamped at
 // issuance, with the same trade as Roles: authoritative for what this token
 // may do, stale with respect to anything granted afterwards.
 Scopes []string `json:"scopes,omitempty"`
-
-// Actors is the delegation chain (the RFC 8693 `act` claim). Actors[0] is
-// the immediate actor and later elements are the parties further back.
-Actors []Actor `json:"actors,omitempty"`
 ```
 
-```go
-// Actor is one party in a delegation chain.
-type Actor struct {
-    Subject string    `json:"sub"`  // user, service account or oauth client id
-    Kind    string    `json:"kind"` // "user" | "service_account" | "oauth_client"
-    Mode    string    `json:"mode"` // "delegation" | "impersonation"
-    At      time.Time `json:"at"`
-}
-```
+`Actors`, `ActorGrant` and `DelegationID` all arrive with the non-human
+principals work, along with `ImpersonatedBy` becoming a method and
+`PrincipalKind` being retyped to `principal.Kind`. Nothing here touches them.
 
-`ImpersonatedBy` goes away. `Engine.Impersonate` at `service.go:2701` writes a
-one-element chain in its place, and `StopImpersonation` looks for a chain whose
-outermost entry is an impersonation.
+The `scopes` column follows `add_session_roles` at
+`store/postgres/migrations.go:1180`: JSONB on postgres, TEXT on sqlite, a
+native array on mongo, which has no migration group.
 
-### Why Mode lives on the session and not in the token
+### Why this field has to exist
 
-RFC 8693 encodes the delegation and impersonation distinction by absence.
-Delegation emits an `act` claim naming both parties, impersonation emits no
-`act` at all so the token simply looks like the subject, and that asymmetry is
-the wire format we follow exactly.
+`Engine.ExchangeToken` in the non-human principals plan computes the granted
+scope set and then writes `_ = scopes`, with a note to assign it "to whichever
+field the session carries scopes on once you confirm it". There is no such
+field today, so the value is computed and dropped.
+
+That matters beyond tidiness. Without stored scopes there is no subject-side
+ceiling on the second hop, so a token narrowed to one scope could be exchanged
+back up to everything its client is registered for. The column closes that.
+
+### Delegation, impersonation, and where the mode lives
+
+RFC 8693 encodes the distinction by absence. Delegation emits an `act` claim
+naming both parties, impersonation emits no `act` at all so the token simply
+looks like the subject, and that asymmetry is the wire format we follow
+exactly.
 
 An impersonation token carrying no trace of its actor cannot feed an audit
-trail, though, and the audit trail is most of why you would build this. So the
-work splits: the token follows the RFC and the session row records everything
-that happened. `Mode` is how the row stays complete at the moments the wire
-format is deliberately silent.
+trail, though, and the audit trail is most of why you would build this. The
+non-human principals design already solves it: the mode is a per-session
+`ActorGrant`, and the chain is on the row whichever mode applied. The token
+follows the RFC and the row records what happened.
 
-### Migration, in two releases
-
-`add_session_scopes_and_actors` follows the shape of `add_session_roles` at
-`store/postgres/migrations.go:1180`. You get JSONB on postgres, TEXT on sqlite,
-and nothing at all on mongo, which has no migration group. It adds both columns
-and backfills:
-
-```sql
-ALTER TABLE authsome_sessions
-    ADD COLUMN IF NOT EXISTS scopes JSONB NOT NULL DEFAULT '[]'::jsonb,
-    ADD COLUMN IF NOT EXISTS actors JSONB NOT NULL DEFAULT '[]'::jsonb;
-
-UPDATE authsome_sessions
-   SET actors = jsonb_build_array(jsonb_build_object(
-           'sub',  impersonated_by,
-           'kind', 'user',
-           'mode', 'impersonation',
-           'at',   created_at))
- WHERE impersonated_by <> '' AND actors = '[]'::jsonb;
-```
-
-The `impersonated_by` column is **not** dropped here. Dropping it waits for a
-later release, after the store models have shipped a read fallback, because if
-you add, backfill and drop in a single migration then a rolling deploy leaves
-old binaries writing to a column that no longer exists. While both are present
-the models read `Actors` first and fall back to `impersonated_by`.
-
-### Coordination with the other session specs
-
-Three drafts in this directory widen `session.Session`, and whoever lands second
-pays the merge cost:
-
-- DPoP adds `DPoPJKT`.
-- agentauth adds `AgentID`, `GrantID` and `PrincipalKind = "agent"`.
-- This one adds `Scopes` and `Actors`, and removes `ImpersonatedBy`.
-
-Only the removal actually conflicts. The agentauth draft cites `ImpersonatedBy`
-as its precedent for how an agent rides along on a session, so that paragraph
-wants rewriting against `Actors` once this lands. None of agentauth's design
-breaks, only its wording.
-
-## The policy table
-
-```sql
-CREATE TABLE authsome_oauth2_exchange_policies (
-    id              TEXT PRIMARY KEY,
-    app_id          TEXT NOT NULL REFERENCES authsome_apps(id),
-    client_id       TEXT NOT NULL,
-    subject_kind    TEXT NOT NULL,              -- user | service_account | oauth_client | any
-    subject_match   TEXT NOT NULL DEFAULT '*',  -- a principal id, or '*'
-    modes           JSONB NOT NULL DEFAULT '["delegation"]',
-    max_scopes      JSONB NOT NULL DEFAULT '[]',
-    max_ttl_seconds INT  NOT NULL DEFAULT 0,    -- 0 inherits from SessionConfig
-    max_chain_depth INT  NOT NULL DEFAULT 1,
-    enabled         BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (app_id, client_id, subject_kind, subject_match)
-);
-```
-
-`client_id` is always the authenticated requesting client. When an `actor_token`
-comes along its principal becomes the head of the chain, but policy still gates
-on the client, because the client is the party that authenticated and the
-actor's identity is proven by resolving its token rather than asserted in a
-parameter. That's what makes gating on the client alone safe.
-
-Matching is most specific wins, so an exact `subject_match` beats `*` and a
-concrete `subject_kind` beats `any`. If no enabled row matches, the exchange is
-refused.
-
-`max_chain_depth` earns its place because every hop appends an actor. Leave it
-uncapped and chains grow without bound, with every session row and every audit
-record carrying the weight. The default of 1 permits a single hop, so a subject
-that has never been exchanged can be exchanged once and the result cannot be
-exchanged again until somebody raises the number.
-
-`max_ttl_seconds` of 0 means this row does not constrain the TTL, so it drops
-out of the minimum below instead of clamping it to zero. Read the same way as
-the `0 inherits` convention `store.AppSessionConfig` already uses.
-
-Admin CRUD lands at `/v1/admin/oauth/exchange-policies` behind
-`plugin.AdminGuard(p.engine, "manage", "oauth2_exchange_policy")`, which is a
-different permission from `oauth2_client` on purpose. Anyone who can author
-exchange policy can authorise impersonation, and that is a larger power than
-registering a client.
+One consequence worth stating. Because `ActorGrant` is one value per session
+rather than one per hop, a chain cannot record that hop one was a delegation
+and hop two an impersonation. Each hop mints its own session, so the mode of
+each is recorded on the session that hop produced and in that hop's audit
+event. What you lose is reading a mixed-mode history off a single row, and the
+audit trail is the right place to reconstruct it anyway.
 
 ## The scope ceiling
 
-This part took the most thought, and it starts with a problem that the obvious
+This part took the most thought, and it starts with a problem the obvious
 design walks straight into.
 
 A password sign-in produces a session with no scopes on it. If you decide empty
@@ -247,26 +171,23 @@ means unrestricted, every legacy session in your database becomes a universal
 ceiling and the subset rule turns decorative. If you decide empty means nothing,
 then downgrading an existing session into a scoped service token never works,
 because the ceiling is empty on the very first hop. Both readings fail a stated
-requirement, so the answer has to come from somewhere other than the subject.
+requirement.
 
-The policy table is where it comes from. Give each row a `max_scopes` and the
-ceiling collapses into one expression:
+The answer is that three bounds apply and no single one of them has to carry
+the whole job:
 
 ```
-ceiling = client.Scopes ∩ policy.MaxScopes ∩ (subject.Scopes if non-empty else ⊤)
+granted ⊆ client.Scopes ∩ delegation.Scopes ∩ (subject.Scopes if non-empty else ⊤)
 ```
 
-then `requested ⊆ ceiling`, or `invalid_scope`.
+The OAuth plugin owns the first and third, because they are cheap and local and
+an obviously bad request should never reach a grant lookup. The engine owns the
+second, in `intersectScopes`, because the delegation record is its to read.
 
-A scopeless session now gets a ceiling that an administrator wrote down, and a
-scoped subject token can never widen past what it holds. Both cases fall out of
-the same line of code.
-
-That top element is only safe because it can never be the outermost bound.
-`client.Scopes` and `policy.MaxScopes` are both finite and both mandatory, so
-the intersection stays finite and stays administrator-authored no matter what
-the subject looks like. A ceiling rule with a top element in it usually deserves
-suspicion, and this one survives the suspicion.
+A scopeless session gets a ceiling from the client registration and the
+delegation grant, both authored by an administrator. A scoped subject token can
+never widen past what it holds. The top element is safe only because it can
+never be the outermost bound: the other two are finite and both mandatory.
 
 One deliberate deviation: `scope` is required. The RFC makes it optional and
 lets the server choose a default, but the entire point of the feature is asking
@@ -278,69 +199,54 @@ guess on their behalf. An empty `scope` returns `invalid_scope`.
 1. Authenticate the client. Confidential only, bcrypt against `ClientSecret`,
    the same as `client_credentials`. Public clients cannot exchange, since they
    cannot keep a secret and this is a privilege operation.
-2. `clientSupportsGrant(client, tokenExchangeGrantType)`, or `unauthorized_client`.
-3. Resolve `subject_token` through `Engine.ResolveSessionByToken`. Invalid or
-   expired gives you `invalid_grant`.
-4. The subject's `AppID` must equal the client's `AppID`. Skip this and a client
+2. `clientSupportsGrant(client, tokenExchangeGrantType)`, or
+   `unauthorized_client`.
+3. Resolve the client to its principal. `Engine.ExchangeToken` takes a
+   `principal.Ref` actor and `principal.Kind` has no `oauth_client` member, so
+   `OAuth2Client` carries a `PrincipalID` and a client without one is refused.
+4. Resolve `subject_token`. Invalid or expired gives you `invalid_grant`.
+5. The subject's `AppID` must equal the client's `AppID`. Skip this and a client
    in one app can launder a session out of another.
-5. Resolve `actor_token` if present, with the same app check.
-6. Look up policy on `(app, client, subject kind, subject id)`. Missing or
-   disabled means refuse.
-7. Apply the ceiling.
-8. Check `len(subject.Actors) + 1 <= policy.MaxChainDepth`.
-9. Compute the TTL, mint the session, write the audit record.
+6. Resolve `actor_token` if present, with the same app check. Its principal
+   replaces the client as the acting party, and it is proven by resolution
+   rather than asserted in a parameter.
+7. Apply the client bound and the subject bound.
+8. Hand off to `Engine.ExchangeToken`, which finds the delegation grant, applies
+   its scope filter, bounds the TTL and builds the chain.
+9. Write the audit record.
 
-Steps 4 and 8 appear nowhere in RFC 8693, which assumes a single authorization
-server in one trust domain issuing stateless tokens, while this codebase is
-multi-tenant by `AppID` and persists its chains. Specs written against a simpler
-deployment model tend to leave exactly those two gaps for you to find.
+Steps 3 and 5 appear nowhere in RFC 8693. The RFC assumes a single
+authorization server in one trust domain issuing stateless tokens, while this
+codebase is multi-tenant by `AppID` and its principals are first-class rows.
+Specs written against a simpler deployment model tend to leave exactly those
+gaps for you to find.
 
 ### Requesting impersonation
 
-The RFC gives you no parameter for this, since it encodes the distinction by
-absence. Follow that literally and the unmarked default becomes the more
-privileged of the two modes, which is a bad default to ship to anybody.
+You cannot. The RFC gives no parameter for it, and an earlier draft of this
+spec invented a namespaced one defaulting to delegation. That is gone.
 
-Because the requesting client here is always authenticated and always a genuine
-actor, we always record it. Mode comes from a namespaced `authsome_act_mode`
-parameter that defaults to `delegation` and is checked against the policy's
-`modes` list. Section 2.1 explicitly allows additional parameters.
+The mode is a property of the delegation grant, authored through
+`Engine.GrantDelegation` by somebody with the authority to author it. A caller
+presenting a token cannot ask to be upgraded from delegation to impersonation,
+which is a better place for that decision to live than a request body.
 
 ### TTL
 
-```
-ttl = min(policy.MaxTTL, sessCfg.TokenExchangeTTL, time.Until(subject.ExpiresAt))
-```
-
 `account.SessionConfig` gains `TokenExchangeTTL`, defaulting to five minutes,
-and it rides the three layers that `sessionConfigForApp` at `service.go:783`
-already walks: the engine default, then `store.AppSessionConfig.ApplyTo`, then
+and it rides the three layers `sessionConfigForApp` at `service.go:783` already
+walks: the engine default, then `store.AppSessionConfig.ApplyTo`, then
 environment settings. Your admin surface is one more field on the request struct
-at `api/requests.go:599`. No new configuration mechanism appears anywhere.
+at `api/requests.go:599`.
 
-The third clamp matters more than it looks. A token that outlives the credential
-it was minted from is an escalation in the time dimension, and it slips past
-review easily because each individual TTL in the expression looks perfectly
-short on its own.
+The exchanged session must also never outlive the grant that authorised it or
+the subject it came from. A token that survives the credential it was minted
+from is an escalation in the time dimension, and it slips past review easily
+because each individual bound looks short on its own. The grant bound is the
+engine's and already has a test. The subject bound belongs beside it.
 
-Exchanged tokens get no refresh token. `RefreshTokenTTL` is zero and you
-re-exchange when you need another, which keeps the subject as the only durable
-credential in the picture.
-
-### What the new session carries
-
-`AppID` comes from the client. `EnvID` is inherited from the subject and not
-from the app default, so an exchanged token stays in the environment it came
-out of. `UserID`, `PrincipalKind` and `ServiceAccountID` are copied from the
-subject, because both modes keep the subject as `sub`. `Scopes` holds the
-granted set, `Actors` holds the new actor prepended to the subject's chain, and
-`Roles` is copied straight across with the caveat in "Known limitations".
-
-On JWT-format apps, `tokenformat.TokenClaims` gains an `Act *ActClaim` and
-`customClaims` at `tokenformat/jwt.go:69` serialises it as `act`, nested the way
-the RFC describes, emitted for delegation and omitted for impersonation. That
-struct has no extension map today, so this is a real edit to a third core
-package and not a drive-by.
+Exchanged tokens get no refresh token. You re-exchange when you need another,
+which keeps the subject as the only durable credential in the picture.
 
 ## Audit
 
@@ -371,63 +277,73 @@ you alert on them instead of grepping for them after the fact.
 
 ## What gets touched
 
-This is bigger than the plugin, mostly on account of the `ImpersonatedBy`
-unification.
+Much smaller than the earlier draft, because the invasive half moved to its
+proper owner.
 
-Core: `session/session.go`, `account/service.go`, `service.go` for both
-impersonation functions, `middleware/auth.go` at lines 222 and 630,
-`authprovider/session.go:188`, `extension/contract/handlers_sessions.go`, the
-three `store/*/models.go`, `store/postgres/migrations.go`,
-`store/sqlite/migrations.go`, `tokenformat/format.go`, `tokenformat/jwt.go` and
-`plugin/plugin.go`.
+Core: `session/session.go` for the one field, the three `store/*/models.go`,
+`store/postgres/migrations.go` and `store/sqlite/migrations.go`,
+`account/service.go` and the two config override layers, `api/requests.go`,
+`tokenformat/format.go` and `tokenformat/jwt.go` for the `act` claim,
+`plugin/plugin.go` for `SecurityEvents()`, and `engine_token_exchange.go` to
+assign the scopes it already computes and to emit `act`.
 
-Plugin: a new `token_exchange.go` holding the handler along with the ceiling,
-chain and policy logic, plus `plugin.go` for dispatch, request and response
-fields, discovery and admin routes, then `models.go`, `store.go`,
-`store_memory.go`, `store_postgres.go`, `store_sqlite.go`, `store_mongo.go` and
-`migrations.go`.
-
-Add the grant to `GrantTypesSupported` in `handleDiscovery` at
-`plugins/oauth2provider/plugin.go:746` while you are in there. It's one line
-and it's the sort of thing nobody notices until a conformance test does.
+Plugin: a new `token_exchange.go` holding the handler and the two local scope
+bounds, plus `plugin.go` for dispatch, request and response fields and the
+discovery advertisement, `models.go` and `store_models.go` for the client
+principal link, the four store files, and `migrations.go`.
 
 ## Sequencing
 
-Four commits, each independently green. The first one carries the risk and
-shouldn't be tangled up with feature work.
+Six commits, each independently green, and all of them after the non-human
+principals work has landed through its delegation and exchange task.
 
-1. Session schema. `Scopes` and `Actors`, the migration and backfill, and
-   `ImpersonatedBy` removed across every consumer, with no new behaviour at all.
-2. `SecurityEvents()` on the Engine interface, `TokenExchangeTTL` threaded
-   through the config layers, `Act` on `TokenClaims`.
-3. The policy table, store methods across four drivers, admin CRUD.
-4. The grant itself, discovery, tests.
+1. The `scopes` column, stamped at issuance, wired into the engine's exchange.
+2. `TokenExchangeTTL` through the config layers.
+3. The `act` claim, defined and emitted on delegated tokens.
+4. `SecurityEvents()` on the Engine interface.
+5. The grant itself, the client principal link, dispatch and discovery.
+6. The audit events.
 
 ## Testing
 
-`token_exchange_test.go` is table-driven against the memory store, following
-`authcode_test.go`.
+The protocol layer carries these claims, and each gets a test that asserts the
+engine is never reached when the refusal is local:
 
-These carry the security claims and get written first, failing:
+- A scope the subject does not hold is refused.
+- A scope the client is not registered for is refused, even when the subject
+  holds it. Both local bounds have to bite independently.
+- An empty `scope` is refused.
+- A subject from a different app is refused.
+- A public client is refused.
+- A client with no linked principal is refused, with a message that says so.
+- An unsupported `subject_token_type` returns `unsupported_token_type`.
+- An engine refusal, meaning no live grant, surfaces as `invalid_grant` and
+  never leaks a token.
+- The response carries `issued_token_type` and no refresh token.
+- Discovery advertises the grant.
+- Every refusal above writes a security event with the right `denial_reason`.
 
-- Request a scope the subject does not hold, expect `invalid_scope`. This is the
-  subset property, and if it ever passes the feature is broken.
-- Request a scope the subject does hold but the policy's `max_scopes` excludes,
-  expect refusal. Both bounds have to bite independently of each other.
-- Exchange a subject from a different app, expect a `cross_app` refusal.
-- Exchange with no policy row at all, expect refusal, because deny by default is
-  a claim and claims get tested.
-- Ask for impersonation against a delegation-only policy, expect refusal.
-- Build a chain to `max_chain_depth + 1`, expect refusal.
-- Exchange a subject with four minutes left against a five-minute config TTL and
-  expect four minutes back.
-- A delegation exchange on a JWT app emits `act` and the impersonation
-  equivalent emits none, while both write a session row with a complete chain.
-- Every failure above writes a security event with the right `denial_reason`.
+The grant filter, the TTL bound and the chain are the engine's, and the
+non-human principals plan already tests them. Do not re-test them here.
 
-Store parity: session round-trip for `Scopes` and `Actors` across pg, sqlite,
-mongo and memory, plus a backfill test proving an `impersonated_by` row lands as
-a one-element impersonation chain.
+## Coordination with the other designs
+
+Five drafts in this directory now touch the same few files, and whoever lands
+second pays the merge cost. Worth knowing before you start.
+
+`session.Session` is widened by non-human principals (`Actors`, `ActorGrant`,
+`DelegationID`, and `PrincipalKind` retyped), by DPoP (`DPoPJKT`), by agentauth
+(`AgentID`, `GrantID`) and by this one (`Scopes`). Only the retype is a
+breaking change to existing readers, and it belongs to non-human principals.
+
+`tokenformat.TokenClaims` is widened by this design (`Act`) and by non-human
+principal enforcement (`pk`, `ServiceAccountID`). Every field is `omitempty`
+and nothing conflicts.
+
+Migration versions collide if nobody coordinates. The agentauth and DPoP plans
+both claim `20260824000001` against `authsome_sessions`, non-human principals
+takes `20260824000050` through `...0052`, and this design takes `...0060` and
+`...0061`. Pick from a free range rather than appending to the lowest one.
 
 ## Known limitations
 
@@ -436,9 +352,9 @@ anything that checks scopes and completely invisible to anything that checks
 roles, so a token you think of as downgraded still passes every role-gated route
 its subject passed, which is a surprising result if you have not read this far.
 Narrowing both axes needs a scope-to-role mapping that doesn't exist in this
-codebase yet. The follow-up is a `granted_roles` column on the policy row, and
-until that ships this limitation belongs in the user-facing docs and not only
-here.
+codebase yet. The follow-up is a role filter on the delegation grant, beside
+the scope filter it already carries, and until that ships this limitation
+belongs in the user-facing docs and not only here.
 
 Stamped scopes go stale the same way stamped roles do. Widening a session's
 scopes after issuance does not reach an existing token and narrowing them does
@@ -470,7 +386,7 @@ That plugin also does an RFC 8693 shaped exchange, on its own endpoint at
 `/v1/workload/token`, and the two are deliberately separate. The line between
 them is the subject token. A subject token that is an authsome session, sent by
 a registered client narrowing what it already holds, is this endpoint and is
-governed by a policy row. A subject token signed by GitHub or Google or an EKS
+governed by a delegation grant. A subject token signed by GitHub or Google or an EKS
 OIDC provider, sent by a caller holding no secret at all, is that endpoint and
 is governed by an issuer trust config and a claim rule. Neither endpoint should
 grow the other's case, because doing so puts two disjoint authorization models
