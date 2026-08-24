@@ -29,15 +29,24 @@ import (
 // bare type assertion so a wrapped 401 still matches.
 //
 // This only sees errors returned by other MIDDLEWARE further down the
-// chain, such as middleware/rbac.go and middleware/auth.go, which is where
-// every current 401 in this codebase originates. A route handler's
-// returned error is converted to a written response by forge before it is
-// ever handed back to enclosing middleware, so this would not observe a
-// 401 minted that way. The RFC 7592 registration-management handlers are a
-// route-handler case, but they set their own WWW-Authenticate header on
-// ctx directly before returning (plugins/oauth2provider/register.go,
-// authenticateRegistration), which this middleware's overwrite guard below
-// picks up regardless of whether the error itself propagates.
+// chain, such as middleware/rbac.go and middleware/auth.go. A route
+// handler's returned error is converted to a written response by forge
+// inside its own handler-conversion wrapper before it is ever handed back
+// to enclosing middleware, so this middleware cannot observe a 401 minted
+// that way at all, whether or not the handler set its own header first.
+//
+// A route handler that wants the hint on its own 401s has to set the
+// header itself before returning. plugins/oauth2provider/register.go's
+// authenticateRegistration already did this, for a different reason (it
+// sets its own realm on ctx before returning). plugins/oauth2provider
+// handleUserInfo (GET /v1/oauth/userinfo) does the same for this hint
+// specifically, because AuthMiddleware only soft-resolves the bearer token
+// (middleware/auth.go) rather than rejecting, so handleUserInfo's own
+// forge.Unauthorized is the actual point of enforcement and this
+// middleware never sees it. handleToken's client-authentication 401s
+// (POST /v1/oauth/token) are also route-handler errors this middleware
+// cannot see, and are left without the header deliberately rather than
+// fixed the same way; see the comment on handleToken for why.
 func ResourceMetadataChallenge(metadataURL string) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		if metadataURL == "" {

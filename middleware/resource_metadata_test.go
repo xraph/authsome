@@ -85,11 +85,17 @@ func TestResourceMetadataChallenge_InertWhenUnset(t *testing.T) {
 	assert.Empty(t, rec.Header().Get("WWW-Authenticate"))
 }
 
-// A handler that already set its own challenge, like the RFC 7592 routes,
-// keeps it. The header is not overwritten or appended to. RFC 7592's
-// authenticateRegistration sets the header directly on ctx before returning
-// its error (plugins/oauth2provider/register.go), which is why the gate
-// here does the same instead of calling forge.Unauthorized.
+// A caller that already set its own challenge, like RFC 7592's
+// authenticateRegistration (plugins/oauth2provider/register.go), keeps it:
+// the header is not overwritten or appended to. This exercises the
+// overwrite-guard logic directly through a middleware stand-in, the same
+// way the other cases in this file do, since ResourceMetadataChallenge's
+// own code does not distinguish where the pre-set header came from.
+// authenticateRegistration itself runs inside a route handler rather than
+// middleware, so it cannot reach this middleware's guard at all — see
+// plugins/oauth2provider/userinfo_resource_metadata_test.go for the
+// equivalent case proven through the real router-plus-route-handler
+// topology.
 func TestResourceMetadataChallenge_DoesNotOverwrite(t *testing.T) {
 	r := forge.NewRouter()
 	r.Use(middleware.ResourceMetadataChallenge(metaURL))

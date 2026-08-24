@@ -819,6 +819,19 @@ func resolveScopes(client *OAuth2Client, requested string) ([]string, error) {
 	return out, nil
 }
 
+// handleToken and the grant handlers it dispatches to (below) return several
+// 401s on client-authentication failure (invalid client_secret, unknown
+// client_id). Those are not given a resource_metadata hint, deliberately: a
+// client calling the token endpoint already holds the authorization server's
+// URL, since it just made this request to it. RFC 9728 discovery exists for
+// a client that does not yet know where the server is, which is the
+// situation on a protected resource such as /v1/oauth/userinfo, not on the
+// authorization server's own endpoints. middleware.ResourceMetadataChallenge
+// would not add the header here even if it were wanted: these 401s are
+// returned from a route handler, and forge converts a route handler's
+// returned error into a written response before any enclosing middleware's
+// next() call sees it, the same reason handleUserInfo below sets its own
+// header instead of relying on that middleware.
 func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
 	switch req.GrantType {
 	case "authorization_code":
@@ -954,6 +967,21 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeRequest) (*apitypes.
 func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInfo, error) {
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
+		// AuthMiddleware only soft-resolves the bearer token (it calls next
+		// on a missing or invalid one rather than rejecting), so this is the
+		// actual point of enforcement for the OIDC protected resource, and
+		// the 401 originates here rather than in middleware.
+		// middleware.ResourceMetadataChallenge cannot see it: it is
+		// registered as router middleware, but forge converts a route
+		// handler's returned error into a written response inside its own
+		// handler-conversion wrapper before any enclosing middleware's
+		// next() call returns, so the error never reaches the chain. Set
+		// the hint directly, the same way authenticateRegistration does in
+		// register.go, and only if the header is not already set.
+		if ctx.Response().Header().Get("WWW-Authenticate") == "" {
+			ctx.SetHeader("WWW-Authenticate",
+				`Bearer resource_metadata="`+p.issuerURL()+`/.well-known/oauth-protected-resource"`)
+		}
 		return nil, forge.Unauthorized("authentication required")
 	}
 
