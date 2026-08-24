@@ -448,7 +448,7 @@ git commit -m "feat(tokenformat): emit a per-token aud claim"
 
 **Files:**
 - Modify: `service.go:581-592` (the JWT regeneration block inside the refresh path)
-- Test: `refresh_audience_test.go` (create, at repo root, `package authsome`)
+- Test: `refresh_audience_test.go` (create, at repo root, `package authsome_test`)
 
 **Interfaces:**
 - Consumes: `session.Session.Audience` (Task 1), `tokenformat.TokenClaims.Audience` (Task 2).
@@ -460,34 +460,71 @@ git commit -m "feat(tokenformat): emit a per-token aud claim"
 
 - [ ] **Step 2: Write the failing test**
 
-Create `refresh_audience_test.go` at the repo root. Follow the harness the existing `refresh_jwt_test.go` uses in this package for engine construction; the assertion that matters is below.
+Create `refresh_audience_test.go` at the repo root, modelled on `refresh_jwt_test.go`:
 
 ```go
-package authsome
+package authsome_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/tokenformat"
+)
 
 // TestRefreshPreservesAudience proves a refresh does not widen a token.
 //
 // A token bound to one resource server must stay bound across rotation. If the
-// audience is dropped on refresh, the client keeps working and nobody notices,
-// while the token silently becomes valid everywhere. That is a worse hole than
-// the one resource indicators close, so it is asserted directly rather than
-// left to the round-trip test in storetest.
+// audience is dropped on refresh the client keeps working and nobody notices,
+// while the token silently becomes valid everywhere, which is a worse hole
+// than the one resource indicators close.
 //
-// Build the engine exactly as refresh_jwt_test.go does, with an app configured
-// for JWT access tokens. Then:
-//
-//   1. Issue a session and set Audience to []string{"https://api.example.com"}
-//      before it reaches the store.
-//   2. Call the refresh path with that session's refresh token.
-//   3. Assert the returned session still carries the same Audience.
-//   4. Parse the returned access token and assert its aud claim still names
-//      https://api.example.com.
-//
-// Step 4 is the one that fails before the fix. Step 3 passes already, because
-// the store writes every mapped field.
+// The opaque half already passes before the fix, because RotateSession writes
+// the whole model. The JWT half fails, because service.go rebuilds the claims
+// from scratch and never copies the audience across.
+func TestRefreshPreservesAudience(t *testing.T) {
+	jwtFmt, err := tokenformat.NewJWT(tokenformat.JWTConfig{
+		SigningMethod: jwt.SigningMethodHS256,
+		SigningKey:    []byte("test-signing-key-0123456789abcdef"),
+	})
+	require.NoError(t, err)
+
+	eng, st := newTestEngine(t, authsome.WithJWTFormat("aapp_01jf0000000000000000000000", jwtFmt))
+	ctx := context.Background()
+	appID := testAppID(t)
+
+	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
+		AppID:     appID,
+		Email:     "aud-refresh@example.com",
+		Password:  "SecureP@ss1",
+		FirstName: "Aud User",
+	})
+	require.NoError(t, err)
+
+	// Bind the session to one resource, the way issueTokens does.
+	sess.Audience = []string{"https://api.example.com"}
+	require.NoError(t, st.UpdateSession(ctx, sess))
+
+	refreshed, err := eng.Refresh(ctx, sess.RefreshToken)
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"https://api.example.com"}, refreshed.Audience,
+		"the rotated session lost its audience")
+
+	claims, err := jwtFmt.ValidateAccessToken(refreshed.Token)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"https://api.example.com"}, claims.Audience,
+		"the regenerated JWT lost its aud claim, so the refresh widened the token")
+}
 ```
 
-Write the test body against the existing helpers in `refresh_jwt_test.go`. Do not invent a new engine harness.
+If `newTestEngine` returns only the engine in this package, fetch the store the same way the neighbouring tests do, and use whichever update method the store exposes (`UpdateSession` or `RotateSession`) to persist the audience before refreshing.
 
 - [ ] **Step 3: Run the test to verify it fails**
 
@@ -1280,12 +1317,108 @@ git commit -m "feat(oauth2): register a resource allowlist on a client"
 
 - [ ] **Step 1: Write the failing test**
 
-Create `plugins/oauth2provider/authorize_resource_test.go`, modelled on the authorize tests in `authcode_test.go`. Assert:
+Create `plugins/oauth2provider/authorize_resource_test.go`. It reuses the fixtures already defined in `authcode_test.go` in this same package: `newFixture`, `authorize`, `baseAuthorizeQuery`, `codeFrom` and the `confidentialID` / `registeredURI` constants.
 
-1. `GET /v1/oauth/authorize?...&resource=https://api.example.com` on a client whose allowlist contains that value redirects with a code, and the stored code carries `Resources: ["https://api.example.com"]`.
-2. Two `resource` parameters both land on the stored code.
-3. A resource outside the allowlist returns 400 with `invalid_target`.
-4. No `resource` parameter stores an empty `Resources` and still redirects. This is the regression guard for every existing client.
+```go
+package oauth2provider_test
+
+import (
+	"context"
+	"net/http"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/xraph/authsome/plugins/oauth2provider"
+)
+
+const (
+	resAPI   = "https://api.example.com"
+	resFiles = "https://files.example.com"
+	resOther = "https://other.example.com"
+)
+
+// grantResources gives the confidential fixture client an allowlist. The
+// fixture registers no resources, which is the deny-by-default state every
+// existing client is in.
+func grantResources(t *testing.T, st oauth2provider.Store, resources ...string) {
+	t.Helper()
+	c, err := st.GetClient(context.Background(), confidentialID)
+	require.NoError(t, err)
+	c.Resources = resources
+	require.NoError(t, st.CreateClient(context.Background(), c))
+}
+
+func TestAuthorizeResource(t *testing.T) {
+	t.Run("a registered resource lands on the code", func(t *testing.T) {
+		_, st, mux := newFixture(t)
+		grantResources(t, st, resAPI)
+
+		q := baseAuthorizeQuery(confidentialID)
+		q.Add("resource", resAPI)
+
+		code := codeFrom(t, authorize(t, mux, q))
+
+		stored, err := st.GetAuthCode(context.Background(), code)
+		require.NoError(t, err)
+		assert.Equal(t, []string{resAPI}, stored.Resources)
+	})
+
+	t.Run("two resources both land on the code", func(t *testing.T) {
+		_, st, mux := newFixture(t)
+		grantResources(t, st, resAPI, resFiles)
+
+		q := baseAuthorizeQuery(confidentialID)
+		q.Add("resource", resAPI)
+		q.Add("resource", resFiles)
+
+		code := codeFrom(t, authorize(t, mux, q))
+
+		stored, err := st.GetAuthCode(context.Background(), code)
+		require.NoError(t, err)
+		assert.Equal(t, []string{resAPI, resFiles}, stored.Resources,
+			"a repeated resource parameter lost a value, which means it went through the struct binder")
+	})
+
+	t.Run("an unregistered resource is refused", func(t *testing.T) {
+		_, st, mux := newFixture(t)
+		grantResources(t, st, resAPI)
+
+		q := baseAuthorizeQuery(confidentialID)
+		q.Add("resource", resOther)
+
+		rec := authorize(t, mux, q)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Contains(t, rec.Body.String(), "invalid_target")
+	})
+
+	t.Run("an empty allowlist refuses any resource", func(t *testing.T) {
+		_, _, mux := newFixture(t)
+
+		q := baseAuthorizeQuery(confidentialID)
+		q.Add("resource", resAPI)
+
+		rec := authorize(t, mux, q)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Contains(t, rec.Body.String(), "invalid_target")
+	})
+
+	// The regression guard. Every client that exists today sends no resource
+	// parameter and must be completely unaffected.
+	t.Run("no resource parameter still authorizes", func(t *testing.T) {
+		_, st, mux := newFixture(t)
+
+		code := codeFrom(t, authorize(t, mux, baseAuthorizeQuery(confidentialID)))
+
+		stored, err := st.GetAuthCode(context.Background(), code)
+		require.NoError(t, err)
+		assert.Empty(t, stored.Resources)
+	})
+}
+```
+
+If `CreateClient` on the memory store rejects a duplicate ID, add an `UpdateClient` to the `Store` interface in a preceding step, or build the fixture client with its resources already set instead of mutating it.
 
 - [ ] **Step 2: Run the test to verify it fails**
 
@@ -1800,11 +1933,11 @@ Run: `go test ./plugins/oauth2provider/ ./api/ -run 'TestDiscoveryResourceIndica
 
 Expected: PASS.
 
-- [ ] **Step 7: Run the full suite**
+- [ ] **Step 7: Run the package suites**
 
-Run: `go test ./...`
+Run: `go test ./plugins/oauth2provider/ ./api/ ./middleware/`
 
-Expected: PASS. Postgres and mongo store tests skip without their env vars, which is expected.
+Expected: PASS. The full-tree run happens at the end of Task 13.
 
 - [ ] **Step 8: Commit**
 
@@ -1812,6 +1945,127 @@ Expected: PASS. Postgres and mongo store tests skip without their env vars, whic
 git add plugins/oauth2provider/plugin.go plugins/oauth2provider/discovery_resource_test.go \
   api/requests.go api/introspect_handler.go api/introspect_audience_test.go
 git commit -m "feat(oauth2): advertise resource indicators and expose aud on introspection"
+```
+
+---
+
+### Task 13: Wire the expected audience from app settings
+
+**Files:**
+- Modify: `session_settings.go:233-246` (add the setting), `:383` (register it)
+- Modify: `engine.go:246-250` (bindCfg), and add `resolveExpectedAudience` beside `resolveSessionCookieName` at `:346`
+- Test: `engine_audience_test.go` (create, `package authsome_test`)
+
+**Interfaces:**
+- Consumes: `middleware.SessionBindingConfig.ExpectedAudienceResolver` (Task 11).
+- Produces: `SettingResourceIdentifier`, and `func (e *Engine) resolveExpectedAudience(ctx context.Context) []string`.
+
+- [ ] **Step 1: Understand why this task exists**
+
+Task 11 added the hook but nothing fills it, so the check never runs. This is the task that makes the enforcement reachable, and it is the last piece of the spec.
+
+- [ ] **Step 2: Define the setting**
+
+In `session_settings.go`, in the `var` block that holds `SettingCookieName` (line 235):
+
+```go
+	// SettingResourceIdentifier is the resource identifier this app answers to
+	// as an OAuth2 resource server (RFC 8707). Empty disables the audience
+	// check, which is the default and preserves existing behaviour.
+	//
+	// Per app rather than per deployment: two apps in one deployment are two
+	// different resources, and a token minted for one must not authenticate at
+	// the other.
+	SettingResourceIdentifier = settings.Define("session.resource_identifier", "",
+		settings.WithDisplayName("Resource Identifier"),
+		settings.WithDescription("Absolute URI this app answers to as an OAuth2 resource server. Empty disables audience checking."),
+		settings.WithCategory("Cookie Configuration"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithInputType(formconfig.FieldText),
+		settings.WithHelpText("When set, a token whose aud names a different resource is refused. Example: https://api.example.com"),
+		settings.WithOrder(160),
+	)
+```
+
+Pick an `WithOrder` value that does not collide with the ones already in that category, and move it to a more fitting category than "Cookie Configuration" if one exists in the file.
+
+- [ ] **Step 3: Register the setting**
+
+In `session_settings.go`, beside the existing registration at line 383:
+
+```go
+	if err := settings.RegisterTyped(m, "session", SettingResourceIdentifier); err != nil {
+		return err
+	}
+```
+
+- [ ] **Step 4: Write the resolver**
+
+In `engine.go`, directly after `resolveSessionCookieName` (line 360):
+
+```go
+// resolveExpectedAudience returns the resource identifiers this deployment
+// answers to for the request's app, or nil to disable the check.
+//
+// This mirrors resolveSessionCookieName exactly, including the fail-open on a
+// settings error. Failing closed here would turn a settings outage into a
+// total authentication outage, and an audience check is a second line of
+// defence behind the token's own signature.
+func (e *Engine) resolveExpectedAudience(ctx context.Context) []string {
+	mgr := e.Settings()
+	if mgr == nil {
+		return nil
+	}
+	opts := settings.ResolveOpts{}
+	if appID, ok := middleware.AppIDFrom(ctx); ok {
+		opts.AppID = appID.String()
+	}
+	identifier, err := settings.Get(ctx, mgr, SettingResourceIdentifier, opts)
+	if err != nil || identifier == "" {
+		return nil
+	}
+	return []string{identifier}
+}
+```
+
+- [ ] **Step 5: Wire it into the middleware config**
+
+In `engine.go`, in `buildAuthMiddleware` at line 246:
+
+```go
+	bindCfg := middleware.SessionBindingConfig{
+		CookieNameResolver:       e.resolveSessionCookieName,
+		JWTSessionChecker:        e.jwtSessionChecker,
+		ExpectedAudienceResolver: e.resolveExpectedAudience,
+	}
+```
+
+- [ ] **Step 6: Write the test**
+
+Create `engine_audience_test.go` (`package authsome_test`). Using `newTestEngine` and `testAppID` as `refresh_jwt_test.go` does:
+
+1. With the setting unset, sign up, stamp the session with `Audience: []string{"https://other.example.com"}`, and assert a request carrying that token still authenticates. Unset means no check.
+2. Set `session.resource_identifier` to `https://api.example.com` for the app, then assert a token audienced at `https://other.example.com` no longer authenticates, and one audienced at `https://api.example.com` does.
+3. With the setting set, assert a session carrying no audience still authenticates. This is the regression guard for every existing session.
+
+- [ ] **Step 7: Run the tests**
+
+Run: `go test . -run TestEngineExpectedAudience -v`
+
+Expected: PASS.
+
+- [ ] **Step 8: Run the full suite**
+
+Run: `go test ./...`
+
+Expected: PASS. Every app leaves the new setting empty by default, so nothing changes for an existing deployment.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add session_settings.go engine.go engine_audience_test.go
+git commit -m "feat(auth): resolve the expected token audience from app settings"
 ```
 
 ---
