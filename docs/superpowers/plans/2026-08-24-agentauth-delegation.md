@@ -1510,6 +1510,28 @@ func TestEvaluate_OpenOrgAllowsMappedScope(t *testing.T) {
 
 // An org with no policy row falls back to open. Changing this default is a
 // policy decision, not an implementation detail, so it gets its own test.
+// The org that registered an agent governs it, even when the consenting
+// session carries no org context of its own. Keying policy off the session's
+// org alone would let a member of a blocked org authorize the agent simply by
+// signing in without an active organization.
+func TestEvaluate_AgentOrgGovernsWhenSessionHasNoOrg(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(
+		agentauth.WithStore(store),
+		agentauth.WithScope("invoices:read", agentauth.Grants("read", "invoice")),
+	)
+	org := id.NewOrgID()
+	approvedAgent(t, store, org, "client_orgowned")
+	require.NoError(t, store.PutOrgPolicy(context.Background(), &agentauth.OrgAgentPolicy{
+		OrgID: org, Mode: agentauth.ModeBlocked,
+	}))
+
+	// Zero org id, as an app-scoped session would produce.
+	err := p.Evaluate(context.Background(), "client_orgowned", id.NewUserID(), id.OrgID{}, []string{"invoices:read"})
+
+	require.Error(t, err, "the agent's own org policy must apply when the session carries no org")
+}
+
 func TestEvaluate_MissingPolicyDefaultsToOpen(t *testing.T) {
 	store := agentauth.NewMemoryStore()
 	p := agentauth.New(
@@ -1609,7 +1631,7 @@ func (p *Plugin) Evaluate(ctx context.Context, clientID string, _ id.UserID, org
 		return forge.Forbidden("agent is blocked")
 	}
 
-	policy, err := p.policyFor(ctx, orgID)
+	policy, err := p.policyFor(ctx, effectiveOrg(agent, orgID))
 	if err != nil {
 		return err
 	}
@@ -1678,6 +1700,29 @@ func (p *Plugin) clampTTL(policy *OrgAgentPolicy, requested time.Duration) time.
 		ttl = policy.MaxGrantTTL
 	}
 	return ttl
+}
+
+// effectiveOrg decides which organization's policy governs this consent.
+//
+// The orgID the provider hands us comes from the caller's session, and the
+// auth middleware populates it only when that session is org-scoped. An
+// app-scoped session therefore arrives with the zero value, and keying policy
+// off that would mean an org that set ModeBlocked never had it enforced
+// against its own members signing in without an active org. So the agent's own
+// record wins when it has one: an org-registered agent carries the org that
+// registered it, which is a more trustworthy source than ambient session
+// scope, and it cannot be dodged by dropping org context from the request.
+//
+// When neither source yields an org, no org policy applies. That is the
+// single-tenant and app-scoped case, where there is no organization to have an
+// opinion. A self-registered agent authorized from a session with no org
+// context is the one combination this leaves ungoverned; see the plan's
+// deferred notes.
+func effectiveOrg(agent *Agent, sessionOrg id.OrgID) id.OrgID {
+	if !agent.OrgID.IsNil() {
+		return agent.OrgID
+	}
+	return sessionOrg
 }
 
 // policyFor returns the org's policy, defaulting to open when no row exists.
