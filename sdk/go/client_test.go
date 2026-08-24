@@ -60,7 +60,7 @@ func TestClient_SignOut(t *testing.T) {
 
 	client := ts.CreateUserClient(t, "signout@example.com", "SecureP@ss1")
 
-	resp, err := client.SignOut(ctx, &authclient.SignOutRequest{})
+	resp, err := client.SignOut(ctx)
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.Status)
 
@@ -269,7 +269,7 @@ func TestClient_RevokeSession(t *testing.T) {
 		t.Skip("session id not returned as string")
 	}
 
-	resp, err := client.RevokeSession(ctx, sessionID, &authclient.RevokeSessionRequest{})
+	resp, err := client.RevokeSession(ctx, sessionID)
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.Status)
 }
@@ -367,7 +367,7 @@ func TestClient_DeleteOrganization(t *testing.T) {
 	org := ts.CreateOrg(t, auth.User.ID, "DelOrg", "del-org")
 	ts.AddMember(t, org.ID.String(), auth.User.ID, organization.RoleOwner)
 
-	resp, err := client.DeleteOrganization(ctx, org.ID.String(), &authclient.DeleteOrganizationRequest{})
+	resp, err := client.DeleteOrganization(ctx, org.ID.String())
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.Status)
 
@@ -463,7 +463,7 @@ func TestClient_RemoveMember(t *testing.T) {
 	ts.AddMember(t, org.ID.String(), ownerAuth.User.ID, organization.RoleOwner)
 	addedMember := ts.AddMember(t, org.ID.String(), memberAuth.User.ID, organization.RoleMember)
 
-	resp, err := ownerClient.RemoveMember(ctx, org.ID.String(), addedMember.ID.String(), &authclient.RemoveMemberRequest{})
+	resp, err := ownerClient.RemoveMember(ctx, org.ID.String(), addedMember.ID.String())
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.Status)
 }
@@ -531,7 +531,7 @@ func TestClient_ListAPIKeys(t *testing.T) {
 
 	client := ts.CreateUserClient(t, "listkeys@example.com", "SecureP@ss1")
 
-	resp, err := client.ListAPIKeys(ctx)
+	resp, err := client.ListAPIKeys(ctx, nil)
 	if err != nil {
 		// ListAPIKeys may require app_id query param not yet wired.
 		var ce *authclient.ClientError
@@ -819,7 +819,7 @@ func TestClient_ListBillingPlans(t *testing.T) {
 
 	client := ts.CreateUserClient(t, "billing@example.com", "SecureP@ss1")
 
-	resp, err := client.ListBillingPlans(ctx)
+	resp, err := client.ListBillingPlans(ctx, nil)
 	if err != nil {
 		var ce *authclient.ClientError
 		if errors.As(err, &ce) && (ce.StatusCode == 404 || ce.StatusCode == 400) {
@@ -836,7 +836,7 @@ func TestClient_ListSubscriptions(t *testing.T) {
 
 	client := ts.CreateUserClient(t, "subs@example.com", "SecureP@ss1")
 
-	resp, err := client.ListSubscriptions(ctx)
+	resp, err := client.ListSubscriptions(ctx, nil)
 	if err != nil {
 		var ce *authclient.ClientError
 		if errors.As(err, &ce) && (ce.StatusCode == 404 || ce.StatusCode == 400) {
@@ -853,7 +853,7 @@ func TestClient_GetUsageSummary(t *testing.T) {
 
 	client := ts.CreateUserClient(t, "usage@example.com", "SecureP@ss1")
 
-	resp, err := client.GetUsageSummary(ctx)
+	resp, err := client.GetUsageSummary(ctx, nil)
 	if err != nil {
 		var ce *authclient.ClientError
 		if errors.As(err, &ce) && (ce.StatusCode == 404 || ce.StatusCode == 400) {
@@ -870,7 +870,7 @@ func TestClient_ListCoupons(t *testing.T) {
 
 	client := ts.CreateUserClient(t, "coupons@example.com", "SecureP@ss1")
 
-	resp, err := client.ListCoupons(ctx)
+	resp, err := client.ListCoupons(ctx, nil)
 	if err != nil {
 		var ce *authclient.ClientError
 		if errors.As(err, &ce) && (ce.StatusCode == 404 || ce.StatusCode == 400) {
@@ -887,7 +887,7 @@ func TestClient_ListInvoices(t *testing.T) {
 
 	client := ts.CreateUserClient(t, "invoices@example.com", "SecureP@ss1")
 
-	resp, err := client.ListInvoices(ctx)
+	resp, err := client.ListInvoices(ctx, nil)
 	if err != nil {
 		var ce *authclient.ClientError
 		if errors.As(err, &ce) && (ce.StatusCode == 404 || ce.StatusCode == 400) {
@@ -927,7 +927,7 @@ func TestClient_ListConsents(t *testing.T) {
 
 	client := ts.CreateUserClient(t, "consent@example.com", "SecureP@ss1")
 
-	resp, err := client.ListConsents(ctx)
+	resp, err := client.ListConsents(ctx, nil)
 	if err != nil {
 		var ce *authclient.ClientError
 		if errors.As(err, &ce) && (ce.StatusCode == 404 || ce.StatusCode == 400) {
@@ -987,7 +987,7 @@ func TestClient_ListOAuth2Clients_RequiresAdmin(t *testing.T) {
 
 	client := ts.CreateUserClient(t, "oauth2clients@example.com", "SecureP@ss1")
 
-	_, err := client.ListOAuth2Clients(ctx)
+	_, err := client.ListOAuth2Clients(ctx, nil)
 	require.Error(t, err, "a non-admin user must not list OAuth2 clients")
 
 	var ce *authclient.ClientError
