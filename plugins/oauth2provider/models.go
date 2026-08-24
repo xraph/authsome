@@ -46,7 +46,11 @@ type AuthorizationCode struct {
 
 // TokenResponse is the OAuth2 token endpoint response.
 type TokenResponse struct {
-	AccessToken  string `json:"access_token"`
+	AccessToken string `json:"access_token"`
+	// TokenType is "Bearer" for an unbound token and "DPoP" for a bound one
+	// (RFC 9449 section 5). A spec-compliant client reads this to decide
+	// whether to attach proofs, so getting it wrong makes binding invisible
+	// to exactly the clients that implement it correctly.
 	TokenType    string `json:"token_type"`
 	ExpiresIn    int    `json:"expires_in"`
 	RefreshToken string `json:"refresh_token,omitempty"`

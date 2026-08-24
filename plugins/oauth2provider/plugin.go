@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -666,7 +667,7 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 	}
 
 	// Generate tokens.
-	return p.issueTokens(ctx.Context(), client, authCode.UserID, authCode.AppID, authCode.Scopes)
+	return p.issueTokens(ctx, client, authCode.UserID, authCode.AppID, authCode.Scopes)
 }
 
 func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
@@ -687,7 +688,7 @@ func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenReque
 	}
 
 	// Client credentials: no user, just issue an app-level token.
-	return p.issueClientToken(ctx.Context(), client)
+	return p.issueClientToken(ctx, client)
 }
 
 func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeRequest) (*struct{}, error) {
@@ -888,24 +889,86 @@ func (p *Plugin) handleDeleteClient(ctx forge.Context, req *DeleteClientRequest)
 // Token Issuance
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) issueTokens(ctx context.Context, _ *OAuth2Client, userID id.UserID, appID id.AppID, scopes []string) (*TokenResponse, error) {
+// bindDPoP resolves the effective DPoP mode and, if a proof was presented,
+// validates it and returns the thumbprint to stamp on the session.
+//
+// Returns an empty string when the token should be issued unbound. At this
+// point there is no token yet, so Expectation carries no AccessToken and no
+// ExpectedJKT: the key is learned here rather than checked.
+func (p *Plugin) bindDPoP(ctx forge.Context, client *OAuth2Client, appID id.AppID) (string, error) {
+	if p.engine == nil {
+		return "", nil
+	}
+
+	mode := p.engine.DPoPModeForApp(ctx.Context(), appID)
+	if client != nil {
+		mode = dpop.MaxMode(mode, dpop.ParseMode(client.DPoPMode))
+	}
+	if mode == dpop.ModeOff {
+		return "", nil
+	}
+
+	raw := ctx.Request().Header.Get("DPoP")
+	if raw == "" {
+		if mode == dpop.ModeRequired {
+			return "", newOAuth2Error(http.StatusBadRequest, "invalid_dpop_proof",
+				"this client must present a DPoP proof")
+		}
+		return "", nil // optional, and the client did not prove
+	}
+
+	proof, err := dpop.Parse(raw)
+	if err != nil {
+		return "", newOAuth2Error(http.StatusBadRequest, "invalid_dpop_proof", err.Error())
+	}
+
+	nonceRequired := p.engine.DPoPNonceRequiredForApp(ctx.Context(), appID)
+
+	err = p.engine.DPoPValidator().Validate(ctx.Context(), proof, dpop.Expectation{
+		Method:        ctx.Request().Method,
+		URL:           middleware.RequestURL(ctx.Request()),
+		NonceRequired: nonceRequired,
+	})
+	if err != nil {
+		if errors.Is(err, dpop.ErrNonceRequired) || errors.Is(err, dpop.ErrNonceMismatch) {
+			// RFC 9449 section 8: the token endpoint answers with 400 and a
+			// fresh nonce, not a 401 challenge.
+			if signer := p.engine.DPoPNonceSigner(); signer != nil {
+				ctx.Response().Header().Set("DPoP-Nonce", signer.Issue(proof.JKT))
+			}
+			return "", newOAuth2Error(http.StatusBadRequest, "use_dpop_nonce",
+				"a server-provided nonce is required")
+		}
+		return "", newOAuth2Error(http.StatusBadRequest, "invalid_dpop_proof", err.Error())
+	}
+
+	return proof.JKT, nil
+}
+
+func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.UserID, appID id.AppID, scopes []string) (*TokenResponse, error) {
+	jkt, err := p.bindDPoP(ctx, client, appID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Resolve session config for the app.
 	sessCfg := account.SessionConfig{
 		TokenTTL:        p.config.AccessTokenTTL,
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 	}
 	if p.engine != nil {
-		sessCfg = p.engine.SessionConfigForApp(ctx, appID)
+		sessCfg = p.engine.SessionConfigForApp(ctx.Context(), appID)
 	}
 
 	sess, err := account.NewSession(appID, userID, sessCfg)
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("oauth2: create session: %w", err))
 	}
+	sess.DPoPJKT = jkt
 
 	// Bind session to the app's default environment so the FK constraint
 	// on authsome_sessions.env_id is satisfied.
-	if env, envErr := p.store.GetDefaultEnvironment(ctx, appID); envErr == nil && env != nil {
+	if env, envErr := p.store.GetDefaultEnvironment(ctx.Context(), appID); envErr == nil && env != nil {
 		sess.EnvID = env.ID
 	}
 
@@ -918,6 +981,7 @@ func (p *Plugin) issueTokens(ctx context.Context, _ *OAuth2Client, userID id.Use
 				AppID:     appID.String(),
 				SessionID: sess.ID.String(),
 				Scopes:    scopes,
+				DPoPJKT:   jkt,
 				IssuedAt:  sess.CreatedAt,
 				ExpiresAt: sess.ExpiresAt,
 			})
@@ -928,20 +992,30 @@ func (p *Plugin) issueTokens(ctx context.Context, _ *OAuth2Client, userID id.Use
 		}
 	}
 
-	if err := p.store.CreateSession(ctx, sess); err != nil {
+	if err := p.store.CreateSession(ctx.Context(), sess); err != nil {
 		return nil, forge.InternalError(fmt.Errorf("oauth2: save session: %w", err))
+	}
+
+	tokenType := "Bearer"
+	if jkt != "" {
+		tokenType = "DPoP"
 	}
 
 	return &TokenResponse{
 		AccessToken:  sess.Token,
-		TokenType:    "Bearer",
+		TokenType:    tokenType,
 		ExpiresIn:    int(time.Until(sess.ExpiresAt).Seconds()),
 		RefreshToken: sess.RefreshToken,
 		Scope:        strings.Join(scopes, " "),
 	}, nil
 }
 
-func (p *Plugin) issueClientToken(ctx context.Context, client *OAuth2Client) (*TokenResponse, error) {
+func (p *Plugin) issueClientToken(ctx forge.Context, client *OAuth2Client) (*TokenResponse, error) {
+	jkt, err := p.bindDPoP(ctx, client, client.AppID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Client credentials: create a session with no user.
 	sessCfg := account.SessionConfig{
 		TokenTTL:        p.config.AccessTokenTTL,
@@ -953,20 +1027,26 @@ func (p *Plugin) issueClientToken(ctx context.Context, client *OAuth2Client) (*T
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("oauth2: create client session: %w", err))
 	}
+	sess.DPoPJKT = jkt
 
 	// Bind session to the app's default environment so the FK constraint
 	// on authsome_sessions.env_id is satisfied.
-	if env, envErr := p.store.GetDefaultEnvironment(ctx, client.AppID); envErr == nil && env != nil {
+	if env, envErr := p.store.GetDefaultEnvironment(ctx.Context(), client.AppID); envErr == nil && env != nil {
 		sess.EnvID = env.ID
 	}
 
-	if err := p.store.CreateSession(ctx, sess); err != nil {
+	if err := p.store.CreateSession(ctx.Context(), sess); err != nil {
 		return nil, forge.InternalError(fmt.Errorf("oauth2: save client session: %w", err))
+	}
+
+	tokenType := "Bearer"
+	if jkt != "" {
+		tokenType = "DPoP"
 	}
 
 	return &TokenResponse{
 		AccessToken: sess.Token,
-		TokenType:   "Bearer",
+		TokenType:   tokenType,
 		ExpiresIn:   int(time.Until(sess.ExpiresAt).Seconds()),
 		Scope:       strings.Join(client.Scopes, " "),
 	}, nil
@@ -1113,7 +1193,7 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 			return nil, forge.InternalError(fmt.Errorf("oauth2: consume device code: %w", err))
 		}
 
-		return p.issueTokens(ctx.Context(), client, dc.UserID, dc.AppID, dc.Scopes)
+		return p.issueTokens(ctx, client, dc.UserID, dc.AppID, dc.Scopes)
 
 	default:
 		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "unexpected device code status")

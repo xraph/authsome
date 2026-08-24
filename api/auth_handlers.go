@@ -12,12 +12,46 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
 )
+
+// dpopBindingForRequest validates any DPoP proof on a first-party auth request
+// and returns the thumbprint to bind the new session to.
+//
+// Mirrors the OAuth2 plugin's bindDPoP. There is no OAuth client here, so only
+// the app's mode applies.
+func (a *API) dpopBindingForRequest(ctx forge.Context, appID id.AppID) (string, error) {
+	mode := a.engine.DPoPModeForApp(ctx.Context(), appID)
+	if mode == dpop.ModeOff {
+		return "", nil
+	}
+
+	raw := ctx.Request().Header.Get("DPoP")
+	if raw == "" {
+		if mode == dpop.ModeRequired {
+			return "", forge.BadRequest("a DPoP proof is required for this app")
+		}
+		return "", nil
+	}
+
+	proof, err := dpop.Parse(raw)
+	if err != nil {
+		return "", forge.BadRequest("invalid DPoP proof")
+	}
+	if err := a.engine.DPoPValidator().Validate(ctx.Context(), proof, dpop.Expectation{
+		Method:        ctx.Request().Method,
+		URL:           middleware.RequestURL(ctx.Request()),
+		NonceRequired: a.engine.DPoPNonceRequiredForApp(ctx.Context(), appID),
+	}); err != nil {
+		return "", forge.BadRequest("invalid DPoP proof")
+	}
+	return proof.JKT, nil
+}
 
 // rateLimitOpt returns a forge.WithMiddleware option for rate limiting the given endpoint,
 // or nil if rate limiting is not enabled.
@@ -136,6 +170,11 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 		return nil, err
 	}
 
+	dpopJKT, err := a.dpopBindingForRequest(ctx, appID)
+	if err != nil {
+		return nil, err
+	}
+
 	httpReq := ctx.Request()
 	u, sess, err := a.engine.SignUp(ctx.Context(), &account.SignUpRequest{
 		AppID:     appID,
@@ -147,6 +186,7 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 		Metadata:  req.Metadata,
 		IPAddress: clientIPFromRequest(httpReq),
 		UserAgent: httpReq.UserAgent(),
+		DPoPJKT:   dpopJKT,
 	})
 	if err != nil {
 		// Enumeration resistance: a duplicate email must NOT be a probe-able
@@ -275,6 +315,11 @@ func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse
 		return nil, err
 	}
 
+	dpopJKT, err := a.dpopBindingForRequest(ctx, appID)
+	if err != nil {
+		return nil, err
+	}
+
 	httpReq := ctx.Request()
 	u, sess, err := a.engine.SignIn(ctx.Context(), &account.SignInRequest{
 		AppID:     appID,
@@ -283,6 +328,7 @@ func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse
 		Password:  req.Password,
 		IPAddress: clientIPFromRequest(httpReq),
 		UserAgent: httpReq.UserAgent(),
+		DPoPJKT:   dpopJKT,
 	})
 	if err != nil {
 		return nil, mapError(err)
