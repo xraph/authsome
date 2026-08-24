@@ -97,12 +97,25 @@ func TestNonceSigner_NeedsRefresh(t *testing.T) {
 // the call site does not save you: the method actually gets invoked on a
 // nil receiver. These three methods must not panic when that happens, and
 // must return the answer that reads as "no nonce support", not a crash.
+//
+// Verify and NeedsRefresh are fed a well-formed nonce minted by a real
+// signer, not a garbage string. A garbage string like "anything" has no
+// '.' in it, so splitNonce's own ok=false check would return before either
+// method ever touches the receiver. That would pass with or without the
+// nil guard and prove nothing. Feeding a real nonce forces execution past
+// splitNonce and into s.now()/s.sign(), which is where the guard is the
+// only thing standing between "returns false/true" and a nil-pointer panic.
 func TestNonceSigner_NilReceiverFailsClosed(t *testing.T) {
+	valid, err := dpop.NewNonceSigner(nonceSecret, dpop.DefaultNonceTTL)
+	require.NoError(t, err)
+	wellFormedNonce := valid.Issue("jkt-abc")
+	require.NotEmpty(t, wellFormedNonce)
+
 	var s *dpop.NonceSigner
 
 	assert.Equal(t, "", s.Issue("jkt-abc"), "a nil signer cannot mint a nonce")
-	assert.False(t, s.Verify("jkt-abc", "anything"), "a nil signer cannot verify a nonce")
-	assert.True(t, s.NeedsRefresh("anything"), "a nil signer can't vouch that a nonce is still fresh")
+	assert.False(t, s.Verify("jkt-abc", wellFormedNonce), "a nil signer cannot verify a nonce, even a well-formed one")
+	assert.True(t, s.NeedsRefresh(wellFormedNonce), "a nil signer can't vouch that a well-formed nonce is still fresh")
 }
 
 // TestNonceSigner_NeedsRefresh_Boundary pins the half-TTL crossover with a
