@@ -113,3 +113,49 @@ func resolveResources(client *OAuth2Client, requested []string) ([]string, error
 
 	return out, nil
 }
+
+// tokenRequestResources collects the resource indicators from a token
+// request.
+//
+// A form-encoded request populates resourceParams and leaves the JSON field
+// empty; a JSON request does the reverse, so in practice only one of the two
+// ever carries values. If both do, the raw request wins and the two sets are
+// never concatenated.
+func tokenRequestResources(r *http.Request, req *TokenRequest) []string {
+	if raw := resourceParams(r); len(raw) > 0 {
+		return raw
+	}
+	return req.Resource
+}
+
+// narrowResources restricts an already-granted audience to the subset the
+// token request asked for (RFC 8707 section 2.2).
+//
+// A token request may narrow what the user authorized but must never widen
+// it. An empty request inherits the whole granted set, which is what a
+// client that only sends `resource` at the authorization endpoint does.
+func narrowResources(granted, requested []string) ([]string, error) {
+	if len(requested) == 0 {
+		return granted, nil
+	}
+
+	grantedSet := make(map[string]struct{}, len(granted))
+	for _, g := range granted {
+		grantedSet[g] = struct{}{}
+	}
+
+	seen := make(map[string]struct{}, len(requested))
+	out := make([]string, 0, len(requested))
+	for _, r := range requested {
+		if _, ok := grantedSet[r]; !ok {
+			return nil, newOAuth2Error(http.StatusBadRequest, "invalid_target",
+				fmt.Sprintf("resource %q was not granted by this authorization", r))
+		}
+		if _, dup := seen[r]; dup {
+			continue
+		}
+		seen[r] = struct{}{}
+		out = append(out, r)
+	}
+	return out, nil
+}
