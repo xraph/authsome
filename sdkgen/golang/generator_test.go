@@ -329,3 +329,44 @@ func TestGenerate_FormEncodedBodyKeepsItsFields(t *testing.T) {
 	assert.Regexp(t, `GrantType\s+string\s+`+"`"+`json:"grant_type"`+"`", typesContent)
 	assert.Regexp(t, `Code\s+string\s+`+"`"+`json:"code,omitempty"`+"`", typesContent)
 }
+
+// RFC 6749 section 4.1.3 requires the token endpoint to take
+// application/x-www-form-urlencoded. Posting JSON to it is what a conformant
+// server is entitled to reject.
+func TestGenerate_FormEncodedBodyIsPostedAsForm(t *testing.T) {
+	gen := golang.NewGenerator(golang.GeneratorConfig{})
+	files, err := gen.Generate(formBodySpec())
+	require.NoError(t, err)
+
+	var clientContent string
+	for _, f := range files {
+		if f.Path == "client.go" {
+			clientContent = f.Content
+			break
+		}
+	}
+	require.NotEmpty(t, clientContent)
+
+	assert.Contains(t, clientContent, `form.Set("grant_type", req.GrantType)`)
+	assert.Contains(t, clientContent, `form.Set("code", req.Code)`)
+	assert.Contains(t, clientContent, `"application/x-www-form-urlencoded"`)
+	assert.NotContains(t, clientContent, "json.Marshal(req)")
+}
+
+// The JSON routes are the overwhelming majority and must keep posting JSON.
+func TestGenerate_JSONBodyStillPostedAsJSON(t *testing.T) {
+	gen := golang.NewGenerator(golang.GeneratorConfig{})
+	files, err := gen.Generate(testSpec())
+	require.NoError(t, err)
+
+	var clientContent string
+	for _, f := range files {
+		if f.Path == "client.go" {
+			clientContent = f.Content
+			break
+		}
+	}
+	require.NotEmpty(t, clientContent)
+
+	assert.Contains(t, clientContent, "json.Marshal(req)")
+}
