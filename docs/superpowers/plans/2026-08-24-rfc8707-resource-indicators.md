@@ -1122,7 +1122,15 @@ func TestResolveResources(t *testing.T) {
 			got, err := resolveResources(tt.client, tt.requested)
 			if tt.wantErr {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), "invalid_target")
+				// OAuth2HTTPError.Error() returns only the description
+				// (plugin.go:412); the registered error code lives on
+				// ResponseBody(). Asserting on Error() would pass for any
+				// rejection reason at all, including the wrong one.
+				var httpErr *OAuth2HTTPError
+				require.ErrorAs(t, err, &httpErr)
+				body, ok := httpErr.ResponseBody().(*OAuth2Error)
+				require.True(t, ok)
+				assert.Equal(t, "invalid_target", body.Error)
 				return
 			}
 			require.NoError(t, err)
@@ -1209,9 +1217,9 @@ func resolveResources(client *OAuth2Client, requested []string) ([]string, error
 
 Imports for `resource.go` become `fmt`, `net/http`, `net/url`, `strings`.
 
-- [ ] **Step 4: Check the error helper carries the code**
+- [ ] **Step 4: Do not change the error helper**
 
-Read `newOAuth2Error` at `plugin.go:422` and `OAuth2HTTPError.Error()` at `:412`. The test asserts `err.Error()` contains `invalid_target`. If `Error()` returns only the description, assert on `ResponseBody()` instead of changing the helper, since other handlers depend on its current shape.
+`OAuth2HTTPError.Error()` returns only the description and `ResponseBody()` carries the registered code (`plugin.go:412-420`). Other handlers depend on that shape, so leave it alone; the test above already reads the code off `ResponseBody()`. Over the wire the code still reaches the client, because forge renders `ResponseBody()`, which is why the handler tests in later tasks can assert on the response body directly.
 
 - [ ] **Step 5: Run the test**
 
@@ -1430,7 +1438,7 @@ func TestAuthorizeResource(t *testing.T) {
 }
 ```
 
-If `CreateClient` on the memory store rejects a duplicate ID, add an `UpdateClient` to the `Store` interface in a preceding step, or build the fixture client with its resources already set instead of mutating it.
+`MemoryStore.CreateClient` assigns straight into its map (`store_memory.go:31`), so calling it again with the same `ClientID` overwrites rather than erroring. That is what makes `grantResources` work without adding an `UpdateClient` to the `Store` interface.
 
 - [ ] **Step 2: Run the test to verify it fails**
 
@@ -1900,7 +1908,7 @@ git commit -m "feat(middleware): refuse a token audienced at another resource"
 
 - [ ] **Step 1: Write the failing tests**
 
-For discovery, assert `GET /.well-known/oauth-authorization-server` returns `resource_indicators_supported: true`. Use the existing discovery test as the model.
+For discovery, assert `GET /.well-known/openid-configuration` returns `resource_indicators_supported: true`. That is the path the plugin actually registers (`plugin.go:225`); there is no `/.well-known/oauth-authorization-server` route. Use the existing discovery test as the model.
 
 For introspection, assert that a JWT carrying `aud` and an opaque session carrying `Audience` both introspect with the same `aud` array, and that a token with no audience omits the field.
 
