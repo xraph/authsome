@@ -163,9 +163,13 @@ func (s *Store) ListPrincipals(ctx context.Context, q *principal.Query) ([]*prin
 			Where("kind = ?", string(q.Parent.Kind))
 	}
 	if q.ActiveOnly {
+		// Inclusive at the boundary: principal.Principal.IsActive defines
+		// active as `!at.After(expiresAt)`, so a principal expiring at exactly
+		// ActiveAsOf must still come back here. `>` would exclude it and
+		// disagree with the domain method every non-store caller uses.
 		query = query.
 			Where("active = TRUE").
-			Where("(expires_at IS NULL OR expires_at > ?)", q.ActiveAsOf)
+			Where("(expires_at IS NULL OR expires_at >= ?)", q.ActiveAsOf)
 	}
 	if q.Limit > 0 {
 		query = query.Limit(q.Limit)
@@ -214,11 +218,17 @@ func (s *Store) GetDelegation(ctx context.Context, delID id.DelegationID) (*prin
 // The interface takes no time argument (unlike ListDelegations, which is
 // given q.ActiveAsOf as a bound parameter), so the expiry check has to name a
 // clock rather than have one passed in. Postgres names clock_timestamp() in
-// SQL for this; sqlite has no equivalent server-side clock function to lean
-// on (or misuse — NOW()-style transaction-frozen clocks are a postgres
-// concern, not a sqlite one), so the app's own time.Now() is bound as a query
-// parameter instead, exactly the way GetActiveEmailVerification already
-// compares against a TIMESTAMP column elsewhere in this file.
+// SQL for this. Sqlite has no equivalent server-side clock function to lean
+// on, and it would be the wrong thing to reach for anyway: NOW()-style
+// transaction-frozen clocks are a postgres concern, not a sqlite one. So the
+// app's own time.Now() is bound as a query parameter instead, exactly the
+// way GetActiveEmailVerification already compares against a TIMESTAMP column
+// elsewhere in this file.
+//
+// The comparison is `>=`, not `>`: principal.Delegation.IsActive defines a
+// grant expiring at exactly the query instant as still active
+// (`!at.After(expiresAt)`), and every store must agree with the domain
+// method, not just with each other.
 func (s *Store) FindActiveDelegation(
 	ctx context.Context, appID id.AppID, actor, subject principal.Ref, grantKind principal.GrantKind,
 ) (*principal.Delegation, error) {
@@ -231,7 +241,7 @@ func (s *Store) FindActiveDelegation(
 		Where("subject_id = ?", subject.ID).
 		Where("grant_kind = ?", string(grantKind)).
 		Where("revoked_at IS NULL").
-		Where("(expires_at IS NULL OR expires_at > ?)", time.Now()).
+		Where("(expires_at IS NULL OR expires_at >= ?)", time.Now()).
 		Scan(ctx)
 	if err != nil {
 		if errors.Is(sqliteError(err), store.ErrNotFound) {
@@ -263,9 +273,11 @@ func (s *Store) ListDelegations(ctx context.Context, q *principal.DelegationQuer
 		query = query.Where("grant_kind = ?", string(q.GrantKind))
 	}
 	if q.ActiveOnly {
+		// Inclusive at the boundary, matching principal.Delegation.IsActive:
+		// see the comment on ListPrincipals's ActiveOnly branch above.
 		query = query.
 			Where("revoked_at IS NULL").
-			Where("(expires_at IS NULL OR expires_at > ?)", q.ActiveAsOf)
+			Where("(expires_at IS NULL OR expires_at >= ?)", q.ActiveAsOf)
 	}
 	if q.Limit > 0 {
 		query = query.Limit(q.Limit)

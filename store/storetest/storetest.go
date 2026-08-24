@@ -740,6 +740,36 @@ func testEphemeralPrincipalExpiry(t *testing.T, s store.Store) {
 	assert.Contains(t, ids, parent.ID.String())
 	assert.NotContains(t, ids, lapsed.ID.String(), "an active-only listing must exclude the lapsed child")
 
+	// The exact boundary: a principal whose ExpiresAt equals the ActiveAsOf
+	// instant passed to the query is still active. principal.Principal.IsActive
+	// defines active as `!at.After(expiresAt)`, which is inclusive at
+	// equality, and every backend must agree with that method, not just with
+	// each other, or a token minted right up to its ExpiresAt would start
+	// failing mid-request depending only on which store answered it.
+	//
+	// The fixture's ExpiresAt and the query's ActiveAsOf below are the exact
+	// same time.Time value, not two separate now() calls: two calls even a
+	// few nanoseconds apart would make this test flaky for a reason that has
+	// nothing to do with the boundary itself, and now() truncates to the
+	// millisecond precisely because the SQL backends round-trip through their
+	// own timestamp formats and would not preserve anything finer.
+	boundary := now()
+	boundaryChild := seedPrincipal(t, s, tn, principal.KindAgent, "boundary-child")
+	boundaryChild.ParentID = parent.ID
+	boundaryChild.ExpiresAt = &boundary
+	require.NoError(t, s.UpdateServiceAccount(ctx, boundaryChild))
+
+	atBoundary, err := s.ListPrincipals(ctx, &principal.Query{
+		AppID: tn.AppID, Kind: principal.KindAgent, ActiveOnly: true, ActiveAsOf: boundary,
+	})
+	require.NoError(t, err)
+	atBoundaryIDs := make([]string, 0, len(atBoundary))
+	for _, p := range atBoundary {
+		atBoundaryIDs = append(atBoundaryIDs, p.ID)
+	}
+	assert.Contains(t, atBoundaryIDs, boundaryChild.ID.String(),
+		"a principal expiring at exactly ActiveAsOf must still be active, matching principal.Principal.IsActive")
+
 	// The Parent filter itself: unexercised above, and easy for a backend to
 	// get subtly wrong by comparing only the id half of the ref. ToPrincipal
 	// stamps a child's Parent ref with the child's own Kind, so the query
@@ -847,6 +877,42 @@ func testDelegationLifecycle(t *testing.T, s store.Store) {
 	foundSecond, err := s.FindActiveDelegation(ctx, tn.AppID, actor, subject, principal.GrantDelegation)
 	require.NoError(t, err)
 	assert.Equal(t, second.ID.String(), foundSecond.ID.String(), "the active grant must now be the fresh one, not the revoked one")
+
+	// The exact boundary: a grant whose ExpiresAt equals the ActiveAsOf
+	// instant passed to the query is still active. principal.Delegation.IsActive
+	// defines active as `!at.After(expiresAt)`, inclusive at equality, and
+	// ListDelegations must agree with that method, not just with the other
+	// backends. A different grant kind (impersonation, not delegation) keeps
+	// this from colliding with `second`'s live slot on the same actor/subject
+	// pair.
+	//
+	// The fixture's ExpiresAt and the query's ActiveAsOf below are the exact
+	// same time.Time value, not two separate now() calls: see the identical
+	// note in testEphemeralPrincipalExpiry.
+	boundary := now()
+	boundaryDelegation := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     tn.AppID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantImpersonation,
+		GrantedBy: subject,
+		ExpiresAt: &boundary,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateDelegation(ctx, boundaryDelegation))
+
+	atBoundary, err := s.ListDelegations(ctx, &principal.DelegationQuery{
+		AppID: tn.AppID, Subject: &subject, ActiveOnly: true, ActiveAsOf: boundary,
+	})
+	require.NoError(t, err)
+	atBoundaryIDs := make([]string, 0, len(atBoundary))
+	for _, d := range atBoundary {
+		atBoundaryIDs = append(atBoundaryIDs, d.ID.String())
+	}
+	assert.Contains(t, atBoundaryIDs, boundaryDelegation.ID.String(),
+		"a grant expiring at exactly ActiveAsOf must still be active, matching principal.Delegation.IsActive")
 }
 
 // testSessionActorChainRoundTrip pins that the chain survives every session

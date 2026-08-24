@@ -163,9 +163,13 @@ func (s *Store) ListPrincipals(ctx context.Context, q *principal.Query) ([]*prin
 			Where("kind = ?", string(q.Parent.Kind))
 	}
 	if q.ActiveOnly {
+		// Inclusive at the boundary: principal.Principal.IsActive defines
+		// active as `!at.After(expiresAt)`, so a principal expiring at exactly
+		// ActiveAsOf must still come back here. `>` would exclude it and
+		// disagree with the domain method every non-store caller uses.
 		query = query.
 			Where("active = TRUE").
-			Where("(expires_at IS NULL OR expires_at > ?)", q.ActiveAsOf)
+			Where("(expires_at IS NULL OR expires_at >= ?)", q.ActiveAsOf)
 	}
 	if q.Limit > 0 {
 		query = query.Limit(q.Limit)
@@ -218,6 +222,11 @@ func (s *Store) GetDelegation(ctx context.Context, delID id.DelegationID) (*prin
 // transaction, so inside a long-lived transaction a grant would stay usable
 // past its expires_at for the transaction's whole life. clock_timestamp()
 // reads the wall clock at the moment this statement runs instead.
+//
+// The comparison is `>=`, not `>`: principal.Delegation.IsActive defines a
+// grant expiring at exactly the query instant as still active
+// (`!at.After(expiresAt)`), and every store must agree with the domain
+// method, not just with each other.
 func (s *Store) FindActiveDelegation(
 	ctx context.Context, appID id.AppID, actor, subject principal.Ref, grantKind principal.GrantKind,
 ) (*principal.Delegation, error) {
@@ -230,7 +239,7 @@ func (s *Store) FindActiveDelegation(
 		Where("subject_id = ?", subject.ID).
 		Where("grant_kind = ?", string(grantKind)).
 		Where("revoked_at IS NULL").
-		Where("(expires_at IS NULL OR expires_at > clock_timestamp())").
+		Where("(expires_at IS NULL OR expires_at >= clock_timestamp())").
 		Scan(ctx)
 	if err != nil {
 		if errors.Is(pgError(err), store.ErrNotFound) {
@@ -262,9 +271,11 @@ func (s *Store) ListDelegations(ctx context.Context, q *principal.DelegationQuer
 		query = query.Where("grant_kind = ?", string(q.GrantKind))
 	}
 	if q.ActiveOnly {
+		// Inclusive at the boundary, matching principal.Delegation.IsActive:
+		// see the comment on ListPrincipals's ActiveOnly branch above.
 		query = query.
 			Where("revoked_at IS NULL").
-			Where("(expires_at IS NULL OR expires_at > ?)", q.ActiveAsOf)
+			Where("(expires_at IS NULL OR expires_at >= ?)", q.ActiveAsOf)
 	}
 	if q.Limit > 0 {
 		query = query.Limit(q.Limit)
