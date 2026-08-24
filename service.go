@@ -583,6 +583,9 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 			UserID:    sess.UserID.String(),
 			AppID:     sess.AppID.String(),
 			SessionID: sess.ID.String(),
+			// Without this the first refresh turns a token bound to one
+			// resource server into an unrestricted one, silently.
+			Audience:  sess.Audience,
 			IssuedAt:  sess.UpdatedAt,
 			ExpiresAt: sess.ExpiresAt,
 		})
