@@ -15,6 +15,7 @@
 - Go 1.26.0. Module path `github.com/xraph/authsome`.
 - No new third-party dependencies. Use `golang-jwt/jwt/v5`. Do NOT add `go-jose`, `lestrrat-go/jwx`, or `MicahParks/keyfunc`.
 - All tables are prefixed `authsome_ssf_`. All migration groups are named `authsome-sharedsignals` and declare `migrate.DependsOn("authsome")`.
+- Migration versions here start at `20260824000001`. A sibling plan moved off that number to avoid a collision, but that plan appends to the shared `authsome` group where versions must be unique. This one owns its own group, and version numbers are scoped per group: `plugins/social` and `plugins/sso` both already use `20240201000001` in theirs. Do not renumber.
 - Signature algorithms accepted: `RS256`, `RS384`, `RS512`, `ES256`, `ES384`, `ES512`, `EdDSA`. `none` and every HMAC algorithm (`HS*`) are rejected.
 - SET `typ` header must be `secevent+jwt`.
 - `iat` must fall inside `[now - 24h, now + 5m]`.
