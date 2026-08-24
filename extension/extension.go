@@ -518,14 +518,12 @@ func (e *Extension) init(fapp forge.App) error {
 
 			// Origin-root routes first. Well-known discovery documents must
 			// answer at the host root, so they cannot go on groupedRouter.
-			// In standalone mode router and groupedRouter are the same
-			// instance, and registering a path twice panics, so skip the
-			// root pass when they coincide.
-			if router != groupedRouter {
-				for _, rp := range eng.Plugins().RootRouteProviders() {
-					if err := rp.RegisterRootRoutes(router); err != nil {
-						return fmt.Errorf("authsome: register plugin root routes (%T): %w", rp, err)
-					}
+			// No duplicate-path risk: basePath is never empty (it defaults
+			// to /authsome above), so the prefixed mirror and the root
+			// registration always land on different literal paths.
+			for _, rp := range eng.Plugins().RootRouteProviders() {
+				if err := rp.RegisterRootRoutes(router); err != nil {
+					return fmt.Errorf("authsome: register plugin root routes (%T): %w", rp, err)
 				}
 			}
 
