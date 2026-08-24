@@ -242,5 +242,3 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 	return p.registerAdminRoutes(router)
 }
-
-func (p *Plugin) registerAdminRoutes(_ forge.Router) error { return nil }
