@@ -30,6 +30,10 @@ var (
 
 func intPtr(v int) *int { return &v }
 
+// logString is a tiny alias so call sites do not repeat the import path of
+// the logging package in every field.
+func logString(key, value string) log.Field { return log.String(key, value) }
+
 // ──────────────────────────────────────────────────
 // Dynamic settings
 // ──────────────────────────────────────────────────
