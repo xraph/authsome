@@ -179,7 +179,7 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xraph/confy v1.0.2 // indirect
 	github.com/xraph/dispatch v1.6.0
-	github.com/xraph/go-utils v1.1.6
+	github.com/xraph/go-utils v1.1.7
 	github.com/xraph/ledger v1.6.0
 	github.com/xraph/vault v1.6.0
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
