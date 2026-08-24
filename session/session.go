@@ -58,8 +58,10 @@ type Session struct {
 	Roles []string `json:"roles,omitempty"`
 
 	// PrincipalKind identifies the type of principal that owns this session.
-	// Valid values are "user" and "service_account". Empty string means "user"
-	// for backwards compatibility with existing sessions.
+	// Valid values are "user", "service_account", and "agent". Empty string
+	// means "user" for backwards compatibility with existing sessions. An
+	// agent session keeps the delegating human in UserID; a service-account
+	// session does not, since there is no human behind it.
 	PrincipalKind string `json:"principal_kind,omitempty"`
 	// ServiceAccountID is set when PrincipalKind is "service_account".
 	// UserID is left as the zero value in that case.

@@ -14,9 +14,9 @@ import (
 // principalKindServiceAccount is the PrincipalKind a service-account session
 // carries. Service accounts are authorized by scope rather than by role, and
 // their UserID is the zero value, so there is nothing for the stamper to look
-// up. Spelled here as a constant because middleware/auth.go compares the same
-// literal.
-const principalKindServiceAccount = "service_account"
+// up. Aliased to session.PrincipalKindServiceAccount rather than redefined as
+// a literal, so the two cannot drift apart.
+const principalKindServiceAccount = session.PrincipalKindServiceAccount
 
 // roleStamper resolves the role slugs a user holds within an app.
 //

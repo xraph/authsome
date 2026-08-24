@@ -47,6 +47,7 @@ func RunConformance(t *testing.T, newStore Factory) {
 		{"SessionRolesRoundTrip", testSessionRolesRoundTrip},
 		{"SessionPrincipalKindRoundTrip", testSessionPrincipalKindRoundTrip},
 		{"ServiceAccountSessionRoundTrip", testServiceAccountSessionRoundTrip},
+		{"AgentSessionRoundTrip", testAgentSessionRoundTrip},
 		{"RotateSessionCAS", testRotateSessionCAS},
 		{"RefreshTokenRevocation", testRefreshTokenRevocation},
 		{"RefreshTokenReplayIsIdempotent", testRefreshTokenReplayIsIdempotent},
@@ -471,6 +472,64 @@ func testServiceAccountSessionRoundTrip(t *testing.T, s store.Store) {
 			assert.Equal(t, "service_account", got.PrincipalKind, "PrincipalKind must survive the round trip")
 			assert.Equal(t, svcID.String(), got.ServiceAccountID.String(), "ServiceAccountID must survive the round trip")
 			assert.True(t, got.UserID.IsNil(), "a service-account session must not acquire a UserID")
+		})
+	}
+}
+
+// testAgentSessionRoundTrip is the regression test for the postgres CHECK
+// constraint rewrite in migration 20260824000060, the way
+// testServiceAccountSessionRoundTrip guards the 20260620000002 constraint it
+// is modeled on. Memory has no CHECK, no migrations and no SQL at all, so a
+// hand test against memory.New() alone cannot catch a broken constraint —
+// this one runs through storetest.RunConformance and so exercises every
+// backend that hooks into it, postgres included.
+//
+// Unlike a service-account session, an agent session keeps UserID populated
+// with the delegating human: that is the entire reason this shape does not
+// collapse into the service-account one, and it is the thing this test
+// exists to pin down alongside PrincipalKind, AgentID and GrantID.
+func testAgentSessionRoundTrip(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "agent-delegator@example.com")
+
+	agentID := id.NewAgentID()
+	grantID := id.NewAgentGrantID()
+	sess := &session.Session{
+		ID:                    id.NewSessionID(),
+		AppID:                 tn.AppID,
+		EnvID:                 tn.EnvID,
+		UserID:                u.ID,
+		Token:                 "tok-agent",
+		RefreshToken:          "rtok-agent",
+		FamilyID:              id.NewSessionFamilyID(),
+		PrincipalKind:         session.PrincipalKindAgent,
+		AgentID:               agentID,
+		GrantID:               grantID,
+		ExpiresAt:             now().Add(time.Hour),
+		RefreshTokenExpiresAt: now().Add(24 * time.Hour),
+		CreatedAt:             now(),
+		UpdatedAt:             now(),
+	}
+	require.NoError(t, s.CreateSession(ctx, sess), "an agent session must be persistable alongside its delegating user")
+
+	// Every read path must reconstruct the principal, not just the by-id one:
+	// middleware resolves sessions by token, and refresh goes by refresh token.
+	for _, tc := range []struct {
+		name string
+		get  func() (*session.Session, error)
+	}{
+		{"GetSession", func() (*session.Session, error) { return s.GetSession(ctx, sess.ID) }},
+		{"GetSessionByToken", func() (*session.Session, error) { return s.GetSessionByToken(ctx, "tok-agent") }},
+		{"GetSessionByRefreshToken", func() (*session.Session, error) { return s.GetSessionByRefreshToken(ctx, "rtok-agent") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.get()
+			require.NoError(t, err)
+			assert.Equal(t, session.PrincipalKindAgent, got.PrincipalKind, "PrincipalKind must survive the round trip")
+			assert.Equal(t, agentID.String(), got.AgentID.String(), "AgentID must survive the round trip")
+			assert.Equal(t, grantID.String(), got.GrantID.String(), "GrantID must survive the round trip")
+			assert.Equal(t, u.ID.String(), got.UserID.String(), "the delegating human must survive the round trip, unlike a service-account session")
 		})
 	}
 }

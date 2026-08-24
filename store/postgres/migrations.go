@@ -1296,9 +1296,9 @@ ALTER TABLE authsome_sessions
 ALTER TABLE authsome_sessions
     ADD CONSTRAINT authsome_sessions_principal_check CHECK (
         (principal_kind = 'service_account'
-             AND service_account_id <> '' AND user_id = '')
+             AND service_account_id <> '' AND user_id = '' AND agent_id = '')
         OR (principal_kind = 'agent'
-             AND agent_id <> '' AND user_id <> '' AND service_account_id = '')
+             AND agent_id <> '' AND grant_id <> '' AND user_id <> '' AND service_account_id = '')
         OR (principal_kind IN ('', 'user')
              AND user_id <> '' AND service_account_id = '' AND agent_id = '')
     );
