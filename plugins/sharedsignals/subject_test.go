@@ -9,6 +9,7 @@ import (
 
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugins/sharedsignals/caep"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store/memory"
 	"github.com/xraph/authsome/user"
 )
@@ -212,4 +213,171 @@ func TestResolveSubject_AliasesDisagreeingRejected(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, OutcomeRejected, got.Outcome)
+}
+
+// ── Fix round 1 ──────────────────────────────────────────────────
+//
+// ITEM 1: phone_number and email must not resolve across environments of the
+// same app. GetUserByPhone is not env-scoped in the core store interface, so
+// without a post-check a staging stream could resolve (and revoke) a
+// production user just by knowing their phone number.
+
+func TestResolveSubject_PhoneCrossEnvironmentRejected(t *testing.T) {
+	f := newResolveFixture(t, true)
+
+	// Same app, different environment than the user who owns this phone
+	// number. GetUserByPhone has no envID parameter and will find the user
+	// regardless; the resolver must refuse to act on the mismatch itself.
+	otherStream := *f.stream
+	otherStream.EnvID = id.NewEnvironmentID()
+
+	got, err := f.plugin.resolveSubject(context.Background(), &otherStream, caep.SubjectID{
+		Format: caep.FormatPhoneNumber, PhoneNumber: f.user.Phone,
+	})
+	require.NoError(t, err)
+	assert.NotEqual(t, OutcomeApplied, got.Outcome,
+		"a stream must not resolve a phone number belonging to a user in a different environment")
+	assert.True(t, got.UserID.IsNil())
+}
+
+func TestResolveSubject_EmailCrossEnvironmentRejected(t *testing.T) {
+	f := newResolveFixture(t, true)
+
+	otherStream := *f.stream
+	otherStream.EnvID = id.NewEnvironmentID()
+
+	got, err := f.plugin.resolveSubject(context.Background(), &otherStream, caep.SubjectID{
+		Format: caep.FormatEmail, Email: f.user.Email,
+	})
+	require.NoError(t, err)
+	assert.NotEqual(t, OutcomeApplied, got.Outcome,
+		"a stream must not resolve an email belonging to a user in a different environment")
+	assert.True(t, got.UserID.IsNil())
+}
+
+// ITEM 2: a complex subject's session member must be verified to belong to
+// the resolved user before Resolution.SessionID is trusted, and any failure
+// to verify -- ownership mismatch or a malformed ID -- must fail the whole
+// event closed rather than silently widening the action to every session the
+// user has.
+
+func TestResolveSubject_ComplexSubjectSessionMemberVerified(t *testing.T) {
+	ctx := context.Background()
+	f := newResolveFixture(t, true)
+	authStore, ok := f.plugin.authStore.(*memory.Store)
+	require.True(t, ok)
+
+	sess := &session.Session{
+		ID: id.NewSessionID(), AppID: f.appID, EnvID: f.envID, UserID: f.user.ID,
+	}
+	require.NoError(t, authStore.CreateSession(ctx, sess))
+
+	got, err := f.plugin.resolveSubject(ctx, f.stream, caep.SubjectID{
+		Members: map[string]caep.SubjectID{
+			"user":    {Format: caep.FormatIssSub, Issuer: "https://org.okta.com", Subject: "okta-user-1"},
+			"session": {ID: sess.ID.String()},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, OutcomeApplied, got.Outcome)
+	assert.Equal(t, f.user.ID, got.UserID)
+	assert.Equal(t, sess.ID, got.SessionID)
+}
+
+func TestResolveSubject_ComplexSubjectSessionMemberWrongUserRejected(t *testing.T) {
+	ctx := context.Background()
+	f := newResolveFixture(t, true)
+	authStore, ok := f.plugin.authStore.(*memory.Store)
+	require.True(t, ok)
+
+	// A session that belongs to someone other than the resolved user. Naming
+	// it must kill the whole event, not just be ignored -- falling back to
+	// "revoke every session f.user has" would be the more destructive
+	// direction, not the safe one.
+	sess := &session.Session{
+		ID: id.NewSessionID(), AppID: f.appID, EnvID: f.envID, UserID: id.NewUserID(),
+	}
+	require.NoError(t, authStore.CreateSession(ctx, sess))
+
+	got, err := f.plugin.resolveSubject(ctx, f.stream, caep.SubjectID{
+		Members: map[string]caep.SubjectID{
+			"user":    {Format: caep.FormatIssSub, Issuer: "https://org.okta.com", Subject: "okta-user-1"},
+			"session": {ID: sess.ID.String()},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, OutcomeRejected, got.Outcome)
+	assert.True(t, got.UserID.IsNil())
+	assert.True(t, got.SessionID.IsNil())
+}
+
+func TestResolveSubject_ComplexSubjectMalformedSessionIDRejected(t *testing.T) {
+	f := newResolveFixture(t, true)
+
+	got, err := f.plugin.resolveSubject(context.Background(), f.stream, caep.SubjectID{
+		Members: map[string]caep.SubjectID{
+			"user":    {Format: caep.FormatIssSub, Issuer: "https://org.okta.com", Subject: "okta-user-1"},
+			"session": {ID: "not-a-valid-session-id"},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, OutcomeRejected, got.Outcome,
+		"a malformed session ID must reject the event, not fall back to the unscoped action")
+	assert.True(t, got.UserID.IsNil())
+}
+
+// ITEM 3: phone_number subjects must look like E.164 before ever reaching
+// the store.
+
+func TestResolveSubject_PhoneNotE164Rejected(t *testing.T) {
+	f := newResolveFixture(t, true)
+
+	for _, phone := range []string{
+		"5551234567",    // missing leading '+'
+		"+0155512345",   // country code starts with 0
+		"+1",            // too short
+		"+abcabcabcabc", // not digits
+	} {
+		got, err := f.plugin.resolveSubject(context.Background(), f.stream, caep.SubjectID{
+			Format: caep.FormatPhoneNumber, PhoneNumber: phone,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, OutcomeRejected, got.Outcome, "phone %q", phone)
+	}
+}
+
+// ITEM 4: the address is trimmed once and the same trimmed string is used
+// for both the domain check and the store lookup, so surrounding whitespace
+// (previously a silent, safe-but-wrong rejection) now resolves correctly.
+
+func TestResolveSubject_EmailWhitespaceTrimmedConsistently(t *testing.T) {
+	f := newResolveFixture(t, true)
+
+	got, err := f.plugin.resolveSubject(context.Background(), f.stream, caep.SubjectID{
+		Format: caep.FormatEmail, Email: "  target@corp.com  ",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, OutcomeApplied, got.Outcome)
+	assert.Equal(t, f.user.ID, got.UserID)
+}
+
+// ITEM 5: a member rejected on policy grounds (here, a foreign issuer) must
+// be skipped by resolveAliases exactly like one that names nobody, letting a
+// surviving member carry the event on its own.
+
+func TestResolveSubject_AliasesSkipsRejectedMemberAndUsesSurvivor(t *testing.T) {
+	f := newResolveFixture(t, true)
+
+	got, err := f.plugin.resolveSubject(context.Background(), f.stream, caep.SubjectID{
+		Format: caep.FormatAliases,
+		Identifiers: []caep.SubjectID{
+			// Foreign issuer: this member is REJECTED by policy, not merely
+			// unresolved.
+			{Format: caep.FormatIssSub, Issuer: "https://login.microsoftonline.com", Subject: "okta-user-1"},
+			{Format: caep.FormatEmail, Email: "target@corp.com"},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, OutcomeApplied, got.Outcome)
+	assert.Equal(t, f.user.ID, got.UserID)
 }
