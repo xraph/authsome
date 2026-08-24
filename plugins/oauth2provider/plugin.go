@@ -1162,6 +1162,12 @@ func (p *Plugin) handleDeviceComplete(ctx forge.Context, req *DeviceCompleteRequ
 
 	// Apply the user's decision.
 	if req.Action == "approve" {
+		// Same veto point as the authorization-code flow: a gate refusal
+		// must block the approval, not be undone after the fact.
+		orgID, _ := middleware.OrgIDFrom(ctx.Context())
+		if gateErr := p.EvaluateConsent(ctx.Context(), dc.ClientID, userID, orgID, dc.Scopes); gateErr != nil {
+			return nil, gateErr
+		}
 		dc.Status = DeviceCodeStatusAuthorized
 		dc.UserID = userID
 	} else {

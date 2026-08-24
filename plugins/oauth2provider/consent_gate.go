@@ -17,6 +17,12 @@ import (
 type ConsentGate interface {
 	// Evaluate returns a non-nil error to refuse the authorization. The error
 	// is surfaced to the caller, so it should be a forge HTTP error.
+	//
+	// orgID is the caller's active organization, taken from the session that
+	// is granting consent. It is the zero value (id.OrgID{}) whenever that
+	// session is not org-scoped — that is not an assertion that no policy
+	// applies. An implementation must not treat a zero orgID as permission to
+	// skip its policy check; do the same evaluation you would for any org.
 	Evaluate(ctx context.Context, clientID string, userID id.UserID, orgID id.OrgID, scopes []string) error
 }
 
