@@ -26754,7 +26754,7 @@
         "operationId": "oauth2DeviceAuthorize",
         "requestBody": {
           "content": {
-            "multipart/form-data": {
+            "application/x-www-form-urlencoded": {
               "schema": {
                 "properties": {
                   "client_id": {
@@ -26938,7 +26938,7 @@
         "operationId": "oauth2DeviceComplete",
         "requestBody": {
           "content": {
-            "multipart/form-data": {
+            "application/x-www-form-urlencoded": {
               "schema": {
                 "properties": {
                   "action": {
@@ -27128,7 +27128,7 @@
         "operationId": "oauth2Revoke",
         "requestBody": {
           "content": {
-            "multipart/form-data": {
+            "application/x-www-form-urlencoded": {
               "schema": {
                 "properties": {
                   "token": {
@@ -27307,7 +27307,7 @@
         "operationId": "oauth2Token",
         "requestBody": {
           "content": {
-            "multipart/form-data": {
+            "application/x-www-form-urlencoded": {
               "schema": {
                 "properties": {
                   "client_id": {

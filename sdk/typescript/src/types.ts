@@ -1632,13 +1632,13 @@ export type SendSMSCodeRequest = SMSSendRequest;
 
 export type VerifySMSCodeRequest = SMSVerifyRequest;
 
-export type Oauth2DeviceAuthorizeRequest = Record<string, unknown>;
+export type Oauth2DeviceAuthorizeRequest = { client_id: string; scope?: string };
 
-export type Oauth2DeviceCompleteRequest = Record<string, unknown>;
+export type Oauth2DeviceCompleteRequest = { action: string; user_code: string };
 
-export type Oauth2RevokeRequest = Record<string, unknown>;
+export type Oauth2RevokeRequest = { token: string; token_type_hint?: string };
 
-export type Oauth2TokenRequest = Record<string, unknown>;
+export type Oauth2TokenRequest = { client_id?: string; client_secret?: string; code?: string; code_verifier?: string; device_code?: string; grant_type: string; redirect_uri?: string };
 
 export type CreateOrganizationRequest = CreateOrgRequest;
 
