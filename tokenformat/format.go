@@ -22,6 +22,9 @@ type TokenClaims struct {
 	OrgID     string   `json:"org_id,omitempty"`
 	SessionID string   `json:"sid"`
 	Scopes    []string `json:"scopes,omitempty"`
+	// DPoPJKT is the RFC 7638 thumbprint this token is bound to (RFC 9449).
+	// Empty means an unbound bearer token. Serialised as the cnf.jkt claim.
+	DPoPJKT   string `json:"-"`
 	IssuedAt  time.Time
 	ExpiresAt time.Time
 }
