@@ -76,11 +76,12 @@ func TestResolveResources(t *testing.T) {
 	noAllowlist := &OAuth2Client{}
 
 	tests := []struct {
-		name      string
-		client    *OAuth2Client
-		requested []string
-		want      []string
-		wantErr   bool
+		name        string
+		client      *OAuth2Client
+		requested   []string
+		want        []string
+		wantErr     bool
+		wantErrDesc string
 	}{
 		{
 			name:      "no resource requested yields no audience",
@@ -107,16 +108,18 @@ func TestResolveResources(t *testing.T) {
 			want:      []string{"https://files.example.com", "https://api.example.com"},
 		},
 		{
-			name:      "an unregistered resource is rejected",
-			client:    allowed,
-			requested: []string{"https://evil.example.com"},
-			wantErr:   true,
+			name:        "an unregistered resource is rejected",
+			client:      allowed,
+			requested:   []string{"https://evil.example.com"},
+			wantErr:     true,
+			wantErrDesc: `resource "https://evil.example.com" is not registered for this client`,
 		},
 		{
-			name:      "an empty allowlist rejects any request",
-			client:    noAllowlist,
-			requested: []string{"https://api.example.com"},
-			wantErr:   true,
+			name:        "an empty allowlist rejects any request",
+			client:      noAllowlist,
+			requested:   []string{"https://api.example.com"},
+			wantErr:     true,
+			wantErrDesc: `resource "https://api.example.com" is not registered for this client`,
 		},
 		{
 			name:      "an empty allowlist still allows an empty request",
@@ -125,22 +128,34 @@ func TestResolveResources(t *testing.T) {
 			want:      nil,
 		},
 		{
-			name:      "a relative URI is rejected",
-			client:    allowed,
-			requested: []string{"/api"},
-			wantErr:   true,
+			// The allowlist does not contain "/api" either, so a broken
+			// implementation that dropped the IsAbs check would still reject
+			// this value, just for the wrong reason (membership, not syntax).
+			// Pinning the description on the specific "is not an absolute
+			// URI" wording is what proves the syntax rule itself fired.
+			name:        "a relative URI is rejected",
+			client:      allowed,
+			requested:   []string{"/api"},
+			wantErr:     true,
+			wantErrDesc: `resource "/api" is not an absolute URI`,
 		},
 		{
-			name:      "a URI carrying a fragment is rejected",
-			client:    allowed,
-			requested: []string{"https://api.example.com#section"},
-			wantErr:   true,
+			// Same reasoning as the relative URI case above: the raw value
+			// is not in the allowlist, so membership alone would reject it
+			// too. Pinning the description proves the fragment rule fired,
+			// not the membership check.
+			name:        "a URI carrying a fragment is rejected",
+			client:      allowed,
+			requested:   []string{"https://api.example.com#section"},
+			wantErr:     true,
+			wantErrDesc: `resource "https://api.example.com#section" must not include a fragment`,
 		},
 		{
-			name:      "an empty string is rejected",
-			client:    allowed,
-			requested: []string{""},
-			wantErr:   true,
+			name:        "an empty string is rejected",
+			client:      allowed,
+			requested:   []string{""},
+			wantErr:     true,
+			wantErrDesc: "resource must not be empty",
 		},
 	}
 
@@ -158,6 +173,14 @@ func TestResolveResources(t *testing.T) {
 				body, ok := httpErr.ResponseBody().(*OAuth2Error)
 				require.True(t, ok)
 				assert.Equal(t, "invalid_target", body.Error)
+				// The code alone does not say which branch rejected the
+				// value: every rejection in resolveResources uses the same
+				// invalid_target code. Pinning the description is what
+				// proves the specific rule named by the subtest actually
+				// fired, rather than a later check (such as allowlist
+				// membership) catching the same input for a different
+				// reason.
+				assert.Equal(t, tt.wantErrDesc, body.ErrorDescription)
 				return
 			}
 			require.NoError(t, err)
