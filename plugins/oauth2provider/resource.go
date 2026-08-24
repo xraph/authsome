@@ -3,8 +3,8 @@ package oauth2provider
 import (
 	"fmt"
 	"net/http"
-	"net/url"
-	"strings"
+
+	"github.com/xraph/authsome/internal/resourceuri"
 )
 
 // resourceParams extracts the repeatable RFC 8707 resource parameter.
@@ -45,27 +45,14 @@ func resourceParams(r *http.Request) []string {
 // an empty string when the value is syntactically valid, and a description of
 // the violation otherwise.
 //
-// Both resolveResources and client registration enforce this same rule.
-// Sharing the check here means the wording, and the rule itself, cannot drift
-// between the two call sites.
+// resolveResources, client registration, the dashboard create form and the
+// core's session.resource_identifier setting all enforce this same rule. It
+// lives in internal/resourceuri because the last of those is in the root
+// package, which this plugin imports, so the dependency cannot run the other
+// way. Sharing it means the rule and its wording cannot drift between the
+// value a client may ask for and the value a deployment answers to.
 func resourceURISyntaxError(raw string) string {
-	if raw == "" {
-		return "resource must not be empty"
-	}
-
-	// RFC 8707 section 2: the value MUST be an absolute URI and MUST NOT
-	// carry a fragment. A fragment never reaches a server, so two values
-	// differing only after the # would name the same resource while
-	// comparing as different audiences.
-	u, err := url.Parse(raw)
-	if err != nil || !u.IsAbs() {
-		return fmt.Sprintf("resource %q is not an absolute URI", raw)
-	}
-	if u.Fragment != "" || strings.Contains(raw, "#") {
-		return fmt.Sprintf("resource %q must not include a fragment", raw)
-	}
-
-	return ""
+	return resourceuri.SyntaxError(raw)
 }
 
 // resolveResources validates the requested resource indicators against the

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xraph/authsome/formconfig"
+	"github.com/xraph/authsome/internal/resourceuri"
 	"github.com/xraph/authsome/settings"
 )
 
@@ -216,6 +217,7 @@ var (
 		settings.WithEnforceable(),
 		settings.WithInputType(formconfig.FieldText),
 		settings.WithHelpText("When set, a token whose aud names a different resource is refused. Example: https://api.example.com"),
+		settings.WithValidation(validateResourceIdentifier),
 		settings.WithOrder(56),
 	)
 )
@@ -433,6 +435,30 @@ func validateTokenTTL(val json.RawMessage) error {
 	}
 	if v < 60 || v > 86400 {
 		return fmt.Errorf("token TTL must be between 60 and 86400 seconds")
+	}
+	return nil
+}
+
+// validateResourceIdentifier rejects a value that could never match anything.
+//
+// The setting is compared against a token's aud, which the OAuth2 provider
+// already forces through the same RFC 8707 syntax rule. Typing "api.example.com"
+// here without a scheme leaves the deployment looking configured while
+// matching no token at all, and the symptom is every audienced token being
+// refused, which reads like a bug in the check rather than a typo in a text
+// box.
+//
+// Empty stays valid: it is the default and it means the check is off.
+func validateResourceIdentifier(val json.RawMessage) error {
+	var v string
+	if err := json.Unmarshal(val, &v); err != nil {
+		return fmt.Errorf("invalid value: %w", err)
+	}
+	if v == "" {
+		return nil
+	}
+	if msg := resourceuri.SyntaxError(v); msg != "" {
+		return fmt.Errorf("invalid resource identifier: %s", msg)
 	}
 	return nil
 }

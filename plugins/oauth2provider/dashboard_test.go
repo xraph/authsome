@@ -176,3 +176,76 @@ func TestRenderClientsPage_CreateWithoutResourcesStoresEmptyAllowlist(t *testing
 		t.Errorf("expected an empty allowlist, got %v", clients[0].Resources)
 	}
 }
+
+// TestRenderClientsPage_CreateRejectsInvalidResource covers the third branch
+// of the dashboard's resource parsing, the one the two tests above leave
+// untouched: a value that fails the RFC 8707 syntax rule.
+//
+// Both halves matter. The error has to surface, and the client must not be
+// created, because a validation branch that reports a problem after writing
+// the row is not validation. Each case also names a distinct rule, so a check
+// that only rejected empty strings, or only checked for a scheme, would leave
+// one of them green.
+func TestRenderClientsPage_CreateRejectsInvalidResource(t *testing.T) {
+	cases := []struct {
+		name      string
+		resources string
+		wantMsg   string
+	}{
+		{
+			name:      "a bare host has no scheme",
+			resources: "api.example.com",
+			wantMsg:   "is not an absolute URI",
+		},
+		{
+			name:      "one bad value among good ones fails the whole form",
+			resources: "https://api.example.com /files",
+			wantMsg:   "is not an absolute URI",
+		},
+		{
+			name:      "a fragment names the same resource twice over",
+			resources: "https://api.example.com/#v1",
+			wantMsg:   "must not include a fragment",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := NewMemoryStore()
+			p := &Plugin{oauth2Store: store, logger: log.NewNoopLogger()}
+			appID := id.NewAppID()
+			ctx := dashboard.WithAppID(context.Background(), appID)
+
+			comp, err := p.renderClientsPage(ctx, contributor.Params{
+				FormData: map[string]string{
+					"action":        "create",
+					"name":          "Bad Resource Client",
+					"redirect_uris": "https://app.example.com/cb",
+					"resources":     tc.resources,
+				},
+			})
+			if err != nil {
+				t.Fatalf("renderClientsPage returned error: %v", err)
+			}
+
+			html := renderClientsPageHTML(ctx, t, comp)
+			if !strings.Contains(html, "o2-error-toast") {
+				t.Errorf("expected a validation error toast, got:\n%s", html)
+			}
+			if !strings.Contains(html, tc.wantMsg) {
+				t.Errorf("expected the error to say %q, got:\n%s", tc.wantMsg, html)
+			}
+			if strings.Contains(html, "OAuth2 client created successfully") {
+				t.Errorf("a rejected form must not report success, got:\n%s", html)
+			}
+
+			clients, err := store.ListClients(ctx, appID)
+			if err != nil {
+				t.Fatalf("ListClients: %v", err)
+			}
+			if len(clients) != 0 {
+				t.Errorf("a rejected form must create no client, got %d", len(clients))
+			}
+		})
+	}
+}
