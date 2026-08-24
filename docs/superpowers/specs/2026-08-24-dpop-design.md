@@ -424,5 +424,11 @@ files is your alarm.
 - RFC 8414 authorization server metadata, noted above.
 - DPoP for API keys.
 - RFC 7591 dynamic client registration, 8707 resource indicators and 8693 token
-  exchange. None of them are started in this repo. DPoP composes with all three
-  and depends on none of them.
+  exchange. Each has its own design dated today under
+  `docs/superpowers/specs/`. DPoP composes with all three and depends on none
+  of them, so they can land in any order. What they do share is tables: 8707
+  and the agentauth delegation design both add columns to `authsome_sessions`,
+  and 7591 and 8707 both add columns to `authsome_oauth2_clients`. Whoever
+  implements second takes the union of the columns and a fresh migration
+  version, because two migrations sharing a version inside one group fail at
+  startup.

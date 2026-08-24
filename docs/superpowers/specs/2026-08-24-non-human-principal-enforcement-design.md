@@ -16,8 +16,9 @@ places that actually enforce authentication to accept a principal that is not a
 user. Each of them resolves a user and treats failure as failure.
 
 So the credential exists, carries roles, resolves from its token, and then dies
-at the guard. You can confirm the gap by grepping for a test that sends a
-service-account credential at a protected route. There isn't one.
+at the guard. If you want to confirm the gap before believing it, go looking for
+a test that sends a service-account credential at a protected route and watch
+what comes back, because there isn't one anywhere in the tree.
 
 This spec closes that. It is small, it is entirely inside existing files, and it
 is a prerequisite for workload identity federation, which otherwise issues a
@@ -29,7 +30,7 @@ credential with nowhere to spend it.
 
 `authprovider.SessionProvider.Authenticate` resolves the session, then resolves
 the user from it, and returns `auth.ErrAuthenticationFailed` when that lookup
-fails (`authprovider/session.go:102`). A service-account session has a nil
+fails (`authprovider/session.go:109`). A service-account session has a nil
 `UserID`, so `resolveUser("")` fails and every route registered with
 `forge.WithGroupAuth("session")` or `plugin.SessionGuard` answers 401.
 
@@ -41,7 +42,7 @@ nil `User`. Skip `resolveUser` entirely. Add `principal_kind` and
 kinds apart without unwrapping `Data`.
 
 `BridgeToContext` already guards on `data.User != nil`
-(`authprovider/session.go:201`), so it needs one change and not a rewrite: move
+(`authprovider/session.go:200`), so it needs one change and not a rewrite: move
 `WithAuthMethod` out of that guard. Right now a service-account request
 would reach a handler with no auth method recorded at all, which is a confusing
 thing to debug and a worse thing to log.
@@ -49,8 +50,8 @@ thing to debug and a worse thing to log.
 ### RequireAuth gates on a user
 
 `middleware.RequireAuth()` checks `UserFrom(ctx)` and 401s when it's absent
-(`middleware/auth.go:660`). The strategy branch sets `WithUser` only when
-`result.User != nil` (`middleware/auth.go:613`), which is never true for a
+(`middleware/auth.go:661`). The strategy branch sets `WithUser` only when
+`result.User != nil` (`middleware/auth.go:610`), which is never true for a
 service account. That covers the nine `api/*_handlers.go` groups built on
 `RequireAuth()`.
 
@@ -108,8 +109,9 @@ skips service accounts on the grounds that they're authorized by scope
 (`engine_session_roles.go:190`), and it leaves any session that already carries
 roles alone. Both behaviours are what workload identity needs, so leave them.
 
-No store changes, no migrations, no new tables. Every change here is in
-`authprovider/session.go`, `middleware/auth.go` and `tokenformat/format.go`.
+There are no store changes, no migrations and no new tables anywhere in this
+spec, and every line of it lands in one of three files: `authprovider/session.go`,
+`middleware/auth.go` and `tokenformat/format.go`.
 
 ## Coordinating with the specs landing alongside this one
 
