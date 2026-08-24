@@ -54,3 +54,7 @@ sdk/**/node_modules/
 # messages. Gitignored so the agent loop doesn't leak ephemeral
 # state into the repo.
 _project_files/
+
+# Subagent-driven-development workspaces (ledgers, briefs, review packages).
+# Ephemeral coordination state; git history is the record.
+.superpowers/
