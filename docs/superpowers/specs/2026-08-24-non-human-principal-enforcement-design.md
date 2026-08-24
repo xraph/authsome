@@ -31,9 +31,9 @@ Use their abstraction, don't build a parallel one. Concretely:
 
 The context helper is theirs. `principal.FromContext(ctx)` and
 `middleware.PrincipalFrom(ctx)` are already specified, and everything below
-reads through those instead of a private helper. An earlier draft of this spec
-proposed an unexported `principalFrom`, which would have been a second answer to
-a question already answered.
+reads through those and not through a private helper. An earlier draft of this
+spec proposed an unexported `principalFrom`, which would have been a second
+answer to a question already answered.
 
 Principal kinds are theirs too. `KindUser`, `KindAgent`, `KindWorkload` and
 `KindService` all exist in that design, so nothing here should compare
@@ -76,7 +76,7 @@ worse to log.
 service account. That covers the nine `api/*_handlers.go` groups built on
 `RequireAuth()`.
 
-Fix: gate on the resolved principal instead of on the user, reading through
+Fix: gate on the resolved principal and not on the user, reading through
 `middleware.PrincipalFrom`. A user principal satisfies it exactly as before, so
 this is additive for human traffic. Nothing else in the strategy branch moves,
 since it already puts the session on the context.
@@ -145,8 +145,7 @@ already scheduled there.
 serialises it through `customClaims` at `tokenformat/jwt.go:69`, and this spec
 adds `pk` and `pid`. Nothing conflicts and every field is `omitempty`, so the
 merge is mechanical, but whoever implements second should open the other spec
-and add all the fields in one pass rather than finding the collision in a
-rebase.
+and add all the fields in one pass, so nobody finds the collision in a rebase.
 
 That draft also adds a `Scopes` column to `authsome_sessions`. Nothing here
 depends on it. Workload identity does, so if these land close together the
@@ -180,7 +179,7 @@ The change to `SessionProvider.Authenticate` means `SessionData.User` can now be
 nil where callers previously assumed otherwise. `BridgeToContext` handles it,
 but it may not be the only consumer. Audit every use of `SessionData` before
 writing the branch, and if something else dereferences `.User`, fix it here
-rather than leaving the plugin work to trip over it.
+and don't leave the plugin work to trip over it.
 
 The larger risk is coordination, not code. Three designs now touch
 `middleware/auth.go` and two touch `tokenformat.TokenClaims`. Whoever goes first
