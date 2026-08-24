@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
+	"go/format"
 	"sort"
 	"strings"
 	"text/template"
@@ -66,7 +67,38 @@ func (g *Generator) Generate(spec *openapi.Spec) ([]GeneratedFile, error) {
 	}
 	files = append(files, GeneratedFile{Path: "client.go", Content: content})
 
+	for i := range files {
+		formatted, fmtErr := gofmt(files[i].Content)
+		if fmtErr != nil {
+			return nil, fmt.Errorf("format %s: %w", files[i].Path, fmtErr)
+		}
+
+		files[i].Content = formatted
+	}
+
 	return files, nil
+}
+
+// gofmt runs the output through go/format, which is the same pass `gofmt`
+// makes.
+//
+// A template cannot align a struct field against fields it has not rendered
+// yet, and it writes whatever the surrounding text says even where Go has a
+// shorter spelling for it: a lone return type comes out as `(error)` because
+// the parentheses are in the template. CI checks the tree with goimports and
+// fails on both. Formatting here means generated code is formatted the moment
+// it is written, and nobody has to remember to run gofmt over sdk/ afterwards.
+//
+// A parse failure is returned, not swallowed. Unformattable output means the
+// template produced something that is not Go, and writing it out to be
+// discovered at build time helps nobody.
+func gofmt(src string) (string, error) {
+	out, err := format.Source([]byte(src))
+	if err != nil {
+		return "", err
+	}
+
+	return string(out), nil
 }
 
 // TemplateData holds all data passed to templates.
