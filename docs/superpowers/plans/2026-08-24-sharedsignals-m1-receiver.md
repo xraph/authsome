@@ -29,7 +29,7 @@
 The spec's "Changes outside the plugin" section lists three core changes. Implementation review found two corrections, applied in this plan:
 
 1. `*authsome.Engine` already has both `RevokeSession` (`service.go:694`) and `Dispatcher` (`engine.go:750`). The two new capability interfaces in `plugin/plugin.go` are therefore declarations only; no method is added to the engine.
-2. A fourth core change is needed that the spec did not name: four ID prefixes in `id/id.go`, following the convention every other plugin uses.
+2. Two core changes are needed that the spec did not name: four ID prefixes in `id/id.go`, following the convention every other plugin uses, and a `RateLimitConfig.SSFPushLimit` field so the push route can opt into the existing `authsome.PluginRateLimit` helper.
 
 ## File Structure
 
@@ -69,6 +69,7 @@ The spec's "Changes outside the plugin" section lists three core changes. Implem
 | `plugin/plugin.go` | `SessionRevoker` and `DispatcherProvider` interfaces |
 | `plugins/riskengine/plugin.go` | Populate `Identifier` and `UserID` on `RiskRequest` |
 | `plugins/sso/plugin.go` | Call `LinkSubject` after OIDC sign-in |
+| `config.go` | `RateLimitConfig.SSFPushLimit`, defaulting to 60 |
 
 ---
 
@@ -2515,7 +2516,7 @@ func TestReceivedEventModel_NoResolvedUser(t *testing.T) {
 	}
 	got, err := toReceivedEvent(fromReceivedEvent(in))
 	require.NoError(t, err)
-	assert.True(t, got.ResolvedUserID.IsZero())
+	assert.True(t, got.ResolvedUserID.IsNil())
 }
 
 func TestSignalModel_RoundTrip(t *testing.T) {
@@ -2804,7 +2805,7 @@ func toSubjectLink(m *subjectLinkModel) (*SubjectLink, error) {
 
 func fromReceivedEvent(e *ReceivedEvent) *receivedEventModel {
 	resolved := ""
-	if !e.ResolvedUserID.IsZero() {
+	if !e.ResolvedUserID.IsNil() {
 		resolved = e.ResolvedUserID.String()
 	}
 	return &receivedEventModel{
@@ -3893,7 +3894,7 @@ func TestMongoDocs_ReceivedEventRoundTrip(t *testing.T) {
 	got, err := docToReceivedEvent(receivedEventToDoc(in))
 	require.NoError(t, err)
 	assert.Equal(t, "j", got.JTI)
-	assert.True(t, got.ResolvedUserID.IsZero())
+	assert.True(t, got.ResolvedUserID.IsNil())
 }
 
 func TestMongoDocs_SignalRoundTrip(t *testing.T) {
@@ -4092,7 +4093,7 @@ func docToSubjectLink(d *subjectLinkDoc) (*SubjectLink, error) {
 
 func receivedEventToDoc(e *ReceivedEvent) *receivedEventDoc {
 	resolved := ""
-	if !e.ResolvedUserID.IsZero() {
+	if !e.ResolvedUserID.IsNil() {
 		resolved = e.ResolvedUserID.String()
 	}
 	return &receivedEventDoc{
@@ -4971,7 +4972,7 @@ func TestResolveSubject_IssSubRejectsForeignIssuer(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, OutcomeRejected, got.Outcome)
-	assert.True(t, got.UserID.IsZero())
+	assert.True(t, got.UserID.IsNil())
 }
 
 func TestResolveSubject_UnknownSubjectIsUnresolved(t *testing.T) {
@@ -5304,3 +5305,2846 @@ verified check itself must stay.
 git add plugins/sharedsignals/subject.go plugins/sharedsignals/subject_test.go
 git commit -m "feat(sharedsignals): subject identifier resolution with domain and verification gating"
 ```
+
+---
+
+### Task 12: Subject link stamping
+
+**Files:**
+- Create: `plugins/sharedsignals/links.go`
+- Modify: `plugins/sso/plugin.go` (after a successful OIDC sign-in)
+- Test: `plugins/sharedsignals/links_test.go`
+
+**Interfaces:**
+- Consumes: `Store` and `SubjectLink` from Task 6, `Plugin` from Task 10.
+- Produces: `(*Plugin).LinkSubject(ctx context.Context, appID id.AppID, envID id.EnvironmentID, issuer, subject string, userID id.UserID, source string) error`; the exported `SubjectLinker` interface other plugins assert against.
+
+Without links, `iss_sub` resolves to nobody and the receiver is a very well tested no-op. SSO is where they come from, because Okta's `sub` in the SET is the same value Okta puts in the OIDC id_token.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `plugins/sharedsignals/links_test.go`:
+
+```go
+package sharedsignals
+
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/xraph/authsome/id"
+)
+
+func TestLinkSubject_CreatesAndResolves(t *testing.T) {
+	ctx := context.Background()
+	p := New()
+	p.store = NewMemoryStore()
+	appID, envID := id.NewAppID(), id.NewEnvironmentID()
+	userID := id.NewUserID()
+
+	require.NoError(t, p.LinkSubject(ctx, appID, envID,
+		"https://org.okta.com", "okta-user-1", userID, SourceSSO))
+
+	got, err := p.store.GetSubjectLink(ctx, appID, envID, "https://org.okta.com", "okta-user-1")
+	require.NoError(t, err)
+	assert.Equal(t, userID, got.UserID)
+	assert.Equal(t, SourceSSO, got.Source)
+}
+
+// Signing in twice must refresh the link rather than pile up rows.
+func TestLinkSubject_IsIdempotent(t *testing.T) {
+	ctx := context.Background()
+	p := New()
+	p.store = NewMemoryStore()
+	appID, envID := id.NewAppID(), id.NewEnvironmentID()
+	userID := id.NewUserID()
+
+	for i := 0; i < 3; i++ {
+		require.NoError(t, p.LinkSubject(ctx, appID, envID,
+			"https://i", "u1", userID, SourceSSO))
+	}
+	got, err := p.store.GetSubjectLink(ctx, appID, envID, "https://i", "u1")
+	require.NoError(t, err)
+	assert.Equal(t, userID, got.UserID)
+}
+
+func TestLinkSubject_RejectsEmptyArguments(t *testing.T) {
+	ctx := context.Background()
+	p := New()
+	p.store = NewMemoryStore()
+	appID, envID := id.NewAppID(), id.NewEnvironmentID()
+
+	require.Error(t, p.LinkSubject(ctx, appID, envID, "", "u1", id.NewUserID(), SourceSSO))
+	require.Error(t, p.LinkSubject(ctx, appID, envID, "https://i", "", id.NewUserID(), SourceSSO))
+	require.Error(t, p.LinkSubject(ctx, appID, envID, "https://i", "u1", id.Nil, SourceSSO))
+}
+
+// The interface is what sso asserts against, so it has to be satisfied by the
+// concrete plugin or the wiring silently does nothing.
+func TestPlugin_IsSubjectLinker(t *testing.T) {
+	var _ SubjectLinker = New()
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `go test ./plugins/sharedsignals/ -run 'LinkSubject|SubjectLinker' -v`
+Expected: FAIL, `LinkSubject` is undefined.
+
+- [ ] **Step 3: Write the linker**
+
+Create `plugins/sharedsignals/links.go`:
+
+```go
+package sharedsignals
+
+import (
+	"context"
+	"errors"
+
+	"github.com/xraph/authsome/id"
+)
+
+// SubjectLinker is implemented by this plugin so other plugins can record the
+// upstream identity they just authenticated without importing the concrete
+// type. Callers reach it through engine.Plugin("sharedsignals") and a type
+// assertion, the same way risk contributors are wired.
+type SubjectLinker interface {
+	LinkSubject(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
+		issuer, subject string, userID id.UserID, source string) error
+}
+
+var _ SubjectLinker = (*Plugin)(nil)
+
+// LinkSubject records that (issuer, subject) is this user, so a later CAEP
+// event naming that pair resolves. Calling it repeatedly is safe: the store
+// upserts on the tuple.
+func (p *Plugin) LinkSubject(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
+	issuer, subject string, userID id.UserID, source string) error {
+	if issuer == "" {
+		return errors.New("sharedsignals: link subject: issuer is required")
+	}
+	if subject == "" {
+		return errors.New("sharedsignals: link subject: subject is required")
+	}
+	if userID.IsNil() {
+		return errors.New("sharedsignals: link subject: user is required")
+	}
+	if source == "" {
+		source = SourceManual
+	}
+	if p.store == nil {
+		return errors.New("sharedsignals: link subject: no store configured")
+	}
+
+	return p.store.UpsertSubjectLink(ctx, &SubjectLink{
+		ID:      id.NewSSFLinkID(),
+		AppID:   appID,
+		EnvID:   envID,
+		Issuer:  issuer,
+		Subject: subject,
+		UserID:  userID,
+		Source:  source,
+	})
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `go test ./plugins/sharedsignals/ -run 'LinkSubject|SubjectLinker' -v`
+Expected: PASS, four tests.
+
+- [ ] **Step 5: Wire sso to call it**
+
+Find where `plugins/sso/plugin.go` completes an OIDC sign-in and has both the
+resolved user and the id_token `sub` in scope. Search for the call that
+creates the session after `handleOIDCRedirect` or `handleCallback` resolves a
+user:
+
+```bash
+grep -n "func (p \*Plugin) handleCallback\|func (p \*Plugin) handleOIDCRedirect" -A 60 plugins/sso/plugin.go
+```
+
+Add this helper to `plugins/sso/plugin.go`:
+
+```go
+// subjectLinker is the slice of the sharedsignals plugin sso needs. Declared
+// here rather than imported so sso does not depend on that plugin being
+// compiled in.
+type subjectLinker interface {
+	LinkSubject(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
+		issuer, subject string, userID id.UserID, source string) error
+}
+
+// linkSharedSignalsSubject records the IdP subject we just authenticated so a
+// later CAEP event naming (issuer, sub) can find this user. A no-op when the
+// sharedsignals plugin is not registered, and never fatal to a sign-in: a
+// failure here costs a future signal, not this login.
+func (p *Plugin) linkSharedSignalsSubject(ctx context.Context, u *user.User,
+	issuer, subject string) {
+	if p.engine == nil || issuer == "" || subject == "" {
+		return
+	}
+	target := p.engine.Plugin("sharedsignals")
+	if target == nil {
+		return
+	}
+	linker, ok := target.(subjectLinker)
+	if !ok {
+		return
+	}
+	if err := linker.LinkSubject(ctx, u.AppID, u.EnvID, issuer, subject, u.ID, "sso"); err != nil {
+		p.logger.Warn("sso: record shared signals subject link",
+			log.String("issuer", issuer),
+			log.String("error", err.Error()),
+		)
+	}
+}
+```
+
+Then call it immediately after the user is resolved on the OIDC path, passing
+the connection's `Issuer` and the id_token's `sub`.
+
+- [ ] **Step 6: Test the sso wiring**
+
+Create `plugins/sso/sharedsignals_link_test.go`:
+
+```go
+package sso
+
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/user"
+)
+
+type recordingLinker struct {
+	calls   int
+	issuer  string
+	subject string
+	userID  id.UserID
+	err     error
+}
+
+func (r *recordingLinker) Name() string { return "sharedsignals" }
+
+func (r *recordingLinker) LinkSubject(_ context.Context, _ id.AppID, _ id.EnvironmentID,
+	issuer, subject string, userID id.UserID, _ string) error {
+	r.calls++
+	r.issuer, r.subject, r.userID = issuer, subject, userID
+	return r.err
+}
+
+func TestLinkSharedSignalsSubject_SkipsWhenPluginAbsent(t *testing.T) {
+	p := &Plugin{}
+	// No engine means no plugin registry; this must not panic.
+	p.linkSharedSignalsSubject(context.Background(),
+		&user.User{ID: id.NewUserID()}, "https://i", "u1")
+}
+
+func TestLinkSharedSignalsSubject_SkipsEmptyValues(t *testing.T) {
+	r := &recordingLinker{}
+	p := newSSOPluginWithPlugin(t, r)
+	u := &user.User{ID: id.NewUserID(), AppID: id.NewAppID(), EnvID: id.NewEnvironmentID()}
+
+	p.linkSharedSignalsSubject(context.Background(), u, "", "u1")
+	p.linkSharedSignalsSubject(context.Background(), u, "https://i", "")
+	assert.Zero(t, r.calls)
+}
+
+func TestLinkSharedSignalsSubject_RecordsLink(t *testing.T) {
+	r := &recordingLinker{}
+	p := newSSOPluginWithPlugin(t, r)
+	u := &user.User{ID: id.NewUserID(), AppID: id.NewAppID(), EnvID: id.NewEnvironmentID()}
+
+	p.linkSharedSignalsSubject(context.Background(), u, "https://org.okta.com", "okta-user-1")
+	assert.Equal(t, 1, r.calls)
+	assert.Equal(t, "https://org.okta.com", r.issuer)
+	assert.Equal(t, "okta-user-1", r.subject)
+	assert.Equal(t, u.ID, r.userID)
+}
+```
+
+Build `newSSOPluginWithPlugin` in that file using the same engine test double
+`plugins/sso` already uses in `routes_test.go`. Read that file first:
+
+```bash
+grep -n "func new.*Plugin\|plugin.Engine" plugins/sso/routes_test.go | head
+```
+
+If no double exists there, add one whose `Plugin(name string)` returns the
+recorder when `name == "sharedsignals"` and nil otherwise, and whose
+`Logger()` returns `log.NewNoopLogger()`.
+
+- [ ] **Step 7: Run both suites**
+
+Run: `go test ./plugins/sharedsignals/ ./plugins/sso/ -v`
+Expected: PASS.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add plugins/sharedsignals/links.go plugins/sharedsignals/links_test.go plugins/sso/plugin.go plugins/sso/sharedsignals_link_test.go
+git commit -m "feat(sharedsignals): record IdP subject links on SSO sign-in"
+```
+
+---
+
+### Task 13: The action matrix and the circuit breaker
+
+**Files:**
+- Create: `plugins/sharedsignals/actions.go`
+- Test: `plugins/sharedsignals/actions_test.go`
+
+**Interfaces:**
+- Consumes: `caep.Event` from Task 2, `Resolution` from Task 11, `Store` from Task 6, `plugin.SessionRevoker` from Task 5.
+- Produces: action constants `ActionRevokeAll`, `ActionRevokeSession`, `ActionSignal`, `ActionLog`, `ActionNone`; `(*Plugin).actionFor(s *InboundStream, ev caep.Event) string`; `(*Plugin).severityFor(ev caep.Event) int`; `(*Plugin).applyEvent(ctx context.Context, s *InboundStream, ev caep.Event, res Resolution) (actionTaken string, err error)`; `(*Plugin).checkCircuitBreaker(ctx context.Context, s *InboundStream) (bool, error)`.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `plugins/sharedsignals/actions_test.go`:
+
+```go
+package sharedsignals
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/plugins/sharedsignals/caep"
+	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/store/memory"
+)
+
+type recordingRevoker struct {
+	revoked []id.SessionID
+	err     error
+}
+
+func (r *recordingRevoker) RevokeSession(_ context.Context, sessionID id.SessionID) error {
+	if r.err != nil {
+		return r.err
+	}
+	r.revoked = append(r.revoked, sessionID)
+	return nil
+}
+
+type actionFixture struct {
+	plugin   *Plugin
+	stream   *InboundStream
+	revoker  *recordingRevoker
+	userID   id.UserID
+	sessions []id.SessionID
+}
+
+func newActionFixture(t *testing.T) actionFixture {
+	t.Helper()
+	ctx := context.Background()
+	appID, envID := id.NewAppID(), id.NewEnvironmentID()
+	userID := id.NewUserID()
+
+	authStore := memory.New()
+	var sessions []id.SessionID
+	for i := 0; i < 3; i++ {
+		s := &session.Session{
+			ID: id.NewSessionID(), AppID: appID, EnvID: envID, UserID: userID,
+			Token: "tok-" + string(rune('a'+i)), ExpiresAt: time.Now().Add(time.Hour),
+		}
+		require.NoError(t, authStore.CreateSession(ctx, s))
+		sessions = append(sessions, s.ID)
+	}
+
+	rev := &recordingRevoker{}
+	p := New()
+	p.store = NewMemoryStore()
+	p.authStore = authStore
+	p.revoker = rev
+
+	stream := &InboundStream{
+		ID: id.NewSSFStreamID(), AppID: appID, EnvID: envID,
+		Issuer: "https://org.okta.com", Status: StatusEnabled,
+		EnforcementMode: EnforcementEnforce, MaxActionsPerHour: 100,
+	}
+	require.NoError(t, p.store.CreateInboundStream(ctx, stream))
+
+	return actionFixture{plugin: p, stream: stream, revoker: rev,
+		userID: userID, sessions: sessions}
+}
+
+func TestActionFor_Defaults(t *testing.T) {
+	p := New()
+	s := &InboundStream{}
+	cases := []struct {
+		ev   caep.Event
+		want string
+	}{
+		{caep.Event{Type: caep.EventSessionRevoked}, ActionRevokeAll},
+		{caep.Event{Type: caep.EventTokenClaimsChange}, ActionRevokeAll},
+		{caep.Event{Type: caep.EventCredentialChange, ChangeType: "revoke"}, ActionRevokeAll},
+		{caep.Event{Type: caep.EventCredentialChange, ChangeType: "delete"}, ActionRevokeAll},
+		{caep.Event{Type: caep.EventCredentialChange, ChangeType: "create"}, ActionSignal},
+		{caep.Event{Type: caep.EventAssuranceLevelChange, ChangeDirection: "decrease"}, ActionSignal},
+		{caep.Event{Type: caep.EventAssuranceLevelChange, ChangeDirection: "increase"}, ActionSignal},
+		{caep.Event{Type: caep.EventDeviceComplianceChange, CurrentStatus: "not-compliant"}, ActionSignal},
+		{caep.Event{Type: caep.EventRiskLevelChange, CurrentLevel: "HIGH"}, ActionSignal},
+		{caep.Event{Type: caep.EventVerification}, ActionNone},
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.want, p.actionFor(s, tc.ev), "event %s", tc.ev.Type)
+	}
+}
+
+func TestActionFor_StreamOverrideWins(t *testing.T) {
+	p := New()
+	s := &InboundStream{ActionOverrides: map[string]string{
+		caep.EventSessionRevoked: ActionSignal,
+	}}
+	assert.Equal(t, ActionSignal, p.actionFor(s, caep.Event{Type: caep.EventSessionRevoked}))
+}
+
+func TestSeverityFor(t *testing.T) {
+	p := New()
+	assert.Equal(t, 100, p.severityFor(caep.Event{Type: caep.EventSessionRevoked}))
+	assert.Equal(t, 90, p.severityFor(caep.Event{
+		Type: caep.EventCredentialChange, ChangeType: "revoke"}))
+	assert.Equal(t, 20, p.severityFor(caep.Event{
+		Type: caep.EventCredentialChange, ChangeType: "create"}))
+	assert.Equal(t, 70, p.severityFor(caep.Event{
+		Type: caep.EventAssuranceLevelChange, ChangeDirection: "decrease"}))
+	assert.Equal(t, 10, p.severityFor(caep.Event{
+		Type: caep.EventAssuranceLevelChange, ChangeDirection: "increase"}))
+	assert.Equal(t, 60, p.severityFor(caep.Event{
+		Type: caep.EventDeviceComplianceChange, CurrentStatus: "not-compliant"}))
+	assert.Equal(t, 10, p.severityFor(caep.Event{
+		Type: caep.EventDeviceComplianceChange, CurrentStatus: "compliant"}))
+	assert.Equal(t, 80, p.severityFor(caep.Event{
+		Type: caep.EventRiskLevelChange, CurrentLevel: "HIGH"}))
+}
+
+func TestApplyEvent_SessionRevokedRevokesEverySession(t *testing.T) {
+	f := newActionFixture(t)
+	action, err := f.plugin.applyEvent(context.Background(), f.stream,
+		caep.Event{Type: caep.EventSessionRevoked},
+		Resolution{UserID: f.userID, Outcome: OutcomeApplied})
+	require.NoError(t, err)
+	assert.Equal(t, ActionRevokeAll, action)
+	assert.Len(t, f.revoker.revoked, 3)
+}
+
+// A session member in a complex subject narrows the blast radius to one
+// session instead of signing the user out everywhere.
+func TestApplyEvent_TargetedSessionRevoke(t *testing.T) {
+	f := newActionFixture(t)
+	action, err := f.plugin.applyEvent(context.Background(), f.stream,
+		caep.Event{Type: caep.EventSessionRevoked},
+		Resolution{UserID: f.userID, SessionID: f.sessions[1], Outcome: OutcomeApplied})
+	require.NoError(t, err)
+	assert.Equal(t, ActionRevokeSession, action)
+	require.Len(t, f.revoker.revoked, 1)
+	assert.Equal(t, f.sessions[1], f.revoker.revoked[0])
+}
+
+// Observe mode must record the signal and skip the revocation, so an operator
+// can watch a new stream before trusting it.
+func TestApplyEvent_ObserveModeDoesNotRevoke(t *testing.T) {
+	f := newActionFixture(t)
+	f.stream.EnforcementMode = EnforcementObserve
+
+	action, err := f.plugin.applyEvent(context.Background(), f.stream,
+		caep.Event{Type: caep.EventSessionRevoked},
+		Resolution{UserID: f.userID, Outcome: OutcomeApplied})
+	require.NoError(t, err)
+	assert.Equal(t, ActionLog, action)
+	assert.Empty(t, f.revoker.revoked)
+
+	signals, err := f.plugin.store.ListActiveSignals(context.Background(),
+		f.stream.AppID, f.userID, time.Now())
+	require.NoError(t, err)
+	require.Len(t, signals, 1, "observe mode still records the signal")
+}
+
+func TestApplyEvent_AlwaysWritesASignal(t *testing.T) {
+	f := newActionFixture(t)
+	_, err := f.plugin.applyEvent(context.Background(), f.stream,
+		caep.Event{Type: caep.EventDeviceComplianceChange, CurrentStatus: "not-compliant"},
+		Resolution{UserID: f.userID, Outcome: OutcomeApplied})
+	require.NoError(t, err)
+
+	signals, err := f.plugin.store.ListActiveSignals(context.Background(),
+		f.stream.AppID, f.userID, time.Now())
+	require.NoError(t, err)
+	require.Len(t, signals, 1)
+	assert.Equal(t, 60, signals[0].Severity)
+	assert.Empty(t, f.revoker.revoked)
+}
+
+func TestApplyEvent_VerificationTakesNoUserAction(t *testing.T) {
+	f := newActionFixture(t)
+	action, err := f.plugin.applyEvent(context.Background(), f.stream,
+		caep.Event{Type: caep.EventVerification, State: "abc"},
+		Resolution{Outcome: OutcomeApplied})
+	require.NoError(t, err)
+	assert.Equal(t, "", action)
+	assert.Empty(t, f.revoker.revoked)
+}
+
+func TestCircuitBreaker_TripsAndPausesStream(t *testing.T) {
+	ctx := context.Background()
+	f := newActionFixture(t)
+	f.stream.MaxActionsPerHour = 2
+	require.NoError(t, f.plugin.store.UpdateInboundStream(ctx, f.stream))
+
+	now := time.Now()
+	for i := 0; i < 2; i++ {
+		require.NoError(t, f.plugin.store.InsertReceivedEvent(ctx, &ReceivedEvent{
+			ID: id.NewSSFEventID(), StreamID: f.stream.ID,
+			JTI: "prior-" + string(rune('a'+i)), EventType: caep.EventSessionRevoked,
+			Outcome: OutcomeApplied, ActionTaken: ActionRevokeAll, ReceivedAt: now,
+		}))
+	}
+
+	ok, err := f.plugin.checkCircuitBreaker(ctx, f.stream)
+	require.NoError(t, err)
+	assert.False(t, ok, "the breaker must trip at the limit")
+
+	after, err := f.plugin.store.GetInboundStream(ctx, f.stream.ID)
+	require.NoError(t, err)
+	assert.Equal(t, StatusPaused, after.Status,
+		"a tripped breaker pauses the stream so it stops acting until a human looks")
+}
+
+func TestCircuitBreaker_AllowsUnderLimit(t *testing.T) {
+	f := newActionFixture(t)
+	ok, err := f.plugin.checkCircuitBreaker(context.Background(), f.stream)
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `go test ./plugins/sharedsignals/ -run 'Action|Severity|ApplyEvent|CircuitBreaker' -v`
+Expected: FAIL, the action helpers are undefined.
+
+- [ ] **Step 3: Write the action matrix**
+
+Create `plugins/sharedsignals/actions.go`:
+
+```go
+package sharedsignals
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/plugins/sharedsignals/caep"
+)
+
+// Actions an event can produce.
+const (
+	ActionRevokeAll     = "revoke_all"
+	ActionRevokeSession = "revoke_session"
+	ActionSignal        = "signal"
+	ActionLog           = "log"
+	ActionNone          = "none"
+)
+
+// actionFor decides what an event does. A stream override always wins over
+// the default, so an operator can quiet a noisy transmitter per event type
+// without turning the whole stream off.
+func (p *Plugin) actionFor(s *InboundStream, ev caep.Event) string {
+	if override, ok := s.ActionOverrides[ev.Type]; ok && override != "" {
+		return override
+	}
+
+	switch ev.Type {
+	case caep.EventSessionRevoked:
+		return ActionRevokeAll
+
+	case caep.EventTokenClaimsChange:
+		// session.Roles is stamped at issue time and never re-resolved, so a
+		// claims change cannot reach a live session. Ending it is the only
+		// way to pick up the new claims.
+		return ActionRevokeAll
+
+	case caep.EventCredentialChange:
+		if ev.ChangeType == "revoke" || ev.ChangeType == "delete" {
+			return ActionRevokeAll
+		}
+		return ActionSignal
+
+	case caep.EventAssuranceLevelChange,
+		caep.EventDeviceComplianceChange,
+		caep.EventRiskLevelChange:
+		return ActionSignal
+
+	case caep.EventVerification:
+		return ActionNone
+
+	default:
+		return ActionSignal
+	}
+}
+
+// severityFor scores an event 0 to 100 for the risk engine.
+func (p *Plugin) severityFor(ev caep.Event) int {
+	switch ev.Type {
+	case caep.EventSessionRevoked:
+		return 100
+
+	case caep.EventTokenClaimsChange:
+		return 50
+
+	case caep.EventCredentialChange:
+		if ev.ChangeType == "revoke" || ev.ChangeType == "delete" {
+			return 90
+		}
+		return 20
+
+	case caep.EventAssuranceLevelChange:
+		if ev.ChangeDirection == "decrease" {
+			return 70
+		}
+		return 10
+
+	case caep.EventDeviceComplianceChange:
+		if ev.CurrentStatus == "not-compliant" {
+			return 60
+		}
+		return 10
+
+	case caep.EventRiskLevelChange:
+		switch ev.CurrentLevel {
+		case "HIGH":
+			return 80
+		case "MEDIUM":
+			return 50
+		default:
+			return 10
+		}
+
+	default:
+		return 30
+	}
+}
+
+// applyEvent runs the matrix for one resolved event and returns the action it
+// actually took. A signal is always recorded first, so even an action that is
+// skipped or fails still leaves the next sign-in something to score.
+func (p *Plugin) applyEvent(ctx context.Context, s *InboundStream,
+	ev caep.Event, res Resolution) (string, error) {
+	if ev.Type == caep.EventVerification {
+		return "", p.completeVerification(ctx, s, ev)
+	}
+
+	action := p.actionFor(s, ev)
+
+	if err := p.recordSignal(ctx, s, ev, res); err != nil {
+		return "", err
+	}
+
+	if action == ActionSignal || action == ActionNone || action == ActionLog {
+		return "", nil
+	}
+
+	// Observe mode records everything and changes nothing.
+	if s.EnforcementMode == EnforcementObserve {
+		p.audit(ctx, s, ev, res, bridge.SeverityWarning, "would_"+action)
+		return ActionLog, nil
+	}
+
+	if p.revoker == nil {
+		return "", fmt.Errorf("sharedsignals: cannot revoke, engine does not support it")
+	}
+
+	// A session member in the subject narrows this to one session.
+	if !res.SessionID.IsNil() && action == ActionRevokeAll {
+		action = ActionRevokeSession
+	}
+
+	switch action {
+	case ActionRevokeSession:
+		if err := p.revoker.RevokeSession(ctx, res.SessionID); err != nil {
+			return "", err
+		}
+	case ActionRevokeAll:
+		sessions, err := p.authStore.ListUserSessions(ctx, res.UserID)
+		if err != nil {
+			return "", err
+		}
+		for _, sess := range sessions {
+			// Stay inside this stream's app and environment. A stream never
+			// reaches a session it was not scoped to.
+			if sess.AppID != s.AppID {
+				continue
+			}
+			if err := p.revoker.RevokeSession(ctx, sess.ID); err != nil {
+				return "", err
+			}
+		}
+	}
+
+	p.audit(ctx, s, ev, res, bridge.SeverityCritical, action)
+	return action, nil
+}
+
+func (p *Plugin) recordSignal(ctx context.Context, s *InboundStream,
+	ev caep.Event, res Resolution) error {
+	now := time.Now()
+	eventAt := now
+	if ev.EventTimestamp > 0 {
+		// CAEP timestamps are seconds in the spec but Okta sends
+		// milliseconds, so treat anything implausibly large as millis.
+		if ev.EventTimestamp > 1e11 {
+			eventAt = time.UnixMilli(ev.EventTimestamp)
+		} else {
+			eventAt = time.Unix(ev.EventTimestamp, 0)
+		}
+	}
+
+	reason := ""
+	if ev.ReasonAdmin != nil {
+		reason = ev.ReasonAdmin["en"]
+	}
+
+	return p.store.CreateSignal(ctx, &Signal{
+		ID:        id.NewSSFSignalID(),
+		AppID:     s.AppID,
+		EnvID:     s.EnvID,
+		UserID:    res.UserID,
+		StreamID:  s.ID,
+		EventType: ev.Type,
+		Severity:  p.severityFor(ev),
+		Reason:    reason,
+		EventAt:   eventAt,
+		ExpiresAt: now.Add(p.config.SignalTTL),
+		CreatedAt: now,
+	})
+}
+
+// completeVerification matches the echoed state against what we sent. A
+// mismatch is not an error to the transmitter, it just does not mark the
+// stream verified.
+func (p *Plugin) completeVerification(ctx context.Context, s *InboundStream,
+	ev caep.Event) error {
+	if s.PendingVerifyState == "" || ev.State != s.PendingVerifyState {
+		return nil
+	}
+	now := time.Now()
+	s.LastVerifiedAt = &now
+	s.PendingVerifyState = ""
+	return p.store.UpdateInboundStream(ctx, s)
+}
+
+// checkCircuitBreaker reports whether the stream may still act. Crossing the
+// limit pauses the stream and raises an alert, because a transmitter asking
+// for thousands of revocations is either compromised or misconfigured and
+// both want the same answer.
+func (p *Plugin) checkCircuitBreaker(ctx context.Context, s *InboundStream) (bool, error) {
+	limit := s.MaxActionsPerHour
+	if limit <= 0 {
+		limit = p.config.MaxActionsPerHour
+	}
+
+	count, err := p.store.CountActionsSince(ctx, s.ID, time.Now().Add(-time.Hour))
+	if err != nil {
+		return false, err
+	}
+	if count < limit {
+		return true, nil
+	}
+
+	s.Status = StatusPaused
+	if err := p.store.UpdateInboundStream(ctx, s); err != nil {
+		return false, err
+	}
+
+	if p.chronicle != nil {
+		_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
+			Action:   "ssf_circuit_breaker_tripped",
+			Resource: "sharedsignals_stream",
+			Tenant:   s.AppID.String(),
+			Outcome:  bridge.OutcomeFailure,
+			Severity: bridge.SeverityCritical,
+			Metadata: map[string]string{
+				"stream_id": s.ID.String(),
+				"issuer":    s.Issuer,
+				"limit":     fmt.Sprintf("%d", limit),
+				"count":     fmt.Sprintf("%d", count),
+			},
+		})
+	}
+	if p.relay != nil {
+		_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
+			Type:     "security.ssf.circuit_breaker_tripped",
+			TenantID: s.AppID.String(),
+			Data: map[string]string{
+				"stream_id": s.ID.String(),
+				"issuer":    s.Issuer,
+			},
+		})
+	}
+
+	p.logger.Warn("sharedsignals: circuit breaker tripped, stream paused",
+		logString("stream_id", s.ID.String()),
+		logString("issuer", s.Issuer),
+	)
+	return false, nil
+}
+
+func (p *Plugin) audit(ctx context.Context, s *InboundStream, ev caep.Event,
+	res Resolution, severity bridge.Severity, action string) {
+	if p.chronicle == nil {
+		return
+	}
+	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
+		Action:   "ssf_event_applied",
+		Resource: "session",
+		ActorID:  res.UserID.String(),
+		Tenant:   s.AppID.String(),
+		Outcome:  bridge.OutcomeSuccess,
+		Severity: severity,
+		Metadata: map[string]string{
+			"stream_id":  s.ID.String(),
+			"issuer":     s.Issuer,
+			"event_type": ev.Type,
+			"action":     action,
+		},
+	})
+}
+```
+
+Add this helper to `plugins/sharedsignals/plugin.go` so the logging calls read
+the same everywhere:
+
+```go
+// logString is a tiny alias so call sites do not repeat the import path of
+// the logging package in every field.
+func logString(key, value string) log.Field { return log.String(key, value) }
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `go test ./plugins/sharedsignals/ -run 'Action|Severity|ApplyEvent|CircuitBreaker' -v`
+Expected: PASS, eleven tests.
+
+If `bridge.Severity` or `log.Field` do not resolve, check the real names with
+`go doc github.com/xraph/authsome/bridge.AuditEvent` and
+`go doc github.com/xraph/go-utils/log.String`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add plugins/sharedsignals/actions.go plugins/sharedsignals/actions_test.go plugins/sharedsignals/plugin.go
+git commit -m "feat(sharedsignals): action matrix, signal recording and the blast-radius breaker"
+```
+
+---
+
+### Task 14: The push endpoint
+
+**Files:**
+- Create: `plugins/sharedsignals/receiver.go`
+- Modify: `plugins/sharedsignals/plugin.go` (delete the `registerReceiverRoutes` stub from Task 10)
+- Test: `plugins/sharedsignals/receiver_test.go`
+
+**Interfaces:**
+- Consumes: everything from Tasks 1, 2, 3, 4, 6, 10, 11 and 13.
+- Produces: `(*Plugin).registerReceiverRoutes(router forge.Router) error`; `(*Plugin).handlePush(ctx forge.Context) error`; `HashSecret(raw string) string`; `NewPushSecret() (raw, hash string, err error)`.
+
+This is the endpoint an external party talks to, so the gates run cheapest and least trusting first. The test file is the specification for the ordering.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `plugins/sharedsignals/receiver_test.go`:
+
+```go
+package sharedsignals
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/plugins/sharedsignals/caep"
+	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/store/memory"
+)
+
+type receiverFixture struct {
+	plugin    *Plugin
+	stream    *InboundStream
+	revoker   *recordingRevoker
+	key       *rsa.PrivateKey
+	jwksSrv   *httptest.Server
+	pushPath  string
+	pushToken string
+	userID    id.UserID
+}
+
+const (
+	fixtureIssuer = "https://org.okta.com"
+	fixtureAud    = "https://authsome.example/ssf"
+	fixtureKID    = "kid-1"
+	fixtureSub    = "okta-user-1"
+)
+
+func newReceiverFixture(t *testing.T) *receiverFixture {
+	t.Helper()
+	ctx := context.Background()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	// A fake transmitter serving its own JWKS, which is the only way to test
+	// the verification path the way it actually runs.
+	jwksSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		n := base64.RawURLEncoding.EncodeToString(key.PublicKey.N.Bytes())
+		e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.PublicKey.E)).Bytes())
+		fmt.Fprintf(w, `{"keys":[{"kty":"RSA","use":"sig","alg":"RS256","kid":%q,"n":%q,"e":%q}]}`,
+			fixtureKID, n, e)
+	}))
+	t.Cleanup(jwksSrv.Close)
+
+	appID, envID := id.NewAppID(), id.NewEnvironmentID()
+	userID := id.NewUserID()
+
+	authStore := memory.New()
+	require.NoError(t, authStore.CreateSession(ctx, &session.Session{
+		ID: id.NewSessionID(), AppID: appID, EnvID: envID, UserID: userID,
+		Token: "tok-1", ExpiresAt: time.Now().Add(time.Hour),
+	}))
+
+	rev := &recordingRevoker{}
+	p := New(Config{Audience: fixtureAud})
+	p.store = NewMemoryStore()
+	p.authStore = authStore
+	p.revoker = rev
+	require.NoError(t, p.OnInit(ctx, stubEngine{}))
+	// OnInit installs a memory store and a jwks client; keep ours.
+	p.store = NewMemoryStore()
+	p.authStore = authStore
+	p.revoker = rev
+
+	pushPath, pushPathHash, err := NewPushSecret()
+	require.NoError(t, err)
+	pushToken, pushTokenHash, err := NewPushSecret()
+	require.NoError(t, err)
+
+	stream := &InboundStream{
+		ID: id.NewSSFStreamID(), AppID: appID, EnvID: envID, Name: "okta",
+		Issuer: fixtureIssuer, Audience: fixtureAud, JWKSURI: jwksSrv.URL,
+		PushPathHash: pushPathHash, PushTokenHash: pushTokenHash,
+		AllowedEventTypes: []string{
+			caep.EventSessionRevoked, caep.EventCredentialChange, caep.EventVerification,
+		},
+		AllowedSubjectFormats: []string{caep.FormatIssSub},
+		EnforcementMode:       EnforcementEnforce,
+		Status:                StatusEnabled,
+		MaxActionsPerHour:     100,
+	}
+	require.NoError(t, p.store.CreateInboundStream(ctx, stream))
+	require.NoError(t, p.store.UpsertSubjectLink(ctx, &SubjectLink{
+		ID: id.NewSSFLinkID(), AppID: appID, EnvID: envID,
+		Issuer: fixtureIssuer, Subject: fixtureSub, UserID: userID, Source: SourceSSO,
+	}))
+
+	return &receiverFixture{
+		plugin: p, stream: stream, revoker: rev, key: key, jwksSrv: jwksSrv,
+		pushPath: pushPath, pushToken: pushToken, userID: userID,
+	}
+}
+
+// signSET builds a SET the fixture's fake transmitter would send.
+func (f *receiverFixture) signSET(t *testing.T, mutate func(jwt.MapClaims)) string {
+	t.Helper()
+	claims := jwt.MapClaims{
+		"iss": fixtureIssuer,
+		"aud": fixtureAud,
+		"jti": "jti-" + id.NewSSFEventID().String(),
+		"iat": time.Now().Unix(),
+		"events": map[string]any{
+			caep.EventSessionRevoked: map[string]any{
+				// Okta ships "subject", not "sub_id".
+				"subject": map[string]any{
+					"format": "iss_sub", "iss": fixtureIssuer, "sub": fixtureSub,
+				},
+				"reason_admin": map[string]any{"en": "Account compromised"},
+			},
+		},
+	}
+	if mutate != nil {
+		mutate(claims)
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	tok.Header["typ"] = "secevent+jwt"
+	tok.Header["kid"] = fixtureKID
+	signed, err := tok.SignedString(f.key)
+	require.NoError(t, err)
+	return signed
+}
+
+// post drives the handler through the plugin's own router so the route
+// pattern and the parameter binding are exercised, not bypassed.
+func (f *receiverFixture) post(t *testing.T, path, token, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost,
+		"/v1/ssf/streams/"+path+"/events", stringReader(body))
+	req.Header.Set("Content-Type", "application/secevent+jwt")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	rec := httptest.NewRecorder()
+	f.plugin.servePushForTest(rec, req, path)
+	return rec
+}
+
+func errBody(t *testing.T, rec *httptest.ResponseRecorder) map[string]string {
+	t.Helper()
+	var out map[string]string
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &out))
+	return out
+}
+
+func TestPush_ValidSETRevokesSessions(t *testing.T) {
+	f := newReceiverFixture(t)
+	rec := f.post(t, f.pushPath, f.pushToken, f.signSET(t, nil))
+
+	assert.Equal(t, http.StatusAccepted, rec.Code)
+	assert.Empty(t, rec.Body.String(), "a 202 carries no body")
+	assert.Len(t, f.revoker.revoked, 1)
+}
+
+func TestPush_UnknownPathIs404(t *testing.T) {
+	f := newReceiverFixture(t)
+	rec := f.post(t, "not-a-real-path", f.pushToken, f.signSET(t, nil))
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Empty(t, f.revoker.revoked)
+}
+
+func TestPush_WrongTokenIs401(t *testing.T) {
+	f := newReceiverFixture(t)
+	rec := f.post(t, f.pushPath, "wrong-token", f.signSET(t, nil))
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Equal(t, "authentication_failed", errBody(t, rec)["err"])
+	assert.Empty(t, f.revoker.revoked)
+}
+
+func TestPush_MissingTokenIs401(t *testing.T) {
+	f := newReceiverFixture(t)
+	rec := f.post(t, f.pushPath, "", f.signSET(t, nil))
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestPush_PausedStreamIs403(t *testing.T) {
+	f := newReceiverFixture(t)
+	f.stream.Status = StatusPaused
+	require.NoError(t, f.plugin.store.UpdateInboundStream(context.Background(), f.stream))
+
+	rec := f.post(t, f.pushPath, f.pushToken, f.signSET(t, nil))
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Equal(t, "access_denied", errBody(t, rec)["err"])
+}
+
+func TestPush_WrongIssuerIs400(t *testing.T) {
+	f := newReceiverFixture(t)
+	body := f.signSET(t, func(c jwt.MapClaims) { c["iss"] = "https://evil.example" })
+	rec := f.post(t, f.pushPath, f.pushToken, body)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "invalid_issuer", errBody(t, rec)["err"])
+	assert.Empty(t, f.revoker.revoked)
+}
+
+func TestPush_WrongAudienceIs400(t *testing.T) {
+	f := newReceiverFixture(t)
+	body := f.signSET(t, func(c jwt.MapClaims) { c["aud"] = "https://elsewhere" })
+	rec := f.post(t, f.pushPath, f.pushToken, body)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "invalid_audience", errBody(t, rec)["err"])
+}
+
+func TestPush_UnsignedSETIs400(t *testing.T) {
+	f := newReceiverFixture(t)
+	tok := jwt.NewWithClaims(jwt.SigningMethodNone, jwt.MapClaims{
+		"iss": fixtureIssuer, "aud": fixtureAud, "jti": "j", "iat": time.Now().Unix(),
+		"events": map[string]any{caep.EventSessionRevoked: map[string]any{
+			"subject": map[string]any{"format": "iss_sub", "iss": fixtureIssuer, "sub": fixtureSub},
+		}},
+	})
+	tok.Header["typ"] = "secevent+jwt"
+	body, err := tok.SignedString(jwt.UnsafeAllowNoneSignatureType)
+	require.NoError(t, err)
+
+	rec := f.post(t, f.pushPath, f.pushToken, body)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "invalid_key", errBody(t, rec)["err"])
+	assert.Empty(t, f.revoker.revoked)
+}
+
+// A replayed SET must be accepted and ignored. Answering with an error would
+// make the transmitter retry forever.
+func TestPush_ReplayedJTIIsAcceptedOnceOnly(t *testing.T) {
+	f := newReceiverFixture(t)
+	body := f.signSET(t, nil)
+
+	first := f.post(t, f.pushPath, f.pushToken, body)
+	assert.Equal(t, http.StatusAccepted, first.Code)
+	assert.Len(t, f.revoker.revoked, 1)
+
+	second := f.post(t, f.pushPath, f.pushToken, body)
+	assert.Equal(t, http.StatusAccepted, second.Code)
+	assert.Len(t, f.revoker.revoked, 1, "a replay must not revoke a second time")
+}
+
+// A subject we cannot place returns 202. An error would tell the transmitter
+// which of its users have accounts here.
+func TestPush_UnknownSubjectIs202AndDoesNothing(t *testing.T) {
+	f := newReceiverFixture(t)
+	body := f.signSET(t, func(c jwt.MapClaims) {
+		c["events"] = map[string]any{
+			caep.EventSessionRevoked: map[string]any{
+				"subject": map[string]any{
+					"format": "iss_sub", "iss": fixtureIssuer, "sub": "nobody-here",
+				},
+			},
+		}
+	})
+
+	rec := f.post(t, f.pushPath, f.pushToken, body)
+	assert.Equal(t, http.StatusAccepted, rec.Code)
+	assert.Empty(t, f.revoker.revoked)
+}
+
+// An event type the stream did not subscribe to is recorded and dropped.
+func TestPush_EventTypeNotAllowedIsIgnored(t *testing.T) {
+	f := newReceiverFixture(t)
+	body := f.signSET(t, func(c jwt.MapClaims) {
+		c["events"] = map[string]any{
+			caep.EventDeviceComplianceChange: map[string]any{
+				"subject": map[string]any{
+					"format": "iss_sub", "iss": fixtureIssuer, "sub": fixtureSub,
+				},
+				"current_status": "not-compliant", "previous_status": "compliant",
+			},
+		}
+	})
+
+	rec := f.post(t, f.pushPath, f.pushToken, body)
+	assert.Equal(t, http.StatusAccepted, rec.Code)
+	assert.Empty(t, f.revoker.revoked)
+}
+
+func TestPush_OversizedBodyIs400(t *testing.T) {
+	f := newReceiverFixture(t)
+	huge := make([]byte, f.plugin.config.MaxBodyBytes+1024)
+	for i := range huge {
+		huge[i] = 'A'
+	}
+	rec := f.post(t, f.pushPath, f.pushToken, string(huge))
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// The whole point of pinning keys per stream: a genuine SET aimed at one
+// tenant must not work against another tenant's URL.
+func TestPush_CrossStreamReplayFails(t *testing.T) {
+	ctx := context.Background()
+	f := newReceiverFixture(t)
+
+	otherPath, otherPathHash, err := NewPushSecret()
+	require.NoError(t, err)
+	otherToken, otherTokenHash, err := NewPushSecret()
+	require.NoError(t, err)
+	require.NoError(t, f.plugin.store.CreateInboundStream(ctx, &InboundStream{
+		ID: id.NewSSFStreamID(), AppID: id.NewAppID(), EnvID: id.NewEnvironmentID(),
+		Issuer: "https://other-idp.example", Audience: fixtureAud,
+		JWKSURI:      f.jwksSrv.URL,
+		PushPathHash: otherPathHash, PushTokenHash: otherTokenHash,
+		AllowedEventTypes:     []string{caep.EventSessionRevoked},
+		AllowedSubjectFormats: []string{caep.FormatIssSub},
+		EnforcementMode:       EnforcementEnforce, Status: StatusEnabled,
+		MaxActionsPerHour:     100,
+	}))
+
+	rec := f.post(t, otherPath, otherToken, f.signSET(t, nil))
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "invalid_issuer", errBody(t, rec)["err"])
+	assert.Empty(t, f.revoker.revoked)
+}
+
+func TestHashSecret_IsStableAndNotThePlaintext(t *testing.T) {
+	raw, hash, err := NewPushSecret()
+	require.NoError(t, err)
+	assert.NotEqual(t, raw, hash)
+	assert.Equal(t, hash, HashSecret(raw))
+	assert.NotEqual(t, hash, HashSecret(raw+"x"))
+}
+```
+
+Add the small reader helper at the bottom of the same file:
+
+```go
+func stringReader(s string) *strings.Reader { return strings.NewReader(s) }
+```
+
+and add `"strings"` to its imports.
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `go test ./plugins/sharedsignals/ -run 'TestPush|TestHashSecret' -v`
+Expected: FAIL, `NewPushSecret` and `servePushForTest` are undefined.
+
+- [ ] **Step 3: Write the receiver**
+
+Create `plugins/sharedsignals/receiver.go`:
+
+```go
+package sharedsignals
+
+import (
+	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"strings"
+
+	"github.com/xraph/forge"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/plugins/sharedsignals/caep"
+	"github.com/xraph/authsome/plugins/sharedsignals/setjwt"
+)
+
+// HashSecret returns the hex SHA-256 of a push secret. Only the hash is
+// stored, so a database copy does not yield a working push endpoint.
+func HashSecret(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
+
+// NewPushSecret mints a URL-safe random secret and its hash. The plaintext is
+// shown to the operator once at stream creation and never persisted.
+func NewPushSecret() (raw, hash string, err error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", "", err
+	}
+	raw = base64.RawURLEncoding.EncodeToString(buf)
+	return raw, HashSecret(raw), nil
+}
+
+// registerReceiverRoutes mounts the push endpoint.
+func (p *Plugin) registerReceiverRoutes(router forge.Router) error {
+	g := router.Group("/v1/ssf", forge.WithGroupTags("Shared Signals"))
+
+	// A raw handler: the body is a compact JWS rather than JSON, success is a
+	// bodiless 202, and failure is the RFC 8935 error object.
+	return g.POST("/streams/:push_path/events", p.handlePush,
+		forge.WithSummary("Receive Security Event Tokens"),
+		forge.WithOperationID("receiveSecurityEventTokens"),
+	)
+}
+
+func (p *Plugin) handlePush(ctx forge.Context) error {
+	p.servePush(ctx.Response(), ctx.Request(), ctx.Param("push_path"))
+	return nil
+}
+
+// servePushForTest exposes the pipeline to tests without a forge context.
+func (p *Plugin) servePushForTest(w http.ResponseWriter, r *http.Request, pushPath string) {
+	p.servePush(w, r, pushPath)
+}
+
+// setError writes the RFC 8935 error object. The description never echoes
+// anything the caller sent.
+func setError(w http.ResponseWriter, status int, code, description string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{ //nolint:errcheck // response write
+		"err": code, "description": description,
+	})
+}
+
+// dummyHash is compared against on a stream miss so an unknown push path and
+// a bad token cost roughly the same work.
+const dummyHash = "0000000000000000000000000000000000000000000000000000000000000000"
+
+func (p *Plugin) servePush(w http.ResponseWriter, r *http.Request, pushPath string) {
+	ctx := r.Context()
+
+	// Gate 1: bound the body before reading any of it.
+	body, err := io.ReadAll(io.LimitReader(r.Body, p.config.MaxBodyBytes+1))
+	if err != nil {
+		setError(w, http.StatusBadRequest, "invalid_request", "could not read the request body")
+		return
+	}
+	if int64(len(body)) > p.config.MaxBodyBytes {
+		setError(w, http.StatusBadRequest, "invalid_request", "the request body is too large")
+		return
+	}
+
+	// Gate 2: the secret URL segment selects the stream. Everything we trust
+	// comes from this row, never from the token.
+	stream, err := p.store.GetInboundStreamByPushPathHash(ctx, HashSecret(pushPath))
+	if err != nil {
+		// Burn a comparison so a missing stream and a bad token look alike.
+		_ = subtle.ConstantTimeCompare([]byte(dummyHash), []byte(dummyHash))
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	// Gate 3: a paused or disabled stream acts on nothing.
+	if stream.Status != StatusEnabled {
+		setError(w, http.StatusForbidden, "access_denied", "the stream is not enabled")
+		return
+	}
+
+	// Gate 4: the bearer token the transmitter was given at registration.
+	presented := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if subtle.ConstantTimeCompare(
+		[]byte(HashSecret(presented)), []byte(stream.PushTokenHash)) != 1 {
+		setError(w, http.StatusUnauthorized, "authentication_failed",
+			"the transmitter could not be authenticated")
+		return
+	}
+
+	// Gates 5 to 11 live in setjwt: typ, algorithm allow-list, key
+	// resolution, signature, issuer, audience, jti and iat.
+	token, err := setjwt.Validate(ctx, body, setjwt.Options{
+		Issuer:    stream.Issuer,
+		Audience:  p.audienceFor(stream),
+		Keys:      &streamKeys{client: p.jwks, uri: stream.JWKSURI},
+		Now:       time.Now,
+		MaxAge:    p.config.MaxSETAge,
+		ClockSkew: p.config.ClockSkew,
+		MaxEvents: 10,
+	})
+	if err != nil {
+		setError(w, http.StatusBadRequest, setjwt.ErrCode(err),
+			"the security event token was rejected")
+		return
+	}
+
+	// Gate 12: the dedupe row commits before anything acts, which makes the
+	// row the ledger. A conflict is a replay, and a replay is a success.
+	if err := p.processSET(ctx, stream, token); err != nil {
+		if errors.Is(err, ErrDuplicateJTI) {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		p.logger.Error("sharedsignals: process security event token",
+			logString("stream_id", stream.ID.String()),
+			logString("error", err.Error()),
+		)
+		setError(w, http.StatusBadRequest, "invalid_request",
+			"the security event token could not be processed")
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (p *Plugin) audienceFor(s *InboundStream) string {
+	if s.Audience != "" {
+		return s.Audience
+	}
+	return p.config.Audience
+}
+
+// streamKeys adapts the shared JWKS client to the per-stream resolver setjwt
+// expects, so a kid can only ever select a key from this stream's key set.
+type streamKeys struct {
+	client *jwksclient.Client
+	uri    string
+}
+
+func (s *streamKeys) Key(ctx context.Context, kid string) (crypto.PublicKey, error) {
+	return s.client.Key(ctx, s.uri, kid)
+}
+
+// processSET records each event, resolves its subject and applies the matrix.
+// A single unusable event never fails the whole SET: it is recorded with its
+// outcome and the rest carry on.
+func (p *Plugin) processSET(ctx context.Context, stream *InboundStream,
+	token *setjwt.Token) error {
+	for eventType, payload := range token.Events {
+		record := &ReceivedEvent{
+			ID:        id.NewSSFEventID(),
+			StreamID:  stream.ID,
+			JTI:       token.JTI,
+			EventType: eventType,
+			Outcome:   OutcomePending,
+		}
+		if err := p.store.InsertReceivedEvent(ctx, record); err != nil {
+			return err
+		}
+
+		outcome, action, failure := p.processOneEvent(ctx, stream, eventType, payload)
+		record.Outcome = outcome
+		record.ActionTaken = action
+		if failure != nil {
+			record.Error = failure.Error()
+		}
+		if err := p.store.UpdateReceivedEvent(ctx, record); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *Plugin) processOneEvent(ctx context.Context, stream *InboundStream,
+	eventType string, payload json.RawMessage) (outcome, action string, failure error) {
+	if !caep.IsKnownEventType(eventType) {
+		return OutcomeIgnored, "", nil
+	}
+	if !allowsEventType(stream, eventType) {
+		return OutcomeIgnored, "", nil
+	}
+
+	ev, err := caep.ParseEvent(eventType, payload)
+	if err != nil {
+		return OutcomeRejected, "", err
+	}
+
+	res, err := p.resolveSubject(ctx, stream, ev.Subject)
+	if err != nil {
+		return OutcomeRejected, "", err
+	}
+	if res.Outcome != OutcomeApplied {
+		// Unresolved and rejected both stop here without an error, so the
+		// transmitter learns nothing about who does or does not have an
+		// account and stops retrying.
+		return res.Outcome, "", nil
+	}
+
+	allowed, err := p.checkCircuitBreaker(ctx, stream)
+	if err != nil {
+		return OutcomeRejected, "", err
+	}
+	if !allowed {
+		return OutcomeRejected, "", errors.New("stream paused by the circuit breaker")
+	}
+
+	action, err = p.applyEvent(ctx, stream, ev, res)
+	if err != nil {
+		return OutcomeRejected, "", err
+	}
+	return OutcomeApplied, action, nil
+}
+
+func allowsEventType(s *InboundStream, eventType string) bool {
+	// An empty list means the stream accepts every type it understands.
+	if len(s.AllowedEventTypes) == 0 {
+		return true
+	}
+	for _, t := range s.AllowedEventTypes {
+		if t == eventType {
+			return true
+		}
+	}
+	return false
+}
+```
+
+Add `"time"` and the `jwksclient` import to that file, and delete the
+`registerReceiverRoutes` stub added at the bottom of `plugin.go` in Task 10.
+
+- [ ] **Step 4: Add the per-IP rate limit**
+
+The spec's first gate is a per-IP rate limit, and the repo already has the
+idiom for a plugin-owned route cap. Add a field to `RateLimitConfig` in
+`config.go`, next to `VerifyEmailLimit`:
+
+```go
+	// SSFPushLimit is the max Shared Signals push deliveries accepted per
+	// window per client (default: 60). Defence in depth only: rate limiting
+	// is off unless Enabled is set, so the real controls on this endpoint are
+	// the secret path, the bearer token, the signature, and the per-stream
+	// circuit breaker.
+	SSFPushLimit int `json:"ssf_push_limit"`
+```
+
+Set its default of 60 wherever the other rate-limit defaults are applied:
+
+```bash
+grep -n "VerifyEmailLimit" config.go
+```
+
+Then apply it to the route in `registerReceiverRoutes`:
+
+```go
+func (p *Plugin) registerReceiverRoutes(router forge.Router) error {
+	g := router.Group("/v1/ssf", forge.WithGroupTags("Shared Signals"))
+
+	opts := []forge.RouteOption{
+		forge.WithSummary("Receive Security Event Tokens"),
+		forge.WithOperationID("receiveSecurityEventTokens"),
+	}
+	// Nil when the host is not the concrete engine or rate limiting is off,
+	// which is why this is defence in depth and not the control.
+	opts = append(opts, authsome.PluginRateLimit(p.engine,
+		func(c authsome.RateLimitConfig) int { return c.SSFPushLimit })...)
+
+	// A raw handler: the body is a compact JWS rather than JSON, success is a
+	// bodiless 202, and failure is the RFC 8935 error object.
+	return g.POST("/streams/:push_path/events", p.handlePush, opts...)
+}
+```
+
+Import the root package as `authsome "github.com/xraph/authsome"`. That
+direction is fine: the root imports `plugin`, never `plugins/*`, and
+`plugins/riskengine/contract.go` already does the same thing.
+
+- [ ] **Step 5: Run test to verify it passes**
+
+Run: `go test ./plugins/sharedsignals/ -run 'TestPush|TestHashSecret' -v`
+Expected: PASS, thirteen tests.
+
+If `forge.Context` has no `Param` method for a raw handler, check how
+`plugins/sso` reads `ctx.Param("provider")` in `handleACS` and match it.
+
+- [ ] **Step 6: Run the whole package with the race detector**
+
+Run: `go test ./plugins/sharedsignals/... -race`
+Expected: PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add plugins/sharedsignals/receiver.go plugins/sharedsignals/receiver_test.go plugins/sharedsignals/plugin.go config.go
+git commit -m "feat(sharedsignals): SSF push endpoint with ordered validation gates"
+```
+
+---
+
+### Task 15: Risk contributor, and fixing riskengine's empty UserID
+
+**Files:**
+- Create: `plugins/sharedsignals/risk.go`
+- Modify: `plugins/riskengine/plugin.go` (the `RiskRequest` struct and `OnBeforeSignIn`)
+- Test: `plugins/sharedsignals/risk_test.go`
+- Test: `plugins/riskengine/plugin_test.go`
+
+**Interfaces:**
+- Consumes: `Store` and `Signal` from Task 6, `Plugin` from Task 10.
+- Produces: `(*Plugin).EvaluateRisk(ctx context.Context, req *riskengine.RiskRequest) (*riskengine.RiskSignal, error)`; a new `Email` field and a populated `UserID` on `riskengine.RiskRequest`.
+
+`riskengine.OnBeforeSignIn` currently builds `RiskRequest{IPAddress, UserAgent, AppID}` and never sets `UserID`, so the field is empty on every call. Every contributor shipped so far scores an IP, which is why nobody noticed. Fix that first or this contributor scores nothing forever.
+
+- [ ] **Step 1: Write the failing riskengine test**
+
+Append to `plugins/riskengine/plugin_test.go`:
+
+```go
+// capturingContributor records the request it was handed so we can assert on
+// what the engine actually populates.
+type capturingContributor struct {
+	got *RiskRequest
+}
+
+func (c *capturingContributor) Name() string { return "capturing" }
+
+func (c *capturingContributor) EvaluateRisk(_ context.Context, req *RiskRequest) (*RiskSignal, error) {
+	c.got = req
+	return &RiskSignal{Source: "capturing", Score: 0, Weight: 1}, nil
+}
+
+// A user-scoped contributor needs something to identify the user by. Before
+// this fix the engine passed neither, so the whole class of contributor was
+// dead on arrival.
+func TestOnBeforeSignIn_PassesIdentifierToContributors(t *testing.T) {
+	c := &capturingContributor{}
+	p := New(c)
+	p.logger = log.NewNoopLogger()
+
+	appID := id.NewAppID()
+	err := p.OnBeforeSignIn(context.Background(), &account.SignInRequest{
+		AppID:     appID,
+		Email:     "target@corp.com",
+		IPAddress: "203.0.113.10",
+		UserAgent: "test-agent",
+	})
+	require.NoError(t, err)
+
+	require.NotNil(t, c.got)
+	assert.Equal(t, "203.0.113.10", c.got.IPAddress)
+	assert.Equal(t, appID.String(), c.got.AppID)
+	assert.Equal(t, "target@corp.com", c.got.Email,
+		"contributors that score a user need the sign-in identifier")
+}
+
+func TestOnBeforeSignIn_PassesUsernameWhenEmailAbsent(t *testing.T) {
+	c := &capturingContributor{}
+	p := New(c)
+	p.logger = log.NewNoopLogger()
+
+	err := p.OnBeforeSignIn(context.Background(), &account.SignInRequest{
+		AppID:    id.NewAppID(),
+		Username: "targetuser",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, c.got)
+	assert.Equal(t, "targetuser", c.got.Username)
+}
+```
+
+Add whatever of `context`, `testing`, `account`, `id`, `log`, `require` and
+`assert` that file does not already import.
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `go test ./plugins/riskengine/ -run TestOnBeforeSignIn_Passes -v`
+Expected: FAIL, `RiskRequest` has no `Email` or `Username` field.
+
+- [ ] **Step 3: Fix riskengine**
+
+In `plugins/riskengine/plugin.go`, extend `RiskRequest`:
+
+```go
+// RiskRequest contains the data needed for risk evaluation.
+type RiskRequest struct {
+	IPAddress string
+	UserAgent string
+	AppID     string
+	EnvID     string
+
+	// UserID is set once the principal is known. It is empty on the
+	// pre-authentication path, where Email or Username identify the attempt
+	// instead.
+	UserID string
+
+	// Email and Username carry the sign-in identifier so a contributor that
+	// scores a user rather than an address has something to resolve.
+	Email    string
+	Username string
+}
+```
+
+and populate it in `OnBeforeSignIn`:
+
+```go
+	riskReq := &RiskRequest{
+		IPAddress: req.IPAddress,
+		UserAgent: req.UserAgent,
+		AppID:     req.AppID.String(),
+		EnvID:     req.EnvID.String(),
+		Email:     req.Email,
+		Username:  req.Username,
+	}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `go test ./plugins/riskengine/ -v`
+Expected: PASS, including the pre-existing tests.
+
+- [ ] **Step 5: Commit the riskengine fix on its own**
+
+It stands alone and is worth reverting independently if it regresses anything.
+
+```bash
+git add plugins/riskengine/plugin.go plugins/riskengine/plugin_test.go
+git commit -m "fix(riskengine): carry the sign-in identifier into RiskRequest"
+```
+
+- [ ] **Step 6: Write the failing contributor test**
+
+Create `plugins/sharedsignals/risk_test.go`:
+
+```go
+package sharedsignals
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/plugins/riskengine"
+	"github.com/xraph/authsome/store/memory"
+	"github.com/xraph/authsome/user"
+)
+
+func newRiskFixture(t *testing.T) (*Plugin, id.AppID, id.EnvironmentID, *user.User) {
+	t.Helper()
+	ctx := context.Background()
+	appID, envID := id.NewAppID(), id.NewEnvironmentID()
+
+	authStore := memory.New()
+	u := &user.User{
+		ID: id.NewUserID(), AppID: appID, EnvID: envID,
+		Email: "target@corp.com", EmailVerified: true,
+	}
+	require.NoError(t, authStore.CreateUserWithPrimaryEmail(ctx, u, &user.UserEmail{
+		ID: id.NewUserEmailID(), UserID: u.ID, AppID: appID, EnvID: envID,
+		Email: u.Email, Verified: true, Primary: true,
+	}))
+
+	p := New()
+	p.store = NewMemoryStore()
+	p.authStore = authStore
+	return p, appID, envID, u
+}
+
+func TestEvaluateRisk_NoSignalsScoresZero(t *testing.T) {
+	p, appID, _, u := newRiskFixture(t)
+	got, err := p.EvaluateRisk(context.Background(), &riskengine.RiskRequest{
+		AppID: appID.String(), Email: u.Email,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, 0, got.Score)
+}
+
+func TestEvaluateRisk_FreshSignalScoresFull(t *testing.T) {
+	ctx := context.Background()
+	p, appID, envID, u := newRiskFixture(t)
+	now := time.Now()
+
+	require.NoError(t, p.store.CreateSignal(ctx, &Signal{
+		ID: id.NewSSFSignalID(), AppID: appID, EnvID: envID, UserID: u.ID,
+		EventType: "session-revoked", Severity: 100, Reason: "compromised",
+		EventAt: now, ExpiresAt: now.Add(p.config.SignalTTL), CreatedAt: now,
+	}))
+
+	got, err := p.EvaluateRisk(ctx, &riskengine.RiskRequest{
+		AppID: appID.String(), Email: u.Email,
+	})
+	require.NoError(t, err)
+	assert.Greater(t, got.Score, 90, "a signal received seconds ago has barely decayed")
+	assert.Equal(t, "sharedsignals", got.Source)
+	assert.Equal(t, 2.0, got.Weight)
+}
+
+// A signal near the end of its life should barely move the score, so an old
+// event does not keep challenging a user forever.
+func TestEvaluateRisk_SignalDecays(t *testing.T) {
+	ctx := context.Background()
+	p, appID, envID, u := newRiskFixture(t)
+	now := time.Now()
+
+	require.NoError(t, p.store.CreateSignal(ctx, &Signal{
+		ID: id.NewSSFSignalID(), AppID: appID, EnvID: envID, UserID: u.ID,
+		EventType: "session-revoked", Severity: 100,
+		EventAt: now.Add(-23 * time.Hour), ExpiresAt: now.Add(time.Hour),
+		CreatedAt: now.Add(-23 * time.Hour),
+	}))
+
+	got, err := p.EvaluateRisk(ctx, &riskengine.RiskRequest{
+		AppID: appID.String(), Email: u.Email,
+	})
+	require.NoError(t, err)
+	assert.Less(t, got.Score, 20, "a nearly expired signal must have decayed")
+	assert.Greater(t, got.Score, 0)
+}
+
+func TestEvaluateRisk_TakesTheHighestSignal(t *testing.T) {
+	ctx := context.Background()
+	p, appID, envID, u := newRiskFixture(t)
+	now := time.Now()
+
+	for _, sev := range []int{20, 90, 40} {
+		require.NoError(t, p.store.CreateSignal(ctx, &Signal{
+			ID: id.NewSSFSignalID(), AppID: appID, EnvID: envID, UserID: u.ID,
+			EventType: "e", Severity: sev,
+			EventAt: now, ExpiresAt: now.Add(p.config.SignalTTL), CreatedAt: now,
+		}))
+	}
+
+	got, err := p.EvaluateRisk(ctx, &riskengine.RiskRequest{
+		AppID: appID.String(), Email: u.Email,
+	})
+	require.NoError(t, err)
+	assert.Greater(t, got.Score, 80)
+}
+
+// A sign-in we cannot attribute to a user must score nothing rather than
+// guessing.
+func TestEvaluateRisk_UnknownUserScoresZero(t *testing.T) {
+	p, appID, _, _ := newRiskFixture(t)
+	got, err := p.EvaluateRisk(context.Background(), &riskengine.RiskRequest{
+		AppID: appID.String(), Email: "stranger@corp.com",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 0, got.Score)
+}
+
+func TestPlugin_IsRiskContributor(t *testing.T) {
+	var _ riskengine.RiskContributor = New()
+}
+```
+
+- [ ] **Step 7: Run test to verify it fails**
+
+Run: `go test ./plugins/sharedsignals/ -run 'EvaluateRisk|RiskContributor' -v`
+Expected: FAIL, `EvaluateRisk` is undefined.
+
+- [ ] **Step 8: Write the contributor**
+
+Create `plugins/sharedsignals/risk.go`:
+
+```go
+package sharedsignals
+
+import (
+	"context"
+	"time"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/plugins/riskengine"
+)
+
+var _ riskengine.RiskContributor = (*Plugin)(nil)
+
+// caepSignalWeight is how much more a CAEP event counts than an IP heuristic.
+// An identity provider that watched an account get taken over is a far better
+// source than a reputation list.
+const caepSignalWeight = 2.0
+
+// EvaluateRisk replays stored signals at sign-in time. This is how an event
+// that arrived at 02:00, when nobody was signing in, reaches the 08:00 login
+// that cares about it. A high score crosses riskengine's medium threshold and
+// its decision becomes "challenge", which is how step-up is expressed without
+// inventing a second mechanism.
+func (p *Plugin) EvaluateRisk(ctx context.Context, req *riskengine.RiskRequest) (*riskengine.RiskSignal, error) {
+	none := &riskengine.RiskSignal{
+		Source: "sharedsignals", Score: 0, Weight: caepSignalWeight,
+	}
+
+	if p.store == nil || req == nil || req.AppID == "" {
+		return none, nil
+	}
+	appID, err := id.ParseAppID(req.AppID)
+	if err != nil {
+		return none, nil //nolint:nilerr // an unparseable app is not our failure
+	}
+
+	userID, ok := p.resolveRiskUser(ctx, appID, req)
+	if !ok {
+		return none, nil
+	}
+
+	now := time.Now()
+	signals, err := p.store.ListActiveSignals(ctx, appID, userID, now)
+	if err != nil {
+		return none, err
+	}
+	if len(signals) == 0 {
+		return none, nil
+	}
+
+	best := 0
+	reason := ""
+	for _, s := range signals {
+		score := decayedSeverity(s, now)
+		if score > best {
+			best = score
+			reason = s.EventType
+		}
+	}
+
+	return &riskengine.RiskSignal{
+		Source: "sharedsignals",
+		Score:  best,
+		Weight: caepSignalWeight,
+		Reason: "shared signals event: " + reason,
+	}, nil
+}
+
+// resolveRiskUser turns whatever identifies the sign-in attempt into a user.
+// UserID is preferred when the caller already knows it.
+func (p *Plugin) resolveRiskUser(ctx context.Context, appID id.AppID,
+	req *riskengine.RiskRequest) (id.UserID, bool) {
+	if req.UserID != "" {
+		if userID, err := id.ParseUserID(req.UserID); err == nil {
+			return userID, true
+		}
+	}
+	if p.authStore == nil {
+		return id.Nil, false
+	}
+	if req.Email != "" {
+		if u, err := p.authStore.GetUserByEmail(ctx, appID, req.Email); err == nil && u != nil {
+			return u.ID, true
+		}
+	}
+	if req.Username != "" {
+		if u, err := p.authStore.GetUserByUsername(ctx, appID, req.Username); err == nil && u != nil {
+			return u.ID, true
+		}
+	}
+	return id.Nil, false
+}
+
+// decayedSeverity fades a signal linearly from its full severity at
+// EventAt to zero at ExpiresAt.
+func decayedSeverity(s *Signal, now time.Time) int {
+	total := s.ExpiresAt.Sub(s.EventAt)
+	if total <= 0 {
+		return 0
+	}
+	remaining := s.ExpiresAt.Sub(now)
+	if remaining <= 0 {
+		return 0
+	}
+	if remaining > total {
+		remaining = total
+	}
+	return int(float64(s.Severity) * (float64(remaining) / float64(total)))
+}
+```
+
+- [ ] **Step 9: Run test to verify it passes**
+
+Run: `go test ./plugins/sharedsignals/ -run 'EvaluateRisk|RiskContributor' -v`
+Expected: PASS, six tests.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add plugins/sharedsignals/risk.go plugins/sharedsignals/risk_test.go
+git commit -m "feat(sharedsignals): replay stored CAEP signals into the risk engine"
+```
+
+---
+
+### Task 16: Stream admin CRUD
+
+**Files:**
+- Create: `plugins/sharedsignals/admin.go`
+- Modify: `plugins/sharedsignals/plugin.go` (delete the `registerAdminRoutes` stub from Task 10)
+- Test: `plugins/sharedsignals/admin_test.go`
+
+**Interfaces:**
+- Consumes: `Store`, `InboundStream`, `NewPushSecret`, `jwksclient.ValidateURI`.
+- Produces: `CreateStreamRequest`, `CreateStreamResponse`, `StreamView`, `ListStreamsResponse`, `UpdateStreamRequest`; `(*Plugin).registerAdminRoutes(router forge.Router) error`; `(*Plugin).CreateStream(ctx context.Context, appID id.AppID, envID id.EnvironmentID, req CreateStreamRequest) (*CreateStreamResponse, error)`.
+
+The service method carries the logic and gets the tests; the routes are a thin binding over it.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `plugins/sharedsignals/admin_test.go`:
+
+```go
+package sharedsignals
+
+import (
+	"context"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/plugins/sharedsignals/caep"
+)
+
+func newAdminFixture(t *testing.T) (*Plugin, id.AppID, id.EnvironmentID) {
+	t.Helper()
+	p := New(Config{Audience: "https://authsome.example/ssf"})
+	p.store = NewMemoryStore()
+	return p, id.NewAppID(), id.NewEnvironmentID()
+}
+
+func TestCreateStream_ReturnsSecretsOnceAndStoresHashes(t *testing.T) {
+	ctx := context.Background()
+	p, appID, envID := newAdminFixture(t)
+
+	got, err := p.CreateStream(ctx, appID, envID, CreateStreamRequest{
+		Name: "okta-prod", Issuer: "https://org.okta.com",
+		JWKSURI: "https://org.okta.com/oauth2/v1/keys",
+	})
+	require.NoError(t, err)
+
+	assert.NotEmpty(t, got.PushURLPath, "the caller needs the plaintext once")
+	assert.NotEmpty(t, got.PushToken)
+
+	stored, err := p.store.GetInboundStream(ctx, got.Stream.ID)
+	require.NoError(t, err)
+	assert.Equal(t, HashSecret(got.PushURLPath), stored.PushPathHash)
+	assert.Equal(t, HashSecret(got.PushToken), stored.PushTokenHash)
+	assert.NotContains(t, stored.PushPathHash, got.PushURLPath,
+		"the plaintext must never be persisted")
+}
+
+func TestCreateStream_AppliesDefaults(t *testing.T) {
+	ctx := context.Background()
+	p, appID, envID := newAdminFixture(t)
+
+	got, err := p.CreateStream(ctx, appID, envID, CreateStreamRequest{
+		Name: "okta", Issuer: "https://org.okta.com",
+		JWKSURI: "https://org.okta.com/keys",
+	})
+	require.NoError(t, err)
+
+	stored, err := p.store.GetInboundStream(ctx, got.Stream.ID)
+	require.NoError(t, err)
+	assert.Equal(t, StatusEnabled, stored.Status)
+	assert.Equal(t, EnforcementEnforce, stored.EnforcementMode)
+	assert.Equal(t, 100, stored.MaxActionsPerHour)
+	assert.Equal(t, "https://authsome.example/ssf", stored.Audience)
+	assert.Equal(t, []string{caep.FormatIssSub}, stored.AllowedSubjectFormats,
+		"iss_sub only unless the operator opts into more")
+}
+
+func TestCreateStream_RejectsBadInput(t *testing.T) {
+	ctx := context.Background()
+	p, appID, envID := newAdminFixture(t)
+
+	_, err := p.CreateStream(ctx, appID, envID, CreateStreamRequest{
+		Issuer: "", JWKSURI: "https://org.okta.com/keys"})
+	require.Error(t, err)
+
+	_, err = p.CreateStream(ctx, appID, envID, CreateStreamRequest{
+		Issuer: "https://org.okta.com", JWKSURI: ""})
+	require.Error(t, err)
+}
+
+// An operator pasting a metadata-service URL is still an SSRF, so the same
+// check the fetcher uses runs at registration too.
+func TestCreateStream_RejectsUnsafeJWKSURI(t *testing.T) {
+	ctx := context.Background()
+	p, appID, envID := newAdminFixture(t)
+
+	for _, uri := range []string{
+		"http://org.okta.com/keys",
+		"https://169.254.169.254/latest/meta-data/",
+		"https://127.0.0.1/keys",
+	} {
+		_, err := p.CreateStream(ctx, appID, envID, CreateStreamRequest{
+			Name: "x", Issuer: "https://org.okta.com", JWKSURI: uri,
+		})
+		require.Error(t, err, "jwks_uri %q must be refused", uri)
+	}
+}
+
+// Allowing email as a subject format without naming a verified domain would
+// let the transmitter name anyone at all.
+func TestCreateStream_EmailFormatRequiresVerifiedDomains(t *testing.T) {
+	ctx := context.Background()
+	p, appID, envID := newAdminFixture(t)
+
+	_, err := p.CreateStream(ctx, appID, envID, CreateStreamRequest{
+		Name: "x", Issuer: "https://org.okta.com",
+		JWKSURI:               "https://org.okta.com/keys",
+		AllowedSubjectFormats: []string{caep.FormatEmail},
+	})
+	require.Error(t, err)
+
+	_, err = p.CreateStream(ctx, appID, envID, CreateStreamRequest{
+		Name: "x", Issuer: "https://org.okta.com",
+		JWKSURI:               "https://org.okta.com/keys",
+		AllowedSubjectFormats: []string{caep.FormatEmail},
+		VerifiedDomains:       []string{"corp.com"},
+	})
+	require.NoError(t, err)
+}
+
+// A listing must never hand back a hash that could be checked offline
+// against a guessed secret.
+func TestStreamView_OmitsSecrets(t *testing.T) {
+	ctx := context.Background()
+	p, appID, envID := newAdminFixture(t)
+
+	created, err := p.CreateStream(ctx, appID, envID, CreateStreamRequest{
+		Name: "okta", Issuer: "https://org.okta.com",
+		JWKSURI: "https://org.okta.com/keys",
+	})
+	require.NoError(t, err)
+
+	stored, err := p.store.GetInboundStream(ctx, created.Stream.ID)
+	require.NoError(t, err)
+
+	view := toStreamView(stored)
+	rec := httptest.NewRecorder()
+	require.NoError(t, writeJSONForTest(rec, view))
+
+	body := rec.Body.String()
+	assert.NotContains(t, body, stored.PushPathHash)
+	assert.NotContains(t, body, stored.PushTokenHash)
+	assert.Contains(t, body, "https://org.okta.com")
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `go test ./plugins/sharedsignals/ -run 'CreateStream|StreamView' -v`
+Expected: FAIL, `CreateStream` is undefined.
+
+- [ ] **Step 3: Write the admin surface**
+
+Create `plugins/sharedsignals/admin.go`:
+
+```go
+package sharedsignals
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+
+	"github.com/xraph/forge"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/plugins/sharedsignals/caep"
+	"github.com/xraph/authsome/plugins/sharedsignals/jwksclient"
+)
+
+// CreateStreamRequest registers an identity provider we will accept events
+// from.
+type CreateStreamRequest struct {
+	Name                  string            `json:"name"`
+	Issuer                string            `json:"issuer"`
+	JWKSURI               string            `json:"jwks_uri"`
+	Audience              string            `json:"audience,omitempty"`
+	AllowedEventTypes     []string          `json:"allowed_event_types,omitempty"`
+	AllowedSubjectFormats []string          `json:"allowed_subject_formats,omitempty"`
+	VerifiedDomains       []string          `json:"verified_domains,omitempty"`
+	ActionOverrides       map[string]string `json:"action_overrides,omitempty"`
+	EnforcementMode       string            `json:"enforcement_mode,omitempty"`
+	MaxActionsPerHour     int               `json:"max_actions_per_hour,omitempty"`
+}
+
+// StreamView is the read model. It deliberately carries no secret and no
+// hash of one.
+type StreamView struct {
+	ID                    string            `json:"id"`
+	Name                  string            `json:"name"`
+	Issuer                string            `json:"issuer"`
+	Audience              string            `json:"audience"`
+	JWKSURI               string            `json:"jwks_uri"`
+	AllowedEventTypes     []string          `json:"allowed_event_types"`
+	AllowedSubjectFormats []string          `json:"allowed_subject_formats"`
+	VerifiedDomains       []string          `json:"verified_domains"`
+	ActionOverrides       map[string]string `json:"action_overrides"`
+	EnforcementMode       string            `json:"enforcement_mode"`
+	Status                string            `json:"status"`
+	MaxActionsPerHour     int               `json:"max_actions_per_hour"`
+	LastVerifiedAt        *time.Time        `json:"last_verified_at,omitempty"`
+	CreatedAt             time.Time         `json:"created_at"`
+	UpdatedAt             time.Time         `json:"updated_at"`
+}
+
+// CreateStreamResponse carries the two secrets. This is the only time either
+// is readable; the store keeps hashes.
+type CreateStreamResponse struct {
+	Stream StreamView `json:"stream"`
+	// PushURLPath is the secret segment in the push URL.
+	PushURLPath string `json:"push_url_path"`
+	// PushToken is the bearer token the transmitter must send.
+	PushToken string `json:"push_token"`
+	// PushURL is the full URL to hand to the transmitter.
+	PushURL string `json:"push_url"`
+}
+
+// UpdateStreamRequest changes the mutable parts of a stream. Secrets are not
+// among them; rotate by creating a new stream.
+type UpdateStreamRequest struct {
+	Name                  *string           `json:"name,omitempty"`
+	Status                *string           `json:"status,omitempty"`
+	EnforcementMode       *string           `json:"enforcement_mode,omitempty"`
+	MaxActionsPerHour     *int              `json:"max_actions_per_hour,omitempty"`
+	AllowedEventTypes     []string          `json:"allowed_event_types,omitempty"`
+	AllowedSubjectFormats []string          `json:"allowed_subject_formats,omitempty"`
+	VerifiedDomains       []string          `json:"verified_domains,omitempty"`
+	ActionOverrides       map[string]string `json:"action_overrides,omitempty"`
+}
+
+// ListStreamsResponse is the list payload.
+type ListStreamsResponse struct {
+	Streams []StreamView `json:"streams"`
+}
+
+func toStreamView(s *InboundStream) StreamView {
+	return StreamView{
+		ID: s.ID.String(), Name: s.Name, Issuer: s.Issuer,
+		Audience: s.Audience, JWKSURI: s.JWKSURI,
+		AllowedEventTypes:     s.AllowedEventTypes,
+		AllowedSubjectFormats: s.AllowedSubjectFormats,
+		VerifiedDomains:       s.VerifiedDomains,
+		ActionOverrides:       s.ActionOverrides,
+		EnforcementMode:       s.EnforcementMode,
+		Status:                s.Status,
+		MaxActionsPerHour:     s.MaxActionsPerHour,
+		LastVerifiedAt:        s.LastVerifiedAt,
+		CreatedAt:             s.CreatedAt, UpdatedAt: s.UpdatedAt,
+	}
+}
+
+func containsString(haystack []string, needle string) bool {
+	for _, h := range haystack {
+		if h == needle {
+			return true
+		}
+	}
+	return false
+}
+
+// CreateStream registers a stream and mints its two secrets.
+func (p *Plugin) CreateStream(ctx context.Context, appID id.AppID,
+	envID id.EnvironmentID, req CreateStreamRequest) (*CreateStreamResponse, error) {
+	if req.Issuer == "" {
+		return nil, errors.New("sharedsignals: issuer is required")
+	}
+	if req.JWKSURI == "" {
+		return nil, errors.New("sharedsignals: jwks_uri is required")
+	}
+	// The same check the fetcher runs, applied before the URL is ever stored.
+	if err := jwksclient.ValidateURI(req.JWKSURI); err != nil {
+		return nil, fmt.Errorf("sharedsignals: %w", err)
+	}
+
+	formats := req.AllowedSubjectFormats
+	if len(formats) == 0 {
+		// iss_sub only by default. Every other format widens who the
+		// transmitter is allowed to name.
+		formats = []string{caep.FormatIssSub}
+	}
+	// Email and phone name a person without the IdP proving it issued them,
+	// so they only make sense inside domains the operator has claimed.
+	if (containsString(formats, caep.FormatEmail) ||
+		containsString(formats, caep.FormatPhoneNumber)) &&
+		len(req.VerifiedDomains) == 0 {
+		return nil, errors.New(
+			"sharedsignals: the email and phone_number formats require verified_domains")
+	}
+
+	mode := req.EnforcementMode
+	if mode == "" {
+		mode = EnforcementEnforce
+	}
+	if mode != EnforcementEnforce && mode != EnforcementObserve {
+		return nil, fmt.Errorf("sharedsignals: unknown enforcement mode %q", mode)
+	}
+
+	audience := req.Audience
+	if audience == "" {
+		audience = p.config.Audience
+	}
+
+	limit := req.MaxActionsPerHour
+	if limit <= 0 {
+		limit = p.config.MaxActionsPerHour
+	}
+
+	pushPath, pushPathHash, err := NewPushSecret()
+	if err != nil {
+		return nil, err
+	}
+	pushToken, pushTokenHash, err := NewPushSecret()
+	if err != nil {
+		return nil, err
+	}
+
+	stream := &InboundStream{
+		ID: id.NewSSFStreamID(), AppID: appID, EnvID: envID,
+		Name: req.Name, Issuer: req.Issuer, Audience: audience,
+		JWKSURI: req.JWKSURI,
+		PushPathHash: pushPathHash, PushTokenHash: pushTokenHash,
+		AllowedEventTypes:     req.AllowedEventTypes,
+		AllowedSubjectFormats: formats,
+		VerifiedDomains:       req.VerifiedDomains,
+		ActionOverrides:       req.ActionOverrides,
+		EnforcementMode:       mode,
+		Status:                StatusEnabled,
+		MaxActionsPerHour:     limit,
+	}
+	if err := p.store.CreateInboundStream(ctx, stream); err != nil {
+		return nil, err
+	}
+
+	return &CreateStreamResponse{
+		Stream:      toStreamView(stream),
+		PushURLPath: pushPath,
+		PushToken:   pushToken,
+		PushURL:     "/v1/ssf/streams/" + pushPath + "/events",
+	}, nil
+}
+
+// UpdateStream changes the mutable fields of a stream.
+func (p *Plugin) UpdateStream(ctx context.Context, streamID id.SSFStreamID,
+	req UpdateStreamRequest) (*StreamView, error) {
+	stream, err := p.store.GetInboundStream(ctx, streamID)
+	if err != nil {
+		return nil, err
+	}
+	if req.Name != nil {
+		stream.Name = *req.Name
+	}
+	if req.Status != nil {
+		switch *req.Status {
+		case StatusEnabled, StatusPaused, StatusDisabled:
+			stream.Status = *req.Status
+		default:
+			return nil, fmt.Errorf("sharedsignals: unknown status %q", *req.Status)
+		}
+	}
+	if req.EnforcementMode != nil {
+		switch *req.EnforcementMode {
+		case EnforcementEnforce, EnforcementObserve:
+			stream.EnforcementMode = *req.EnforcementMode
+		default:
+			return nil, fmt.Errorf("sharedsignals: unknown enforcement mode %q", *req.EnforcementMode)
+		}
+	}
+	if req.MaxActionsPerHour != nil {
+		stream.MaxActionsPerHour = *req.MaxActionsPerHour
+	}
+	if req.AllowedEventTypes != nil {
+		stream.AllowedEventTypes = req.AllowedEventTypes
+	}
+	if req.AllowedSubjectFormats != nil {
+		if (containsString(req.AllowedSubjectFormats, caep.FormatEmail) ||
+			containsString(req.AllowedSubjectFormats, caep.FormatPhoneNumber)) &&
+			len(stream.VerifiedDomains) == 0 && len(req.VerifiedDomains) == 0 {
+			return nil, errors.New(
+				"sharedsignals: the email and phone_number formats require verified_domains")
+		}
+		stream.AllowedSubjectFormats = req.AllowedSubjectFormats
+	}
+	if req.VerifiedDomains != nil {
+		stream.VerifiedDomains = req.VerifiedDomains
+	}
+	if req.ActionOverrides != nil {
+		stream.ActionOverrides = req.ActionOverrides
+	}
+
+	if err := p.store.UpdateInboundStream(ctx, stream); err != nil {
+		return nil, err
+	}
+	view := toStreamView(stream)
+	return &view, nil
+}
+
+// registerAdminRoutes mounts the stream CRUD behind session auth.
+func (p *Plugin) registerAdminRoutes(router forge.Router) error {
+	g := router.Group("/v1/ssf/admin",
+		forge.WithGroupTags("Shared Signals"),
+		forge.WithGroupAuth("session"),
+	)
+
+	if err := g.POST("/streams", p.handleCreateStream,
+		forge.WithSummary("Register an inbound Shared Signals stream"),
+		forge.WithOperationID("createSSFStream"),
+	); err != nil {
+		return err
+	}
+	if err := g.GET("/streams", p.handleListStreams,
+		forge.WithSummary("List inbound Shared Signals streams"),
+		forge.WithOperationID("listSSFStreams"),
+	); err != nil {
+		return err
+	}
+	if err := g.PATCH("/streams/:id", p.handleUpdateStream,
+		forge.WithSummary("Update an inbound Shared Signals stream"),
+		forge.WithOperationID("updateSSFStream"),
+	); err != nil {
+		return err
+	}
+	return g.DELETE("/streams/:id", p.handleDeleteStream,
+		forge.WithSummary("Delete an inbound Shared Signals stream"),
+		forge.WithOperationID("deleteSSFStream"),
+	)
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	return json.NewEncoder(w).Encode(v)
+}
+
+// writeJSONForTest lets the admin tests assert on the encoded shape.
+func writeJSONForTest(w http.ResponseWriter, v any) error {
+	return writeJSON(w, http.StatusOK, v)
+}
+
+func (p *Plugin) handleCreateStream(ctx forge.Context) error {
+	var req CreateStreamRequest
+	body, err := io.ReadAll(io.LimitReader(ctx.Request().Body, 64*1024))
+	if err != nil {
+		return forge.BadRequest("could not read the request body")
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		return forge.BadRequest("the request body is not valid JSON")
+	}
+
+	appID, envID, err := p.requestScope(ctx)
+	if err != nil {
+		return err
+	}
+
+	res, cerr := p.CreateStream(ctx.Context(), appID, envID, req)
+	if cerr != nil {
+		return forge.BadRequest(cerr.Error())
+	}
+	return writeJSON(ctx.Response(), http.StatusCreated, res)
+}
+
+func (p *Plugin) handleListStreams(ctx forge.Context) error {
+	appID, _, err := p.requestScope(ctx)
+	if err != nil {
+		return err
+	}
+	streams, lerr := p.store.ListInboundStreams(ctx.Context(), appID)
+	if lerr != nil {
+		return forge.InternalError(lerr)
+	}
+	views := make([]StreamView, 0, len(streams))
+	for _, s := range streams {
+		views = append(views, toStreamView(s))
+	}
+	return writeJSON(ctx.Response(), http.StatusOK, ListStreamsResponse{Streams: views})
+}
+
+func (p *Plugin) handleUpdateStream(ctx forge.Context) error {
+	streamID, perr := id.ParseWithPrefix(ctx.Param("id"), id.PrefixSSFStream)
+	if perr != nil {
+		return forge.BadRequest("invalid stream id")
+	}
+	var req UpdateStreamRequest
+	body, err := io.ReadAll(io.LimitReader(ctx.Request().Body, 64*1024))
+	if err != nil {
+		return forge.BadRequest("could not read the request body")
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		return forge.BadRequest("the request body is not valid JSON")
+	}
+
+	view, uerr := p.UpdateStream(ctx.Context(), streamID, req)
+	if uerr != nil {
+		if errors.Is(uerr, ErrNotFound) {
+			return forge.NotFound("stream not found")
+		}
+		return forge.BadRequest(uerr.Error())
+	}
+	return writeJSON(ctx.Response(), http.StatusOK, view)
+}
+
+func (p *Plugin) handleDeleteStream(ctx forge.Context) error {
+	streamID, perr := id.ParseWithPrefix(ctx.Param("id"), id.PrefixSSFStream)
+	if perr != nil {
+		return forge.BadRequest("invalid stream id")
+	}
+	if err := p.store.DeleteInboundStream(ctx.Context(), streamID); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return forge.NotFound("stream not found")
+		}
+		return forge.InternalError(err)
+	}
+	ctx.Response().WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+// requestScope resolves the app and environment the caller is acting in.
+// The publishable-key middleware puts both on the context; the configured
+// default app is the fallback, matching how plugins/sso resolves it in
+// requestAppID.
+func (p *Plugin) requestScope(ctx forge.Context) (id.AppID, id.EnvironmentID, error) {
+	envID, _ := middleware.EnvIDFrom(ctx.Context())
+
+	if appID, ok := middleware.AppIDFrom(ctx.Context()); ok {
+		return appID, envID, nil
+	}
+	appID, err := id.ParseAppID(p.engine.DefaultAppID())
+	if err != nil {
+		return id.Nil, id.Nil, forge.BadRequest("invalid app configuration")
+	}
+	return appID, envID, nil
+}
+```
+
+Add `"github.com/xraph/authsome/middleware"` to the import block.
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `go test ./plugins/sharedsignals/ -run 'CreateStream|StreamView' -v`
+Expected: PASS, six tests.
+
+- [ ] **Step 5: Delete the Task 10 stub and run the whole package**
+
+Remove `func (p *Plugin) registerAdminRoutes(_ forge.Router) error { return nil }`
+from `plugin.go`.
+
+Run: `go test ./plugins/sharedsignals/... -race`
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add plugins/sharedsignals/admin.go plugins/sharedsignals/admin_test.go plugins/sharedsignals/plugin.go
+git commit -m "feat(sharedsignals): stream registration and admin CRUD"
+```
+
+---
+
+### Task 17: End-to-end through a real engine
+
+**Files:**
+- Create: `plugins/sharedsignals/e2e_test.go`
+- Test: `plugins/sharedsignals/e2e_test.go`
+
+**Interfaces:**
+- Consumes: everything. This task adds no production code.
+
+Every test so far has poked one layer. This one stands up a real engine, registers the plugin, points a fake transmitter at it, pushes a `session-revoked` and asserts the session is gone from the store. It is the test that would have caught the whole feature being wired up wrong.
+
+- [ ] **Step 1: Write the end-to-end test**
+
+Create `plugins/sharedsignals/e2e_test.go`:
+
+```go
+package sharedsignals_test
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"encoding/base64"
+	"fmt"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/secutil"
+	"github.com/xraph/authsome/plugins/sharedsignals"
+	"github.com/xraph/authsome/plugins/sharedsignals/caep"
+	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/user"
+)
+
+// fakeTransmitter is an identity provider: a keypair, a JWKS endpoint and the
+// ability to sign a SET the way Okta does.
+type fakeTransmitter struct {
+	key    *rsa.PrivateKey
+	server *httptest.Server
+	issuer string
+}
+
+func newFakeTransmitter(t *testing.T) *fakeTransmitter {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		n := base64.RawURLEncoding.EncodeToString(key.PublicKey.N.Bytes())
+		e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.PublicKey.E)).Bytes())
+		fmt.Fprintf(w, `{"keys":[{"kty":"RSA","use":"sig","alg":"RS256","kid":"k1","n":%q,"e":%q}]}`, n, e)
+	}))
+	t.Cleanup(srv.Close)
+
+	return &fakeTransmitter{key: key, server: srv, issuer: "https://idp.test.example"}
+}
+
+// sessionRevokedSET signs a session-revoked event in Okta's shape, meaning
+// the subject arrives under "subject" rather than "sub_id".
+func (f *fakeTransmitter) sessionRevokedSET(t *testing.T, audience, subject string) string {
+	t.Helper()
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"iss": f.issuer,
+		"aud": audience,
+		"jti": "jti-" + id.NewSSFEventID().String(),
+		"iat": time.Now().Unix(),
+		"events": map[string]any{
+			caep.EventSessionRevoked: map[string]any{
+				"subject": map[string]any{
+					"format": "iss_sub", "iss": f.issuer, "sub": subject,
+				},
+				"reason_admin":    map[string]any{"en": "Account compromised"},
+				"event_timestamp": time.Now().UnixMilli(),
+			},
+		},
+	})
+	tok.Header["typ"] = "secevent+jwt"
+	tok.Header["kid"] = "k1"
+	signed, err := tok.SignedString(f.key)
+	require.NoError(t, err)
+	return signed
+}
+
+// The whole point of the feature, in one test: an upstream compromise ends
+// the sessions authsome issued.
+func TestEndToEnd_UpstreamRevocationKillsLiveSessions(t *testing.T) {
+	ctx := context.Background()
+	idp := newFakeTransmitter(t)
+
+	ssf := sharedsignals.New(sharedsignals.Config{
+		Audience: "https://authsome.test/ssf",
+	})
+	eng := secutil.NewTestEngine(t, authsome.WithPlugin(ssf))
+
+	appID, err := id.ParseAppID(eng.DefaultAppID())
+	require.NoError(t, err)
+
+	// A user with two live sessions.
+	u := &user.User{
+		ID: id.NewUserID(), AppID: appID,
+		Email: "victim@corp.com", EmailVerified: true,
+	}
+	require.NoError(t, eng.Store().CreateUserWithPrimaryEmail(ctx, u, &user.UserEmail{
+		ID: id.NewUserEmailID(), UserID: u.ID, AppID: appID,
+		Email: u.Email, Verified: true, Primary: true,
+	}))
+	for i := 0; i < 2; i++ {
+		require.NoError(t, eng.Store().CreateSession(ctx, &session.Session{
+			ID: id.NewSessionID(), AppID: appID, UserID: u.ID,
+			Token:     fmt.Sprintf("live-token-%d", i),
+			ExpiresAt: time.Now().Add(24 * time.Hour),
+		}))
+	}
+
+	live, err := eng.ListSessions(ctx, u.ID)
+	require.NoError(t, err)
+	require.Len(t, live, 2, "the user starts with two live sessions")
+
+	// Register the IdP as a stream and link its subject to our user, which is
+	// what an SSO sign-in would have done.
+	created, err := ssf.CreateStream(ctx, appID, id.Nil, sharedsignals.CreateStreamRequest{
+		Name:    "test-idp",
+		Issuer:  idp.issuer,
+		JWKSURI: idp.server.URL,
+	})
+	require.NoError(t, err)
+	require.NoError(t, ssf.LinkSubject(ctx, appID, id.Nil,
+		idp.issuer, "idp-user-1", u.ID, sharedsignals.SourceSSO))
+
+	// The IdP decides the account is compromised and pushes the event.
+	body := idp.sessionRevokedSET(t, "https://authsome.test/ssf", "idp-user-1")
+	req := httptest.NewRequest(http.MethodPost,
+		"/v1/ssf/streams/"+created.PushURLPath+"/events", stringReader(body))
+	req.Header.Set("Content-Type", "application/secevent+jwt")
+	req.Header.Set("Authorization", "Bearer "+created.PushToken)
+	rec := httptest.NewRecorder()
+
+	ssf.ServePushForTest(rec, req, created.PushURLPath)
+	require.Equal(t, http.StatusAccepted, rec.Code, "body: %s", rec.Body.String())
+
+	// The sessions are gone from the store, not merely marked.
+	after, err := eng.ListSessions(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Empty(t, after, "an upstream revocation must end every live session")
+
+	// And a durable signal is left behind for the next sign-in to score.
+	riskReq := riskRequestFor(appID, u.Email)
+	signal, err := ssf.EvaluateRisk(ctx, riskReq)
+	require.NoError(t, err)
+	assert.Greater(t, signal.Score, 90,
+		"the revocation must also leave a high-confidence risk signal")
+}
+
+// A SET signed by a key the stream does not trust changes nothing.
+func TestEndToEnd_ForgedSETLeavesSessionsAlone(t *testing.T) {
+	ctx := context.Background()
+	realIDP := newFakeTransmitter(t)
+	attacker := newFakeTransmitter(t)
+	attacker.issuer = realIDP.issuer // same issuer claim, different key
+
+	ssf := sharedsignals.New(sharedsignals.Config{Audience: "https://authsome.test/ssf"})
+	eng := secutil.NewTestEngine(t, authsome.WithPlugin(ssf))
+
+	appID, err := id.ParseAppID(eng.DefaultAppID())
+	require.NoError(t, err)
+
+	u := &user.User{ID: id.NewUserID(), AppID: appID,
+		Email: "victim@corp.com", EmailVerified: true}
+	require.NoError(t, eng.Store().CreateUserWithPrimaryEmail(ctx, u, &user.UserEmail{
+		ID: id.NewUserEmailID(), UserID: u.ID, AppID: appID,
+		Email: u.Email, Verified: true, Primary: true,
+	}))
+	require.NoError(t, eng.Store().CreateSession(ctx, &session.Session{
+		ID: id.NewSessionID(), AppID: appID, UserID: u.ID,
+		Token: "live-token", ExpiresAt: time.Now().Add(24 * time.Hour),
+	}))
+
+	created, err := ssf.CreateStream(ctx, appID, id.Nil, sharedsignals.CreateStreamRequest{
+		Name: "test-idp", Issuer: realIDP.issuer, JWKSURI: realIDP.server.URL,
+	})
+	require.NoError(t, err)
+	require.NoError(t, ssf.LinkSubject(ctx, appID, id.Nil,
+		realIDP.issuer, "idp-user-1", u.ID, sharedsignals.SourceSSO))
+
+	// Signed by the attacker's key, but the stream only trusts the real IdP's
+	// JWKS, so the signature check fails.
+	body := attacker.sessionRevokedSET(t, "https://authsome.test/ssf", "idp-user-1")
+	req := httptest.NewRequest(http.MethodPost,
+		"/v1/ssf/streams/"+created.PushURLPath+"/events", stringReader(body))
+	req.Header.Set("Content-Type", "application/secevent+jwt")
+	req.Header.Set("Authorization", "Bearer "+created.PushToken)
+	rec := httptest.NewRecorder()
+
+	ssf.ServePushForTest(rec, req, created.PushURLPath)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	after, err := eng.ListSessions(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Len(t, after, 1, "a forged SET must leave every session alone")
+}
+```
+
+- [ ] **Step 2: Export the two test seams this needs**
+
+The end-to-end test lives in package `sharedsignals_test`, so it needs two
+exported helpers. In `plugins/sharedsignals/receiver.go`, rename the unexported
+`servePushForTest` to an exported one and keep the internal tests calling it:
+
+```go
+// ServePushForTest drives the push pipeline without a forge context. It is
+// exported for end-to-end tests that live outside this package; production
+// traffic arrives through handlePush.
+func (p *Plugin) ServePushForTest(w http.ResponseWriter, r *http.Request, pushPath string) {
+	p.servePush(w, r, pushPath)
+}
+```
+
+Update the call in `receiver_test.go` from `servePushForTest` to
+`ServePushForTest`.
+
+Add the two small helpers the e2e file references at the bottom of
+`e2e_test.go`:
+
+```go
+func stringReader(s string) *strings.Reader { return strings.NewReader(s) }
+
+func riskRequestFor(appID id.AppID, email string) *riskengine.RiskRequest {
+	return &riskengine.RiskRequest{AppID: appID.String(), Email: email}
+}
+```
+
+with `"strings"` and `"github.com/xraph/authsome/plugins/riskengine"` imported.
+
+- [ ] **Step 3: Run the end-to-end test**
+
+Run: `go test ./plugins/sharedsignals/ -run TestEndToEnd -v`
+Expected: PASS, two tests.
+
+If `TestEndToEnd_UpstreamRevocationKillsLiveSessions` reports 202 but leaves
+the sessions alive, the plugin did not pick up a `SessionRevoker` in `OnInit`.
+Check that `secutil.NewTestEngine` passes `*authsome.Engine` (not a wrapper)
+into `OnInit`, and that the type assertion in `OnInit` succeeds.
+
+- [ ] **Step 4: Run everything**
+
+```bash
+go test ./plugins/sharedsignals/... ./plugins/riskengine/... ./plugins/sso/... ./id/... ./plugin/... -race
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Run the full suite and the linter**
+
+```bash
+make test
+```
+
+```bash
+make lint
+```
+
+Expected: both clean. Do not move on with a failing lint; the `//nolint`
+comments in this plan cover the intentional best-effort error drops, and
+anything else the linter finds is a real defect.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add plugins/sharedsignals/e2e_test.go plugins/sharedsignals/receiver.go plugins/sharedsignals/receiver_test.go
+git commit -m "test(sharedsignals): end-to-end revocation and forged-token coverage"
+```
+
+---
+
+## Wiring it up
+
+The plugin is registered like any other, and it needs to be added wherever the
+host builds its engine:
+
+```go
+import "github.com/xraph/authsome/plugins/sharedsignals"
+
+ssf := sharedsignals.New(sharedsignals.Config{
+    Audience: "https://auth.example.com/ssf",
+})
+
+eng, err := authsome.NewEngine(
+    authsome.WithPlugin(ssf),
+    // Feed CAEP signals into the composite score alongside the IP-based
+    // contributors. Without this the signals are recorded but never scored.
+    authsome.WithPlugin(riskengine.New(ipreputation.New(), ssf)),
+)
+```
+
+Registration order matters in one direction only: `riskengine` holds the
+contributor slice, so `ssf` has to exist before it is constructed. Both are
+registered with the engine independently.
+
+## Definition of done
+
+- [ ] `make test` passes.
+- [ ] `make lint` passes.
+- [ ] `go test ./plugins/sharedsignals/... -race` passes.
+- [ ] Every negative security test named in the spec has a test in this
+      package: `alg: none`, HMAC confusion, wrong `iss`, wrong `aud`, stale
+      `iat`, future `iat`, missing `jti`, over-long `jti`, replayed `jti`,
+      unknown `kid`, wrong signing key, cross-stream replay, cross-app
+      subject, email outside `verified_domains`, unverified email, disagreeing
+      aliases, oversized body, oversized JWKS, and a circuit breaker trip.
+- [ ] The store conformance suite runs against memory and sqlite.
+- [ ] A real Okta-shaped SET, meaning `subject` rather than `sub_id`, is in
+      the fixtures and passes.
+
+## What M1 deliberately leaves out
+
+M2 through M4 in the spec: the outbound stream client, the dashboard contract
+and dashui page, and the transmitter emit path. Also poll-based receiving, the
+`account`, `uri` and `did` subject formats, and transmitter key rotation.
