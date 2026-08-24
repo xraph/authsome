@@ -2,6 +2,7 @@ package agentauth
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -220,6 +221,16 @@ func (s *MemoryStore) GetOrgPolicy(_ context.Context, orgID id.OrgID) (*OrgAgent
 }
 
 func (s *MemoryStore) PutOrgPolicy(_ context.Context, p *OrgAgentPolicy) error {
+	switch p.Mode {
+	case ModeOpen, ModeAllowlist, ModeBlocked:
+	default:
+		// A policy with an unrecognized mode must never make it into the
+		// store: Evaluate and CreateGrant treat that case as a deny, but
+		// refusing it here means bad data can't exist to be misread in the
+		// first place.
+		return fmt.Errorf("agentauth: invalid policy mode %q", p.Mode)
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cp := *p

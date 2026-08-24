@@ -36,18 +36,92 @@ func (p *Plugin) Evaluate(ctx context.Context, clientID string, _ id.UserID, org
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("agentauth: load agent: %w", err)
+		// A genuine store failure denies. It must never collapse into the
+		// not-found branch above and allow the request through.
+		return forge.InternalError(fmt.Errorf("agentauth: load agent: %w", err))
 	}
 
 	if agent.Status == StatusBlocked {
 		return forge.Forbidden("agent is blocked")
 	}
 
-	policy, err := p.policyFor(ctx, effectiveOrg(agent, orgID))
-	if err != nil {
-		return err
+	for _, org := range governingOrgs(agent, orgID) {
+		policy, err := p.policyFor(ctx, org)
+		if err != nil {
+			return err
+		}
+		if err := p.checkPolicy(agent, policy, scopes); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateGrant writes the delegation. It refuses a grant with no delegating
+// human, which is the invariant the whole authorization model rests on. It
+// also re-runs the same policy check Evaluate performs, once per governing
+// org, rather than trusting that every caller ran Evaluate first: CreateGrant
+// is exported, so nothing at the type level stops a caller from reaching it
+// directly, and the invariant that a scope or a blocked policy never reaches
+// a stored grant has to hold regardless of call order.
+func (p *Plugin) CreateGrant(ctx context.Context, in CreateGrantInput) (*AgentGrant, error) {
+	// IsNil rules out the zero value; the prefix check rules out a non-zero
+	// ID that merely isn't a user id. id.UserID is a type alias, so nothing
+	// at compile time stops an org or agent id from being passed here.
+	if in.UserID.IsNil() || in.UserID.Prefix() != id.PrefixUser {
+		return nil, errors.New("agentauth: a grant requires a delegating user")
 	}
 
+	agent, err := p.store.GetAgent(ctx, in.AgentID)
+	if errors.Is(err, ErrNotFound) {
+		return nil, forge.BadRequest("unknown agent")
+	}
+	if err != nil {
+		return nil, forge.InternalError(fmt.Errorf("agentauth: load agent: %w", err))
+	}
+	if agent.Status == StatusBlocked {
+		return nil, forge.Forbidden("agent is blocked")
+	}
+
+	orgs := governingOrgs(agent, in.OrgID)
+	ttl := in.RequestedTTL
+	for _, org := range orgs {
+		policy, err := p.policyFor(ctx, org)
+		if err != nil {
+			return nil, err
+		}
+		if err := p.checkPolicy(agent, policy, in.Scopes); err != nil {
+			return nil, err
+		}
+		// Folding the running ttl back in as the "requested" value narrows it
+		// by each governing org's ceiling in turn, so the org with the
+		// tightest MaxGrantTTL always wins regardless of how many orgs apply.
+		ttl = p.clampTTL(policy, ttl)
+	}
+
+	now := time.Now()
+	g := &AgentGrant{
+		ID:        id.NewAgentGrantID(),
+		AppID:     in.AppID,
+		AgentID:   in.AgentID,
+		UserID:    in.UserID,
+		OrgID:     in.OrgID,
+		Scopes:    in.Scopes,
+		ConsentID: in.ConsentID,
+		ExpiresAt: now.Add(ttl),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := p.store.CreateAgentGrant(ctx, g); err != nil {
+		return nil, forge.InternalError(fmt.Errorf("agentauth: create grant: %w", err))
+	}
+	return g, nil
+}
+
+// checkPolicy applies one org's policy against the agent and the requested
+// scopes. Evaluate and CreateGrant both call it, once per governing org, so
+// neither can write or authorize a delegation the other would have refused.
+func (p *Plugin) checkPolicy(agent *Agent, policy *OrgAgentPolicy, scopes []string) error {
 	switch policy.Mode {
 	case ModeBlocked:
 		return forge.Forbidden("this organization does not allow agent delegation")
@@ -57,6 +131,15 @@ func (p *Plugin) Evaluate(ctx context.Context, clientID string, _ id.UserID, org
 		}
 	case ModeOpen:
 		// Any non-blocked agent may be authorized.
+	default:
+		// An unrecognized mode denies. A policy nobody can interpret must not
+		// be treated as permission: PolicyMode is a bare string whose zero
+		// value is "", and nothing upstream of this switch can guarantee the
+		// value is one of the three known constants (a partial update that
+		// only touches MaxGrantTTL and re-Puts the struct is enough to carry
+		// a garbled Mode). Falling open here would let exactly that kind of
+		// write silently disarm an org's block.
+		return forge.Forbidden("agent delegation policy for this organization is not recognized")
 	}
 
 	for _, s := range scopes {
@@ -70,39 +153,11 @@ func (p *Plugin) Evaluate(ctx context.Context, clientID string, _ id.UserID, org
 	return nil
 }
 
-// CreateGrant writes the delegation. It refuses a grant with no delegating
-// human, which is the invariant the whole authorization model rests on.
-func (p *Plugin) CreateGrant(ctx context.Context, in CreateGrantInput) (*AgentGrant, error) {
-	if in.UserID.IsNil() {
-		return nil, errors.New("agentauth: a grant requires a delegating user")
-	}
-
-	policy, err := p.policyFor(ctx, in.OrgID)
-	if err != nil {
-		return nil, err
-	}
-
-	now := time.Now()
-	g := &AgentGrant{
-		ID:        id.NewAgentGrantID(),
-		AppID:     in.AppID,
-		AgentID:   in.AgentID,
-		UserID:    in.UserID,
-		OrgID:     in.OrgID,
-		Scopes:    in.Scopes,
-		ConsentID: in.ConsentID,
-		ExpiresAt: now.Add(p.clampTTL(policy, in.RequestedTTL)),
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-	if err := p.store.CreateAgentGrant(ctx, g); err != nil {
-		return nil, fmt.Errorf("agentauth: create grant: %w", err)
-	}
-	return g, nil
-}
-
 // clampTTL takes the shortest of the request, the org ceiling and the plugin
-// default. A zero request means "use the default".
+// default. A zero request means "use the default". If every input folds to a
+// non-positive duration — for example WithDefaultGrantTTL(0) with no org
+// ceiling to save it — it falls back to the package default rather than
+// producing a grant that is born expired.
 func (p *Plugin) clampTTL(policy *OrgAgentPolicy, requested time.Duration) time.Duration {
 	ttl := p.grantTTL
 	if requested > 0 && requested < ttl {
@@ -111,30 +166,44 @@ func (p *Plugin) clampTTL(policy *OrgAgentPolicy, requested time.Duration) time.
 	if policy != nil && policy.MaxGrantTTL > 0 && policy.MaxGrantTTL < ttl {
 		ttl = policy.MaxGrantTTL
 	}
+	if ttl <= 0 {
+		ttl = defaultGrantTTL
+	}
 	return ttl
 }
 
-// effectiveOrg decides which organization's policy governs this consent.
+// governingOrgs returns the distinct, non-nil organizations whose policy
+// governs a delegation: the org that registered the agent, and the org the
+// consenting session is scoped to, if either is present. Both apply when
+// both are present and different, and the delegation must clear every one of
+// them — either org's policy is a well-formed "no" regardless of what the
+// other says.
 //
-// The orgID the provider hands us comes from the caller's session, and the
-// auth middleware populates it only when that session is org-scoped. An
-// app-scoped session therefore arrives with the zero value, and keying policy
-// off that would mean an org that set ModeBlocked never had it enforced
-// against its own members signing in without an active org. So the agent's own
-// record wins when it has one: an org-registered agent carries the org that
-// registered it, which is a more trustworthy source than ambient session
-// scope, and it cannot be dodged by dropping org context from the request.
+// This is deliberately not "pick a winner". Preferring only the agent's org
+// closes the dodge where an app-scoped session (zero session org) authorizes
+// an agent whose own org is blocked, but it reopens a worse hole: an org that
+// blocks delegation would only be able to enforce that block against agents
+// it registered itself, never against an agent registered elsewhere and used
+// by one of its own members. Preferring only the session org reopens the
+// original hole the same way. Checking both is the only option that lets
+// each org's policy mean what it says regardless of which side of the
+// delegation an org is standing on.
 //
-// When neither source yields an org, no org policy applies. That is the
-// single-tenant and app-scoped case, where there is no organization to have an
-// opinion. A self-registered agent authorized from a session with no org
-// context is the one combination this leaves ungoverned; see the plan's
-// deferred notes.
-func effectiveOrg(agent *Agent, sessionOrg id.OrgID) id.OrgID {
+// When neither source yields an org, there is no organization to have an
+// opinion — the single-tenant and app-scoped case — and the sole element
+// returned is the zero org id, which resolves to the open default.
+func governingOrgs(agent *Agent, sessionOrg id.OrgID) []id.OrgID {
+	var orgs []id.OrgID
 	if !agent.OrgID.IsNil() {
-		return agent.OrgID
+		orgs = append(orgs, agent.OrgID)
 	}
-	return sessionOrg
+	if !sessionOrg.IsNil() && sessionOrg.String() != agent.OrgID.String() {
+		orgs = append(orgs, sessionOrg)
+	}
+	if len(orgs) == 0 {
+		orgs = append(orgs, id.OrgID{})
+	}
+	return orgs
 }
 
 // policyFor returns the org's policy, defaulting to open when no row exists.
@@ -144,7 +213,7 @@ func (p *Plugin) policyFor(ctx context.Context, orgID id.OrgID) (*OrgAgentPolicy
 		return &OrgAgentPolicy{OrgID: orgID, Mode: ModeOpen}, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("agentauth: load org policy: %w", err)
+		return nil, forge.InternalError(fmt.Errorf("agentauth: load org policy: %w", err))
 	}
 	return policy, nil
 }

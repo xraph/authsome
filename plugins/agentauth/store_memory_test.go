@@ -174,6 +174,30 @@ func TestMemoryStore_OrgAgentPolicy_CopySafety(t *testing.T) {
 	assert.Equal(t, "invoices:read", got2.AllowedScopes[0], "stored allowed_scopes must not be mutated")
 }
 
+// PutOrgPolicy must refuse a policy with a mode that isn't one of the three
+// known constants. Evaluate and CreateGrant treat an unrecognized mode as a
+// deny, but the safer invariant is that bad data can never be written in the
+// first place — a partial update that only touches MaxGrantTTL and re-Puts
+// the struct must not be able to carry a garbled Mode into the store.
+func TestMemoryStore_PutOrgPolicy_RejectsUnrecognizedMode(t *testing.T) {
+	s := agentauth.NewMemoryStore()
+
+	err := s.PutOrgPolicy(context.Background(), &agentauth.OrgAgentPolicy{
+		OrgID: id.NewOrgID(), Mode: agentauth.PolicyMode("bogus"),
+	})
+
+	require.Error(t, err, "a policy nobody can interpret must be impossible to store")
+}
+
+// The zero value of PolicyMode ("") must be refused for the same reason.
+func TestMemoryStore_PutOrgPolicy_RejectsZeroValueMode(t *testing.T) {
+	s := agentauth.NewMemoryStore()
+
+	err := s.PutOrgPolicy(context.Background(), &agentauth.OrgAgentPolicy{OrgID: id.NewOrgID()})
+
+	require.Error(t, err, "an unset mode must be impossible to store")
+}
+
 // RevokeGrantsByAgent with specific org should only revoke grants in that org.
 func TestMemoryStore_RevokeGrantsByAgent_WithOrg(t *testing.T) {
 	s := agentauth.NewMemoryStore()
