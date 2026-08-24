@@ -30,6 +30,7 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/bridge/ledgeradapter"
 	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
@@ -100,6 +101,12 @@ type Engine struct {
 
 	// Ceremony state store for multi-instance auth ceremonies
 	ceremonyStore ceremony.Store
+
+	// RFC 9449 DPoP: proof validator (always constructed), nonce signer
+	// (nil when no signing secret is derivable) and replay cache.
+	dpopValidator   *dpop.Validator
+	dpopNonceSigner *dpop.NonceSigner
+	dpopReplayCache dpop.ReplayCache
 
 	// Token format (default: opaque; per-app overrides via AppSessionConfig.TokenFormat)
 	defaultTokenFormat tokenformat.Format
@@ -175,6 +182,11 @@ func NewEngine(opts ...Option) (*Engine, error) {
 	if err := registerCaptchaSettings(e.settingsMgr); err != nil {
 		return nil, fmt.Errorf("authsome: failed to register captcha settings: %w", err)
 	}
+
+	// Construct the RFC 9449 DPoP validator and, when a secret is
+	// derivable, the nonce signer. Settings and JWT formats (both consulted
+	// indirectly, the latter via NonceSecret) are established by this point.
+	e.initDPoP()
 
 	// Resolve token encryptor: WithTokenEncryptor wins, otherwise read env.
 	if e.tokenEncryptor == nil {
@@ -1448,6 +1460,16 @@ func (e *Engine) NonceSecret() []byte {
 	}
 
 	return nil
+}
+
+// hkdfLike derives a domain-separated key from base material. Same
+// construction NonceSecret already uses for the dashboard, pulled out so
+// other subsystems (DPoP) can derive their own key from the same base
+// secret under a different info string.
+func hkdfLike(base []byte, info string) []byte {
+	h := hmac.New(sha256.New, base)
+	h.Write([]byte(info))
+	return h.Sum(nil)
 }
 
 // Metrics returns the current engine metrics.

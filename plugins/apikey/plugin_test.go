@@ -21,6 +21,7 @@ import (
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
@@ -66,6 +67,12 @@ func (m *mockEngine) SessionConfigForApp(_ context.Context, _ id.AppID, _ ...id.
 func (m *mockEngine) TokenFormatForApp(_ string) tokenformat.Format { return nil }
 func (m *mockEngine) CeremonyStore() ceremony.Store                 { return nil }
 func (m *mockEngine) APIKeyStore() apikey.Store                     { return m.store }
+func (m *mockEngine) DPoPValidator() *dpop.Validator                { return nil }
+func (m *mockEngine) DPoPNonceSigner() *dpop.NonceSigner            { return nil }
+func (m *mockEngine) DPoPModeForApp(_ context.Context, _ id.AppID) dpop.Mode {
+	return dpop.ModeOff
+}
+func (m *mockEngine) DPoPNonceRequiredForApp(_ context.Context, _ id.AppID) bool { return false }
 func (m *mockEngine) ResolveSessionByToken(_ string) (*session.Session, error) {
 	return nil, errors.New("not implemented")
 }

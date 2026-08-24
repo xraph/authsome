@@ -19,6 +19,7 @@ import (
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
@@ -101,6 +102,16 @@ type Engine interface {
 	CeremonyStore() ceremony.Store
 	// APIKeyStore returns the API key store.
 	APIKeyStore() apikey.Store
+	// DPoPValidator returns the RFC 9449 proof validator. Never nil.
+	DPoPValidator() *dpop.Validator
+	// DPoPNonceSigner returns the DPoP nonce signer, or nil when no signing
+	// secret could be derived.
+	DPoPNonceSigner() *dpop.NonceSigner
+	// DPoPModeForApp resolves an app's DPoP mode. Fold a per-client value in
+	// with dpop.MaxMode; a client value must never lower the app's.
+	DPoPModeForApp(ctx context.Context, appID id.AppID) dpop.Mode
+	// DPoPNonceRequiredForApp reports whether an app demands a nonce.
+	DPoPNonceRequiredForApp(ctx context.Context, appID id.AppID) bool
 
 	// ── User / session resolution ──
 
