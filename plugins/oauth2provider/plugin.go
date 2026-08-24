@@ -317,6 +317,20 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// reason POST /register does above — an engine-less test or a stock
 	// deployment that never configures a shared limiter must still get
 	// one, rather than these routes going unlimited.
+	//
+	// The key combines the caller's IP with the path's client_id rather
+	// than either alone. Supplying a KeyFunc replaces
+	// middleware.RateLimit's default IP-only key, it does not add to it —
+	// so a client_id-only key (what this used to be) drops IP throttling
+	// entirely: one host could drive unbounded GetClient lookups by
+	// varying the path segment, and worse, anyone who learns a real
+	// client_id could burn that specific bucket and lock its legitimate
+	// owner out of GET/PUT/DELETE for the window. Keying on both restores
+	// the per-caller throttle and still keeps one guesser from parallelizing
+	// across client_ids to dodge it. middleware.ClientIP is the same
+	// trusted-proxy-aware helper the default KeyFunc uses; reading a
+	// forwarding header here directly would let a direct, untrusted client
+	// mint a fresh bucket per request by spoofing it.
 	manageOpts := func(extra ...forge.RouteOption) []forge.RouteOption {
 		base := []forge.RouteOption{
 			forge.WithErrorResponses(),
@@ -324,7 +338,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				Limit:  p.config.RegistrationRateLimit.Limit * 6,
 				Window: p.config.RegistrationRateLimit.Window,
 				KeyFunc: func(c forge.Context) string {
-					return "oauth2-reg-manage:" + c.Param("clientId")
+					return "oauth2-reg-manage:" + middleware.ClientIP(c.Request()) + ":" + c.Param("clientId")
 				},
 			})),
 		}

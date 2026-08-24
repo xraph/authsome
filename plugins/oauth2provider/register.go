@@ -16,13 +16,37 @@ import (
 	"github.com/xraph/authsome/middleware"
 )
 
-// Cheap per-field caps enforced on an unauthenticated registration request.
-// See the checks in handleRegisterClient for why these exist.
+// Cheap per-field caps enforced on both handleRegisterClient and
+// handleUpdateRegistration. None of these are RFC 7591/7592 requirements;
+// they exist so a single request cannot make the stored client record, or
+// the work done building it, unboundedly large. PUT is authenticated where
+// POST is not, but the record it writes goes through the exact same
+// full-row replace on every backend (see UpdateClient's doc comment), so
+// the cap applies just as much there.
 const (
 	maxRegisterRedirectURIs  = 20
 	maxRegisterClientNameLen = 256
 	maxRegisterContacts      = 10
 )
+
+// checkRegistrationSizeCaps enforces maxRegisterRedirectURIs,
+// maxRegisterClientNameLen and maxRegisterContacts. Shared by registration
+// and update so the two paths cannot drift on what counts as too large.
+func checkRegistrationSizeCaps(redirectURIs []string, clientName string, contacts []string) error {
+	if len(redirectURIs) > maxRegisterRedirectURIs {
+		return regError(http.StatusBadRequest, errInvalidClientMetadata,
+			fmt.Sprintf("redirect_uris must not exceed %d entries", maxRegisterRedirectURIs))
+	}
+	if len(clientName) > maxRegisterClientNameLen {
+		return regError(http.StatusBadRequest, errInvalidClientMetadata,
+			fmt.Sprintf("client_name must not exceed %d characters", maxRegisterClientNameLen))
+	}
+	if len(contacts) > maxRegisterContacts {
+		return regError(http.StatusBadRequest, errInvalidClientMetadata,
+			fmt.Sprintf("contacts must not exceed %d entries", maxRegisterContacts))
+	}
+	return nil
+}
 
 // RegisterClientRequest is an RFC 7591 client registration request.
 type RegisterClientRequest struct {
@@ -141,21 +165,8 @@ func (p *Plugin) handleRegisterClient(ctx forge.Context, req *RegisterClientRequ
 		return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
 			"redirect_uris is required")
 	}
-	// Cheap caps on an unauthenticated write path. None of these are RFC
-	// 7591 requirements; they exist so a single request cannot make the
-	// stored client record, or the work done building it, unboundedly
-	// large.
-	if len(req.RedirectURIs) > maxRegisterRedirectURIs {
-		return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
-			fmt.Sprintf("redirect_uris must not exceed %d entries", maxRegisterRedirectURIs))
-	}
-	if len(req.ClientName) > maxRegisterClientNameLen {
-		return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
-			fmt.Sprintf("client_name must not exceed %d characters", maxRegisterClientNameLen))
-	}
-	if len(req.Contacts) > maxRegisterContacts {
-		return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
-			fmt.Sprintf("contacts must not exceed %d entries", maxRegisterContacts))
+	if capErr := checkRegistrationSizeCaps(req.RedirectURIs, req.ClientName, req.Contacts); capErr != nil {
+		return nil, capErr
 	}
 	for _, u := range req.RedirectURIs {
 		if uriErr := validateRedirectURI(u); uriErr != nil {
@@ -316,15 +327,37 @@ func (p *Plugin) clientInfoResponse(c *OAuth2Client) *RegisterClientResponse {
 }
 
 // RegistrationRequest addresses one registration by its client_id.
+//
+// ClientID is tagged json:"-" on purpose, not left untagged. forge's
+// BindRequest binds path params first and then JSON-decodes the body over
+// the same struct, and encoding/json matches an untagged field
+// case-insensitively — so a body key "clientId" would otherwise be able to
+// overwrite the path value after the fact. This struct has no other field
+// for a body to collide with today, which is the only reason leaving it
+// untagged would happen to be safe right now; json:"-" keeps it safe if a
+// body field is ever added here later. See UpdateRegistrationRequest below
+// for the case where that actually bit us.
 type RegistrationRequest struct {
-	ClientID string `path:"clientId"`
+	ClientID string `path:"clientId" json:"-"`
 }
 
 // UpdateRegistrationRequest is an RFC 7592 client update. The body repeats
 // the full registration; anything omitted is cleared, per RFC 7592
 // section 2.2, which specifies a replacement and not a merge.
+//
+// ClientID is tagged json:"-": without it, a body key "clientId" (matched
+// case-insensitively by encoding/json against the untagged field) lands
+// here and overwrites the path-bound value, since BindRequest binds the
+// path first and then decodes the body on top of it. That let a caller PUT
+// to an arbitrary junk path with {"client_id": "<victim-id>"} in the body
+// and have the section 2.2 client_id check below compare the body against
+// itself instead of against the URL, while the route's rate limiter (keyed
+// on the path segment) charged the junk value instead of the real one.
+// Handlers below additionally never read this field — they take the
+// client_id from ctx.Param("clientId") directly — so this tag is
+// belt-and-braces, not the only thing standing between the two.
 type UpdateRegistrationRequest struct {
-	ClientID string `path:"clientId"`
+	ClientID string `path:"clientId" json:"-"`
 
 	BodyClientID     string   `json:"client_id,omitempty"`
 	BodyClientSecret string   `json:"client_secret,omitempty"`
@@ -350,6 +383,18 @@ type UpdateRegistrationRequest struct {
 // unauthenticated caller which client_ids exist. Admin-created clients have
 // an empty hash and are rejected before the compare, which is what keeps
 // them off these routes entirely.
+//
+// The failure paths are NOT constant-time relative to each other: an
+// unknown client_id or an admin-created one returns before ever touching
+// bcrypt, while a real dynamically-registered client with a wrong token
+// pays for one bcrypt compare. Accepted deliberately rather than padded
+// with a dummy hash compare, because the thing that distinguishes the fast
+// path from the slow one — whether a given client_id exists and was
+// dynamically registered — is not a secret an attacker needs the timing
+// side channel to learn. client_id is 16 random bytes handed back in the
+// clear at registration and echoed in every token response and error from
+// then on; anyone who can time this endpoint to test existence already
+// has the id in hand.
 func (p *Plugin) authenticateRegistration(ctx forge.Context, clientID string) (*OAuth2Client, error) {
 	unauthorized := func() error {
 		ctx.SetHeader("WWW-Authenticate", `Bearer realm="registration"`)
@@ -381,8 +426,10 @@ func (p *Plugin) authenticateRegistration(ctx forge.Context, clientID string) (*
 	return client, nil
 }
 
-func (p *Plugin) handleReadRegistration(ctx forge.Context, req *RegistrationRequest) (*RegisterClientResponse, error) {
-	client, err := p.authenticateRegistration(ctx, req.ClientID)
+func (p *Plugin) handleReadRegistration(ctx forge.Context, _ *RegistrationRequest) (*RegisterClientResponse, error) {
+	// The client_id is read from the path directly rather than the bound
+	// request struct. See RegistrationRequest's doc comment.
+	client, err := p.authenticateRegistration(ctx, ctx.Param("clientId"))
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +440,12 @@ func (p *Plugin) handleReadRegistration(ctx forge.Context, req *RegistrationRequ
 }
 
 func (p *Plugin) handleUpdateRegistration(ctx forge.Context, req *UpdateRegistrationRequest) (*RegisterClientResponse, error) {
-	client, err := p.authenticateRegistration(ctx, req.ClientID)
+	// The client_id is read from the path directly rather than the bound
+	// request struct. See UpdateRegistrationRequest's doc comment: without
+	// this, a body key matching ClientID's field name could overwrite the
+	// path-bound value before this handler ever sees it.
+	clientID := ctx.Param("clientId")
+	client, err := p.authenticateRegistration(ctx, clientID)
 	if err != nil {
 		return nil, err
 	}
@@ -416,6 +468,14 @@ func (p *Plugin) handleUpdateRegistration(ctx forge.Context, req *UpdateRegistra
 		return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
 			"redirect_uris is required")
 	}
+	// Same caps as registration. Every write here is a full-record replace
+	// on every backend (see UpdateClient's doc comment), so an update is
+	// just as capable of ballooning the stored row, or the redirect_uris
+	// list resolveRedirectURI scans on every authorize, as an initial
+	// registration is.
+	if capErr := checkRegistrationSizeCaps(req.RedirectURIs, req.ClientName, req.Contacts); capErr != nil {
+		return nil, capErr
+	}
 	for _, u := range req.RedirectURIs {
 		if uriErr := validateRedirectURI(u); uriErr != nil {
 			return nil, uriErr
@@ -428,6 +488,13 @@ func (p *Plugin) handleUpdateRegistration(ctx forge.Context, req *UpdateRegistra
 	if err != nil {
 		return nil, err
 	}
+	// Omitting scope entirely resets the client to the full allowlist,
+	// which can widen it relative to whatever narrower set it held before
+	// this PUT. That is intentional, not a bug to "fix" into a merge: RFC
+	// 7592 section 2.2 specifies replacement semantics for the whole
+	// registration, and the allowlist is the ceiling either way, so this
+	// can never grant a scope registration itself would have refused. See
+	// TestManage_UpdateOmittingScopeResetsToAllowlist.
 	scopes := clampScopes(strings.Fields(req.Scope), p.config.DynamicRegistrationScopes)
 
 	authMethod := req.TokenEndpointAuthMethod
@@ -439,6 +506,15 @@ func (p *Plugin) handleUpdateRegistration(ctx forge.Context, req *UpdateRegistra
 	default:
 		return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
 			fmt.Sprintf("token_endpoint_auth_method %q is not supported", authMethod))
+	}
+	// A public client has no client_secret hash, and update never mints
+	// one — only registration does. Letting this transition through would
+	// leave the client permanently unable to authenticate as confidential
+	// (every later bcrypt compare fails against an empty hash) with no
+	// signal at the time it happened. Reject it loudly instead.
+	if authMethod != "none" && client.ClientSecret == "" {
+		return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
+			"a public client cannot switch to a confidential token_endpoint_auth_method through update; register a new client instead")
 	}
 
 	client.Name = req.ClientName
@@ -470,8 +546,10 @@ func (p *Plugin) handleUpdateRegistration(ctx forge.Context, req *UpdateRegistra
 // OpenAPI documentation only and has no effect on what status is actually
 // written. So the 204 has to be written here directly, and the nil, nil
 // return tells the adapter not to write anything on top of it.
-func (p *Plugin) handleDeleteRegistration(ctx forge.Context, req *RegistrationRequest) (*apitypes.Empty, error) {
-	client, err := p.authenticateRegistration(ctx, req.ClientID)
+func (p *Plugin) handleDeleteRegistration(ctx forge.Context, _ *RegistrationRequest) (*apitypes.Empty, error) {
+	// The client_id is read from the path directly rather than the bound
+	// request struct. See RegistrationRequest's doc comment.
+	client, err := p.authenticateRegistration(ctx, ctx.Param("clientId"))
 	if err != nil {
 		return nil, err
 	}
