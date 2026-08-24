@@ -94,7 +94,13 @@ func (j *JWT) GenerateAccessToken(claims TokenClaims) (string, error) {
 	if j.config.Issuer != "" {
 		jwtClaims.Issuer = j.config.Issuer
 	}
-	if j.config.Audience != "" {
+	// A per-token audience is the resource the client actually asked for, so
+	// it wins. The configured value is an app-wide default from before
+	// resource indicators existed.
+	switch {
+	case len(claims.Audience) > 0:
+		jwtClaims.Audience = jwt.ClaimStrings(claims.Audience)
+	case j.config.Audience != "":
 		jwtClaims.Audience = jwt.ClaimStrings{j.config.Audience}
 	}
 
@@ -147,6 +153,7 @@ func (j *JWT) ValidateAccessToken(tokenStr string) (*TokenClaims, error) {
 		OrgID:     claims.OrgID,
 		SessionID: claims.SessionID,
 		Scopes:    claims.Scopes,
+		Audience:  []string(claims.Audience),
 		IssuedAt:  issuedAt,
 		ExpiresAt: expiresAt,
 	}, nil
