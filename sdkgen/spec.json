@@ -2554,6 +2554,18 @@
         ],
         "type": "object"
       },
+      "IntrospectConfirmation": {
+        "properties": {
+          "jkt": {
+            "description": "RFC 7638 thumbprint of the confirmation key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "jkt"
+        ],
+        "type": "object"
+      },
       "IntrospectResponse": {
         "properties": {
           "active": {
@@ -2563,6 +2575,10 @@
           "app_id": {
             "description": "Application ID",
             "type": "string"
+          },
+          "cnf": {
+            "$ref": "#/components/schemas/IntrospectConfirmation",
+            "description": "Proof-of-possession confirmation for a DPoP-bound token"
           },
           "env_id": {
             "description": "Environment ID",

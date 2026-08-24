@@ -121,6 +121,7 @@ export type {
   GroupRef,
   GroupResource,
   HealthResponse,
+  IntrospectConfirmation,
   IntrospectResponse,
   IntrospectUser,
   Invitation,

@@ -293,6 +293,45 @@ which is a positive signal that something is wrong, and degrading that to
 anonymous would hand an attacker a way to strip the proof off a bound token and
 fall through to any endpoint in your API that tolerates anonymous access.
 
+## The other two paths to an identity
+
+`middleware/auth.go` is not the only place a token turns into an authenticated
+request. Two other paths resolve a credential, and a rule that holds in one
+place and not the others is not an invariant, so both apply the same check.
+
+Client mode is the one that was genuinely open. A service running with
+`WithClientMode` has no engine and no session table, so it validates tokens by
+calling the identity server's `/v1/introspect` and using what comes back. The
+introspection response now carries `cnf` with the `jkt` whenever the token is
+bound, which is what RFC 9449 section 7.3 asks for. Without it the calling
+service has no way to find out that the token in its hand is bound to a key,
+and it accepts a stolen one. The client middleware reads that claim and runs
+the same `enforceDPoP` the engine path runs. None of the checking moves to the
+identity server, because the request never goes there.
+
+So the service validates the proof itself, with its own `dpop.Validator` and
+its own replay cache, built by the extension on first use. It mints no tokens,
+so it has no nonce secret and never demands a nonce. If you assemble the
+middleware yourself and pass no validator, a bound token is refused rather than
+admitted, matching what the engine path does when its validator is missing.
+
+The second path is `authprovider.SessionProvider`, registered with the forge
+auth registry and reached by plugin authz, organization, waitlist and consent.
+In a normal deployment the global middleware rejects a bad presentation long
+before this runs, so it was closed in practice. It was closed by accident of
+chain ordering, though, and it opens the moment somebody assembles a chain
+without the global middleware. The provider now checks the binding itself. It
+answers with an auth context rather than a response, so it cannot write an RFC
+9449 challenge and returns `ErrInvalidCredentials` instead. The client learns
+less from that than it would from the middleware, which is a reason to keep the
+middleware in front of it.
+
+All three call one implementation. `checkDPoP` holds the rule and touches no
+response, `enforceDPoP` wraps it for the middleware and writes the challenge,
+and `EnforceDPoPForRequest` wraps it for callers that only get to say yes or
+no. Two copies of a rule this important would drift, and the copy nobody reads
+is the one that drifts first.
+
 ## Nonce
 
 Stateless HMAC, built the same way as `dashboard/nonce.go`, keyed from

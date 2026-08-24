@@ -654,6 +654,19 @@ type IntrospectResponse struct {
 	SessionID string          `json:"session_id,omitempty" description:"Session ID"`
 	ExpiresAt string          `json:"expires_at,omitempty" description:"Token expiration time (RFC 3339)"`
 	User      *IntrospectUser `json:"user,omitempty" description:"Resolved user details"`
+
+	// Confirmation carries the RFC 7800 cnf claim for a DPoP-bound token
+	// (RFC 9449 section 7.3). A resource server that validates tokens by
+	// introspection has no other way to learn the token is bound, so
+	// omitting this leaves it accepting a stolen token as an ordinary
+	// bearer token. Absent means unbound.
+	Confirmation *IntrospectConfirmation `json:"cnf,omitempty" description:"Proof-of-possession confirmation for a DPoP-bound token"`
+}
+
+// IntrospectConfirmation is the RFC 7800 cnf claim. Only the jkt member is
+// used, holding the RFC 7638 thumbprint of the key the token is bound to.
+type IntrospectConfirmation struct {
+	JKT string `json:"jkt" description:"RFC 7638 thumbprint of the confirmation key"`
 }
 
 // IntrospectUser holds basic user details returned by introspection.

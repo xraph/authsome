@@ -230,6 +230,37 @@ func (e *Engine) requireStarted() error {
 	return nil
 }
 
+// DPoPBindingConfig returns the RFC 9449 enforcement wiring, for every auth
+// path that resolves a token and therefore has to honour a binding. The auth
+// middleware is one such path and the registered session auth provider is
+// another; anyone assembling their own chain gets the same config from here
+// rather than reassembling one that drifts.
+//
+// The validator is always non-nil (initDPoP builds it unconditionally); the
+// nonce signer is nil until a secret is derivable, which DPoPNonceRequiredForApp
+// already accounts for by refusing to demand nonces it cannot mint.
+func (e *Engine) DPoPBindingConfig() middleware.SessionBindingConfig {
+	return middleware.SessionBindingConfig{
+		DPoPValidator:   e.DPoPValidator(),
+		DPoPNonceSigner: e.DPoPNonceSigner(),
+		DPoPNonceRequired: func(ctx context.Context, appID string) bool {
+			parsed, err := id.Parse(appID)
+			if err != nil {
+				return false
+			}
+			return e.DPoPNonceRequiredForApp(ctx, parsed)
+		},
+		DPoPAudit: func(ctx context.Context, action string, md map[string]string) {
+			severity := bridge.SeverityInfo
+			if action == hook.ActionDPoPProofReplayed {
+				severity = bridge.SeverityWarning
+			}
+			e.audit(ctx, severity, bridge.OutcomeFailure, action, "session",
+				md["session_id"], "", md["app_id"], "auth", md)
+		},
+	}
+}
+
 // buildAuthMiddleware constructs the fully-configured auth middleware with
 // capability detection (JWT, strategies) and the cookie-to-header bridge.
 // Called once during InitPlugins so both the extension and plugins share
@@ -250,32 +281,9 @@ func (e *Engine) requireStarted() error {
 func (e *Engine) buildAuthMiddleware() {
 	var inner forge.Middleware
 
-	bindCfg := middleware.SessionBindingConfig{
-		CookieNameResolver: e.resolveSessionCookieName,
-		JWTSessionChecker:  e.jwtSessionChecker,
-
-		// DPoP enforcement wiring (RFC 9449). The validator is always
-		// non-nil (initDPoP builds it unconditionally); the nonce signer is
-		// nil until a secret is derivable, which DPoPNonceRequiredForApp
-		// already accounts for by refusing to demand nonces it cannot mint.
-		DPoPValidator:   e.DPoPValidator(),
-		DPoPNonceSigner: e.DPoPNonceSigner(),
-		DPoPNonceRequired: func(ctx context.Context, appID string) bool {
-			parsed, err := id.Parse(appID)
-			if err != nil {
-				return false
-			}
-			return e.DPoPNonceRequiredForApp(ctx, parsed)
-		},
-		DPoPAudit: func(ctx context.Context, action string, md map[string]string) {
-			severity := bridge.SeverityInfo
-			if action == hook.ActionDPoPProofReplayed {
-				severity = bridge.SeverityWarning
-			}
-			e.audit(ctx, severity, bridge.OutcomeFailure, action, "session",
-				md["session_id"], "", md["app_id"], "auth", md)
-		},
-	}
+	bindCfg := e.DPoPBindingConfig()
+	bindCfg.CookieNameResolver = e.resolveSessionCookieName
+	bindCfg.JWTSessionChecker = e.jwtSessionChecker
 
 	if e.HasJWT() {
 		inner = middleware.AuthMiddlewareWithJWT(
@@ -344,7 +352,9 @@ func (e *Engine) registerSessionAuthProvider() {
 		e.logger.Debug("authsome: no auth registry available, skipping session provider registration")
 		return
 	}
-	provider := authprovider.NewSessionProvider(e.ResolveSessionByToken, e.ResolveUser, e.logger, e.resolveSessionCookieName)
+	provider := authprovider.
+		NewSessionProvider(e.ResolveSessionByToken, e.ResolveUser, e.logger, e.resolveSessionCookieName).
+		WithDPoP(e.DPoPBindingConfig())
 	if err := e.authRegistry.Register(provider); err != nil {
 		e.logger.Warn("authsome: failed to register session auth provider",
 			log.String("error", err.Error()),

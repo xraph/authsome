@@ -3890,9 +3890,33 @@ class HealthResponse {
   String toString() => 'HealthResponse(${toJson()})';
 }
 
+class IntrospectConfirmation {
+  final String jkt;
+
+  const IntrospectConfirmation({
+    required this.jkt,
+  });
+
+  factory IntrospectConfirmation.fromJson(Map<String, dynamic> json) {
+    return IntrospectConfirmation(
+      jkt: json['jkt'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'jkt': jkt,
+    };
+  }
+
+  @override
+  String toString() => 'IntrospectConfirmation(${toJson()})';
+}
+
 class IntrospectResponse {
   final bool active;
   final String? appId;
+  final IntrospectConfirmation? cnf;
   final String? envId;
   final String? expiresAt;
   final String? orgId;
@@ -3903,6 +3927,7 @@ class IntrospectResponse {
   const IntrospectResponse({
     required this.active,
     this.appId,
+    this.cnf,
     this.envId,
     this.expiresAt,
     this.orgId,
@@ -3915,6 +3940,7 @@ class IntrospectResponse {
     return IntrospectResponse(
       active: json['active'] as bool,
       appId: json['app_id'] as String?,
+      cnf: json['cnf'] == null ? null : IntrospectConfirmation.fromJson(Map<String, dynamic>.from(json['cnf'] as Map)),
       envId: json['env_id'] as String?,
       expiresAt: json['expires_at'] as String?,
       orgId: json['org_id'] as String?,
@@ -3928,6 +3954,7 @@ class IntrospectResponse {
     return {
       'active': active,
       if (appId != null) 'app_id': appId,
+      if (cnf != null) 'cnf': cnf?.toJson(),
       if (envId != null) 'env_id': envId,
       if (expiresAt != null) 'expires_at': expiresAt,
       if (orgId != null) 'org_id': orgId,

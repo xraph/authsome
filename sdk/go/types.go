@@ -773,16 +773,22 @@ type HealthResponse struct {
 	Status string `json:"status"`
 }
 
+// IntrospectConfirmation represents the IntrospectConfirmation schema.
+type IntrospectConfirmation struct {
+	Jkt string `json:"jkt"`
+}
+
 // IntrospectResponse represents the IntrospectResponse schema.
 type IntrospectResponse struct {
-	Active    bool            `json:"active"`
-	AppID     string          `json:"app_id,omitempty"`
-	EnvID     string          `json:"env_id,omitempty"`
-	ExpiresAt string          `json:"expires_at,omitempty"`
-	OrgID     string          `json:"org_id,omitempty"`
-	SessionID string          `json:"session_id,omitempty"`
-	User      *IntrospectUser `json:"user,omitempty"`
-	UserID    string          `json:"user_id,omitempty"`
+	Active    bool                    `json:"active"`
+	AppID     string                  `json:"app_id,omitempty"`
+	Cnf       *IntrospectConfirmation `json:"cnf,omitempty"`
+	EnvID     string                  `json:"env_id,omitempty"`
+	ExpiresAt string                  `json:"expires_at,omitempty"`
+	OrgID     string                  `json:"org_id,omitempty"`
+	SessionID string                  `json:"session_id,omitempty"`
+	User      *IntrospectUser         `json:"user,omitempty"`
+	UserID    string                  `json:"user_id,omitempty"`
 }
 
 // IntrospectUser represents the IntrospectUser schema.
