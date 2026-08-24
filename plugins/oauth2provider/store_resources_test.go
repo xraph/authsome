@@ -77,7 +77,7 @@ func TestMemoryStore_ResourcesRoundTrip(t *testing.T) {
 
 // resourcesCases is the shared table for converter round-trip coverage: one
 // case with a populated resource list, one with none. The empty case matters
-// as much as the populated one — it is what catches an encoding that
+// as much as the populated one: it is what catches an encoding that
 // flattens []string into a delimited string (round-tripping "" back out as a
 // spurious one-element slice instead of staying empty).
 var resourcesCases = []struct {
