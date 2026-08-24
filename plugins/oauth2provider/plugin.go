@@ -41,6 +41,18 @@ var (
 	_ plugin.MigrationProvider = (*Plugin)(nil)
 )
 
+// RateLimit bounds how often an endpoint may be called.
+type RateLimit struct {
+	Limit  int
+	Window time.Duration
+}
+
+// ProtectedResource describes one RFC 9728 protected resource.
+type ProtectedResource struct {
+	Resource        string
+	ScopesSupported []string
+}
+
 // Config configures the OAuth2 provider plugin.
 type Config struct {
 	// Issuer is the OAuth2 issuer URL (e.g. "https://auth.example.com").
@@ -63,6 +75,30 @@ type Config struct {
 	// Set this to a custom URL (e.g. "https://myapp.com/device") when using
 	// an external UI like authsome-ui to host the verification page.
 	VerificationURI string
+
+	// DynamicRegistration enables RFC 7591 registration. Off by default:
+	// an upgrade must never open a public registration endpoint on its own.
+	DynamicRegistration bool
+
+	// RegistrationAppID is the app dynamic clients belong to when the
+	// request carries no resolvable publishable key. Leave empty on a
+	// multi-tenant deployment so an unkeyed request is refused rather
+	// than pooled into somebody's app.
+	RegistrationAppID string
+
+	// DynamicRegistrationScopes is the allowlist a dynamic client's
+	// requested scopes are intersected against. Defaults to openid,
+	// profile, email and offline_access.
+	DynamicRegistrationScopes []string
+
+	// RegistrationRateLimit caps POST /register per client IP.
+	// Defaults to 10 per hour.
+	RegistrationRateLimit RateLimit
+
+	// ProtectedResources declares additional RFC 9728 resource identifiers,
+	// keyed by the path suffix they are served under. AuthSome always
+	// describes itself at the unsuffixed path regardless of this map.
+	ProtectedResources map[string]ProtectedResource
 }
 
 // Plugin is the OAuth2 provider plugin.
@@ -92,7 +128,15 @@ func New(cfg ...Config) *Plugin {
 	if c.DeviceCodeInterval == 0 {
 		c.DeviceCodeInterval = 5
 	}
-	return &Plugin{config: c}
+	if len(c.DynamicRegistrationScopes) == 0 {
+		c.DynamicRegistrationScopes = []string{"openid", "profile", "email", "offline_access"}
+	}
+	if c.RegistrationRateLimit.Limit == 0 {
+		c.RegistrationRateLimit = RateLimit{Limit: 10, Window: time.Hour}
+	}
+
+	p := &Plugin{config: c, logger: log.NewNoopLogger()}
+	return p
 }
 
 // Name returns the plugin name.
