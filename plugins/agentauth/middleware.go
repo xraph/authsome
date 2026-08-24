@@ -64,6 +64,10 @@ func (p *Plugin) Authorize(ctx context.Context, sess *session.Session, action, r
 
 	grant, ok := p.cache.get(sess.GrantID)
 	if !ok {
+		// Captured before the store read, not after: this is what lets put
+		// tell whether a RevokeGrant landed while the read was in flight, so
+		// that revocation is never resurrected by this request's own write.
+		gen := p.cache.generation()
 		loaded, err := p.store.GetAgentGrant(ctx, sess.GrantID)
 		if errors.Is(err, ErrNotFound) {
 			return ErrGrantInactive
@@ -71,7 +75,7 @@ func (p *Plugin) Authorize(ctx context.Context, sess *session.Session, action, r
 		if err != nil {
 			return fmt.Errorf("agentauth: load grant: %w", err)
 		}
-		p.cache.put(loaded)
+		p.cache.put(loaded, gen)
 		grant = loaded
 	}
 	if !grant.IsActive(time.Now()) {

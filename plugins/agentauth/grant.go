@@ -138,10 +138,19 @@ func (p *Plugin) CreateGrant(ctx context.Context, in CreateGrantInput) (*AgentGr
 // RevokeGrant revokes a delegation and drops it from the cache, so the next
 // request sees the revocation without waiting out the cache ttl.
 func (p *Plugin) RevokeGrant(ctx context.Context, grantID id.AgentGrantID) error {
-	if err := p.store.RevokeAgentGrant(ctx, grantID); err != nil {
-		return fmt.Errorf("agentauth: revoke grant: %w", err)
-	}
+	err := p.store.RevokeAgentGrant(ctx, grantID)
+	// Invalidate unconditionally, even when the store call errors, and
+	// before inspecting the error at all. On a network store a timeout can
+	// mean the write landed but the ack did not; skipping invalidation on
+	// error would leave that grant revoked in the store and live in the
+	// cache for the rest of the ttl.
 	p.cache.invalidate(grantID)
+	if errors.Is(err, ErrNotFound) {
+		return forge.NotFound("agent grant not found")
+	}
+	if err != nil {
+		return forge.InternalError(fmt.Errorf("agentauth: revoke grant: %w", err))
+	}
 	return nil
 }
 
