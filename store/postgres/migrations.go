@@ -1160,5 +1160,32 @@ ALTER TABLE %[1]s ADD CONSTRAINT %[1]s_app_id_fkey
 				return nil
 			},
 		},
+
+		// Migration: DPoP confirmation key (RFC 9449).
+		//
+		// TEXT NOT NULL DEFAULT '' so every existing row backfills to the
+		// unbound state. An unbound session authorises exactly what it
+		// authorised before this column existed, which is what keeps the
+		// rollout free of a flag day.
+		//
+		// No index. Sessions are still looked up by token; nothing queries
+		// by thumbprint.
+		&migrate.Migration{
+			Name:    "add_session_dpop_jkt",
+			Version: "20260824000040",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions
+    ADD COLUMN IF NOT EXISTS dpop_jkt TEXT NOT NULL DEFAULT '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions DROP COLUMN IF EXISTS dpop_jkt;
+`)
+				return err
+			},
+		},
 	)
 }

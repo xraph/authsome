@@ -210,6 +210,7 @@ type SessionModel struct {
 	RefreshTokenExpiresAt time.Time `grove:"refresh_token_expires_at,notnull"`
 	CreatedAt             time.Time `grove:"created_at,notnull,default:now()"`
 	UpdatedAt             time.Time `grove:"updated_at,notnull,default:now()"`
+	DPoPJKT               string    `grove:"dpop_jkt"`
 }
 
 func toSession(m *SessionModel) (*session.Session, error) {
@@ -243,6 +244,7 @@ func toSession(m *SessionModel) (*session.Session, error) {
 		RefreshTokenExpiresAt: m.RefreshTokenExpiresAt,
 		CreatedAt:             m.CreatedAt,
 		UpdatedAt:             m.UpdatedAt,
+		DPoPJKT:               m.DPoPJKT,
 	}
 	if m.OrgID != "" {
 		orgID, err := id.ParseOrgID(m.OrgID)
@@ -290,6 +292,7 @@ func fromSession(s *session.Session) *SessionModel {
 		RefreshTokenExpiresAt: s.RefreshTokenExpiresAt,
 		CreatedAt:             s.CreatedAt,
 		UpdatedAt:             s.UpdatedAt,
+		DPoPJKT:               s.DPoPJKT,
 	}
 	if s.OrgID.Prefix() != "" {
 		m.OrgID = s.OrgID.String()

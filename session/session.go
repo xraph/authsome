@@ -39,4 +39,13 @@ type Session struct {
 	// ServiceAccountID is set when PrincipalKind is "service_account".
 	// UserID is left as the zero value in that case.
 	ServiceAccountID id.ServiceAccountID `json:"service_account_id,omitempty"`
+
+	// DPoPJKT is the RFC 7638 thumbprint of the public key this session is
+	// bound to (RFC 9449). Empty means an ordinary unbound bearer session,
+	// which is what every session created before this field existed will be.
+	//
+	// Enforcement follows this value and not any configuration: once it is
+	// set, the session cannot be used without a matching proof, whatever the
+	// app or client mode says at the time of the request.
+	DPoPJKT string `json:"dpop_jkt,omitempty"`
 }
