@@ -270,16 +270,24 @@ A `hook.ActionPrincipalAuth` bus event fires after the decision, so Chronicle
 and the relay pick up machine auth in the audit trail without subscribing to a
 typed hook.
 
-What each of the six plugins actually needs:
+What each of the six plugins actually needs. All six need work, though three
+of them barely any:
 
-- riskengine implements `BeforePrincipalAuth` and builds the same
-  `RiskRequest{IPAddress, UserAgent, AppID}` it builds today. Its five
-  contributors need no changes, because that struct never carried a user.
-- ipreputation, geofence and vpndetect are contributors only, reached through
-  riskengine. Zero changes.
+- ipreputation, geofence and vpndetect each hook `OnBeforeSignIn` and
+  `OnBeforeSignUp`, and each has already extracted its logic into a
+  `check(ctx, ipAddress, appID)` method. Adding `OnBeforePrincipalAuth` is a
+  three-line method per plugin calling the same `check`.
+- riskengine aggregates contributors registered from outside the repository,
+  and gains its own `OnBeforePrincipalAuth`. Its `RiskRequest` carries a
+  `UserID` field, which is empty for a machine caller, so the struct gains a
+  `Principal` field holding the ref. Filling `UserID` with a service-account id
+  instead would hand every existing contributor something that is not a user
+  id and let it keep reading the field as though it were.
 - impossibletravel and anomaly key their in-memory history by `u.ID.String()`.
   Their map key becomes `Ref.String()`, and `LoginLocation.UserID` and
-  `LoginPattern.UserID` become a `principal.Ref`. Contained to those two files.
+  `LoginPattern.UserID` become a `principal.Ref`. Two agents sharing one travel
+  history would score each other's movements as travel, which on a fleet spread
+  across regions is a permanent false positive.
 
 ## Getting a delegated credential
 

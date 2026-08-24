@@ -415,7 +415,7 @@ git commit -m "feat(principal): add principal ref, chain and kind value types"
 
 **Interfaces:**
 - Consumes: Task 1's `Ref`, `Chain`, `Kind`.
-- Produces: `principal.GrantKind` with `GrantDelegation` and `GrantImpersonation`. `principal.Delegation` with `IsActive(time.Time) bool` and `AllowsScope(string) bool`. `principal.Store` interface with `CreateDelegation`, `GetDelegation`, `FindActiveDelegation`, `ListDelegationsForSubject`, `ListDelegationsForActor`, `RevokeDelegation`, plus the principal read side `GetPrincipal` and `ListPrincipals`. `principal.AuthAttempt`. `principal.NewContext`, `principal.FromContext`, `principal.NewActorsContext`, `principal.ActorsFromContext`. `id.DelegationID`, `id.NewDelegationID`, `id.ParseDelegationID`, `id.PrefixDelegation`.
+- Produces: `principal.GrantKind` with `GrantDelegation` and `GrantImpersonation`. `principal.Delegation` with `IsActive(time.Time) bool` and `AllowsScope(string) bool`. `principal.Store` interface with `GetPrincipal`, `ListPrincipals`, `CreateDelegation`, `GetDelegation`, `FindActiveDelegation`, `ListDelegations`, `RevokeDelegation`. `principal.AuthAttempt`. `principal.NewContext`, `principal.FromContext`, `principal.NewActorsContext`, `principal.ActorsFromContext`. `id.DelegationID`, `id.NewDelegationID`, `id.ParseDelegationID`, `id.PrefixDelegation`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2314,3 +2314,2317 @@ git commit -m "feat(store/mongo): add delegation grants and principal fields"
 ```
 
 ---
+
+## Task 8: Chain-aware authorization
+
+`HasPermission` keeps its exact signature so `plugin.PermissionChecker` and
+every current caller are untouched. It becomes a wrapper.
+
+Where the spec's three-part rule is enforced: Warden covers the subject check
+and the actor checks, which is this task. The grant's scope filter is applied
+when the session is minted, in Task 14, by intersecting the requested scope
+with the grant and with the actor's own scopes. Splitting it that way keeps a
+scope lookup off the per-check path.
+
+**Files:**
+- Create: `engine_principal.go`
+- Create: `engine_principal_test.go`
+- Modify: `service.go:1915-1954`
+- Modify: `session/session.go`
+
+**Interfaces:**
+- Consumes: Task 1 and 2 types, `e.wardenEng`, `e.ensureWardenScope`.
+- Produces: `Engine.Can(ctx context.Context, subject principal.Ref, actors principal.Chain, action, resource string) (bool, error)`, `Engine.ResolvePrincipal(ctx context.Context, ref principal.Ref) (*principal.Principal, error)`, `session.Session.AuthzActors() principal.Chain`.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `engine_principal_test.go`. Use the existing engine test fixtures in `engine_test.go` for construction:
+
+```go
+package authsome
+
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/principal"
+)
+
+// Delegation narrows and never widens. Each row is one of the four
+// combinations of (subject allowed, actor allowed), and only the case where
+// both allow may pass.
+func TestCanIntersectsSubjectAndActor(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		subjectAllow  bool
+		actorAllow    bool
+		wantAllowed   bool
+	}{
+		{"both allow", true, true, true},
+		{"actor denied", true, false, false},
+		{"subject denied", false, true, false},
+		{"both denied", false, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e, userID, agentRef := setupCanFixture(t, tc.subjectAllow, tc.actorAllow)
+
+			got, err := e.Can(context.Background(),
+				principal.UserRef(userID),
+				principal.Chain{agentRef},
+				"read", "document")
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantAllowed, got)
+		})
+	}
+}
+
+// With no chain the behaviour must be byte-identical to a plain subject check,
+// which is what every existing caller relies on.
+func TestCanWithEmptyChainIsASingleCheck(t *testing.T) {
+	e, userID, _ := setupCanFixture(t, true, false)
+
+	got, err := e.Can(context.Background(), principal.UserRef(userID), nil, "read", "document")
+	require.NoError(t, err)
+	assert.True(t, got, "an empty chain must not consult any actor")
+}
+
+// HasPermission must keep answering exactly as it did, since it is on the
+// plugin.PermissionChecker contract.
+func TestHasPermissionDelegatesToCan(t *testing.T) {
+	e, userID, _ := setupCanFixture(t, true, false)
+
+	got, err := e.HasPermission(context.Background(), userID, "read", "document")
+	require.NoError(t, err)
+	assert.True(t, got)
+}
+
+// A multi-hop chain checks every hop. An ephemeral child acting through a
+// parent that has lost the permission must be denied, or revoking the parent
+// would leave its children running.
+func TestCanChecksEveryHop(t *testing.T) {
+	e, userID, childRef, parentRef := setupMultiHopFixture(t,
+		true /*subject*/, true /*child*/, false /*parent*/)
+
+	got, err := e.Can(context.Background(),
+		principal.UserRef(userID),
+		principal.Chain{childRef, parentRef},
+		"read", "document")
+	require.NoError(t, err)
+	assert.False(t, got, "a denied parent must deny the child acting through it")
+}
+```
+
+Write `setupCanFixture` and `setupMultiHopFixture` in the same file using the
+engine construction helper already used by `engine_test.go`, granting or
+withholding the `read` permission on `document` per argument by creating a role
+in Warden and assigning it to the subject and actor refs.
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `go test . -run 'TestCan|TestHasPermissionDelegates' -v`
+Expected: FAIL, `e.Can` undefined.
+
+- [ ] **Step 3: Add `AuthzActors` to the session**
+
+In `session/session.go`:
+
+```go
+// AuthzActors returns the actors Warden must independently authorize.
+//
+// Empty for an impersonation, and that is the point. Impersonating somebody is
+// precisely the request to evaluate as them, so the admin's own permissions
+// are not intersected in. The gate for impersonation sits on Engine.Impersonate,
+// which is where an admin is checked once, rather than on every subsequent
+// permission check made while impersonating.
+func (s *Session) AuthzActors() principal.Chain {
+	if s.ActorGrant == principal.GrantImpersonation {
+		return nil
+	}
+	return s.Actors
+}
+```
+
+- [ ] **Step 4: Write `engine_principal.go`**
+
+```go
+package authsome
+
+import (
+	"context"
+	"fmt"
+
+	log "github.com/xraph/go-utils/log"
+	"github.com/xraph/warden"
+
+	"github.com/xraph/authsome/principal"
+)
+
+// wardenSubjectKind maps a principal kind onto a Warden subject kind.
+//
+// All three non-human kinds collapse onto SubjectServiceAcct so role
+// assignments live in one namespace and an operator grants a role once rather
+// than once per kind. The finer kind rides along in the subject attributes, so
+// an ABAC policy can still tell an agent from a CI workload.
+func wardenSubjectKind(k principal.Kind) warden.SubjectKind {
+	if k == principal.KindUser || k == "" {
+		return warden.SubjectUser
+	}
+	return warden.SubjectServiceAcct
+}
+
+// wardenSubject builds the Warden subject for ref.
+//
+// onBehalfOf is set when ref is an actor rather than the subject, so a policy
+// can deny an agent an action it would allow the same agent calling for
+// itself.
+func wardenSubject(ref principal.Ref, onBehalfOf *principal.Ref) warden.Subject {
+	attrs := map[string]any{"principal_kind": string(ref.Kind)}
+	if onBehalfOf != nil {
+		attrs["on_behalf_of"] = onBehalfOf.String()
+		attrs["actor_kind"] = string(ref.Kind)
+	}
+	return warden.Subject{
+		Kind:       wardenSubjectKind(ref.Kind),
+		ID:         ref.ID,
+		Attributes: attrs,
+	}
+}
+
+// Can reports whether subject may perform action on resource, given that
+// actors are acting on the subject's behalf.
+//
+// With no actors this is a single Warden check and behaves exactly as
+// HasPermission always has. With actors, every party must allow: the subject,
+// and each hop of the chain. Delegation can only narrow. The first denial
+// short-circuits, so a denied agent costs one check rather than the whole
+// chain.
+//
+// Impersonation does not reach here with a populated chain. Session.AuthzActors
+// returns nil for it, because impersonating somebody is the request to
+// evaluate as them.
+func (e *Engine) Can(
+	ctx context.Context, subject principal.Ref, actors principal.Chain, action, resource string,
+) (bool, error) {
+	ctx = e.ensureWardenScope(ctx)
+
+	allowed, err := e.checkOne(ctx, wardenSubject(subject, nil), action, resource)
+	if err != nil || !allowed {
+		return false, err
+	}
+
+	for _, actor := range actors {
+		allowed, err := e.checkOne(ctx, wardenSubject(actor, &subject), action, resource)
+		if err != nil {
+			return false, err
+		}
+		if !allowed {
+			e.logger.Warn("authsome: Can denied by actor",
+				log.String("subject", subject.String()),
+				log.String("actor", actor.String()),
+				log.String("action", action),
+				log.String("resource", resource),
+			)
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+func (e *Engine) checkOne(
+	ctx context.Context, sub warden.Subject, action, resource string,
+) (bool, error) {
+	result, err := e.wardenEng.Check(ctx, &warden.CheckRequest{
+		Subject:  sub,
+		Action:   warden.Action{Name: action},
+		Resource: warden.Resource{Type: resource},
+	})
+	if err != nil {
+		return false, err
+	}
+	return result.Allowed, nil
+}
+
+// ResolvePrincipal resolves any caller by ref.
+func (e *Engine) ResolvePrincipal(ctx context.Context, ref principal.Ref) (*principal.Principal, error) {
+	if err := e.requireStarted(); err != nil {
+		return nil, err
+	}
+	p, err := e.store.GetPrincipal(ctx, ref)
+	if err != nil {
+		return nil, fmt.Errorf("authsome: resolve principal %s: %w", ref, err)
+	}
+	return p, nil
+}
+
+// PrincipalStore returns the principal and delegation store.
+func (e *Engine) PrincipalStore() principal.Store { return e.store }
+```
+
+- [ ] **Step 5: Rewrite `HasPermission` as a wrapper**
+
+Replace the body of `HasPermission` in `service.go:1915`, keeping the signature
+and the existing denial logging block:
+
+```go
+// HasPermission checks whether a user has a specific permission.
+//
+// Preserved as-is for plugin.PermissionChecker and for every caller that has a
+// user ID and no chain. It is Can with an empty chain.
+func (e *Engine) HasPermission(ctx context.Context, userID id.UserID, action, resource string) (bool, error) {
+	allowed, err := e.Can(ctx, principal.UserRef(userID), nil, action, resource)
+	if err != nil {
+		e.logger.Warn("authsome: HasPermission error",
+			log.String("user_id", userID.String()),
+			log.String("action", action),
+			log.String("resource", resource),
+			log.String("error", err.Error()),
+		)
+		return false, err
+	}
+	if !allowed {
+		// Keep the existing tenant and scope diagnostics verbatim: they are
+		// what operators use to work out which app a denial came from.
+		forgeAppID := ""
+		forgeOrgID := ""
+		if s, ok := forge.ScopeFrom(ctx); ok {
+			forgeAppID = s.AppID()
+			forgeOrgID = s.OrgID()
+		}
+		e.logger.Warn("authsome: HasPermission denied",
+			log.String("user_id", userID.String()),
+			log.String("action", action),
+			log.String("resource", resource),
+			log.String("forge_app_id", forgeAppID),
+			log.String("forge_org_id", forgeOrgID),
+			log.String("platform_app_id", e.PlatformAppID().String()),
+		)
+	}
+	return allowed, nil
+}
+```
+
+The `decision` and `reason` log fields go away, because `Can` returns a boolean
+rather than a `CheckResult`. If those fields matter to you, have `checkOne`
+return the `*warden.CheckResult` and log them there instead, where they are
+available for every hop and not only the subject.
+
+- [ ] **Step 6: Run the tests to verify they pass**
+
+Run: `go test . -run 'TestCan|TestHasPermission' -v && go test ./...`
+Expected: PASS. Every existing permission test must still pass, since the
+empty-chain path is the old path.
+
+- [ ] **Step 7: Commit**
+
+```bash
+make check
+git add -A
+git commit -m "feat(authz): add chain-aware Can, intersecting subject with actors
+
+A principal is a Warden subject in its own right, so a workload holds a role
+with no user behind it. When a chain is present every hop must allow, which
+means delegation can only narrow. HasPermission keeps its signature and
+becomes Can with an empty chain."
+```
+
+---
+
+## Task 9: Widen `plugin.Engine`
+
+**Files:**
+- Modify: `plugin/plugin.go:52-143`
+- Modify: `plugins/apikey/plugin_test.go:47`
+
+**Interfaces:**
+- Consumes: Task 8's `Engine.Can`, `Engine.ResolvePrincipal`, `Engine.PrincipalStore`.
+- Produces: three new methods on the `plugin.Engine` interface.
+
+- [ ] **Step 1: Write the failing test**
+
+Add to `plugin/plugin_test.go` (create if absent):
+
+```go
+package plugin_test
+
+import (
+	"testing"
+
+	"github.com/xraph/authsome/plugin"
+)
+
+// The three principal methods are on the core interface rather than an
+// optional capability interface. Plugins are meant to reason about non-human
+// callers, and a type assertion makes that undiscoverable.
+func TestEngineInterfaceExposesPrincipalMethods(t *testing.T) {
+	var e plugin.Engine
+	if e != nil {
+		_ = e.ResolvePrincipal
+		_ = e.PrincipalStore
+		_ = e.Can
+	}
+}
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `go test ./plugin/ -run TestEngineInterfaceExposesPrincipalMethods -v`
+Expected: FAIL to compile, the methods are not on the interface.
+
+- [ ] **Step 3: Add the methods to the interface**
+
+In `plugin/plugin.go`, after the `// ── User / session resolution ──` block:
+
+```go
+	// ── Principals ──
+
+	// ResolvePrincipal resolves any caller, human or otherwise, by ref.
+	// Use this rather than ResolveUser when a plugin must work for agents and
+	// workloads as well as people.
+	ResolvePrincipal(ctx context.Context, ref principal.Ref) (*principal.Principal, error)
+
+	// PrincipalStore returns the principal and delegation store.
+	PrincipalStore() principal.Store
+
+	// Can is the chain-aware authorization check. Pass an empty chain for an
+	// ordinary single-subject check.
+	Can(ctx context.Context, subject principal.Ref, actors principal.Chain,
+		action, resource string) (bool, error)
+```
+
+Add `github.com/xraph/authsome/principal` to the imports.
+
+- [ ] **Step 4: Update the one in-repo mock**
+
+`plugins/apikey/plugin_test.go` declares `var _ plugin.Engine = (*mockEngine)(nil)`.
+Add the three methods to `mockEngine`:
+
+```go
+func (m *mockEngine) ResolvePrincipal(_ context.Context, _ principal.Ref) (*principal.Principal, error) {
+	return nil, principal.ErrNotFound
+}
+
+func (m *mockEngine) PrincipalStore() principal.Store { return nil }
+
+func (m *mockEngine) Can(_ context.Context, _ principal.Ref, _ principal.Chain, _, _ string) (bool, error) {
+	return false, nil
+}
+```
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+Run: `go build ./... && go test ./plugin/ ./plugins/apikey/ -v`
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+make check
+git add -A
+git commit -m "feat(plugin): expose principal resolution and chain-aware authz on Engine
+
+Out-of-tree implementers of plugin.Engine will need the three new methods."
+```
+
+---
+
+## Task 10: Resolve the principal onto the request context
+
+**Files:**
+- Modify: `middleware/context.go`
+- Modify: `middleware/auth.go` (`setSessionContext`, `tryStrategyAuth`)
+- Test: `middleware/principal_test.go` (create)
+
+**Interfaces:**
+- Consumes: Task 3's `Session.Subject()`, `Session.Actors`; Task 2's context carriers.
+- Produces: `middleware.WithPrincipal`, `middleware.PrincipalFrom`, `middleware.WithActors`, `middleware.ActorsFrom`, `middleware.PrincipalResolver`, and `middleware.setPrincipalContext(goCtx context.Context, sess *session.Session, resolve PrincipalResolver, logger log.Logger) context.Context`.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `middleware/principal_test.go`:
+
+```go
+package middleware_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/principal"
+)
+
+func TestPrincipalContextCarriers(t *testing.T) {
+	ctx := context.Background()
+
+	_, ok := middleware.PrincipalFrom(ctx)
+	assert.False(t, ok)
+
+	p := &principal.Principal{Ref: principal.Ref{Kind: principal.KindWorkload, ID: "svc_ci"}}
+	ctx = middleware.WithPrincipal(ctx, p)
+
+	got, ok := middleware.PrincipalFrom(ctx)
+	require.True(t, ok)
+	assert.Equal(t, p, got)
+
+	// The same value must be readable through the principal package, so a
+	// plugin can get the caller without importing middleware.
+	viaPackage, ok := principal.FromContext(ctx)
+	require.True(t, ok, "middleware and principal must share one context key")
+	assert.Equal(t, p, viaPackage)
+}
+
+func TestActorsContextCarrier(t *testing.T) {
+	ctx := context.Background()
+	chain := principal.Chain{{Kind: principal.KindAgent, ID: "svc_a"}}
+	ctx = middleware.WithActors(ctx, chain)
+
+	got, ok := middleware.ActorsFrom(ctx)
+	require.True(t, ok)
+	assert.Equal(t, chain, got)
+
+	viaPackage, ok := principal.ActorsFromContext(ctx)
+	require.True(t, ok)
+	assert.Equal(t, chain, viaPackage)
+}
+
+func TestImpersonatorStillLandsOnContext(t *testing.T) {
+	admin := id.NewUserID()
+	ctx := middleware.WithImpersonator(context.Background(), admin)
+
+	got, ok := middleware.ImpersonatorFrom(ctx)
+	require.True(t, ok, "the impersonator carrier must keep working")
+	assert.Equal(t, admin.String(), got.String())
+}
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `go test ./middleware/ -run 'Principal|Actors|Impersonator' -v`
+Expected: FAIL, `middleware.WithPrincipal` undefined.
+
+- [ ] **Step 3: Add the carriers**
+
+In `middleware/context.go`, following the existing `With`/`From` convention.
+They delegate to the `principal` package rather than defining their own keys,
+so a plugin reading through `principal.FromContext` sees the same value:
+
+```go
+// WithPrincipal returns ctx carrying the resolved caller.
+func WithPrincipal(ctx context.Context, p *principal.Principal) context.Context {
+	return principal.NewContext(ctx, p)
+}
+
+// PrincipalFrom returns the resolved caller.
+func PrincipalFrom(ctx context.Context) (*principal.Principal, bool) {
+	return principal.FromContext(ctx)
+}
+
+// WithActors returns ctx carrying the actor chain.
+func WithActors(ctx context.Context, c principal.Chain) context.Context {
+	return principal.NewActorsContext(ctx, c)
+}
+
+// ActorsFrom returns the actor chain.
+func ActorsFrom(ctx context.Context) (principal.Chain, bool) {
+	return principal.ActorsFromContext(ctx)
+}
+```
+
+Add the resolver type next to `UserResolver` in `middleware/auth.go`:
+
+```go
+// PrincipalResolver resolves a caller by ref. Middleware takes this as a
+// function rather than an engine so it does not import the engine package.
+type PrincipalResolver func(principal.Ref) (*principal.Principal, error)
+```
+
+- [ ] **Step 4: Populate the context from both auth paths**
+
+Add one helper to `middleware/auth.go`:
+
+```go
+// setPrincipalContext resolves the session's subject and puts it, and the
+// actor chain, on the context.
+//
+// A resolution failure is logged and passed over rather than failing the
+// request. The session already authenticated the caller; this is enrichment,
+// and refusing the request over it would turn a principal-store blip into an
+// outage on traffic that is otherwise fine.
+func setPrincipalContext(
+	goCtx context.Context, sess *session.Session, resolve PrincipalResolver, logger log.Logger,
+) context.Context {
+	if len(sess.Actors) > 0 {
+		goCtx = WithActors(goCtx, sess.Actors)
+	}
+	if resolve == nil {
+		return goCtx
+	}
+	ref := sess.Subject()
+	if ref.IsZero() {
+		return goCtx
+	}
+	p, err := resolve(ref)
+	if err != nil {
+		logger.Warn("auth middleware: failed to resolve principal",
+			log.String("principal", ref.String()),
+			log.String("error", err.Error()),
+		)
+		return goCtx
+	}
+	return WithPrincipal(goCtx, p)
+}
+```
+
+Call it from `setSessionContext` immediately after the impersonator block, and
+from `tryStrategyAuth` immediately after the session block. Both already hold
+`goCtx` and `sess`. Thread a `PrincipalResolver` through
+`AuthMiddlewareWithStrategies` and `AuthMiddleware` alongside the existing
+`UserResolver`, defaulting to nil so a caller that has not wired one keeps
+working.
+
+`*user.User` continues to be set for human subjects, so `UserFrom(ctx)` and
+every handler reading it are untouched.
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+Run: `go test ./middleware/ ./... `
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+make check
+git add -A
+git commit -m "feat(middleware): resolve the caller as a principal on both auth paths"
+```
+
+---
+
+## Task 11: The principal auth hooks
+
+**Files:**
+- Modify: `plugin/plugin.go`
+- Modify: `plugin/registry.go`
+- Test: `plugin/registry_test.go`
+
+**Interfaces:**
+- Consumes: Task 2's `principal.AuthAttempt`.
+- Produces: `plugin.BeforePrincipalAuth`, `plugin.AfterPrincipalAuth`, `Registry.EmitBeforePrincipalAuth(ctx, *principal.AuthAttempt) error`, `Registry.EmitAfterPrincipalAuth(ctx, *principal.AuthAttempt, *session.Session)`.
+
+- [ ] **Step 1: Write the failing test**
+
+Add to `plugin/registry_test.go`:
+
+```go
+// A denying plugin must stop the authentication, the same way EmitBeforeSignIn
+// does. This is the whole reason these are typed hooks and not hook.Bus
+// events: Bus.Emit logs handler errors and returns nothing, so it cannot deny.
+func TestEmitBeforePrincipalAuthStopsOnFirstError(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+
+	first := &recordingPrincipalHook{name: "first"}
+	denier := &denyingPrincipalHook{name: "denier"}
+	last := &recordingPrincipalHook{name: "last"}
+	require.NoError(t, r.Register(first))
+	require.NoError(t, r.Register(denier))
+	require.NoError(t, r.Register(last))
+
+	err := r.EmitBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject:        principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+		CredentialKind: "api_key",
+	})
+	require.Error(t, err)
+	assert.True(t, first.called, "hooks before the denier must have run")
+	assert.False(t, last.called, "hooks after the denier must not run")
+}
+
+func TestEmitAfterPrincipalAuthRunsEveryHook(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+	a := &recordingPrincipalHook{name: "a"}
+	b := &recordingPrincipalHook{name: "b"}
+	require.NoError(t, r.Register(a))
+	require.NoError(t, r.Register(b))
+
+	r.EmitAfterPrincipalAuth(context.Background(),
+		&principal.AuthAttempt{Subject: principal.Ref{Kind: principal.KindWorkload, ID: "svc_2"}},
+		&session.Session{})
+
+	assert.True(t, a.afterCalled)
+	assert.True(t, b.afterCalled)
+}
+```
+
+Write `recordingPrincipalHook` and `denyingPrincipalHook` in the same file,
+implementing `Name()`, `OnBeforePrincipalAuth` and `OnAfterPrincipalAuth`,
+following the existing test doubles in that file.
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `go test ./plugin/ -run PrincipalAuth -v`
+Expected: FAIL, `EmitBeforePrincipalAuth` undefined.
+
+- [ ] **Step 3: Declare the hooks**
+
+In `plugin/plugin.go`, after the sign-out hooks:
+
+```go
+// ──────────────────────────────────────────────────
+// Principal auth hooks (non-human callers)
+// ──────────────────────────────────────────────────
+
+// BeforePrincipalAuth is called before a credential becomes a session for a
+// caller that did not go through sign-in: an API key, a token exchange, a
+// workload JWT.
+//
+// Returning an error denies the authentication. This is the machine-side
+// counterpart to BeforeSignIn, and it exists because static API key traffic
+// reaches strategy.Authenticate and never fires the sign-in hooks, so every
+// risk plugin was blind to it.
+type BeforePrincipalAuth interface {
+	OnBeforePrincipalAuth(ctx context.Context, a *principal.AuthAttempt) error
+}
+
+// AfterPrincipalAuth is called once a non-human caller has a session. Errors
+// are logged and do not fail the request, matching the other After hooks.
+type AfterPrincipalAuth interface {
+	OnAfterPrincipalAuth(ctx context.Context, a *principal.AuthAttempt, s *session.Session) error
+}
+```
+
+- [ ] **Step 4: Wire the registry**
+
+In `plugin/registry.go`, add the entry types next to `beforeSignInEntry`:
+
+```go
+type beforePrincipalAuthEntry struct {
+	name string
+	hook BeforePrincipalAuth
+}
+type afterPrincipalAuthEntry struct {
+	name string
+	hook AfterPrincipalAuth
+}
+```
+
+Add the slices to `Registry`:
+
+```go
+	beforePrincipalAuth []beforePrincipalAuthEntry
+	afterPrincipalAuth  []afterPrincipalAuthEntry
+```
+
+Add the registration branches next to the `BeforeSignIn` branch:
+
+```go
+	if h, ok := p.(BeforePrincipalAuth); ok {
+		r.beforePrincipalAuth = append(r.beforePrincipalAuth, beforePrincipalAuthEntry{name, h})
+	}
+	if h, ok := p.(AfterPrincipalAuth); ok {
+		r.afterPrincipalAuth = append(r.afterPrincipalAuth, afterPrincipalAuthEntry{name, h})
+	}
+```
+
+Add the emitters next to `EmitBeforeSignIn`:
+
+```go
+// EmitBeforePrincipalAuth notifies all plugins that implement
+// BeforePrincipalAuth, stopping at the first error.
+func (r *Registry) EmitBeforePrincipalAuth(ctx context.Context, a *principal.AuthAttempt) error {
+	for _, e := range r.beforePrincipalAuth {
+		if err := e.hook.OnBeforePrincipalAuth(ctx, a); err != nil {
+			return fmt.Errorf("plugin %s: %w", e.name, err)
+		}
+	}
+	return nil
+}
+
+// EmitAfterPrincipalAuth notifies all plugins that implement
+// AfterPrincipalAuth. Errors are logged, never propagated.
+func (r *Registry) EmitAfterPrincipalAuth(ctx context.Context, a *principal.AuthAttempt, s *session.Session) {
+	for _, e := range r.afterPrincipalAuth {
+		if err := e.hook.OnAfterPrincipalAuth(ctx, a, s); err != nil {
+			r.logger.Warn("plugin hook error",
+				log.String("plugin", e.name),
+				log.String("hook", "OnAfterPrincipalAuth"),
+				log.String("error", err.Error()),
+			)
+		}
+	}
+}
+```
+
+Match the exact error-wrapping and logging style the neighbouring emitters use
+in that file.
+
+- [ ] **Step 5: Add the bus action constant**
+
+In `hook/hook.go`, add to the action constants:
+
+```go
+	// ActionPrincipalAuth fires after a non-human caller has authenticated.
+	// The typed BeforePrincipalAuth hook is what denies; this is the audit
+	// and relay signal, so Chronicle picks up machine auth without any
+	// subscriber implementing a plugin interface.
+	ActionPrincipalAuth = "auth.principal"
+```
+
+- [ ] **Step 6: Run the tests to verify they pass**
+
+Run: `go test ./plugin/ ./hook/ -v`
+Expected: PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+make check
+git add -A
+git commit -m "feat(plugin): add BeforePrincipalAuth and AfterPrincipalAuth hooks"
+```
+
+---
+
+## Task 12: Fire the hooks from API-key auth, with a cached verdict
+
+This is the task that closes the risk gap. It also contains the one decision
+this plan deliberately leaves to you: the cache eviction policy. See Step 4.
+
+**Files:**
+- Create: `plugin_principalauth.go`
+- Create: `plugin_principalauth_test.go`
+- Modify: `plugins/apikey/plugin.go` (`apikeyStrategy.Authenticate`)
+- Modify: `plugins/apikey/contract.go`
+- Modify: `engine.go` (wire the emitter into the apikey strategy at init)
+
+**Interfaces:**
+- Consumes: Task 11's emitters, Task 2's `AuthAttempt`.
+- Produces: `authsome.principalAuthGate` with `Authorize(ctx context.Context, a *principal.AuthAttempt) error`, and `apikey.PrincipalAuthGate` as the narrow interface the plugin depends on:
+
+```go
+// PrincipalAuthGate scores a machine caller and may deny it. The apikey
+// plugin holds this rather than the engine so it does not import authsome.
+type PrincipalAuthGate interface {
+	Authorize(ctx context.Context, a *principal.AuthAttempt) error
+	Observe(ctx context.Context, a *principal.AuthAttempt, s *session.Session)
+}
+```
+
+- [ ] **Step 1: Write the failing test**
+
+Create `plugin_principalauth_test.go`. It needs `log "github.com/xraph/go-utils/log"` in its imports for `log.NewNoopLogger()`:
+
+```go
+package authsome
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/xraph/authsome/principal"
+)
+
+func attempt(credID, ip string) *principal.AuthAttempt {
+	return &principal.AuthAttempt{
+		Subject:        principal.Ref{Kind: principal.KindService, ID: "svc_1"},
+		CredentialKind: "api_key",
+		CredentialID:   credID,
+		IPAddress:      ip,
+		At:             time.Now(),
+	}
+}
+
+// A denying plugin must deny the request. Without this the six risk plugins
+// see machine traffic but cannot act on it, which is worse than not seeing it.
+func TestPrincipalAuthGateDenies(t *testing.T) {
+	denied := errors.New("blocked by risk")
+	g := newPrincipalAuthGate(func(_ context.Context, _ *principal.AuthAttempt) error {
+		return denied
+	}, nil, time.Minute, log.NewNoopLogger())
+
+	err := g.Authorize(context.Background(), attempt("akey_1", "1.2.3.4"))
+	assert.ErrorIs(t, err, denied)
+}
+
+// A repeat call with the same credential and IP inside the TTL must not
+// re-run the contributor chain. A chatty agent would otherwise pay for a geo
+// and reputation lookup on every single call.
+func TestPrincipalAuthGateCachesTheVerdict(t *testing.T) {
+	var calls int
+	g := newPrincipalAuthGate(func(_ context.Context, _ *principal.AuthAttempt) error {
+		calls++
+		return nil
+	}, nil, time.Minute, log.NewNoopLogger())
+
+	ctx := context.Background()
+	require.NoError(t, g.Authorize(ctx, attempt("akey_1", "1.2.3.4")))
+	require.NoError(t, g.Authorize(ctx, attempt("akey_1", "1.2.3.4")))
+	assert.Equal(t, 1, calls, "the second call must be served from the cache")
+}
+
+// A different source IP is a different verdict. The same key used from a new
+// country is exactly what impossibletravel and geofence exist to catch, so it
+// must not ride the cached allow.
+func TestPrincipalAuthGateKeysOnIP(t *testing.T) {
+	var calls int
+	g := newPrincipalAuthGate(func(_ context.Context, _ *principal.AuthAttempt) error {
+		calls++
+		return nil
+	}, nil, time.Minute, log.NewNoopLogger())
+
+	ctx := context.Background()
+	require.NoError(t, g.Authorize(ctx, attempt("akey_1", "1.2.3.4")))
+	require.NoError(t, g.Authorize(ctx, attempt("akey_1", "5.6.7.8")))
+	assert.Equal(t, 2, calls, "a new source IP must be scored fresh")
+}
+
+// A denial must not be cached as long as an allow, or a transient block
+// outlives the condition that caused it. Denials are re-evaluated every time.
+func TestPrincipalAuthGateDoesNotCacheDenials(t *testing.T) {
+	var calls int
+	g := newPrincipalAuthGate(func(_ context.Context, _ *principal.AuthAttempt) error {
+		calls++
+		return errors.New("blocked")
+	}, nil, time.Minute, log.NewNoopLogger())
+
+	ctx := context.Background()
+	_ = g.Authorize(ctx, attempt("akey_1", "1.2.3.4"))
+	_ = g.Authorize(ctx, attempt("akey_1", "1.2.3.4"))
+	assert.Equal(t, 2, calls, "a denial must be re-evaluated, not cached")
+}
+
+// An expired entry is re-scored.
+func TestPrincipalAuthGateExpiresEntries(t *testing.T) {
+	var calls int
+	g := newPrincipalAuthGate(func(_ context.Context, _ *principal.AuthAttempt) error {
+		calls++
+		return nil
+	}, nil, time.Nanosecond, log.NewNoopLogger())
+
+	ctx := context.Background()
+	require.NoError(t, g.Authorize(ctx, attempt("akey_1", "1.2.3.4")))
+	time.Sleep(time.Millisecond)
+	require.NoError(t, g.Authorize(ctx, attempt("akey_1", "1.2.3.4")))
+	assert.Equal(t, 2, calls)
+}
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `go test . -run TestPrincipalAuthGate -v`
+Expected: FAIL, `newPrincipalAuthGate` undefined.
+
+- [ ] **Step 3: Write the gate**
+
+Create `plugin_principalauth.go`:
+
+```go
+package authsome
+
+import (
+	"context"
+	"sync"
+	"time"
+
+	log "github.com/xraph/go-utils/log"
+
+	"github.com/xraph/authsome/hook"
+	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/session"
+)
+
+// principalAuthGate runs the BeforePrincipalAuth chain for machine callers and
+// caches the verdict.
+//
+// The cache is what makes scoring machine traffic affordable. Sign-in happens
+// once a day per human; an agent authenticates on every call, and the risk
+// contributors do geo lookups and reputation lookups. Keyed on credential and
+// source IP together, so the same key appearing from a new address is scored
+// fresh rather than riding an earlier allow.
+type principalAuthGate struct {
+	authorize func(context.Context, *principal.AuthAttempt) error
+	observe   func(context.Context, *principal.AuthAttempt, *session.Session)
+	ttl       time.Duration
+	logger    log.Logger
+
+	mu      sync.Mutex
+	entries map[string]time.Time // cache key -> when the allow expires
+}
+
+func newPrincipalAuthGate(
+	authorize func(context.Context, *principal.AuthAttempt) error,
+	observe func(context.Context, *principal.AuthAttempt, *session.Session),
+	ttl time.Duration,
+	logger log.Logger,
+) *principalAuthGate {
+	if logger == nil {
+		logger = log.NewNoopLogger()
+	}
+	return &principalAuthGate{
+		authorize: authorize,
+		observe:   observe,
+		ttl:       ttl,
+		logger:    logger,
+		entries:   make(map[string]time.Time),
+	}
+}
+
+func cacheKey(a *principal.AuthAttempt) string {
+	return a.CredentialID + "|" + a.IPAddress
+}
+
+// Authorize scores a, denying if any plugin does.
+//
+// Only allows are cached. A denial is re-evaluated every time, because the
+// condition behind it (a reputation listing, a travel impossibility) can clear
+// within the TTL, and a cached denial would keep a caller locked out after the
+// reason had gone.
+func (g *principalAuthGate) Authorize(ctx context.Context, a *principal.AuthAttempt) error {
+	if g.authorize == nil {
+		return nil
+	}
+
+	key := cacheKey(a)
+	now := a.At
+	if now.IsZero() {
+		now = time.Now()
+	}
+
+	g.mu.Lock()
+	expires, cached := g.entries[key]
+	g.mu.Unlock()
+	if cached && now.Before(expires) {
+		return nil
+	}
+
+	if err := g.authorize(ctx, a); err != nil {
+		return err
+	}
+
+	g.mu.Lock()
+	g.entries[key] = now.Add(g.ttl)
+	g.evictLocked(now)
+	g.mu.Unlock()
+	return nil
+}
+
+// Observe runs the after hooks and emits the bus event.
+func (g *principalAuthGate) Observe(ctx context.Context, a *principal.AuthAttempt, s *session.Session) {
+	if g.observe != nil {
+		g.observe(ctx, a, s)
+	}
+}
+```
+
+- [ ] **Step 4: YOUR CONTRIBUTION, the eviction policy**
+
+`evictLocked(now time.Time)` is stubbed in the file above and needs writing.
+The trade-off is real and it is yours to make, so the plan does not decide it.
+
+The map grows one entry per (credential, source IP) pair. For a fleet of agents
+behind rotating egress addresses that is unbounded, and this map lives for the
+process lifetime on the authentication hot path.
+
+Options, roughly:
+
+- Sweep expired entries on every write. Simple and keeps the map honest, but
+  it is O(n) under the lock on a path that runs per request.
+- Sweep only when the map crosses a size threshold. Amortizes the cost, at the
+  price of a periodic latency spike and a bounded overshoot.
+- Hard cap with random or oldest-first eviction once full. Bounded memory
+  guaranteed, but a busy credential can be evicted by a burst of one-off ones
+  and lose its cached allow.
+- A time-bucketed two-map rotation. Cheap eviction, coarse expiry.
+
+Write it in `plugin_principalauth.go`:
+
+```go
+// evictLocked removes entries that can no longer serve a hit. The caller holds
+// g.mu.
+//
+// This runs on the authentication path for every machine caller, so what it
+// costs matters as much as what it reclaims.
+func (g *principalAuthGate) evictLocked(now time.Time) {
+	// TODO: implement the eviction policy.
+}
+```
+
+Add a test to `plugin_principalauth_test.go` pinning whatever bound you chose,
+so the next person cannot quietly regress it. If you picked a hard cap, assert
+the map never exceeds it after inserting well past the cap.
+
+- [ ] **Step 5: Wire the gate into the engine**
+
+In `engine.go`, where the apikey plugin is initialized, build the gate from the
+registry and hand it to the plugin:
+
+```go
+	gate := newPrincipalAuthGate(
+		e.plugins.EmitBeforePrincipalAuth,
+		func(ctx context.Context, a *principal.AuthAttempt, s *session.Session) {
+			e.plugins.EmitAfterPrincipalAuth(ctx, a, s)
+			e.hooks.Emit(ctx, &hook.Event{
+				Action:     hook.ActionPrincipalAuth,
+				Resource:   hook.ResourceSession,
+				ResourceID: s.ID.String(),
+				ActorID:    a.Subject.ID,
+				Tenant:     a.AppID.String(),
+				Metadata: map[string]string{
+					"principal_kind":  string(a.Subject.Kind),
+					"credential_kind": a.CredentialKind,
+					"credential_id":   a.CredentialID,
+					"ip":              a.IPAddress,
+				},
+			})
+		},
+		e.principalAuthTTL,
+		e.logger,
+	)
+```
+
+Add `principalAuthTTL time.Duration` to the `Engine` struct with a five-minute
+default, and a `WithPrincipalAuthTTL(d time.Duration) Option` in `option.go`
+following the shape of the other options in that file.
+
+- [ ] **Step 6: Fire from the API-key strategy**
+
+In `plugins/apikey/plugin.go`, add `gate PrincipalAuthGate` to `apikeyStrategy`
+and call it in `Authenticate` after the key is verified and before the
+synthetic session is returned. Both branches, the service-account one and the
+user-bound one, go through it:
+
+```go
+	subject := principal.Ref{Kind: principal.KindService, ID: key.ServiceAccountID.String()}
+	if key.ServiceAccountID.IsNil() {
+		subject = principal.Ref{Kind: principal.KindUser, ID: key.UserID.String()}
+	}
+	att := &principal.AuthAttempt{
+		Subject:        subject,
+		AppID:          key.AppID,
+		EnvID:          key.EnvID,
+		CredentialKind: "api_key",
+		CredentialID:   key.ID.String(),
+		IPAddress:      clientIP(r),
+		UserAgent:      r.UserAgent(),
+		At:             now,
+	}
+	if s.gate != nil {
+		if err := s.gate.Authorize(ctx, att); err != nil {
+			return nil, fmt.Errorf("apikey: %w", err)
+		}
+	}
+```
+
+and after the synthetic session is built, in both branches:
+
+```go
+	if s.gate != nil {
+		s.gate.Observe(ctx, att, syntheticSession)
+	}
+```
+
+A user-bound API key goes through the gate too. It is machine traffic whoever
+it is billed to, and it is just as invisible to the sign-in hooks.
+
+Write `clientIP(r *http.Request) string` in the same file if the plugin does
+not already have one, reading `X-Forwarded-For` then `X-Real-IP` then
+`r.RemoteAddr`, matching whatever `middleware.clientIPFromRequest` does so the
+two agree.
+
+- [ ] **Step 7: Run the tests to verify they pass**
+
+Run: `go test . ./plugins/apikey/ -v`
+Expected: PASS, including a new case in `plugins/apikey/plugin_test.go`
+asserting that a gate returning an error makes `Authenticate` fail.
+
+- [ ] **Step 8: Commit**
+
+```bash
+make check
+git add -A
+git commit -m "feat(apikey): score machine callers through the principal auth hooks
+
+Static API key traffic reached strategy.Authenticate and fired none of the
+sign-in hooks, so all six risk plugins were blind to it. The verdict is
+cached per credential and source IP so a chatty agent does not pay for a geo
+lookup on every call."
+```
+
+---
+
+## Task 13: The risk plugins adopt the hook
+
+All six need work. Three of them (`ipreputation`, `geofence`, `vpndetect`)
+already have their logic extracted into
+`check(ctx context.Context, ipAddress, appID string) error`, so for those this
+is a three-line method each. `riskengine` aggregates externally-registered
+contributors and needs its own entry point. `impossibletravel` and `anomaly`
+record history keyed by user and need re-keying by principal.
+
+Note on `RiskRequest`: it carries `UserID string`, which is empty for a machine
+caller. This task adds a `Principal string` field rather than stuffing a
+service-account id into `UserID`, because an externally-registered contributor
+reading `UserID` would otherwise silently start receiving something that is not
+a user id.
+
+**Files:**
+- Modify: `plugins/riskengine/plugin.go`
+- Modify: `plugins/ipreputation/plugin.go`
+- Modify: `plugins/geofence/plugin.go`
+- Modify: `plugins/vpndetect/plugin.go`
+- Modify: `plugins/impossibletravel/plugin.go`
+- Modify: `plugins/anomaly/plugin.go`
+- Test: the existing `plugin_test.go` in each
+
+**Interfaces:**
+- Consumes: Task 11's `plugin.BeforePrincipalAuth` and `plugin.AfterPrincipalAuth`.
+- Produces: `riskengine.RiskRequest.Principal string` (a `principal.Ref` rendered as `kind:id`). `impossibletravel.LoginLocation.Principal principal.Ref` replacing its `UserID` field, and `impossibletravel.Plugin.recordLocation(ctx context.Context, ref principal.Ref, ipAddress string) error`. `anomaly.LoginPattern.Principal principal.Ref` replacing its `UserID` field, and `anomaly.Plugin.recordLogin(ctx context.Context, ref principal.Ref, ipAddress string) error`.
+
+- [ ] **Step 1: Write the failing tests**
+
+In `plugins/ipreputation/plugin_test.go`, and the same shape in
+`plugins/geofence/plugin_test.go` and `plugins/vpndetect/plugin_test.go` with
+each one's own blocking condition:
+
+```go
+// A machine caller from a bad IP must be denied, exactly as a person is.
+// This is the gap: API-key traffic never reached OnBeforeSignIn.
+func TestIPReputationBlocksPrincipalAuth(t *testing.T) {
+	p := ipreputation.New(ipreputation.Config{Provider: blockingProvider{}})
+	require.NoError(t, p.OnInit(context.Background(), newTestEngine(t)))
+
+	err := p.OnBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject:        principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+		AppID:          id.NewAppID(),
+		IPAddress:      badIP,
+		CredentialKind: "api_key",
+	})
+	assert.Error(t, err)
+}
+
+// An attempt with no IP must pass rather than fail closed, matching what
+// check already does for sign-in. A blank IP is a deployment detail, not a
+// signal.
+func TestIPReputationAllowsAttemptWithNoIP(t *testing.T) {
+	p := ipreputation.New(ipreputation.Config{Provider: blockingProvider{}})
+	require.NoError(t, p.OnInit(context.Background(), newTestEngine(t)))
+
+	assert.NoError(t, p.OnBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject: principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+		AppID:   id.NewAppID(),
+	}))
+}
+```
+
+In `plugins/riskengine/plugin_test.go`:
+
+```go
+func TestRiskEngineBlocksPrincipalAuth(t *testing.T) {
+	p := riskengine.New()
+	require.NoError(t, p.OnInit(context.Background(), newTestEngine(t)))
+	p.AddContributor(alwaysHighRisk{})
+
+	err := p.OnBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject:        principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+		AppID:          id.NewAppID(),
+		IPAddress:      "1.2.3.4",
+		CredentialKind: "api_key",
+	})
+	assert.Error(t, err, "a high-risk machine caller must be denied")
+}
+
+// With no contributors the hook is a no-op, matching OnBeforeSignIn.
+// Otherwise installing riskengine alone would deny every machine caller.
+func TestRiskEngineAllowsWithNoContributors(t *testing.T) {
+	p := riskengine.New()
+	require.NoError(t, p.OnInit(context.Background(), newTestEngine(t)))
+
+	assert.NoError(t, p.OnBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject: principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+	}))
+}
+
+// The contributor must be able to tell a machine caller from a person.
+// UserID stays empty for machines rather than being filled with a
+// service-account id, which an existing contributor would misread.
+func TestRiskEngineSetsPrincipalNotUserID(t *testing.T) {
+	p := riskengine.New()
+	require.NoError(t, p.OnInit(context.Background(), newTestEngine(t)))
+	spy := &capturingContributor{}
+	p.AddContributor(spy)
+
+	require.NoError(t, p.OnBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject:   principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+		AppID:     id.NewAppID(),
+		IPAddress: "1.2.3.4",
+	}))
+
+	require.NotNil(t, spy.last)
+	assert.Equal(t, "agent:svc_1", spy.last.Principal)
+	assert.Empty(t, spy.last.UserID, "a machine caller has no user id")
+}
+```
+
+Write `capturingContributor` in that file, implementing `Name()` and
+`EvaluateRisk` and storing the last `*RiskRequest` it saw.
+
+In `plugins/impossibletravel/plugin_test.go`:
+
+```go
+// History is keyed by principal, not by user. Two agents must not share one
+// travel history, and an agent must not inherit a user's.
+func TestImpossibleTravelKeysByPrincipal(t *testing.T) {
+	p := impossibletravel.New(impossibletravel.Config{
+		MaxSpeedKmH:    900,
+		MinDistanceKm:  100,
+		LookbackWindow: time.Hour,
+	})
+	require.NoError(t, p.OnInit(context.Background(), newTestEngineWithGeoIP(t)))
+	ctx := context.Background()
+
+	agentA := principal.Ref{Kind: principal.KindAgent, ID: "svc_a"}
+	agentB := principal.Ref{Kind: principal.KindAgent, ID: "svc_b"}
+
+	require.NoError(t, p.OnAfterPrincipalAuth(ctx,
+		&principal.AuthAttempt{Subject: agentA, IPAddress: londonIP},
+		&session.Session{IPAddress: londonIP}))
+
+	// Agent B's first sighting is in Sydney. With a shared history this would
+	// score as London to Sydney in no time at all; with per-principal history
+	// it is simply a first login and produces no event.
+	require.NoError(t, p.OnAfterPrincipalAuth(ctx,
+		&principal.AuthAttempt{Subject: agentB, IPAddress: sydneyIP},
+		&session.Session{IPAddress: sydneyIP}))
+
+	assert.Empty(t, p.RecordedEvents(), "one agent's history must not contaminate another's")
+}
+```
+
+`RecordedEvents()` does not exist yet. Add it to `impossibletravel.Plugin` as a
+test-visible accessor returning the impossible-travel events the plugin has
+raised, or assert against whatever the plugin already exposes for that in its
+existing tests. Check `plugins/impossibletravel/plugin_test.go` first and reuse
+its existing assertion mechanism rather than adding a second one.
+
+- [ ] **Step 2: Run to verify they fail**
+
+Run: `go test ./plugins/riskengine/ ./plugins/ipreputation/ ./plugins/geofence/ ./plugins/vpndetect/ ./plugins/impossibletravel/ ./plugins/anomaly/ -v`
+Expected: FAIL, `OnBeforePrincipalAuth` undefined on all six.
+
+- [ ] **Step 3: The three IP-based plugins**
+
+Each already has `check(ctx, ipAddress, appID string) error`, so each gets the
+same three-line method. In `plugins/ipreputation/plugin.go`:
+
+```go
+// OnBeforePrincipalAuth checks the IP reputation of a machine caller.
+//
+// The same check sign-in gets. API-key traffic reaches strategy.Authenticate
+// and fires none of the sign-in hooks, so without this a leaked key works from
+// any address in the world.
+func (p *Plugin) OnBeforePrincipalAuth(ctx context.Context, a *principal.AuthAttempt) error {
+	return p.check(ctx, a.IPAddress, a.AppID.String())
+}
+```
+
+Add the identical method to `plugins/geofence/plugin.go` and
+`plugins/vpndetect/plugin.go`, changing only the doc comment to name what that
+plugin checks. Add `github.com/xraph/authsome/principal` to each import block.
+
+- [ ] **Step 4: riskengine**
+
+Add the field to `RiskRequest` in `plugins/riskengine/plugin.go`:
+
+```go
+type RiskRequest struct {
+	IPAddress string
+	UserAgent string
+	AppID     string
+	// UserID is the human this request is for, empty for a machine caller.
+	UserID string
+	// Principal is the caller rendered as "kind:id". Set for every request,
+	// including sign-in, so a contributor has one field it can always key on.
+	// UserID is left empty rather than filled with a service-account id,
+	// because an existing contributor reading it expects a user.
+	Principal string
+}
+```
+
+Set `Principal` in the existing `OnBeforeSignIn` as well, so contributors see
+it on both paths:
+
+```go
+	riskReq := &RiskRequest{
+		IPAddress: req.IPAddress,
+		UserAgent: req.UserAgent,
+		AppID:     req.AppID.String(),
+		Principal: principal.Ref{Kind: principal.KindUser, ID: req.Email}.String(),
+	}
+```
+
+If `account.SignInRequest` carries no user id at that point, which is likely
+since the user has not been resolved yet, leave `Principal` empty on the
+sign-in path and say so in the field comment rather than putting an email in an
+id position. Confirm before writing it.
+
+Add the hook:
+
+```go
+// OnBeforePrincipalAuth scores a machine caller and blocks above the high
+// threshold, exactly as OnBeforeSignIn does for a person.
+func (p *Plugin) OnBeforePrincipalAuth(ctx context.Context, a *principal.AuthAttempt) error {
+	if len(p.contributors) == 0 {
+		return nil
+	}
+
+	riskReq := &RiskRequest{
+		IPAddress: a.IPAddress,
+		UserAgent: a.UserAgent,
+		AppID:     a.AppID.String(),
+		Principal: a.Subject.String(),
+	}
+
+	assessment := p.evaluate(ctx, riskReq)
+	p.lastAssessment = assessment
+	p.auditAssessment(ctx, riskReq, assessment)
+
+	if assessment.Decision == "block" {
+		return fmt.Errorf("riskengine: %s", p.config.BlockMessage)
+	}
+	return nil
+}
+```
+
+- [ ] **Step 5: impossibletravel**
+
+In `plugins/impossibletravel/plugin.go`, change `LoginLocation.UserID id.UserID`
+to `Principal principal.Ref`, and the `lastLogins` map key from
+`u.ID.String()` to `ref.String()`. Extract the body of `OnAfterSignIn` into
+`recordLocation` and have both hooks call it:
+
+```go
+// OnAfterSignIn records a person's login location.
+func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, s *session.Session) error {
+	return p.recordLocation(ctx, principal.UserRef(u.ID), s.IPAddress)
+}
+
+// OnAfterPrincipalAuth records a machine caller's location.
+//
+// Keyed by principal rather than user. An agent has no user, and two agents
+// sharing one history would score each other's movements as travel, which on
+// a fleet spread across regions means a permanent false positive.
+func (p *Plugin) OnAfterPrincipalAuth(ctx context.Context, a *principal.AuthAttempt, s *session.Session) error {
+	ip := a.IPAddress
+	if ip == "" && s != nil {
+		ip = s.IPAddress
+	}
+	return p.recordLocation(ctx, a.Subject, ip)
+}
+```
+
+`recordLocation` takes the whole existing body of `OnAfterSignIn` with
+`userKey` replaced by `ref.String()` and `current.UserID` replaced by
+`current.Principal = ref`. Anywhere the body reaches for `u.ID` for an audit
+or event field, use `ref.String()`.
+
+- [ ] **Step 6: anomaly**
+
+Apply exactly the same shape to `plugins/anomaly/plugin.go`:
+`LoginPattern.UserID` becomes `Principal principal.Ref`, the `patterns` map key
+becomes `ref.String()`, the body of `OnAfterSignIn` moves into
+`recordLogin(ctx context.Context, ref principal.Ref, ipAddress string) error`,
+and both hooks call it, with `OnAfterPrincipalAuth` falling back to the
+session IP the same way impossibletravel does.
+
+- [ ] **Step 7: Run the tests to verify they pass**
+
+Run: `go test ./plugins/... -v`
+Expected: PASS, all six risk plugins plus everything else under `plugins/`.
+
+- [ ] **Step 8: Verify the gap is actually closed**
+
+Add one end-to-end assertion in `plugins/apikey/plugin_test.go` that ties Task
+12 to this one, since that is the behaviour the whole change exists for:
+
+```go
+// The regression test for the original gap. Before this change an API key
+// authenticated with all six risk plugins installed and none of them ran.
+func TestAPIKeyAuthRunsTheRiskChain(t *testing.T) {
+	blocked := false
+	gate := gateFunc(func(_ context.Context, _ *principal.AuthAttempt) error {
+		blocked = true
+		return errors.New("blocked by risk")
+	})
+	s := newAPIKeyStrategy(t, gate)
+
+	_, err := s.Authenticate(context.Background(), requestWithValidKey(t))
+	assert.Error(t, err)
+	assert.True(t, blocked, "API key auth must run the principal auth chain")
+}
+```
+
+- [ ] **Step 9: Commit**
+
+```bash
+make check
+git add -A
+git commit -m "feat(risk): score non-human callers across all six risk plugins
+
+ipreputation, geofence and vpndetect get the same IP check sign-in gets.
+riskengine gains a Principal field on RiskRequest so a contributor can tell a
+machine caller from a person without UserID being filled with something that
+is not a user id. impossibletravel and anomaly key history by principal, so
+two agents do not share one travel or login history."
+```
+
+---
+
+## Task 14: Delegation lifecycle and token exchange
+
+**Files:**
+- Modify: `engine_principal.go`
+- Create: `engine_token_exchange.go`
+- Create: `engine_token_exchange_test.go`
+- Create: `api/principal_handlers.go`
+- Modify: `api/api.go` (add the registerer to `rootRegisterers`)
+
+**Interfaces:**
+- Consumes: Task 4's `principal.Store`, Task 8's `Can`, Task 12's gate.
+- Produces:
+
+```go
+func (e *Engine) GrantDelegation(ctx context.Context, appID id.AppID, actor, subject principal.Ref,
+    scopes []string, grantedBy principal.Ref, expiresAt *time.Time) (*principal.Delegation, error)
+func (e *Engine) RevokeDelegation(ctx context.Context, delID id.DelegationID) error
+func (e *Engine) ListDelegationsForSubject(ctx context.Context, appID id.AppID, subject principal.Ref) ([]*principal.Delegation, error)
+func (e *Engine) ExchangeToken(ctx context.Context, req *ExchangeRequest) (*session.Session, error)
+
+type ExchangeRequest struct {
+    AppID            id.AppID
+    Actor            principal.Ref
+    RequestedSubject principal.Ref
+    Scopes           []string
+    IPAddress        string
+    UserAgent        string
+    CredentialID     string
+}
+```
+
+- [ ] **Step 1: Write the failing test**
+
+Create `engine_token_exchange_test.go`:
+
+```go
+package authsome
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/xraph/authsome/principal"
+)
+
+// Exchange without a grant must fail. The endpoint exercises authority
+// somebody already gave; it has no path that creates any.
+func TestExchangeWithoutGrantIsRefused(t *testing.T) {
+	e, appID, agent, userRef := setupExchangeFixture(t)
+
+	_, err := e.ExchangeToken(context.Background(), &ExchangeRequest{
+		AppID: appID, Actor: agent, RequestedSubject: userRef,
+	})
+	assert.Error(t, err, "no grant means no exchange")
+}
+
+func TestExchangeMintsADelegatedSession(t *testing.T) {
+	e, appID, agent, userRef := setupExchangeFixture(t)
+	ctx := context.Background()
+
+	_, err := e.GrantDelegation(ctx, appID, agent, userRef,
+		[]string{"repo:read"}, userRef, nil)
+	require.NoError(t, err)
+
+	sess, err := e.ExchangeToken(ctx, &ExchangeRequest{
+		AppID: appID, Actor: agent, RequestedSubject: userRef,
+		Scopes: []string{"repo:read"},
+	})
+	require.NoError(t, err)
+
+	// The subject is the human. This is what keeps session.UserID meaning
+	// "the person this request is for" for every existing consumer.
+	assert.Equal(t, userRef.ID, sess.UserID.String())
+	assert.Equal(t, principal.KindUser, sess.PrincipalKind)
+	assert.Equal(t, principal.Chain{agent}, sess.Actors)
+	assert.Equal(t, principal.GrantDelegation, sess.ActorGrant)
+	assert.False(t, sess.DelegationID.IsNil())
+	assert.True(t, sess.ImpersonatedBy().IsNil(), "a delegation is not impersonation")
+}
+
+// A scope the grant does not carry must not survive the exchange. This is
+// where the spec's scope filter is enforced.
+func TestExchangeIntersectsScopes(t *testing.T) {
+	e, appID, agent, userRef := setupExchangeFixture(t)
+	ctx := context.Background()
+
+	_, err := e.GrantDelegation(ctx, appID, agent, userRef, []string{"repo:read"}, userRef, nil)
+	require.NoError(t, err)
+
+	_, err = e.ExchangeToken(ctx, &ExchangeRequest{
+		AppID: appID, Actor: agent, RequestedSubject: userRef,
+		Scopes: []string{"repo:write"},
+	})
+	assert.Error(t, err, "a scope outside the grant must be refused, not silently dropped")
+}
+
+// A revoked grant stops working immediately, which is the entire point of
+// storing grants rather than asserting the chain per request.
+func TestExchangeRefusesRevokedGrant(t *testing.T) {
+	e, appID, agent, userRef := setupExchangeFixture(t)
+	ctx := context.Background()
+
+	d, err := e.GrantDelegation(ctx, appID, agent, userRef, nil, userRef, nil)
+	require.NoError(t, err)
+	require.NoError(t, e.RevokeDelegation(ctx, d.ID))
+
+	_, err = e.ExchangeToken(ctx, &ExchangeRequest{
+		AppID: appID, Actor: agent, RequestedSubject: userRef,
+	})
+	assert.Error(t, err)
+}
+
+// The session's lifetime cannot outlive the grant's. A one-hour grant that
+// mints a thirty-day session is a grant nobody actually revoked.
+func TestExchangeBoundsSessionTTLByGrantExpiry(t *testing.T) {
+	e, appID, agent, userRef := setupExchangeFixture(t)
+	ctx := context.Background()
+
+	soon := time.Now().Add(5 * time.Minute)
+	_, err := e.GrantDelegation(ctx, appID, agent, userRef, nil, userRef, &soon)
+	require.NoError(t, err)
+
+	sess, err := e.ExchangeToken(ctx, &ExchangeRequest{
+		AppID: appID, Actor: agent, RequestedSubject: userRef,
+	})
+	require.NoError(t, err)
+	assert.False(t, sess.ExpiresAt.After(soon), "the session must not outlive the grant")
+}
+```
+
+Write `setupExchangeFixture(t)` returning an engine, an app ID, an agent ref
+and a user ref, using the engine construction helper `engine_test.go` already
+uses and seeding one agent principal and one user.
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `go test . -run TestExchange -v`
+Expected: FAIL, `ExchangeToken` undefined.
+
+- [ ] **Step 3: Add the delegation lifecycle to `engine_principal.go`**
+
+```go
+// GrantDelegation records that actor may act for subject.
+//
+// grantedBy is who consented and is recorded for audit. The caller is
+// responsible for having checked that grantedBy is entitled to consent: for an
+// ordinary delegation that means grantedBy is the subject or an admin over it,
+// and the API layer enforces it before calling here.
+func (e *Engine) GrantDelegation(
+	ctx context.Context, appID id.AppID, actor, subject principal.Ref,
+	scopes []string, grantedBy principal.Ref, expiresAt *time.Time,
+) (*principal.Delegation, error) {
+	if err := e.requireStarted(); err != nil {
+		return nil, err
+	}
+	if appID.IsNil() {
+		return nil, fmt.Errorf("authsome: app_id is required")
+	}
+	if actor.IsZero() || subject.IsZero() {
+		return nil, fmt.Errorf("authsome: actor and subject are required")
+	}
+	if actor == subject {
+		// Acting for yourself is not a delegation, and storing one would put a
+		// chain on a session that has no second principal on it.
+		return nil, fmt.Errorf("authsome: a principal cannot be delegated to itself")
+	}
+
+	now := time.Now()
+	d := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     appID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantDelegation,
+		Scopes:    scopes,
+		GrantedBy: grantedBy,
+		ExpiresAt: expiresAt,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := e.store.CreateDelegation(ctx, d); err != nil {
+		return nil, fmt.Errorf("authsome: grant delegation: %w", err)
+	}
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionDelegationGrant,
+		Resource:   hook.ResourceSession,
+		ResourceID: d.ID.String(),
+		ActorID:    grantedBy.ID,
+		Tenant:     appID.String(),
+		Metadata: map[string]string{
+			"actor":   actor.String(),
+			"subject": subject.String(),
+		},
+	})
+	return d, nil
+}
+
+// RevokeDelegation ends a grant.
+func (e *Engine) RevokeDelegation(ctx context.Context, delID id.DelegationID) error {
+	if err := e.requireStarted(); err != nil {
+		return err
+	}
+	if err := e.store.RevokeDelegation(ctx, delID, time.Now()); err != nil {
+		return fmt.Errorf("authsome: revoke delegation: %w", err)
+	}
+	return nil
+}
+
+// ListDelegationsForSubject returns what may act for subject, so a person can
+// see and revoke the agents holding authority over their account.
+func (e *Engine) ListDelegationsForSubject(
+	ctx context.Context, appID id.AppID, subject principal.Ref,
+) ([]*principal.Delegation, error) {
+	if err := e.requireStarted(); err != nil {
+		return nil, err
+	}
+	return e.store.ListDelegations(ctx, &principal.DelegationQuery{
+		AppID: appID, Subject: &subject, ActiveOnly: true, ActiveAsOf: time.Now(),
+	})
+}
+```
+
+Add `hook.ActionDelegationGrant = "principal.delegation.grant"` and
+`hook.ActionDelegationRevoke = "principal.delegation.revoke"` to the action
+constants, and emit the revoke event from `RevokeDelegation` the same way.
+
+- [ ] **Step 4: Write `engine_token_exchange.go`**
+
+```go
+package authsome
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/session"
+)
+
+// ExchangeRequest asks for a session in which Actor acts for RequestedSubject.
+type ExchangeRequest struct {
+	AppID            id.AppID
+	Actor            principal.Ref
+	RequestedSubject principal.Ref
+	Scopes           []string
+	IPAddress        string
+	UserAgent        string
+	// CredentialID identifies the credential the actor authenticated with, so
+	// the risk verdict caches against it.
+	CredentialID string
+}
+
+// ExchangeToken mints a session in which the actor acts on the subject's
+// behalf, against a grant that already exists.
+//
+// It never creates authority. Without a live grant matching (app, actor,
+// subject) this fails, which is what makes revocation meaningful.
+func (e *Engine) ExchangeToken(ctx context.Context, req *ExchangeRequest) (*session.Session, error) {
+	if err := e.requireStarted(); err != nil {
+		return nil, err
+	}
+
+	grant, err := e.store.FindActiveDelegation(
+		ctx, req.AppID, req.Actor, req.RequestedSubject, principal.GrantDelegation)
+	if err != nil {
+		return nil, fmt.Errorf("authsome: exchange: no active delegation for %s acting as %s: %w",
+			req.Actor, req.RequestedSubject, err)
+	}
+
+	actorPrincipal, err := e.store.GetPrincipal(ctx, req.Actor)
+	if err != nil {
+		return nil, fmt.Errorf("authsome: exchange: resolve actor: %w", err)
+	}
+	now := time.Now()
+	if !actorPrincipal.IsActive(now) {
+		return nil, fmt.Errorf("authsome: exchange: actor %s is disabled or expired", req.Actor)
+	}
+
+	// Scope narrowing. Refuse rather than silently drop: an agent that asked
+	// for repo:write and got a session without it fails later, somewhere far
+	// from the cause, and reads as a bug in the agent.
+	scopes, err := intersectScopes(req.Scopes, grant, actorPrincipal.Scopes)
+	if err != nil {
+		return nil, fmt.Errorf("authsome: exchange: %w", err)
+	}
+
+	att := &principal.AuthAttempt{
+		Subject:        req.RequestedSubject,
+		Actors:         principal.Chain{req.Actor},
+		AppID:          req.AppID,
+		CredentialKind: "token_exchange",
+		CredentialID:   req.CredentialID,
+		IPAddress:      req.IPAddress,
+		UserAgent:      req.UserAgent,
+		Ephemeral:      actorPrincipal.IsEphemeral(),
+		At:             now,
+	}
+	if err := e.plugins.EmitBeforePrincipalAuth(ctx, att); err != nil {
+		return nil, fmt.Errorf("authsome: exchange: %w", err)
+	}
+
+	userID, err := id.ParseUserID(req.RequestedSubject.ID)
+	if err != nil {
+		return nil, fmt.Errorf("authsome: exchange: subject must be a user: %w", err)
+	}
+
+	cfg := e.sessionConfigForApp(ctx, req.AppID)
+	// A session must not outlive the grant that justified it.
+	if grant.ExpiresAt != nil {
+		if remaining := time.Until(*grant.ExpiresAt); remaining < cfg.TokenTTL {
+			cfg.TokenTTL = remaining
+			cfg.RefreshTokenTTL = remaining
+		}
+	}
+
+	sess, err := e.newSession(req.AppID, userID, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("authsome: exchange: create session: %w", err)
+	}
+	sess.PrincipalKind = principal.KindUser
+	sess.Actors = principal.Chain{req.Actor}
+	sess.ActorGrant = principal.GrantDelegation
+	sess.DelegationID = grant.ID
+	sess.IPAddress = req.IPAddress
+	sess.UserAgent = req.UserAgent
+	_ = scopes // recorded on the session by whichever scope field the app uses
+
+	if err := e.store.CreateSession(ctx, sess); err != nil {
+		return nil, fmt.Errorf("authsome: exchange: store session: %w", err)
+	}
+
+	e.plugins.EmitAfterPrincipalAuth(ctx, att, sess)
+	return sess, nil
+}
+
+// intersectScopes returns the scopes an exchanged session may carry.
+//
+// Every requested scope must be inside both the grant's filter and the actor's
+// own scopes. Asking for one that is not is an error rather than a quiet
+// removal.
+func intersectScopes(requested []string, grant *principal.Delegation, actorScopes []string) ([]string, error) {
+	if len(requested) == 0 {
+		return nil, nil
+	}
+	actorHas := make(map[string]bool, len(actorScopes))
+	for _, s := range actorScopes {
+		actorHas[s] = true
+	}
+	out := make([]string, 0, len(requested))
+	for _, s := range requested {
+		if !grant.AllowsScope(s) {
+			return nil, fmt.Errorf("scope %q is outside the delegation grant", s)
+		}
+		if len(actorScopes) > 0 && !actorHas[s] {
+			return nil, fmt.Errorf("scope %q is outside the actor's own scopes", s)
+		}
+		out = append(out, s)
+	}
+	return out, nil
+}
+```
+
+Replace the `_ = scopes` line with an assignment to whichever field the session
+carries scopes on once you confirm it. If sessions have no scope field, drop
+the variable and let `intersectScopes` serve purely as the gate, which is the
+role that matters.
+
+- [ ] **Step 5: Add the HTTP surface**
+
+Create `api/principal_handlers.go` with a registerer following
+`registerHealthRoutes` in `api/api.go`:
+
+```go
+func (a *API) registerPrincipalRoutes(router forge.Router) error {
+	g := router.Group("/v1", forge.WithGroupTags("principals"))
+
+	if err := g.POST("/token/exchange", a.handleTokenExchange,
+		forge.WithSummary("Exchange a credential for a delegated session"),
+		forge.WithDescription("Mints a session in which the calling principal acts on behalf of another, against an existing delegation grant. Returns 403 when no live grant matches."),
+		forge.WithOperationID("exchangeToken"),
+		forge.WithResponseSchema(http.StatusOK, "Delegated session", TokenExchangeResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	return g.GET("/principals/me/delegations", a.handleListMyDelegations,
+		forge.WithSummary("List what may act on your behalf"),
+		forge.WithOperationID("listMyDelegations"),
+		forge.WithResponseSchema(http.StatusOK, "Delegations", DelegationListResponse{}),
+		forge.WithErrorResponses(),
+	)
+}
+```
+
+Add `a.registerPrincipalRoutes` to the `rootRegisterers` slice at
+`api/api.go:100`. The handler reads the calling principal with
+`middleware.PrincipalFrom(ctx.Context())`, refuses when absent, and passes
+`req.RequestedSubject` through `id.ParseUserID` before calling
+`ExchangeToken`. Define `TokenExchangeRequest`, `TokenExchangeResponse` and
+`DelegationListResponse` in `api/requests.go` alongside the existing request
+types, and never put the minted token anywhere but the response body.
+
+- [ ] **Step 6: Run the tests to verify they pass**
+
+Run: `go test . ./api/ -v`
+Expected: PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+make check
+git add -A
+git commit -m "feat(principal): add delegation grants and RFC 8693 token exchange
+
+An agent exchanges its own credential for a session acting as a user, against
+a grant that already exists. Scope narrowing is enforced here, at mint time,
+so the per-check path stays free of a scope lookup."
+```
+
+---
+
+## Task 15: Ephemeral children
+
+**Files:**
+- Modify: `engine_principal.go`
+- Modify: `api/principal_handlers.go`
+- Test: `engine_principal_test.go`
+
+**Interfaces:**
+- Consumes: Task 4's `ParentID` and `ExpiresAt`, Task 14's handlers.
+- Produces:
+
+```go
+func (e *Engine) MintChildPrincipal(ctx context.Context, parentID id.ServiceAccountID,
+    name string, scopes []string, ttl time.Duration) (*serviceaccount.ServiceAccount, *apikey.APIKey, string, error)
+func (e *Engine) ReapExpiredPrincipals(ctx context.Context, appID id.AppID) (int, error)
+```
+
+- [ ] **Step 1: Write the failing test**
+
+```go
+// A child may not out-scope its parent. Otherwise minting a child is a
+// privilege escalation with an extra step.
+func TestMintChildRefusesScopesTheParentLacks(t *testing.T) {
+	e, _, parent := setupParentFixture(t, []string{"repo:read"})
+
+	_, _, _, err := e.MintChildPrincipal(context.Background(), parent.ID,
+		"child", []string{"repo:write"}, time.Hour)
+	assert.Error(t, err)
+}
+
+// A child may not outlive its parent, or revoking the parent leaves its
+// children running.
+func TestMintChildCapsTTLByParentExpiry(t *testing.T) {
+	e, _, parent := setupParentFixtureExpiring(t, 5*time.Minute)
+
+	child, _, _, err := e.MintChildPrincipal(context.Background(), parent.ID,
+		"child", nil, 24*time.Hour)
+	require.NoError(t, err)
+	require.NotNil(t, child.ExpiresAt)
+	assert.False(t, child.ExpiresAt.After(*parent.ExpiresAt))
+}
+
+func TestMintChildRecordsTheParent(t *testing.T) {
+	e, appID, parent := setupParentFixture(t, nil)
+
+	child, key, secret, err := e.MintChildPrincipal(context.Background(), parent.ID,
+		"child", nil, time.Hour)
+	require.NoError(t, err)
+	assert.Equal(t, parent.ID.String(), child.ParentID.String())
+	assert.Equal(t, appID.String(), child.AppID.String())
+	assert.NotEmpty(t, secret, "the secret is returned once and never stored")
+	assert.Equal(t, child.ID.String(), key.ServiceAccountID.String())
+}
+
+func TestReapRemovesExpiredChildrenOnly(t *testing.T) {
+	e, appID, parent := setupParentFixture(t, nil)
+	ctx := context.Background()
+
+	lapsed, _, _, err := e.MintChildPrincipal(ctx, parent.ID, "lapsed", nil, -time.Hour)
+	require.NoError(t, err)
+
+	n, err := e.ReapExpiredPrincipals(ctx, appID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+
+	_, err = e.GetServiceAccount(ctx, lapsed.ID)
+	assert.Error(t, err, "the lapsed child must be gone")
+	_, err = e.GetServiceAccount(ctx, parent.ID)
+	assert.NoError(t, err, "the durable parent must survive the reaper")
+}
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `go test . -run 'TestMintChild|TestReap' -v`
+Expected: FAIL, `MintChildPrincipal` undefined.
+
+- [ ] **Step 3: Implement**
+
+```go
+// MintChildPrincipal creates a short-lived principal under a registered
+// parent, with its own API key.
+//
+// This is what makes per-task agents workable: one durable registration, N
+// ephemeral instances, each with its own identity for attribution and its own
+// credential to revoke. The two caps are what keep it from being an escalation:
+// a child's scopes are a subset of its parent's, and a child's expiry never
+// passes its parent's.
+//
+// The secret is returned once and is not stored.
+func (e *Engine) MintChildPrincipal(
+	ctx context.Context, parentID id.ServiceAccountID, name string, scopes []string, ttl time.Duration,
+) (*serviceaccount.ServiceAccount, *apikey.APIKey, string, error) {
+	if err := e.requireStarted(); err != nil {
+		return nil, nil, "", err
+	}
+	if ttl <= 0 {
+		return nil, nil, "", fmt.Errorf("authsome: ttl must be positive")
+	}
+
+	parent, err := e.store.GetServiceAccount(ctx, parentID)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("authsome: mint child: get parent: %w", err)
+	}
+	if !parent.Active {
+		return nil, nil, "", fmt.Errorf("authsome: mint child: parent is inactive")
+	}
+	if parent.ParentID.Prefix() != "" {
+		// One level only. A tree of ephemeral principals is a revocation
+		// problem nobody can reason about, and nothing needs it.
+		return nil, nil, "", fmt.Errorf("authsome: mint child: an ephemeral principal cannot mint children")
+	}
+
+	if err := requireScopeSubset(scopes, parent.Scopes); err != nil {
+		return nil, nil, "", fmt.Errorf("authsome: mint child: %w", err)
+	}
+
+	now := time.Now()
+	expires := now.Add(ttl)
+	if parent.ExpiresAt != nil && expires.After(*parent.ExpiresAt) {
+		expires = *parent.ExpiresAt
+	}
+
+	kind := parent.Kind
+	if kind == "" {
+		kind = principal.KindService
+	}
+	child := &serviceaccount.ServiceAccount{
+		ID:          id.NewServiceAccountID(),
+		AppID:       parent.AppID,
+		EnvID:       parent.EnvID,
+		OrgID:       parent.OrgID,
+		Kind:        kind,
+		Name:        name,
+		ParentID:    parent.ID,
+		OwnerUserID: parent.OwnerUserID,
+		Scopes:      scopes,
+		ExpiresAt:   &expires,
+		Active:      true,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if err := e.store.CreateServiceAccount(ctx, child); err != nil {
+		return nil, nil, "", fmt.Errorf("authsome: mint child: %w", err)
+	}
+
+	key, secret, err := e.CreateServiceAccountAPIKey(ctx, child.ID, name, scopes, &expires)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("authsome: mint child: create key: %w", err)
+	}
+	return child, key, secret, nil
+}
+
+// requireScopeSubset refuses any scope the parent does not itself hold. A
+// parent with no scopes at all places no restriction, matching how an empty
+// scope list is read everywhere else in this package.
+func requireScopeSubset(child, parent []string) error {
+	if len(parent) == 0 || len(child) == 0 {
+		return nil
+	}
+	has := make(map[string]bool, len(parent))
+	for _, s := range parent {
+		has[s] = true
+	}
+	for _, s := range child {
+		if !has[s] {
+			return fmt.Errorf("scope %q is outside the parent's scopes", s)
+		}
+	}
+	return nil
+}
+
+// ReapExpiredPrincipals deletes lapsed ephemeral children and returns how many
+// went.
+//
+// Only children are reaped. A durable principal with an expiry set is one an
+// operator chose to time-limit, and deleting it out from under them would
+// destroy a registration they can see in the dashboard.
+func (e *Engine) ReapExpiredPrincipals(ctx context.Context, appID id.AppID) (int, error) {
+	if err := e.requireStarted(); err != nil {
+		return 0, err
+	}
+	all, err := e.store.ListPrincipals(ctx, &principal.Query{AppID: appID})
+	if err != nil {
+		return 0, fmt.Errorf("authsome: reap: list principals: %w", err)
+	}
+	now := time.Now()
+	reaped := 0
+	for _, p := range all {
+		if p.Parent == nil || !p.IsExpired(now) {
+			continue
+		}
+		svcID, parseErr := id.ParseServiceAccountID(p.ID)
+		if parseErr != nil {
+			continue
+		}
+		if delErr := e.store.DeleteServiceAccount(ctx, svcID); delErr != nil {
+			e.logger.Warn("authsome: reap: delete failed",
+				log.String("principal", p.Ref.String()),
+				log.String("error", delErr.Error()),
+			)
+			continue
+		}
+		reaped++
+	}
+	return reaped, nil
+}
+```
+
+- [ ] **Step 4: Add the endpoint**
+
+In `api/principal_handlers.go`, add to `registerPrincipalRoutes`:
+
+```go
+	if err := g.POST("/principals/:id/children", a.handleMintChild,
+		forge.WithSummary("Mint an ephemeral child principal"),
+		forge.WithDescription("Creates a short-lived principal under the calling parent, with its own credential. Scopes must be a subset of the parent's and the TTL is capped by the parent's expiry."),
+		forge.WithOperationID("mintChildPrincipal"),
+		forge.WithResponseSchema(http.StatusCreated, "Child principal", MintChildResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+```
+
+The handler reads the calling principal from the context and refuses when the
+path id does not match it, so a parent can only mint under itself.
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+Run: `go test . ./api/ -v`
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+make check
+git add -A
+git commit -m "feat(principal): mint ephemeral children under a registered parent
+
+One durable registration, N per-task instances, each with its own identity and
+credential. Scopes are capped by the parent's and the expiry never passes the
+parent's, so minting a child cannot escalate."
+```
+
+---
+
+## Task 16: Impersonation becomes a delegation grant
+
+The last piece of the subsume. `Engine.Impersonate` already stamps the chain
+(Task 3). This gives it a grant row, so an impersonation appears in the same
+listing and revocation surface as everything else.
+
+**Files:**
+- Modify: `service.go:2679-2750`
+- Test: `service_test.go`
+
+**Interfaces:**
+- Consumes: Task 14's grant lifecycle.
+- Produces: no new exported API. `Impersonate` and `StopImpersonation` keep their signatures.
+
+- [ ] **Step 1: Write the failing test**
+
+Add to `service_test.go`:
+
+```go
+// An impersonation now leaves a grant behind, so it shows up wherever
+// delegations do and can be revoked the same way.
+func TestImpersonateRecordsAGrant(t *testing.T) {
+	e, appID, admin, target := setupImpersonationFixture(t)
+	ctx := context.Background()
+
+	_, sess, err := e.Impersonate(ctx, admin.ID, target.ID)
+	require.NoError(t, err)
+	require.False(t, sess.DelegationID.IsNil(), "the session must name its grant")
+
+	d, err := e.PrincipalStore().GetDelegation(ctx, sess.DelegationID)
+	require.NoError(t, err)
+	assert.Equal(t, principal.GrantImpersonation, d.GrantKind)
+	assert.Equal(t, principal.UserRef(admin.ID), d.Actor)
+	assert.Equal(t, principal.UserRef(target.ID), d.Subject)
+	assert.Equal(t, appID.String(), d.AppID.String())
+}
+
+// The behaviour every existing consumer depends on must be unchanged.
+func TestImpersonateStillReadsAsImpersonation(t *testing.T) {
+	e, _, admin, target := setupImpersonationFixture(t)
+
+	_, sess, err := e.Impersonate(context.Background(), admin.ID, target.ID)
+	require.NoError(t, err)
+
+	assert.Equal(t, admin.ID.String(), sess.ImpersonatedBy().String())
+	assert.Equal(t, target.ID.String(), sess.UserID.String())
+	assert.Empty(t, sess.AuthzActors(), "impersonation evaluates as the target alone")
+}
+
+// Ending an impersonation must revoke the grant as well as the session, or
+// the admin keeps standing authority to start a new one silently.
+func TestStopImpersonationRevokesTheGrant(t *testing.T) {
+	e, _, admin, target := setupImpersonationFixture(t)
+	ctx := context.Background()
+
+	_, sess, err := e.Impersonate(ctx, admin.ID, target.ID)
+	require.NoError(t, err)
+	require.NoError(t, e.StopImpersonation(ctx, sess.ID))
+
+	d, err := e.PrincipalStore().GetDelegation(ctx, sess.DelegationID)
+	require.NoError(t, err)
+	assert.NotNil(t, d.RevokedAt, "stopping must revoke the grant")
+}
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `go test . -run TestImpersonat -v`
+Expected: FAIL, `sess.DelegationID` is nil because no grant is written.
+
+- [ ] **Step 3: Write the grant in `Impersonate`**
+
+In `service.go`, between creating the session and storing it:
+
+```go
+	now := time.Now()
+	// Impersonation is a delegation with its own grant kind, so it appears in
+	// the same listing and revocation surface as every other way one principal
+	// comes to act for another. The one thing that stays special is how it is
+	// authorized: Session.AuthzActors returns nil for it, so the admin's own
+	// permissions are not intersected in.
+	expires := now.Add(cfg.TokenTTL)
+	grant := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     u.AppID,
+		Actor:     principal.UserRef(adminID),
+		Subject:   principal.UserRef(targetID),
+		GrantKind: principal.GrantImpersonation,
+		GrantedBy: principal.UserRef(adminID),
+		ExpiresAt: &expires,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := e.store.CreateDelegation(ctx, grant); err != nil {
+		return nil, nil, fmt.Errorf("authsome: impersonate: record grant: %w", err)
+	}
+
+	sess.SetImpersonatedBy(adminID)
+	sess.DelegationID = grant.ID
+```
+
+- [ ] **Step 4: Revoke in `StopImpersonation`**
+
+After the session is deleted:
+
+```go
+	if !sess.DelegationID.IsNil() {
+		// Best effort. The session is already gone, so the impersonation has
+		// ended whatever happens here, and failing the call would report an
+		// unstopped impersonation that has in fact stopped.
+		if err := e.store.RevokeDelegation(ctx, sess.DelegationID, time.Now()); err != nil {
+			e.logger.Warn("authsome: stop impersonation: revoke grant failed",
+				log.String("delegation_id", sess.DelegationID.String()),
+				log.String("error", err.Error()),
+			)
+		}
+	}
+```
+
+Note that a repeat `Impersonate` for the same admin and target while the first
+is live hits the partial unique index and returns `store.ErrConflict`. Decide
+whether that is the behaviour you want: it prevents an admin holding two
+concurrent impersonation sessions for one user. If you want to allow it,
+reuse the existing live grant instead of creating a second one, by calling
+`FindActiveDelegation` first and only creating when it returns
+`principal.ErrNotFound`.
+
+- [ ] **Step 5: Run the full suite**
+
+Run: `go test ./... && go test -tags integration ./store/...`
+Expected: PASS everywhere, including the existing impersonation e2e coverage.
+
+- [ ] **Step 6: Commit**
+
+```bash
+make check
+git add -A
+git commit -m "feat(auth): record impersonation as a delegation grant
+
+Completes the subsume. An impersonation now appears in the same listing and
+revocation surface as any other delegation, while keeping its one special
+property: it evaluates as the target alone rather than intersecting the
+admin's permissions in."
+```
+
+---
+
+## Verification
+
+After Task 16, the whole feature is in. Confirm before calling it done:
+
+```bash
+go build ./...
+go test ./...
+go test -tags integration ./store/...
+make check
+```
+
+Every one of those must pass. The integration run is the one that matters most
+here, because it is the only thing that proves postgres and sqlite actually
+implement what they previously stubbed.
