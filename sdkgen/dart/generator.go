@@ -163,6 +163,11 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 		OutputMode:     g.config.OutputMode,
 	}
 
+	// Names already claimed by a generated class. Request classes are named
+	// after their operation and checked against this so a synthesized one never
+	// collides with a component that got there first.
+	declared := make(map[string]bool)
+
 	// Build types from components/schemas
 	if spec.Components != nil {
 		schemaNames := make([]string, 0, len(spec.Components.Schemas))
@@ -186,30 +191,9 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 				continue
 			}
 
-			td := TypeDef{Name: name}
-			if schema.Properties != nil {
-				fieldNames := make([]string, 0, len(schema.Properties))
-				for fn := range schema.Properties {
-					fieldNames = append(fieldNames, fn)
-				}
-				sort.Strings(fieldNames)
-
-				requiredSet := make(map[string]bool)
-				for _, r := range schema.Required {
-					requiredSet[r] = true
-				}
-
-				for _, fn := range fieldNames {
-					fs := schema.Properties[fn]
-					td.Fields = append(td.Fields, FieldDef{
-						Name:     safeDartFieldName(toCamelCase(fn)),
-						JSONName: fn,
-						Type:     g.schemaToDartType(fs),
-						Optional: !requiredSet[fn],
-					})
-				}
-			}
+			td := TypeDef{Name: name, Fields: g.schemaToDartFields(schema)}
 			data.Types = append(data.Types, td)
+			declared[name] = true
 		}
 	}
 
@@ -278,11 +262,7 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 			// Determine body type
 			if pair.op.RequestBody != nil {
 				opDef.HasBody = true
-				if schema := requestBodySchema(pair.op.RequestBody); schema != nil {
-					opDef.BodyType = g.schemaToDartBodyType(schema)
-				} else {
-					opDef.BodyType = "Map<String, dynamic>"
-				}
+				opDef.BodyType = g.bodyType(pair.op, data, declared)
 			}
 
 			// Determine response type
@@ -407,6 +387,97 @@ func requestBodySchema(rb *openapi.RequestBody) *openapi.Schema {
 	}
 
 	return nil
+}
+
+// schemaToDartFields turns a schema's properties into class fields, sorted by
+// property name so the same schema always produces the same class.
+func (g *Generator) schemaToDartFields(schema *openapi.Schema) []FieldDef {
+	if schema == nil || schema.Properties == nil {
+		return nil
+	}
+
+	fieldNames := make([]string, 0, len(schema.Properties))
+	for fn := range schema.Properties {
+		fieldNames = append(fieldNames, fn)
+	}
+	sort.Strings(fieldNames)
+
+	requiredSet := make(map[string]bool)
+	for _, r := range schema.Required {
+		requiredSet[r] = true
+	}
+
+	fields := make([]FieldDef, 0, len(fieldNames))
+	for _, fn := range fieldNames {
+		fs := schema.Properties[fn]
+		fields = append(fields, FieldDef{
+			Name:     safeDartFieldName(toCamelCase(fn)),
+			JSONName: fn,
+			Type:     g.schemaToDartType(fs),
+			Optional: !requiredSet[fn],
+		})
+	}
+
+	return fields
+}
+
+// bodyType names the Dart type a request body is passed as, generating a class
+// for it when the schema is written inline.
+//
+// A $ref already names something, and the class for it comes from the
+// components pass. An inline schema names nothing, and every field the endpoint
+// takes used to be thrown away in favour of Map<String, dynamic>. The four
+// OAuth2 routes are the whole population of that case: forge writes their
+// bodies inline because they are form-encoded. So the schema is turned into a
+// class of its own, named after the operation the way the Go and TypeScript
+// generators name theirs.
+//
+// The name is derived from the operation ID rather than the configured method
+// name, so an embedded build with method overrides still produces the same
+// class names as a standalone one.
+func (g *Generator) bodyType(op *openapi.Operation, data *TemplateData, declared map[string]bool) string {
+	const fallback = "Map<String, dynamic>"
+
+	schema := requestBodySchema(op.RequestBody)
+	if schema == nil {
+		return fallback
+	}
+
+	if schema.Ref != "" {
+		return g.schemaToDartBodyType(schema)
+	}
+
+	fields := g.schemaToDartFields(schema)
+	if len(fields) == 0 {
+		return fallback
+	}
+
+	name := exportedDartName(op.OperationID) + "Request"
+	if name == "Request" || isDartReservedTypeName(name) {
+		return fallback
+	}
+
+	// A component already holding the name has its own class; use that rather
+	// than emitting a second one under the same name.
+	if declared[name] {
+		return name
+	}
+
+	data.Types = append(data.Types, TypeDef{Name: name, Fields: fields})
+	declared[name] = true
+
+	return name
+}
+
+// exportedDartName upper-cases the first letter of an operation ID, which is
+// already camelCase, giving the PascalCase a class name needs.
+func exportedDartName(s string) string {
+	if s == "" {
+		return ""
+	}
+	r := []rune(s)
+	r[0] = unicode.ToUpper(r[0])
+	return string(r)
 }
 
 func (g *Generator) schemaToDartBodyType(s *openapi.Schema) string {
