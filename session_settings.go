@@ -398,7 +398,10 @@ func registerCoreSessionSettings(m *settings.Manager) error {
 	if err := settings.RegisterTyped(m, "session", SettingCookieSameSite); err != nil {
 		return err
 	}
-	return settings.RegisterTyped(m, "session", SettingCookieUseHostPrefix)
+	if err := settings.RegisterTyped(m, "session", SettingCookieUseHostPrefix); err != nil {
+		return err
+	}
+	return registerDPoPSettings(m)
 }
 
 // ──────────────────────────────────────────────────
