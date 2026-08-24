@@ -32,6 +32,7 @@ type Plugin struct {
 	permChecker plugin.PermissionChecker
 	grantTTL    time.Duration
 	basePath    string
+	cache       *grantCache
 }
 
 // Option configures the plugin at construction.
@@ -61,6 +62,7 @@ func New(opts ...Option) *Plugin {
 		store:    NewMemoryStore(),
 		scopes:   NewScopeRegistry(),
 		grantTTL: defaultGrantTTL,
+		cache:    newGrantCache(grantCacheTTL),
 	}
 	for _, opt := range opts {
 		opt(p)

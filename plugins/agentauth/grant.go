@@ -135,6 +135,16 @@ func (p *Plugin) CreateGrant(ctx context.Context, in CreateGrantInput) (*AgentGr
 	return g, nil
 }
 
+// RevokeGrant revokes a delegation and drops it from the cache, so the next
+// request sees the revocation without waiting out the cache ttl.
+func (p *Plugin) RevokeGrant(ctx context.Context, grantID id.AgentGrantID) error {
+	if err := p.store.RevokeAgentGrant(ctx, grantID); err != nil {
+		return fmt.Errorf("agentauth: revoke grant: %w", err)
+	}
+	p.cache.invalidate(grantID)
+	return nil
+}
+
 // checkPolicy applies one org's policy against the agent and the requested
 // scopes. Evaluate and CreateGrant both call it, once per governing org, so
 // neither can write or authorize a delegation the other would have refused.

@@ -62,12 +62,17 @@ func (p *Plugin) Authorize(ctx context.Context, sess *session.Session, action, r
 		return nil
 	}
 
-	grant, err := p.store.GetAgentGrant(ctx, sess.GrantID)
-	if errors.Is(err, ErrNotFound) {
-		return ErrGrantInactive
-	}
-	if err != nil {
-		return fmt.Errorf("agentauth: load grant: %w", err)
+	grant, ok := p.cache.get(sess.GrantID)
+	if !ok {
+		loaded, err := p.store.GetAgentGrant(ctx, sess.GrantID)
+		if errors.Is(err, ErrNotFound) {
+			return ErrGrantInactive
+		}
+		if err != nil {
+			return fmt.Errorf("agentauth: load grant: %w", err)
+		}
+		p.cache.put(loaded)
+		grant = loaded
 	}
 	if !grant.IsActive(time.Now()) {
 		return ErrGrantInactive
