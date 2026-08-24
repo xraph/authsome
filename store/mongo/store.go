@@ -44,6 +44,7 @@ const (
 	colAppSessionConfigs    = "authsome_app_session_configs"
 	colRevokedRefreshTokens = "authsome_revoked_refresh_tokens"
 	colServiceAccounts      = "authsome_service_accounts"
+	colDelegations          = "authsome_delegations"
 	colUserEmails           = "authsome_user_emails"
 )
 
@@ -628,6 +629,10 @@ func migrationIndexes() map[string][]mongo.IndexModel {
 				Options: options.Index().SetUnique(true),
 			},
 			{Keys: bson.D{{Key: "app_id", Value: 1}}},
+		},
+		colDelegations: {
+			{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "subject_kind", Value: 1}, {Key: "subject_id", Value: 1}}},
+			{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "actor_kind", Value: 1}, {Key: "actor_id", Value: 1}}},
 		},
 	}
 }

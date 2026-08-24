@@ -2,46 +2,264 @@ package mongo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/store"
 )
 
-// GetPrincipal is a stub: not yet implemented for the MongoDB backend.
-func (s *Store) GetPrincipal(_ context.Context, _ principal.Ref) (*principal.Principal, error) {
-	return nil, fmt.Errorf("mongo: GetPrincipal: not implemented")
+// findLimit turns a query limit into driver options. Zero means unlimited,
+// which is how both the memory and postgres backends read an unset Limit.
+func findLimit(n int) []options.Lister[options.FindOptions] {
+	if n <= 0 {
+		return nil
+	}
+	return []options.Lister[options.FindOptions]{options.Find().SetLimit(int64(n))}
 }
 
-// ListPrincipals is a stub: not yet implemented for the MongoDB backend.
-func (s *Store) ListPrincipals(_ context.Context, _ *principal.Query) ([]*principal.Principal, error) {
-	return nil, fmt.Errorf("mongo: ListPrincipals: not implemented")
+// ──────────────────────────────────────────────────
+// Principal read side
+// ──────────────────────────────────────────────────
+
+// GetPrincipal resolves any principal by ref. A user ref is assembled from the
+// users collection; every other kind comes from the service accounts one,
+// looked up by id alone. The ref's Kind only routes which collection to read,
+// matching how the memory and postgres backends resolve a principal.
+func (s *Store) GetPrincipal(ctx context.Context, ref principal.Ref) (*principal.Principal, error) {
+	if ref.Kind == principal.KindUser {
+		uid, err := id.ParseUserID(ref.ID)
+		if err != nil {
+			return nil, principal.ErrNotFound
+		}
+		u, err := s.GetUser(ctx, uid)
+		if err != nil {
+			return nil, principal.ErrNotFound
+		}
+		return &principal.Principal{
+			Ref:      ref,
+			AppID:    u.AppID,
+			EnvID:    u.EnvID,
+			Name:     u.Name(),
+			Disabled: false,
+		}, nil
+	}
+
+	var m serviceAccountModel
+	err := s.mdb.Collection(colServiceAccounts).
+		FindOne(ctx, bson.M{"_id": ref.ID}).Decode(&m)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, principal.ErrNotFound
+		}
+		return nil, fmt.Errorf("authsome/mongo: get principal: %w", err)
+	}
+	svc, err := fromServiceAccountModel(&m)
+	if err != nil {
+		return nil, err
+	}
+	return svc.ToPrincipal(), nil
 }
 
-// CreateDelegation is a stub: not yet implemented for the MongoDB backend.
-func (s *Store) CreateDelegation(_ context.Context, _ *principal.Delegation) error {
-	return fmt.Errorf("mongo: CreateDelegation: not implemented")
+// ListPrincipals returns principals matching q. Only non-human principals live
+// in the service accounts collection, so this never returns users.
+func (s *Store) ListPrincipals(ctx context.Context, q *principal.Query) ([]*principal.Principal, error) {
+	filter := bson.M{}
+	// Clauses that can each constrain "kind" go through $and rather than
+	// straight into the map: q.Kind and q.Parent.Kind are separate filters
+	// that both land on the same field, and a plain map assignment would let
+	// the second silently replace the first. Under $and two disagreeing kinds
+	// match nothing, which is the honest answer, since a principal has one.
+	var and []bson.M
+	if !q.AppID.IsNil() {
+		filter["app_id"] = q.AppID.String()
+	}
+	if q.Kind != "" {
+		and = append(and, bson.M{"kind": string(q.Kind)})
+	}
+	if q.OwnerUser != nil {
+		filter["owner_user_id"] = q.OwnerUser.String()
+	}
+	if q.Parent != nil {
+		and = append(and, bson.M{"parent_id": q.Parent.ID})
+		// ToPrincipal stamps a child's Parent ref with the child's own kind,
+		// so the kind half of that ref constrains the child, not the parent.
+		// Matching on the id alone would return a child of the right parent
+		// under a kind the caller did not ask for.
+		if q.Parent.Kind != "" {
+			and = append(and, bson.M{"kind": string(q.Parent.Kind)})
+		}
+	}
+	if len(and) > 0 {
+		filter["$and"] = and
+	}
+	if q.ActiveOnly {
+		filter["active"] = true
+		// expires_at is null for a principal that never lapses. grove writes
+		// the key whatever the omitempty tag says, so the null branch is the
+		// common one rather than the absent branch.
+		filter["$or"] = bson.A{
+			bson.M{"expires_at": nil},
+			bson.M{"expires_at": bson.M{"$gte": q.ActiveAsOf}},
+		}
+	}
+
+	cur, err := s.mdb.Collection(colServiceAccounts).Find(ctx, filter, findLimit(q.Limit)...)
+	if err != nil {
+		return nil, fmt.Errorf("authsome/mongo: list principals: %w", err)
+	}
+	defer cur.Close(ctx)
+
+	out := make([]*principal.Principal, 0)
+	for cur.Next(ctx) {
+		var m serviceAccountModel
+		if err := cur.Decode(&m); err != nil {
+			return nil, fmt.Errorf("authsome/mongo: decode principal: %w", err)
+		}
+		svc, err := fromServiceAccountModel(&m)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, svc.ToPrincipal())
+	}
+	return out, cur.Err()
 }
 
-// GetDelegation is a stub: not yet implemented for the MongoDB backend.
-func (s *Store) GetDelegation(_ context.Context, _ id.DelegationID) (*principal.Delegation, error) {
-	return nil, fmt.Errorf("mongo: GetDelegation: not implemented")
+// ──────────────────────────────────────────────────
+// Delegation grants
+// ──────────────────────────────────────────────────
+
+func (s *Store) CreateDelegation(ctx context.Context, d *principal.Delegation) error {
+	m := toDelegationModel(d)
+	_, err := s.mdb.Collection(colDelegations).InsertOne(ctx, m)
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return store.ErrConflict
+		}
+		return fmt.Errorf("authsome/mongo: create delegation: %w", err)
+	}
+	return nil
 }
 
-// FindActiveDelegation is a stub: not yet implemented for the MongoDB backend.
+func (s *Store) GetDelegation(ctx context.Context, delID id.DelegationID) (*principal.Delegation, error) {
+	var m delegationModel
+	err := s.mdb.Collection(colDelegations).
+		FindOne(ctx, bson.M{"_id": delID.String()}).Decode(&m)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, principal.ErrNotFound
+		}
+		return nil, fmt.Errorf("authsome/mongo: get delegation: %w", err)
+	}
+	return fromDelegationModel(&m)
+}
+
+// FindActiveDelegation resolves the live grant letting actor act for subject.
+//
+// Liveness is evaluated in the query rather than by loading and filtering in
+// Go: this runs on the authentication path for every delegated request, and
+// the partial unique index means at most one document can match.
 func (s *Store) FindActiveDelegation(
-	_ context.Context, _ id.AppID, _, _ principal.Ref, _ principal.GrantKind,
+	ctx context.Context, appID id.AppID, actor, subject principal.Ref, grantKind principal.GrantKind,
 ) (*principal.Delegation, error) {
-	return nil, fmt.Errorf("mongo: FindActiveDelegation: not implemented")
+	now := time.Now()
+	filter := bson.M{
+		"app_id":       appID.String(),
+		"actor_kind":   string(actor.Kind),
+		"actor_id":     actor.ID,
+		"subject_kind": string(subject.Kind),
+		"subject_id":   subject.ID,
+		"grant_kind":   string(grantKind),
+		"revoked_at":   nil,
+		"$or": bson.A{
+			bson.M{"expires_at": nil},
+			bson.M{"expires_at": bson.M{"$gte": now}},
+		},
+	}
+
+	var m delegationModel
+	err := s.mdb.Collection(colDelegations).FindOne(ctx, filter).Decode(&m)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, principal.ErrNotFound
+		}
+		return nil, fmt.Errorf("authsome/mongo: find active delegation: %w", err)
+	}
+	return fromDelegationModel(&m)
 }
 
-// ListDelegations is a stub: not yet implemented for the MongoDB backend.
-func (s *Store) ListDelegations(_ context.Context, _ *principal.DelegationQuery) ([]*principal.Delegation, error) {
-	return nil, fmt.Errorf("mongo: ListDelegations: not implemented")
+func (s *Store) ListDelegations(ctx context.Context, q *principal.DelegationQuery) ([]*principal.Delegation, error) {
+	filter := bson.M{}
+	if !q.AppID.IsNil() {
+		filter["app_id"] = q.AppID.String()
+	}
+	if !q.OrgID.IsNil() {
+		filter["org_id"] = q.OrgID.String()
+	}
+	if q.Actor != nil {
+		filter["actor_kind"] = string(q.Actor.Kind)
+		filter["actor_id"] = q.Actor.ID
+	}
+	if q.Subject != nil {
+		filter["subject_kind"] = string(q.Subject.Kind)
+		filter["subject_id"] = q.Subject.ID
+	}
+	if q.GrantKind != "" {
+		filter["grant_kind"] = string(q.GrantKind)
+	}
+	if q.ActiveOnly {
+		filter["revoked_at"] = nil
+		filter["$or"] = bson.A{
+			bson.M{"expires_at": nil},
+			bson.M{"expires_at": bson.M{"$gte": q.ActiveAsOf}},
+		}
+	}
+
+	cur, err := s.mdb.Collection(colDelegations).Find(ctx, filter, findLimit(q.Limit)...)
+	if err != nil {
+		return nil, fmt.Errorf("authsome/mongo: list delegations: %w", err)
+	}
+	defer cur.Close(ctx)
+
+	out := make([]*principal.Delegation, 0)
+	for cur.Next(ctx) {
+		var m delegationModel
+		if err := cur.Decode(&m); err != nil {
+			return nil, fmt.Errorf("authsome/mongo: decode delegation: %w", err)
+		}
+		d, err := fromDelegationModel(&m)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, cur.Err()
 }
 
-// RevokeDelegation is a stub: not yet implemented for the MongoDB backend.
-func (s *Store) RevokeDelegation(_ context.Context, _ id.DelegationID, _ time.Time) error {
-	return fmt.Errorf("mongo: RevokeDelegation: not implemented")
+// RevokeDelegation marks a grant revoked. The revoked_at guard makes a repeat
+// call a no-op rather than moving the timestamp, so a retried revocation
+// cannot rewrite when the revocation actually happened.
+func (s *Store) RevokeDelegation(ctx context.Context, delID id.DelegationID, at time.Time) error {
+	res, err := s.mdb.Collection(colDelegations).UpdateOne(ctx,
+		bson.M{"_id": delID.String(), "revoked_at": nil},
+		bson.M{"$set": bson.M{"revoked_at": at, "updated_at": at}},
+	)
+	if err != nil {
+		return fmt.Errorf("authsome/mongo: revoke delegation: %w", err)
+	}
+	if res.MatchedCount == 0 {
+		// Either already revoked or absent. Distinguish, because a caller
+		// revoking a grant that never existed has a different problem from one
+		// retrying.
+		if _, getErr := s.GetDelegation(ctx, delID); getErr != nil {
+			return getErr
+		}
+	}
+	return nil
 }

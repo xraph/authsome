@@ -1038,25 +1038,55 @@ func fromAPIKeyModel(m *apiKeyModel) (*apikey.APIKey, error) {
 type serviceAccountModel struct {
 	grove.BaseModel `grove:"table:authsome_service_accounts"`
 
-	ID          string    `grove:"id,pk"       bson:"_id"`
-	AppID       string    `grove:"app_id"      bson:"app_id"`
-	Name        string    `grove:"name"        bson:"name"`
-	Description string    `grove:"description" bson:"description,omitempty"`
-	Scopes      string    `grove:"scopes"      bson:"scopes,omitempty"`
-	Active      bool      `grove:"active"      bson:"active"`
-	CreatedAt   time.Time `grove:"created_at"  bson:"created_at"`
-	UpdatedAt   time.Time `grove:"updated_at"  bson:"updated_at"`
+	ID          string `grove:"id,pk"       bson:"_id"`
+	AppID       string `grove:"app_id"      bson:"app_id"`
+	EnvID       string `grove:"env_id"        bson:"env_id,omitempty"`
+	OrgID       string `grove:"org_id"        bson:"org_id,omitempty"`
+	Kind        string `grove:"kind"          bson:"kind,omitempty"`
+	Name        string `grove:"name"        bson:"name"`
+	Description string `grove:"description" bson:"description,omitempty"`
+	// Scopes stays a comma-joined string rather than the native array the
+	// session models use. Converting it needs a data migration over existing
+	// rows, which belongs with the change that needs it, not here.
+	Scopes      string     `grove:"scopes"      bson:"scopes,omitempty"`
+	OwnerUserID string     `grove:"owner_user_id" bson:"owner_user_id,omitempty"`
+	ParentID    string     `grove:"parent_id"     bson:"parent_id,omitempty"`
+	ExpiresAt   *time.Time `grove:"expires_at"    bson:"expires_at,omitempty"`
+	Active      bool       `grove:"active"      bson:"active"`
+	CreatedAt   time.Time  `grove:"created_at"  bson:"created_at"`
+	UpdatedAt   time.Time  `grove:"updated_at"  bson:"updated_at"`
 }
 
 func toServiceAccountModel(svc *serviceaccount.ServiceAccount) *serviceAccountModel {
+	// Never blank on write, matching store/postgres: a row this store creates
+	// gets a concrete kind, and the empty-kind fallback in ToPrincipal stays a
+	// read-time concern for rows written by some other tool.
+	kind := svc.Kind
+	if kind == "" {
+		kind = principal.KindService
+	}
 	m := &serviceAccountModel{
 		ID:          svc.ID.String(),
 		AppID:       svc.AppID.String(),
+		Kind:        string(kind),
 		Name:        svc.Name,
 		Description: svc.Description,
+		ExpiresAt:   svc.ExpiresAt,
 		Active:      svc.Active,
 		CreatedAt:   svc.CreatedAt,
 		UpdatedAt:   svc.UpdatedAt,
+	}
+	if svc.EnvID.Prefix() != "" {
+		m.EnvID = svc.EnvID.String()
+	}
+	if svc.OrgID.Prefix() != "" {
+		m.OrgID = svc.OrgID.String()
+	}
+	if !svc.OwnerUserID.IsNil() {
+		m.OwnerUserID = svc.OwnerUserID.String()
+	}
+	if !svc.ParentID.IsNil() {
+		m.ParentID = svc.ParentID.String()
 	}
 	if len(svc.Scopes) > 0 {
 		m.Scopes = strings.Join(svc.Scopes, ",")
@@ -1076,16 +1106,131 @@ func fromServiceAccountModel(m *serviceAccountModel) (*serviceaccount.ServiceAcc
 	svc := &serviceaccount.ServiceAccount{
 		ID:          svcID,
 		AppID:       appID,
+		Kind:        principal.Kind(m.Kind),
 		Name:        m.Name,
 		Description: m.Description,
+		ExpiresAt:   m.ExpiresAt,
 		Active:      m.Active,
 		CreatedAt:   m.CreatedAt,
 		UpdatedAt:   m.UpdatedAt,
+	}
+	if m.EnvID != "" {
+		envID, err := id.ParseEnvironmentID(m.EnvID)
+		if err != nil {
+			return nil, err
+		}
+		svc.EnvID = envID
+	}
+	if m.OrgID != "" {
+		orgID, err := id.ParseOrgID(m.OrgID)
+		if err != nil {
+			return nil, err
+		}
+		svc.OrgID = orgID
+	}
+	if m.OwnerUserID != "" {
+		ownerID, err := id.ParseUserID(m.OwnerUserID)
+		if err != nil {
+			return nil, err
+		}
+		svc.OwnerUserID = ownerID
+	}
+	if m.ParentID != "" {
+		parentID, err := id.ParseServiceAccountID(m.ParentID)
+		if err != nil {
+			return nil, err
+		}
+		svc.ParentID = parentID
 	}
 	if m.Scopes != "" {
 		svc.Scopes = strings.Split(m.Scopes, ",")
 	}
 	return svc, nil
+}
+
+// ──────────────────────────────────────────────────
+// Delegation model
+// ──────────────────────────────────────────────────
+
+type delegationModel struct {
+	grove.BaseModel `grove:"table:authsome_delegations"`
+
+	ID            string     `grove:"id,pk"            bson:"_id"`
+	AppID         string     `grove:"app_id"           bson:"app_id"`
+	OrgID         string     `grove:"org_id"           bson:"org_id,omitempty"`
+	ActorKind     string     `grove:"actor_kind"       bson:"actor_kind"`
+	ActorID       string     `grove:"actor_id"         bson:"actor_id"`
+	SubjectKind   string     `grove:"subject_kind"     bson:"subject_kind"`
+	SubjectID     string     `grove:"subject_id"       bson:"subject_id"`
+	GrantKind     string     `grove:"grant_kind"       bson:"grant_kind"`
+	Scopes        []string   `grove:"scopes"           bson:"scopes,omitempty"`
+	GrantedByKind string     `grove:"granted_by_kind"  bson:"granted_by_kind,omitempty"`
+	GrantedByID   string     `grove:"granted_by_id"    bson:"granted_by_id,omitempty"`
+	ExpiresAt     *time.Time `grove:"expires_at"       bson:"expires_at,omitempty"`
+	RevokedAt     *time.Time `grove:"revoked_at"       bson:"revoked_at,omitempty"`
+	CreatedAt     time.Time  `grove:"created_at"       bson:"created_at"`
+	UpdatedAt     time.Time  `grove:"updated_at"       bson:"updated_at"`
+}
+
+func toDelegationModel(d *principal.Delegation) *delegationModel {
+	m := &delegationModel{
+		ID:            d.ID.String(),
+		AppID:         d.AppID.String(),
+		ActorKind:     string(d.Actor.Kind),
+		ActorID:       d.Actor.ID,
+		SubjectKind:   string(d.Subject.Kind),
+		SubjectID:     d.Subject.ID,
+		GrantKind:     string(d.GrantKind),
+		GrantedByKind: string(d.GrantedBy.Kind),
+		GrantedByID:   d.GrantedBy.ID,
+		ExpiresAt:     d.ExpiresAt,
+		RevokedAt:     d.RevokedAt,
+		CreatedAt:     d.CreatedAt,
+		UpdatedAt:     d.UpdatedAt,
+	}
+	if d.OrgID.Prefix() != "" {
+		m.OrgID = d.OrgID.String()
+	}
+	// Non-nil, like every other slice this store writes: grove writes each
+	// mapped field whatever the bson omitempty tag says, so a nil arrives as
+	// null and the generated $jsonSchema, which declares bsonType array,
+	// rejects the insert. An unscoped grant is the common case here.
+	m.Scopes = append([]string{}, d.Scopes...)
+	return m
+}
+
+func fromDelegationModel(m *delegationModel) (*principal.Delegation, error) {
+	delID, err := id.ParseDelegationID(m.ID)
+	if err != nil {
+		return nil, err
+	}
+	appID, err := id.ParseAppID(m.AppID)
+	if err != nil {
+		return nil, err
+	}
+	d := &principal.Delegation{
+		ID:        delID,
+		AppID:     appID,
+		Actor:     principal.Ref{Kind: principal.Kind(m.ActorKind), ID: m.ActorID},
+		Subject:   principal.Ref{Kind: principal.Kind(m.SubjectKind), ID: m.SubjectID},
+		GrantKind: principal.GrantKind(m.GrantKind),
+		GrantedBy: principal.Ref{Kind: principal.Kind(m.GrantedByKind), ID: m.GrantedByID},
+		ExpiresAt: m.ExpiresAt,
+		RevokedAt: m.RevokedAt,
+		CreatedAt: m.CreatedAt,
+		UpdatedAt: m.UpdatedAt,
+	}
+	if m.OrgID != "" {
+		orgID, err := id.ParseOrgID(m.OrgID)
+		if err != nil {
+			return nil, err
+		}
+		d.OrgID = orgID
+	}
+	if len(m.Scopes) > 0 {
+		d.Scopes = append([]string(nil), m.Scopes...)
+	}
+	return d, nil
 }
 
 // ──────────────────────────────────────────────────

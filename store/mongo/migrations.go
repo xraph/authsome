@@ -12,6 +12,7 @@ import (
 	"github.com/xraph/grove/migrate"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/user"
 )
 
@@ -943,6 +944,112 @@ func init() {
 			// Forward-only, matching add_session_principal_identity: rolling the
 			// validator back would reject the delegated sessions this makes
 			// storable.
+			Down: func(_ context.Context, _ migrate.Executor) error { return nil },
+		},
+
+		// Migration: the delegation grants collection. A grant is the durable,
+		// revocable record that one principal may act for another. The chain on
+		// a session says who is acting; this says they were allowed to.
+		&migrate.Migration{
+			Name:    "create_authsome_delegations",
+			Version: "20260824000070",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				if err := mexec.CreateCollection(ctx, (*delegationModel)(nil)); err != nil {
+					return err
+				}
+				return mexec.CreateIndexes(ctx, colDelegations, []mongo.IndexModel{
+					{
+						// One live grant per (app, actor, subject, kind). The
+						// partial filter keys on revoked_at being null rather
+						// than absent, which is the whole point: grove writes
+						// every mapped field whatever the bson omitempty tag
+						// says, so a live grant stores revoked_at: null and
+						// never omits the key. Filtering on $exists would
+						// match no document at all and quietly enforce
+						// nothing, and mongo rejects $exists: false in a
+						// partial filter regardless. Revoking sets a date,
+						// which drops the row out of the index and frees the
+						// slot for a fresh grant.
+						Keys: bson.D{
+							{Key: "app_id", Value: 1},
+							{Key: "actor_kind", Value: 1}, {Key: "actor_id", Value: 1},
+							{Key: "subject_kind", Value: 1}, {Key: "subject_id", Value: 1},
+							{Key: "grant_kind", Value: 1},
+						},
+						Options: options.Index().SetUnique(true).
+							SetPartialFilterExpression(bson.D{
+								{Key: "revoked_at", Value: bson.D{{Key: "$type", Value: "null"}}},
+							}),
+					},
+					{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "subject_kind", Value: 1}, {Key: "subject_id", Value: 1}}},
+					{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "actor_kind", Value: 1}, {Key: "actor_id", Value: 1}}},
+				})
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				return mexec.DropCollection(ctx, (*delegationModel)(nil))
+			},
+		},
+
+		// Migration: principal fields on service accounts, and the actor-chain
+		// backfill. serviceAccountModel gained kind, env_id, org_id,
+		// owner_user_id, parent_id and expires_at, so an existing deployment's
+		// generated validator has to be reapplied before a row carrying them
+		// can be written.
+		//
+		// The backfill converts the legacy impersonation projection into a real
+		// chain. fromSessionModel already reads those documents correctly
+		// through its impersonated_by fallback, so this changes no behaviour;
+		// it means an operator querying actors.id sees impersonations too,
+		// rather than only sessions written since the chain landed.
+		&migrate.Migration{
+			Name:    "add_principal_fields_and_backfill_chain",
+			Version: "20260824000071",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				if err := mexec.RefreshValidator(ctx, (*serviceAccountModel)(nil)); err != nil {
+					return fmt.Errorf("refresh service account validator: %w", err)
+				}
+				if err := mexec.CreateIndexes(ctx, colServiceAccounts, []mongo.IndexModel{
+					{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "kind", Value: 1}}},
+					{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "parent_id", Value: 1}}},
+					{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "owner_user_id", Value: 1}}},
+				}); err != nil {
+					return fmt.Errorf("create service account indexes: %w", err)
+				}
+
+				// Only documents that carry the legacy field and no chain yet,
+				// so a re-run cannot overwrite a chain written since.
+				_, err := mexec.DB().Collection(colSessions).UpdateMany(ctx,
+					bson.M{
+						"impersonated_by": bson.M{"$gt": ""},
+						"actor_grant":     bson.M{"$in": bson.A{nil, ""}},
+					},
+					mongo.Pipeline{{{Key: "$set", Value: bson.D{
+						{Key: "actors", Value: bson.A{bson.D{
+							{Key: "kind", Value: string(principal.KindUser)},
+							{Key: "id", Value: "$impersonated_by"},
+						}}},
+						{Key: "actor_grant", Value: string(principal.GrantImpersonation)},
+					}}}},
+				)
+				if err != nil {
+					return fmt.Errorf("backfill session actor chain: %w", err)
+				}
+				return nil
+			},
+			// Forward-only. Undoing the backfill would strip chains this store
+			// now depends on, and the read path treats a chain as the truth.
 			Down: func(_ context.Context, _ migrate.Executor) error { return nil },
 		},
 	)
