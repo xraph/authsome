@@ -13,9 +13,21 @@ import (
 
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/sharedsignals/caep"
 	"github.com/xraph/authsome/plugins/sharedsignals/jwksclient"
 )
+
+// permStreamResource is the RBAC resource name for the stream admin API,
+// paired with the "manage" action already used across the repo's admin
+// surfaces (see plugins/oauth2provider, plugins/sso, plugins/social:
+// "manage"/"oauth2_client", "manage"/"sso_connection",
+// "manage"/"social_provider" -- each names the specific entity the group
+// manages rather than the whole plugin, which is the pattern this follows).
+// A stream is a session-revocation capability, so it gets its own
+// permission rather than folding into some broader "sharedsignals" grant
+// that might get handed out for unrelated reasons.
+const permStreamResource = "ssf_stream"
 
 // CreateStreamRequest registers an identity provider we will accept events
 // from.
@@ -64,13 +76,14 @@ type CreateStreamResponse struct {
 	PushURL string `json:"push_url"`
 }
 
-// UpdateStreamRequest changes the mutable parts of a stream. Secrets are not
-// among them; rotate by creating a new stream.
+// UpdateStreamRequest changes the mutable parts of a stream. The two push
+// secrets are not among them; rotate by creating a new stream.
 type UpdateStreamRequest struct {
 	Name                  *string           `json:"name,omitempty"`
 	Status                *string           `json:"status,omitempty"`
 	EnforcementMode       *string           `json:"enforcement_mode,omitempty"`
 	MaxActionsPerHour     *int              `json:"max_actions_per_hour,omitempty"`
+	JWKSURI               *string           `json:"jwks_uri,omitempty"`
 	AllowedEventTypes     []string          `json:"allowed_event_types,omitempty"`
 	AllowedSubjectFormats []string          `json:"allowed_subject_formats,omitempty"`
 	VerifiedDomains       []string          `json:"verified_domains,omitempty"`
@@ -107,6 +120,34 @@ func containsString(haystack []string, needle string) bool {
 	return false
 }
 
+// validateStreamState checks the invariants a stream must hold no matter how
+// it got there. CreateStream runs it against the row it is about to insert;
+// UpdateStream must run it against the fully-merged RESULTING state of a
+// patch, not just the fields that particular patch happened to touch --
+// otherwise a PATCH that only clears verified_domains (leaving
+// allowed_subject_formats untouched, still carrying "email") sails through
+// with neither field individually looking wrong, and the stream ends up in a
+// state CreateStream would have refused outright: the email/phone_number
+// formats active with no verified domain backing them, which lets the
+// transmitter name anyone.
+func validateStreamState(s *InboundStream) error {
+	// The same check the fetcher runs, applied before the URL is ever
+	// stored -- and re-applied here so an update can't introduce a URL the
+	// create path would have refused either.
+	if err := jwksclient.ValidateURI(s.JWKSURI); err != nil {
+		return fmt.Errorf("sharedsignals: %w", err)
+	}
+	// Email and phone name a person without the IdP proving it issued them,
+	// so they only make sense inside domains the operator has claimed.
+	if (containsString(s.AllowedSubjectFormats, caep.FormatEmail) ||
+		containsString(s.AllowedSubjectFormats, caep.FormatPhoneNumber)) &&
+		len(s.VerifiedDomains) == 0 {
+		return errors.New(
+			"sharedsignals: the email and phone_number formats require verified_domains")
+	}
+	return nil
+}
+
 // CreateStream registers a stream and mints its two secrets.
 func (p *Plugin) CreateStream(ctx context.Context, appID id.AppID,
 	envID id.EnvironmentID, req CreateStreamRequest) (*CreateStreamResponse, error) {
@@ -116,10 +157,6 @@ func (p *Plugin) CreateStream(ctx context.Context, appID id.AppID,
 	if req.JWKSURI == "" {
 		return nil, errors.New("sharedsignals: jwks_uri is required")
 	}
-	// The same check the fetcher runs, applied before the URL is ever stored.
-	if err := jwksclient.ValidateURI(req.JWKSURI); err != nil {
-		return nil, fmt.Errorf("sharedsignals: %w", err)
-	}
 
 	formats := req.AllowedSubjectFormats
 	if len(formats) == 0 {
@@ -127,13 +164,11 @@ func (p *Plugin) CreateStream(ctx context.Context, appID id.AppID,
 		// transmitter is allowed to name.
 		formats = []string{caep.FormatIssSub}
 	}
-	// Email and phone name a person without the IdP proving it issued them,
-	// so they only make sense inside domains the operator has claimed.
-	if (containsString(formats, caep.FormatEmail) ||
-		containsString(formats, caep.FormatPhoneNumber)) &&
-		len(req.VerifiedDomains) == 0 {
-		return nil, errors.New(
-			"sharedsignals: the email and phone_number formats require verified_domains")
+	if err := validateStreamState(&InboundStream{
+		JWKSURI: req.JWKSURI, AllowedSubjectFormats: formats,
+		VerifiedDomains: req.VerifiedDomains,
+	}); err != nil {
+		return nil, err
 	}
 
 	mode := req.EnforcementMode
@@ -217,16 +252,13 @@ func (p *Plugin) UpdateStream(ctx context.Context, streamID id.SSFStreamID,
 	if req.MaxActionsPerHour != nil {
 		stream.MaxActionsPerHour = *req.MaxActionsPerHour
 	}
+	if req.JWKSURI != nil {
+		stream.JWKSURI = *req.JWKSURI
+	}
 	if req.AllowedEventTypes != nil {
 		stream.AllowedEventTypes = req.AllowedEventTypes
 	}
 	if req.AllowedSubjectFormats != nil {
-		if (containsString(req.AllowedSubjectFormats, caep.FormatEmail) ||
-			containsString(req.AllowedSubjectFormats, caep.FormatPhoneNumber)) &&
-			len(stream.VerifiedDomains) == 0 && len(req.VerifiedDomains) == 0 {
-			return nil, errors.New(
-				"sharedsignals: the email and phone_number formats require verified_domains")
-		}
 		stream.AllowedSubjectFormats = req.AllowedSubjectFormats
 	}
 	if req.VerifiedDomains != nil {
@@ -236,6 +268,13 @@ func (p *Plugin) UpdateStream(ctx context.Context, streamID id.SSFStreamID,
 		stream.ActionOverrides = req.ActionOverrides
 	}
 
+	// Validate the RESULTING state, not the individual fields this patch
+	// happened to touch -- see validateStreamState's doc comment for why
+	// that distinction matters.
+	if err := validateStreamState(stream); err != nil {
+		return nil, err
+	}
+
 	if err := p.store.UpdateInboundStream(ctx, stream); err != nil {
 		return nil, err
 	}
@@ -243,16 +282,38 @@ func (p *Plugin) UpdateStream(ctx context.Context, streamID id.SSFStreamID,
 	return &view, nil
 }
 
-// registerAdminRoutes mounts the stream CRUD behind session auth.
+// registerAdminRoutes mounts the stream CRUD behind session auth, plus an
+// RBAC permission check on the three routes that mutate a stream.
+//
+// forge.WithGroupAuth("session") on its own writes OpenAPI metadata only --
+// it documents the requirement but enforces nothing at request time. The
+// actual gate is forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
+// which is what plugin/authz.go's own doc comment pairs it with (see also
+// plugins/waitlist/plugin.go and plugins/subscription/routes.go for the same
+// pairing elsewhere in this codebase). Without it this group was reachable
+// by anyone, session or no session.
+//
+// SessionGuard alone still isn't the right bar for this group: it only
+// proves SOME session exists, and a stream is a session-revocation
+// capability, so any signed-in end user of the app would otherwise be able
+// to mint one for themselves. The create/update/delete routes carry an
+// additional permStreamResource permission check for that reason; list and
+// get stay at session-only, same as the read/write split in
+// plugins/subscription/routes.go.
 func (p *Plugin) registerAdminRoutes(router forge.Router) error {
 	g := router.Group("/v1/ssf/admin",
 		forge.WithGroupTags("Shared Signals"),
 		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
 	)
 
+	writeGuard := plugin.PermissionRouteOptions(p.engine, "manage", permStreamResource)
+
 	if err := g.POST("/streams", p.handleCreateStream,
-		forge.WithSummary("Register an inbound Shared Signals stream"),
-		forge.WithOperationID("createSSFStream"),
+		append([]forge.RouteOption{
+			forge.WithSummary("Register an inbound Shared Signals stream"),
+			forge.WithOperationID("createSSFStream"),
+		}, writeGuard...)...,
 	); err != nil {
 		return err
 	}
@@ -263,14 +324,18 @@ func (p *Plugin) registerAdminRoutes(router forge.Router) error {
 		return err
 	}
 	if err := g.PATCH("/streams/:id", p.handleUpdateStream,
-		forge.WithSummary("Update an inbound Shared Signals stream"),
-		forge.WithOperationID("updateSSFStream"),
+		append([]forge.RouteOption{
+			forge.WithSummary("Update an inbound Shared Signals stream"),
+			forge.WithOperationID("updateSSFStream"),
+		}, writeGuard...)...,
 	); err != nil {
 		return err
 	}
 	return g.DELETE("/streams/:id", p.handleDeleteStream,
-		forge.WithSummary("Delete an inbound Shared Signals stream"),
-		forge.WithOperationID("deleteSSFStream"),
+		append([]forge.RouteOption{
+			forge.WithSummary("Delete an inbound Shared Signals stream"),
+			forge.WithOperationID("deleteSSFStream"),
+		}, writeGuard...)...,
 	)
 }
 

@@ -11,9 +11,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xraph/forge"
+	"github.com/xraph/forge/extensions/auth"
 
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/sharedsignals/caep"
 )
 
@@ -259,4 +261,266 @@ func TestHandleDeleteStream_CrossAppIsIndistinguishableFromMissing(t *testing.T)
 	// The stream must survive the cross-app delete attempt.
 	_, err = p.store.GetInboundStream(ctx, mustParseStreamID(t, created.Stream.ID))
 	require.NoError(t, err, "app A's stream must not be deleted by app B")
+}
+
+// ──────────────────────────────────────────────────
+// Auth enforcement: registerAdminRoutes must actually gate the group, not
+// just document it. forge.WithGroupAuth("session") on its own writes
+// OpenAPI metadata and enforces nothing at request time -- the group needs
+// forge.WithGroupMiddleware(plugin.SessionGuard(engine)...) too, and the
+// three mutating routes additionally need a permission check so an ordinary
+// signed-in user can't mint themselves a session-revocation capability.
+// ──────────────────────────────────────────────────
+
+// fakeAuthEngine wraps stubEngine (see stub_engine_test.go) so these tests
+// can exercise the real plugin.SessionGuard / plugin.PermissionGuard code
+// paths -- a real auth.Registry actually runs its provider lookup and a
+// real middleware.RequirePermission actually calls HasPermission -- rather
+// than asserting only that a slice of middleware is non-empty.
+type fakeAuthEngine struct {
+	stubEngine
+	registry   auth.Registry
+	defaultApp string
+	// permissions maps "userID|action|resource" to the scripted RBAC
+	// decision; a missing key means denied, matching a real checker with no
+	// grant on file.
+	permissions map[string]bool
+}
+
+func (e *fakeAuthEngine) AuthRegistry() auth.Registry { return e.registry }
+func (e *fakeAuthEngine) DefaultAppID() string         { return e.defaultApp }
+
+func (e *fakeAuthEngine) HasPermission(_ context.Context, userID id.UserID, action, resource string) (bool, error) {
+	return e.permissions[userID.String()+"|"+action+"|"+resource], nil
+}
+
+var _ plugin.PermissionChecker = (*fakeAuthEngine)(nil)
+
+// alwaysSessionProvider authenticates every request unconditionally. It
+// exists so a test can get past SessionGuard's real registry-driven check
+// without standing up a full session/cookie issuing pipeline, isolating
+// what these tests are actually proving: whether the group's middleware is
+// wired at all (TestRegisterAdminRoutes_RejectsUnauthenticated uses a
+// registry with NO provider registered instead, precisely to exercise the
+// rejection path), and whether PermissionGuard gates the write routes once
+// a session exists.
+type alwaysSessionProvider struct{}
+
+func (alwaysSessionProvider) Name() string                  { return "session" }
+func (alwaysSessionProvider) Type() auth.SecuritySchemeType { return auth.SecurityTypeHTTP }
+
+func (alwaysSessionProvider) Authenticate(context.Context, *http.Request) (*auth.AuthContext, error) {
+	return &auth.AuthContext{Subject: "test-subject", ProviderName: "session"}, nil
+}
+
+func (alwaysSessionProvider) OpenAPIScheme() auth.SecurityScheme { return auth.SecurityScheme{} }
+
+func (alwaysSessionProvider) Middleware() forge.Middleware {
+	return func(next forge.Handler) forge.Handler { return next }
+}
+
+// TestRegisterAdminRoutes_RejectsUnauthenticated reproduces, and proves the
+// fix for, exactly what the review found live: POST /v1/ssf/admin/streams
+// with no Authorization header used to return 201 with a working
+// push_url_path and push_token, because WithGroupAuth("session") alone
+// enforces nothing. Every admin route must now reject a request that
+// carries no session at all.
+func TestRegisterAdminRoutes_RejectsUnauthenticated(t *testing.T) {
+	ctx := context.Background()
+	appID := id.NewAppID()
+
+	p := New(Config{Audience: "https://authsome.example/ssf"})
+	p.store = NewMemoryStore()
+	p.engine = &fakeAuthEngine{
+		// No provider registered: exactly the "nobody is signed in" case.
+		registry:   auth.NewRegistry(nil, forge.NewNoopLogger()),
+		defaultApp: appID.String(),
+	}
+
+	// Structural backstop: if SessionGuard ever regresses to returning nil
+	// for an engine that does expose an AuthRegistry, the live assertions
+	// below would still catch it (nil middleware wired in means everything
+	// passes through), but pin the precondition directly too.
+	require.NotEmpty(t, plugin.SessionGuard(p.engine), "SessionGuard must produce middleware for a real registry")
+
+	router := forge.NewRouter()
+	require.NoError(t, p.registerAdminRoutes(router))
+	h := router.Handler()
+
+	createBody := []byte(`{"issuer":"https://org.okta.com","jwks_uri":"https://org.okta.com/keys"}`)
+	someStreamID := id.NewSSFStreamID().String()
+
+	cases := []struct {
+		name, method, path string
+		body                []byte
+	}{
+		{"create", http.MethodPost, "/v1/ssf/admin/streams", createBody},
+		{"list", http.MethodGet, "/v1/ssf/admin/streams", nil},
+		{"update", http.MethodPatch, "/v1/ssf/admin/streams/" + someStreamID, []byte(`{"name":"x"}`)},
+		{"delete", http.MethodDelete, "/v1/ssf/admin/streams/" + someStreamID, nil},
+	}
+	for _, c := range cases {
+		req := httptest.NewRequestWithContext(ctx, c.method, c.path, bytes.NewReader(c.body))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusUnauthorized, rec.Code,
+			"%s (%s %s) must be rejected without a session", c.name, c.method, c.path)
+	}
+
+	// The rejected create must not have registered a stream.
+	streams, err := p.store.ListInboundStreams(ctx, appID)
+	require.NoError(t, err)
+	assert.Empty(t, streams, "an unauthenticated create must not have gone through")
+}
+
+// TestRegisterAdminRoutes_MutatingRoutesRequirePermission proves the second
+// half of the fix: SessionGuard alone would let any signed-in end user of
+// the app register, update or delete a stream -- and a stream is what
+// authorises session revocation, so that's a privilege escalation. Create,
+// update and delete must additionally require the "manage"/permStreamResource
+// permission; list must not, since it carries no writeGuard.
+func TestRegisterAdminRoutes_MutatingRoutesRequirePermission(t *testing.T) {
+	ctx := context.Background()
+	registry := auth.NewRegistry(nil, forge.NewNoopLogger())
+	require.NoError(t, registry.Register(alwaysSessionProvider{}))
+
+	allowedUser := id.NewUserID()
+	deniedUser := id.NewUserID()
+	appID := id.NewAppID()
+
+	engine := &fakeAuthEngine{
+		registry:   registry,
+		defaultApp: appID.String(),
+		permissions: map[string]bool{
+			allowedUser.String() + "|manage|" + permStreamResource: true,
+		},
+	}
+
+	// Structural backstop, same reasoning as the unauthenticated test above.
+	require.NotEmpty(t, plugin.SessionGuard(engine))
+	require.NotEmpty(t, plugin.PermissionGuard(engine, "manage", permStreamResource),
+		"PermissionGuard must produce middleware for an engine implementing PermissionChecker")
+
+	p := New(Config{Audience: "https://authsome.example/ssf"})
+	p.store = NewMemoryStore()
+	p.engine = engine
+
+	router := forge.NewRouter()
+	// Stand-in for the engine-wide, non-blocking AuthMiddleware that in
+	// production runs ahead of every route group and bridges a resolved
+	// session onto middleware.WithUserID (see
+	// authprovider.SessionProvider.Middleware / BridgeToContext).
+	// registerAdminRoutes' own SessionGuard re-validates that some session
+	// exists via the registry above, but the generic multi-provider
+	// registry path it uses does not itself populate UserIDFrom -- that
+	// bridging is a separate, globally-applied concern in production. This
+	// reads a per-request test header instead, matching the same
+	// direct-context-injection pattern plugins/organization/authz_test.go's
+	// orgReq already uses in this codebase to isolate authorization logic
+	// from session/cookie plumbing.
+	router.Use(func(next forge.Handler) forge.Handler {
+		return func(c forge.Context) error {
+			if raw := c.Request().Header.Get("X-Test-User-Id"); raw != "" {
+				if uid, uerr := id.ParseUserID(raw); uerr == nil {
+					c.WithContext(middleware.WithUserID(c.Context(), uid))
+				}
+			}
+			return next(c)
+		}
+	})
+	require.NoError(t, p.registerAdminRoutes(router))
+	h := router.Handler()
+
+	doAs := func(userID id.UserID, method, path string, body []byte) int {
+		req := httptest.NewRequestWithContext(ctx, method, path, bytes.NewReader(body))
+		req.Header.Set("X-Test-User-Id", userID.String())
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	createBody := []byte(`{"issuer":"https://org.okta.com","jwks_uri":"https://org.okta.com/keys"}`)
+
+	assert.Equal(t, http.StatusForbidden,
+		doAs(deniedUser, http.MethodPost, "/v1/ssf/admin/streams", createBody),
+		"a session without the permission must not be able to create a stream")
+	assert.Equal(t, http.StatusOK,
+		doAs(deniedUser, http.MethodGet, "/v1/ssf/admin/streams", nil),
+		"list carries no permission gate, only the session requirement")
+
+	require.Equal(t, http.StatusCreated,
+		doAs(allowedUser, http.MethodPost, "/v1/ssf/admin/streams", createBody))
+
+	streams, err := p.store.ListInboundStreams(ctx, appID)
+	require.NoError(t, err)
+	require.Len(t, streams, 1, "only the allowed user's create should have gone through")
+	streamPath := "/v1/ssf/admin/streams/" + streams[0].ID.String()
+
+	assert.Equal(t, http.StatusForbidden,
+		doAs(deniedUser, http.MethodPatch, streamPath, []byte(`{"name":"renamed"}`)),
+		"a session without the permission must not be able to update a stream")
+	assert.Equal(t, http.StatusForbidden,
+		doAs(deniedUser, http.MethodDelete, streamPath, nil),
+		"a session without the permission must not be able to delete a stream")
+
+	assert.Equal(t, http.StatusOK,
+		doAs(allowedUser, http.MethodPatch, streamPath, []byte(`{"name":"renamed"}`)),
+		"the permitted user must still be able to update its own stream")
+}
+
+// ──────────────────────────────────────────────────
+// Update-state validation: a PATCH must be validated against its fully
+// merged RESULTING state, not just the fields it happened to touch.
+// ──────────────────────────────────────────────────
+
+// TestUpdateStream_CannotBypassVerifiedDomainsGateViaPartialPatch proves the
+// fix: a PATCH carrying only verified_domains: [] must not be allowed to
+// leave a stream with the email format active and zero verified domains --
+// the reviewer's live proof of exactly this bypass.
+func TestUpdateStream_CannotBypassVerifiedDomainsGateViaPartialPatch(t *testing.T) {
+	ctx := context.Background()
+	p, appID, envID := newAdminFixture(t)
+
+	created, err := p.CreateStream(ctx, appID, envID, CreateStreamRequest{
+		Name: "okta", Issuer: "https://org.okta.com",
+		JWKSURI:               "https://org.okta.com/keys",
+		AllowedSubjectFormats: []string{caep.FormatEmail},
+		VerifiedDomains:       []string{"corp.com"},
+	})
+	require.NoError(t, err)
+	streamID := mustParseStreamID(t, created.Stream.ID)
+
+	_, err = p.UpdateStream(ctx, streamID, UpdateStreamRequest{
+		VerifiedDomains: []string{},
+	})
+	require.Error(t, err,
+		"clearing verified_domains while the email format is still active must be refused")
+
+	stored, err := p.store.GetInboundStream(ctx, streamID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"corp.com"}, stored.VerifiedDomains,
+		"a rejected patch must not have partially applied")
+}
+
+// TestUpdateStream_RejectsUnsafeJWKSURI proves an update cannot introduce a
+// jwks_uri the create path would have refused.
+func TestUpdateStream_RejectsUnsafeJWKSURI(t *testing.T) {
+	ctx := context.Background()
+	p, appID, envID := newAdminFixture(t)
+
+	created, err := p.CreateStream(ctx, appID, envID, CreateStreamRequest{
+		Name: "okta", Issuer: "https://org.okta.com",
+		JWKSURI: "https://org.okta.com/keys",
+	})
+	require.NoError(t, err)
+	streamID := mustParseStreamID(t, created.Stream.ID)
+
+	unsafe := "https://169.254.169.254/latest/meta-data/"
+	_, err = p.UpdateStream(ctx, streamID, UpdateStreamRequest{JWKSURI: &unsafe})
+	require.Error(t, err, "jwks_uri %q must be refused on update just as it would be on create", unsafe)
+
+	stored, err := p.store.GetInboundStream(ctx, streamID)
+	require.NoError(t, err)
+	assert.Equal(t, "https://org.okta.com/keys", stored.JWKSURI,
+		"a rejected patch must not have partially applied")
 }
