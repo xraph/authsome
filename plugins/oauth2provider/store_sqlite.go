@@ -68,6 +68,23 @@ func (s *SqliteStore) GetClientByID(ctx context.Context, clientID id.OAuth2Clien
 	return toOAuth2Client(m)
 }
 
+func (s *SqliteStore) UpdateClient(ctx context.Context, c *OAuth2Client) error {
+	c.UpdatedAt = time.Now()
+	m := fromOAuth2Client(c)
+	res, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx)
+	if err != nil {
+		return oauth2SqliteError(err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return oauth2SqliteError(err)
+	}
+	if n == 0 {
+		return ErrClientNotFound
+	}
+	return nil
+}
+
 func (s *SqliteStore) ListClients(ctx context.Context, appID id.AppID) ([]*OAuth2Client, error) {
 	var models []oauth2ClientModel
 	err := s.sdb.NewSelect(&models).

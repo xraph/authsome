@@ -72,3 +72,37 @@ func TestOAuth2Client_RegistrationTokenHashIsNotSerialised(t *testing.T) {
 	assert.NotContains(t, string(b), c.RegistrationTokenHash)
 	assert.NotContains(t, string(b), "registration_token_hash")
 }
+
+func TestMemoryStore_UpdateClient(t *testing.T) {
+	st := oauth2provider.NewMemoryStore()
+	ctx := context.Background()
+
+	c := &oauth2provider.OAuth2Client{
+		ID:           id.NewOAuth2ClientID(),
+		AppID:        id.NewAppID(),
+		Name:         "Before",
+		ClientID:     "dyn-2",
+		RedirectURIs: []string{"http://127.0.0.1:9000/cb"},
+		Scopes:       []string{"openid"},
+		GrantTypes:   []string{"authorization_code"},
+	}
+	require.NoError(t, st.CreateClient(ctx, c))
+
+	c.Name = "After"
+	c.RedirectURIs = []string{"http://127.0.0.1:9100/cb"}
+	require.NoError(t, st.UpdateClient(ctx, c))
+
+	got, err := st.GetClient(ctx, "dyn-2")
+	require.NoError(t, err)
+	assert.Equal(t, "After", got.Name)
+	assert.Equal(t, []string{"http://127.0.0.1:9100/cb"}, got.RedirectURIs)
+}
+
+func TestMemoryStore_UpdateClientMissing(t *testing.T) {
+	st := oauth2provider.NewMemoryStore()
+	err := st.UpdateClient(context.Background(), &oauth2provider.OAuth2Client{
+		ID:       id.NewOAuth2ClientID(),
+		ClientID: "nope",
+	})
+	assert.ErrorIs(t, err, oauth2provider.ErrClientNotFound)
+}

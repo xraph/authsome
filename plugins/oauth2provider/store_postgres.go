@@ -68,6 +68,23 @@ func (s *PostgresStore) GetClientByID(ctx context.Context, clientID id.OAuth2Cli
 	return toOAuth2Client(m)
 }
 
+func (s *PostgresStore) UpdateClient(ctx context.Context, c *OAuth2Client) error {
+	c.UpdatedAt = time.Now()
+	m := fromOAuth2Client(c)
+	res, err := s.pg.NewUpdate(m).WherePK().Exec(ctx)
+	if err != nil {
+		return oauth2PgError(err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return oauth2PgError(err)
+	}
+	if n == 0 {
+		return ErrClientNotFound
+	}
+	return nil
+}
+
 func (s *PostgresStore) ListClients(ctx context.Context, appID id.AppID) ([]*OAuth2Client, error) {
 	var models []oauth2ClientModel
 	err := s.pg.NewSelect(&models).

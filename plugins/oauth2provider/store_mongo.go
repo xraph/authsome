@@ -352,6 +352,20 @@ func (s *MongoStore) GetClientByID(ctx context.Context, clientID id.OAuth2Client
 	return oauth2ClientDocToModel(doc)
 }
 
+func (s *MongoStore) UpdateClient(ctx context.Context, c *OAuth2Client) error {
+	c.UpdatedAt = time.Now()
+	doc := oauth2ClientToDoc(c)
+	res, err := s.mdb.Collection(oauth2ClientsColl).ReplaceOne(ctx,
+		bson.M{"_id": c.ID.String()}, doc)
+	if err != nil {
+		return oauth2MongoError(err)
+	}
+	if res.MatchedCount == 0 {
+		return ErrClientNotFound
+	}
+	return nil
+}
+
 func (s *MongoStore) ListClients(ctx context.Context, appID id.AppID) ([]*OAuth2Client, error) {
 	cursor, err := s.mdb.Collection(oauth2ClientsColl).Find(ctx, bson.M{
 		"app_id": appID.String(),

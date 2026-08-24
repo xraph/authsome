@@ -20,6 +20,9 @@ type Store interface {
 	CreateClient(ctx context.Context, c *OAuth2Client) error
 	GetClient(ctx context.Context, clientID string) (*OAuth2Client, error)
 	GetClientByID(ctx context.Context, id id.OAuth2ClientID) (*OAuth2Client, error)
+	// UpdateClient persists changes to an existing client, matched on ID.
+	// Returns ErrClientNotFound when no row matches.
+	UpdateClient(ctx context.Context, c *OAuth2Client) error
 	ListClients(ctx context.Context, appID id.AppID) ([]*OAuth2Client, error)
 	DeleteClient(ctx context.Context, id id.OAuth2ClientID) error
 
