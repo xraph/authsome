@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store"
 )
@@ -129,7 +130,7 @@ func TestCreateSessionSkipsServiceAccounts(t *testing.T) {
 	})
 
 	sess := testSession()
-	sess.PrincipalKind = principalKindServiceAccount
+	sess.PrincipalKind = principal.KindService
 	sess.UserID = id.UserID{}
 
 	if err := s.CreateSession(context.Background(), sess); err != nil {

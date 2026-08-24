@@ -163,7 +163,7 @@ func sessionsDetailHandler(deps Deps) func(ctx context.Context, in GetSessionInp
 			AppID:                 s.AppID.String(),
 			EnvID:                 s.EnvID.String(),
 			RefreshTokenExpiresAt: s.RefreshTokenExpiresAt.UTC().Format(time.RFC3339),
-			PrincipalKind:         s.PrincipalKind,
+			PrincipalKind:         string(s.PrincipalKind),
 			UpdatedAt:             s.UpdatedAt.UTC().Format(time.RFC3339),
 		}
 		if !s.OrgID.IsNil() {
@@ -172,8 +172,8 @@ func sessionsDetailHandler(deps Deps) func(ctx context.Context, in GetSessionInp
 		if !s.DeviceID.IsNil() {
 			d.DeviceID = s.DeviceID.String()
 		}
-		if !s.ImpersonatedBy.IsNil() {
-			d.ImpersonatedBy = s.ImpersonatedBy.String()
+		if imp := s.ImpersonatedBy(); !imp.IsNil() {
+			d.ImpersonatedBy = imp.String()
 		}
 		return d, nil
 	}

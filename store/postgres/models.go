@@ -19,6 +19,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/notification"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
@@ -244,7 +245,7 @@ func toSession(m *SessionModel) (*session.Session, error) {
 		ID:                    sessID,
 		AppID:                 appID,
 		EnvID:                 envID,
-		PrincipalKind:         m.PrincipalKind,
+		PrincipalKind:         principal.Kind(m.PrincipalKind),
 		Token:                 m.Token,
 		RefreshToken:          m.RefreshToken,
 		IPAddress:             m.IPAddress,
@@ -292,7 +293,7 @@ func toSession(m *SessionModel) (*session.Session, error) {
 		if err != nil {
 			return nil, err
 		}
-		s.ImpersonatedBy = impID
+		s.SetImpersonatedBy(impID)
 	}
 	if m.FamilyID != "" {
 		famID, err := id.ParseSessionFamilyID(m.FamilyID)
@@ -313,7 +314,7 @@ func fromSession(s *session.Session) *SessionModel {
 		AppID:                 s.AppID.String(),
 		EnvID:                 s.EnvID.String(),
 		UserID:                s.UserID.String(),
-		PrincipalKind:         s.PrincipalKind,
+		PrincipalKind:         string(s.PrincipalKind),
 		Token:                 s.Token,
 		RefreshToken:          s.RefreshToken,
 		IPAddress:             s.IPAddress,
@@ -333,8 +334,8 @@ func fromSession(s *session.Session) *SessionModel {
 	if s.DeviceID.Prefix() != "" {
 		m.DeviceID = s.DeviceID.String()
 	}
-	if s.ImpersonatedBy.Prefix() != "" {
-		m.ImpersonatedBy = s.ImpersonatedBy.String()
+	if imp := s.ImpersonatedBy(); imp.Prefix() != "" {
+		m.ImpersonatedBy = imp.String()
 	}
 	if s.FamilyID.Prefix() != "" {
 		m.FamilyID = s.FamilyID.String()

@@ -2698,7 +2698,7 @@ func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID) (
 	if err != nil {
 		return nil, nil, fmt.Errorf("authsome: impersonate: create session: %w", err)
 	}
-	sess.ImpersonatedBy = adminID
+	sess.SetImpersonatedBy(adminID)
 
 	if err := e.store.CreateSession(ctx, sess); err != nil {
 		return nil, nil, fmt.Errorf("authsome: impersonate: store session: %w", err)
@@ -2735,7 +2735,7 @@ func (e *Engine) StopImpersonation(ctx context.Context, sessionID id.SessionID) 
 		return fmt.Errorf("authsome: stop impersonation: %w", err)
 	}
 
-	if sess.ImpersonatedBy.Prefix() == "" {
+	if sess.ImpersonatedBy().Prefix() == "" {
 		return fmt.Errorf("authsome: session is not an impersonation session")
 	}
 
@@ -2743,7 +2743,7 @@ func (e *Engine) StopImpersonation(ctx context.Context, sessionID id.SessionID) 
 		return fmt.Errorf("authsome: stop impersonation: delete session: %w", err)
 	}
 
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "stop_impersonation", "session", sessionID.String(), sess.ImpersonatedBy.String(), sess.AppID.String(), "admin", map[string]string{
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "stop_impersonation", "session", sessionID.String(), sess.ImpersonatedBy().String(), sess.AppID.String(), "admin", map[string]string{
 		"target_user_id": sess.UserID.String(),
 	})
 
