@@ -81,17 +81,22 @@ func postTokenJSON(t *testing.T, mux forge.Router, body map[string]any) *httptes
 }
 
 // postDeviceAuthorize posts a JSON body carrying client_id to
-// /v1/oauth/device/authorize, with the resource indicator on the query
+// /v1/oauth/device/authorize, with the resource indicators on the query
 // string. DeviceAuthRequest has no field for "resource": it is read
 // straight off the request by resourceParams, which checks the query string
 // on every method, so putting it there exercises that path without touching
-// the JSON-bound client_id.
-func postDeviceAuthorize(t *testing.T, mux forge.Router, clientID, resource string) *httptest.ResponseRecorder {
+// the JSON-bound client_id. Repeating the parameter is how RFC 8707 asks for
+// more than one resource.
+func postDeviceAuthorize(t *testing.T, mux forge.Router, clientID string, resources ...string) *httptest.ResponseRecorder {
 	t.Helper()
 	b, err := json.Marshal(map[string]string{"client_id": clientID})
 	require.NoError(t, err)
+	q := url.Values{}
+	for _, r := range resources {
+		q.Add("resource", r)
+	}
 	req := httptest.NewRequestWithContext(context.Background(), "POST",
-		"/v1/oauth/device/authorize?resource="+url.QueryEscape(resource), bytes.NewReader(b))
+		"/v1/oauth/device/authorize?"+q.Encode(), bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -269,6 +274,76 @@ func TestTokenResource(t *testing.T) {
 
 		resp := decodeTokenResponse(t, rec)
 		assert.Equal(t, []string{resAPI}, audienceFor(t, acct, resp.AccessToken))
+	})
+
+	// Case 5a: the device grant must narrow the same way the authorization
+	// code grant does. Authorize for two resources, redeem asking for one, and
+	// the token must carry only that one. Case 5 redeems with no resource at
+	// all, so it only ever exercises the pass-through branch: delete the
+	// narrowing call from the device grant entirely and case 5 stays green.
+	t.Run("device redemption narrows to the resource requested at the token endpoint", func(t *testing.T) {
+		_, st, acct, mux := tokenFixture(t)
+		grantResources(t, st, resAPI, resFiles)
+
+		authRec := postDeviceAuthorize(t, mux, confidentialID, resAPI, resFiles)
+		require.Equal(t, http.StatusOK, authRec.Code, "body: %s", authRec.Body.String())
+		var authResp oauth2provider.DeviceAuthResponse
+		require.NoError(t, json.Unmarshal(authRec.Body.Bytes(), &authResp))
+
+		dc, err := st.GetDeviceCodeByDeviceCode(context.Background(), authResp.DeviceCode)
+		require.NoError(t, err)
+		require.Equal(t, []string{resAPI, resFiles}, dc.Resources,
+			"the device code must carry both resources resolved at /device/authorize")
+
+		dc.Status = oauth2provider.DeviceCodeStatusAuthorized
+		dc.UserID = id.NewUserID()
+		require.NoError(t, st.UpdateDeviceCode(context.Background(), dc))
+
+		rec := postTokenJSON(t, mux, map[string]any{
+			"grant_type":  "urn:ietf:params:oauth:grant-type:device_code",
+			"device_code": authResp.DeviceCode,
+			"client_id":   confidentialID,
+			"resource":    []string{resFiles},
+		})
+
+		resp := decodeTokenResponse(t, rec)
+		assert.Equal(t, []string{resFiles}, audienceFor(t, acct, resp.AccessToken),
+			"the device grant widened the token back to everything the code was granted")
+	})
+
+	// Case 5b: the widening half. A device redemption naming a resource the
+	// user never approved must be refused, and refused by the narrowing rule
+	// rather than the client allowlist rule. resOther is not registered with
+	// the client either, so a device grant wrongly wired through
+	// resolveResources would also reject it, with the wrong message. Only the
+	// wording tells the two apart, since both answer invalid_target.
+	t.Run("device redemption cannot widen past what the device code was granted", func(t *testing.T) {
+		_, st, _, mux := tokenFixture(t)
+		grantResources(t, st, resAPI, resFiles)
+
+		authRec := postDeviceAuthorize(t, mux, confidentialID, resAPI)
+		require.Equal(t, http.StatusOK, authRec.Code, "body: %s", authRec.Body.String())
+		var authResp oauth2provider.DeviceAuthResponse
+		require.NoError(t, json.Unmarshal(authRec.Body.Bytes(), &authResp))
+
+		dc, err := st.GetDeviceCodeByDeviceCode(context.Background(), authResp.DeviceCode)
+		require.NoError(t, err)
+		dc.Status = oauth2provider.DeviceCodeStatusAuthorized
+		dc.UserID = id.NewUserID()
+		require.NoError(t, st.UpdateDeviceCode(context.Background(), dc))
+
+		rec := postTokenJSON(t, mux, map[string]any{
+			"grant_type":  "urn:ietf:params:oauth:grant-type:device_code",
+			"device_code": authResp.DeviceCode,
+			"client_id":   confidentialID,
+			"resource":    []string{resFiles},
+		})
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code, "body: %s", rec.Body.String())
+		assert.Contains(t, rec.Body.String(), "invalid_target")
+		assert.Contains(t, rec.Body.String(), "was not granted by this authorization",
+			"must fail via narrowResources' rejection, not resolveResources'")
+		assert.NotContains(t, rec.Body.String(), "access_token")
 	})
 
 	// Case 6: a JSON token request carrying "resource": [...] must work. The
