@@ -203,8 +203,82 @@ func TestValidate_KeyMismatch(t *testing.T) {
 	p, err := dpop.Parse(mintProof(t, testKey(t), "dpop+jwt", "ES256", claims))
 	require.NoError(t, err)
 
-	v := newTestValidator(now)
-	assert.ErrorIs(t, v.Validate(context.Background(), p, dpop.Expectation{
-		Method: "POST", URL: testURL, ExpectedJKT: "some-other-thumbprint",
-	}), dpop.ErrKeyMismatch)
+	t.Run("mismatched jkt is rejected", func(t *testing.T) {
+		v := newTestValidator(now)
+		assert.ErrorIs(t, v.Validate(context.Background(), p, dpop.Expectation{
+			Method: "POST", URL: testURL, ExpectedJKT: "some-other-thumbprint",
+		}), dpop.ErrKeyMismatch)
+	})
+
+	// Without this case, inverting the comparison in Validate (checking
+	// == 1 instead of != 1) would reject every correct key and accept
+	// every wrong one, and the suite would stay green.
+	t.Run("matching jkt passes", func(t *testing.T) {
+		v := newTestValidator(now)
+		assert.NoError(t, v.Validate(context.Background(), p, dpop.Expectation{
+			Method: "POST", URL: testURL, ExpectedJKT: p.JKT,
+		}))
+	})
+}
+
+// TestValidate_NonceRequired pins both branches of the nonce check. Without
+// the first case, rewriting the nil-verifier guard from
+// "v.cfg.Nonce == nil || ..." to "v.cfg.Nonce != nil && ..." would make a
+// missing verifier silently pass every nonce-required request, and nothing
+// else in this suite would notice because Config.Nonce is nil everywhere else
+// too.
+func TestValidate_NonceRequired(t *testing.T) {
+	now := time.Now()
+	key := testKey(t)
+
+	t.Run("nil verifier fails closed", func(t *testing.T) {
+		claims := validClaims()
+		claims["iat"] = now.Unix()
+		claims["nonce"] = "server-issued-nonce"
+		p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", claims))
+		require.NoError(t, err)
+
+		v := newTestValidator(now)
+		assert.ErrorIs(t, v.Validate(context.Background(), p, dpop.Expectation{
+			Method: "POST", URL: testURL, NonceRequired: true,
+		}), dpop.ErrNonceMismatch)
+	})
+
+	t.Run("missing nonce claim is rejected", func(t *testing.T) {
+		claims := validClaims()
+		claims["iat"] = now.Unix()
+		p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", claims))
+		require.NoError(t, err)
+
+		v := newTestValidator(now)
+		assert.ErrorIs(t, v.Validate(context.Background(), p, dpop.Expectation{
+			Method: "POST", URL: testURL, NonceRequired: true,
+		}), dpop.ErrNonceRequired)
+	})
+}
+
+// TestAccessTokenHash_RFC9449Vector pins the derivation against RFC 9449's own
+// worked example rather than against AccessTokenHash's own output. ath is a
+// cross-implementation value the client computes independently from the RFC,
+// so a wrong hash, encoding, or byte source here would reject every correctly
+// implemented client while every self-referential test in this file kept
+// passing.
+//
+// Vector: RFC 9449 section 7.1, Figures 13 and 14 (access token and the ath
+// claim it produces). Cross-checked independently of this repository with:
+//
+//	python3 -c "
+//	import hashlib, base64
+//	token = 'Kz~8mXK1EalYznwH-LC-1fBAo.4Ljp~zsPE_NeO.gxU'
+//	h = hashlib.sha256(token.encode('ascii')).digest()
+//	print(base64.urlsafe_b64encode(h).rstrip(b'=').decode())
+//	"
+//
+// which prints the same value asserted below.
+func TestAccessTokenHash_RFC9449Vector(t *testing.T) {
+	const (
+		rfcToken = "Kz~8mXK1EalYznwH-LC-1fBAo.4Ljp~zsPE_NeO.gxU"
+		wantATH  = "fUHyO2r2Z3DZ53EsNrWBb0xWXoaNy59IiKCAqksmQEo"
+	)
+	assert.Equal(t, wantATH, dpop.AccessTokenHash(rfcToken))
 }
