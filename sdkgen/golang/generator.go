@@ -51,7 +51,10 @@ type GeneratedFile struct {
 
 // Generate produces all Go SDK files from the given spec.
 func (g *Generator) Generate(spec *openapi.Spec) ([]GeneratedFile, error) {
-	data := g.buildTemplateData(spec)
+	data, err := g.buildTemplateData(spec)
+	if err != nil {
+		return nil, err
+	}
 
 	var files []GeneratedFile
 
@@ -135,7 +138,7 @@ func (o OperationDef) HasPathParams() bool { return len(o.PathParams) > 0 }
 // HasQueryParams returns true when the operation has query parameters.
 func (o OperationDef) HasQueryParams() bool { return len(o.QueryParams) > 0 }
 
-func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
+func (g *Generator) buildTemplateData(spec *openapi.Spec) (*TemplateData, error) {
 	data := &TemplateData{
 		PackageName: g.config.PackageName,
 		ModulePath:  g.config.ModulePath,
@@ -245,7 +248,12 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 				opDef.HasBody = true
 				schema, mediaType := requestBodyContent(pair.op.RequestBody)
 				if schema != nil {
-					opDef.BodyFields = g.schemaToGoFields(resolveSchemaRef(spec, schema))
+					resolved, resolveErr := resolveSchemaRef(spec, schema)
+					if resolveErr != nil {
+						return nil, fmt.Errorf("%s %s: %w", pair.method, path, resolveErr)
+					}
+
+					opDef.BodyFields = g.schemaToGoFields(resolved)
 					opDef.FormBody = mediaType == mediaTypeForm && allStringFields(opDef.BodyFields)
 				}
 			}
@@ -277,7 +285,7 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 		}
 	}
 
-	return data
+	return data, nil
 }
 
 func (g *Generator) operationRequiresAuth(op *openapi.Operation) bool {
@@ -330,31 +338,41 @@ func (g *Generator) schemaToGoType(s *openapi.Schema) string {
 // the fields through the reference is what lets the generated struct keep its
 // own name and still have the fields in it.
 //
-// Anything that is not a component reference comes back untouched, including a
-// dangling ref, which is left for the caller to notice rather than papered over
-// with an empty struct.
-func resolveSchemaRef(spec *openapi.Spec, s *openapi.Schema) *openapi.Schema {
+// A ref that does not point into components/schemas belongs to whoever wrote
+// it and comes back untouched. A ref that does point there and resolves to
+// nothing is an error, because the alternative is a request struct with no
+// fields in it, and that generates a client posting "{}" at a body the server
+// requires. A cycle is the same failure by a different route and reads the
+// same way.
+func resolveSchemaRef(spec *openapi.Spec, s *openapi.Schema) (*openapi.Schema, error) {
 	const prefix = "#/components/schemas/"
 
 	seen := make(map[string]bool)
 
 	for s != nil && s.Ref != "" {
 		name, ok := strings.CutPrefix(s.Ref, prefix)
-		if !ok || seen[name] || spec.Components == nil {
-			return s
+		if !ok {
+			return s, nil
 		}
 
+		if spec.Components == nil {
+			return nil, fmt.Errorf("schema %q is referenced but the document has no components section", name)
+		}
+
+		if seen[name] {
+			return nil, fmt.Errorf("schema %q sits in a $ref cycle, so it never resolves to any fields", name)
+		}
 		seen[name] = true
 
 		target, found := spec.Components.Schemas[name]
 		if !found || target == nil {
-			return s
+			return nil, fmt.Errorf("schema %q is referenced but not defined in the document", name)
 		}
 
 		s = target
 	}
 
-	return s
+	return s, nil
 }
 
 const (
