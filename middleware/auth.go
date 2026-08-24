@@ -655,10 +655,15 @@ func setSessionContext(ctx forge.Context, sess *session.Session, resolveUser Use
 }
 
 // RequireAuth returns a forge middleware that rejects unauthenticated requests.
+//
+// Authenticated means a resolved principal of any kind, not a user
+// specifically. A machine caller carries no *user.User, so gating on one
+// turned away every service account, agent and workload credential before it
+// reached a handler.
 func RequireAuth() forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
-			if _, ok := UserFrom(ctx.Context()); !ok {
+			if _, ok := PrincipalRefFrom(ctx.Context()); !ok {
 				body := map[string]any{
 					"error": "authentication required",
 					"code":  http.StatusUnauthorized,
