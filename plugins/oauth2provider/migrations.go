@@ -297,7 +297,7 @@ ALTER TABLE authsome_oauth2_clients ADD COLUMN metadata                   TEXT N
 			},
 			// Older SQLite cannot drop columns, so Down is a no-op. Rolling
 			// back this migration leaves the columns in place, harmlessly.
-			Down: func(ctx context.Context, exec migrate.Executor) error {
+			Down: func(_ context.Context, _ migrate.Executor) error {
 				return nil
 			},
 		},
