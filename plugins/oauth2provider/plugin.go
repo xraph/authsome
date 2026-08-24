@@ -244,6 +244,29 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
+	// RFC 7591 dynamic client registration. Unauthenticated by design, so
+	// it is rate limited by IP and returns 404 unless explicitly enabled.
+	regOpts := []forge.RouteOption{
+		forge.WithSummary("Register OAuth2 client"),
+		forge.WithDescription("RFC 7591 dynamic client registration."),
+		forge.WithOperationID("oauth2RegisterClient"),
+		forge.WithRequestSchema(RegisterClientRequest{}),
+		forge.WithResponseSchema(http.StatusCreated, "Client registered", RegisterClientResponse{}),
+		forge.WithCreatedResponse(RegisterClientResponse{}),
+		forge.WithErrorResponses(),
+	}
+	if p.engine != nil {
+		if rl := p.engine.RateLimiter(); rl != nil {
+			regOpts = append(regOpts, forge.WithMiddleware(middleware.RateLimit(rl, middleware.RateLimitConfig{
+				Limit:  p.config.RegistrationRateLimit.Limit,
+				Window: p.config.RegistrationRateLimit.Window,
+			})))
+		}
+	}
+	if err := g.POST("/register", p.handleRegisterClient, regOpts...); err != nil {
+		return err
+	}
+
 	// Authenticated OAuth2 endpoints — require a logged-in user.
 	// The extension's global AuthMiddleware populates the user context;
 	// RequireAuthMiddleware blocks if no user was resolved.

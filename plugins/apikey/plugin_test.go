@@ -26,6 +26,7 @@ import (
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	apikeyPlugin "github.com/xraph/authsome/plugins/apikey"
+	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -75,6 +76,7 @@ func (m *mockEngine) GetUser(_ context.Context, _ id.UserID) (*user.User, error)
 func (m *mockEngine) EnsureDefaultRole(_ context.Context, _ id.AppID, _ id.UserID) {}
 func (m *mockEngine) AuthMiddleware() forge.Middleware                             { return nil }
 func (m *mockEngine) AuthRegistry() auth.Registry                                  { return nil }
+func (m *mockEngine) RateLimiter() ratelimit.Limiter                               { return nil }
 func (m *mockEngine) PlatformAppID() id.AppID                                      { return id.AppID{} }
 func (m *mockEngine) DefaultAppID() string                                         { return "" }
 func (m *mockEngine) BasePath() string                                             { return "" }

@@ -22,6 +22,7 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -129,6 +130,11 @@ type Engine interface {
 	// - Create blocking middleware via Middleware("session", "api-key")
 	// - Use forge.WithGroupAuth("session") for OpenAPI + enforcement
 	AuthRegistry() auth.Registry
+
+	// ── Rate limiting ──
+
+	// RateLimiter returns the engine's rate limiter. May be nil.
+	RateLimiter() ratelimit.Limiter
 
 	// ── Config accessors ──
 	// These expose commonly-needed config values without importing
