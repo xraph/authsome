@@ -210,3 +210,100 @@ func TestAuthMiddleware_Audience_JWT(t *testing.T) {
 		})
 	}
 }
+
+// TestAuthMiddleware_Audience_BareConstructor exercises the audience
+// guard inlined directly into AuthMiddleware's own session-resolution
+// block (as opposed to trySessionAuth, which the strategy/JWT
+// constructors delegate to). AuthMiddleware is exported and does not
+// route through trySessionAuth, so it needed its own copy of the
+// check; this covers the three cases that distinguish "the check is
+// wired here too" from "it silently does nothing": no resolver
+// configured still passes, an unaudienced legacy token still passes,
+// and a disjoint audience is refused. The refusal case is the one
+// that actually proves the check is wired, since the other two would
+// also pass with no check at all.
+func TestAuthMiddleware_Audience_BareConstructor(t *testing.T) {
+	cases := []struct {
+		name           string
+		tokenAudience  []string
+		expected       []string
+		wantAuthorized bool
+	}{
+		{
+			name:           "no resolver configured, audienced token still passes",
+			tokenAudience:  []string{"https://other.example.com"},
+			expected:       nil,
+			wantAuthorized: true,
+		},
+		{
+			name:           "unaudienced token passes an audience check",
+			tokenAudience:  nil,
+			expected:       []string{"https://api.example.com"},
+			wantAuthorized: true,
+		},
+		{
+			name:           "disjoint audience is refused",
+			tokenAudience:  []string{"https://other.example.com"},
+			expected:       []string{"https://api.example.com"},
+			wantAuthorized: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testUserID := id.NewUserID()
+			testAppID := id.NewAppID()
+			testSessID := id.NewSessionID()
+
+			testSession := &session.Session{
+				ID:       testSessID,
+				AppID:    testAppID,
+				UserID:   testUserID,
+				Token:    "bare-audience-token",
+				Audience: tc.tokenAudience,
+			}
+			testUser := &user.User{
+				ID:    testUserID,
+				AppID: testAppID,
+				Email: "bare-audience@test.com",
+			}
+
+			mw := middleware.AuthMiddleware(
+				func(token string) (*session.Session, error) {
+					if token == "bare-audience-token" {
+						return testSession, nil
+					}
+					return nil, errors.New("invalid")
+				},
+				func(userIDStr string) (*user.User, error) {
+					if userIDStr == testUserID.String() {
+						return testUser, nil
+					}
+					return nil, errors.New("not found")
+				},
+				log.NewNoopLogger(),
+				middleware.SessionBindingConfig{
+					ExpectedAudienceResolver: audienceResolverFor(tc.expected),
+				},
+			)
+
+			var gotUser bool
+			router := forge.NewRouter()
+			router.Use(mw)
+			router.GET("/test", func(ctx forge.Context) error {
+				_, gotUser = middleware.UserFrom(ctx.Context())
+				return ctx.NoContent(http.StatusOK)
+			})
+
+			req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+			req.Header.Set("Authorization", "Bearer bare-audience-token")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code, "middleware always passes through to next handler")
+			assert.Equal(t, tc.wantAuthorized, gotUser,
+				"expected authenticated=%v for token audience %v against expected %v",
+				tc.wantAuthorized, tc.tokenAudience, tc.expected)
+		})
+	}
+}

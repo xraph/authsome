@@ -199,6 +199,19 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 				return next(ctx)
 			}
 
+			// Resource indicator guard (RFC 8707): a token audienced at a resource
+			// this deployment does not answer to must not authenticate here. Values
+			// are resource URIs supplied by the caller, so they are never logged.
+			if bindCfg.ExpectedAudienceResolver != nil {
+				expected := bindCfg.ExpectedAudienceResolver(ctx.Context())
+				if !audienceAllowed(sess.Audience, expected) {
+					logger.Warn("auth middleware: session audience mismatch",
+						log.String("session_id", sess.ID.String()),
+					)
+					return next(ctx)
+				}
+			}
+
 			// Session binding: validate IP and/or device match
 			if bindCfg.BindToIP && sess.IPAddress != "" {
 				clientIP := clientIPFromRequest(ctx.Request())
