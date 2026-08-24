@@ -27,15 +27,24 @@ scoped to what that rule allows. No secret lives in CI.
 
 Two things were worth checking before designing anything.
 
-Non-human principals are already here. `serviceaccount.ServiceAccount` is a
-first-class entity, `session.Session` carries `PrincipalKind` and
-`ServiceAccountID`, and the apikey plugin mints service-account sessions today,
-so the credential this plugin issues is that principal and there is nothing
-synthetic about it and no fake user row anywhere.
+Non-human principals are already here, and a second design is deepening them
+this week. `serviceaccount.ServiceAccount` is a first-class entity,
+`session.Session` carries `PrincipalKind` and `ServiceAccountID`, the apikey
+plugin mints service-account sessions today, and
+`2026-08-24-non-human-principals-design.md` adds a `principal` package on top of
+all of it with four kinds, an actor chain and a real store. One of those kinds
+is `KindWorkload`, described there as a CI job or a cron or service-to-service
+traffic, which is exactly what this plugin issues credentials to. So the
+credential is that principal, with nothing synthetic about it and no fake user
+row anywhere.
 
-What is missing is the enforcement path, so a service-account session currently
-gets rejected by every guard it meets. That's the prerequisite spec and it has
-to land first.
+Two things are missing and both are somebody else's scope. The enforcement path
+rejects a non-human session at every guard it meets, which is the prerequisite
+spec listed above. And postgres and sqlite return `not implemented` from all
+five service-account store methods, so on the two backends most people deploy
+you cannot create the principal a rule is supposed to bind to. That gap is
+scheduled in the principal design's per-backend table. Neither is work this spec
+does, and neither is optional.
 
 RFC 8693 token exchange has been designed, and it does not fit. No code exists
 yet, but `2026-08-24-token-exchange-rfc8693-design.md` landed the same day as this
@@ -83,8 +92,8 @@ client authentication, and the boundary between the two endpoints is written
 down in both specs so that neither one drifts into the other's territory as
 people forget why they were separated.
 
-The rest, briefly. A rule binds to a service account you created beforehand, so
-a bad rule grants an existing scoped identity rather than conjuring a new one.
+The rest, briefly. A rule binds to a principal you created beforehand, so a bad
+rule grants an existing scoped identity and never conjures a new one.
 The issued credential is a persisted, revocable session honouring the app's
 configured token format. Attribution lives in a plugin-local exchange record
 keyed by session ID, which keeps `session.Session` out of it. Claim rules are
@@ -315,8 +324,12 @@ safe direction: the caller requests a fresh platform token and retries.
 
 ### The session
 
-`PrincipalKind` of `"service_account"`, `ServiceAccountID` from the matched
-rule, nil `UserID`, and `Roles` from the rule's `granted_roles`. Because `Roles`
+The principal kind is `principal.KindWorkload` where the `principal` package has
+landed, falling back to `"service_account"` if this ships first. Prefer
+`KindWorkload`: a CI job is not a durable service account, it has a hard TTL and
+a parent, and `principal.Principal` already carries `Parent` and `ExpiresAt`
+fields that say so. The bound principal ID comes from the matched rule, `UserID`
+is nil, and `Roles` comes from the rule's `granted_roles`. Because `Roles`
 is already populated, `roleStampingStore.CreateSession` leaves it alone
 (`engine_session_roles.go:187`), which is exactly the case that comment
 describes.

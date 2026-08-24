@@ -422,6 +422,32 @@ service-account session carries a zero `UserID` with nothing to look up, and
 breaking it starts erroring session creation for every machine caller you
 have.
 
+## Enforcement gap this design does not close
+
+Added 2026-08-24 by the session designing
+`2026-08-24-workload-identity-federation-design.md`, so this spec carries a
+record of it. The detail lives in
+`2026-08-24-non-human-principal-enforcement-design.md`.
+
+Resolving a principal onto the context is necessary and not sufficient. Three
+places reject a caller without a user before any of this reaches a handler, and
+none of them are covered here or in the plan.
+
+`authprovider.SessionProvider.Authenticate` resolves the user from the session
+and returns `auth.ErrAuthenticationFailed` when that lookup fails
+(`authprovider/session.go:109`), so every route on `forge.WithGroupAuth("session")`
+or `plugin.SessionGuard` answers 401 to a nil-`UserID` session.
+`middleware.RequireAuth()` gates on `UserFrom(ctx)` (`middleware/auth.go:661`),
+which covers the nine `api/*_handlers.go` groups. And the JWT branch calls
+`id.MustParse(claims.UserID)` (`middleware/auth.go:425`), which panics on an
+empty `sub` because `id.Parse("")` errors.
+
+That last one interacts with the statement above that `UserFrom(ctx)` and every
+handler reading it are untouched. Keeping `UserFrom` user-only is right. The
+problem is that `RequireAuth` consults it before a handler runs, so the machine
+traffic this design makes visible to the risk plugins is still refused at the
+door.
+
 ## Deliberately out of scope
 
 No agent-specific metadata. Model name, vendor, tool manifest belong to whoever
