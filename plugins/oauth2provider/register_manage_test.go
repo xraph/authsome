@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -90,8 +91,6 @@ func TestManage_TokenFromAnotherClientIs401(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
-// Admin-created clients have no registration token hash, so they are not
-// reachable over 7592 even if the client_id is known.
 // Admin-created clients have DynamicallyRegistered == false AND an empty
 // RegistrationTokenHash. authenticateRegistration checks both, and the two
 // cases below pull them apart so each half of that check is actually
@@ -212,30 +211,90 @@ func TestManage_UpdateRejectsMismatchedClientID(t *testing.T) {
 	assert.Equal(t, "invalid_client_metadata", got["error"])
 }
 
-// UpdateRegistrationRequest.ClientID is path-bound with no json tag
-// (json:"-"), specifically so a body field cannot win a case-insensitive
-// match against it and overwrite the path value once BindRequest decodes
-// the body on top. This proves the attack the tag closes: a caller who
-// does not hold the victim's token, hitting an arbitrary path, cannot
-// smuggle the victim's client_id into the body and have it authenticate or
-// mutate as that client.
+// UpdateRegistrationRequest.ClientID is a Go field named ClientID with no
+// json tag of its own (json:"-"). encoding/json matches an untagged field
+// case-insensitively against a body key, and the collision is against the
+// Go field name, not the path parameter name: "clientId" is what
+// strings.EqualFold("clientId", "ClientID") accepts, not "client_id" (that
+// key instead binds to the separately, correctly tagged BodyClientID
+// field, json:"client_id", and always did — sending it here would not have
+// exercised the bug even before the json:"-" tag existed). The case below
+// sends "clientId" for that reason. A second case with "client_id" is kept
+// alongside it precisely to document that distinction: that key hits
+// BodyClientID and produces a different, unrelated 400, not the 401 this
+// test is about.
 func TestManage_UpdateIgnoresClientIDSmuggledInBody(t *testing.T) {
-	_, st, router, _ := newRegistrationFixture(t, true)
-	victimID, _ := registerOne(t, router)
+	// The collision key is "clientId": encoding/json matches an untagged
+	// field case-insensitively against the Go field name (ClientID), not
+	// against the path parameter name or the RFC wire name. "client_id"
+	// binds to the separately, correctly tagged BodyClientID field
+	// (json:"client_id") and never collided with the path-bound ClientID,
+	// even before json:"-" was added — sending it would not exercise this
+	// at all, which is why this case targets "clientId" specifically.
+	//
+	// A test that presents a token that matches nobody cannot tell a
+	// smuggled client_id apart from a plain auth failure: both come back
+	// 401 with the same body, since the presented token would not match
+	// the smuggled target's hash either. So this test instead targets a
+	// REAL client's own path with that client's OWN valid token, and
+	// tries to smuggle a DIFFERENT real client's id through the body. If
+	// the smuggled value ever won over the path (the pre-fix bug), the
+	// token would be checked against the wrong client's hash and this
+	// would 401 instead of succeeding against the path's client.
+	t.Run("clientId in body cannot redirect the update to a different client", func(t *testing.T) {
+		_, st, router, _ := newRegistrationFixture(t, true)
+		clientA, tokenA := registerOne(t, router)
+		clientB, _ := registerOne(t, router)
 
-	body, err := json.Marshal(map[string]any{
-		"client_id":     victimID,
-		"redirect_uris": []string{"http://127.0.0.1:9999/cb"},
+		body, err := json.Marshal(map[string]any{
+			"clientId":                   clientB,
+			"redirect_uris":              []string{"http://127.0.0.1:9500/cb"},
+			"token_endpoint_auth_method": "none",
+		})
+		require.NoError(t, err)
+
+		rec := manageReq(t, router, http.MethodPut, clientA, tokenA, string(body))
+		require.Equal(t, http.StatusOK, rec.Code,
+			"A's own token against A's own path must authenticate as A regardless of what the body's clientId names")
+
+		updatedA, err := st.GetClient(t.Context(), clientA)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"http://127.0.0.1:9500/cb"}, updatedA.RedirectURIs,
+			"the path's client, A, must be the one that got updated")
+
+		stillB, err := st.GetClient(t.Context(), clientB)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"http://127.0.0.1:9000/cb"}, stillB.RedirectURIs,
+			"B must be untouched by a request addressed to A's path")
 	})
-	require.NoError(t, err)
 
-	rec := manageReq(t, router, http.MethodPut, "some-junk-path-segment", "not-the-victims-token", string(body))
-	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	// "client_id" is the RFC 7591/7592 wire name and binds to
+	// BodyClientID, not ClientID: it is not the collision key. Pinned
+	// separately so nobody reads the case above and assumes "client_id"
+	// would have worked just as well.
+	t.Run("client_id in body is the RFC field, not the collision, and is compared against the path", func(t *testing.T) {
+		_, st, router, _ := newRegistrationFixture(t, true)
+		clientA, tokenA := registerOne(t, router)
+		clientB, _ := registerOne(t, router)
 
-	stored, err := st.GetClient(t.Context(), victimID)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"http://127.0.0.1:9000/cb"}, stored.RedirectURIs,
-		"the victim's record must be untouched by a request addressed to a different path")
+		body, err := json.Marshal(map[string]any{
+			"client_id":     clientB,
+			"redirect_uris": []string{"http://127.0.0.1:9500/cb"},
+		})
+		require.NoError(t, err)
+
+		rec := manageReq(t, router, http.MethodPut, clientA, tokenA, string(body))
+		require.Equal(t, http.StatusBadRequest, rec.Code,
+			"section 2.2: a body client_id naming a different client than the path must be rejected")
+		var got map[string]any
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+		assert.Equal(t, "invalid_client_metadata", got["error"])
+
+		stored, err := st.GetClient(t.Context(), clientA)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"http://127.0.0.1:9000/cb"}, stored.RedirectURIs,
+			"the rejected request must not have written anything")
+	})
 }
 
 // PUT runs the same registration in place, so it is the same full-record
@@ -423,14 +482,25 @@ func TestManage_UpdateDoesNotRotateTokenOrLeakCredentials(t *testing.T) {
 // UpdateClient is a full-record replace on every backend. A handler that
 // fetches the stored client and mutates it in place (as this one does)
 // keeps everything it does not explicitly touch; a handler that
-// constructed a fresh OAuth2Client from the request would silently wipe
-// these fields instead.
+// constructed a fresh OAuth2Client from the request would risk silently
+// wiping these fields instead. This test pins that by comparing a
+// snapshot taken before the PUT against the store's state after it.
+//
+// The snapshot has to be a dereferenced copy, not just another pointer:
+// MemoryStore.GetClient hands back the live pointer into its map with no
+// copy, and handleUpdateRegistration mutates that same object in place.
+// Two GetClient calls around the PUT would return the identical *OAuth2Client,
+// making every assertion below compare a field against itself regardless
+// of what the handler did. Copying the struct by value before the PUT
+// fixes that; verified by temporarily having the handler zero one of
+// these fields and confirming the assertion below actually fails.
 func TestManage_UpdatePreservesFieldsItDoesNotTouch(t *testing.T) {
 	_, st, router, _ := newRegistrationFixture(t, true)
 	clientID, token := registerOne(t, router)
 
 	before, err := st.GetClient(t.Context(), clientID)
 	require.NoError(t, err)
+	beforeCopy := *before
 
 	rec := manageReq(t, router, http.MethodPut, clientID, token, `{
 		"client_id": "`+clientID+`",
@@ -442,10 +512,10 @@ func TestManage_UpdatePreservesFieldsItDoesNotTouch(t *testing.T) {
 
 	after, err := st.GetClient(t.Context(), clientID)
 	require.NoError(t, err)
-	assert.Equal(t, before.RegistrationTokenHash, after.RegistrationTokenHash)
-	assert.Equal(t, before.ClientSecret, after.ClientSecret)
-	assert.Equal(t, before.CreatedAt, after.CreatedAt)
-	assert.Equal(t, before.AppID, after.AppID)
+	assert.Equal(t, beforeCopy.RegistrationTokenHash, after.RegistrationTokenHash)
+	assert.Equal(t, beforeCopy.ClientSecret, after.ClientSecret)
+	assert.Equal(t, beforeCopy.CreatedAt, after.CreatedAt)
+	assert.Equal(t, beforeCopy.AppID, after.AppID)
 }
 
 func TestManage_Delete(t *testing.T) {
@@ -486,4 +556,58 @@ func TestManage_StillWorksWhenRegistrationDisabled(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, rec.Code)
 	_, err = st.GetClient(t.Context(), clientID)
 	assert.ErrorIs(t, err, oauth2provider.ErrClientNotFound)
+}
+
+// The manage routes' rate-limit key combines the caller's IP with the
+// path's client_id. Supplying a KeyFunc replaces middleware.RateLimit's
+// default IP-only key rather than adding to it, so a client_id-only key
+// (what shipped originally) drops per-IP throttling entirely and lets
+// anyone who learns a client_id burn that specific bucket and lock its
+// owner out. This pins both halves of the composite key: the same caller
+// trips its own budget, and a different caller against the identical
+// client_id is unaffected by it.
+func TestManage_RateLimitKeyIncludesCallerIP(t *testing.T) {
+	appID := id.NewAppID()
+	p := oauth2provider.New(oauth2provider.Config{
+		Issuer:                "https://auth.example.com",
+		DynamicRegistration:   true,
+		RegistrationAppID:     appID.String(),
+		RegistrationRateLimit: oauth2provider.RateLimit{Limit: 1, Window: time.Minute},
+	})
+	st := oauth2provider.NewMemoryStore()
+	p.SetOAuth2Store(st)
+	router := newTestRouter(t, p)
+
+	clientID, token := registerOne(t, router)
+
+	getFrom := func(remoteAddr string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(http.MethodGet, "/v1/oauth/register/"+clientID, nil)
+		r.Header.Set("Authorization", "Bearer "+token)
+		r.RemoteAddr = remoteAddr
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, r)
+		return rec
+	}
+
+	// The manage routes run at 6x the base registration limit (see
+	// manageOpts in plugin.go): Limit 1 here means a budget of 6.
+	const manageLimit = 6
+	const ip1 = "203.0.113.5:11111"
+	for i := 1; i <= manageLimit; i++ {
+		rec := getFrom(ip1)
+		require.Equal(t, http.StatusOK, rec.Code, "request %d from this caller is within its budget", i)
+	}
+	rec := getFrom(ip1)
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code,
+		"the same caller IP against the same client_id must trip once its budget is spent")
+
+	// A different caller IP against the SAME client_id must get its own,
+	// fresh budget. If the key ever regressed to client_id-only (the
+	// original bug this pins), this would 429 immediately, since the
+	// client_id-only bucket above is already exhausted.
+	const ip2 = "203.0.113.9:22222"
+	rec = getFrom(ip2)
+	assert.Equal(t, http.StatusOK, rec.Code,
+		"a different caller IP must not inherit another IP's exhausted budget for the same client_id")
 }

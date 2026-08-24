@@ -346,16 +346,23 @@ type RegistrationRequest struct {
 // section 2.2, which specifies a replacement and not a merge.
 //
 // ClientID is tagged json:"-": without it, a body key "clientId" (matched
-// case-insensitively by encoding/json against the untagged field) lands
-// here and overwrites the path-bound value, since BindRequest binds the
-// path first and then decodes the body on top of it. That let a caller PUT
-// to an arbitrary junk path with {"client_id": "<victim-id>"} in the body
-// and have the section 2.2 client_id check below compare the body against
+// case-insensitively by encoding/json against the Go field name, not
+// against the path parameter name or the RFC wire name "client_id", which
+// binds to the separately tagged BodyClientID below) lands here and
+// overwrites the path-bound value, since BindRequest binds the path first
+// and then decodes the body on top of it. That let a caller PUT to an
+// arbitrary junk path with {"clientId": "<victim-id>"} in the body and
+// have the section 2.2 client_id check below compare the body against
 // itself instead of against the URL, while the route's rate limiter (keyed
 // on the path segment) charged the junk value instead of the real one.
 // Handlers below additionally never read this field — they take the
-// client_id from ctx.Param("clientId") directly — so this tag is
-// belt-and-braces, not the only thing standing between the two.
+// client_id from ctx.Param("clientId") directly, confirmed by actually
+// reverting each protection in isolation: removing only this tag leaves
+// the handler unaffected (it never consults the field either way), and
+// removing only the handler's ctx.Param read while this tag stays in
+// place is what reproduces the original bug. So the tag alone is
+// belt-and-braces; the ctx.Param read in the handler is what actually
+// carries the fix.
 type UpdateRegistrationRequest struct {
 	ClientID string `path:"clientId" json:"-"`
 

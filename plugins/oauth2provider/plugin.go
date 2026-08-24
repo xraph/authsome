@@ -321,16 +321,28 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// The key combines the caller's IP with the path's client_id rather
 	// than either alone. Supplying a KeyFunc replaces
 	// middleware.RateLimit's default IP-only key, it does not add to it —
-	// so a client_id-only key (what this used to be) drops IP throttling
-	// entirely: one host could drive unbounded GetClient lookups by
-	// varying the path segment, and worse, anyone who learns a real
-	// client_id could burn that specific bucket and lock its legitimate
-	// owner out of GET/PUT/DELETE for the window. Keying on both restores
-	// the per-caller throttle and still keeps one guesser from parallelizing
-	// across client_ids to dodge it. middleware.ClientIP is the same
-	// trusted-proxy-aware helper the default KeyFunc uses; reading a
-	// forwarding header here directly would let a direct, untrusted client
-	// mint a fresh bucket per request by spoofing it.
+	// so a client_id-only key (what this used to be) dropped IP throttling
+	// entirely: one host varying the path segment got a fresh, unthrottled
+	// bucket per client_id it guessed, and worse, anyone who learned a
+	// real client_id could burn that specific bucket and lock its
+	// legitimate owner out of GET/PUT/DELETE for the window. Keying on
+	// both restores a real per-caller budget and fixes that lockout: an
+	// attacker's requests now land in their own IP's bucket instead of
+	// the victim's.
+	//
+	// What this key does NOT do: throttle enumeration across client_ids.
+	// One IP still gets a fresh 6x budget for every distinct client_id it
+	// tries, by design — client_id is 16 random bytes, not a secret worth
+	// building a global-per-IP limiter around here, and bcrypt's own cost
+	// already taxes each guess in authenticateRegistration. Do not read
+	// this key as an anti-enumeration control; it only fixes who pays for
+	// a given client_id's budget, not how many client_ids one caller may
+	// try.
+	//
+	// middleware.ClientIP is the same trusted-proxy-aware helper the
+	// default KeyFunc uses; reading a forwarding header here directly
+	// would let a direct, untrusted client mint a fresh bucket per
+	// request by spoofing it.
 	manageOpts := func(extra ...forge.RouteOption) []forge.RouteOption {
 		base := []forge.RouteOption{
 			forge.WithErrorResponses(),
