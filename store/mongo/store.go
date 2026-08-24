@@ -105,6 +105,21 @@ func (s *Store) Migrate(ctx context.Context, extraGroups ...*migrate.Group) erro
 // that finishes in seconds, so 5 minutes is well past any legitimate
 // in-flight migration window and well within the patience operators
 // will have for a wedged boot loop.
+// lockWaitBudget bounds how long the orchestrator waits for the migration
+// lock before giving up and returning a lock error. grove defaults this to
+// migrate.DefaultLockTimeout, which is 5 minutes, and that default starves the
+// stale-lock recovery below: the recovery only runs once orch.Migrate returns
+// ErrLockHeld, so a crashed migrator wedges every later boot for a full five
+// minutes before self-heal so much as begins. Two such waits in one test
+// binary run past the default go test timeout, which is how the migration lock
+// tests came to hang instead of fail.
+//
+// Every migration here is a no-op or a CreateCollection / CreateIndexes /
+// collMod that finishes in seconds, so a few seconds covers a genuinely
+// concurrent migrator. Waiting longer than that is the staleness check's job,
+// not the retry loop's.
+const lockWaitBudget = 10 * time.Second
+
 const staleLockThreshold = 5 * time.Minute
 
 // mongomigrateLockCollection / mongomigrateLockID mirror the unexported
@@ -143,7 +158,7 @@ func (s *Store) runMigrationsWithSelfHeal(ctx context.Context, groups []*migrate
 		return fmt.Errorf("authsome/mongo: create migration executor: %w", err)
 	}
 
-	orch := migrate.NewOrchestrator(executor, groups...)
+	orch := migrate.NewOrchestrator(executor, groups...).SetLockTimeout(lockWaitBudget)
 	_, err = orch.Migrate(ctx)
 	if err == nil {
 		return nil
@@ -164,7 +179,7 @@ func (s *Store) runMigrationsWithSelfHeal(ctx context.Context, groups []*migrate
 		if retryErr != nil {
 			return fmt.Errorf("authsome/mongo: rebuild executor after breaking stale lock: %w", retryErr)
 		}
-		retryOrch := migrate.NewOrchestrator(retryExec, groups...)
+		retryOrch := migrate.NewOrchestrator(retryExec, groups...).SetLockTimeout(lockWaitBudget)
 		if _, retryMigrateErr := retryOrch.Migrate(ctx); retryMigrateErr != nil {
 			return fmt.Errorf("authsome/mongo: migration retry after breaking stale lock: %w", retryMigrateErr)
 		}
@@ -182,7 +197,7 @@ func (s *Store) runMigrationsWithSelfHeal(ctx context.Context, groups []*migrate
 	if retryErr != nil {
 		return fmt.Errorf("authsome/mongo: rebuild executor after tracking reset: %w", retryErr)
 	}
-	retryOrch := migrate.NewOrchestrator(retryExec, groups...)
+	retryOrch := migrate.NewOrchestrator(retryExec, groups...).SetLockTimeout(lockWaitBudget)
 	if _, err := retryOrch.Migrate(ctx); err != nil {
 		return fmt.Errorf("authsome/mongo: migration retry after tracking reset failed: %w", err)
 	}
