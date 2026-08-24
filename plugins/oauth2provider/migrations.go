@@ -153,6 +153,29 @@ ALTER TABLE authsome_oauth2_device_codes ADD CONSTRAINT authsome_oauth2_device_c
 		},
 	)
 
+	// dpop_mode is this client's RFC 9449 mode override: "off", "optional",
+	// "required", or empty to inherit the app's setting. Empty is the default
+	// so every existing client keeps inheriting, unchanged by this migration.
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_oauth2_client_dpop_mode",
+			Version: "20260824000041",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_oauth2_clients
+    ADD COLUMN IF NOT EXISTS dpop_mode TEXT NOT NULL DEFAULT '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_oauth2_clients DROP COLUMN IF EXISTS dpop_mode;
+`)
+				return err
+			},
+		},
+	)
+
 	// ──────────────────────────────────────────────────
 	// SQLite migrations
 	// ──────────────────────────────────────────────────
@@ -243,6 +266,24 @@ CREATE INDEX IF NOT EXISTS idx_authsome_oauth2_device_codes_user_code
 			Down: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_oauth2_device_codes;`)
 				return err
+			},
+		},
+	)
+
+	// dpop_mode is this client's RFC 9449 mode override: "off", "optional",
+	// "required", or empty to inherit the app's setting. Empty is the default
+	// so every existing client keeps inheriting, unchanged by this migration.
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_oauth2_client_dpop_mode",
+			Version: "20260824000041",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_oauth2_clients ADD COLUMN dpop_mode TEXT NOT NULL DEFAULT '';`)
+				return err
+			},
+			Down: func(_ context.Context, _ migrate.Executor) error {
+				// SQLite does not support DROP COLUMN in older versions; best-effort.
+				return nil
 			},
 		},
 	)

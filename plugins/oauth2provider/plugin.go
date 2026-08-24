@@ -20,6 +20,7 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
@@ -332,6 +333,7 @@ type CreateClientRequest struct {
 	Scopes       []string `json:"scopes,omitempty"`
 	GrantTypes   []string `json:"grant_types,omitempty"`
 	Public       bool     `json:"public,omitempty"`
+	DPoPMode     string   `json:"dpop_mode,omitempty"`
 }
 
 // CreateClientResponse is returned when an OAuth2 client is created.
@@ -800,6 +802,14 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 		scopes = []string{"openid", "profile", "email"}
 	}
 
+	// Normalise through ParseMode so an unrecognised value is stored as a
+	// known one rather than sitting in the column waiting to be misread.
+	// Empty stays empty, which means inherit.
+	dpopMode := ""
+	if req.DPoPMode != "" {
+		dpopMode = string(dpop.ParseMode(req.DPoPMode))
+	}
+
 	client := &OAuth2Client{
 		ID:           id.NewOAuth2ClientID(),
 		AppID:        appID,
@@ -810,6 +820,7 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 		Scopes:       scopes,
 		GrantTypes:   grantTypes,
 		Public:       req.Public,
+		DPoPMode:     dpopMode,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	}

@@ -46,6 +46,7 @@ type oauth2ClientDoc struct {
 	Scopes       []string  `bson:"scopes"`
 	GrantTypes   []string  `bson:"grant_types"`
 	Public       bool      `bson:"public"`
+	DPoPMode     string    `bson:"dpop_mode"`
 	CreatedAt    time.Time `bson:"created_at"`
 	UpdatedAt    time.Time `bson:"updated_at"`
 }
@@ -102,6 +103,7 @@ func oauth2ClientDocToModel(d *oauth2ClientDoc) (*OAuth2Client, error) {
 		Scopes:       scopes,
 		GrantTypes:   grantTypes,
 		Public:       d.Public,
+		DPoPMode:     d.DPoPMode,
 		CreatedAt:    d.CreatedAt,
 		UpdatedAt:    d.UpdatedAt,
 	}, nil
@@ -131,6 +133,7 @@ func oauth2ClientToDoc(c *OAuth2Client) *oauth2ClientDoc {
 		Scopes:       scopes,
 		GrantTypes:   grantTypes,
 		Public:       c.Public,
+		DPoPMode:     c.DPoPMode,
 		CreatedAt:    c.CreatedAt,
 		UpdatedAt:    c.UpdatedAt,
 	}

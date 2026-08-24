@@ -17,8 +17,15 @@ type OAuth2Client struct {
 	Scopes       []string          `json:"scopes"`
 	GrantTypes   []string          `json:"grant_types"` // "authorization_code", "client_credentials"
 	Public       bool              `json:"public"`      // Public clients (SPAs, mobile) don't have a secret
-	CreatedAt    time.Time         `json:"created_at"`
-	UpdatedAt    time.Time         `json:"updated_at"`
+	// DPoPMode is this client's RFC 9449 mode: "off", "optional", "required",
+	// or empty to inherit the app's setting.
+	//
+	// Resolution is monotonic. The effective mode is the stricter of the app's
+	// and this value, so a client can raise the bar but never lower one the
+	// app has set.
+	DPoPMode  string    `json:"dpop_mode,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // AuthorizationCode represents a short-lived authorization code.

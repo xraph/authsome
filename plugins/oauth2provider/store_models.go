@@ -25,6 +25,7 @@ type oauth2ClientModel struct {
 	Scopes       json.RawMessage `grove:"scopes,type:jsonb"`
 	GrantTypes   json.RawMessage `grove:"grant_types,type:jsonb"`
 	Public       bool            `grove:"public,notnull"`
+	DPoPMode     string          `grove:"dpop_mode,notnull"`
 	CreatedAt    time.Time       `grove:"created_at,notnull,default:now()"`
 	UpdatedAt    time.Time       `grove:"updated_at,notnull,default:now()"`
 }
@@ -109,6 +110,7 @@ func toOAuth2Client(m *oauth2ClientModel) (*OAuth2Client, error) {
 		Scopes:       scopes,
 		GrantTypes:   grantTypes,
 		Public:       m.Public,
+		DPoPMode:     m.DPoPMode,
 		CreatedAt:    m.CreatedAt,
 		UpdatedAt:    m.UpdatedAt,
 	}, nil
@@ -138,6 +140,7 @@ func fromOAuth2Client(c *OAuth2Client) *oauth2ClientModel {
 		Scopes:       scopes,
 		GrantTypes:   grantTypes,
 		Public:       c.Public,
+		DPoPMode:     c.DPoPMode,
 		CreatedAt:    c.CreatedAt,
 		UpdatedAt:    c.UpdatedAt,
 	}
