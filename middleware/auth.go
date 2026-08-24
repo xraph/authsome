@@ -13,6 +13,7 @@ import (
 
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/strategy"
 	"github.com/xraph/authsome/tokenformat"
@@ -421,29 +422,83 @@ func tryJWTAuth(
 	goCtx := ctx.Context()
 
 	// Build a virtual session from JWT claims (no DB record needed).
-	appID := id.MustParse(claims.AppID)
-	userID := id.MustParse(claims.UserID)
+	//
+	// Every id below arrives inside the token, so it is attacker-influenced
+	// even though a valid signature is required to reach this code. These
+	// parses used to be id.MustParse, which panics on anything malformed and
+	// panicked outright on a machine token, whose sub is a service account id
+	// and was empty before the principal claims existed. Refuse the token
+	// instead: a panic in auth middleware is a bad failure mode to leave in
+	// place for a case the signature check is the only thing preventing.
+	parse := func(field, raw string) (id.ID, bool) {
+		parsed, parseErr := id.Parse(raw)
+		if parseErr != nil {
+			logger.Warn("auth middleware: JWT carries a malformed id claim",
+				log.String("claim", field),
+				log.String("error", parseErr.Error()),
+			)
+			return id.Nil, false
+		}
+		return parsed, true
+	}
+
+	appID, ok := parse("app_id", claims.AppID)
+	if !ok {
+		return false
+	}
+	subjectID, ok := parse("sub", claims.UserID)
+	if !ok {
+		return false
+	}
 
 	goCtx = WithAppID(goCtx, appID)
-	goCtx = WithUserID(goCtx, userID)
 	goCtx = WithAuthMethod(goCtx, "jwt")
 
+	// An empty PrincipalKind means user, which is what every token minted
+	// before that claim existed carries.
+	kind := principal.Kind(claims.PrincipalKind)
+	isUser := kind == "" || kind == principal.KindUser
+	if isUser {
+		goCtx = WithUserID(goCtx, subjectID)
+	}
+
 	if claims.SessionID != "" {
-		sessionID := id.MustParse(claims.SessionID)
+		sessionID, sidOK := parse("sid", claims.SessionID)
+		if !sidOK {
+			return false
+		}
 		goCtx = WithSessionID(goCtx, sessionID)
 	}
 
 	if claims.EnvID != "" {
-		envID := id.MustParse(claims.EnvID)
+		envID, envOK := parse("env_id", claims.EnvID)
+		if !envOK {
+			return false
+		}
 		goCtx = WithEnvID(goCtx, envID)
 	}
 
 	if claims.OrgID != "" {
-		orgID := id.MustParse(claims.OrgID)
+		orgID, orgOK := parse("org_id", claims.OrgID)
+		if !orgOK {
+			return false
+		}
 		goCtx = WithOrgID(goCtx, orgID)
 		goCtx = forge.WithScope(goCtx, forge.NewOrgScope(claims.AppID, claims.OrgID))
 	} else {
 		goCtx = forge.WithScope(goCtx, forge.NewAppScope(claims.AppID))
+	}
+
+	// A machine caller has no user row to resolve. Put the principal on the
+	// context so PrincipalRefFrom finds it, and stop.
+	if !isUser {
+		goCtx = principal.NewContext(goCtx, &principal.Principal{
+			Ref:    principal.Ref{Kind: kind, ID: subjectID.String()},
+			AppID:  appID,
+			Scopes: claims.Scopes,
+		})
+		ctx.WithContext(goCtx)
+		return true
 	}
 
 	// Resolve user from claims.
