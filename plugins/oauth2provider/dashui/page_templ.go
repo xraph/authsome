@@ -33,6 +33,7 @@ type OAuth2ClientView struct {
 	ClientID     string
 	RedirectURIs []string
 	Scopes       []string
+	Resources    []string
 	GrantTypes   []string
 	Public       bool
 	CreatedAt    time.Time
@@ -103,7 +104,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 			var templ_7745c5c3_Var2 string
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(data.CreatedClient.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 72, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 73, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 			if templ_7745c5c3_Err != nil {
@@ -116,7 +117,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(data.CreatedClient.ClientID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 79, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 80, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -159,7 +160,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(data.CreatedClient.ClientSecret)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 97, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 98, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 				if templ_7745c5c3_Err != nil {
@@ -220,7 +221,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(data.Error)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 120, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 121, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -259,7 +260,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(data.Success)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 134, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 135, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -792,7 +793,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 										var templ_7745c5c3_Var31 string
 										templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(c.Name)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 316, Col: 45}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 317, Col: 45}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 										if templ_7745c5c3_Err != nil {
@@ -831,7 +832,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 										var templ_7745c5c3_Var33 string
 										templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(truncateClientID(c.ClientID))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 319, Col: 94}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 320, Col: 94}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 										if templ_7745c5c3_Err != nil {
@@ -939,7 +940,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 										var templ_7745c5c3_Var38 string
 										templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Join(c.GrantTypes, ", "))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 333, Col: 89}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 334, Col: 89}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 										if templ_7745c5c3_Err != nil {
@@ -979,7 +980,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 										var templ_7745c5c3_Var40 string
 										templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(created)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 337, Col: 64}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 338, Col: 64}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 										if templ_7745c5c3_Err != nil {
@@ -1018,7 +1019,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 										var templ_7745c5c3_Var42 string
 										templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(c.ID)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 342, Col: 62}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 343, Col: 62}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 										if templ_7745c5c3_Err != nil {

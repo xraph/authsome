@@ -39,6 +39,35 @@ func resourceParams(r *http.Request) []string {
 	return out
 }
 
+// resourceURISyntaxError checks a single RFC 8707 resource indicator against
+// the syntax rule shared by request-time resolution and admin registration:
+// the value must be an absolute URI and must not carry a fragment. It returns
+// an empty string when the value is syntactically valid, and a description of
+// the violation otherwise.
+//
+// Both resolveResources and client registration enforce this same rule.
+// Sharing the check here means the wording, and the rule itself, cannot drift
+// between the two call sites.
+func resourceURISyntaxError(raw string) string {
+	if raw == "" {
+		return "resource must not be empty"
+	}
+
+	// RFC 8707 section 2: the value MUST be an absolute URI and MUST NOT
+	// carry a fragment. A fragment never reaches a server, so two values
+	// differing only after the # would name the same resource while
+	// comparing as different audiences.
+	u, err := url.Parse(raw)
+	if err != nil || !u.IsAbs() {
+		return fmt.Sprintf("resource %q is not an absolute URI", raw)
+	}
+	if u.Fragment != "" || strings.Contains(raw, "#") {
+		return fmt.Sprintf("resource %q must not include a fragment", raw)
+	}
+
+	return ""
+}
+
 // resolveResources validates the requested resource indicators against the
 // client's allowlist and returns the audience to grant.
 //
@@ -66,23 +95,8 @@ func resolveResources(client *OAuth2Client, requested []string) ([]string, error
 	out := make([]string, 0, len(requested))
 
 	for _, raw := range requested {
-		if raw == "" {
-			return nil, newOAuth2Error(http.StatusBadRequest, "invalid_target",
-				"resource must not be empty")
-		}
-
-		// RFC 8707 section 2: the value MUST be an absolute URI and MUST NOT
-		// carry a fragment. A fragment never reaches a server, so two values
-		// differing only after the # would name the same resource while
-		// comparing as different audiences.
-		u, err := url.Parse(raw)
-		if err != nil || !u.IsAbs() {
-			return nil, newOAuth2Error(http.StatusBadRequest, "invalid_target",
-				fmt.Sprintf("resource %q is not an absolute URI", raw))
-		}
-		if u.Fragment != "" || strings.Contains(raw, "#") {
-			return nil, newOAuth2Error(http.StatusBadRequest, "invalid_target",
-				fmt.Sprintf("resource %q must not include a fragment", raw))
+		if msg := resourceURISyntaxError(raw); msg != "" {
+			return nil, newOAuth2Error(http.StatusBadRequest, "invalid_target", msg)
 		}
 
 		if _, ok := allowed[raw]; !ok {

@@ -577,6 +577,7 @@ type CreateClientRequest struct {
 	Name         string   `json:"name"`
 	RedirectURIs []string `json:"redirect_uris"`
 	Scopes       []string `json:"scopes,omitempty"`
+	Resources    []string `json:"resources,omitempty"`
 	GrantTypes   []string `json:"grant_types,omitempty"`
 	Public       bool     `json:"public,omitempty"`
 }
@@ -589,6 +590,7 @@ type CreateClientResponse struct {
 	Name         string   `json:"name"`
 	RedirectURIs []string `json:"redirect_uris"`
 	Scopes       []string `json:"scopes"`
+	Resources    []string `json:"resources"`
 	GrantTypes   []string `json:"grant_types"`
 	Public       bool     `json:"public"`
 }
@@ -1096,6 +1098,16 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 		scopes = []string{"openid", "profile", "email"}
 	}
 
+	// Validate the allowlist at registration so a malformed entry is caught
+	// here rather than turning every later authorize request into an opaque
+	// invalid_target. This shares the exact rule resolveResources applies at
+	// request time, so the two can never disagree about what counts as valid.
+	for _, raw := range req.Resources {
+		if msg := resourceURISyntaxError(raw); msg != "" {
+			return nil, forge.BadRequest(msg)
+		}
+	}
+
 	client := &OAuth2Client{
 		ID:                      id.NewOAuth2ClientID(),
 		AppID:                   appID,
@@ -1104,6 +1116,7 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 		ClientSecret:            hashedSecret,
 		RedirectURIs:            req.RedirectURIs,
 		Scopes:                  scopes,
+		Resources:               req.Resources,
 		GrantTypes:              grantTypes,
 		Public:                  req.Public,
 		TokenEndpointAuthMethod: authMethodForPublic(req.Public),
@@ -1121,6 +1134,7 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 		Name:         client.Name,
 		RedirectURIs: client.RedirectURIs,
 		Scopes:       client.Scopes,
+		Resources:    client.Resources,
 		GrantTypes:   client.GrantTypes,
 		Public:       client.Public,
 	}
