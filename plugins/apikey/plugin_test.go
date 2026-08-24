@@ -43,6 +43,29 @@ import (
 type mockEngine struct {
 	logger log.Logger
 	store  apikey.Store
+	// gate, when set, is returned from PrincipalAuthGate so OnInit picks it
+	// up via plugin.PrincipalAuthGateProvider, exactly as *authsome.Engine
+	// does in production.
+	gate apikeyPlugin.PrincipalAuthGate
+}
+
+// PrincipalAuthGate implements plugin.PrincipalAuthGateProvider.
+func (m *mockEngine) PrincipalAuthGate() any { return m.gate }
+
+// fakeGate is a test double for apikeyPlugin.PrincipalAuthGate.
+type fakeGate struct {
+	authorizeErr error
+	authorizeN   int
+	observeN     int
+}
+
+func (g *fakeGate) Authorize(_ context.Context, _ *principal.AuthAttempt) error {
+	g.authorizeN++
+	return g.authorizeErr
+}
+
+func (g *fakeGate) Observe(_ context.Context, _ *principal.AuthAttempt, _ *session.Session) {
+	g.observeN++
 }
 
 // Compile-time check.
@@ -651,6 +674,80 @@ func TestPlugin_Strategy_Authenticate_RejectsPublicKey(t *testing.T) {
 	_, err = s.Authenticate(context.Background(), req)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "public key")
+}
+
+// TestPlugin_Strategy_Authenticate_GateDenies proves the deny path end to
+// end: a valid, unexpired, unrevoked key must still be rejected when the
+// principal-auth gate denies it. Without this, a risk plugin wired up behind
+// the gate could return an error and Authenticate would ignore it, which
+// would be worse than not scoring machine traffic at all: it would look
+// enforced when it is not.
+func TestPlugin_Strategy_Authenticate_GateDenies(t *testing.T) {
+	p, store := newTestPlugin()
+	denyErr := errors.New("blocked by risk")
+	gate := &fakeGate{authorizeErr: denyErr}
+	require.NoError(t, p.OnInit(context.Background(), &mockEngine{logger: log.NewNoopLogger(), store: store, gate: gate}))
+	s := p.Strategy()
+
+	appID := id.NewAppID()
+	userID := id.NewUserID()
+
+	raw, hash, prefix, err := apikey.GenerateKey()
+	require.NoError(t, err)
+
+	now := time.Now()
+	err = store.CreateAPIKey(context.Background(), &apikey.APIKey{
+		ID: id.NewAPIKeyID(), AppID: appID, UserID: userID,
+		Name: "Gated Key", KeyHash: hash, KeyPrefix: prefix,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/data", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	req.Header.Set("X-App-ID", appID.String())
+
+	result, err := s.Authenticate(context.Background(), req)
+	require.Error(t, err, "a gate denial must fail authentication, not just get logged")
+	assert.Nil(t, result, "a denied request must not return a session")
+	assert.ErrorIs(t, err, denyErr)
+	assert.Equal(t, 1, gate.authorizeN, "the gate must have been consulted")
+	assert.Equal(t, 0, gate.observeN, "Observe must not run when Authorize denies")
+}
+
+// TestPlugin_Strategy_Authenticate_GateObservesAllow proves the allow path
+// reaches Observe with the same session that was returned, for both the
+// service-account and user-bound branches: a user-bound API key is machine
+// traffic too and must not skip the gate.
+func TestPlugin_Strategy_Authenticate_GateObservesAllow(t *testing.T) {
+	p, store := newTestPlugin()
+	gate := &fakeGate{}
+	require.NoError(t, p.OnInit(context.Background(), &mockEngine{logger: log.NewNoopLogger(), store: store, gate: gate}))
+	s := p.Strategy()
+
+	appID := id.NewAppID()
+	userID := id.NewUserID()
+
+	raw, hash, prefix, err := apikey.GenerateKey()
+	require.NoError(t, err)
+
+	now := time.Now()
+	err = store.CreateAPIKey(context.Background(), &apikey.APIKey{
+		ID: id.NewAPIKeyID(), AppID: appID, UserID: userID,
+		Name: "Allowed Key", KeyHash: hash, KeyPrefix: prefix,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/data", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	req.Header.Set("X-App-ID", appID.String())
+
+	result, err := s.Authenticate(context.Background(), req)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 1, gate.authorizeN)
+	assert.Equal(t, 1, gate.observeN)
 }
 
 func TestAPIKey_GenerateKeyPair(t *testing.T) {

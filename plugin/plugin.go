@@ -210,6 +210,18 @@ type DispatcherProvider interface {
 	Dispatcher() bridge.Dispatcher
 }
 
+// PrincipalAuthGateProvider is optionally implemented by engines that score
+// machine callers (API keys, and anything else authenticating without a
+// human sign-in) through the principal-auth hooks before minting a session.
+// Returns any, not a named gate type, so this package does not have to
+// import a specific plugin's interface (which would create an import cycle
+// with a plugin that itself needs the concrete authsome.Engine type, as the
+// apikey plugin does). The consuming plugin type-asserts the result against
+// its own narrow gate interface. *authsome.Engine satisfies it.
+type PrincipalAuthGateProvider interface {
+	PrincipalAuthGate() any
+}
+
 // ──────────────────────────────────────────────────
 // Lifecycle hooks
 // ──────────────────────────────────────────────────

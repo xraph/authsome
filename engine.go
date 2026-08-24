@@ -14,6 +14,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	log "github.com/xraph/go-utils/log"
 
@@ -37,6 +38,7 @@ import (
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/securityevent"
@@ -70,6 +72,17 @@ type Engine struct {
 	pendingPlugins     []plugin.Plugin
 	pendingStrategies  []pendingStrategy
 	pendingAppSessCfgs []*appsessionconfig.Config
+
+	// principalAuthGate scores machine callers (API keys, and any other
+	// credential that authenticates without a human sign-in) through the
+	// principal-auth hooks before a session is minted. Built once during
+	// NewEngine and exposed to plugins via PrincipalAuthGate, which
+	// implements plugin.PrincipalAuthGateProvider.
+	principalAuthGate *principalAuthGate
+	// principalAuthTTL controls how long an allow verdict is cached, keyed
+	// on credential and source IP together. Set via WithPrincipalAuthTTL;
+	// defaults to five minutes.
+	principalAuthTTL time.Duration
 
 	// First-class authorization engine (optional, replaces bridge for RBAC)
 	wardenEng *warden.Engine
@@ -168,6 +181,35 @@ func NewEngine(opts ...Option) (*Engine, error) {
 	e.plugins = plugin.NewRegistry(e.logger)
 	e.hooks = hook.NewBus(e.logger)
 	e.strategies = strategy.NewRegistry(e.logger)
+
+	// Wire the principal-auth gate. Static API-key traffic (and any other
+	// machine credential) reaches strategy.Authenticate directly, bypassing
+	// every sign-in hook, so this is what fires OnBeforePrincipalAuth /
+	// OnAfterPrincipalAuth for it instead. See plugin_principalauth.go.
+	if e.principalAuthTTL <= 0 {
+		e.principalAuthTTL = 5 * time.Minute
+	}
+	e.principalAuthGate = newPrincipalAuthGate(
+		e.plugins.EmitBeforePrincipalAuth,
+		func(ctx context.Context, a *principal.AuthAttempt, s *session.Session) {
+			e.plugins.EmitAfterPrincipalAuth(ctx, a, s)
+			e.hooks.Emit(ctx, &hook.Event{
+				Action:     hook.ActionPrincipalAuth,
+				Resource:   hook.ResourceSession,
+				ResourceID: s.ID.String(),
+				ActorID:    a.Subject.ID,
+				Tenant:     a.AppID.String(),
+				Metadata: map[string]string{
+					"principal_kind":  string(a.Subject.Kind),
+					"credential_kind": a.CredentialKind,
+					"credential_id":   a.CredentialID,
+					"ip":              a.IPAddress,
+				},
+			})
+		},
+		e.principalAuthTTL,
+		e.logger,
+	)
 
 	// Initialize the dynamic settings manager.
 	e.settingsMgr = settings.NewManager(e.store, e.logger)
@@ -1283,6 +1325,16 @@ func (e *Engine) APIKeyStore() apikey.Store {
 		return apikey.NewKeymithStore(e.keysmithEng)
 	}
 	return e.store.(apikey.Store) //nolint:errcheck // type assertion
+}
+
+// PrincipalAuthGate implements plugin.PrincipalAuthGateProvider. It returns
+// any rather than a named type so this package does not have to import a
+// plugin package to spell the return type, which would create an import
+// cycle with plugins (such as apikey) that need the concrete *Engine type
+// for other reasons. Consumers type-assert the result against their own
+// narrow gate interface.
+func (e *Engine) PrincipalAuthGate() any {
+	return e.principalAuthGate
 }
 
 // ResolveAppByPublicKey resolves a publishable key (pk_live_...) to an app.
