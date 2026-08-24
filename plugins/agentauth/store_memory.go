@@ -88,6 +88,7 @@ func (s *MemoryStore) CreateAgentGrant(_ context.Context, g *AgentGrant) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cp := *g
+	cp.Scopes = append([]string(nil), g.Scopes...)
 	s.grants[g.ID.String()] = &cp
 	return nil
 }
@@ -100,6 +101,7 @@ func (s *MemoryStore) GetAgentGrant(_ context.Context, grantID id.AgentGrantID) 
 		return nil, ErrNotFound
 	}
 	cp := *g
+	cp.Scopes = append([]string(nil), g.Scopes...)
 	return &cp, nil
 }
 
@@ -115,6 +117,7 @@ func (s *MemoryStore) GetActiveGrant(_ context.Context, agentID id.AgentID, user
 			continue
 		}
 		cp := *g
+		cp.Scopes = append([]string(nil), g.Scopes...)
 		return &cp, nil
 	}
 	return nil, ErrNotFound
@@ -127,6 +130,7 @@ func (s *MemoryStore) ListGrantsByUser(_ context.Context, userID id.UserID) ([]*
 	for _, g := range s.grants {
 		if g.UserID.String() == userID.String() {
 			cp := *g
+			cp.Scopes = append([]string(nil), g.Scopes...)
 			out = append(out, &cp)
 		}
 	}
@@ -140,6 +144,7 @@ func (s *MemoryStore) UpdateAgentGrant(_ context.Context, g *AgentGrant) error {
 		return ErrNotFound
 	}
 	cp := *g
+	cp.Scopes = append([]string(nil), g.Scopes...)
 	s.grants[g.ID.String()] = &cp
 	return nil
 }
@@ -210,6 +215,7 @@ func (s *MemoryStore) GetOrgPolicy(_ context.Context, orgID id.OrgID) (*OrgAgent
 		return nil, ErrNotFound
 	}
 	cp := *p
+	cp.AllowedScopes = append([]string(nil), p.AllowedScopes...)
 	return &cp, nil
 }
 
@@ -217,6 +223,7 @@ func (s *MemoryStore) PutOrgPolicy(_ context.Context, p *OrgAgentPolicy) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cp := *p
+	cp.AllowedScopes = append([]string(nil), p.AllowedScopes...)
 	s.policies[p.OrgID.String()] = &cp
 	return nil
 }

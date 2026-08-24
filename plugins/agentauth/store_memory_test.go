@@ -111,3 +111,124 @@ func TestAgentGrant_IsActive(t *testing.T) {
 		})
 	}
 }
+
+// Copy safety test: reading should return a deep copy that can't mutate stored state.
+func TestMemoryStore_GetAgentGrant_CopySafety_ReadPath(t *testing.T) {
+	s := agentauth.NewMemoryStore()
+	g := newGrant(t, id.NewUserID(), id.NewOrgID(), time.Now().Add(time.Hour))
+
+	require.NoError(t, s.CreateAgentGrant(context.Background(), g))
+
+	got1, err := s.GetAgentGrant(context.Background(), g.ID)
+	require.NoError(t, err)
+	require.Equal(t, "invoices:read", got1.Scopes[0])
+
+	// Mutate the returned grant
+	got1.Scopes[0] = "admin:*"
+
+	// Read again and verify mutation did not affect stored state
+	got2, err := s.GetAgentGrant(context.Background(), g.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "invoices:read", got2.Scopes[0], "stored scope must not be mutated")
+}
+
+// Copy safety test: writing should not share the caller's slice.
+func TestMemoryStore_CreateAgentGrant_CopySafety_WritePath(t *testing.T) {
+	s := agentauth.NewMemoryStore()
+	g := newGrant(t, id.NewUserID(), id.NewOrgID(), time.Now().Add(time.Hour))
+
+	require.NoError(t, s.CreateAgentGrant(context.Background(), g))
+
+	// Mutate the caller's grant after creating it
+	g.Scopes[0] = "admin:*"
+
+	// Read from store and verify mutation did not affect stored state
+	got, err := s.GetAgentGrant(context.Background(), g.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "invoices:read", got.Scopes[0], "stored scope must not be affected by caller mutation")
+}
+
+// Copy safety test for OrgAgentPolicy.AllowedScopes.
+func TestMemoryStore_OrgAgentPolicy_CopySafety(t *testing.T) {
+	s := agentauth.NewMemoryStore()
+	org := id.NewOrgID()
+	p := &agentauth.OrgAgentPolicy{
+		OrgID:         org,
+		Mode:          agentauth.ModeAllowlist,
+		MaxGrantTTL:   time.Hour,
+		AllowedScopes: []string{"invoices:read", "users:read"},
+	}
+
+	require.NoError(t, s.PutOrgPolicy(context.Background(), p))
+
+	got1, err := s.GetOrgPolicy(context.Background(), org)
+	require.NoError(t, err)
+	require.Equal(t, "invoices:read", got1.AllowedScopes[0])
+
+	// Mutate the returned policy
+	got1.AllowedScopes[0] = "admin:*"
+
+	// Read again and verify mutation did not affect stored state
+	got2, err := s.GetOrgPolicy(context.Background(), org)
+	require.NoError(t, err)
+	assert.Equal(t, "invoices:read", got2.AllowedScopes[0], "stored allowed_scopes must not be mutated")
+}
+
+// RevokeGrantsByAgent with specific org should only revoke grants in that org.
+func TestMemoryStore_RevokeGrantsByAgent_WithOrg(t *testing.T) {
+	s := agentauth.NewMemoryStore()
+	agent := id.NewAgentID()
+	org1 := id.NewOrgID()
+	org2 := id.NewOrgID()
+	user := id.NewUserID()
+
+	g1 := newGrant(t, user, org1, time.Now().Add(time.Hour))
+	g1.AgentID = agent
+	g2 := newGrant(t, user, org2, time.Now().Add(time.Hour))
+	g2.AgentID = agent
+
+	require.NoError(t, s.CreateAgentGrant(context.Background(), g1))
+	require.NoError(t, s.CreateAgentGrant(context.Background(), g2))
+
+	// Revoke the agent's grants only in org1
+	require.NoError(t, s.RevokeGrantsByAgent(context.Background(), agent, org1))
+
+	// g1 should be revoked
+	revoked, err := s.GetAgentGrant(context.Background(), g1.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, revoked.RevokedAt, "grant in specified org must be revoked")
+
+	// g2 should survive
+	survivor, err := s.GetAgentGrant(context.Background(), g2.ID)
+	require.NoError(t, err)
+	assert.Nil(t, survivor.RevokedAt, "grant in different org must not be revoked")
+}
+
+// RevokeGrantsByAgent with zero-value org should revoke the agent's grants everywhere.
+func TestMemoryStore_RevokeGrantsByAgent_AllOrgs(t *testing.T) {
+	s := agentauth.NewMemoryStore()
+	agent := id.NewAgentID()
+	org1 := id.NewOrgID()
+	org2 := id.NewOrgID()
+	user := id.NewUserID()
+
+	g1 := newGrant(t, user, org1, time.Now().Add(time.Hour))
+	g1.AgentID = agent
+	g2 := newGrant(t, user, org2, time.Now().Add(time.Hour))
+	g2.AgentID = agent
+
+	require.NoError(t, s.CreateAgentGrant(context.Background(), g1))
+	require.NoError(t, s.CreateAgentGrant(context.Background(), g2))
+
+	// Revoke the agent's grants across all orgs (zero-value orgID)
+	require.NoError(t, s.RevokeGrantsByAgent(context.Background(), agent, id.OrgID{}))
+
+	// Both grants should be revoked
+	r1, err := s.GetAgentGrant(context.Background(), g1.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, r1.RevokedAt, "grant in org1 must be revoked")
+
+	r2, err := s.GetAgentGrant(context.Background(), g2.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, r2.RevokedAt, "grant in org2 must be revoked")
+}
