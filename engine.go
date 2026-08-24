@@ -361,23 +361,28 @@ func (e *Engine) resolveSessionCookieName(ctx context.Context) string {
 }
 
 // resolveExpectedAudience returns the resource identifiers this deployment
-// answers to for the request's app, or nil to disable the check.
+// answers to for the app that minted the presented token, or nil to disable
+// the check.
 //
-// This mirrors resolveSessionCookieName exactly, including the fail-open on a
-// settings error. Failing closed here would turn a settings outage into a
-// total authentication outage across every app, and the audience check is a
-// second line of defence sitting behind the token's own signature, which has
-// already been verified by the time this runs. Do not "harden" this into a
-// fail-closed check without understanding that trade.
-func (e *Engine) resolveExpectedAudience(ctx context.Context) []string {
+// appID comes from the token itself (sess.AppID or claims.AppID), not from the
+// request context. resolveSessionCookieName reads the request's app id because
+// picking a cookie name is a property of the inbound call, but the audience
+// check is a property of the credential. The request only carries an app id
+// when PublishableKeyMiddleware ran and the caller sent X-Publishable-Key,
+// both optional, so reading it here would let a caller disable the check by
+// dropping a header.
+//
+// The fail-open on a settings error is deliberate. Failing closed would turn a
+// settings outage into a total authentication outage across every app, and the
+// audience check is a second line of defence sitting behind the token's own
+// signature, which has already been verified by the time this runs. Do not
+// "harden" this into a fail-closed check without understanding that trade.
+func (e *Engine) resolveExpectedAudience(ctx context.Context, appID string) []string {
 	mgr := e.Settings()
 	if mgr == nil {
 		return nil
 	}
-	opts := settings.ResolveOpts{}
-	if appID, ok := middleware.AppIDFrom(ctx); ok {
-		opts.AppID = appID.String()
-	}
+	opts := settings.ResolveOpts{AppID: appID}
 	identifier, err := settings.Get(ctx, mgr, SettingResourceIdentifier, opts)
 	if err != nil || identifier == "" {
 		return nil

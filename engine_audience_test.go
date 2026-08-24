@@ -47,11 +47,25 @@ func audienceRouter(eng *authsome.Engine) forge.Router {
 	return router
 }
 
-// audienceRequest builds a bearer-authenticated request whose context
-// already carries the app ID, the way PublishableKeyMiddleware would
-// populate it ahead of AuthMiddleware in the production router chain.
-// resolveExpectedAudience reads the app ID off exactly this context value.
-func audienceRequest(appID id.AppID, token string) *http.Request {
+// audienceRequest builds a bearer-authenticated request whose context carries
+// no app ID at all.
+//
+// This is the ordinary case, not an edge case. PublishableKeyMiddleware is
+// what puts an app ID on the context, and it is a no-op when the caller omits
+// X-Publishable-Key; a resource server built on eng.AuthMiddleware() need
+// never install it. So the audience check has to work from what the TOKEN
+// says, and every test below that does not say otherwise runs in this
+// configuration on purpose.
+func audienceRequest(token string) *http.Request {
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	return req
+}
+
+// audienceRequestWithAppID is audienceRequest plus the context value
+// PublishableKeyMiddleware would set, so both halves of the fallback question
+// stay covered: adding a publishable key must not change the outcome.
+func audienceRequestWithAppID(appID id.AppID, token string) *http.Request {
 	ctx := middleware.WithAppID(context.Background(), appID)
 	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -88,7 +102,7 @@ func TestEngineExpectedAudience_UnsetDisablesCheck(t *testing.T) {
 	require.NoError(t, memStore.UpdateSession(ctx, sess))
 
 	rec := httptest.NewRecorder()
-	audienceRouter(eng).ServeHTTP(rec, audienceRequest(appID, sess.Token))
+	audienceRouter(eng).ServeHTTP(rec, audienceRequest(sess.Token))
 
 	assert.Equal(t, http.StatusOK, rec.Code,
 		"setting unset must disable the audience check: a session audienced elsewhere still authenticates")
@@ -99,6 +113,13 @@ func TestEngineExpectedAudience_UnsetDisablesCheck(t *testing.T) {
 // and a token audienced at the configured resource still authenticates. Both
 // halves matter: proving only the rejection would be satisfied by a check
 // that rejects everything.
+//
+// The requests here carry no app ID on their context. That is the whole point.
+// The setting lives at App scope, so resolving it needs an app ID from
+// somewhere, and the only one always available is the one stamped on the token
+// itself. Resolve it from the request instead and this test's rejection case
+// authenticates, which is how the check managed to look wired while doing
+// nothing.
 func TestEngineExpectedAudience_SetEnforcesMatch(t *testing.T) {
 	eng, memStore := newTestEngine(t)
 	ctx := context.Background()
@@ -127,12 +148,12 @@ func TestEngineExpectedAudience_SetEnforcesMatch(t *testing.T) {
 	router := audienceRouter(eng)
 
 	recWrong := httptest.NewRecorder()
-	router.ServeHTTP(recWrong, audienceRequest(appID, wrongSess.Token))
+	router.ServeHTTP(recWrong, audienceRequest(wrongSess.Token))
 	assert.Equal(t, http.StatusUnauthorized, recWrong.Code,
 		"a token audienced at a different resource must not authenticate once the setting is set")
 
 	recRight := httptest.NewRecorder()
-	router.ServeHTTP(recRight, audienceRequest(appID, rightSess.Token))
+	router.ServeHTTP(recRight, audienceRequest(rightSess.Token))
 	assert.Equal(t, http.StatusOK, recRight.Code,
 		"a token audienced at the configured resource must still authenticate")
 }
@@ -158,8 +179,54 @@ func TestEngineExpectedAudience_SetButSessionHasNoAudience(t *testing.T) {
 	require.Empty(t, sess.Audience, "a session minted without a resource parameter carries no audience")
 
 	rec := httptest.NewRecorder()
-	audienceRouter(eng).ServeHTTP(rec, audienceRequest(appID, sess.Token))
+	audienceRouter(eng).ServeHTTP(rec, audienceRequest(sess.Token))
 
 	assert.Equal(t, http.StatusOK, rec.Code,
 		"a session with no audience must still authenticate even when the setting is set")
+}
+
+// TestEngineExpectedAudience_SetEnforcesMatchWithPublishableKey repeats the
+// enforcement case with an app ID on the request context, the way
+// PublishableKeyMiddleware leaves it.
+//
+// Sending a publishable key must not change the answer either way. Keeping
+// both configurations covered is what stops a future change from quietly
+// going back to reading the request: that change would still pass here and
+// fail the no-app-ID test above.
+func TestEngineExpectedAudience_SetEnforcesMatchWithPublishableKey(t *testing.T) {
+	eng, memStore := newTestEngine(t)
+	ctx := context.Background()
+	appID := testAppID(t)
+
+	setResourceIdentifier(t, eng, appID, "https://api.example.com")
+
+	_, wrongSess, err := eng.SignUp(ctx, &account.SignUpRequest{
+		AppID:    appID,
+		Email:    "audience-pk-wrong@example.com",
+		Password: "SecureP@ss1",
+	})
+	require.NoError(t, err)
+	wrongSess.Audience = []string{"https://other.example.com"}
+	require.NoError(t, memStore.UpdateSession(ctx, wrongSess))
+
+	_, rightSess, err := eng.SignUp(ctx, &account.SignUpRequest{
+		AppID:    appID,
+		Email:    "audience-pk-right@example.com",
+		Password: "SecureP@ss1",
+	})
+	require.NoError(t, err)
+	rightSess.Audience = []string{"https://api.example.com"}
+	require.NoError(t, memStore.UpdateSession(ctx, rightSess))
+
+	router := audienceRouter(eng)
+
+	recWrong := httptest.NewRecorder()
+	router.ServeHTTP(recWrong, audienceRequestWithAppID(appID, wrongSess.Token))
+	assert.Equal(t, http.StatusUnauthorized, recWrong.Code,
+		"a token audienced at a different resource must not authenticate with a publishable key either")
+
+	recRight := httptest.NewRecorder()
+	router.ServeHTTP(recRight, audienceRequestWithAppID(appID, rightSess.Token))
+	assert.Equal(t, http.StatusOK, recRight.Code,
+		"a token audienced at the configured resource must still authenticate with a publishable key")
 }

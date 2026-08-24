@@ -33,7 +33,21 @@ func audienceResolverFor(expected []string) middleware.ExpectedAudienceResolver 
 	if expected == nil {
 		return nil
 	}
-	return func(_ context.Context) []string {
+	return func(_ context.Context, _ string) []string {
+		return expected
+	}
+}
+
+// audienceResolverForApp answers only for one app id and returns nil for any
+// other. It exists to pin down WHICH app id the middleware hands the resolver:
+// a resolver that ignores its argument, like audienceResolverFor above, would
+// be satisfied by passing the request's app id, the empty string, or anything
+// else.
+func audienceResolverForApp(wantAppID string, expected []string) middleware.ExpectedAudienceResolver {
+	return func(_ context.Context, appID string) []string {
+		if appID != wantAppID {
+			return nil
+		}
 		return expected
 	}
 }
@@ -306,4 +320,143 @@ func TestAuthMiddleware_Audience_BareConstructor(t *testing.T) {
 				tc.wantAuthorized, tc.tokenAudience, tc.expected)
 		})
 	}
+}
+
+// TestAuthMiddleware_Audience_ResolverReceivesTokenAppID pins down which app
+// id the middleware hands the resolver.
+//
+// The resolver must be asked about the app that minted the token, not the app
+// on the request context. The request context here deliberately carries no app
+// id at all, which is what happens whenever the caller omits X-Publishable-Key
+// or the deployment never installs PublishableKeyMiddleware. Resolving from
+// the request in that configuration yields nothing, and an empty expected set
+// means "check disabled", so the guard would vanish exactly when an attacker
+// drops an optional header.
+//
+// Each case pairs a resolver keyed to the token's app id with a disjoint token
+// audience, so authentication succeeding means the resolver was asked about
+// the wrong app and returned nil.
+func TestAuthMiddleware_Audience_ResolverReceivesTokenAppID(t *testing.T) {
+	t.Run("opaque session", func(t *testing.T) {
+		testUserID := id.NewUserID()
+		testAppID := id.NewAppID()
+
+		testSession := &session.Session{
+			ID:       id.NewSessionID(),
+			AppID:    testAppID,
+			UserID:   testUserID,
+			Token:    "token-appid",
+			Audience: []string{"https://other.example.com"},
+		}
+
+		mw := middleware.AuthMiddlewareWithStrategies(
+			func(token string) (*session.Session, error) {
+				if token == "token-appid" {
+					return testSession, nil
+				}
+				return nil, errors.New("invalid")
+			},
+			func(_ string) (*user.User, error) {
+				return &user.User{ID: testUserID, AppID: testAppID, Email: "appid@test.com"}, nil
+			},
+			nil,
+			log.NewNoopLogger(),
+			middleware.SessionBindingConfig{
+				ExpectedAudienceResolver: audienceResolverForApp(
+					testAppID.String(), []string{"https://api.example.com"}),
+			},
+		)
+
+		assert.False(t, runAudienceProbe(t, mw, "token-appid"),
+			"a session audienced elsewhere must be refused even with no app id on the request context")
+	})
+
+	t.Run("jwt", func(t *testing.T) {
+		testUserID := id.NewUserID()
+		testAppID := id.NewAppID()
+
+		validator := &mockJWTValidator{
+			claims: &tokenformat.TokenClaims{
+				UserID:    testUserID.String(),
+				AppID:     testAppID.String(),
+				SessionID: id.NewSessionID().String(),
+				Audience:  []string{"https://other.example.com"},
+			},
+		}
+
+		mw := middleware.AuthMiddlewareWithJWT(
+			func(_ string) (*session.Session, error) {
+				return nil, errors.New("not found")
+			},
+			func(_ string) (*user.User, error) {
+				return &user.User{ID: testUserID, AppID: testAppID, Email: "appid-jwt@test.com"}, nil
+			},
+			nil,
+			validator,
+			log.NewNoopLogger(),
+			middleware.SessionBindingConfig{
+				ExpectedAudienceResolver: audienceResolverForApp(
+					testAppID.String(), []string{"https://api.example.com"}),
+			},
+		)
+
+		assert.False(t, runAudienceProbe(t, mw, "header.payload.signature"),
+			"a JWT audienced elsewhere must be refused even with no app id on the request context")
+	})
+
+	t.Run("bare constructor", func(t *testing.T) {
+		testUserID := id.NewUserID()
+		testAppID := id.NewAppID()
+
+		testSession := &session.Session{
+			ID:       id.NewSessionID(),
+			AppID:    testAppID,
+			UserID:   testUserID,
+			Token:    "bare-token-appid",
+			Audience: []string{"https://other.example.com"},
+		}
+
+		mw := middleware.AuthMiddleware(
+			func(token string) (*session.Session, error) {
+				if token == "bare-token-appid" {
+					return testSession, nil
+				}
+				return nil, errors.New("invalid")
+			},
+			func(_ string) (*user.User, error) {
+				return &user.User{ID: testUserID, AppID: testAppID, Email: "appid-bare@test.com"}, nil
+			},
+			log.NewNoopLogger(),
+			middleware.SessionBindingConfig{
+				ExpectedAudienceResolver: audienceResolverForApp(
+					testAppID.String(), []string{"https://api.example.com"}),
+			},
+		)
+
+		assert.False(t, runAudienceProbe(t, mw, "bare-token-appid"),
+			"a session audienced elsewhere must be refused even with no app id on the request context")
+	})
+}
+
+// runAudienceProbe drives one bearer-authenticated request through mw and
+// reports whether a user landed on the context. The request context is bare on
+// purpose: no app id, no publishable key.
+func runAudienceProbe(t *testing.T, mw forge.Middleware, token string) bool {
+	t.Helper()
+
+	var gotUser bool
+	router := forge.NewRouter()
+	router.Use(mw)
+	router.GET("/test", func(ctx forge.Context) error {
+		_, gotUser = middleware.UserFrom(ctx.Context())
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code, "middleware always passes through to next handler")
+	return gotUser
 }

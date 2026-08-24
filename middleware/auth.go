@@ -129,9 +129,16 @@ type SessionExistsChecker func(sessionID string) (*session.Session, error)
 type CookieNameResolver func(ctx context.Context) string
 
 // ExpectedAudienceResolver returns the resource identifiers this deployment
-// answers to for the current request. Nil, or an empty result, disables the
-// audience check.
-type ExpectedAudienceResolver func(ctx context.Context) []string
+// answers to for the app the presented token was minted under. Nil, or an
+// empty result, disables the audience check.
+//
+// The app id handed to the resolver is the TOKEN's, never the request's. A
+// resource identifier is configured per app, and the request context only
+// carries an app id when the caller sent a publishable key, which is optional.
+// Resolving from the request would let a caller switch the check off by
+// omitting a header, and would leave a resource server that never installs
+// PublishableKeyMiddleware with no app-scoped enforcement at all.
+type ExpectedAudienceResolver func(ctx context.Context, appID string) []string
 
 // SessionBindingConfig controls session binding validation.
 type SessionBindingConfig struct {
@@ -153,8 +160,8 @@ type SessionBindingConfig struct {
 	JWTSessionChecker SessionExistsChecker
 
 	// ExpectedAudienceResolver returns the resource identifiers this
-	// deployment answers to for the current request's app. Nil, or an empty
-	// result, disables the check.
+	// deployment answers to for the app that minted the presented token.
+	// Nil, or an empty result, disables the check.
 	//
 	// Per app rather than per process: two apps in one deployment are two
 	// different resources, and a token minted for one must not authenticate at
@@ -203,7 +210,7 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 			// this deployment does not answer to must not authenticate here. Values
 			// are resource URIs supplied by the caller, so they are never logged.
 			if bindCfg.ExpectedAudienceResolver != nil {
-				expected := bindCfg.ExpectedAudienceResolver(ctx.Context())
+				expected := bindCfg.ExpectedAudienceResolver(ctx.Context(), sess.AppID.String())
 				if !audienceAllowed(sess.Audience, expected) {
 					logger.Warn("auth middleware: session audience mismatch",
 						log.String("session_id", sess.ID.String()),
@@ -409,7 +416,7 @@ func tryJWTAuth(
 	// this deployment does not answer to must not authenticate here. Values
 	// are resource URIs supplied by the caller, so they are never logged.
 	if bindCfg.ExpectedAudienceResolver != nil {
-		expected := bindCfg.ExpectedAudienceResolver(ctx.Context())
+		expected := bindCfg.ExpectedAudienceResolver(ctx.Context(), claims.AppID)
 		if !audienceAllowed(claims.Audience, expected) {
 			logger.Warn("auth middleware: JWT audience mismatch",
 				log.String("session_id", claims.SessionID),
@@ -535,7 +542,7 @@ func trySessionAuth(
 	// this deployment does not answer to must not authenticate here. Values
 	// are resource URIs supplied by the caller, so they are never logged.
 	if bindCfg.ExpectedAudienceResolver != nil {
-		expected := bindCfg.ExpectedAudienceResolver(ctx.Context())
+		expected := bindCfg.ExpectedAudienceResolver(ctx.Context(), sess.AppID.String())
 		if !audienceAllowed(sess.Audience, expected) {
 			logger.Warn("auth middleware: session audience mismatch",
 				log.String("session_id", sess.ID.String()),
