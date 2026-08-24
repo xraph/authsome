@@ -347,6 +347,15 @@ type RouteProvider interface {
 	RegisterRoutes(router forge.Router) error
 }
 
+// RootRouteProvider is implemented by plugins that must serve routes at the
+// origin root rather than under the extension's mount prefix. Well-known
+// discovery documents are the only legitimate use: RFC 8414 and RFC 9728
+// define their locations relative to the origin, so a prefixed copy is
+// invisible to a client that only knows the host.
+type RootRouteProvider interface {
+	RegisterRootRoutes(router forge.Router) error
+}
+
 // MigrationProvider allows a plugin to register its own grove migration
 // groups. The engine collects these groups and passes them to Store.Migrate()
 // so plugin tables are created alongside the core schema. The driverName

@@ -36,6 +36,7 @@ import (
 var (
 	_ plugin.Plugin            = (*Plugin)(nil)
 	_ plugin.RouteProvider     = (*Plugin)(nil)
+	_ plugin.RootRouteProvider = (*Plugin)(nil)
 	_ plugin.OnInit            = (*Plugin)(nil)
 	_ plugin.MigrationProvider = (*Plugin)(nil)
 )
@@ -221,10 +222,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
-	// Well-known OIDC discovery
+	// Mirror onto the grouped router so an SDK client whose base URL
+	// includes the mount prefix still resolves discovery.
 	if err := router.GET("/.well-known/openid-configuration", p.handleDiscovery,
 		forge.WithSummary("OpenID Connect Discovery"),
-		forge.WithOperationID("oidcDiscovery"),
+		forge.WithOperationID("oidcDiscoveryPrefixed"),
 		forge.WithTags("OAuth2"),
 	); err != nil {
 		return err
@@ -262,6 +264,24 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Delete OAuth2 client"),
 		forge.WithOperationID("deleteOAuth2Client"),
 		forge.WithErrorResponses(),
+	)
+}
+
+// RegisterRootRoutes registers discovery documents at the origin root.
+// These cannot live on the grouped router: a client that only knows the
+// host fetches https://host/.well-known/... with no prefix.
+func (p *Plugin) RegisterRootRoutes(router forge.Router) error {
+	return p.registerWellKnown(router)
+}
+
+// registerWellKnown mounts the discovery documents on the given router.
+// Called for the origin root, and again on the grouped router so clients
+// configured with a prefixed base URL keep working.
+func (p *Plugin) registerWellKnown(router forge.Router) error {
+	return router.GET("/.well-known/openid-configuration", p.handleDiscovery,
+		forge.WithSummary("OpenID Connect Discovery"),
+		forge.WithOperationID("oidcDiscovery"),
+		forge.WithTags("OAuth2"),
 	)
 }
 

@@ -117,6 +117,10 @@ type routeProviderEntry struct {
 	name string
 	hook RouteProvider
 }
+type rootRouteProviderEntry struct {
+	name string
+	hook RootRouteProvider
+}
 type migrationProviderEntry struct {
 	name string
 	hook MigrationProvider
@@ -158,6 +162,7 @@ type Registry struct {
 	afterMemberRemove      []afterMemberRemoveEntry
 	afterMemberRoleChange  []afterMemberRoleChangeEntry
 	routeProviders         []routeProviderEntry
+	rootRouteProviders     []rootRouteProviderEntry
 	migrationProviders     []migrationProviderEntry
 	dataExportContributors []dataExportContributorEntry
 }
@@ -256,6 +261,9 @@ func (r *Registry) Register(p Plugin) {
 	}
 	if h, ok := p.(RouteProvider); ok {
 		r.routeProviders = append(r.routeProviders, routeProviderEntry{name, h})
+	}
+	if h, ok := p.(RootRouteProvider); ok {
+		r.rootRouteProviders = append(r.rootRouteProviders, rootRouteProviderEntry{name, h})
 	}
 	if h, ok := p.(MigrationProvider); ok {
 		r.migrationProviders = append(r.migrationProviders, migrationProviderEntry{name, h})
@@ -540,6 +548,15 @@ func (r *Registry) EmitAfterMemberRoleChange(ctx context.Context, m *organizatio
 func (r *Registry) RouteProviders() []RouteProvider {
 	providers := make([]RouteProvider, len(r.routeProviders))
 	for i, e := range r.routeProviders {
+		providers[i] = e.hook
+	}
+	return providers
+}
+
+// RootRouteProviders returns all plugins that provide origin-root routes.
+func (r *Registry) RootRouteProviders() []RootRouteProvider {
+	providers := make([]RootRouteProvider, len(r.rootRouteProviders))
+	for i, e := range r.rootRouteProviders {
 		providers[i] = e.hook
 	}
 	return providers
