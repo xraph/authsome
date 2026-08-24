@@ -62,6 +62,10 @@ type Config struct {
 	// Set this to a custom URL (e.g. "https://myapp.com/device") when using
 	// an external UI like authsome-ui to host the verification page.
 	VerificationURI string
+
+	// ConsentGate, if set, is consulted before every authorization code is
+	// issued. See SetConsentGate for post-construction wiring.
+	ConsentGate ConsentGate
 }
 
 // Plugin is the OAuth2 provider plugin.
@@ -71,6 +75,7 @@ type Plugin struct {
 	oauth2Store Store
 	logger      log.Logger
 	engine      plugin.Engine
+	consentGate ConsentGate
 }
 
 // New creates a new OAuth2 provider plugin.
@@ -91,7 +96,7 @@ func New(cfg ...Config) *Plugin {
 	if c.DeviceCodeInterval == 0 {
 		c.DeviceCodeInterval = 5
 	}
-	return &Plugin{config: c}
+	return &Plugin{config: c, consentGate: c.ConsentGate}
 }
 
 // Name returns the plugin name.
@@ -487,6 +492,14 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
 		return nil, forge.Unauthorized("authentication required to authorize")
+	}
+
+	// Give a registered gate (e.g. an agent-delegation policy) a chance to
+	// veto the authorization before a code is issued. orgID is whatever the
+	// session carries; it may be the zero value when the session has none.
+	orgID, _ := middleware.OrgIDFrom(ctx.Context())
+	if gateErr := p.EvaluateConsent(ctx.Context(), req.ClientID, userID, orgID, scopes); gateErr != nil {
+		return nil, gateErr
 	}
 
 	// Generate authorization code.
