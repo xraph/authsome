@@ -15,6 +15,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/user"
 
@@ -336,6 +337,76 @@ func TestRegistry_EmptyRegistry(t *testing.T) {
 
 	assert.Empty(t, r.Plugins())
 	assert.Empty(t, r.RouteProviders())
+}
+
+// recordingPrincipalHook records whether its before/after principal-auth
+// hooks were called, without denying anything.
+type recordingPrincipalHook struct {
+	name        string
+	called      bool
+	afterCalled bool
+}
+
+func (h *recordingPrincipalHook) Name() string { return h.name }
+
+func (h *recordingPrincipalHook) OnBeforePrincipalAuth(_ context.Context, _ *principal.AuthAttempt) error {
+	h.called = true
+	return nil
+}
+
+func (h *recordingPrincipalHook) OnAfterPrincipalAuth(_ context.Context, _ *principal.AuthAttempt, _ *session.Session) error {
+	h.afterCalled = true
+	return nil
+}
+
+// denyingPrincipalHook always denies the authentication attempt.
+type denyingPrincipalHook struct {
+	name   string
+	called bool
+}
+
+func (h *denyingPrincipalHook) Name() string { return h.name }
+
+func (h *denyingPrincipalHook) OnBeforePrincipalAuth(_ context.Context, _ *principal.AuthAttempt) error {
+	h.called = true
+	return errors.New("denied")
+}
+
+// A denying plugin must stop the authentication, the same way EmitBeforeSignIn
+// does. This is the whole reason these are typed hooks and not hook.Bus
+// events: Bus.Emit logs handler errors and returns nothing, so it cannot deny.
+func TestEmitBeforePrincipalAuthStopsOnFirstError(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+
+	first := &recordingPrincipalHook{name: "first"}
+	denier := &denyingPrincipalHook{name: "denier"}
+	last := &recordingPrincipalHook{name: "last"}
+	r.Register(first)
+	r.Register(denier)
+	r.Register(last)
+
+	err := r.EmitBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject:        principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+		CredentialKind: "api_key",
+	})
+	require.Error(t, err)
+	assert.True(t, first.called, "hooks before the denier must have run")
+	assert.False(t, last.called, "hooks after the denier must not run")
+}
+
+func TestEmitAfterPrincipalAuthRunsEveryHook(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+	a := &recordingPrincipalHook{name: "a"}
+	b := &recordingPrincipalHook{name: "b"}
+	r.Register(a)
+	r.Register(b)
+
+	r.EmitAfterPrincipalAuth(context.Background(),
+		&principal.AuthAttempt{Subject: principal.Ref{Kind: principal.KindWorkload, ID: "svc_2"}},
+		&session.Session{})
+
+	assert.True(t, a.afterCalled)
+	assert.True(t, b.afterCalled)
 }
 
 func TestRegistry_OnInitShutdown(_ *testing.T) {

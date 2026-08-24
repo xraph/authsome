@@ -260,6 +260,28 @@ type AfterSignOut interface {
 }
 
 // ──────────────────────────────────────────────────
+// Principal auth hooks (non-human callers)
+// ──────────────────────────────────────────────────
+
+// BeforePrincipalAuth is called before a credential becomes a session for a
+// caller that did not go through sign-in: an API key, a token exchange, a
+// workload JWT.
+//
+// Returning an error denies the authentication. This is the machine-side
+// counterpart to BeforeSignIn, and it exists because static API key traffic
+// reaches strategy.Authenticate and never fires the sign-in hooks, so every
+// risk plugin was blind to it.
+type BeforePrincipalAuth interface {
+	OnBeforePrincipalAuth(ctx context.Context, a *principal.AuthAttempt) error
+}
+
+// AfterPrincipalAuth is called once a non-human caller has a session. Errors
+// are logged and do not fail the request, matching the other After hooks.
+type AfterPrincipalAuth interface {
+	OnAfterPrincipalAuth(ctx context.Context, a *principal.AuthAttempt, s *session.Session) error
+}
+
+// ──────────────────────────────────────────────────
 // User lifecycle hooks
 // ──────────────────────────────────────────────────
 
