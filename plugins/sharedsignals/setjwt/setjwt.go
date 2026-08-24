@@ -110,11 +110,11 @@ func Validate(ctx context.Context, raw []byte, opts Options) (*Token, error) {
 	if err != nil {
 		return nil, err
 	}
-	if typ != "secevent+jwt" {
-		return nil, fmt.Errorf("%w: typ header must be secevent+jwt", ErrInvalidRequest)
-	}
 	if _, ok := allowedAlgs[alg]; !ok {
 		return nil, fmt.Errorf("%w: algorithm %q is not accepted", ErrInvalidKey, alg)
+	}
+	if typ != "secevent+jwt" {
+		return nil, fmt.Errorf("%w: typ header must be secevent+jwt", ErrInvalidRequest)
 	}
 
 	key, err := opts.Keys.Key(ctx, kid)

@@ -80,8 +80,12 @@ func setError(w http.ResponseWriter, status int, code, description string) {
 	})
 }
 
-// dummyHash is compared against on a stream miss so an unknown push path and
-// a bad token cost roughly the same work.
+// dummyHash is compared against on a stream miss so the lookup itself takes
+// roughly the same time whether or not the push path exists. The 404 and 401
+// status codes are already distinguishable to the caller -- this compare is
+// not trying to hide that -- it only stops an attacker from timing the
+// lookup to learn whether a guessed push path is real before ever reaching
+// gate 4's token compare.
 const dummyHash = "0000000000000000000000000000000000000000000000000000000000000000"
 
 func (p *Plugin) servePush(w http.ResponseWriter, r *http.Request, pushPath string) {
@@ -123,7 +127,7 @@ func (p *Plugin) servePush(w http.ResponseWriter, r *http.Request, pushPath stri
 		return
 	}
 
-	// Gates 5 to 11 live in setjwt: typ, algorithm allow-list, key
+	// Gates 5 to 11 live in setjwt: algorithm allow-list, typ, key
 	// resolution, signature, issuer, audience, jti and iat.
 	token, err := setjwt.Validate(ctx, body, setjwt.Options{
 		Issuer:    stream.Issuer,
@@ -140,8 +144,9 @@ func (p *Plugin) servePush(w http.ResponseWriter, r *http.Request, pushPath stri
 		return
 	}
 
-	// Gate 12: the dedupe row commits before anything acts, which makes the
-	// row the ledger. A conflict is a replay, and a replay is a success.
+	// Gate 12: each event's dedupe row commits before it is acted on, which
+	// makes the row the ledger. A conflict on every event in the SET means
+	// the whole delivery is a replay, and a replay is a success.
 	if err := p.processSET(ctx, stream, token); err != nil {
 		if errors.Is(err, ErrDuplicateJTI) {
 			w.WriteHeader(http.StatusAccepted)
@@ -151,8 +156,14 @@ func (p *Plugin) servePush(w http.ResponseWriter, r *http.Request, pushPath stri
 			logString("stream_id", stream.ID.String()),
 			logString("error", err.Error()),
 		)
-		setError(w, http.StatusBadRequest, "invalid_request",
-			"the security event token could not be processed")
+		// Nothing here is a reason the TOKEN was rejected -- it is our own
+		// store failing to insert, update or undo a received-event row, or
+		// an infrastructure error surfaced from processing one event (see
+		// processOneEvent). None of RFC 8935's error codes describe "our
+		// database had a blip," and a 400 tells a well-behaved transmitter
+		// to stop retrying, which is exactly wrong when a retry would
+		// actually succeed. Answer plain 500 instead, with no RFC 8935 body.
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -177,11 +188,22 @@ func (s *streamKeys) Key(ctx context.Context, kid string) (crypto.PublicKey, err
 	return s.client.Key(ctx, s.uri, kid)
 }
 
-// processSET records each event, resolves its subject and applies the matrix.
-// A single unusable event never fails the whole SET: it is recorded with its
-// outcome and the rest carry on.
+// processSET records each event, resolves its subject and applies the
+// matrix. Each event is deduped on its own -- see ErrDuplicateJTI's doc
+// comment on why the key includes event_type -- so one event colliding with
+// a prior delivery does not stop the SET's other events, which carry their
+// own event types and so their own dedupe identity, from being processed.
+// Only when every event in the SET has already been recorded is the whole
+// delivery reported as the replay it actually is.
+//
+// A single unusable event never fails the whole SET for a POLICY reason: an
+// unresolved subject, a rejected subject, an event type the stream did not
+// subscribe to and so on are all recorded with their outcome and the rest
+// carry on. An INFRASTRUCTURE failure is different: see processOneEvent's
+// infra return value.
 func (p *Plugin) processSET(ctx context.Context, stream *InboundStream,
 	token *setjwt.Token) error {
+	anyNew := false
 	for eventType, payload := range token.Events {
 		record := &ReceivedEvent{
 			ID:        id.NewSSFEventID(),
@@ -191,10 +213,33 @@ func (p *Plugin) processSET(ctx context.Context, stream *InboundStream,
 			Outcome:   OutcomePending,
 		}
 		if err := p.store.InsertReceivedEvent(ctx, record); err != nil {
+			if errors.Is(err, ErrDuplicateJTI) {
+				continue
+			}
 			return err
 		}
+		anyNew = true
 
-		outcome, action, failure := p.processOneEvent(ctx, stream, eventType, payload)
+		outcome, action, failure, infra := p.processOneEvent(ctx, stream, eventType, payload)
+		if infra {
+			// The dedupe row this event just wrote must not survive an
+			// infrastructure failure: leaving it committed would make the
+			// transmitter's retry read back as a replay of a delivery that
+			// was never actually handled, permanently dropping whatever
+			// this event was. Best-effort undo and let the caller answer
+			// with an error so the transmitter retries and this time the
+			// insert starts fresh.
+			if derr := p.store.DeleteReceivedEvent(ctx, record.ID); derr != nil {
+				p.logger.Error(
+					"sharedsignals: could not undo dedupe row after an infrastructure failure",
+					logString("event_id", record.ID.String()),
+					logString("stream_id", stream.ID.String()),
+					logString("error", derr.Error()),
+				)
+			}
+			return failure
+		}
+
 		record.Outcome = outcome
 		record.ActionTaken = action
 		if failure != nil {
@@ -204,47 +249,65 @@ func (p *Plugin) processSET(ctx context.Context, stream *InboundStream,
 			return err
 		}
 	}
+	if !anyNew {
+		return ErrDuplicateJTI
+	}
 	return nil
 }
 
+// processOneEvent handles one event from a SET. infra is true only when
+// failure came from a store call breaking for its own reasons -- not from
+// any decision about the event's content -- and tells the caller this event
+// was never actually resolved one way or the other, so its dedupe row must
+// not be left standing. Every other return represents a genuine policy
+// outcome (ignored, unresolved, rejected, applied) and is meant to be
+// recorded and answered with success, exactly as before.
 func (p *Plugin) processOneEvent(ctx context.Context, stream *InboundStream,
-	eventType string, payload json.RawMessage) (outcome, action string, failure error) {
+	eventType string, payload json.RawMessage) (outcome, action string, failure error, infra bool) {
 	if !caep.IsKnownEventType(eventType) {
-		return OutcomeIgnored, "", nil
+		return OutcomeIgnored, "", nil, false
 	}
 	if !allowsEventType(stream, eventType) {
-		return OutcomeIgnored, "", nil
+		return OutcomeIgnored, "", nil, false
 	}
 
 	ev, err := caep.ParseEvent(eventType, payload)
 	if err != nil {
-		return OutcomeRejected, "", err
+		return OutcomeRejected, "", err, false
 	}
 
 	res, err := p.resolveSubject(ctx, stream, ev.Subject)
 	if err != nil {
-		return OutcomeRejected, "", err
+		// Every error resolveSubject can return here traces back to a store
+		// call (resolveViaLink's GetSubjectLink) that failed for a reason
+		// other than "not found" -- an infrastructure problem, not a policy
+		// decision about the subject. A miss is unresolved, not an error;
+		// see resolveViaLink.
+		return "", "", err, true
 	}
 	if res.Outcome != OutcomeApplied {
 		// Unresolved and rejected both stop here without an error, so the
 		// transmitter learns nothing about who does or does not have an
 		// account and stops retrying.
-		return res.Outcome, "", nil
+		return res.Outcome, "", nil, false
 	}
 
 	allowed, err := p.checkCircuitBreaker(ctx, stream)
 	if err != nil {
-		return OutcomeRejected, "", err
+		// Same reasoning as resolveSubject above: CountActionsSince failing
+		// is the store breaking, not a verdict that this event should be
+		// rejected.
+		return "", "", err, true
 	}
 	if !allowed {
-		return OutcomeRejected, "", errors.New("stream paused by the circuit breaker")
+		return OutcomeRejected, "", errors.New("stream paused by the circuit breaker"), false
 	}
 
 	action, err = p.applyEvent(ctx, stream, ev, res)
 	if err != nil {
-		return OutcomeRejected, "", err
+		return OutcomeRejected, "", err, false
 	}
-	return OutcomeApplied, action, nil
+	return OutcomeApplied, action, nil, false
 }
 
 func allowsEventType(s *InboundStream, eventType string) bool {

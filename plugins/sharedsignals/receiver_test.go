@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -145,6 +146,60 @@ func (f *receiverFixture) signSET(t *testing.T, mutate func(jwt.MapClaims)) stri
 	signed, err := tok.SignedString(f.key)
 	require.NoError(t, err)
 	return signed
+}
+
+// signMultiEventSET builds a SET carrying two events under one jti: a
+// session-revoked bundled with a credential-change, both for fixtureSub.
+// RFC 8417 keys the events object by event type URI, so this is exactly the
+// shape a real transmitter sends when it wants to report more than one thing
+// about the same subject in one delivery.
+func (f *receiverFixture) signMultiEventSET(t *testing.T, jti string) string {
+	t.Helper()
+	claims := jwt.MapClaims{
+		"iss": fixtureIssuer,
+		"aud": fixtureAud,
+		"jti": jti,
+		"iat": time.Now().Unix(),
+		"events": map[string]any{
+			caep.EventSessionRevoked: map[string]any{
+				"subject": map[string]any{
+					"format": "iss_sub", "iss": fixtureIssuer, "sub": fixtureSub,
+				},
+				"reason_admin": map[string]any{"en": "Account compromised"},
+			},
+			caep.EventCredentialChange: map[string]any{
+				"subject": map[string]any{
+					"format": "iss_sub", "iss": fixtureIssuer, "sub": fixtureSub,
+				},
+				"credential_type": "password",
+				"change_type":     "update",
+			},
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	tok.Header["typ"] = "secevent+jwt"
+	tok.Header["kid"] = fixtureKID
+	signed, err := tok.SignedString(f.key)
+	require.NoError(t, err)
+	return signed
+}
+
+// countReceivedEvents returns how many ReceivedEvent rows exist for a given
+// (stream, jti), reaching directly into MemoryStore's map since this test
+// file lives in the same package. It is how the multi-event tests prove
+// every event in a SET was actually recorded, not just the SET's HTTP
+// response code.
+func countReceivedEvents(t *testing.T, s Store, streamID id.SSFStreamID, jti string) int {
+	t.Helper()
+	mem, ok := s.(*MemoryStore)
+	require.True(t, ok, "countReceivedEvents needs the MemoryStore backing this test fixture")
+	count := 0
+	for _, e := range mem.events {
+		if e.StreamID == streamID && e.JTI == jti {
+			count++
+		}
+	}
+	return count
 }
 
 // post drives the handler through the plugin's own router so the route
@@ -342,6 +397,138 @@ func TestHashSecret_IsStableAndNotThePlaintext(t *testing.T) {
 	assert.NotEqual(t, raw, hash)
 	assert.Equal(t, hash, HashSecret(raw))
 	assert.NotEqual(t, hash, HashSecret(raw+"x"))
+}
+
+// The dedupe key used to be (stream_id, jti) alone, so the second event in a
+// multi-event SET collided with the row the first one had just inserted --
+// on the very first delivery, before any replay ever happened. Which event
+// went first was decided by Go's randomized map iteration order, so the
+// damage was intermittent: a bundled session-revoked was a coin flip on
+// whether it ever actually revoked anything, and the transmitter was told
+// 202 regardless. This test runs enough iterations, with a fresh jti each
+// time, that iteration order cannot hide a regression back to that key.
+func TestPush_MultiEventSETRecordsBothEventsAndRevokesEveryRun(t *testing.T) {
+	f := newReceiverFixture(t)
+
+	const runs = 30
+	for i := 0; i < runs; i++ {
+		jti := fmt.Sprintf("multi-jti-%d", i)
+		f.revoker.revoked = nil
+
+		rec := f.post(t, f.pushPath, f.pushToken, f.signMultiEventSET(t, jti))
+		require.Equal(t, http.StatusAccepted, rec.Code, "run %d", i)
+
+		assert.Equal(t, 2, countReceivedEvents(t, f.plugin.store, f.stream.ID, jti),
+			"run %d: both events in the SET must be recorded, not just whichever the map visited first", i)
+		assert.Len(t, f.revoker.revoked, 1,
+			"run %d: the bundled session-revoked must revoke exactly once regardless of map iteration order", i)
+	}
+}
+
+// Replaying a two-event SET must be a no-op the second time -- 202, nothing
+// revoked again -- and since every event it carries was already recorded,
+// this is also the "a SET whose events are all already seen" case: the
+// second post has nothing new to insert at all, not even a partial mix of
+// new and already-seen events.
+func TestPush_ReplayedMultiEventSETIsAcceptedWithNoSecondRevocation(t *testing.T) {
+	f := newReceiverFixture(t)
+	body := f.signMultiEventSET(t, "multi-replay-jti")
+
+	first := f.post(t, f.pushPath, f.pushToken, body)
+	assert.Equal(t, http.StatusAccepted, first.Code)
+	assert.Equal(t, 2, countReceivedEvents(t, f.plugin.store, f.stream.ID, "multi-replay-jti"))
+	assert.Len(t, f.revoker.revoked, 1)
+
+	second := f.post(t, f.pushPath, f.pushToken, body)
+	assert.Equal(t, http.StatusAccepted, second.Code, "every event was already seen, so this is a replay, and a replay is a success")
+	assert.Equal(t, 2, countReceivedEvents(t, f.plugin.store, f.stream.ID, "multi-replay-jti"),
+		"no new rows from the replay")
+	assert.Len(t, f.revoker.revoked, 1, "a replay must not revoke a second time")
+}
+
+// flakyLinkStore fails GetSubjectLink a fixed number of times before
+// behaving normally, simulating a transient store outage (a dropped
+// connection, a timeout) that resolves on its own -- as opposed to
+// ErrNotFound, which is a real answer, not a failure.
+type flakyLinkStore struct {
+	*MemoryStore
+	failsLeft int
+}
+
+func (s *flakyLinkStore) GetSubjectLink(ctx context.Context, appID id.AppID,
+	envID id.EnvironmentID, issuer, subject string) (*SubjectLink, error) {
+	if s.failsLeft > 0 {
+		s.failsLeft--
+		return nil, errors.New("simulated transient store outage")
+	}
+	return s.MemoryStore.GetSubjectLink(ctx, appID, envID, issuer, subject)
+}
+
+// A store error during subject resolution is an infrastructure failure, not
+// a policy verdict about the event. Answering 202 (as the code used to)
+// would tell the transmitter its delivery succeeded when nothing was ever
+// attempted, permanently losing what might be a genuine compromise event
+// since M1 ships no dispatcher to retry a merely-pending row. The fix must
+// answer with an error AND leave no dedupe row behind, so the transmitter's
+// own retry of the identical SET is actually reprocessed rather than read
+// back as a replay of a delivery that never happened.
+func TestPush_InfrastructureFailureDuringResolutionRetriesInsteadOfReplaying(t *testing.T) {
+	f := newReceiverFixture(t)
+	mem, ok := f.plugin.store.(*MemoryStore)
+	require.True(t, ok)
+	f.plugin.store = &flakyLinkStore{MemoryStore: mem, failsLeft: 1}
+
+	body := f.signSET(t, nil)
+
+	jti := extractJTI(t, body)
+
+	first := f.post(t, f.pushPath, f.pushToken, body)
+	assert.Equal(t, http.StatusInternalServerError, first.Code)
+	assert.Empty(t, first.Body.String(), "an infrastructure failure carries no RFC 8935 body -- none of its codes describe our own store breaking")
+	assert.Empty(t, f.revoker.revoked)
+	assert.Equal(t, 0, countReceivedEvents(t, mem, f.stream.ID, jti),
+		"the dedupe row from the failed attempt must have been undone")
+
+	second := f.post(t, f.pushPath, f.pushToken, body)
+	assert.Equal(t, http.StatusAccepted, second.Code)
+	assert.Len(t, f.revoker.revoked, 1, "the retry must actually be processed, not swallowed as a replay")
+}
+
+// extractJTI pulls the jti claim back out of a signed SET body, without
+// verifying anything -- it only exists so a test can look up the
+// ReceivedEvent row it should not find.
+func extractJTI(t *testing.T, signedSET string) string {
+	t.Helper()
+	parser := jwt.NewParser()
+	tok, _, err := parser.ParseUnverified(signedSET, jwt.MapClaims{})
+	require.NoError(t, err)
+	claims, ok := tok.Claims.(jwt.MapClaims)
+	require.True(t, ok)
+	jti, _ := claims["jti"].(string)
+	return jti
+}
+
+// A subject format the stream does not allow is a REJECTED subject, not an
+// unresolved one -- a distinct code path from TestPush_UnknownSubjectIs202AndDoesNothing,
+// which covers a well-formed, allowed subject that simply names nobody we
+// know. Both must still answer 202: an error here would let the transmitter
+// learn something about our policy configuration from the outside.
+func TestPush_RejectedSubjectFormatIs202AndDoesNothing(t *testing.T) {
+	f := newReceiverFixture(t)
+	body := f.signSET(t, func(c jwt.MapClaims) {
+		c["events"] = map[string]any{
+			caep.EventSessionRevoked: map[string]any{
+				"subject": map[string]any{
+					"format": "email", "email": "someone@example.com",
+				},
+			},
+		}
+	})
+
+	rec := f.post(t, f.pushPath, f.pushToken, body)
+	assert.Equal(t, http.StatusAccepted, rec.Code)
+	assert.Empty(t, rec.Body.String())
+	assert.Empty(t, f.revoker.revoked)
 }
 
 func stringReader(s string) *strings.Reader { return strings.NewReader(s) }

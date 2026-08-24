@@ -213,6 +213,29 @@ func runStoreConformance(t *testing.T, newStore func(*testing.T) Store) {
 		require.ErrorIs(t, err, ErrDuplicateJTI,
 			"a replayed jti must be reported as a duplicate, not a generic write error")
 
+		// The dedupe key is (stream_id, jti, event_type), not (stream_id,
+		// jti) alone: RFC 8417 keys a SET's events object by type, so one
+		// delivery legitimately carries several types under the same jti.
+		// A second event type on the SAME stream and jti must insert fine.
+		otherType := &ReceivedEvent{
+			ID: id.NewSSFEventID(), StreamID: streamID, JTI: "jti-1",
+			EventType: "other-event-type", Outcome: OutcomePending, ReceivedAt: now,
+		}
+		require.NoError(t, s.InsertReceivedEvent(ctx, otherType),
+			"a different event_type under the same (stream_id, jti) must not collide")
+
+		// DeleteReceivedEvent undoes an insert -- the compensating action
+		// servePush takes when processing an event fails for an
+		// infrastructure reason, so the transmitter's retry is reprocessed
+		// rather than read back later as a replay.
+		require.NoError(t, s.DeleteReceivedEvent(ctx, otherType.ID))
+		require.NoError(t, s.InsertReceivedEvent(ctx, &ReceivedEvent{
+			ID: id.NewSSFEventID(), StreamID: streamID, JTI: "jti-1",
+			EventType: "other-event-type", Outcome: OutcomePending, ReceivedAt: now,
+		}), "after DeleteReceivedEvent the same (stream_id, jti, event_type) must insert again")
+		require.ErrorIs(t, s.DeleteReceivedEvent(ctx, id.NewSSFEventID()), ErrNotFound,
+			"deleting an event ID that was never inserted must not silently succeed")
+
 		// This event lives on a DIFFERENT stream and already carries an
 		// ActionTaken, so a backend that dropped the stream_id filter in
 		// CountActionsSince would count it too and the assertion below

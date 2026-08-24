@@ -34,8 +34,13 @@ func linkKey(appID id.AppID, envID id.EnvironmentID, issuer, subject string) str
 	return appID.String() + "|" + envID.String() + "|" + issuer + "|" + subject
 }
 
-func eventKey(streamID id.SSFStreamID, jti string) string {
-	return streamID.String() + "|" + jti
+// eventKey is the dedupe identity: RFC 8417 keys a SET's events object by
+// event type URI, so a single delivery carries at most one event of a given
+// type under one jti but may legitimately carry several different types.
+// The key must include event_type or the second event in a multi-event SET
+// collides with the first on its very first delivery.
+func eventKey(streamID id.SSFStreamID, jti, eventType string) string {
+	return streamID.String() + "|" + jti + "|" + eventType
 }
 
 func cloneStream(s *InboundStream) *InboundStream {
@@ -150,7 +155,7 @@ func (m *MemoryStore) GetSubjectLink(_ context.Context, appID id.AppID,
 func (m *MemoryStore) InsertReceivedEvent(_ context.Context, e *ReceivedEvent) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	k := eventKey(e.StreamID, e.JTI)
+	k := eventKey(e.StreamID, e.JTI, e.EventType)
 	if _, ok := m.events[k]; ok {
 		return ErrDuplicateJTI
 	}
@@ -165,13 +170,28 @@ func (m *MemoryStore) InsertReceivedEvent(_ context.Context, e *ReceivedEvent) e
 func (m *MemoryStore) UpdateReceivedEvent(_ context.Context, e *ReceivedEvent) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	k := eventKey(e.StreamID, e.JTI)
+	k := eventKey(e.StreamID, e.JTI, e.EventType)
 	if _, ok := m.events[k]; !ok {
 		return ErrNotFound
 	}
 	out := *e
 	m.events[k] = &out
 	return nil
+}
+
+// DeleteReceivedEvent removes a row by ID. Events are keyed in storage by
+// (stream_id, jti, event_type), not by ID, so this scans -- MemoryStore
+// backs tests and standalone mode, never a production hot path.
+func (m *MemoryStore) DeleteReceivedEvent(_ context.Context, eventID id.SSFEventID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for k, e := range m.events {
+		if e.ID == eventID {
+			delete(m.events, k)
+			return nil
+		}
+	}
+	return ErrNotFound
 }
 
 func (m *MemoryStore) CountActionsSince(_ context.Context, streamID id.SSFStreamID,

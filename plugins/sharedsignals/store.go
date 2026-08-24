@@ -15,9 +15,16 @@ import (
 var (
 	// ErrNotFound is returned when a row does not exist.
 	ErrNotFound = errors.New("sharedsignals: not found")
-	// ErrDuplicateJTI is returned when a (stream_id, jti) pair already
-	// exists. Callers treat this as a replay and answer 202, so it must be
-	// distinguishable from every other write failure.
+	// ErrDuplicateJTI is returned when a (stream_id, jti, event_type)
+	// triple already exists. Callers treat this as a replay and answer 202,
+	// so it must be distinguishable from every other write failure.
+	//
+	// The key is the triple, not just (stream_id, jti), because RFC 8417
+	// keys a SET's `events` object by event type URI, so a single delivery
+	// carries at most one event of a given type but may legitimately carry
+	// several different types under the same jti. Keying on (stream_id,
+	// jti) alone would make the second event in a multi-event SET collide
+	// with the row the first one just inserted, on the very first delivery.
 	ErrDuplicateJTI = errors.New("sharedsignals: duplicate jti")
 )
 
@@ -147,10 +154,17 @@ type Store interface {
 	GetSubjectLink(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
 		issuer, subject string) (*SubjectLink, error)
 
-	// InsertReceivedEvent returns ErrDuplicateJTI when (stream_id, jti)
-	// already exists.
+	// InsertReceivedEvent returns ErrDuplicateJTI when (stream_id, jti,
+	// event_type) already exists.
 	InsertReceivedEvent(ctx context.Context, e *ReceivedEvent) error
 	UpdateReceivedEvent(ctx context.Context, e *ReceivedEvent) error
+	// DeleteReceivedEvent removes one received-event row by ID. Its only
+	// caller is the servePush pipeline undoing InsertReceivedEvent's dedupe
+	// row after processing that event failed for an infrastructure reason
+	// rather than a policy one -- a transmitter retry must actually be
+	// reprocessed, not read back later as a replay of a delivery that was
+	// never really handled.
+	DeleteReceivedEvent(ctx context.Context, id id.SSFEventID) error
 	// CountActionsSince counts events on a stream that actually did
 	// something since a cutoff. It backs the circuit breaker.
 	CountActionsSince(ctx context.Context, streamID id.SSFStreamID, since time.Time) (int, error)

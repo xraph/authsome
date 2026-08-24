@@ -146,6 +146,18 @@ func (s *SqliteStore) UpdateReceivedEvent(ctx context.Context, e *ReceivedEvent)
 	return nil
 }
 
+func (s *SqliteStore) DeleteReceivedEvent(ctx context.Context, eventID id.SSFEventID) error {
+	res, err := s.sdb.NewDelete((*receivedEventModel)(nil)).
+		Where("id = ?", eventID.String()).Exec(ctx)
+	if err != nil {
+		return sqlErr(err)
+	}
+	if n, rerr := res.RowsAffected(); rerr == nil && n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *SqliteStore) CountActionsSince(ctx context.Context,
 	streamID id.SSFStreamID, since time.Time) (int, error) {
 	count, err := s.sdb.NewSelect((*receivedEventModel)(nil)).

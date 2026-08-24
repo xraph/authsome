@@ -181,6 +181,18 @@ func (s *PostgresStore) UpdateReceivedEvent(ctx context.Context, e *ReceivedEven
 	return nil
 }
 
+func (s *PostgresStore) DeleteReceivedEvent(ctx context.Context, eventID id.SSFEventID) error {
+	res, err := s.pg.NewDelete((*receivedEventModel)(nil)).
+		Where("id = ?", eventID.String()).Exec(ctx)
+	if err != nil {
+		return sqlErr(err)
+	}
+	if n, rerr := res.RowsAffected(); rerr == nil && n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *PostgresStore) CountActionsSince(ctx context.Context,
 	streamID id.SSFStreamID, since time.Time) (int, error) {
 	count, err := s.pg.NewSelect((*receivedEventModel)(nil)).
