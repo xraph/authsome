@@ -1730,6 +1730,7 @@ class AuthClient {
 'POST',
       path,
       body: body.toJson(),
+      form: true,
     );
     return DeviceAuthResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
@@ -1742,6 +1743,7 @@ class AuthClient {
 'POST',
       path,
       body: body.toJson(),
+      form: true,
     );
     return DeviceCompleteResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
@@ -1754,6 +1756,7 @@ class AuthClient {
 'POST',
       path,
       body: body.toJson(),
+      form: true,
       token: token,
     );
   }
@@ -1766,6 +1769,7 @@ class AuthClient {
 'POST',
       path,
       body: body.toJson(),
+      form: true,
     );
     return Oauth2providerTokenResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
@@ -2573,15 +2577,30 @@ class AuthClient {
   // Internal request helper
   // ──────────────────────────────────────────────────
 
+  /// Encodes a body as application/x-www-form-urlencoded, which RFC 6749
+  /// section 4.1.3 requires at the OAuth2 token endpoint. Absent values stay
+  /// off the wire entirely, the same as toJson() leaves them out.
+  String _encodeForm(Map<String, dynamic> body) {
+    final params = <String, String>{};
+    body.forEach((key, value) {
+      if (value != null) {
+        params[key] = value.toString();
+      }
+    });
+    return Uri(queryParameters: params).query;
+  }
+
   Future<dynamic> _request(
     String method,
     String path, {
     Map<String, dynamic>? body,
     String? token,
+    bool form = false,
   }) async {
     final uri = Uri.parse('$_baseUrl$path');
     final headers = <String, String>{
-      'Content-Type': 'application/json',
+      'Content-Type':
+          form ? 'application/x-www-form-urlencoded' : 'application/json',
       'Accept': 'application/json',
     };
 
@@ -2592,7 +2611,8 @@ class AuthClient {
       headers['X-Publishable-Key'] = _publishableKey!;
     }
 
-    final encodedBody = body != null ? jsonEncode(body) : null;
+    final encodedBody =
+        body != null ? (form ? _encodeForm(body) : jsonEncode(body)) : null;
     late http.Response response;
 
     switch (method) {
