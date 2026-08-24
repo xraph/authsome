@@ -95,6 +95,107 @@ func TestSessionActivity_ExtendExpiry(t *testing.T) {
 	assert.Equal(t, sessID, touchedSessionID, "toucher should be called with the session ID")
 }
 
+// TestSessionActivity_AgentSession_NotExtended is the middleware/activity.go
+// half of the "an agent session never outlives its grant" invariant, the
+// third of three guards alongside Engine.Refresh's agent-principal refusal
+// (service_test.go: TestRefresh_RefusesAgentPrincipalSession) and
+// roleStampingStore's shouldRestamp exclusion
+// (engine_session_roles_test.go: TestRotateSessionSkipsAgents). An agent
+// session's ExpiresAt must survive the activity middleware completely
+// unchanged, and the toucher (the store write) must never be called for it.
+func TestSessionActivity_AgentSession_NotExtended(t *testing.T) {
+	var touched int32
+
+	mw := middleware.SessionActivityMiddleware(
+		func(_ context.Context, _ id.SessionID, _, _ time.Time) error {
+			atomic.AddInt32(&touched, 1)
+			return nil
+		},
+		func(_ context.Context) middleware.SessionActivityConfig {
+			return middleware.SessionActivityConfig{
+				Enabled:           true,
+				InactivityTimeout: 30 * time.Minute,
+			}
+		},
+		log.NewNoopLogger(),
+	)
+
+	originalExpiresAt := time.Now().Add(10 * time.Minute) // a grant-clamped agent TTL
+	sess := &session.Session{
+		ID:             id.NewSessionID(),
+		Token:          "agent-test-token",
+		PrincipalKind:  session.PrincipalKindAgent,
+		AgentID:        id.NewAgentID(),
+		GrantID:        id.NewAgentGrantID(),
+		LastActivityAt: time.Now().Add(-2 * time.Minute), // past throttle interval
+		ExpiresAt:      originalExpiresAt,
+	}
+
+	router := forge.NewRouter()
+	router.Use(injectSession(sess))
+	router.Use(mw)
+	router.GET("/test", func(ctx forge.Context) error {
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, int32(0), atomic.LoadInt32(&touched), "an agent session must never be touched by the sliding window")
+	assert.True(t, sess.ExpiresAt.Equal(originalExpiresAt), "an agent session's ExpiresAt must survive the activity middleware unchanged")
+}
+
+// TestSessionActivity_HumanSession_StillExtended is the control for the test
+// above: it proves the agent exclusion did not disable the sliding window
+// for everyone. A human session under the identical middleware, config and
+// throttle window must still be extended exactly as before.
+func TestSessionActivity_HumanSession_StillExtended(t *testing.T) {
+	var touchedSessionID id.SessionID
+	var touched int32
+
+	mw := middleware.SessionActivityMiddleware(
+		func(_ context.Context, sessID id.SessionID, _, _ time.Time) error {
+			touchedSessionID = sessID
+			atomic.AddInt32(&touched, 1)
+			return nil
+		},
+		func(_ context.Context) middleware.SessionActivityConfig {
+			return middleware.SessionActivityConfig{
+				Enabled:           true,
+				InactivityTimeout: 30 * time.Minute,
+			}
+		},
+		log.NewNoopLogger(),
+	)
+
+	sessID := id.NewSessionID()
+	originalExpiresAt := time.Now().Add(5 * time.Minute)
+	sess := &session.Session{
+		ID:             sessID,
+		Token:          "human-test-token",
+		LastActivityAt: time.Now().Add(-2 * time.Minute), // past throttle interval
+		ExpiresAt:      originalExpiresAt,
+	}
+
+	router := forge.NewRouter()
+	router.Use(injectSession(sess))
+	router.Use(mw)
+	router.GET("/test", func(ctx forge.Context) error {
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, int32(1), atomic.LoadInt32(&touched), "a human session must still be touched by the sliding window")
+	assert.Equal(t, sessID, touchedSessionID)
+	assert.True(t, sess.ExpiresAt.After(originalExpiresAt), "a human session's ExpiresAt must still be extended")
+}
+
 func TestSessionActivity_ThrottleTouchInterval(t *testing.T) {
 	var touched int32
 

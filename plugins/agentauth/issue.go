@@ -13,11 +13,22 @@ import (
 	"github.com/xraph/authsome/session"
 )
 
-// agentSessionTTL bounds an agent access token. Short by design: Engine.Refresh
-// (service.go) refuses to rotate an agent-principal session at all today —
-// there is no agent-aware refresh path yet, so this TTL is a hard ceiling,
-// not a value a refresh can extend. A short session is what keeps a revoked
-// or expired grant's effect prompt in the absence of any renewal.
+// agentSessionTTL bounds an agent access token, and is a hard ceiling: nothing
+// in the engine extends an agent session past it. Three separate guards
+// enforce that, each closing a different route to the same failure (a
+// session outliving the grant that authorized it):
+//   - Engine.Refresh (service.go) refuses to rotate an agent-principal
+//     session at all, so a refresh cannot renew one.
+//   - roleStampingStore's shouldStamp/shouldRestamp (engine_session_roles.go)
+//     never re-stamp an agent session, so even if rotation were ever allowed
+//     it could not restore the delegating human's roles onto it.
+//   - middleware.SessionActivityMiddleware (middleware/activity.go) skips
+//     agent sessions entirely, so the sliding session window cannot reset
+//     ExpiresAt to now + InactivityTimeout on ordinary request traffic.
+//
+// Short by design: with no renewal path of any kind, this TTL is genuinely
+// the only thing standing between a revoked or expired grant and continued
+// access, until agentauth grows its own grant-aware refresh.
 const agentSessionTTL = 15 * time.Minute
 
 // IssueMeta carries request-scoped metadata onto the minted session. Without
