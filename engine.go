@@ -821,6 +821,11 @@ func (e *Engine) CeremonyStore() ceremony.Store {
 // RateLimiter returns the rate limiter (may be nil).
 func (e *Engine) RateLimiter() ratelimit.Limiter { return e.rateLimiter }
 
+// ProtectedResourceMetadataURL returns the configured RFC 9728 metadata URL.
+func (e *Engine) ProtectedResourceMetadataURL() string {
+	return e.config.ProtectedResourceMetadataURL
+}
+
 // Lockout returns the account lockout tracker (may be nil).
 func (e *Engine) Lockout() lockout.Tracker { return e.lockout }
 

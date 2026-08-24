@@ -88,6 +88,12 @@ func (a *API) RegisterRoutes(router forge.Router) error {
 	// platform pool.
 	router.Use(middleware.PublishableKeyMiddleware(a.engine, a.engine.Logger()))
 
+	// RFC 9728 section 5.1: tell an unauthenticated caller where the
+	// protected resource metadata lives, so an MCP client can bootstrap
+	// discovery from a 401 rather than needing the URL up front. Inert
+	// unless WithProtectedResourceMetadataURL was set.
+	router.Use(middleware.ResourceMetadataChallenge(a.engine.ProtectedResourceMetadataURL()))
+
 	// Well-known and JWKS routes must be registered on the root router
 	// (not the grouped router) so they appear at /.well-known/* instead
 	// of being nested under the extension group prefix.
