@@ -61,6 +61,7 @@ const (
 	PrefixSessionFamily   Prefix = "asfm"
 	PrefixServiceAccount  Prefix = "svc"
 	PrefixUserEmail       Prefix = "auem"
+	PrefixDelegation      Prefix = "adel"
 )
 
 // ID is the primary identifier type for all AuthSome entities.
@@ -193,6 +194,10 @@ type SessionFamilyID = ID
 
 // ServiceAccountID is a type-safe identifier for service accounts (prefix: "svc").
 type ServiceAccountID = ID
+
+// DelegationID is a type-safe identifier for delegation grants (prefix: "adel").
+// A delegation records that one principal may act on behalf of another.
+type DelegationID = ID
 
 // AnyID is a TypeID that accepts any valid prefix.
 type AnyID = ID
@@ -378,6 +383,9 @@ func NewSessionFamilyID() ID { return New(PrefixSessionFamily) }
 // NewServiceAccountID generates a new unique service account ID.
 func NewServiceAccountID() ID { return New(PrefixServiceAccount) }
 
+// NewDelegationID generates a new unique delegation ID.
+func NewDelegationID() ID { return New(PrefixDelegation) }
+
 // ──────────────────────────────────────────────────
 // Convenience parsers
 // ──────────────────────────────────────────────────
@@ -496,6 +504,9 @@ func ParseSessionFamilyID(s string) (ID, error) { return ParseWithPrefix(s, Pref
 
 // ParseServiceAccountID parses a string and validates the "svc" prefix.
 func ParseServiceAccountID(s string) (ID, error) { return ParseWithPrefix(s, PrefixServiceAccount) }
+
+// ParseDelegationID parses a string and validates the "adel" prefix.
+func ParseDelegationID(s string) (ID, error) { return ParseWithPrefix(s, PrefixDelegation) }
 
 // ParseAny parses a string into an ID without type checking the prefix.
 func ParseAny(s string) (ID, error) { return Parse(s) }
