@@ -72,7 +72,7 @@ func TestUser_GetByEmail(t *testing.T) {
 	u := testUser(appID)
 	require.NoError(t, s.CreateUser(ctx(), u))
 
-	got, err := s.GetUserByEmail(ctx(), appID, "alice@example.com")
+	got, err := s.GetUserByEmail(ctx(), appID, id.Nil, "alice@example.com")
 	require.NoError(t, err)
 	assert.Equal(t, u.ID.String(), got.ID.String())
 }
@@ -80,7 +80,7 @@ func TestUser_GetByEmail(t *testing.T) {
 func TestUser_GetByEmail_NotFound(t *testing.T) {
 	s := newStore()
 	appID := testAppID()
-	_, err := s.GetUserByEmail(ctx(), appID, "none@example.com")
+	_, err := s.GetUserByEmail(ctx(), appID, id.Nil, "none@example.com")
 	assert.ErrorIs(t, err, store.ErrNotFound)
 }
 
@@ -90,7 +90,7 @@ func TestUser_GetByUsername(t *testing.T) {
 	u := testUser(appID)
 	require.NoError(t, s.CreateUser(ctx(), u))
 
-	got, err := s.GetUserByUsername(ctx(), appID, "alice")
+	got, err := s.GetUserByUsername(ctx(), appID, id.Nil, "alice")
 	require.NoError(t, err)
 	assert.Equal(t, u.ID.String(), got.ID.String())
 }

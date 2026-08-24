@@ -51,6 +51,8 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"DeleteAppCascade", testDeleteAppCascade},
 		{"UserEmailIsAppScoped", testUserEmailIsAppScoped},
 		{"UserPhoneLookupIsEnvScoped", testUserPhoneLookupIsEnvScoped},
+		{"UserEmailLookupIsEnvScoped", testUserEmailLookupIsEnvScoped},
+		{"UserUsernameLookupIsEnvScoped", testUserUsernameLookupIsEnvScoped},
 		{"ListUsersTotalAndFilter", testListUsersTotalAndFilter},
 		{"ListUsersEmailMetacharsAreSafe", testListUsersEmailMetacharsAreSafe},
 		{"SessionCRUD", testSessionCRUD},
@@ -156,6 +158,21 @@ func seedSiblingEnv(t *testing.T, s store.Store, tn tenant) tenant {
 	}
 	require.NoError(t, s.CreateEnvironment(context.Background(), env))
 	return tenant{AppID: tn.AppID, EnvID: env.ID}
+}
+
+func seedUserWithUsername(t *testing.T, s store.Store, tn tenant, email, username string) *user.User {
+	t.Helper()
+	u := &user.User{
+		ID:        id.NewUserID(),
+		AppID:     tn.AppID,
+		EnvID:     tn.EnvID,
+		Email:     email,
+		Username:  username,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateUser(context.Background(), u))
+	return u
 }
 
 func seedUserWithPhone(t *testing.T, s store.Store, tn tenant, email, phone string) *user.User {
@@ -283,17 +300,17 @@ func testUserEmailIsAppScoped(t *testing.T, s store.Store) {
 	ub := seedUser(t, s, b, "shared@test.com")
 	assert.NotEqual(t, ua.ID.String(), ub.ID.String())
 
-	gotA, err := s.GetUserByEmail(ctx, a.AppID, "shared@test.com")
+	gotA, err := s.GetUserByEmail(ctx, a.AppID, id.Nil, "shared@test.com")
 	require.NoError(t, err)
 	assert.Equal(t, ua.ID.String(), gotA.ID.String(), "lookup must return this app's user")
 
-	gotB, err := s.GetUserByEmail(ctx, b.AppID, "shared@test.com")
+	gotB, err := s.GetUserByEmail(ctx, b.AppID, id.Nil, "shared@test.com")
 	require.NoError(t, err)
 	assert.Equal(t, ub.ID.String(), gotB.ID.String(), "lookup must be scoped per app")
 
 	// An app that has no such user must not resolve one from a sibling app.
 	empty := seedTenant(t, s)
-	_, err = s.GetUserByEmail(ctx, empty.AppID, "shared@test.com")
+	_, err = s.GetUserByEmail(ctx, empty.AppID, id.Nil, "shared@test.com")
 	assert.ErrorIs(t, err, store.ErrNotFound, "email lookup must not cross tenants")
 }
 
@@ -342,6 +359,69 @@ func testUserPhoneLookupIsEnvScoped(t *testing.T, s store.Store) {
 	other := seedTenant(t, s)
 	_, err = s.GetUserByPhone(ctx, other.AppID, other.EnvID, phone)
 	assert.ErrorIs(t, err, store.ErrNotFound, "phone lookup must not cross apps")
+}
+
+// testUserEmailLookupIsEnvScoped proves an email lookup cannot reach across
+// environments of the same app. Only one user is seeded on purpose: the
+// backends disagree today on whether (app_id, env_id, email) or
+// (app_id, email) is unique, so seeding the same address twice is not
+// portable. Resolving a user the caller's environment does not own is the
+// actual hole, and one row is enough to prove it is closed.
+func testUserEmailLookupIsEnvScoped(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	prod := seedTenant(t, s)
+	staging := seedSiblingEnv(t, s, prod)
+
+	const email = "lives-in-prod@test.com"
+	prodUser := seedUser(t, s, prod, email)
+
+	gotProd, err := s.GetUserByEmail(ctx, prod.AppID, prod.EnvID, email)
+	require.NoError(t, err)
+	assert.Equal(t, prodUser.ID.String(), gotProd.ID.String(),
+		"the owning environment must resolve its own user")
+
+	_, err = s.GetUserByEmail(ctx, staging.AppID, staging.EnvID, email)
+	assert.ErrorIs(t, err, store.ErrNotFound,
+		"email lookup must not cross environments within an app")
+
+	// A nil environment keeps the historical app-wide behaviour, which the
+	// signup and rename uniqueness guards depend on.
+	anyEnv, err := s.GetUserByEmail(ctx, prod.AppID, id.Nil, email)
+	require.NoError(t, err)
+	assert.Equal(t, prodUser.ID.String(), anyEnv.ID.String(),
+		"a nil env must still match app-wide")
+
+	other := seedTenant(t, s)
+	_, err = s.GetUserByEmail(ctx, other.AppID, other.EnvID, email)
+	assert.ErrorIs(t, err, store.ErrNotFound, "email lookup must not cross apps")
+}
+
+// testUserUsernameLookupIsEnvScoped is the username half of the same contract.
+func testUserUsernameLookupIsEnvScoped(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	prod := seedTenant(t, s)
+	staging := seedSiblingEnv(t, s, prod)
+
+	const handle = "prodhandle"
+	prodUser := seedUserWithUsername(t, s, prod, "handle-prod@test.com", handle)
+
+	gotProd, err := s.GetUserByUsername(ctx, prod.AppID, prod.EnvID, handle)
+	require.NoError(t, err)
+	assert.Equal(t, prodUser.ID.String(), gotProd.ID.String(),
+		"the owning environment must resolve its own user")
+
+	_, err = s.GetUserByUsername(ctx, staging.AppID, staging.EnvID, handle)
+	assert.ErrorIs(t, err, store.ErrNotFound,
+		"username lookup must not cross environments within an app")
+
+	anyEnv, err := s.GetUserByUsername(ctx, prod.AppID, id.Nil, handle)
+	require.NoError(t, err)
+	assert.Equal(t, prodUser.ID.String(), anyEnv.ID.String(),
+		"a nil env must still match app-wide")
+
+	other := seedTenant(t, s)
+	_, err = s.GetUserByUsername(ctx, other.AppID, other.EnvID, handle)
+	assert.ErrorIs(t, err, store.ErrNotFound, "username lookup must not cross apps")
 }
 
 func testListUsersTotalAndFilter(t *testing.T, s store.Store) {

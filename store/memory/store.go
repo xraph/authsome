@@ -284,13 +284,17 @@ func (s *Store) GetUser(_ context.Context, userID id.UserID) (*user.User, error)
 	return u, nil
 }
 
-func (s *Store) GetUserByEmail(_ context.Context, appID id.AppID, email string) (*user.User, error) {
+func (s *Store) GetUserByEmail(_ context.Context, appID id.AppID, envID id.EnvironmentID, email string) (*user.User, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, u := range s.users {
-		if u.AppID.String() == appID.String() && u.Email == email {
-			return u, nil
+		if u.AppID.String() != appID.String() || u.Email != email {
+			continue
 		}
+		if !envID.IsNil() && u.EnvID.String() != envID.String() {
+			continue
+		}
+		return u, nil
 	}
 	return nil, store.ErrNotFound
 }
@@ -310,13 +314,17 @@ func (s *Store) GetUserByPhone(_ context.Context, appID id.AppID, envID id.Envir
 	return nil, store.ErrNotFound
 }
 
-func (s *Store) GetUserByUsername(_ context.Context, appID id.AppID, username string) (*user.User, error) {
+func (s *Store) GetUserByUsername(_ context.Context, appID id.AppID, envID id.EnvironmentID, username string) (*user.User, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, u := range s.users {
-		if u.AppID.String() == appID.String() && u.Username == username {
-			return u, nil
+		if u.AppID.String() != appID.String() || u.Username != username {
+			continue
 		}
+		if !envID.IsNil() && u.EnvID.String() != envID.String() {
+			continue
+		}
+		return u, nil
 	}
 	return nil, store.ErrNotFound
 }

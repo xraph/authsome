@@ -50,16 +50,22 @@ func (s *Store) GetUser(ctx context.Context, userID id.UserID) (*user.User, erro
 	return fromUserModel(&m)
 }
 
-// GetUserByEmail returns a user by app ID and email, excluding soft-deleted users.
-func (s *Store) GetUserByEmail(ctx context.Context, appID id.AppID, email string) (*user.User, error) {
+// GetUserByEmail returns a user by app ID, environment and email, excluding
+// soft-deleted users. A nil envID matches app-wide.
+func (s *Store) GetUserByEmail(ctx context.Context, appID id.AppID, envID id.EnvironmentID, email string) (*user.User, error) {
 	var m userModel
 
+	filter := bson.M{
+		"app_id":     appID.String(),
+		"email":      email,
+		"deleted_at": nil,
+	}
+	if !envID.IsNil() {
+		filter["env_id"] = envID.String()
+	}
+
 	err := s.mdb.NewFind(&m).
-		Filter(bson.M{
-			"app_id":     appID.String(),
-			"email":      email,
-			"deleted_at": nil,
-		}).
+		Filter(filter).
 		Scan(ctx)
 	if err != nil {
 		if isNoDocuments(err) {
@@ -100,16 +106,22 @@ func (s *Store) GetUserByPhone(ctx context.Context, appID id.AppID, envID id.Env
 	return fromUserModel(&m)
 }
 
-// GetUserByUsername returns a user by app ID and username, excluding soft-deleted users.
-func (s *Store) GetUserByUsername(ctx context.Context, appID id.AppID, username string) (*user.User, error) {
+// GetUserByUsername returns a user by app ID, environment and username,
+// excluding soft-deleted users. A nil envID matches app-wide.
+func (s *Store) GetUserByUsername(ctx context.Context, appID id.AppID, envID id.EnvironmentID, username string) (*user.User, error) {
 	var m userModel
 
+	filter := bson.M{
+		"app_id":     appID.String(),
+		"username":   username,
+		"deleted_at": nil,
+	}
+	if !envID.IsNil() {
+		filter["env_id"] = envID.String()
+	}
+
 	err := s.mdb.NewFind(&m).
-		Filter(bson.M{
-			"app_id":     appID.String(),
-			"username":   username,
-			"deleted_at": nil,
-		}).
+		Filter(filter).
 		Scan(ctx)
 	if err != nil {
 		if isNoDocuments(err) {
