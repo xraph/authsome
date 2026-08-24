@@ -254,6 +254,9 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("OAuth2 Authorization"),
 		forge.WithDescription("Authorization endpoint for the OAuth2 authorization code flow."),
 		forge.WithOperationID("oauth2Authorize"),
+		forge.WithParameter("resource", "query",
+			"RFC 8707 resource indicator. Repeatable. Absolute URI, no fragment.",
+			false, "https://api.example.com"),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -715,6 +718,13 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		return nil, err
 	}
 
+	// RFC 8707. Read off the raw request because the struct binder rejects a
+	// []string query field outright; see resourceParams.
+	resources, err := resolveResources(client, resourceParams(ctx.Request()))
+	if err != nil {
+		return nil, err
+	}
+
 	// PKCE is mandatory for public clients (RFC 8252 §8.1): they hold no
 	// secret, so an attacker who intercepts the code on the redirect — a
 	// custom-scheme hijack, a shared browser — can redeem it without one.
@@ -758,6 +768,7 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		AppID:               client.AppID,
 		RedirectURI:         redirectURI,
 		Scopes:              scopes,
+		Resources:           resources,
 		CodeChallenge:       req.CodeChallenge,
 		CodeChallengeMethod: req.CodeChallengeMethod,
 		ExpiresAt:           time.Now().Add(p.config.AuthCodeTTL),
