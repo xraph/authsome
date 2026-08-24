@@ -198,3 +198,144 @@ func TestRegisterClientAPIProxy_OnRealRouter(t *testing.T) {
 		t.Fatalf("registerClientAPIProxy: %v", err)
 	}
 }
+
+// TestBuildClientAPIProxy_ForwardedHeadersDescribeTheClient pins what upstream
+// is told about the caller.
+//
+// The previous Director set X-Forwarded-Host from req.Host immediately after
+// overwriting req.Host with the upstream host, so upstream was handed its own
+// hostname instead of the client's. Upstream keys tenant resolution and CSRF on
+// these headers, so that value has to be the host the client actually used.
+func TestBuildClientAPIProxy_ForwardedHeadersDescribeTheClient(t *testing.T) {
+	t.Parallel()
+
+	var gotHost, gotProto, gotFor, gotHostHeader string
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHost = r.Header.Get("X-Forwarded-Host")
+		gotProto = r.Header.Get("X-Forwarded-Proto")
+		gotFor = r.Header.Get("X-Forwarded-For")
+		gotHostHeader = r.Host
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	e := newTestExtension(upstream.URL)
+	_, proxy, err := e.buildClientAPIProxy()
+	if err != nil {
+		t.Fatalf("buildClientAPIProxy: %v", err)
+	}
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet,
+		"http://dashboard.local/authsome/v1/admin/settings", nil)
+	req.RemoteAddr = "203.0.113.9:54321"
+
+	proxy.ServeHTTP(httptest.NewRecorder(), req)
+
+	if gotHost != "dashboard.local" {
+		t.Errorf("X-Forwarded-Host = %q, want the client's host dashboard.local", gotHost)
+	}
+	if gotProto != "http" {
+		t.Errorf("X-Forwarded-Proto = %q, want http", gotProto)
+	}
+	if gotFor != "203.0.113.9" {
+		t.Errorf("X-Forwarded-For = %q, want the peer address 203.0.113.9", gotFor)
+	}
+	// The Host header itself still targets upstream, so upstream's own routing
+	// and TLS/vhost matching keep working.
+	upstreamHost := strings.TrimPrefix(upstream.URL, "http://")
+	if gotHostHeader != upstreamHost {
+		t.Errorf("Host = %q, want the upstream host %q", gotHostHeader, upstreamHost)
+	}
+}
+
+// TestBuildClientAPIProxy_IgnoresClientSuppliedForwardingHeaders is the security
+// half of the migration.
+//
+// Under Director, a client-supplied X-Forwarded-Host survived to upstream (the
+// old code only filled it in when absent), which let a caller choose the host
+// upstream resolves a tenant from. Rewrite makes ReverseProxy strip every
+// inbound Forwarded and X-Forwarded-* header first, so the values upstream sees
+// are always derived from the connection.
+func TestBuildClientAPIProxy_IgnoresClientSuppliedForwardingHeaders(t *testing.T) {
+	t.Parallel()
+
+	var gotHost, gotProto, gotFor, gotForwarded string
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHost = r.Header.Get("X-Forwarded-Host")
+		gotProto = r.Header.Get("X-Forwarded-Proto")
+		gotFor = r.Header.Get("X-Forwarded-For")
+		gotForwarded = r.Header.Get("Forwarded")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	e := newTestExtension(upstream.URL)
+	_, proxy, err := e.buildClientAPIProxy()
+	if err != nil {
+		t.Fatalf("buildClientAPIProxy: %v", err)
+	}
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet,
+		"http://dashboard.local/authsome/v1/admin/settings", nil)
+	req.RemoteAddr = "203.0.113.9:54321"
+	// A caller trying to pick the tenant and hide its address.
+	req.Header.Set("X-Forwarded-Host", "victim-tenant.example.com")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-For", "10.0.0.1")
+	req.Header.Set("Forwarded", "host=victim-tenant.example.com;proto=https")
+
+	proxy.ServeHTTP(httptest.NewRecorder(), req)
+
+	if gotHost == "victim-tenant.example.com" {
+		t.Errorf("X-Forwarded-Host = %q: a client-supplied host reached upstream", gotHost)
+	}
+	if gotHost != "dashboard.local" {
+		t.Errorf("X-Forwarded-Host = %q, want dashboard.local", gotHost)
+	}
+	if gotProto != "http" {
+		t.Errorf("X-Forwarded-Proto = %q, want http derived from the connection", gotProto)
+	}
+	if strings.Contains(gotFor, "10.0.0.1") {
+		t.Errorf("X-Forwarded-For = %q: a client-supplied address reached upstream", gotFor)
+	}
+	if gotFor != "203.0.113.9" {
+		t.Errorf("X-Forwarded-For = %q, want only the peer address", gotFor)
+	}
+	if gotForwarded != "" {
+		t.Errorf("Forwarded = %q, want it stripped", gotForwarded)
+	}
+}
+
+// TestBuildClientAPIProxy_DoesNotJoinPortalPath pins why the Rewrite func sets
+// the URL by hand instead of calling ProxyRequest.SetURL: SetURL joins the
+// target's path onto the inbound one, which would duplicate the prefix upstream
+// already expects.
+func TestBuildClientAPIProxy_DoesNotJoinPortalPath(t *testing.T) {
+	t.Parallel()
+
+	var gotPath string
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	// A PortalURL carrying a trailing path is the case that would double up.
+	e := newTestExtension(upstream.URL + "/authsome")
+	_, proxy, err := e.buildClientAPIProxy()
+	if err != nil {
+		t.Fatalf("buildClientAPIProxy: %v", err)
+	}
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet,
+		"http://dashboard.local/authsome/v1/admin/settings", nil)
+
+	proxy.ServeHTTP(httptest.NewRecorder(), req)
+
+	if gotPath != "/authsome/v1/admin/settings" {
+		t.Errorf("upstream path = %q, want the inbound path unchanged", gotPath)
+	}
+}
