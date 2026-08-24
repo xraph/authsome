@@ -19,11 +19,15 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"syscall"
 	"time"
 )
 
 // ErrKeyNotFound is returned when no key in the set carries the wanted kid.
 var ErrKeyNotFound = errors.New("jwksclient: no key for kid")
+
+// ErrResponseTooLarge is returned when a JWKS response exceeds MaxResponseBytes.
+var ErrResponseTooLarge = errors.New("jwksclient: key set exceeds the size limit")
 
 // Options configures a Client.
 type Options struct {
@@ -42,15 +46,20 @@ func (o *Options) defaults() {
 	if o.HTTPClient == nil {
 		o.HTTPClient = &http.Client{
 			Timeout: 5 * time.Second,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) > 0 && req.URL.Host != via[0].URL.Host {
-					return errors.New("jwksclient: cross-host redirect refused")
-				}
-				if len(via) >= 3 {
-					return errors.New("jwksclient: too many redirects")
-				}
-				return nil
+			Transport: &http.Transport{
+				DialContext: (&net.Dialer{
+					Timeout: 5 * time.Second,
+					// Control runs after DNS resolution, on the resolved IP,
+					// immediately before the socket opens. That is the only
+					// point that catches both a hostname that resolves
+					// straight to an internal address (ValidateURI's literal
+					// check never sees a bare hostname) and DNS rebinding
+					// (an address that was public when ValidateURI ran and
+					// is not by the time we actually connect).
+					Control: guardDialAddress,
+				}).DialContext,
 			},
+			CheckRedirect: checkRedirect,
 		}
 	}
 	if o.MinRefetchInterval == 0 {
@@ -68,6 +77,48 @@ func (o *Options) defaults() {
 	if o.ValidateURI == nil {
 		o.ValidateURI = ValidateURI
 	}
+}
+
+// guardDialAddress is the net.Dialer Control func for the default HTTP
+// client's transport. It runs after DNS resolution and immediately before
+// the socket opens, on the address actually being connected to, and refuses
+// loopback, private, link-local and unspecified addresses. This is the real
+// enforcement point for "do not let an inbound request make us dial an
+// internal address" -- ValidateURI is only a cheap pre-filter that cannot
+// see through a hostname.
+func guardDialAddress(_, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return fmt.Errorf("jwksclient: parse dial address %q: %w", address, err)
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return fmt.Errorf("jwksclient: dial address %q did not resolve to an IP", host)
+	}
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		return fmt.Errorf("jwksclient: refusing to dial internal address %s", ip)
+	}
+	return nil
+}
+
+// checkRedirect is the default HTTP client's redirect policy: same host,
+// https only, and at most a couple of hops. Without the scheme check a
+// same-host redirect from https to http would be followed and the key set
+// fetched in plaintext, defeating ValidateURI's https-only requirement.
+func checkRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) > 0 {
+		if req.URL.Scheme != "https" {
+			return errors.New("jwksclient: redirect to non-https refused")
+		}
+		if req.URL.Host != via[0].URL.Host {
+			return errors.New("jwksclient: cross-host redirect refused")
+		}
+	}
+	if len(via) >= 3 {
+		return errors.New("jwksclient: too many redirects")
+	}
+	return nil
 }
 
 type entry struct {
@@ -123,7 +174,7 @@ func (c *Client) cachedKey(jwksURI, kid string) (crypto.PublicKey, bool) {
 
 // refresh fetches the key set, unless another goroutine is already doing so
 // or the last fetch is more recent than MinRefetchInterval.
-func (c *Client) refresh(ctx context.Context, jwksURI string) error {
+func (c *Client) refresh(ctx context.Context, jwksURI string) (err error) {
 	c.mu.Lock()
 	if e, ok := c.cache[jwksURI]; ok &&
 		c.opts.Now().Sub(e.lastFetched) < c.opts.MinRefetchInterval {
@@ -143,19 +194,34 @@ func (c *Client) refresh(ctx context.Context, jwksURI string) error {
 	c.inflight[jwksURI] = done
 	c.mu.Unlock()
 
-	keys, err := c.fetch(ctx, jwksURI)
+	var keys map[string]crypto.PublicKey
+	// This is the inbound-triggered hot path: fetch() parses whatever an
+	// external IdP sent back, so a panic in there (malformed response, a bug
+	// in a decoder) must not be allowed to skip cleanup. Without this defer,
+	// a panic would leave the inflight entry registered and `done` unclosed,
+	// stranding every concurrent waiter on this URI until its own context
+	// deadline -- a lasting denial of service on that IdP's key verification
+	// triggered by a single bad response.
+	defer func() {
+		r := recover()
+		c.mu.Lock()
+		delete(c.inflight, jwksURI)
+		if r == nil && err == nil {
+			c.cache[jwksURI] = &entry{keys: keys, lastFetched: c.opts.Now()}
+		} else {
+			// Negative caching: a failed fetch (including a panic) still
+			// stamps the clock so a broken endpoint cannot be hammered on
+			// every inbound request.
+			c.cache[jwksURI] = &entry{keys: map[string]crypto.PublicKey{}, lastFetched: c.opts.Now()}
+		}
+		c.mu.Unlock()
+		close(done)
+		if r != nil {
+			panic(r)
+		}
+	}()
 
-	c.mu.Lock()
-	delete(c.inflight, jwksURI)
-	if err == nil {
-		c.cache[jwksURI] = &entry{keys: keys, lastFetched: c.opts.Now()}
-	} else {
-		// Negative caching: a failed fetch still stamps the clock so a broken
-		// endpoint cannot be hammered on every inbound request.
-		c.cache[jwksURI] = &entry{keys: map[string]crypto.PublicKey{}, lastFetched: c.opts.Now()}
-	}
-	c.mu.Unlock()
-	close(done)
+	keys, err = c.fetch(ctx, jwksURI)
 	return err
 }
 
@@ -194,7 +260,7 @@ func (c *Client) fetch(ctx context.Context, jwksURI string) (map[string]crypto.P
 		return nil, fmt.Errorf("jwksclient: read body: %w", err)
 	}
 	if int64(len(body)) > c.opts.MaxResponseBytes {
-		return nil, errors.New("jwksclient: key set exceeds the size limit")
+		return nil, ErrResponseTooLarge
 	}
 
 	var doc struct {
@@ -263,9 +329,18 @@ func (k jwk) publicKey() (crypto.PublicKey, error) {
 	}
 }
 
-// ValidateURI checks a JWKS URI before it is stored on a stream. It refuses
-// plain HTTP and any host that is a literal private, loopback or link-local
-// address, so an operator cannot point a stream at the metadata service.
+// ValidateURI is a cheap pre-filter, run when a JWKS URI is accepted and
+// stored on a stream. It refuses plain HTTP and a host that is a literal
+// private, loopback or link-local IP address (the obvious cases: someone
+// pastes "https://169.254.169.254/..." directly). It does NOT resolve
+// hostnames, so it cannot catch "https://localhost/keys" or
+// "https://metadata.google.internal/keys" -- a bare hostname always fails
+// net.ParseIP and skips the whole check. It also cannot catch DNS rebinding,
+// where a hostname resolves to a public address now and an internal one
+// later. Neither gap matters for what actually reaches the network: the
+// default HTTP client's dialer (see guardDialAddress) inspects the resolved
+// address immediately before every connection, after DNS resolution, and is
+// what actually enforces the address policy for real traffic.
 func ValidateURI(rawURL string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
