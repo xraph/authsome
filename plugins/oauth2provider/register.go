@@ -15,6 +15,14 @@ import (
 	"github.com/xraph/authsome/middleware"
 )
 
+// Cheap per-field caps enforced on an unauthenticated registration request.
+// See the checks in handleRegisterClient for why these exist.
+const (
+	maxRegisterRedirectURIs  = 20
+	maxRegisterClientNameLen = 256
+	maxRegisterContacts      = 10
+)
+
 // RegisterClientRequest is an RFC 7591 client registration request.
 type RegisterClientRequest struct {
 	RedirectURIs            []string `json:"redirect_uris"`
@@ -80,8 +88,10 @@ func (p *Plugin) resolveRegistrationAppID(ctx forge.Context) (id.AppID, error) {
 		"registration requires a publishable key on this deployment")
 }
 
-// issuerURL returns the configured issuer, or the localhost default the
-// discovery handler already falls back to.
+// issuerURL returns the configured issuer, or a localhost default when none
+// is set. Shared by the discovery document, the device flow's verification
+// URI, and dynamic registration's registration_client_uri, so the fallback
+// only lives in one place.
 func (p *Plugin) issuerURL() string {
 	if p.config.Issuer != "" {
 		return p.config.Issuer
@@ -130,6 +140,22 @@ func (p *Plugin) handleRegisterClient(ctx forge.Context, req *RegisterClientRequ
 		return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
 			"redirect_uris is required")
 	}
+	// Cheap caps on an unauthenticated write path. None of these are RFC
+	// 7591 requirements; they exist so a single request cannot make the
+	// stored client record, or the work done building it, unboundedly
+	// large.
+	if len(req.RedirectURIs) > maxRegisterRedirectURIs {
+		return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
+			fmt.Sprintf("redirect_uris must not exceed %d entries", maxRegisterRedirectURIs))
+	}
+	if len(req.ClientName) > maxRegisterClientNameLen {
+		return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
+			fmt.Sprintf("client_name must not exceed %d characters", maxRegisterClientNameLen))
+	}
+	if len(req.Contacts) > maxRegisterContacts {
+		return nil, regError(http.StatusBadRequest, errInvalidClientMetadata,
+			fmt.Sprintf("contacts must not exceed %d entries", maxRegisterContacts))
+	}
 	for _, u := range req.RedirectURIs {
 		if uriErr := validateRedirectURI(u); uriErr != nil {
 			return nil, uriErr
@@ -140,6 +166,14 @@ func (p *Plugin) handleRegisterClient(ctx forge.Context, req *RegisterClientRequ
 	if err != nil {
 		return nil, err
 	}
+
+	// response_types is accepted but neither validated nor stored: this
+	// server only ever runs the authorization_code response type, "code",
+	// and RFC 7591 section 2 lets the server substitute its own values the
+	// same way it does for scope. Unlike grant_types just above, there is
+	// nothing here to clamp against or reject — the response always
+	// reports ["code"] in clientInfoResponse regardless of what was asked
+	// for.
 	scopes := clampScopes(strings.Fields(req.Scope), p.config.DynamicRegistrationScopes)
 
 	authMethod := req.TokenEndpointAuthMethod
@@ -217,8 +251,15 @@ func (p *Plugin) handleRegisterClient(ctx forge.Context, req *RegisterClientRequ
 	// value, so the 201 RFC 7591 requires has to be written directly; the
 	// nil return here (mirroring handleRevoke/handleAuthorize elsewhere in
 	// this package) tells the framework not to write a second response on
-	// top of this one.
-	return nil, ctx.JSON(http.StatusCreated, resp)
+	// top of this one. Returning ctx.JSON's error as the handler error
+	// would send it back through handleError onto a response that is
+	// already committed — a superfluous WriteHeader plus a mangled body if
+	// the client disconnected mid-encode — so log it and swallow it
+	// instead.
+	if jsonErr := ctx.JSON(http.StatusCreated, resp); jsonErr != nil {
+		p.logger.Warn("oauth2: write registration response", log.Error(jsonErr))
+	}
+	return nil, nil
 }
 
 // clientInfoResponse renders the RFC 7591 client information response. It

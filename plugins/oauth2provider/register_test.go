@@ -6,10 +6,12 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xraph/forge"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugins/oauth2provider"
@@ -103,8 +105,10 @@ func TestRegister_ConfidentialClientGetsSecretOnce(t *testing.T) {
 
 	stored, err := st.GetClient(t.Context(), got["client_id"].(string))
 	require.NoError(t, err)
-	// Stored hashed, never in the clear.
-	assert.NotEqual(t, secret, stored.ClientSecret)
+	// Stored as a bcrypt hash of exactly this secret, never in the clear.
+	// A plain NotEqual would also pass for a reversed string or any other
+	// non-matching garbage, so verify the hash actually opens with it.
+	assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(stored.ClientSecret), []byte(secret)))
 	assert.NotEmpty(t, stored.RegistrationTokenHash)
 	assert.True(t, stored.DynamicallyRegistered)
 }
@@ -192,8 +196,52 @@ func TestRegister_RoundTripsInformationalMetadata(t *testing.T) {
 
 	var got map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	// Response-side: this is what clientInfoResponse's str() closure and
+	// the contacts type switch actually produce over the wire, decoded
+	// back out of real JSON (encoding/json turns a JSON array into
+	// []interface{}, not []string).
+	assert.Equal(t, "mcp-cli", got["software_id"])
+	assert.Equal(t, "https://example.com", got["client_uri"])
+	assert.Equal(t, []any{"ops@example.com"}, got["contacts"])
+
 	stored, err := st.GetClient(t.Context(), got["client_id"].(string))
 	require.NoError(t, err)
 	assert.Equal(t, "mcp-cli", stored.Metadata["software_id"])
 	assert.Equal(t, "https://example.com", stored.Metadata["client_uri"])
+}
+
+// A Plugin built the way newRegistrationFixture builds it never calls
+// OnInit, so it has no engine and no engine-provided rate limiter.
+// registrationLimiter must still fall back to a process-local one and the
+// route must still attach the middleware — the earlier code silently
+// skipped attaching it whenever p.engine was nil, which described exactly
+// this fixture and, more importantly, every stock deployment that never
+// turns on extension.Config.RateLimit.
+//
+// The limit is set low rather than left at the real 10/hour default so
+// this test doesn't need ten rounds of DefaultCost bcrypt hashing; the
+// point is proving the middleware is wired up at all, not exercising a
+// particular configured cap.
+func TestRegister_RateLimitsWithoutEngineLimiter(t *testing.T) {
+	appID := id.NewAppID()
+	p := oauth2provider.New(oauth2provider.Config{
+		Issuer:                "https://auth.example.com",
+		DynamicRegistration:   true,
+		RegistrationAppID:     appID.String(),
+		RegistrationRateLimit: oauth2provider.RateLimit{Limit: 3, Window: time.Minute},
+	})
+	st := oauth2provider.NewMemoryStore()
+	p.SetOAuth2Store(st)
+	router := newTestRouter(t, p)
+
+	// A public client skips the client-secret bcrypt hash, leaving one
+	// hash (the registration access token) per request.
+	const body = `{"redirect_uris":["https://app.example.com/cb"],"token_endpoint_auth_method":"none"}`
+	for i := 1; i <= 3; i++ {
+		rec := postRegister(t, router, body)
+		require.Equal(t, http.StatusCreated, rec.Code, "request %d is within the limit", i)
+	}
+
+	rec := postRegister(t, router, body)
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code, "the request past the limit must be rejected")
 }

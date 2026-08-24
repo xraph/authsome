@@ -24,6 +24,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/tokenformat"
 
@@ -108,6 +109,12 @@ type Plugin struct {
 	oauth2Store Store
 	logger      log.Logger
 	engine      plugin.Engine
+
+	// regLimiter is a process-local fallback used for POST /register when
+	// the engine has no rate limiter configured (extension.Config.RateLimit
+	// defaults off, and most embedders never set one either). See
+	// registrationLimiter.
+	regLimiter ratelimit.Limiter
 }
 
 // New creates a new OAuth2 provider plugin.
@@ -169,7 +176,38 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		p.oauth2Store = NewMemoryStore()
 	}
 
+	// POST /register is unauthenticated and does two bcrypt hashes per
+	// request, so it must never run unlimited. Most deployments never turn
+	// on extension.Config.RateLimit (it defaults off), which would
+	// otherwise leave engine.RateLimiter() nil and the endpoint's rate
+	// limit middleware silently unattached. Fall back to a process-local
+	// limiter instead — constructed once, here, not per request or per
+	// route registration.
+	if engine.RateLimiter() == nil {
+		p.regLimiter = ratelimit.NewMemoryLimiter()
+		p.logger.Warn("oauth2: no engine rate limiter configured; " +
+			"dynamic client registration falls back to a process-local limiter, " +
+			"so the cap is per-replica behind a load balancer")
+	}
+
 	return nil
+}
+
+// registrationLimiter returns the limiter POST /register should use. It
+// prefers the engine's shared limiter and falls back to a process-local one
+// otherwise — built once in OnInit, or lazily here for tests that construct
+// a Plugin without calling OnInit at all, so the fallback never leaves the
+// endpoint unlimited.
+func (p *Plugin) registrationLimiter() ratelimit.Limiter {
+	if p.engine != nil {
+		if rl := p.engine.RateLimiter(); rl != nil {
+			return rl
+		}
+	}
+	if p.regLimiter == nil {
+		p.regLimiter = ratelimit.NewMemoryLimiter()
+	}
+	return p.regLimiter
 }
 
 // MigrationGroups returns the OAuth2 migration groups for the given driver.
@@ -246,22 +284,21 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	// RFC 7591 dynamic client registration. Unauthenticated by design, so
 	// it is rate limited by IP and returns 404 unless explicitly enabled.
+	// The limiter always comes from registrationLimiter, never skipped:
+	// most deployments never configure engine.RateLimiter(), and an
+	// endpoint that mints credentials must not go unlimited just because
+	// nobody opted into the shared limiter.
 	regOpts := []forge.RouteOption{
 		forge.WithSummary("Register OAuth2 client"),
 		forge.WithDescription("RFC 7591 dynamic client registration."),
 		forge.WithOperationID("oauth2RegisterClient"),
 		forge.WithRequestSchema(RegisterClientRequest{}),
 		forge.WithResponseSchema(http.StatusCreated, "Client registered", RegisterClientResponse{}),
-		forge.WithCreatedResponse(RegisterClientResponse{}),
 		forge.WithErrorResponses(),
-	}
-	if p.engine != nil {
-		if rl := p.engine.RateLimiter(); rl != nil {
-			regOpts = append(regOpts, forge.WithMiddleware(middleware.RateLimit(rl, middleware.RateLimitConfig{
-				Limit:  p.config.RegistrationRateLimit.Limit,
-				Window: p.config.RegistrationRateLimit.Window,
-			})))
-		}
+		forge.WithMiddleware(middleware.RateLimit(p.registrationLimiter(), middleware.RateLimitConfig{
+			Limit:  p.config.RegistrationRateLimit.Limit,
+			Window: p.config.RegistrationRateLimit.Window,
+		})),
 	}
 	if err := g.POST("/register", p.handleRegisterClient, regOpts...); err != nil {
 		return err
@@ -825,10 +862,7 @@ func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInf
 }
 
 func (p *Plugin) handleDiscovery(_ forge.Context, _ *DiscoveryRequest) (*DiscoveryResponse, error) {
-	issuer := p.config.Issuer
-	if issuer == "" {
-		issuer = "https://localhost"
-	}
+	issuer := p.issuerURL()
 
 	return &DiscoveryResponse{
 		Issuer:                            issuer,
@@ -1097,11 +1131,7 @@ func (p *Plugin) handleDeviceAuthorize(ctx forge.Context, req *DeviceAuthRequest
 	// Compute verification URI.
 	verificationURI := p.config.VerificationURI
 	if verificationURI == "" {
-		issuer := p.config.Issuer
-		if issuer == "" {
-			issuer = "https://localhost"
-		}
-		verificationURI = issuer + "/v1/oauth/device"
+		verificationURI = p.issuerURL() + "/v1/oauth/device"
 	}
 
 	scopes := strings.Fields(req.Scope)
