@@ -1041,5 +1041,23 @@ ALTER TABLE authsome_sessions DROP COLUMN principal_kind;
 				return err
 			},
 		},
+		&migrate.Migration{
+			Name:    "add_session_agent_principal",
+			Version: "20260824000060",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions ADD COLUMN agent_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_sessions ADD COLUMN grant_id TEXT NOT NULL DEFAULT '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions DROP COLUMN agent_id;
+ALTER TABLE authsome_sessions DROP COLUMN grant_id;
+`)
+				return err
+			},
+		},
 	)
 }

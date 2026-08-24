@@ -195,14 +195,18 @@ type sessionModel struct {
 	// authorization decisions.
 	PrincipalKind    string `grove:"principal_kind"            bson:"principal_kind,omitempty"`
 	ServiceAccountID string `grove:"service_account_id"        bson:"service_account_id,omitempty"`
-	OrgID            string `grove:"org_id"                    bson:"org_id,omitempty"`
-	FamilyID         string `grove:"family_id"                 bson:"family_id,omitempty"`
-	Token            string `grove:"token"                     bson:"token"`
-	RefreshToken     string `grove:"refresh_token"             bson:"refresh_token"`
-	IPAddress        string `grove:"ip_address"                bson:"ip_address"`
-	UserAgent        string `grove:"user_agent"                bson:"user_agent"`
-	DeviceID         string `grove:"device_id"                 bson:"device_id,omitempty"`
-	ImpersonatedBy   string `grove:"impersonated_by"           bson:"impersonated_by,omitempty"`
+	// AgentID and GrantID carry the agent principal and the grant that
+	// authorized it, mapped the same way as ServiceAccountID above.
+	AgentID        string `grove:"agent_id"                  bson:"agent_id,omitempty"`
+	GrantID        string `grove:"grant_id"                  bson:"grant_id,omitempty"`
+	OrgID          string `grove:"org_id"                    bson:"org_id,omitempty"`
+	FamilyID       string `grove:"family_id"                 bson:"family_id,omitempty"`
+	Token          string `grove:"token"                     bson:"token"`
+	RefreshToken   string `grove:"refresh_token"             bson:"refresh_token"`
+	IPAddress      string `grove:"ip_address"                bson:"ip_address"`
+	UserAgent      string `grove:"user_agent"                bson:"user_agent"`
+	DeviceID       string `grove:"device_id"                 bson:"device_id,omitempty"`
+	ImpersonatedBy string `grove:"impersonated_by"           bson:"impersonated_by,omitempty"`
 	// Mongo stores the slugs as a native array, the way WebhookModel.Events
 	// does. The SQL stores encode JSON into a text column because they have
 	// no array type worth using here; there is no reason to flatten it twice.
@@ -233,6 +237,12 @@ func toSessionModel(s *session.Session) *sessionModel {
 	}
 	if !s.ServiceAccountID.IsNil() {
 		m.ServiceAccountID = s.ServiceAccountID.String()
+	}
+	if !s.AgentID.IsNil() {
+		m.AgentID = s.AgentID.String()
+	}
+	if !s.GrantID.IsNil() {
+		m.GrantID = s.GrantID.String()
 	}
 	if s.OrgID.Prefix() != "" {
 		m.OrgID = s.OrgID.String()
@@ -298,6 +308,20 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 			return nil, err
 		}
 		s.ServiceAccountID = svcID
+	}
+	if m.AgentID != "" {
+		agentID, err := id.ParseAgentID(m.AgentID)
+		if err != nil {
+			return nil, err
+		}
+		s.AgentID = agentID
+	}
+	if m.GrantID != "" {
+		grantID, err := id.ParseAgentGrantID(m.GrantID)
+		if err != nil {
+			return nil, err
+		}
+		s.GrantID = grantID
 	}
 	if m.OrgID != "" {
 		orgID, err := id.ParseOrgID(m.OrgID)

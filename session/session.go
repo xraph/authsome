@@ -7,6 +7,17 @@ import (
 	"github.com/xraph/authsome/id"
 )
 
+// Principal kinds a session may carry. An empty PrincipalKind means
+// PrincipalKindUser, for rows written before the column existed.
+const (
+	PrincipalKindUser           = "user"
+	PrincipalKindServiceAccount = "service_account"
+	// PrincipalKindAgent marks a session issued to a delegated agent. Unlike
+	// a service-account session, UserID stays populated with the delegating
+	// human, so every consumer that resolves a session's user keeps working.
+	PrincipalKindAgent = "agent"
+)
+
 // Session represents an authenticated user session.
 type Session struct {
 	ID     id.SessionID     `json:"id"`
@@ -53,4 +64,10 @@ type Session struct {
 	// ServiceAccountID is set when PrincipalKind is "service_account".
 	// UserID is left as the zero value in that case.
 	ServiceAccountID id.ServiceAccountID `json:"service_account_id,omitempty"`
+	// AgentID is set when PrincipalKind is "agent". UserID remains the
+	// delegating human.
+	AgentID id.AgentID `json:"agent_id,omitempty"`
+	// GrantID names the AgentGrant that authorized this session, so revoking
+	// that grant can find and delete the sessions it issued.
+	GrantID id.AgentGrantID `json:"grant_id,omitempty"`
 }

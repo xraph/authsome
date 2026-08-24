@@ -207,14 +207,18 @@ type SessionModel struct {
 	// stamped, and this value is branched on to make authorization decisions.
 	PrincipalKind    string `grove:"principal_kind"`
 	ServiceAccountID string `grove:"service_account_id"`
-	OrgID            string `grove:"org_id"`
-	FamilyID         string `grove:"family_id"`
-	Token            string `grove:"token,notnull"`
-	RefreshToken     string `grove:"refresh_token,notnull"`
-	IPAddress        string `grove:"ip_address"`
-	UserAgent        string `grove:"user_agent"`
-	DeviceID         string `grove:"device_id"`
-	ImpersonatedBy   string `grove:"impersonated_by"`
+	// AgentID and GrantID carry the agent principal and the grant that
+	// authorized it, mapped the same way as ServiceAccountID above.
+	AgentID        string `grove:"agent_id"`
+	GrantID        string `grove:"grant_id"`
+	OrgID          string `grove:"org_id"`
+	FamilyID       string `grove:"family_id"`
+	Token          string `grove:"token,notnull"`
+	RefreshToken   string `grove:"refresh_token,notnull"`
+	IPAddress      string `grove:"ip_address"`
+	UserAgent      string `grove:"user_agent"`
+	DeviceID       string `grove:"device_id"`
+	ImpersonatedBy string `grove:"impersonated_by"`
 	// Roles is JSON rather than the comma-separated form APIKeyModel.Scopes
 	// uses. A slug containing a comma would split into two role names nobody
 	// was ever granted, and these strings are read back as an authorization
@@ -273,6 +277,20 @@ func toSession(m *SessionModel) (*session.Session, error) {
 		}
 		s.ServiceAccountID = svcID
 	}
+	if m.AgentID != "" {
+		agentID, err := id.ParseAgentID(m.AgentID)
+		if err != nil {
+			return nil, err
+		}
+		s.AgentID = agentID
+	}
+	if m.GrantID != "" {
+		grantID, err := id.ParseAgentGrantID(m.GrantID)
+		if err != nil {
+			return nil, err
+		}
+		s.GrantID = grantID
+	}
 	if m.OrgID != "" {
 		orgID, err := id.ParseOrgID(m.OrgID)
 		if err != nil {
@@ -326,6 +344,12 @@ func fromSession(s *session.Session) *SessionModel {
 	}
 	if !s.ServiceAccountID.IsNil() {
 		m.ServiceAccountID = s.ServiceAccountID.String()
+	}
+	if !s.AgentID.IsNil() {
+		m.AgentID = s.AgentID.String()
+	}
+	if !s.GrantID.IsNil() {
+		m.GrantID = s.GrantID.String()
 	}
 	if s.OrgID.Prefix() != "" {
 		m.OrgID = s.OrgID.String()
