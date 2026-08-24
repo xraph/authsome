@@ -1049,8 +1049,9 @@ type LoginBeginResponse struct {
 
 // LoginByDomainRequest represents the LoginByDomainRequest schema.
 type LoginByDomainRequest struct {
-	Email     string `json:"email"`
-	ReturnURL string `json:"return_url,omitempty"`
+	ConnectionID string `json:"connection_id,omitempty"`
+	Email        string `json:"email"`
+	ReturnURL    string `json:"return_url,omitempty"`
 }
 
 // LoginFinishResponse represents the LoginFinishResponse schema.
@@ -2059,8 +2060,9 @@ type SsoExchangeRequest struct {
 
 // StartSSOLoginByDomainRequest is the request body for StartSSOLoginByDomain.
 type StartSSOLoginByDomainRequest struct {
-	Email     string `json:"email"`
-	ReturnURL string `json:"return_url,omitempty"`
+	ConnectionID string `json:"connection_id,omitempty"`
+	Email        string `json:"email"`
+	ReturnURL    string `json:"return_url,omitempty"`
 }
 
 // ResendEmailVerificationRequest is the request body for ResendEmailVerification.
