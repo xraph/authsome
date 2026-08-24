@@ -71,9 +71,9 @@ func (c *Client) AuthsomeListRolesInApp(ctx context.Context, appID string) (*Rol
 // API key authenticates against the platform app but role assignments
 // live in per-workspace apps. Pass the workspace's AppID here so the
 // engine's ListUserRolesInApp queries the right tenant.
-func (c *Client) AuthsomeListUserRolesInApp(ctx context.Context, userId, appID string) (*UserRoleListResponse, error) {
+func (c *Client) AuthsomeListUserRolesInApp(ctx context.Context, userID, appID string) (*UserRoleListResponse, error) {
 	path := "/v1/users/{userId}/roles"
-	path = strings.Replace(path, "{userId}", userId, 1)
+	path = strings.Replace(path, "{userId}", userID, 1)
 	if appID != "" {
 		path = path + "?app_id=" + appID
 	}

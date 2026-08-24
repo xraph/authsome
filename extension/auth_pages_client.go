@@ -213,7 +213,7 @@ func (a *clientAuthPages) handleLogout(ctx *router.PageContext) (string, templ.C
 	// Best-effort SignOut on the remote — the server identifies the session
 	// from the cookie/header forwarded by the client SDK.
 	if token := extractToken(r); token != "" {
-		_, _ = a.client.SignOut(r.Context(), &authclient.SignOutRequest{}) //nolint:errcheck // best-effort sign out
+		_, _ = a.client.SignOut(r.Context()) //nolint:errcheck // best-effort sign out
 	}
 
 	clearSessionCookie(ctx, nil, isSecureRequest(r))

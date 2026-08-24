@@ -301,9 +301,9 @@ func (c *Client) OidcDiscovery(ctx context.Context) (*DiscoveryResponse, error) 
 }
 
 // ScimListGroups — List SCIM Groups
-func (c *Client) ScimListGroups(ctx context.Context) (*ListResponse, error) {
+func (c *Client) ScimListGroups(ctx context.Context) (*ScimListResponse, error) {
 	path := "/scim/v2/Groups"
-	var result ListResponse
+	var result ScimListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -311,14 +311,10 @@ func (c *Client) ScimListGroups(ctx context.Context) (*ListResponse, error) {
 }
 
 // ScimCreateGroup — Create SCIM Group
-func (c *Client) ScimCreateGroup(ctx context.Context, req *ScimCreateGroupRequest) (*GroupResource, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) ScimCreateGroup(ctx context.Context) (*GroupResource, error) {
 	path := "/scim/v2/Groups"
 	var result GroupResource
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -336,54 +332,42 @@ func (c *Client) ScimGetGroup(ctx context.Context, groupId string) (*GroupResour
 }
 
 // ScimReplaceGroup — Replace SCIM Group
-func (c *Client) ScimReplaceGroup(ctx context.Context, groupId string, req *ScimReplaceGroupRequest) (*GroupResource, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) ScimReplaceGroup(ctx context.Context, groupId string) (*GroupResource, error) {
 	path := "/scim/v2/Groups/{groupId}"
 	path = strings.Replace(path, "{groupId}", groupId, 1)
 	var result GroupResource
-	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
+	if err := c.do(ctx, "PUT", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // ScimPatchGroup — Patch SCIM Group
-func (c *Client) ScimPatchGroup(ctx context.Context, groupId string, req *ScimPatchGroupRequest) (*GroupResource, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) ScimPatchGroup(ctx context.Context, groupId string) (*GroupResource, error) {
 	path := "/scim/v2/Groups/{groupId}"
 	path = strings.Replace(path, "{groupId}", groupId, 1)
 	var result GroupResource
-	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+	if err := c.do(ctx, "PATCH", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // ScimDeleteGroup — Delete SCIM Group
-func (c *Client) ScimDeleteGroup(ctx context.Context, groupId string, req *ScimDeleteGroupRequest) (*Object, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) ScimDeleteGroup(ctx context.Context, groupId string) (*Empty, error) {
 	path := "/scim/v2/Groups/{groupId}"
 	path = strings.Replace(path, "{groupId}", groupId, 1)
-	var result Object
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	var result Empty
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // ScimResourceTypes — SCIM Resource Types
-func (c *Client) ScimResourceTypes(ctx context.Context) (*Object, error) {
+func (c *Client) ScimResourceTypes(ctx context.Context) (*ResourceTypeList, error) {
 	path := "/scim/v2/ResourceTypes"
-	var result Object
+	var result ResourceTypeList
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -391,9 +375,9 @@ func (c *Client) ScimResourceTypes(ctx context.Context) (*Object, error) {
 }
 
 // ScimSchemas — SCIM Schemas
-func (c *Client) ScimSchemas(ctx context.Context) (*Object, error) {
+func (c *Client) ScimSchemas(ctx context.Context) (*SchemaList, error) {
 	path := "/scim/v2/Schemas"
-	var result Object
+	var result SchemaList
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -401,9 +385,9 @@ func (c *Client) ScimSchemas(ctx context.Context) (*Object, error) {
 }
 
 // ScimServiceProviderConfig — SCIM Service Provider Configuration
-func (c *Client) ScimServiceProviderConfig(ctx context.Context) (*Object, error) {
+func (c *Client) ScimServiceProviderConfig(ctx context.Context) (*ServiceProviderConfig, error) {
 	path := "/scim/v2/ServiceProviderConfig"
-	var result Object
+	var result ServiceProviderConfig
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -411,9 +395,9 @@ func (c *Client) ScimServiceProviderConfig(ctx context.Context) (*Object, error)
 }
 
 // ScimListUsers — List SCIM Users
-func (c *Client) ScimListUsers(ctx context.Context) (*ListResponse, error) {
+func (c *Client) ScimListUsers(ctx context.Context) (*ScimListResponse, error) {
 	path := "/scim/v2/Users"
-	var result ListResponse
+	var result ScimListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -421,14 +405,10 @@ func (c *Client) ScimListUsers(ctx context.Context) (*ListResponse, error) {
 }
 
 // ScimCreateUser — Create SCIM User
-func (c *Client) ScimCreateUser(ctx context.Context, req *ScimCreateUserRequest) (*UserResource, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) ScimCreateUser(ctx context.Context) (*UserResource, error) {
 	path := "/scim/v2/Users"
 	var result UserResource
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -446,45 +426,33 @@ func (c *Client) ScimGetUser(ctx context.Context, userId string) (*UserResource,
 }
 
 // ScimReplaceUser — Replace SCIM User
-func (c *Client) ScimReplaceUser(ctx context.Context, userId string, req *ScimReplaceUserRequest) (*UserResource, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) ScimReplaceUser(ctx context.Context, userId string) (*UserResource, error) {
 	path := "/scim/v2/Users/{userId}"
 	path = strings.Replace(path, "{userId}", userId, 1)
 	var result UserResource
-	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
+	if err := c.do(ctx, "PUT", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // ScimPatchUser — Patch SCIM User
-func (c *Client) ScimPatchUser(ctx context.Context, userId string, req *ScimPatchUserRequest) (*UserResource, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) ScimPatchUser(ctx context.Context, userId string) (*UserResource, error) {
 	path := "/scim/v2/Users/{userId}"
 	path = strings.Replace(path, "{userId}", userId, 1)
 	var result UserResource
-	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+	if err := c.do(ctx, "PATCH", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // ScimDeleteUser — Delete SCIM User
-func (c *Client) ScimDeleteUser(ctx context.Context, userId string, req *ScimDeleteUserRequest) (*Object, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) ScimDeleteUser(ctx context.Context, userId string) (*Empty, error) {
 	path := "/scim/v2/Users/{userId}"
 	path = strings.Replace(path, "{userId}", userId, 1)
-	var result Object
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	var result Empty
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -505,25 +473,21 @@ func (c *Client) AdminCreateApp(ctx context.Context, req *AdminCreateAppRequest)
 }
 
 // AdminDeleteApp — Delete application (admin)
-func (c *Client) AdminDeleteApp(ctx context.Context, appId string, req *AdminDeleteAppRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) AdminDeleteApp(ctx context.Context, appId string) (*ApiStatusResponse, error) {
 	path := "/v1/admin/apps/{appId}"
 	path = strings.Replace(path, "{appId}", appId, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	var result ApiStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // GetAppClientConfig — Get per-app client config overrides
-func (c *Client) GetAppClientConfig(ctx context.Context, appId string) (*Config, error) {
+func (c *Client) GetAppClientConfig(ctx context.Context, appId string) (*AppclientconfigConfig, error) {
 	path := "/v1/admin/apps/{appId}/client-config"
 	path = strings.Replace(path, "{appId}", appId, 1)
-	var result Config
+	var result AppclientconfigConfig
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -531,14 +495,14 @@ func (c *Client) GetAppClientConfig(ctx context.Context, appId string) (*Config,
 }
 
 // SetAppClientConfig — Set per-app client config overrides
-func (c *Client) SetAppClientConfig(ctx context.Context, appId string, req *SetAppClientConfigRequest) (*Config, error) {
+func (c *Client) SetAppClientConfig(ctx context.Context, appId string, req *SetAppClientConfigRequest) (*AppclientconfigConfig, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/admin/apps/{appId}/client-config"
 	path = strings.Replace(path, "{appId}", appId, 1)
-	var result Config
+	var result AppclientconfigConfig
 	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -546,25 +510,21 @@ func (c *Client) SetAppClientConfig(ctx context.Context, appId string, req *SetA
 }
 
 // DeleteAppClientConfig — Delete per-app client config overrides
-func (c *Client) DeleteAppClientConfig(ctx context.Context, appId string, req *DeleteAppClientConfigRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) DeleteAppClientConfig(ctx context.Context, appId string) (*ApiStatusResponse, error) {
 	path := "/v1/admin/apps/{appId}/client-config"
 	path = strings.Replace(path, "{appId}", appId, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	var result ApiStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // GetAppSessionConfig — Get per-app session config
-func (c *Client) GetAppSessionConfig(ctx context.Context, appId string) (*Config, error) {
+func (c *Client) GetAppSessionConfig(ctx context.Context, appId string) (*AppsessionconfigConfig, error) {
 	path := "/v1/admin/apps/{appId}/session-config"
 	path = strings.Replace(path, "{appId}", appId, 1)
-	var result Config
+	var result AppsessionconfigConfig
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -572,14 +532,14 @@ func (c *Client) GetAppSessionConfig(ctx context.Context, appId string) (*Config
 }
 
 // SetAppSessionConfig — Set per-app session config
-func (c *Client) SetAppSessionConfig(ctx context.Context, appId string, req *SetAppSessionConfigRequest) (*Config, error) {
+func (c *Client) SetAppSessionConfig(ctx context.Context, appId string, req *SetAppSessionConfigRequest) (*AppsessionconfigConfig, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/admin/apps/{appId}/session-config"
 	path = strings.Replace(path, "{appId}", appId, 1)
-	var result Config
+	var result AppsessionconfigConfig
 	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -587,29 +547,30 @@ func (c *Client) SetAppSessionConfig(ctx context.Context, appId string, req *Set
 }
 
 // DeleteAppSessionConfig — Delete per-app session config
-func (c *Client) DeleteAppSessionConfig(ctx context.Context, appId string, req *DeleteAppSessionConfigRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) DeleteAppSessionConfig(ctx context.Context, appId string) (*ApiStatusResponse, error) {
 	path := "/v1/admin/apps/{appId}/session-config"
 	path = strings.Replace(path, "{appId}", appId, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	var result ApiStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // AdminBulkRevokeSessions — Bulk revoke sessions (admin)
-func (c *Client) AdminBulkRevokeSessions(ctx context.Context, req *AdminBulkRevokeSessionsRequest) (*BulkRevokeSessionsResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) AdminBulkRevokeSessions(ctx context.Context, params *AdminBulkRevokeSessionsParams) (*BulkRevokeSessionsResponse, error) {
 	path := "/v1/admin/bulk/sessions"
+	if params != nil {
+		q := url.Values{}
+		if params.UserID != "" {
+			q.Set("user_id", params.UserID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result BulkRevokeSessionsResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -630,37 +591,38 @@ func (c *Client) AdminBulkImportUsers(ctx context.Context, req *AdminBulkImportU
 }
 
 // AdminStopImpersonation — Stop impersonation (admin)
-func (c *Client) AdminStopImpersonation(ctx context.Context, req *AdminStopImpersonationRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) AdminStopImpersonation(ctx context.Context) (*ApiStatusResponse, error) {
 	path := "/v1/admin/impersonate/stop"
-	var result StatusResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+	var result ApiStatusResponse
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // AdminImpersonate — Impersonate user (admin)
-func (c *Client) AdminImpersonate(ctx context.Context, userId string, req *AdminImpersonateRequest) (*AuthResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) AdminImpersonate(ctx context.Context, userId string) (*AuthResponse, error) {
 	path := "/v1/admin/impersonate/{userId}"
 	path = strings.Replace(path, "{userId}", userId, 1)
 	var result AuthResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // ListOAuth2Clients — List OAuth2 clients
-func (c *Client) ListOAuth2Clients(ctx context.Context) (*ListClientsResponse, error) {
+func (c *Client) ListOAuth2Clients(ctx context.Context, params *ListOAuth2ClientsParams) (*ListClientsResponse, error) {
 	path := "/v1/admin/oauth/clients"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result ListClientsResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -683,7 +645,7 @@ func (c *Client) CreateOAuth2Client(ctx context.Context, req *CreateOAuth2Client
 }
 
 // DeleteOAuth2Client — Delete OAuth2 client
-func (c *Client) DeleteOAuth2Client(ctx context.Context, clientId string, req *DeleteOAuth2ClientRequest) error {
+func (c *Client) DeleteOAuth2Client(ctx context.Context, clientId string, req *DeleteOAuth2ClientRequest) (error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -694,8 +656,17 @@ func (c *Client) DeleteOAuth2Client(ctx context.Context, clientId string, req *D
 }
 
 // AdminListOrgs — List organizations (admin)
-func (c *Client) AdminListOrgs(ctx context.Context) (*OrgListResponse, error) {
+func (c *Client) AdminListOrgs(ctx context.Context, params *AdminListOrgsParams) (*OrgListResponse, error) {
 	path := "/v1/admin/orgs"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result OrgListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -703,9 +674,123 @@ func (c *Client) AdminListOrgs(ctx context.Context) (*OrgListResponse, error) {
 	return &result, nil
 }
 
+// AdminGrantPlatformOwner — Grant platform-owner role (admin)
+func (c *Client) AdminGrantPlatformOwner(ctx context.Context, req *AdminGrantPlatformOwnerRequest) (*AdminPlatformOwnerResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/platform/owners"
+	var result AdminPlatformOwnerResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminRevokePlatformOwner — Revoke platform-owner role (admin)
+func (c *Client) AdminRevokePlatformOwner(ctx context.Context, userID string) (*AdminPlatformOwnerResponse, error) {
+	path := "/v1/admin/platform/owners/{userID}"
+	path = strings.Replace(path, "{userID}", userID, 1)
+	var result AdminPlatformOwnerResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminListServiceAccounts — List service accounts (admin)
+func (c *Client) AdminListServiceAccounts(ctx context.Context, params *AdminListServiceAccountsParams) (*AdminServiceAccountListResponse, error) {
+	path := "/v1/admin/service-accounts"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		var zeroLimit int64
+		if params.Limit != zeroLimit {
+			q.Set("limit", fmt.Sprint(params.Limit))
+		}
+		if params.Cursor != "" {
+			q.Set("cursor", params.Cursor)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result AdminServiceAccountListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminCreateServiceAccount — Create service account (admin)
+func (c *Client) AdminCreateServiceAccount(ctx context.Context, req *AdminCreateServiceAccountRequest) (*AdminServiceAccountResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/service-accounts"
+	var result AdminServiceAccountResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminGetServiceAccount — Get service account (admin)
+func (c *Client) AdminGetServiceAccount(ctx context.Context, serviceAccountId string) (*AdminServiceAccountResponse, error) {
+	path := "/v1/admin/service-accounts/{serviceAccountId}"
+	path = strings.Replace(path, "{serviceAccountId}", serviceAccountId, 1)
+	var result AdminServiceAccountResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminDeleteServiceAccount — Delete service account (admin)
+func (c *Client) AdminDeleteServiceAccount(ctx context.Context, serviceAccountId string) (*ApiStatusResponse, error) {
+	path := "/v1/admin/service-accounts/{serviceAccountId}"
+	path = strings.Replace(path, "{serviceAccountId}", serviceAccountId, 1)
+	var result ApiStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminCreateServiceAccountAPIKey — Create service account API key (admin)
+func (c *Client) AdminCreateServiceAccountAPIKey(ctx context.Context, serviceAccountId string, req *AdminCreateServiceAccountAPIKeyRequest) (*AdminServiceAccountAPIKeyResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/service-accounts/{serviceAccountId}/api-keys"
+	path = strings.Replace(path, "{serviceAccountId}", serviceAccountId, 1)
+	var result AdminServiceAccountAPIKeyResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // ListSettingsDefinitions — List all setting definitions
-func (c *Client) ListSettingsDefinitions(ctx context.Context) (*ListDefinitionsResponse, error) {
+func (c *Client) ListSettingsDefinitions(ctx context.Context, params *ListSettingsDefinitionsParams) (*ListDefinitionsResponse, error) {
 	path := "/v1/admin/settings/definitions"
+	if params != nil {
+		q := url.Values{}
+		if params.Namespace != "" {
+			q.Set("namespace", params.Namespace)
+		}
+		if params.Category != "" {
+			q.Set("category", params.Category)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result ListDefinitionsResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -740,23 +825,49 @@ func (c *Client) EnforceSetting(ctx context.Context, key string, req *EnforceSet
 }
 
 // UnenforceSetting — Remove enforcement from a setting
-func (c *Client) UnenforceSetting(ctx context.Context, key string, req *UnenforceSettingRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) UnenforceSetting(ctx context.Context, key string, params *UnenforceSettingParams) (*ApiStatusResponse, error) {
 	path := "/v1/admin/settings/enforce/{key}"
 	path = strings.Replace(path, "{key}", key, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	if params != nil {
+		q := url.Values{}
+		if params.Scope != "" {
+			q.Set("scope", params.Scope)
+		}
+		if params.ScopeID != "" {
+			q.Set("scope_id", params.ScopeID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result ApiStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // ResolveSettings — Resolve all settings at a scope
-func (c *Client) ResolveSettings(ctx context.Context) (*ResolvedSettingsResponse, error) {
+func (c *Client) ResolveSettings(ctx context.Context, params *ResolveSettingsParams) (*ResolvedSettingsResponse, error) {
 	path := "/v1/admin/settings/resolve"
+	if params != nil {
+		q := url.Values{}
+		if params.Namespace != "" {
+			q.Set("namespace", params.Namespace)
+		}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if params.OrgID != "" {
+			q.Set("org_id", params.OrgID)
+		}
+		if params.UserID != "" {
+			q.Set("user_id", params.UserID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result ResolvedSettingsResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -765,9 +876,24 @@ func (c *Client) ResolveSettings(ctx context.Context) (*ResolvedSettingsResponse
 }
 
 // ResolveSetting — Resolve one setting with cascade details
-func (c *Client) ResolveSetting(ctx context.Context, key string) (*ResolvedSettingResponse, error) {
+func (c *Client) ResolveSetting(ctx context.Context, key string, params *ResolveSettingParams) (*ResolvedSettingResponse, error) {
 	path := "/v1/admin/settings/resolve/{key}"
 	path = strings.Replace(path, "{key}", key, 1)
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if params.OrgID != "" {
+			q.Set("org_id", params.OrgID)
+		}
+		if params.UserID != "" {
+			q.Set("user_id", params.UserID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result ResolvedSettingResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -791,15 +917,115 @@ func (c *Client) SetSetting(ctx context.Context, key string, req *SetSettingRequ
 }
 
 // DeleteSetting — Delete a setting override at a scope
-func (c *Client) DeleteSetting(ctx context.Context, key string, req *DeleteSettingRequest) (*StatusResponse, error) {
+func (c *Client) DeleteSetting(ctx context.Context, key string, params *DeleteSettingParams) (*ApiStatusResponse, error) {
+	path := "/v1/admin/settings/values/{key}"
+	path = strings.Replace(path, "{key}", key, 1)
+	if params != nil {
+		q := url.Values{}
+		if params.Scope != "" {
+			q.Set("scope", params.Scope)
+		}
+		if params.ScopeID != "" {
+			q.Set("scope_id", params.ScopeID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result ApiStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SocialAdminListProviders — List social providers (admin)
+func (c *Client) SocialAdminListProviders(ctx context.Context, params *SocialAdminListProvidersParams) (*AdminListProvidersResponse, error) {
+	path := "/v1/admin/social/providers"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result AdminListProvidersResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SocialAdminCatalog — List supported social providers
+func (c *Client) SocialAdminCatalog(ctx context.Context) (*AdminCatalogResponse, error) {
+	path := "/v1/admin/social/providers/catalog"
+	var result AdminCatalogResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SocialAdminUpsertProvider — Configure a social provider (admin)
+func (c *Client) SocialAdminUpsertProvider(ctx context.Context, provider string, req *SocialAdminUpsertProviderRequest, params *SocialAdminUpsertProviderParams) (*AdminProviderResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := "/v1/admin/settings/values/{key}"
-	path = strings.Replace(path, "{key}", key, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	path := "/v1/admin/social/providers/{provider}"
+	path = strings.Replace(path, "{provider}", provider, 1)
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result AdminProviderResponse
+	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SocialAdminDeleteProvider — Delete a social provider (admin)
+func (c *Client) SocialAdminDeleteProvider(ctx context.Context, provider string, params *SocialAdminDeleteProviderParams) (*AdminDeleteProviderResponse, error) {
+	path := "/v1/admin/social/providers/{provider}"
+	path = strings.Replace(path, "{provider}", provider, 1)
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result AdminDeleteProviderResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SsoAdminListConnections — List SSO connections for an app (admin)
+func (c *Client) SsoAdminListConnections(ctx context.Context, params *SsoAdminListConnectionsParams) (*AdminListConnectionsResponse, error) {
+	path := "/v1/admin/sso/connections"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result AdminListConnectionsResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -819,20 +1045,11 @@ func (c *Client) SsoAdminCreateConnection(ctx context.Context, req *SsoAdminCrea
 	return &result, nil
 }
 
-// SsoAdminListConnections — List SSO connections for an app (admin)
-func (c *Client) SsoAdminListConnections(ctx context.Context, appID string) (*SsoAdminListConnectionsResponse, error) {
-	path := "/v1/admin/sso/connections?app_id=" + appID
-	var result SsoAdminListConnectionsResponse
-	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
 // SsoAdminGetConnection — Get SSO connection (admin)
-func (c *Client) SsoAdminGetConnection(ctx context.Context, connectionID string) (*SsoConnection, error) {
-	path := strings.Replace("/v1/admin/sso/connections/{connectionId}", "{connectionId}", connectionID, 1)
-	var result SsoConnection
+func (c *Client) SsoAdminGetConnection(ctx context.Context, connectionId string) (*Connection, error) {
+	path := "/v1/admin/sso/connections/{connectionId}"
+	path = strings.Replace(path, "{connectionId}", connectionId, 1)
+	var result Connection
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -840,13 +1057,14 @@ func (c *Client) SsoAdminGetConnection(ctx context.Context, connectionID string)
 }
 
 // SsoAdminUpdateConnection — Update SSO connection (admin)
-func (c *Client) SsoAdminUpdateConnection(ctx context.Context, connectionID string, req *SsoAdminUpdateConnectionRequest) (*SsoConnection, error) {
+func (c *Client) SsoAdminUpdateConnection(ctx context.Context, connectionId string, req *SsoAdminUpdateConnectionRequest) (*Connection, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := strings.Replace("/v1/admin/sso/connections/{connectionId}", "{connectionId}", connectionID, 1)
-	var result SsoConnection
+	path := "/v1/admin/sso/connections/{connectionId}"
+	path = strings.Replace(path, "{connectionId}", connectionId, 1)
+	var result Connection
 	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -854,62 +1072,10 @@ func (c *Client) SsoAdminUpdateConnection(ctx context.Context, connectionID stri
 }
 
 // SsoAdminDeleteConnection — Delete SSO connection (admin)
-func (c *Client) SsoAdminDeleteConnection(ctx context.Context, connectionID string) (*StatusResponse, error) {
-	path := strings.Replace("/v1/admin/sso/connections/{connectionId}", "{connectionId}", connectionID, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// SocialAdminCatalog — List supported social providers
-func (c *Client) SocialAdminCatalog(ctx context.Context) (*SocialAdminCatalogResponse, error) {
-	path := "/v1/admin/social/providers/catalog"
-	var result SocialAdminCatalogResponse
-	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// SocialAdminListProviders — List configured social providers (admin)
-func (c *Client) SocialAdminListProviders(ctx context.Context, appID string) (*SocialAdminListProvidersResponse, error) {
-	path := "/v1/admin/social/providers"
-	if appID != "" {
-		path += "?app_id=" + appID
-	}
-	var result SocialAdminListProvidersResponse
-	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// SocialAdminUpsertProvider — Configure a social provider (admin)
-func (c *Client) SocialAdminUpsertProvider(ctx context.Context, provider, appID string, req *SocialAdminUpsertProviderRequest) (*SocialAdminProviderResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := strings.Replace("/v1/admin/social/providers/{provider}", "{provider}", provider, 1)
-	if appID != "" {
-		path += "?app_id=" + appID
-	}
-	var result SocialAdminProviderResponse
-	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// SocialAdminDeleteProvider — Delete a social provider (admin)
-func (c *Client) SocialAdminDeleteProvider(ctx context.Context, provider, appID string) (*StatusResponse, error) {
-	path := strings.Replace("/v1/admin/social/providers/{provider}", "{provider}", provider, 1)
-	if appID != "" {
-		path += "?app_id=" + appID
-	}
-	var result StatusResponse
+func (c *Client) SsoAdminDeleteConnection(ctx context.Context, connectionId string) (*AdminDeleteConnectionResponse, error) {
+	path := "/v1/admin/sso/connections/{connectionId}"
+	path = strings.Replace(path, "{connectionId}", connectionId, 1)
+	var result AdminDeleteConnectionResponse
 	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -917,8 +1083,17 @@ func (c *Client) SocialAdminDeleteProvider(ctx context.Context, provider, appID 
 }
 
 // AdminGetStats — Get stats (admin)
-func (c *Client) AdminGetStats(ctx context.Context) (*AdminStatsResponse, error) {
+func (c *Client) AdminGetStats(ctx context.Context, params *AdminGetStatsParams) (*AdminStatsResponse, error) {
 	path := "/v1/admin/stats"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result AdminStatsResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -927,8 +1102,27 @@ func (c *Client) AdminGetStats(ctx context.Context) (*AdminStatsResponse, error)
 }
 
 // AdminListUsers — List users (admin)
-func (c *Client) AdminListUsers(ctx context.Context) (*AdminUserListResponse, error) {
+func (c *Client) AdminListUsers(ctx context.Context, params *AdminListUsersParams) (*AdminUserListResponse, error) {
 	path := "/v1/admin/users"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if params.Email != "" {
+			q.Set("email", params.Email)
+		}
+		if params.Cursor != "" {
+			q.Set("cursor", params.Cursor)
+		}
+		var zeroLimit int64
+		if params.Limit != zeroLimit {
+			q.Set("limit", fmt.Sprint(params.Limit))
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result AdminUserListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -936,29 +1130,15 @@ func (c *Client) AdminListUsers(ctx context.Context) (*AdminUserListResponse, er
 	return &result, nil
 }
 
-// AdminListUsersInApp lists users scoped to a specific App. Supplies
-// the app_id, email, cursor, and limit query params understood by the
-// /v1/admin/users handler. Empty fields are omitted from the URL.
-func (c *Client) AdminListUsersInApp(ctx context.Context, appID, email, cursor string, limit int) (*AdminUserListResponse, error) {
-	path := "/v1/admin/users"
-	q := []string{}
-	if appID != "" {
-		q = append(q, "app_id="+appID)
+// AdminCopyUser — Copy user to another app (admin)
+func (c *Client) AdminCopyUser(ctx context.Context, req *AdminCopyUserRequest) (*User, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	if email != "" {
-		q = append(q, "email="+email)
-	}
-	if cursor != "" {
-		q = append(q, "cursor="+cursor)
-	}
-	if limit > 0 {
-		q = append(q, fmt.Sprintf("limit=%d", limit))
-	}
-	if len(q) > 0 {
-		path += "?" + strings.Join(q, "&")
-	}
-	var result AdminUserListResponse
-	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+	path := "/v1/admin/users/copy"
+	var result User
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -971,24 +1151,6 @@ func (c *Client) AdminCreateUser(ctx context.Context, req *AdminCreateUserReques
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/admin/users/create"
-	var result User
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// AdminCopyUser — Copy user to another app (admin). Reuses the source
-// user's stored password hash so the duplicate authenticates with the
-// original password. 409 from the API means the target app already
-// has a user with that email — callers should treat that as
-// idempotent.
-func (c *Client) AdminCopyUser(ctx context.Context, req *AdminCopyUserRequest) (*User, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/admin/users/copy"
 	var result User
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
@@ -1023,29 +1185,25 @@ func (c *Client) AdminUpdateUser(ctx context.Context, userId string, req *AdminU
 }
 
 // AdminDeleteUser — Delete user (admin)
-func (c *Client) AdminDeleteUser(ctx context.Context, userId string, req *AdminDeleteUserRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) AdminDeleteUser(ctx context.Context, userId string) (*ApiStatusResponse, error) {
 	path := "/v1/admin/users/{userId}"
 	path = strings.Replace(path, "{userId}", userId, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	var result ApiStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // AdminBanUser — Ban user (admin)
-func (c *Client) AdminBanUser(ctx context.Context, userId string, req *AdminBanUserRequest) (*StatusResponse, error) {
+func (c *Client) AdminBanUser(ctx context.Context, userId string, req *AdminBanUserRequest) (*ApiStatusResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/admin/users/{userId}/ban"
 	path = strings.Replace(path, "{userId}", userId, 1)
-	var result StatusResponse
+	var result ApiStatusResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -1053,23 +1211,28 @@ func (c *Client) AdminBanUser(ctx context.Context, userId string, req *AdminBanU
 }
 
 // AdminUnbanUser — Unban user (admin)
-func (c *Client) AdminUnbanUser(ctx context.Context, userId string, req *AdminUnbanUserRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) AdminUnbanUser(ctx context.Context, userId string) (*ApiStatusResponse, error) {
 	path := "/v1/admin/users/{userId}/unban"
 	path = strings.Replace(path, "{userId}", userId, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+	var result ApiStatusResponse
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // ListCoupons — List coupons
-func (c *Client) ListCoupons(ctx context.Context) (*ListCouponsResponse, error) {
+func (c *Client) ListCoupons(ctx context.Context, params *ListCouponsParams) (*ListCouponsResponse, error) {
 	path := "/v1/billing/coupons"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result ListCouponsResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -1092,14 +1255,10 @@ func (c *Client) CreateCoupon(ctx context.Context, req *CreateCouponRequest) (*C
 }
 
 // DeleteCoupon — Delete coupon
-func (c *Client) DeleteCoupon(ctx context.Context, couponId string, req *DeleteCouponRequest) error {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) DeleteCoupon(ctx context.Context, couponId string) (error) {
 	path := "/v1/billing/coupons/{couponId}"
 	path = strings.Replace(path, "{couponId}", couponId, 1)
-	return c.do(ctx, "DELETE", path, body, nil)
+	return c.do(ctx, "DELETE", path, nil, nil)
 }
 
 // CheckEntitlement — Check feature entitlement
@@ -1114,8 +1273,20 @@ func (c *Client) CheckEntitlement(ctx context.Context, featureKey string) (*Enti
 }
 
 // ListInvoices — List invoices
-func (c *Client) ListInvoices(ctx context.Context) (*ListInvoicesResponse, error) {
+func (c *Client) ListInvoices(ctx context.Context, params *ListInvoicesParams) (*ListInvoicesResponse, error) {
 	path := "/v1/billing/invoices"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if params.TenantID != "" {
+			q.Set("tenant_id", params.TenantID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result ListInvoicesResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -1135,7 +1306,7 @@ func (c *Client) GetInvoice(ctx context.Context, invoiceId string) (*InvoiceResp
 }
 
 // MarkInvoicePaid — Mark invoice as paid
-func (c *Client) MarkInvoicePaid(ctx context.Context, invoiceId string, req *MarkInvoicePaidRequest) error {
+func (c *Client) MarkInvoicePaid(ctx context.Context, invoiceId string, req *MarkInvoicePaidRequest) (error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1146,7 +1317,7 @@ func (c *Client) MarkInvoicePaid(ctx context.Context, invoiceId string, req *Mar
 }
 
 // VoidInvoice — Void an invoice
-func (c *Client) VoidInvoice(ctx context.Context, invoiceId string, req *VoidInvoiceRequest) error {
+func (c *Client) VoidInvoice(ctx context.Context, invoiceId string, req *VoidInvoiceRequest) (error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1157,8 +1328,17 @@ func (c *Client) VoidInvoice(ctx context.Context, invoiceId string, req *VoidInv
 }
 
 // ListBillingPlans — List billing plans
-func (c *Client) ListBillingPlans(ctx context.Context) (*ListPlansResponse, error) {
+func (c *Client) ListBillingPlans(ctx context.Context, params *ListBillingPlansParams) (*ListPlansResponse, error) {
 	path := "/v1/billing/plans"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result ListPlansResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -1192,30 +1372,37 @@ func (c *Client) GetBillingPlan(ctx context.Context, planId string) (*PlanRespon
 }
 
 // ActivateBillingPlan — Activate a billing plan
-func (c *Client) ActivateBillingPlan(ctx context.Context, planId string, req *ActivateBillingPlanRequest) error {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) ActivateBillingPlan(ctx context.Context, planId string) (error) {
 	path := "/v1/billing/plans/{planId}/activate"
 	path = strings.Replace(path, "{planId}", planId, 1)
-	return c.do(ctx, "POST", path, body, nil)
+	return c.do(ctx, "POST", path, nil, nil)
 }
 
 // ArchiveBillingPlan — Archive a billing plan
-func (c *Client) ArchiveBillingPlan(ctx context.Context, planId string, req *ArchiveBillingPlanRequest) error {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) ArchiveBillingPlan(ctx context.Context, planId string) (error) {
 	path := "/v1/billing/plans/{planId}/archive"
 	path = strings.Replace(path, "{planId}", planId, 1)
-	return c.do(ctx, "POST", path, body, nil)
+	return c.do(ctx, "POST", path, nil, nil)
 }
 
 // ListSubscriptions — List subscriptions
-func (c *Client) ListSubscriptions(ctx context.Context) (*ListSubscriptionsResponse, error) {
+func (c *Client) ListSubscriptions(ctx context.Context, params *ListSubscriptionsParams) (*ListSubscriptionsResponse, error) {
 	path := "/v1/billing/subscriptions"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if params.TenantID != "" {
+			q.Set("tenant_id", params.TenantID)
+		}
+		if params.Status != "" {
+			q.Set("status", params.Status)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result ListSubscriptionsResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -1238,8 +1425,20 @@ func (c *Client) CreateSubscription(ctx context.Context, req *CreateSubscription
 }
 
 // GetActiveSubscription — Get active subscription
-func (c *Client) GetActiveSubscription(ctx context.Context) (*Response, error) {
+func (c *Client) GetActiveSubscription(ctx context.Context, params *GetActiveSubscriptionParams) (*Response, error) {
 	path := "/v1/billing/subscriptions/active"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if params.TenantID != "" {
+			q.Set("tenant_id", params.TenantID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result Response
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -1248,7 +1447,7 @@ func (c *Client) GetActiveSubscription(ctx context.Context) (*Response, error) {
 }
 
 // CancelSubscription — Cancel subscription
-func (c *Client) CancelSubscription(ctx context.Context, subId string, req *CancelSubscriptionRequest) error {
+func (c *Client) CancelSubscription(ctx context.Context, subId string, req *CancelSubscriptionRequest) (error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1259,7 +1458,7 @@ func (c *Client) CancelSubscription(ctx context.Context, subId string, req *Canc
 }
 
 // ChangeSubscriptionPlan — Change subscription plan
-func (c *Client) ChangeSubscriptionPlan(ctx context.Context, subId string, req *ChangeSubscriptionPlanRequest) error {
+func (c *Client) ChangeSubscriptionPlan(ctx context.Context, subId string, req *ChangeSubscriptionPlanRequest) (error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1270,30 +1469,34 @@ func (c *Client) ChangeSubscriptionPlan(ctx context.Context, subId string, req *
 }
 
 // PauseSubscription — Pause subscription
-func (c *Client) PauseSubscription(ctx context.Context, subId string, req *PauseSubscriptionRequest) error {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) PauseSubscription(ctx context.Context, subId string) (error) {
 	path := "/v1/billing/subscriptions/{subId}/pause"
 	path = strings.Replace(path, "{subId}", subId, 1)
-	return c.do(ctx, "POST", path, body, nil)
+	return c.do(ctx, "POST", path, nil, nil)
 }
 
 // ResumeSubscription — Resume subscription
-func (c *Client) ResumeSubscription(ctx context.Context, subId string, req *ResumeSubscriptionRequest) error {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) ResumeSubscription(ctx context.Context, subId string) (error) {
 	path := "/v1/billing/subscriptions/{subId}/resume"
 	path = strings.Replace(path, "{subId}", subId, 1)
-	return c.do(ctx, "POST", path, body, nil)
+	return c.do(ctx, "POST", path, nil, nil)
 }
 
 // GetUsageSummary — Get usage summary
-func (c *Client) GetUsageSummary(ctx context.Context) (*UsageSummaryResponse, error) {
+func (c *Client) GetUsageSummary(ctx context.Context, params *GetUsageSummaryParams) (*UsageSummaryResponse, error) {
 	path := "/v1/billing/usage"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if params.TenantID != "" {
+			q.Set("tenant_id", params.TenantID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result UsageSummaryResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -1302,13 +1505,13 @@ func (c *Client) GetUsageSummary(ctx context.Context) (*UsageSummaryResponse, er
 }
 
 // ChangePassword — Change password
-func (c *Client) ChangePassword(ctx context.Context, req *ChangePasswordRequest) (*StatusResponse, error) {
+func (c *Client) ChangePassword(ctx context.Context, req *ChangePasswordRequest) (*ApiStatusResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/change-password"
-	var result StatusResponse
+	var result ApiStatusResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -1316,8 +1519,17 @@ func (c *Client) ChangePassword(ctx context.Context, req *ChangePasswordRequest)
 }
 
 // GetClientConfig — Get client configuration
-func (c *Client) GetClientConfig(ctx context.Context) (*ClientConfigResponse, error) {
+func (c *Client) GetClientConfig(ctx context.Context, params *GetClientConfigParams) (*ClientConfigResponse, error) {
 	path := "/v1/client-config"
+	if params != nil {
+		q := url.Values{}
+		if params.Key != "" {
+			q.Set("key", params.Key)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result ClientConfigResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -1326,9 +1538,25 @@ func (c *Client) GetClientConfig(ctx context.Context) (*ClientConfigResponse, er
 }
 
 // ListConsents — List consents
-func (c *Client) ListConsents(ctx context.Context) (*ListResponse, error) {
+func (c *Client) ListConsents(ctx context.Context, params *ListConsentsParams) (*ConsentListResponse, error) {
 	path := "/v1/consent"
-	var result ListResponse
+	if params != nil {
+		q := url.Values{}
+		if params.Purpose != "" {
+			q.Set("purpose", params.Purpose)
+		}
+		if params.Cursor != "" {
+			q.Set("cursor", params.Cursor)
+		}
+		var zeroLimit int64
+		if params.Limit != zeroLimit {
+			q.Set("limit", fmt.Sprint(params.Limit))
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result ConsentListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -1350,13 +1578,13 @@ func (c *Client) GrantConsent(ctx context.Context, req *GrantConsentRequest) (*C
 }
 
 // RevokeConsent — Revoke consent
-func (c *Client) RevokeConsent(ctx context.Context, req *RevokeConsentRequest) (*StatusResponse, error) {
+func (c *Client) RevokeConsent(ctx context.Context, req *RevokeConsentRequest) (*ConsentStatusResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/consent/revoke"
-	var result StatusResponse
+	var result ConsentStatusResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -1385,38 +1613,39 @@ func (c *Client) GetDevice(ctx context.Context, deviceId string) (*Device, error
 }
 
 // DeleteDevice — Delete device
-func (c *Client) DeleteDevice(ctx context.Context, deviceId string, req *DeleteDeviceRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) DeleteDevice(ctx context.Context, deviceId string) (*ApiStatusResponse, error) {
 	path := "/v1/devices/{deviceId}"
 	path = strings.Replace(path, "{deviceId}", deviceId, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	var result ApiStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // TrustDevice — Trust device
-func (c *Client) TrustDevice(ctx context.Context, deviceId string, req *TrustDeviceRequest) (*Device, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) TrustDevice(ctx context.Context, deviceId string) (*Device, error) {
 	path := "/v1/devices/{deviceId}/trust"
 	path = strings.Replace(path, "{deviceId}", deviceId, 1)
 	var result Device
-	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+	if err := c.do(ctx, "PATCH", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // ListEnvironments — List environments
-func (c *Client) ListEnvironments(ctx context.Context) (*EnvironmentListResponse, error) {
+func (c *Client) ListEnvironments(ctx context.Context, params *ListEnvironmentsParams) (*EnvironmentListResponse, error) {
 	path := "/v1/environments"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result EnvironmentListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -1465,10 +1694,10 @@ func (c *Client) UpdateEnvironment(ctx context.Context, envId string, req *Updat
 }
 
 // DeleteEnvironment — Delete environment
-func (c *Client) DeleteEnvironment(ctx context.Context, envId string) (*StatusResponse, error) {
+func (c *Client) DeleteEnvironment(ctx context.Context, envId string) (*ApiStatusResponse, error) {
 	path := "/v1/environments/{envId}"
 	path = strings.Replace(path, "{envId}", envId, 1)
-	var result StatusResponse
+	var result ApiStatusResponse
 	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -1491,10 +1720,10 @@ func (c *Client) CloneEnvironment(ctx context.Context, envId string, req *CloneE
 }
 
 // SetDefaultEnvironment — Set default environment
-func (c *Client) SetDefaultEnvironment(ctx context.Context, envId string) (*StatusResponse, error) {
+func (c *Client) SetDefaultEnvironment(ctx context.Context, envId string) (*ApiStatusResponse, error) {
 	path := "/v1/environments/{envId}/set-default"
 	path = strings.Replace(path, "{envId}", envId, 1)
-	var result StatusResponse
+	var result ApiStatusResponse
 	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -1566,8 +1795,20 @@ func (c *Client) IntrospectToken(ctx context.Context, req *IntrospectTokenReques
 }
 
 // ListAPIKeys — List API keys
-func (c *Client) ListAPIKeys(ctx context.Context) (*ListKeysResponse, error) {
+func (c *Client) ListAPIKeys(ctx context.Context, params *ListAPIKeysParams) (*ListKeysResponse, error) {
 	path := "/v1/keys"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if params.UserID != "" {
+			q.Set("user_id", params.UserID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result ListKeysResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -1590,14 +1831,10 @@ func (c *Client) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*C
 }
 
 // RevokeAPIKey — Revoke API key
-func (c *Client) RevokeAPIKey(ctx context.Context, keyId string, req *RevokeAPIKeyRequest) error {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) RevokeAPIKey(ctx context.Context, keyId string) (error) {
 	path := "/v1/keys/{keyId}"
 	path = strings.Replace(path, "{keyId}", keyId, 1)
-	return c.do(ctx, "DELETE", path, body, nil)
+	return c.do(ctx, "DELETE", path, nil, nil)
 }
 
 // SendMagicLink — Send magic link
@@ -1615,13 +1852,13 @@ func (c *Client) SendMagicLink(ctx context.Context, req *SendMagicLinkRequest) (
 }
 
 // VerifyMagicLink — Verify magic link
-func (c *Client) VerifyMagicLink(ctx context.Context, req *VerifyMagicLinkRequest) (*VerifyResponse, error) {
+func (c *Client) VerifyMagicLink(ctx context.Context, req *VerifyMagicLinkRequest) (*MagiclinkVerifyResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/magic-link/verify"
-	var result VerifyResponse
+	var result MagiclinkVerifyResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -1629,9 +1866,9 @@ func (c *Client) VerifyMagicLink(ctx context.Context, req *VerifyMagicLinkReques
 }
 
 // GetMe — Get current user
-func (c *Client) GetMe(ctx context.Context) (*User, error) {
+func (c *Client) GetMe(ctx context.Context) (*MeResponse, error) {
 	path := "/v1/me"
-	var result User
+	var result MeResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -1653,14 +1890,10 @@ func (c *Client) UpdateMe(ctx context.Context, req *UpdateMeRequest) (*User, err
 }
 
 // DeleteAccount — Delete account
-func (c *Client) DeleteAccount(ctx context.Context, req *DeleteAccountRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) DeleteAccount(ctx context.Context) (*ApiStatusResponse, error) {
 	path := "/v1/me"
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	var result ApiStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -1758,14 +1991,10 @@ func (c *Client) DisableMFA(ctx context.Context, req *DisableMFARequest) (*Disab
 }
 
 // RegenerateMFARecoveryCodes — Regenerate MFA recovery codes
-func (c *Client) RegenerateMFARecoveryCodes(ctx context.Context, req *RegenerateMFARecoveryCodesRequest) (*RecoveryRegenerateResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) RegenerateMFARecoveryCodes(ctx context.Context) (*RecoveryRegenerateResponse, error) {
 	path := "/v1/mfa/recovery/regenerate"
 	var result RecoveryRegenerateResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -1828,8 +2057,35 @@ func (c *Client) VerifyMFA(ctx context.Context, req *VerifyMFARequest) (*VerifyM
 }
 
 // Oauth2Authorize — OAuth2 Authorization
-func (c *Client) Oauth2Authorize(ctx context.Context) error {
+func (c *Client) Oauth2Authorize(ctx context.Context, params *Oauth2AuthorizeParams) (error) {
 	path := "/v1/oauth/authorize"
+	if params != nil {
+		q := url.Values{}
+		if params.ResponseType != "" {
+			q.Set("response_type", params.ResponseType)
+		}
+		if params.ClientID != "" {
+			q.Set("client_id", params.ClientID)
+		}
+		if params.RedirectURI != "" {
+			q.Set("redirect_uri", params.RedirectURI)
+		}
+		if params.Scope != "" {
+			q.Set("scope", params.Scope)
+		}
+		if params.State != "" {
+			q.Set("state", params.State)
+		}
+		if params.CodeChallenge != "" {
+			q.Set("code_challenge", params.CodeChallenge)
+		}
+		if params.CodeChallengeMethod != "" {
+			q.Set("code_challenge_method", params.CodeChallengeMethod)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	return c.do(ctx, "GET", path, nil, nil)
 }
 
@@ -1862,7 +2118,7 @@ func (c *Client) Oauth2DeviceComplete(ctx context.Context, req *Oauth2DeviceComp
 }
 
 // Oauth2Revoke — Revoke token
-func (c *Client) Oauth2Revoke(ctx context.Context, req *Oauth2RevokeRequest) error {
+func (c *Client) Oauth2Revoke(ctx context.Context, req *Oauth2RevokeRequest) (error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1872,13 +2128,13 @@ func (c *Client) Oauth2Revoke(ctx context.Context, req *Oauth2RevokeRequest) err
 }
 
 // Oauth2Token — OAuth2 Token
-func (c *Client) Oauth2Token(ctx context.Context, req *Oauth2TokenRequest) (*TokenResponse, error) {
+func (c *Client) Oauth2Token(ctx context.Context, req *Oauth2TokenRequest) (*Oauth2providerTokenResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/oauth/token"
-	var result TokenResponse
+	var result Oauth2providerTokenResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -1920,8 +2176,20 @@ func (c *Client) CreateOrganization(ctx context.Context, req *CreateOrganization
 }
 
 // CheckOrgSlug — Check slug availability
-func (c *Client) CheckOrgSlug(ctx context.Context) (*SlugAvailableResponse, error) {
+func (c *Client) CheckOrgSlug(ctx context.Context, params *CheckOrgSlugParams) (*SlugAvailableResponse, error) {
 	path := "/v1/orgs/check-slug"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if params.Slug != "" {
+			q.Set("slug", params.Slug)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result SlugAvailableResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -1944,13 +2212,13 @@ func (c *Client) AcceptInvitation(ctx context.Context, req *AcceptInvitationRequ
 }
 
 // DeclineInvitation — Decline invitation
-func (c *Client) DeclineInvitation(ctx context.Context, req *DeclineInvitationRequest) (*StatusResponse, error) {
+func (c *Client) DeclineInvitation(ctx context.Context, req *DeclineInvitationRequest) (*OrganizationStatusResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/orgs/invitations/decline"
-	var result StatusResponse
+	var result OrganizationStatusResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -1984,15 +2252,11 @@ func (c *Client) UpdateOrganization(ctx context.Context, orgId string, req *Upda
 }
 
 // DeleteOrganization — Delete organization
-func (c *Client) DeleteOrganization(ctx context.Context, orgId string, req *DeleteOrganizationRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) DeleteOrganization(ctx context.Context, orgId string) (*OrganizationStatusResponse, error) {
 	path := "/v1/orgs/{orgId}"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	var result OrganizationStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -2067,16 +2331,12 @@ func (c *Client) UpdateMember(ctx context.Context, orgId string, memberId string
 }
 
 // RemoveMember — Remove member
-func (c *Client) RemoveMember(ctx context.Context, orgId string, memberId string, req *RemoveMemberRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) RemoveMember(ctx context.Context, orgId string, memberId string) (*OrganizationStatusResponse, error) {
 	path := "/v1/orgs/{orgId}/members/{memberId}"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	path = strings.Replace(path, "{memberId}", memberId, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	var result OrganizationStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -2137,25 +2397,21 @@ func (c *Client) UpdateTeam(ctx context.Context, orgId string, teamId string, re
 }
 
 // DeleteTeam — Delete team
-func (c *Client) DeleteTeam(ctx context.Context, orgId string, teamId string, req *DeleteTeamRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) DeleteTeam(ctx context.Context, orgId string, teamId string) (*OrganizationStatusResponse, error) {
 	path := "/v1/orgs/{orgId}/teams/{teamId}"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	path = strings.Replace(path, "{teamId}", teamId, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	var result OrganizationStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // ListPasskeys — List passkeys
-func (c *Client) ListPasskeys(ctx context.Context) (*ListResponse, error) {
+func (c *Client) ListPasskeys(ctx context.Context) (*PasskeyListResponse, error) {
 	path := "/v1/passkeys"
-	var result ListResponse
+	var result PasskeyListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -2163,28 +2419,20 @@ func (c *Client) ListPasskeys(ctx context.Context) (*ListResponse, error) {
 }
 
 // PasskeyLoginBegin — Begin passkey login
-func (c *Client) PasskeyLoginBegin(ctx context.Context, req *PasskeyLoginBeginRequest) (*LoginBeginResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) PasskeyLoginBegin(ctx context.Context) (*LoginBeginResponse, error) {
 	path := "/v1/passkeys/login/begin"
 	var result LoginBeginResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // PasskeyLoginFinish — Complete passkey login
-func (c *Client) PasskeyLoginFinish(ctx context.Context, req *PasskeyLoginFinishRequest) (*LoginFinishResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) PasskeyLoginFinish(ctx context.Context) (*LoginFinishResponse, error) {
 	path := "/v1/passkeys/login/finish"
 	var result LoginFinishResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -2205,42 +2453,34 @@ func (c *Client) PasskeyRegisterBegin(ctx context.Context, req *PasskeyRegisterB
 }
 
 // PasskeyRegisterFinish — Complete passkey registration
-func (c *Client) PasskeyRegisterFinish(ctx context.Context, req *PasskeyRegisterFinishRequest) (*RegisterFinishResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) PasskeyRegisterFinish(ctx context.Context) (*RegisterFinishResponse, error) {
 	path := "/v1/passkeys/register/finish"
 	var result RegisterFinishResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // DeletePasskey — Delete passkey
-func (c *Client) DeletePasskey(ctx context.Context, credentialId string, req *DeletePasskeyRequest) (*DeleteResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) DeletePasskey(ctx context.Context, credentialId string) (*DeleteResponse, error) {
 	path := "/v1/passkeys/{credentialId}"
 	path = strings.Replace(path, "{credentialId}", credentialId, 1)
 	var result DeleteResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // PhoneAuthStart — Start phone authentication
-func (c *Client) PhoneAuthStart(ctx context.Context, req *PhoneAuthStartRequest) (*StartResponse, error) {
+func (c *Client) PhoneAuthStart(ctx context.Context, req *PhoneAuthStartRequest) (*PhoneStartResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/phone/start"
-	var result StartResponse
+	var result PhoneStartResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -2248,13 +2488,13 @@ func (c *Client) PhoneAuthStart(ctx context.Context, req *PhoneAuthStartRequest)
 }
 
 // PhoneAuthVerify — Verify phone OTP
-func (c *Client) PhoneAuthVerify(ctx context.Context, req *PhoneAuthVerifyRequest) (*VerifyResponse, error) {
+func (c *Client) PhoneAuthVerify(ctx context.Context, req *PhoneAuthVerifyRequest) (*PhoneVerifyResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/phone/verify"
-	var result VerifyResponse
+	var result PhoneVerifyResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -2262,13 +2502,13 @@ func (c *Client) PhoneAuthVerify(ctx context.Context, req *PhoneAuthVerifyReques
 }
 
 // RefreshTokens — Refresh tokens
-func (c *Client) RefreshTokens(ctx context.Context, req *RefreshTokensRequest) (*TokenResponse, error) {
+func (c *Client) RefreshTokens(ctx context.Context, req *RefreshTokensRequest) (*ApiTokenResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/refresh"
-	var result TokenResponse
+	var result ApiTokenResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -2276,13 +2516,13 @@ func (c *Client) RefreshTokens(ctx context.Context, req *RefreshTokensRequest) (
 }
 
 // ResetPassword — Reset password
-func (c *Client) ResetPassword(ctx context.Context, req *ResetPasswordRequest) (*StatusResponse, error) {
+func (c *Client) ResetPassword(ctx context.Context, req *ResetPasswordRequest) (*ApiStatusResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/reset-password"
-	var result StatusResponse
+	var result ApiStatusResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -2290,25 +2530,16 @@ func (c *Client) ResetPassword(ctx context.Context, req *ResetPasswordRequest) (
 }
 
 // AuthsomeListRoles — List roles
-func (c *Client) AuthsomeListRoles(ctx context.Context) (*RoleListResponse, error) {
+func (c *Client) AuthsomeListRoles(ctx context.Context, params *AuthsomeListRolesParams) (*RoleListResponse, error) {
 	path := "/v1/roles"
-	var result RoleListResponse
-	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// AuthsomeListRolesInApp — List roles scoped to an explicit app_id.
-// The bare AuthsomeListRoles uses whatever app the engine derives from
-// the call's auth context (which falls back to the configured default
-// app); this variant lets cross-app admin clients (e.g. TwinOS studio,
-// which runs one query per workspace) target a specific app without
-// switching credentials.
-func (c *Client) AuthsomeListRolesInApp(ctx context.Context, appID string) (*RoleListResponse, error) {
-	path := "/v1/roles"
-	if appID != "" {
-		path = path + "?app_id=" + appID
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
 	}
 	var result RoleListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
@@ -2358,10 +2589,10 @@ func (c *Client) AuthsomeUpdateRole(ctx context.Context, roleId string, req *Aut
 }
 
 // AuthsomeDeleteRole — Delete role
-func (c *Client) AuthsomeDeleteRole(ctx context.Context, roleId string) (*StatusResponse, error) {
+func (c *Client) AuthsomeDeleteRole(ctx context.Context, roleId string) (*ApiStatusResponse, error) {
 	path := "/v1/roles/{roleId}"
 	path = strings.Replace(path, "{roleId}", roleId, 1)
-	var result StatusResponse
+	var result ApiStatusResponse
 	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -2369,14 +2600,14 @@ func (c *Client) AuthsomeDeleteRole(ctx context.Context, roleId string) (*Status
 }
 
 // AuthsomeAssignRole — Assign role to user
-func (c *Client) AuthsomeAssignRole(ctx context.Context, roleId string, req *AuthsomeAssignRoleRequest) (*StatusResponse, error) {
+func (c *Client) AuthsomeAssignRole(ctx context.Context, roleId string, req *AuthsomeAssignRoleRequest) (*ApiStatusResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/roles/{roleId}/assign"
 	path = strings.Replace(path, "{roleId}", roleId, 1)
-	var result StatusResponse
+	var result ApiStatusResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -2410,11 +2641,11 @@ func (c *Client) AuthsomeAddPermission(ctx context.Context, roleId string, req *
 }
 
 // AuthsomeRemovePermission — Remove permission from role
-func (c *Client) AuthsomeRemovePermission(ctx context.Context, roleId string, permissionId string) (*StatusResponse, error) {
+func (c *Client) AuthsomeRemovePermission(ctx context.Context, roleId string, permissionId string) (*ApiStatusResponse, error) {
 	path := "/v1/roles/{roleId}/permissions/{permissionId}"
 	path = strings.Replace(path, "{roleId}", roleId, 1)
 	path = strings.Replace(path, "{permissionId}", permissionId, 1)
-	var result StatusResponse
+	var result ApiStatusResponse
 	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -2422,14 +2653,14 @@ func (c *Client) AuthsomeRemovePermission(ctx context.Context, roleId string, pe
 }
 
 // AuthsomeUnassignRole — Unassign role from user
-func (c *Client) AuthsomeUnassignRole(ctx context.Context, roleId string, req *AuthsomeUnassignRoleRequest) (*StatusResponse, error) {
+func (c *Client) AuthsomeUnassignRole(ctx context.Context, roleId string, req *AuthsomeUnassignRoleRequest) (*ApiStatusResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/roles/{roleId}/unassign"
 	path = strings.Replace(path, "{roleId}", roleId, 1)
-	var result StatusResponse
+	var result ApiStatusResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -2447,15 +2678,11 @@ func (c *Client) ListSessions(ctx context.Context) (*SessionListResponse, error)
 }
 
 // RevokeSession — Revoke session
-func (c *Client) RevokeSession(ctx context.Context, sessionId string, req *RevokeSessionRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) RevokeSession(ctx context.Context, sessionId string) (*ApiStatusResponse, error) {
 	path := "/v1/sessions/{sessionId}"
 	path = strings.Replace(path, "{sessionId}", sessionId, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	var result ApiStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -2476,14 +2703,10 @@ func (c *Client) SignIn(ctx context.Context, req *SignInRequest) (*AuthResponse,
 }
 
 // SignOut — Sign out
-func (c *Client) SignOut(ctx context.Context, req *SignOutRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) SignOut(ctx context.Context) (*ApiStatusResponse, error) {
 	path := "/v1/signout"
-	var result StatusResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+	var result ApiStatusResponse
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -2504,69 +2727,75 @@ func (c *Client) SignUp(ctx context.Context, req *SignUpRequest) (*AuthResponse,
 }
 
 // StartOAuth — Start OAuth flow
-func (c *Client) StartOAuth(ctx context.Context, provider string, req *StartOAuthRequest) (*StartResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) StartOAuth(ctx context.Context, provider string, params *StartOAuthParams) (*SocialStartResponse, error) {
 	path := "/v1/social/{provider}"
 	path = strings.Replace(path, "{provider}", provider, 1)
-	var result StartResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+	if params != nil {
+		q := url.Values{}
+		if params.FrontendURL != "" {
+			q.Set("frontend_url", params.FrontendURL)
+		}
+		if params.RedirectURL != "" {
+			q.Set("redirect_url", params.RedirectURL)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result SocialStartResponse
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // OauthCallback — OAuth callback
-func (c *Client) OauthCallback(ctx context.Context, provider string) (*CallbackResponse, error) {
+func (c *Client) OauthCallback(ctx context.Context, provider string, params *OauthCallbackParams) (*SocialCallbackResponse, error) {
 	path := "/v1/social/{provider}/callback"
 	path = strings.Replace(path, "{provider}", provider, 1)
-	var result CallbackResponse
+	if params != nil {
+		q := url.Values{}
+		if params.State != "" {
+			q.Set("state", params.State)
+		}
+		if params.Code != "" {
+			q.Set("code", params.Code)
+		}
+		if params.Error != "" {
+			q.Set("error", params.Error)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result SocialCallbackResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// SsoACS — SSO SAML ACS endpoint
-func (c *Client) SsoACS(ctx context.Context, provider string, req *SsoACSRequest) (*CallbackResponse, error) {
+// SsoExchange — Exchange SSO one-time code for a session
+func (c *Client) SsoExchange(ctx context.Context, req *SsoExchangeRequest) (*SsoCallbackResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := "/v1/sso/{provider}/acs"
-	path = strings.Replace(path, "{provider}", provider, 1)
-	var result CallbackResponse
+	path := "/v1/sso/exchange"
+	var result SsoCallbackResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// SsoCallback — SSO callback (OIDC)
-func (c *Client) SsoCallback(ctx context.Context, provider string, req *SsoCallbackRequest) (*CallbackResponse, error) {
+// StartSSOLoginByDomain — Start SSO login by email domain
+func (c *Client) StartSSOLoginByDomain(ctx context.Context, req *StartSSOLoginByDomainRequest) (*LoginResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := "/v1/sso/{provider}/callback"
-	path = strings.Replace(path, "{provider}", provider, 1)
-	var result CallbackResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// StartSSOLogin — Start SSO login flow
-func (c *Client) StartSSOLogin(ctx context.Context, provider string, req *StartSSOLoginRequest) (*LoginResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/sso/{provider}/login"
-	path = strings.Replace(path, "{provider}", provider, 1)
+	path := "/v1/sso/login"
 	var result LoginResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
@@ -2574,28 +2803,85 @@ func (c *Client) StartSSOLogin(ctx context.Context, provider string, req *StartS
 	return &result, nil
 }
 
-// AuthsomeListUserRoles — List user roles
-func (c *Client) AuthsomeListUserRoles(ctx context.Context, userId string) (*UserRoleListResponse, error) {
-	path := "/v1/users/{userId}/roles"
-	path = strings.Replace(path, "{userId}", userId, 1)
-	var result UserRoleListResponse
-	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+// SsoACS — SSO SAML ACS endpoint
+func (c *Client) SsoACS(ctx context.Context, provider string) (error) {
+	path := "/v1/sso/{provider}/acs"
+	path = strings.Replace(path, "{provider}", provider, 1)
+	return c.do(ctx, "POST", path, nil, nil)
+}
+
+// SsoOIDCRedirect — SSO OIDC redirect landing
+func (c *Client) SsoOIDCRedirect(ctx context.Context, provider string) (error) {
+	path := "/v1/sso/{provider}/callback"
+	path = strings.Replace(path, "{provider}", provider, 1)
+	return c.do(ctx, "GET", path, nil, nil)
+}
+
+// SsoCallback — SSO callback (OIDC)
+func (c *Client) SsoCallback(ctx context.Context, provider string, params *SsoCallbackParams) (*SsoCallbackResponse, error) {
+	path := "/v1/sso/{provider}/callback"
+	path = strings.Replace(path, "{provider}", provider, 1)
+	if params != nil {
+		q := url.Values{}
+		if params.State != "" {
+			q.Set("state", params.State)
+		}
+		if params.Code != "" {
+			q.Set("code", params.Code)
+		}
+		if params.Error != "" {
+			q.Set("error", params.Error)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result SsoCallbackResponse
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// AuthsomeListUserRolesInApp — List user roles scoped to an explicit
-// app_id. The bare AuthsomeListUserRoles uses the engine's platform
-// app, which is wrong for cross-app admin tooling: TwinOS studio's
-// API key authenticates against the platform app but role assignments
-// live in per-workspace apps. Pass the workspace's AppID here so the
-// engine's ListUserRolesInApp queries the right tenant.
-func (c *Client) AuthsomeListUserRolesInApp(ctx context.Context, userId, appID string) (*UserRoleListResponse, error) {
+// StartSSOLogin — Start SSO login flow
+func (c *Client) StartSSOLogin(ctx context.Context, provider string, params *StartSSOLoginParams) (*LoginResponse, error) {
+	path := "/v1/sso/{provider}/login"
+	path = strings.Replace(path, "{provider}", provider, 1)
+	if params != nil {
+		q := url.Values{}
+		if params.ReturnURL != "" {
+			q.Set("return_url", params.ReturnURL)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result LoginResponse
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SsoSPMetadata — SAML SP metadata
+func (c *Client) SsoSPMetadata(ctx context.Context, provider string) (error) {
+	path := "/v1/sso/{provider}/metadata"
+	path = strings.Replace(path, "{provider}", provider, 1)
+	return c.do(ctx, "GET", path, nil, nil)
+}
+
+// AuthsomeListUserRoles — List user roles
+func (c *Client) AuthsomeListUserRoles(ctx context.Context, userId string, params *AuthsomeListUserRolesParams) (*UserRoleListResponse, error) {
 	path := "/v1/users/{userId}/roles"
 	path = strings.Replace(path, "{userId}", userId, 1)
-	if appID != "" {
-		path = path + "?app_id=" + appID
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
 	}
 	var result UserRoleListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
@@ -2605,13 +2891,13 @@ func (c *Client) AuthsomeListUserRolesInApp(ctx context.Context, userId, appID s
 }
 
 // VerifyEmail — Verify email
-func (c *Client) VerifyEmail(ctx context.Context, req *VerifyEmailRequest) (*StatusResponse, error) {
+func (c *Client) VerifyEmail(ctx context.Context, req *VerifyEmailRequest) (*ApiStatusResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/verify-email"
-	var result StatusResponse
+	var result ApiStatusResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -2619,13 +2905,13 @@ func (c *Client) VerifyEmail(ctx context.Context, req *VerifyEmailRequest) (*Sta
 }
 
 // ResendEmailVerification — Resend email verification
-func (c *Client) ResendEmailVerification(ctx context.Context, req *ResendEmailVerificationRequest) (*StatusResponse, error) {
+func (c *Client) ResendEmailVerification(ctx context.Context, req *ResendEmailVerificationRequest) (*ApiStatusResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/verify-email/resend"
-	var result StatusResponse
+	var result ApiStatusResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -2633,8 +2919,17 @@ func (c *Client) ResendEmailVerification(ctx context.Context, req *ResendEmailVe
 }
 
 // ListWebhooks — List webhooks
-func (c *Client) ListWebhooks(ctx context.Context) (*WebhookListResponse, error) {
+func (c *Client) ListWebhooks(ctx context.Context, params *ListWebhooksParams) (*WebhookListResponse, error) {
 	path := "/v1/webhooks"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result WebhookListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -2683,23 +2978,224 @@ func (c *Client) UpdateWebhook(ctx context.Context, webhookId string, req *Updat
 }
 
 // DeleteWebhook — Delete webhook
-func (c *Client) DeleteWebhook(ctx context.Context, webhookId string, req *DeleteWebhookRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) DeleteWebhook(ctx context.Context, webhookId string) (*ApiStatusResponse, error) {
 	path := "/v1/webhooks/{webhookId}"
 	path = strings.Replace(path, "{webhookId}", webhookId, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	var result ApiStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
+
 // ──────────────────────────────────────────────────
 // Query parameter types
 // ──────────────────────────────────────────────────
+
+// AdminBulkRevokeSessionsParams holds optional query parameters for AdminBulkRevokeSessions.
+type AdminBulkRevokeSessionsParams struct {
+	UserID string `json:"user_id,omitempty"`
+}
+
+// ListOAuth2ClientsParams holds optional query parameters for ListOAuth2Clients.
+type ListOAuth2ClientsParams struct {
+	AppID string `json:"app_id,omitempty"`
+}
+
+// AdminListOrgsParams holds optional query parameters for AdminListOrgs.
+type AdminListOrgsParams struct {
+	AppID string `json:"app_id,omitempty"`
+}
+
+// AdminListServiceAccountsParams holds optional query parameters for AdminListServiceAccounts.
+type AdminListServiceAccountsParams struct {
+	AppID string `json:"app_id,omitempty"`
+	Limit int64 `json:"limit,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
+}
+
+// ListSettingsDefinitionsParams holds optional query parameters for ListSettingsDefinitions.
+type ListSettingsDefinitionsParams struct {
+	Namespace string `json:"namespace,omitempty"`
+	Category string `json:"category,omitempty"`
+}
+
+// UnenforceSettingParams holds optional query parameters for UnenforceSetting.
+type UnenforceSettingParams struct {
+	Scope string `json:"scope,omitempty"`
+	ScopeID string `json:"scope_id,omitempty"`
+}
+
+// ResolveSettingsParams holds optional query parameters for ResolveSettings.
+type ResolveSettingsParams struct {
+	Namespace string `json:"namespace,omitempty"`
+	AppID string `json:"app_id,omitempty"`
+	OrgID string `json:"org_id,omitempty"`
+	UserID string `json:"user_id,omitempty"`
+}
+
+// ResolveSettingParams holds optional query parameters for ResolveSetting.
+type ResolveSettingParams struct {
+	AppID string `json:"app_id,omitempty"`
+	OrgID string `json:"org_id,omitempty"`
+	UserID string `json:"user_id,omitempty"`
+}
+
+// DeleteSettingParams holds optional query parameters for DeleteSetting.
+type DeleteSettingParams struct {
+	Scope string `json:"scope,omitempty"`
+	ScopeID string `json:"scope_id,omitempty"`
+}
+
+// SocialAdminListProvidersParams holds optional query parameters for SocialAdminListProviders.
+type SocialAdminListProvidersParams struct {
+	AppID string `json:"app_id,omitempty"`
+}
+
+// SocialAdminUpsertProviderParams holds optional query parameters for SocialAdminUpsertProvider.
+type SocialAdminUpsertProviderParams struct {
+	AppID string `json:"app_id,omitempty"`
+}
+
+// SocialAdminDeleteProviderParams holds optional query parameters for SocialAdminDeleteProvider.
+type SocialAdminDeleteProviderParams struct {
+	AppID string `json:"app_id,omitempty"`
+}
+
+// SsoAdminListConnectionsParams holds optional query parameters for SsoAdminListConnections.
+type SsoAdminListConnectionsParams struct {
+	AppID string `json:"app_id,omitempty"`
+}
+
+// AdminGetStatsParams holds optional query parameters for AdminGetStats.
+type AdminGetStatsParams struct {
+	AppID string `json:"app_id,omitempty"`
+}
+
+// AdminListUsersParams holds optional query parameters for AdminListUsers.
+type AdminListUsersParams struct {
+	AppID string `json:"app_id,omitempty"`
+	Email string `json:"email,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
+	Limit int64 `json:"limit,omitempty"`
+}
+
+// ListCouponsParams holds optional query parameters for ListCoupons.
+type ListCouponsParams struct {
+	AppID string `json:"app_id,omitempty"`
+}
+
+// ListInvoicesParams holds optional query parameters for ListInvoices.
+type ListInvoicesParams struct {
+	AppID string `json:"app_id,omitempty"`
+	TenantID string `json:"tenant_id,omitempty"`
+}
+
+// ListBillingPlansParams holds optional query parameters for ListBillingPlans.
+type ListBillingPlansParams struct {
+	AppID string `json:"app_id,omitempty"`
+}
+
+// ListSubscriptionsParams holds optional query parameters for ListSubscriptions.
+type ListSubscriptionsParams struct {
+	AppID string `json:"app_id,omitempty"`
+	TenantID string `json:"tenant_id,omitempty"`
+	Status string `json:"status,omitempty"`
+}
+
+// GetActiveSubscriptionParams holds optional query parameters for GetActiveSubscription.
+type GetActiveSubscriptionParams struct {
+	AppID string `json:"app_id,omitempty"`
+	TenantID string `json:"tenant_id,omitempty"`
+}
+
+// GetUsageSummaryParams holds optional query parameters for GetUsageSummary.
+type GetUsageSummaryParams struct {
+	AppID string `json:"app_id,omitempty"`
+	TenantID string `json:"tenant_id,omitempty"`
+}
+
+// GetClientConfigParams holds optional query parameters for GetClientConfig.
+type GetClientConfigParams struct {
+	Key string `json:"key,omitempty"`
+}
+
+// ListConsentsParams holds optional query parameters for ListConsents.
+type ListConsentsParams struct {
+	Purpose string `json:"purpose,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
+	Limit int64 `json:"limit,omitempty"`
+}
+
+// ListEnvironmentsParams holds optional query parameters for ListEnvironments.
+type ListEnvironmentsParams struct {
+	AppID string `json:"app_id,omitempty"`
+}
+
+// ListAPIKeysParams holds optional query parameters for ListAPIKeys.
+type ListAPIKeysParams struct {
+	AppID string `json:"app_id,omitempty"`
+	UserID string `json:"user_id,omitempty"`
+}
+
+// Oauth2AuthorizeParams holds optional query parameters for Oauth2Authorize.
+type Oauth2AuthorizeParams struct {
+	ResponseType string `json:"response_type,omitempty"`
+	ClientID string `json:"client_id,omitempty"`
+	RedirectURI string `json:"redirect_uri,omitempty"`
+	Scope string `json:"scope,omitempty"`
+	State string `json:"state,omitempty"`
+	CodeChallenge string `json:"code_challenge,omitempty"`
+	CodeChallengeMethod string `json:"code_challenge_method,omitempty"`
+}
+
+// CheckOrgSlugParams holds optional query parameters for CheckOrgSlug.
+type CheckOrgSlugParams struct {
+	AppID string `json:"app_id,omitempty"`
+	Slug string `json:"slug,omitempty"`
+}
+
+// AuthsomeListRolesParams holds optional query parameters for AuthsomeListRoles.
+type AuthsomeListRolesParams struct {
+	AppID string `json:"app_id,omitempty"`
+}
+
+// StartOAuthParams holds optional query parameters for StartOAuth.
+type StartOAuthParams struct {
+	FrontendURL string `json:"frontend_url,omitempty"`
+	RedirectURL string `json:"redirect_url,omitempty"`
+}
+
+// OauthCallbackParams holds optional query parameters for OauthCallback.
+type OauthCallbackParams struct {
+	State string `json:"state,omitempty"`
+	Code string `json:"code,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+// SsoCallbackParams holds optional query parameters for SsoCallback.
+type SsoCallbackParams struct {
+	State string `json:"state,omitempty"`
+	Code string `json:"code,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+// StartSSOLoginParams holds optional query parameters for StartSSOLogin.
+type StartSSOLoginParams struct {
+	ReturnURL string `json:"return_url,omitempty"`
+}
+
+// AuthsomeListUserRolesParams holds optional query parameters for AuthsomeListUserRoles.
+type AuthsomeListUserRolesParams struct {
+	AppID string `json:"app_id,omitempty"`
+}
+
+// ListWebhooksParams holds optional query parameters for ListWebhooks.
+type ListWebhooksParams struct {
+	AppID string `json:"app_id,omitempty"`
+}
+
 
 // ──────────────────────────────────────────────────
 // Internal HTTP helper
