@@ -22,6 +22,7 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -101,6 +102,14 @@ type Engine interface {
 	CeremonyStore() ceremony.Store
 	// APIKeyStore returns the API key store.
 	APIKeyStore() apikey.Store
+	// SecurityEvents returns the queryable security event store, or nil when
+	// the engine was built without one.
+	//
+	// Plugins write here directly rather than emitting a hook. The hook-bus
+	// bridge builds its Event from Action, Outcome, Metadata and CreatedAt
+	// only, never setting AppID, and securityevent.Query filters on AppID, so
+	// anything recorded that way is written but cannot be read back.
+	SecurityEvents() securityevent.Store
 
 	// ── User / session resolution ──
 
