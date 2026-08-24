@@ -104,11 +104,6 @@ func oauth2ClientDocToModel(d *oauth2ClientDoc) (*OAuth2Client, error) {
 		metadata = map[string]any{}
 	}
 
-	var secretExpires time.Time
-	if d.ClientSecretExpiresAt != nil {
-		secretExpires = *d.ClientSecretExpiresAt
-	}
-
 	return &OAuth2Client{
 		ID:                      clientID,
 		AppID:                   appID,
@@ -122,7 +117,7 @@ func oauth2ClientDocToModel(d *oauth2ClientDoc) (*OAuth2Client, error) {
 		TokenEndpointAuthMethod: d.TokenEndpointAuthMethod,
 		RegistrationTokenHash:   d.RegistrationTokenHash,
 		DynamicallyRegistered:   d.DynamicallyRegistered,
-		ClientSecretExpiresAt:   secretExpires,
+		ClientSecretExpiresAt:   d.ClientSecretExpiresAt,
 		Metadata:                metadata,
 		CreatedAt:               d.CreatedAt,
 		UpdatedAt:               d.UpdatedAt,
@@ -148,12 +143,6 @@ func oauth2ClientToDoc(c *OAuth2Client) *oauth2ClientDoc {
 		metadata = map[string]any{}
 	}
 
-	var secretExpires *time.Time
-	if !c.ClientSecretExpiresAt.IsZero() {
-		t := c.ClientSecretExpiresAt
-		secretExpires = &t
-	}
-
 	return &oauth2ClientDoc{
 		ID:                      c.ID.String(),
 		AppID:                   c.AppID.String(),
@@ -167,7 +156,7 @@ func oauth2ClientToDoc(c *OAuth2Client) *oauth2ClientDoc {
 		TokenEndpointAuthMethod: c.TokenEndpointAuthMethod,
 		RegistrationTokenHash:   c.RegistrationTokenHash,
 		DynamicallyRegistered:   c.DynamicallyRegistered,
-		ClientSecretExpiresAt:   secretExpires,
+		ClientSecretExpiresAt:   c.ClientSecretExpiresAt,
 		Metadata:                metadata,
 		CreatedAt:               c.CreatedAt,
 		UpdatedAt:               c.UpdatedAt,

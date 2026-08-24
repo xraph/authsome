@@ -30,7 +30,7 @@ func TestMemoryStore_ClientRoundTripsRegistrationFields(t *testing.T) {
 		TokenEndpointAuthMethod: "none",
 		RegistrationTokenHash:   "$2a$04$abcdefghijklmnopqrstuv",
 		DynamicallyRegistered:   true,
-		ClientSecretExpiresAt:   expires,
+		ClientSecretExpiresAt:   &expires,
 		Metadata: map[string]any{
 			"client_uri":  "https://example.com",
 			"software_id": "mcp-cli",
@@ -43,8 +43,18 @@ func TestMemoryStore_ClientRoundTripsRegistrationFields(t *testing.T) {
 	assert.Equal(t, "none", got.TokenEndpointAuthMethod)
 	assert.Equal(t, want.RegistrationTokenHash, got.RegistrationTokenHash)
 	assert.True(t, got.DynamicallyRegistered)
+	require.NotNil(t, got.ClientSecretExpiresAt)
 	assert.Equal(t, expires, got.ClientSecretExpiresAt.UTC().Truncate(time.Second))
 	assert.Equal(t, "mcp-cli", got.Metadata["software_id"])
+}
+
+// A client with no expiry must serialise without the key at all, not as the
+// zero time. A bare time.Time would defeat omitempty here, since
+// encoding/json never treats a struct as empty.
+func TestOAuth2Client_OmitsUnsetSecretExpiry(t *testing.T) {
+	b, err := json.Marshal(&oauth2provider.OAuth2Client{ClientID: "x"})
+	require.NoError(t, err)
+	assert.NotContains(t, string(b), "client_secret_expires_at")
 }
 
 // The registration token hash is a credential. It must never reach a JSON

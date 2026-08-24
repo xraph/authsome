@@ -34,9 +34,13 @@ type OAuth2Client struct {
 	// dashboard tell the two populations apart.
 	DynamicallyRegistered bool `json:"dynamically_registered"`
 
-	// ClientSecretExpiresAt is RFC 7591 client_secret_expires_at. The zero
-	// value means the secret never expires and serialises as 0.
-	ClientSecretExpiresAt time.Time `json:"client_secret_expires_at,omitempty"`
+	// ClientSecretExpiresAt is RFC 7591 client_secret_expires_at. Nil means
+	// the secret never expires.
+	//
+	// A pointer, not a bare time.Time: encoding/json never treats a struct as
+	// empty, so omitempty would not fire and every client serialised through
+	// ListClientsResponse would carry "0001-01-01T00:00:00Z".
+	ClientSecretExpiresAt *time.Time `json:"client_secret_expires_at,omitempty"`
 
 	// Metadata holds the RFC 7591 fields that carry no behaviour:
 	// client_uri, logo_uri, contacts, tos_uri, policy_uri, software_id,

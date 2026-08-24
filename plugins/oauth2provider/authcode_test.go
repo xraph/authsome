@@ -57,14 +57,15 @@ func newFixture(t *testing.T) (*oauth2provider.Plugin, oauth2provider.Store, for
 		GrantTypes:   []string{"authorization_code"},
 	}))
 	require.NoError(t, st.CreateClient(context.Background(), &oauth2provider.OAuth2Client{
-		ID:           id.NewOAuth2ClientID(),
-		AppID:        appID,
-		ClientID:     publicID,
-		Name:         "Public",
-		RedirectURIs: []string{registeredURI},
-		Scopes:       []string{"openid", "profile"},
-		GrantTypes:   []string{"authorization_code"},
-		Public:       true,
+		ID:                      id.NewOAuth2ClientID(),
+		AppID:                   appID,
+		ClientID:                publicID,
+		Name:                    "Public",
+		RedirectURIs:            []string{registeredURI},
+		Scopes:                  []string{"openid", "profile"},
+		GrantTypes:              []string{"authorization_code"},
+		Public:                  true,
+		TokenEndpointAuthMethod: "none",
 	}))
 
 	mux := forge.NewRouter()

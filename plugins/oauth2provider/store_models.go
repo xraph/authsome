@@ -110,10 +110,6 @@ func toOAuth2Client(m *oauth2ClientModel) (*OAuth2Client, error) {
 	if len(m.Metadata) > 0 {
 		_ = json.Unmarshal(m.Metadata, &metadata) //nolint:errcheck // best-effort decode
 	}
-	var secretExpires time.Time
-	if m.ClientSecretExpiresAt != nil {
-		secretExpires = *m.ClientSecretExpiresAt
-	}
 
 	return &OAuth2Client{
 		ID:                      clientID,
@@ -128,7 +124,7 @@ func toOAuth2Client(m *oauth2ClientModel) (*OAuth2Client, error) {
 		TokenEndpointAuthMethod: m.TokenEndpointAuthMethod,
 		RegistrationTokenHash:   m.RegistrationTokenHash,
 		DynamicallyRegistered:   m.DynamicallyRegistered,
-		ClientSecretExpiresAt:   secretExpires,
+		ClientSecretExpiresAt:   m.ClientSecretExpiresAt,
 		Metadata:                metadata,
 		CreatedAt:               m.CreatedAt,
 		UpdatedAt:               m.UpdatedAt,
@@ -153,11 +149,6 @@ func fromOAuth2Client(c *OAuth2Client) *oauth2ClientModel {
 	if len(metadata) == 0 || string(metadata) == "null" {
 		metadata = []byte("{}")
 	}
-	var secretExpires *time.Time
-	if !c.ClientSecretExpiresAt.IsZero() {
-		t := c.ClientSecretExpiresAt
-		secretExpires = &t
-	}
 
 	return &oauth2ClientModel{
 		ID:                      c.ID.String(),
@@ -172,7 +163,7 @@ func fromOAuth2Client(c *OAuth2Client) *oauth2ClientModel {
 		TokenEndpointAuthMethod: c.TokenEndpointAuthMethod,
 		RegistrationTokenHash:   c.RegistrationTokenHash,
 		DynamicallyRegistered:   c.DynamicallyRegistered,
-		ClientSecretExpiresAt:   secretExpires,
+		ClientSecretExpiresAt:   c.ClientSecretExpiresAt,
 		Metadata:                metadata,
 		CreatedAt:               c.CreatedAt,
 		UpdatedAt:               c.UpdatedAt,
