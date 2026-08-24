@@ -59,8 +59,12 @@ func TestSubjectDerivesFromPrincipalKind(t *testing.T) {
 	assert.False(t, agent.IsHumanPrincipal())
 }
 
-// The wire format must not move. Removing the struct field would silently drop
-// impersonated_by from every serialized session.
+// The wire format must not move. Before this change ImpersonatedBy was an
+// id.UserID, a struct, and encoding/json never omits a struct for
+// ,omitempty, so the key was always emitted, holding "" when nobody was
+// impersonating. Omitting the key now would still be a move: a consumer
+// that distinguishes an absent key from an empty one would see a session
+// that no longer reports impersonation state at all.
 func TestImpersonatedByStaysOnTheWire(t *testing.T) {
 	admin := id.NewUserID()
 	s := &session.Session{UserID: id.NewUserID()}
@@ -77,8 +81,9 @@ func TestImpersonatedByStaysOnTheWire(t *testing.T) {
 	require.NoError(t, err)
 	var plainDecoded map[string]any
 	require.NoError(t, json.Unmarshal(plain, &plainDecoded))
-	_, present := plainDecoded["impersonated_by"]
-	assert.False(t, present, "an unimpersonated session must omit the key, as it does today")
+	gotImp, present := plainDecoded["impersonated_by"]
+	assert.True(t, present, "an unimpersonated session must still carry the key, as it always has")
+	assert.Equal(t, "", gotImp, "an unimpersonated session's impersonated_by must be empty, not absent")
 }
 
 func TestSessionJSONRoundTrip(t *testing.T) {
