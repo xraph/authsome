@@ -37,17 +37,24 @@ var _ Store = (*MongoStore)(nil)
 // ──────────────────────────────────────────────────
 
 type oauth2ClientDoc struct {
-	ID           string    `bson:"_id"`
-	AppID        string    `bson:"app_id"`
-	Name         string    `bson:"name"`
-	ClientID     string    `bson:"client_id"`
-	ClientSecret string    `bson:"client_secret"`
-	RedirectURIs []string  `bson:"redirect_uris"`
-	Scopes       []string  `bson:"scopes"`
-	GrantTypes   []string  `bson:"grant_types"`
-	Public       bool      `bson:"public"`
-	CreatedAt    time.Time `bson:"created_at"`
-	UpdatedAt    time.Time `bson:"updated_at"`
+	ID           string   `bson:"_id"`
+	AppID        string   `bson:"app_id"`
+	Name         string   `bson:"name"`
+	ClientID     string   `bson:"client_id"`
+	ClientSecret string   `bson:"client_secret"`
+	RedirectURIs []string `bson:"redirect_uris"`
+	Scopes       []string `bson:"scopes"`
+	GrantTypes   []string `bson:"grant_types"`
+	Public       bool     `bson:"public"`
+
+	TokenEndpointAuthMethod string         `bson:"token_endpoint_auth_method"`
+	RegistrationTokenHash   string         `bson:"registration_token_hash"`
+	DynamicallyRegistered   bool           `bson:"dynamically_registered"`
+	ClientSecretExpiresAt   *time.Time     `bson:"client_secret_expires_at,omitempty"`
+	Metadata                map[string]any `bson:"metadata"`
+
+	CreatedAt time.Time `bson:"created_at"`
+	UpdatedAt time.Time `bson:"updated_at"`
 }
 
 type authCodeDoc struct {
@@ -92,18 +99,28 @@ func oauth2ClientDocToModel(d *oauth2ClientDoc) (*OAuth2Client, error) {
 		grantTypes = []string{}
 	}
 
+	metadata := d.Metadata
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+
 	return &OAuth2Client{
-		ID:           clientID,
-		AppID:        appID,
-		Name:         d.Name,
-		ClientID:     d.ClientID,
-		ClientSecret: d.ClientSecret,
-		RedirectURIs: redirectURIs,
-		Scopes:       scopes,
-		GrantTypes:   grantTypes,
-		Public:       d.Public,
-		CreatedAt:    d.CreatedAt,
-		UpdatedAt:    d.UpdatedAt,
+		ID:                      clientID,
+		AppID:                   appID,
+		Name:                    d.Name,
+		ClientID:                d.ClientID,
+		ClientSecret:            d.ClientSecret,
+		RedirectURIs:            redirectURIs,
+		Scopes:                  scopes,
+		GrantTypes:              grantTypes,
+		Public:                  d.Public,
+		TokenEndpointAuthMethod: d.TokenEndpointAuthMethod,
+		RegistrationTokenHash:   d.RegistrationTokenHash,
+		DynamicallyRegistered:   d.DynamicallyRegistered,
+		ClientSecretExpiresAt:   d.ClientSecretExpiresAt,
+		Metadata:                metadata,
+		CreatedAt:               d.CreatedAt,
+		UpdatedAt:               d.UpdatedAt,
 	}, nil
 }
 
@@ -121,18 +138,28 @@ func oauth2ClientToDoc(c *OAuth2Client) *oauth2ClientDoc {
 		grantTypes = []string{}
 	}
 
+	metadata := c.Metadata
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+
 	return &oauth2ClientDoc{
-		ID:           c.ID.String(),
-		AppID:        c.AppID.String(),
-		Name:         c.Name,
-		ClientID:     c.ClientID,
-		ClientSecret: c.ClientSecret,
-		RedirectURIs: redirectURIs,
-		Scopes:       scopes,
-		GrantTypes:   grantTypes,
-		Public:       c.Public,
-		CreatedAt:    c.CreatedAt,
-		UpdatedAt:    c.UpdatedAt,
+		ID:                      c.ID.String(),
+		AppID:                   c.AppID.String(),
+		Name:                    c.Name,
+		ClientID:                c.ClientID,
+		ClientSecret:            c.ClientSecret,
+		RedirectURIs:            redirectURIs,
+		Scopes:                  scopes,
+		GrantTypes:              grantTypes,
+		Public:                  c.Public,
+		TokenEndpointAuthMethod: c.TokenEndpointAuthMethod,
+		RegistrationTokenHash:   c.RegistrationTokenHash,
+		DynamicallyRegistered:   c.DynamicallyRegistered,
+		ClientSecretExpiresAt:   c.ClientSecretExpiresAt,
+		Metadata:                metadata,
+		CreatedAt:               c.CreatedAt,
+		UpdatedAt:               c.UpdatedAt,
 	}
 }
 
@@ -323,6 +350,20 @@ func (s *MongoStore) GetClientByID(ctx context.Context, clientID id.OAuth2Client
 		return nil, oauth2MongoError(err)
 	}
 	return oauth2ClientDocToModel(doc)
+}
+
+func (s *MongoStore) UpdateClient(ctx context.Context, c *OAuth2Client) error {
+	c.UpdatedAt = time.Now()
+	doc := oauth2ClientToDoc(c)
+	res, err := s.mdb.Collection(oauth2ClientsColl).ReplaceOne(ctx,
+		bson.M{"_id": c.ID.String()}, doc)
+	if err != nil {
+		return oauth2MongoError(err)
+	}
+	if res.MatchedCount == 0 {
+		return ErrClientNotFound
+	}
+	return nil
 }
 
 func (s *MongoStore) ListClients(ctx context.Context, appID id.AppID) ([]*OAuth2Client, error) {

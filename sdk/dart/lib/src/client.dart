@@ -91,7 +91,7 @@ class AuthClient {
 
   /// OpenID Connect Discovery
   /// GET /.well-known/openid-configuration
-  Future<DiscoveryResponse> oidcDiscovery({required String token}) async {
+  Future<DiscoveryResponse> oidcDiscoveryPrefixed({required String token}) async {
     final path = '/.well-known/openid-configuration';
     final res = await _request(
 'GET',
@@ -1724,48 +1724,97 @@ class AuthClient {
 
   /// Device Authorization
   /// POST /v1/oauth/device/authorize
-  Future<DeviceAuthResponse> oauth2DeviceAuthorize({required Map<String, dynamic> body}) async {
+  Future<DeviceAuthResponse> oauth2DeviceAuthorize({required Oauth2DeviceAuthorizeRequest body}) async {
     final path = '/v1/oauth/device/authorize';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
     return DeviceAuthResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Complete device authorization
   /// POST /v1/oauth/device/complete
-  Future<DeviceCompleteResponse> oauth2DeviceComplete({required Map<String, dynamic> body}) async {
+  Future<DeviceCompleteResponse> oauth2DeviceComplete({required Oauth2DeviceCompleteRequest body}) async {
     final path = '/v1/oauth/device/complete';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
     return DeviceCompleteResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Register OAuth2 client
+  /// POST /v1/oauth/register
+  Future<RegisterClientResponse> oauth2RegisterClient({required RegisterClientRequest body, required String token}) async {
+    final path = '/v1/oauth/register';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return RegisterClientResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Read OAuth2 client registration
+  /// GET /v1/oauth/register/{clientId}
+  Future<RegisterClientResponse> oauth2ReadRegistration({required String clientId, required String token}) async {
+    final path = '/v1/oauth/register/$clientId';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return RegisterClientResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Update OAuth2 client registration
+  /// PUT /v1/oauth/register/{clientId}
+  Future<RegisterClientResponse> oauth2UpdateRegistration({required String clientId, required UpdateRegistrationRequest body, required String token}) async {
+    final path = '/v1/oauth/register/$clientId';
+    final res = await _request(
+'PUT',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return RegisterClientResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete OAuth2 client registration
+  /// DELETE /v1/oauth/register/{clientId}
+  Future<void> oauth2DeleteRegistration({required String clientId, required String token}) async {
+    final path = '/v1/oauth/register/$clientId';
+    await _request(
+'DELETE',
+      path,
+      token: token,
+    );
+  }
+
   /// Revoke token
   /// POST /v1/oauth/revoke
-  Future<void> oauth2Revoke({required Map<String, dynamic> body, required String token}) async {
+  Future<void> oauth2Revoke({required Oauth2RevokeRequest body, required String token}) async {
     final path = '/v1/oauth/revoke';
     await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
       token: token,
     );
   }
 
   /// OAuth2 Token
   /// POST /v1/oauth/token
-  Future<Oauth2providerTokenResponse> oauth2Token({required Map<String, dynamic> body}) async {
+  Future<Oauth2providerTokenResponse> oauth2Token({required Oauth2TokenRequest body}) async {
     final path = '/v1/oauth/token';
     final res = await _request(
 'POST',
       path,
-      body: body,
+      body: body.toJson(),
     );
     return Oauth2providerTokenResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }

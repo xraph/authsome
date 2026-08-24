@@ -224,17 +224,18 @@ func (p *Plugin) handleDashboardCreateClient(ctx context.Context, appID id.AppID
 
 	now := time.Now()
 	client := &OAuth2Client{
-		ID:           id.NewOAuth2ClientID(),
-		AppID:        appID,
-		Name:         name,
-		ClientID:     clientIDStr,
-		ClientSecret: hashedSecret,
-		RedirectURIs: redirectURIs,
-		Scopes:       scopes,
-		GrantTypes:   grantTypes,
-		Public:       isPublic,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:                      id.NewOAuth2ClientID(),
+		AppID:                   appID,
+		Name:                    name,
+		ClientID:                clientIDStr,
+		ClientSecret:            hashedSecret,
+		RedirectURIs:            redirectURIs,
+		Scopes:                  scopes,
+		GrantTypes:              grantTypes,
+		Public:                  isPublic,
+		TokenEndpointAuthMethod: authMethodForPublic(isPublic),
+		CreatedAt:               now,
+		UpdatedAt:               now,
 	}
 
 	if err := p.oauth2Store.CreateClient(ctx, client); err != nil {

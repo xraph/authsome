@@ -34,6 +34,10 @@ type Config struct {
 
 	// DisableMigrate prevents automatic database migration on Start.
 	DisableMigrate bool `json:"disable_migrate"`
+
+	// ProtectedResourceMetadataURL is the RFC 9728 metadata URL advertised in
+	// the WWW-Authenticate header on a 401. Empty means no hint is emitted.
+	ProtectedResourceMetadataURL string `json:"protected_resource_metadata_url"`
 }
 
 // SessionConfig configures session behavior.

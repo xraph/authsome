@@ -18,6 +18,14 @@ type Config struct {
 	// Debug enables verbose logging of all operations.
 	Debug bool `json:"debug" mapstructure:"debug" yaml:"debug"`
 
+	// ProtectedResourceMetadataURL is the RFC 9728 metadata URL advertised in
+	// the WWW-Authenticate header on 401 responses. Threaded into the engine
+	// config in buildEngineConfig the same way BasePath is; extension mode is
+	// the only mode that serves the RFC 9728 document (via
+	// RootRouteProviders), so this is the field that has to reach the engine
+	// for the hint to work end to end.
+	ProtectedResourceMetadataURL string `json:"protected_resource_metadata_url" mapstructure:"protected_resource_metadata_url" yaml:"protected_resource_metadata_url"`
+
 	// Session configuration.
 	Session SessionConfig `json:"session" mapstructure:"session" yaml:"session"`
 

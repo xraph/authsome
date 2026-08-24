@@ -1,0 +1,614 @@
+package oauth2provider_test
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/plugins/oauth2provider"
+)
+
+// registerOne registers a client and returns its id and registration token.
+func registerOne(t *testing.T, router http.Handler) (clientID, regToken string) {
+	t.Helper()
+	rec := postRegister(t, router, `{
+		"client_name": "Managed",
+		"redirect_uris": ["http://127.0.0.1:9000/cb"],
+		"token_endpoint_auth_method": "none",
+		"scope": "openid profile"
+	}`)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	return got["client_id"].(string), got["registration_access_token"].(string)
+}
+
+func manageReq(t *testing.T, router http.Handler, method, clientID, token, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	var r *http.Request
+	if body == "" {
+		r = httptest.NewRequestWithContext(t.Context(), method, "/v1/oauth/register/"+clientID, nil)
+	} else {
+		r = httptest.NewRequestWithContext(t.Context(), method, "/v1/oauth/register/"+clientID, strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+	}
+	if token != "" {
+		r.Header.Set("Authorization", "Bearer "+token)
+	}
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, r)
+	return rec
+}
+
+func TestManage_ReadReturnsRegistration(t *testing.T) {
+	_, _, router, _ := newRegistrationFixture(t, true)
+	clientID, token := registerOne(t, router)
+
+	rec := manageReq(t, router, http.MethodGet, clientID, token, "")
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, clientID, got["client_id"])
+	assert.Equal(t, "Managed", got["client_name"])
+	// The token is never re-issued on a read.
+	assert.Empty(t, got["registration_access_token"])
+}
+
+func TestManage_WrongTokenIs401(t *testing.T) {
+	_, _, router, _ := newRegistrationFixture(t, true)
+	clientID, _ := registerOne(t, router)
+
+	rec := manageReq(t, router, http.MethodGet, clientID, "not-the-token", "")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Contains(t, rec.Header().Get("WWW-Authenticate"), "Bearer")
+}
+
+func TestManage_MissingTokenIs401(t *testing.T) {
+	_, _, router, _ := newRegistrationFixture(t, true)
+	clientID, _ := registerOne(t, router)
+	rec := manageReq(t, router, http.MethodGet, clientID, "", "")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// A token is scoped to the client it was issued for. Presenting client A's
+// token against client B must fail even though the token itself is valid.
+func TestManage_TokenFromAnotherClientIs401(t *testing.T) {
+	_, _, router, _ := newRegistrationFixture(t, true)
+	_, tokenA := registerOne(t, router)
+	clientB, _ := registerOne(t, router)
+
+	rec := manageReq(t, router, http.MethodGet, clientB, tokenA, "")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// Admin-created clients have DynamicallyRegistered == false AND an empty
+// RegistrationTokenHash. authenticateRegistration checks both, and the two
+// cases below pull them apart so each half of that check is actually
+// exercised: a single case setting both at once would still pass with
+// either condition alone removed.
+
+// A dynamically registered client with no token hash yet (the state a
+// client would be in only via a direct store write, since the real
+// registration path always sets one) must not authenticate no matter what
+// token is presented.
+func TestManage_DynamicClientWithEmptyHashIsUnreachable(t *testing.T) {
+	_, st, router, appID := newRegistrationFixture(t, true)
+	require.NoError(t, st.CreateClient(t.Context(), &oauth2provider.OAuth2Client{
+		ID:                    id.NewOAuth2ClientID(),
+		AppID:                 appID,
+		ClientID:              "dynamic-no-hash",
+		Name:                  "Dynamic without a hash",
+		RedirectURIs:          []string{"https://app.example.com/cb"},
+		GrantTypes:            []string{"authorization_code"},
+		DynamicallyRegistered: true,
+		RegistrationTokenHash: "",
+	}))
+
+	rec := manageReq(t, router, http.MethodGet, "dynamic-no-hash", "anything", "")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// An admin-created client that happens to carry a valid registration token
+// hash (never possible through this codebase's own admin path today, but
+// nothing stops a future admin surface or a migration from setting one)
+// must still be unreachable, because DynamicallyRegistered is false. The
+// token presented here is the one the hash actually matches, so this
+// proves the DynamicallyRegistered gate independently of the hash check.
+func TestManage_HasHashButNotDynamicallyRegisteredIsUnreachable(t *testing.T) {
+	_, st, router, appID := newRegistrationFixture(t, true)
+	const token = "a-token-that-hashes-correctly"
+	hash, err := bcrypt.GenerateFromPassword([]byte(token), bcrypt.DefaultCost)
+	require.NoError(t, err)
+	require.NoError(t, st.CreateClient(t.Context(), &oauth2provider.OAuth2Client{
+		ID:                    id.NewOAuth2ClientID(),
+		AppID:                 appID,
+		ClientID:              "admin-made",
+		Name:                  "Admin",
+		RedirectURIs:          []string{"https://app.example.com/cb"},
+		GrantTypes:            []string{"authorization_code"},
+		DynamicallyRegistered: false,
+		RegistrationTokenHash: string(hash),
+	}))
+
+	rec := manageReq(t, router, http.MethodGet, "admin-made", token, "")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestManage_UpdateChangesRedirectURIs(t *testing.T) {
+	_, st, router, _ := newRegistrationFixture(t, true)
+	clientID, token := registerOne(t, router)
+
+	rec := manageReq(t, router, http.MethodPut, clientID, token, `{
+		"client_id": "`+clientID+`",
+		"client_name": "Renamed",
+		"redirect_uris": ["http://127.0.0.1:9500/cb"],
+		"token_endpoint_auth_method": "none"
+	}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	stored, err := st.GetClient(t.Context(), clientID)
+	require.NoError(t, err)
+	assert.Equal(t, "Renamed", stored.Name)
+	assert.Equal(t, []string{"http://127.0.0.1:9500/cb"}, stored.RedirectURIs)
+}
+
+// The whole point of running updates through the same pipeline: an update
+// must not be able to buy a capability registration refused.
+func TestManage_UpdateCannotWidenGrants(t *testing.T) {
+	_, st, router, _ := newRegistrationFixture(t, true)
+	clientID, token := registerOne(t, router)
+
+	rec := manageReq(t, router, http.MethodPut, clientID, token, `{
+		"client_id": "`+clientID+`",
+		"redirect_uris": ["http://127.0.0.1:9000/cb"],
+		"grant_types": ["authorization_code", "client_credentials"]
+	}`)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+
+	stored, err := st.GetClient(t.Context(), clientID)
+	require.NoError(t, err)
+	assert.NotContains(t, stored.GrantTypes, "client_credentials")
+}
+
+func TestManage_UpdateCannotWidenScopes(t *testing.T) {
+	_, st, router, _ := newRegistrationFixture(t, true)
+	clientID, token := registerOne(t, router)
+
+	rec := manageReq(t, router, http.MethodPut, clientID, token, `{
+		"client_id": "`+clientID+`",
+		"redirect_uris": ["http://127.0.0.1:9000/cb"],
+		"scope": "openid admin:all"
+	}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	stored, err := st.GetClient(t.Context(), clientID)
+	require.NoError(t, err)
+	assert.NotContains(t, stored.Scopes, "admin:all")
+}
+
+func TestManage_UpdateRejectsMismatchedClientID(t *testing.T) {
+	_, _, router, _ := newRegistrationFixture(t, true)
+	clientID, token := registerOne(t, router)
+
+	rec := manageReq(t, router, http.MethodPut, clientID, token, `{
+		"client_id": "some-other-id",
+		"redirect_uris": ["http://127.0.0.1:9000/cb"]
+	}`)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, "invalid_client_metadata", got["error"])
+}
+
+// UpdateRegistrationRequest.ClientID is a Go field named ClientID with no
+// json tag of its own (json:"-"). encoding/json matches an untagged field
+// case-insensitively against a body key, and the collision is against the
+// Go field name, not the path parameter name: "clientId" is what
+// strings.EqualFold("clientId", "ClientID") accepts, not "client_id" (that
+// key instead binds to the separately, correctly tagged BodyClientID
+// field, json:"client_id", and always did — sending it here would not have
+// exercised the bug even before the json:"-" tag existed). The case below
+// sends "clientId" for that reason. A second case with "client_id" is kept
+// alongside it precisely to document that distinction: that key hits
+// BodyClientID and produces a different, unrelated 400, not the 401 this
+// test is about.
+func TestManage_UpdateIgnoresClientIDSmuggledInBody(t *testing.T) {
+	// The collision key is "clientId": encoding/json matches an untagged
+	// field case-insensitively against the Go field name (ClientID), not
+	// against the path parameter name or the RFC wire name. "client_id"
+	// binds to the separately, correctly tagged BodyClientID field
+	// (json:"client_id") and never collided with the path-bound ClientID,
+	// even before json:"-" was added — sending it would not exercise this
+	// at all, which is why this case targets "clientId" specifically.
+	//
+	// A test that presents a token that matches nobody cannot tell a
+	// smuggled client_id apart from a plain auth failure: both come back
+	// 401 with the same body, since the presented token would not match
+	// the smuggled target's hash either. So this test instead targets a
+	// REAL client's own path with that client's OWN valid token, and
+	// tries to smuggle a DIFFERENT real client's id through the body. If
+	// the smuggled value ever won over the path (the pre-fix bug), the
+	// token would be checked against the wrong client's hash and this
+	// would 401 instead of succeeding against the path's client.
+	t.Run("clientId in body cannot redirect the update to a different client", func(t *testing.T) {
+		_, st, router, _ := newRegistrationFixture(t, true)
+		clientA, tokenA := registerOne(t, router)
+		clientB, _ := registerOne(t, router)
+
+		body, err := json.Marshal(map[string]any{
+			"clientId":                   clientB,
+			"redirect_uris":              []string{"http://127.0.0.1:9500/cb"},
+			"token_endpoint_auth_method": "none",
+		})
+		require.NoError(t, err)
+
+		rec := manageReq(t, router, http.MethodPut, clientA, tokenA, string(body))
+		require.Equal(t, http.StatusOK, rec.Code,
+			"A's own token against A's own path must authenticate as A regardless of what the body's clientId names")
+
+		updatedA, err := st.GetClient(t.Context(), clientA)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"http://127.0.0.1:9500/cb"}, updatedA.RedirectURIs,
+			"the path's client, A, must be the one that got updated")
+
+		stillB, err := st.GetClient(t.Context(), clientB)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"http://127.0.0.1:9000/cb"}, stillB.RedirectURIs,
+			"B must be untouched by a request addressed to A's path")
+	})
+
+	// "client_id" is the RFC 7591/7592 wire name and binds to
+	// BodyClientID, not ClientID: it is not the collision key. Pinned
+	// separately so nobody reads the case above and assumes "client_id"
+	// would have worked just as well.
+	t.Run("client_id in body is the RFC field, not the collision, and is compared against the path", func(t *testing.T) {
+		_, st, router, _ := newRegistrationFixture(t, true)
+		clientA, tokenA := registerOne(t, router)
+		clientB, _ := registerOne(t, router)
+
+		body, err := json.Marshal(map[string]any{
+			"client_id":     clientB,
+			"redirect_uris": []string{"http://127.0.0.1:9500/cb"},
+		})
+		require.NoError(t, err)
+
+		rec := manageReq(t, router, http.MethodPut, clientA, tokenA, string(body))
+		require.Equal(t, http.StatusBadRequest, rec.Code,
+			"section 2.2: a body client_id naming a different client than the path must be rejected")
+		var got map[string]any
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+		assert.Equal(t, "invalid_client_metadata", got["error"])
+
+		stored, err := st.GetClient(t.Context(), clientA)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"http://127.0.0.1:9000/cb"}, stored.RedirectURIs,
+			"the rejected request must not have written anything")
+	})
+}
+
+// PUT writes a full record on every backend just as POST's CreateClient
+// does (an UPDATE/ReplaceOne in place rather than an INSERT, but the same
+// whole-row write either way), so it must be capped the same way.
+func TestManage_UpdateRejectsOversizedClientName(t *testing.T) {
+	_, st, router, _ := newRegistrationFixture(t, true)
+	clientID, token := registerOne(t, router)
+
+	body, err := json.Marshal(map[string]any{
+		"client_id":     clientID,
+		"client_name":   strings.Repeat("a", 257),
+		"redirect_uris": []string{"http://127.0.0.1:9000/cb"},
+	})
+	require.NoError(t, err)
+
+	rec := manageReq(t, router, http.MethodPut, clientID, token, string(body))
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, "invalid_client_metadata", got["error"])
+
+	stored, err := st.GetClient(t.Context(), clientID)
+	require.NoError(t, err)
+	assert.Equal(t, "Managed", stored.Name, "the rejected update must not have written anything")
+}
+
+func TestManage_UpdateRejectsTooManyRedirectURIs(t *testing.T) {
+	_, st, router, _ := newRegistrationFixture(t, true)
+	clientID, token := registerOne(t, router)
+
+	uris := make([]string, 21)
+	for i := range uris {
+		uris[i] = fmt.Sprintf("https://app%d.example.com/cb", i)
+	}
+	body, err := json.Marshal(map[string]any{
+		"client_id":     clientID,
+		"redirect_uris": uris,
+	})
+	require.NoError(t, err)
+
+	rec := manageReq(t, router, http.MethodPut, clientID, token, string(body))
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, "invalid_client_metadata", got["error"])
+
+	stored, err := st.GetClient(t.Context(), clientID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"http://127.0.0.1:9000/cb"}, stored.RedirectURIs,
+		"the rejected update must not have written anything")
+}
+
+func TestManage_UpdateRejectsTooManyContacts(t *testing.T) {
+	_, _, router, _ := newRegistrationFixture(t, true)
+	clientID, token := registerOne(t, router)
+
+	contacts := make([]string, 11)
+	for i := range contacts {
+		contacts[i] = fmt.Sprintf("ops%d@example.com", i)
+	}
+	body, err := json.Marshal(map[string]any{
+		"client_id":     clientID,
+		"redirect_uris": []string{"http://127.0.0.1:9000/cb"},
+		"contacts":      contacts,
+	})
+	require.NoError(t, err)
+
+	rec := manageReq(t, router, http.MethodPut, clientID, token, string(body))
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, "invalid_client_metadata", got["error"])
+}
+
+// Omitting scope resets to the full allowlist, not a merge with whatever
+// the client held before. Pinned deliberately so this reads as an
+// intentional replacement-semantics choice, not a bug to "fix" later.
+func TestManage_UpdateOmittingScopeResetsToAllowlist(t *testing.T) {
+	_, _, router, _ := newRegistrationFixture(t, true)
+	rec := postRegister(t, router, `{
+		"redirect_uris": ["http://127.0.0.1:9000/cb"],
+		"token_endpoint_auth_method": "none",
+		"scope": "openid"
+	}`)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	var reg map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &reg))
+	clientID := reg["client_id"].(string)
+	token := reg["registration_access_token"].(string)
+	require.Equal(t, "openid", reg["scope"])
+
+	rec = manageReq(t, router, http.MethodPut, clientID, token, `{
+		"client_id": "`+clientID+`",
+		"redirect_uris": ["http://127.0.0.1:9000/cb"],
+		"token_endpoint_auth_method": "none"
+	}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, "openid profile email offline_access", got["scope"],
+		"an omitted scope resets to the full allowlist, per RFC 7592 replacement semantics")
+}
+
+// A public client has no client_secret hash, and update never mints one.
+// Letting it switch to a confidential auth method would leave it unable to
+// authenticate forever, with no signal at the time it happened.
+func TestManage_UpdateRejectsPublicToConfidentialTransition(t *testing.T) {
+	_, st, router, _ := newRegistrationFixture(t, true)
+	clientID, token := registerOne(t, router) // registered with token_endpoint_auth_method: none
+
+	rec := manageReq(t, router, http.MethodPut, clientID, token, `{
+		"client_id": "`+clientID+`",
+		"redirect_uris": ["http://127.0.0.1:9000/cb"],
+		"token_endpoint_auth_method": "client_secret_basic"
+	}`)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.Equal(t, "invalid_client_metadata", got["error"])
+
+	stored, err := st.GetClient(t.Context(), clientID)
+	require.NoError(t, err)
+	assert.Equal(t, "none", stored.TokenEndpointAuthMethod)
+	assert.True(t, stored.Public)
+}
+
+// Every other 401 case in this file goes through GET. This one, and the
+// DELETE case below it, prove PUT and DELETE independently check the
+// token rather than inheriting coverage from GET by accident.
+func TestManage_UpdateWrongTokenIs401AndDoesNotMutate(t *testing.T) {
+	_, st, router, _ := newRegistrationFixture(t, true)
+	clientID, _ := registerOne(t, router)
+
+	rec := manageReq(t, router, http.MethodPut, clientID, "not-the-token", `{
+		"client_id": "`+clientID+`",
+		"client_name": "Hijacked",
+		"redirect_uris": ["http://127.0.0.1:6666/cb"]
+	}`)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+
+	stored, err := st.GetClient(t.Context(), clientID)
+	require.NoError(t, err)
+	assert.Equal(t, "Managed", stored.Name)
+	assert.Equal(t, []string{"http://127.0.0.1:9000/cb"}, stored.RedirectURIs)
+}
+
+func TestManage_DeleteWrongTokenIs401AndClientSurvives(t *testing.T) {
+	_, st, router, _ := newRegistrationFixture(t, true)
+	clientID, _ := registerOne(t, router)
+
+	rec := manageReq(t, router, http.MethodDelete, clientID, "not-the-token", "")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+
+	_, err := st.GetClient(t.Context(), clientID)
+	assert.NoError(t, err, "a rejected delete must not have removed the client")
+}
+
+// RFC 7592 permits rotating the registration access token on update; this
+// server deliberately does not, because rotation strands any client that
+// fails to persist the new value. The original token presented at
+// registration must keep working after a PUT, and the PUT response itself
+// must not hand back credentials a plain update never touches.
+func TestManage_UpdateDoesNotRotateTokenOrLeakCredentials(t *testing.T) {
+	_, _, router, _ := newRegistrationFixture(t, true)
+	clientID, token := registerOne(t, router)
+
+	putRec := manageReq(t, router, http.MethodPut, clientID, token, `{
+		"client_id": "`+clientID+`",
+		"client_name": "Renamed",
+		"redirect_uris": ["http://127.0.0.1:9500/cb"],
+		"token_endpoint_auth_method": "none"
+	}`)
+	require.Equal(t, http.StatusOK, putRec.Code)
+
+	var putResp map[string]any
+	require.NoError(t, json.Unmarshal(putRec.Body.Bytes(), &putResp))
+	assert.Empty(t, putResp["registration_access_token"])
+	assert.Empty(t, putResp["client_secret"])
+
+	getRec := manageReq(t, router, http.MethodGet, clientID, token, "")
+	assert.Equal(t, http.StatusOK, getRec.Code, "the original registration token must still work after a PUT")
+}
+
+// UpdateClient is a full-record replace on every backend. A handler that
+// fetches the stored client and mutates it in place (as this one does)
+// keeps everything it does not explicitly touch; a handler that
+// constructed a fresh OAuth2Client from the request would risk silently
+// wiping these fields instead. This test pins that by comparing a
+// snapshot taken before the PUT against the store's state after it.
+//
+// The snapshot has to be a dereferenced copy, not just another pointer:
+// MemoryStore.GetClient hands back the live pointer into its map with no
+// copy, and handleUpdateRegistration mutates that same object in place.
+// Two GetClient calls around the PUT would return the identical *OAuth2Client,
+// making every assertion below compare a field against itself regardless
+// of what the handler did. Copying the struct by value before the PUT
+// fixes that; verified by temporarily having the handler zero one of
+// these fields and confirming the assertion below actually fails.
+func TestManage_UpdatePreservesFieldsItDoesNotTouch(t *testing.T) {
+	_, st, router, _ := newRegistrationFixture(t, true)
+	clientID, token := registerOne(t, router)
+
+	before, err := st.GetClient(t.Context(), clientID)
+	require.NoError(t, err)
+	beforeCopy := *before
+
+	rec := manageReq(t, router, http.MethodPut, clientID, token, `{
+		"client_id": "`+clientID+`",
+		"client_name": "Renamed",
+		"redirect_uris": ["http://127.0.0.1:9500/cb"],
+		"token_endpoint_auth_method": "none"
+	}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	after, err := st.GetClient(t.Context(), clientID)
+	require.NoError(t, err)
+	assert.Equal(t, beforeCopy.RegistrationTokenHash, after.RegistrationTokenHash)
+	assert.Equal(t, beforeCopy.ClientSecret, after.ClientSecret)
+	assert.Equal(t, beforeCopy.CreatedAt, after.CreatedAt)
+	assert.Equal(t, beforeCopy.AppID, after.AppID)
+}
+
+func TestManage_Delete(t *testing.T) {
+	_, st, router, _ := newRegistrationFixture(t, true)
+	clientID, token := registerOne(t, router)
+
+	rec := manageReq(t, router, http.MethodDelete, clientID, token, "")
+	require.Equal(t, http.StatusNoContent, rec.Code)
+
+	_, err := st.GetClient(t.Context(), clientID)
+	assert.ErrorIs(t, err, oauth2provider.ErrClientNotFound)
+}
+
+// Turning registration off closes the door to new clients. It must not
+// strand the ones that came in while it was open: an operator still needs
+// DELETE, and a client still needs to see that it was revoked.
+func TestManage_StillWorksWhenRegistrationDisabled(t *testing.T) {
+	p, st, router, _ := newRegistrationFixture(t, true)
+	clientID, token := registerOne(t, router)
+
+	p.SetDynamicRegistrationForTest(false)
+
+	rec := manageReq(t, router, http.MethodGet, clientID, token, "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	rec = manageReq(t, router, http.MethodPut, clientID, token, `{
+		"client_id": "`+clientID+`",
+		"client_name": "Still Managed",
+		"redirect_uris": ["http://127.0.0.1:9000/cb"],
+		"token_endpoint_auth_method": "none"
+	}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	stored, err := st.GetClient(t.Context(), clientID)
+	require.NoError(t, err)
+	assert.Equal(t, "Still Managed", stored.Name)
+
+	rec = manageReq(t, router, http.MethodDelete, clientID, token, "")
+	require.Equal(t, http.StatusNoContent, rec.Code)
+	_, err = st.GetClient(t.Context(), clientID)
+	assert.ErrorIs(t, err, oauth2provider.ErrClientNotFound)
+}
+
+// The manage routes' rate-limit key combines the caller's IP with the
+// path's client_id. Supplying a KeyFunc replaces middleware.RateLimit's
+// default IP-only key rather than adding to it, so a client_id-only key
+// (what shipped originally) drops per-IP throttling entirely and lets
+// anyone who learns a client_id burn that specific bucket and lock its
+// owner out. This pins both halves of the composite key: the same caller
+// trips its own budget, and a different caller against the identical
+// client_id is unaffected by it.
+func TestManage_RateLimitKeyIncludesCallerIP(t *testing.T) {
+	appID := id.NewAppID()
+	p := oauth2provider.New(oauth2provider.Config{
+		Issuer:                "https://auth.example.com",
+		DynamicRegistration:   true,
+		RegistrationAppID:     appID.String(),
+		RegistrationRateLimit: oauth2provider.RateLimit{Limit: 1, Window: time.Minute},
+	})
+	st := oauth2provider.NewMemoryStore()
+	p.SetOAuth2Store(st)
+	router := newTestRouter(t, p)
+
+	clientID, token := registerOne(t, router)
+
+	getFrom := func(remoteAddr string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/oauth/register/"+clientID, nil)
+		r.Header.Set("Authorization", "Bearer "+token)
+		r.RemoteAddr = remoteAddr
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, r)
+		return rec
+	}
+
+	// The manage routes run at 6x the base registration limit (see
+	// manageOpts in plugin.go): Limit 1 here means a budget of 6.
+	const manageLimit = 6
+	const ip1 = "203.0.113.5:11111"
+	for i := 1; i <= manageLimit; i++ {
+		rec := getFrom(ip1)
+		require.Equal(t, http.StatusOK, rec.Code, "request %d from this caller is within its budget", i)
+	}
+	rec := getFrom(ip1)
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code,
+		"the same caller IP against the same client_id must trip once its budget is spent")
+
+	// A different caller IP against the SAME client_id must get its own,
+	// fresh budget. If the key ever regressed to client_id-only (the
+	// original bug this pins), this would 429 immediately, since the
+	// client_id-only bucket above is already exhausted.
+	const ip2 = "203.0.113.9:22222"
+	rec = getFrom(ip2)
+	assert.Equal(t, http.StatusOK, rec.Code,
+		"a different caller IP must not inherit another IP's exhausted budget for the same client_id")
+}

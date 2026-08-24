@@ -238,6 +238,16 @@ func WithRateLimiter(rl ratelimit.Limiter) Option {
 	}
 }
 
+// WithProtectedResourceMetadataURL sets the RFC 9728 metadata URL advertised
+// in the WWW-Authenticate header on a 401. Leave it unset to emit no hint.
+// It should be the origin-root path the oauth2provider plugin serves, for
+// example https://auth.example.com/.well-known/oauth-protected-resource.
+func WithProtectedResourceMetadataURL(url string) Option {
+	return func(e *Engine) {
+		e.config.ProtectedResourceMetadataURL = url
+	}
+}
+
 // WithLockoutTracker sets the account lockout tracker.
 func WithLockoutTracker(t lockout.Tracker) Option {
 	return func(e *Engine) {

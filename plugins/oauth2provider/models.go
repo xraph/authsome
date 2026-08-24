@@ -17,8 +17,44 @@ type OAuth2Client struct {
 	Scopes       []string          `json:"scopes"`
 	GrantTypes   []string          `json:"grant_types"` // "authorization_code", "client_credentials"
 	Public       bool              `json:"public"`      // Public clients (SPAs, mobile) don't have a secret
-	CreatedAt    time.Time         `json:"created_at"`
-	UpdatedAt    time.Time         `json:"updated_at"`
+
+	// TokenEndpointAuthMethod is RFC 7591 token_endpoint_auth_method:
+	// "none", "client_secret_basic" or "client_secret_post". Every
+	// enforcement site (plugin.go's PKCE, client-secret and
+	// client_credentials checks) reads Public, not this field; nothing
+	// reads TokenEndpointAuthMethod to decide behaviour. The two are kept
+	// in sync at every write site instead: the admin and dashboard paths
+	// derive the method from Public, and the dynamic registration path
+	// derives Public from the method ("none" means public). Two flags that
+	// can disagree is a bug waiting to happen.
+	TokenEndpointAuthMethod string `json:"token_endpoint_auth_method,omitempty"`
+
+	// RegistrationTokenHash is the bcrypt hash of the RFC 7592 registration
+	// access token. Empty for admin-created clients, which is what makes
+	// them unreachable over the 7592 routes.
+	RegistrationTokenHash string `json:"-"`
+
+	// DynamicallyRegistered records that this client came in over RFC 7591
+	// rather than the admin surface. It gates the 7592 routes and lets the
+	// dashboard tell the two populations apart.
+	DynamicallyRegistered bool `json:"dynamically_registered"`
+
+	// ClientSecretExpiresAt is RFC 7591 client_secret_expires_at. Nil means
+	// the secret never expires.
+	//
+	// A pointer, not a bare time.Time: encoding/json never treats a struct as
+	// empty, so omitempty would not fire and every client serialised through
+	// ListClientsResponse would carry "0001-01-01T00:00:00Z".
+	ClientSecretExpiresAt *time.Time `json:"client_secret_expires_at,omitempty"`
+
+	// Metadata holds the RFC 7591 fields that carry no behaviour:
+	// client_uri, logo_uri, contacts, tos_uri, policy_uri, software_id,
+	// software_version. They only need to round-trip on a 7592 read, so
+	// they do not each earn a column across four backends.
+	Metadata map[string]any `json:"metadata,omitempty"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // AuthorizationCode represents a short-lived authorization code.

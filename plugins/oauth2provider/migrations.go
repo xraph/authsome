@@ -153,6 +153,44 @@ ALTER TABLE authsome_oauth2_device_codes ADD CONSTRAINT authsome_oauth2_device_c
 		},
 	)
 
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_dynamic_registration_columns",
+			Version: "20260824000030",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_oauth2_clients
+    ADD COLUMN IF NOT EXISTS token_endpoint_auth_method TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS registration_token_hash    TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS dynamically_registered     BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS client_secret_expires_at   TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS metadata                   JSONB NOT NULL DEFAULT '{}';
+
+CREATE INDEX IF NOT EXISTS idx_authsome_oauth2_clients_dynamic
+    ON authsome_oauth2_clients (app_id)
+    WHERE dynamically_registered;
+
+UPDATE authsome_oauth2_clients
+   SET token_endpoint_auth_method = CASE WHEN public THEN 'none' ELSE 'client_secret_basic' END
+ WHERE token_endpoint_auth_method = '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_oauth2_clients_dynamic;
+ALTER TABLE authsome_oauth2_clients
+    DROP COLUMN IF EXISTS token_endpoint_auth_method,
+    DROP COLUMN IF EXISTS registration_token_hash,
+    DROP COLUMN IF EXISTS dynamically_registered,
+    DROP COLUMN IF EXISTS client_secret_expires_at,
+    DROP COLUMN IF EXISTS metadata;
+`)
+				return err
+			},
+		},
+	)
+
 	// ──────────────────────────────────────────────────
 	// SQLite migrations
 	// ──────────────────────────────────────────────────
@@ -243,6 +281,32 @@ CREATE INDEX IF NOT EXISTS idx_authsome_oauth2_device_codes_user_code
 			Down: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_oauth2_device_codes;`)
 				return err
+			},
+		},
+	)
+
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_dynamic_registration_columns",
+			Version: "20260824000030",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_oauth2_clients ADD COLUMN token_endpoint_auth_method TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_oauth2_clients ADD COLUMN registration_token_hash    TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_oauth2_clients ADD COLUMN dynamically_registered     BOOLEAN NOT NULL DEFAULT 0;
+ALTER TABLE authsome_oauth2_clients ADD COLUMN client_secret_expires_at   TIMESTAMP;
+ALTER TABLE authsome_oauth2_clients ADD COLUMN metadata                   TEXT NOT NULL DEFAULT '{}';
+
+UPDATE authsome_oauth2_clients
+   SET token_endpoint_auth_method = CASE WHEN public = 1 THEN 'none' ELSE 'client_secret_basic' END
+ WHERE token_endpoint_auth_method = '';
+`)
+				return err
+			},
+			// Older SQLite cannot drop columns, so Down is a no-op. Rolling
+			// back this migration leaves the columns in place, harmlessly.
+			Down: func(_ context.Context, _ migrate.Executor) error {
+				return nil
 			},
 		},
 	)

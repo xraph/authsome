@@ -22,6 +22,7 @@ import (
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
@@ -402,7 +403,7 @@ func testSessionPrincipalKindRoundTrip(t *testing.T, s store.Store) {
 		Token:                 "tok-kind",
 		RefreshToken:          "rtok-kind",
 		FamilyID:              id.NewSessionFamilyID(),
-		PrincipalKind:         "user",
+		PrincipalKind:         principal.KindUser,
 		ExpiresAt:             now().Add(time.Hour),
 		RefreshTokenExpiresAt: now().Add(24 * time.Hour),
 		CreatedAt:             now(),
@@ -412,7 +413,7 @@ func testSessionPrincipalKindRoundTrip(t *testing.T, s store.Store) {
 
 	got, err := s.GetSession(ctx, explicit.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "user", got.PrincipalKind, "PrincipalKind must survive the round trip")
+	assert.Equal(t, principal.KindUser, got.PrincipalKind, "PrincipalKind must survive the round trip")
 	assert.Equal(t, u.ID.String(), got.UserID.String())
 	assert.True(t, got.ServiceAccountID.IsNil(), "a user session must not gain a ServiceAccountID")
 
@@ -446,7 +447,7 @@ func testServiceAccountSessionRoundTrip(t *testing.T, s store.Store) {
 		Token:                 "tok-svc",
 		RefreshToken:          "rtok-svc",
 		FamilyID:              id.NewSessionFamilyID(),
-		PrincipalKind:         "service_account",
+		PrincipalKind:         principal.KindService,
 		ServiceAccountID:      svcID,
 		ExpiresAt:             now().Add(time.Hour),
 		RefreshTokenExpiresAt: now().Add(24 * time.Hour),
@@ -468,7 +469,7 @@ func testServiceAccountSessionRoundTrip(t *testing.T, s store.Store) {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := tc.get()
 			require.NoError(t, err)
-			assert.Equal(t, "service_account", got.PrincipalKind, "PrincipalKind must survive the round trip")
+			assert.Equal(t, principal.KindService, got.PrincipalKind, "PrincipalKind must survive the round trip")
 			assert.Equal(t, svcID.String(), got.ServiceAccountID.String(), "ServiceAccountID must survive the round trip")
 			assert.True(t, got.UserID.IsNil(), "a service-account session must not acquire a UserID")
 		})

@@ -20,6 +20,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -570,7 +571,7 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 			EnvID:            key.EnvID,
 			CreatedAt:        now,
 			ExpiresAt:        now.Add(24 * time.Hour),
-			PrincipalKind:    "service_account",
+			PrincipalKind:    principal.KindService,
 			ServiceAccountID: key.ServiceAccountID,
 		}
 		return &strategy.Result{Session: syntheticSession}, nil

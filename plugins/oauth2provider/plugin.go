@@ -24,6 +24,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/tokenformat"
 
@@ -36,9 +37,32 @@ import (
 var (
 	_ plugin.Plugin            = (*Plugin)(nil)
 	_ plugin.RouteProvider     = (*Plugin)(nil)
+	_ plugin.RootRouteProvider = (*Plugin)(nil)
 	_ plugin.OnInit            = (*Plugin)(nil)
 	_ plugin.MigrationProvider = (*Plugin)(nil)
 )
+
+// RateLimit bounds how often an endpoint may be called.
+type RateLimit struct {
+	Limit  int
+	Window time.Duration
+}
+
+// ProtectedResource describes one RFC 9728 protected resource.
+type ProtectedResource struct {
+	Resource        string
+	ScopesSupported []string
+}
+
+// defaultDynamicRegistrationScopes is the default Config.DynamicRegistrationScopes
+// allowlist, applied in New when the embedder sets none. Both discovery
+// documents advertise scopes_supported straight from
+// p.config.DynamicRegistrationScopes (metadata.go), so this default is also,
+// transitively, what a stock deployment advertises there. One list feeding
+// both means a client that follows discovery never asks for a scope
+// registration silently drops, and discovery never advertises a scope
+// registration would refuse by default.
+var defaultDynamicRegistrationScopes = []string{"openid", "profile", "email", "offline_access"}
 
 // Config configures the OAuth2 provider plugin.
 type Config struct {
@@ -62,6 +86,30 @@ type Config struct {
 	// Set this to a custom URL (e.g. "https://myapp.com/device") when using
 	// an external UI like authsome-ui to host the verification page.
 	VerificationURI string
+
+	// DynamicRegistration enables RFC 7591 registration. Off by default:
+	// an upgrade must never open a public registration endpoint on its own.
+	DynamicRegistration bool
+
+	// RegistrationAppID is the app dynamic clients belong to when the
+	// request carries no resolvable publishable key. Leave empty on a
+	// multi-tenant deployment so an unkeyed request is refused rather
+	// than pooled into somebody's app.
+	RegistrationAppID string
+
+	// DynamicRegistrationScopes is the allowlist a dynamic client's
+	// requested scopes are intersected against. Defaults to openid,
+	// profile, email and offline_access.
+	DynamicRegistrationScopes []string
+
+	// RegistrationRateLimit caps POST /register per client IP.
+	// Defaults to 10 per hour.
+	RegistrationRateLimit RateLimit
+
+	// ProtectedResources declares additional RFC 9728 resource identifiers,
+	// keyed by the path suffix they are served under. AuthSome always
+	// describes itself at the unsuffixed path regardless of this map.
+	ProtectedResources map[string]ProtectedResource
 }
 
 // Plugin is the OAuth2 provider plugin.
@@ -71,6 +119,12 @@ type Plugin struct {
 	oauth2Store Store
 	logger      log.Logger
 	engine      plugin.Engine
+
+	// regLimiter is a process-local fallback used for POST /register when
+	// the engine has no rate limiter configured (extension.Config.RateLimit
+	// defaults off, and most embedders never set one either). See
+	// registrationLimiter.
+	regLimiter ratelimit.Limiter
 }
 
 // New creates a new OAuth2 provider plugin.
@@ -91,7 +145,15 @@ func New(cfg ...Config) *Plugin {
 	if c.DeviceCodeInterval == 0 {
 		c.DeviceCodeInterval = 5
 	}
-	return &Plugin{config: c}
+	if len(c.DynamicRegistrationScopes) == 0 {
+		c.DynamicRegistrationScopes = append([]string(nil), defaultDynamicRegistrationScopes...)
+	}
+	if c.RegistrationRateLimit.Limit == 0 {
+		c.RegistrationRateLimit = RateLimit{Limit: 10, Window: time.Hour}
+	}
+
+	p := &Plugin{config: c, logger: log.NewNoopLogger()}
+	return p
 }
 
 // Name returns the plugin name.
@@ -124,7 +186,38 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		p.oauth2Store = NewMemoryStore()
 	}
 
+	// POST /register is unauthenticated and does two bcrypt hashes per
+	// request, so it must never run unlimited. Most deployments never turn
+	// on extension.Config.RateLimit (it defaults off), which would
+	// otherwise leave engine.RateLimiter() nil and the endpoint's rate
+	// limit middleware silently unattached. Fall back to a process-local
+	// limiter instead — constructed once, here, not per request or per
+	// route registration.
+	if engine.RateLimiter() == nil {
+		p.regLimiter = ratelimit.NewMemoryLimiter()
+		p.logger.Warn("oauth2: no engine rate limiter configured; " +
+			"dynamic client registration falls back to a process-local limiter, " +
+			"so the cap is per-replica behind a load balancer")
+	}
+
 	return nil
+}
+
+// registrationLimiter returns the limiter POST /register should use. It
+// prefers the engine's shared limiter and falls back to a process-local one
+// otherwise — built once in OnInit, or lazily here for tests that construct
+// a Plugin without calling OnInit at all, so the fallback never leaves the
+// endpoint unlimited.
+func (p *Plugin) registrationLimiter() ratelimit.Limiter {
+	if p.engine != nil {
+		if rl := p.engine.RateLimiter(); rl != nil {
+			return rl
+		}
+	}
+	if p.regLimiter == nil {
+		p.regLimiter = ratelimit.NewMemoryLimiter()
+	}
+	return p.regLimiter
 }
 
 // MigrationGroups returns the OAuth2 migration groups for the given driver.
@@ -144,6 +237,13 @@ func (p *Plugin) SetStore(s store.Store) { p.store = s }
 
 // SetOAuth2Store allows direct OAuth2 store injection for testing.
 func (p *Plugin) SetOAuth2Store(s Store) { p.oauth2Store = s }
+
+// SetDynamicRegistrationForTest toggles RFC 7591 registration after
+// construction. Tests use it to prove the 7592 routes keep working once
+// registration itself is closed.
+func (p *Plugin) SetDynamicRegistrationForTest(enabled bool) {
+	p.config.DynamicRegistration = enabled
+}
 
 // RegisterRoutes registers OAuth2 provider HTTP endpoints.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
@@ -199,6 +299,101 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
+	// RFC 7591 dynamic client registration. Unauthenticated by design, so
+	// it is rate limited by IP and returns 404 unless explicitly enabled.
+	// The limiter always comes from registrationLimiter, never skipped:
+	// most deployments never configure engine.RateLimiter(), and an
+	// endpoint that mints credentials must not go unlimited just because
+	// nobody opted into the shared limiter.
+	regOpts := []forge.RouteOption{
+		forge.WithSummary("Register OAuth2 client"),
+		forge.WithDescription("RFC 7591 dynamic client registration."),
+		forge.WithOperationID("oauth2RegisterClient"),
+		forge.WithRequestSchema(RegisterClientRequest{}),
+		forge.WithResponseSchema(http.StatusCreated, "Client registered", RegisterClientResponse{}),
+		forge.WithErrorResponses(),
+		forge.WithMiddleware(middleware.RateLimit(p.registrationLimiter(), middleware.RateLimitConfig{
+			Limit:  p.config.RegistrationRateLimit.Limit,
+			Window: p.config.RegistrationRateLimit.Window,
+		})),
+	}
+	if err := g.POST("/register", p.handleRegisterClient, regOpts...); err != nil {
+		return err
+	}
+
+	// RFC 7592 registration management. Registered unconditionally: turning
+	// registration off must not strand clients that already registered.
+	// The limiter always comes from registrationLimiter, for the same
+	// reason POST /register does above — an engine-less test or a stock
+	// deployment that never configures a shared limiter must still get
+	// one, rather than these routes going unlimited.
+	//
+	// The key combines the caller's IP with the path's client_id rather
+	// than either alone. Supplying a KeyFunc replaces
+	// middleware.RateLimit's default IP-only key, it does not add to it —
+	// so a client_id-only key (what this used to be) dropped IP throttling
+	// entirely: one host varying the path segment got a fresh, unthrottled
+	// bucket per client_id it guessed, and worse, anyone who learned a
+	// real client_id could burn that specific bucket and lock its
+	// legitimate owner out of GET/PUT/DELETE for the window. Keying on
+	// both restores a real per-caller budget and fixes that lockout: an
+	// attacker's requests now land in their own IP's bucket instead of
+	// the victim's.
+	//
+	// What this key does NOT do: throttle enumeration across client_ids.
+	// One IP still gets a fresh 6x budget for every distinct client_id it
+	// tries, by design — client_id is 16 random bytes, not a secret worth
+	// building a global-per-IP limiter around here, and bcrypt's own cost
+	// already taxes each guess in authenticateRegistration. Do not read
+	// this key as an anti-enumeration control; it only fixes who pays for
+	// a given client_id's budget, not how many client_ids one caller may
+	// try.
+	//
+	// middleware.ClientIP is the same trusted-proxy-aware helper the
+	// default KeyFunc uses; reading a forwarding header here directly
+	// would let a direct, untrusted client mint a fresh bucket per
+	// request by spoofing it.
+	manageOpts := func(extra ...forge.RouteOption) []forge.RouteOption {
+		base := make([]forge.RouteOption, 0, 2+len(extra))
+		base = append(base,
+			forge.WithErrorResponses(),
+			forge.WithMiddleware(middleware.RateLimit(p.registrationLimiter(), middleware.RateLimitConfig{
+				Limit:  p.config.RegistrationRateLimit.Limit * 6,
+				Window: p.config.RegistrationRateLimit.Window,
+				KeyFunc: func(c forge.Context) string {
+					return "oauth2-reg-manage:" + middleware.ClientIP(c.Request()) + ":" + c.Param("clientId")
+				},
+			})),
+		)
+
+		return append(base, extra...)
+	}
+
+	if err := g.GET("/register/:clientId", p.handleReadRegistration, manageOpts(
+		forge.WithSummary("Read OAuth2 client registration"),
+		forge.WithOperationID("oauth2ReadRegistration"),
+		forge.WithResponseSchema(http.StatusOK, "Client information", RegisterClientResponse{}),
+	)...); err != nil {
+		return err
+	}
+
+	if err := g.PUT("/register/:clientId", p.handleUpdateRegistration, manageOpts(
+		forge.WithSummary("Update OAuth2 client registration"),
+		forge.WithOperationID("oauth2UpdateRegistration"),
+		forge.WithRequestSchema(UpdateRegistrationRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Client information", RegisterClientResponse{}),
+	)...); err != nil {
+		return err
+	}
+
+	if err := g.DELETE("/register/:clientId", p.handleDeleteRegistration, manageOpts(
+		forge.WithSummary("Delete OAuth2 client registration"),
+		forge.WithOperationID("oauth2DeleteRegistration"),
+		forge.WithNoContentResponse(),
+	)...); err != nil {
+		return err
+	}
+
 	// Authenticated OAuth2 endpoints — require a logged-in user.
 	// The extension's global AuthMiddleware populates the user context;
 	// RequireAuthMiddleware blocks if no user was resolved.
@@ -221,10 +416,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
-	// Well-known OIDC discovery
+	// Mirror onto the grouped router so an SDK client whose base URL
+	// includes the mount prefix still resolves discovery.
 	if err := router.GET("/.well-known/openid-configuration", p.handleDiscovery,
 		forge.WithSummary("OpenID Connect Discovery"),
-		forge.WithOperationID("oidcDiscovery"),
+		forge.WithOperationID("oidcDiscoveryPrefixed"),
 		forge.WithTags("OAuth2"),
 	); err != nil {
 		return err
@@ -262,6 +458,55 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Delete OAuth2 client"),
 		forge.WithOperationID("deleteOAuth2Client"),
 		forge.WithErrorResponses(),
+	)
+}
+
+// RegisterRootRoutes registers discovery documents at the origin root.
+// These cannot live on the grouped router: a client that only knows the
+// host fetches https://host/.well-known/... with no prefix.
+func (p *Plugin) RegisterRootRoutes(router forge.Router) error {
+	return p.registerWellKnown(router)
+}
+
+// registerWellKnown mounts the discovery documents on the given router.
+// Only the OIDC document is also mirrored onto the grouped router (see
+// RegisterRoutes); the RFC 8414 and RFC 9728 documents are not, since a
+// prefixed copy of either is undiscoverable and would only add duplicate
+// OpenAPI entries.
+func (p *Plugin) registerWellKnown(router forge.Router) error {
+	if err := router.GET("/.well-known/openid-configuration", p.handleDiscovery,
+		forge.WithSummary("OpenID Connect Discovery"),
+		forge.WithOperationID("oidcDiscovery"),
+		forge.WithTags("OAuth2"),
+	); err != nil {
+		return err
+	}
+
+	if err := router.GET("/.well-known/oauth-authorization-server", p.handleAuthServerMetadata,
+		forge.WithSummary("OAuth2 Authorization Server Metadata"),
+		forge.WithDescription("RFC 8414 authorization server metadata."),
+		forge.WithOperationID("oauth2AuthServerMetadata"),
+		forge.WithResponseSchema(http.StatusOK, "Metadata", AuthServerMetadata{}),
+		forge.WithTags("OAuth2"),
+	); err != nil {
+		return err
+	}
+
+	if err := router.GET("/.well-known/oauth-protected-resource", p.handleProtectedResourceMetadata,
+		forge.WithSummary("OAuth2 Protected Resource Metadata"),
+		forge.WithDescription("RFC 9728 protected resource metadata."),
+		forge.WithOperationID("oauth2ProtectedResourceMetadata"),
+		forge.WithResponseSchema(http.StatusOK, "Metadata", ProtectedResourceMetadata{}),
+		forge.WithTags("OAuth2"),
+	); err != nil {
+		return err
+	}
+
+	return router.GET("/.well-known/oauth-protected-resource/:resourcePath", p.handleScopedProtectedResourceMetadata,
+		forge.WithSummary("OAuth2 Protected Resource Metadata (scoped)"),
+		forge.WithOperationID("oauth2ScopedProtectedResourceMetadata"),
+		forge.WithResponseSchema(http.StatusOK, "Metadata", ProtectedResourceMetadata{}),
+		forge.WithTags("OAuth2"),
 	)
 }
 
@@ -315,6 +560,7 @@ type DiscoveryResponse struct {
 	UserinfoEndpoint                  string   `json:"userinfo_endpoint"`
 	RevocationEndpoint                string   `json:"revocation_endpoint"`
 	DeviceAuthorizationEndpoint       string   `json:"device_authorization_endpoint"`
+	RegistrationEndpoint              string   `json:"registration_endpoint,omitempty"`
 	JWKSURI                           string   `json:"jwks_uri"`
 	ResponseTypesSupported            []string `json:"response_types_supported"`
 	GrantTypesSupported               []string `json:"grant_types_supported"`
@@ -483,7 +729,14 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		}
 	}
 
-	// Require authenticated user.
+	// Require authenticated user. No resource_metadata hint here, unlike
+	// handleUserInfo: this 401 means the end user is not signed in, not
+	// that a client failed to authenticate, and the response goes to a
+	// browser in the middle of a redirect, not to a machine parsing a
+	// WWW-Authenticate header. A login redirect is the correct response;
+	// a discovery hint would be read by nobody. See
+	// middleware.ResourceMetadataChallenge's doc comment for the other two
+	// endpoints in this group and why each is or isn't covered.
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
 		return nil, forge.Unauthorized("authentication required to authorize")
@@ -539,6 +792,15 @@ func buildRedirect(redirectURI, code, state string) (string, error) {
 	return u.String(), nil
 }
 
+// authMethodForPublic maps the admin surface's Public bool onto the RFC 7591
+// token_endpoint_auth_method that is the source of truth everywhere else.
+func authMethodForPublic(public bool) string {
+	if public {
+		return "none"
+	}
+	return "client_secret_basic"
+}
+
 // clientAllowsGrant reports whether the client is registered for grantType.
 // An empty GrantTypes list is treated as authorization_code only, matching the
 // default applied at registration.
@@ -576,6 +838,19 @@ func resolveScopes(client *OAuth2Client, requested string) ([]string, error) {
 	return out, nil
 }
 
+// handleToken and the grant handlers it dispatches to (below) return several
+// 401s on client-authentication failure (invalid client_secret, unknown
+// client_id). Those are not given a resource_metadata hint, deliberately: a
+// client calling the token endpoint already holds the authorization server's
+// URL, since it just made this request to it. RFC 9728 discovery exists for
+// a client that does not yet know where the server is, which is the
+// situation on a protected resource such as /v1/oauth/userinfo, not on the
+// authorization server's own endpoints. middleware.ResourceMetadataChallenge
+// would not add the header here even if it were wanted: these 401s are
+// returned from a route handler, and forge converts a route handler's
+// returned error into a written response before any enclosing middleware's
+// next() call sees it, the same reason handleUserInfo below sets its own
+// header instead of relying on that middleware.
 func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
 	switch req.GrantType {
 	case "authorization_code":
@@ -680,6 +955,9 @@ func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenReque
 	if client.Public {
 		return nil, forge.BadRequest("client_credentials grant not allowed for public clients")
 	}
+	if !clientAllowsGrant(client, "client_credentials") {
+		return nil, forge.BadRequest("client is not registered for the client_credentials grant")
+	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(req.ClientSecret)); err != nil {
 		return nil, forge.Unauthorized("invalid client_secret")
@@ -711,6 +989,21 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeRequest) (*apitypes.
 func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInfo, error) {
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
+		// AuthMiddleware only soft-resolves the bearer token (it calls next
+		// on a missing or invalid one rather than rejecting), so this is the
+		// actual point of enforcement for the OIDC protected resource, and
+		// the 401 originates here rather than in middleware.
+		// middleware.ResourceMetadataChallenge cannot see it: it is
+		// registered as router middleware, but forge converts a route
+		// handler's returned error into a written response inside its own
+		// handler-conversion wrapper before any enclosing middleware's
+		// next() call returns, so the error never reaches the chain. Set
+		// the hint directly, the same way authenticateRegistration does in
+		// register.go, and only if the header is not already set.
+		if ctx.Response().Header().Get("WWW-Authenticate") == "" {
+			ctx.SetHeader("WWW-Authenticate",
+				`Bearer resource_metadata="`+p.issuerURL()+`/.well-known/oauth-protected-resource"`)
+		}
 		return nil, forge.Unauthorized("authentication required")
 	}
 
@@ -728,27 +1021,29 @@ func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInf
 	}, nil
 }
 
+// handleDiscovery derives the OIDC discovery document from
+// buildAuthServerMetadata by copying each field across by hand.
+// AuthServerMetadata and DiscoveryResponse are field-identical but distinct
+// struct types, so a field added to one is not automatically added to the
+// other; TestMetadata_OIDCAndAuthServerAgree is what actually catches that.
 func (p *Plugin) handleDiscovery(_ forge.Context, _ *DiscoveryRequest) (*DiscoveryResponse, error) {
-	issuer := p.config.Issuer
-	if issuer == "" {
-		issuer = "https://localhost"
-	}
-
+	m := p.buildAuthServerMetadata()
 	return &DiscoveryResponse{
-		Issuer:                            issuer,
-		AuthorizationEndpoint:             issuer + "/v1/oauth/authorize",
-		TokenEndpoint:                     issuer + "/v1/oauth/token",
-		UserinfoEndpoint:                  issuer + "/v1/oauth/userinfo",
-		RevocationEndpoint:                issuer + "/v1/oauth/revoke",
-		DeviceAuthorizationEndpoint:       issuer + "/v1/oauth/device/authorize",
-		JWKSURI:                           issuer + "/.well-known/jwks.json",
-		ResponseTypesSupported:            []string{"code"},
-		GrantTypesSupported:               []string{"authorization_code", "client_credentials", "urn:ietf:params:oauth:grant-type:device_code"},
-		SubjectTypesSupported:             []string{"public"},
-		IDTokenSigningAlgValuesSupported:  []string{"RS256", "ES256"},
-		ScopesSupported:                   []string{"openid", "profile", "email", "phone"},
-		TokenEndpointAuthMethodsSupported: []string{"client_secret_post", "client_secret_basic"},
-		CodeChallengeMethodsSupported:     []string{"S256", "plain"},
+		Issuer:                            m.Issuer,
+		AuthorizationEndpoint:             m.AuthorizationEndpoint,
+		TokenEndpoint:                     m.TokenEndpoint,
+		UserinfoEndpoint:                  m.UserinfoEndpoint,
+		RevocationEndpoint:                m.RevocationEndpoint,
+		DeviceAuthorizationEndpoint:       m.DeviceAuthorizationEndpoint,
+		RegistrationEndpoint:              m.RegistrationEndpoint,
+		JWKSURI:                           m.JWKSURI,
+		ResponseTypesSupported:            m.ResponseTypesSupported,
+		GrantTypesSupported:               m.GrantTypesSupported,
+		SubjectTypesSupported:             m.SubjectTypesSupported,
+		IDTokenSigningAlgValuesSupported:  m.IDTokenSigningAlgValuesSupported,
+		ScopesSupported:                   m.ScopesSupported,
+		TokenEndpointAuthMethodsSupported: m.TokenEndpointAuthMethodsSupported,
+		CodeChallengeMethodsSupported:     m.CodeChallengeMethodsSupported,
 	}, nil
 }
 
@@ -802,17 +1097,18 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 	}
 
 	client := &OAuth2Client{
-		ID:           id.NewOAuth2ClientID(),
-		AppID:        appID,
-		Name:         req.Name,
-		ClientID:     clientIDStr,
-		ClientSecret: hashedSecret,
-		RedirectURIs: req.RedirectURIs,
-		Scopes:       scopes,
-		GrantTypes:   grantTypes,
-		Public:       req.Public,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:                      id.NewOAuth2ClientID(),
+		AppID:                   appID,
+		Name:                    req.Name,
+		ClientID:                clientIDStr,
+		ClientSecret:            hashedSecret,
+		RedirectURIs:            req.RedirectURIs,
+		Scopes:                  scopes,
+		GrantTypes:              grantTypes,
+		Public:                  req.Public,
+		TokenEndpointAuthMethod: authMethodForPublic(req.Public),
+		CreatedAt:               time.Now(),
+		UpdatedAt:               time.Now(),
 	}
 
 	if err := p.oauth2Store.CreateClient(ctx.Context(), client); err != nil {
@@ -1000,11 +1296,7 @@ func (p *Plugin) handleDeviceAuthorize(ctx forge.Context, req *DeviceAuthRequest
 	// Compute verification URI.
 	verificationURI := p.config.VerificationURI
 	if verificationURI == "" {
-		issuer := p.config.Issuer
-		if issuer == "" {
-			issuer = "https://localhost"
-		}
-		verificationURI = issuer + "/v1/oauth/device"
+		verificationURI = p.issuerURL() + "/v1/oauth/device"
 	}
 
 	scopes := strings.Fields(req.Scope)

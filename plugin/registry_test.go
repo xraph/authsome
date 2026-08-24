@@ -348,3 +348,33 @@ func TestRegistry_OnInitShutdown(_ *testing.T) {
 	_ = r.EmitOnInit(ctx, nil)
 	r.EmitOnShutdown(ctx)
 }
+
+type rootRoutePlugin struct{ called bool }
+
+func (p *rootRoutePlugin) Name() string { return "root-route-test" }
+func (p *rootRoutePlugin) RegisterRootRoutes(_ forge.Router) error {
+	p.called = true
+	return nil
+}
+
+func TestRegistry_RootRouteProviders(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+	p := &rootRoutePlugin{}
+	r.Register(p)
+
+	providers := r.RootRouteProviders()
+	require.Len(t, providers, 1)
+	require.NoError(t, providers[0].RegisterRootRoutes(nil))
+	assert.True(t, p.called)
+}
+
+func TestRegistry_RootRouteProvidersExcludesPlainPlugins(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+	r.Register(&rootRoutePlugin{})
+	// A plugin that only implements Plugin must not appear. Without this
+	// second registration the assertion below passed whether or not plain
+	// plugins were actually excluded, since rootRoutePlugin alone already
+	// accounts for the expected length of 1.
+	r.Register(&basePlugin{name: "plain"})
+	assert.Len(t, r.RootRouteProviders(), 1)
+}

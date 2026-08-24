@@ -2,9 +2,12 @@
 package session
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/principal"
 )
 
 // Session represents an authenticated user session.
@@ -25,7 +28,6 @@ type Session struct {
 	IPAddress             string             `json:"ip_address,omitempty"`
 	UserAgent             string             `json:"user_agent,omitempty"`
 	DeviceID              id.DeviceID        `json:"device_id,omitempty"`
-	ImpersonatedBy        id.UserID          `json:"impersonated_by,omitempty"`
 	LastActivityAt        time.Time          `json:"last_activity_at,omitempty"`
 	ExpiresAt             time.Time          `json:"expires_at"`
 	RefreshTokenExpiresAt time.Time          `json:"refresh_token_expires_at"`
@@ -49,8 +51,115 @@ type Session struct {
 	// PrincipalKind identifies the type of principal that owns this session.
 	// Valid values are "user" and "service_account". Empty string means "user"
 	// for backwards compatibility with existing sessions.
-	PrincipalKind string `json:"principal_kind,omitempty"`
+	PrincipalKind principal.Kind `json:"principal_kind,omitempty"`
 	// ServiceAccountID is set when PrincipalKind is "service_account".
 	// UserID is left as the zero value in that case.
 	ServiceAccountID id.ServiceAccountID `json:"service_account_id,omitempty"`
+
+	// Actors is the chain of principals acting on the subject's behalf,
+	// ordered nearest-caller-first. Empty on an ordinary session, where the
+	// subject is calling directly.
+	//
+	// This subsumes the old ImpersonatedBy field. An impersonation is a chain
+	// of one user actor with ActorGrant set to impersonation, which is why
+	// ImpersonatedBy is now derived rather than stored.
+	Actors principal.Chain `json:"actors,omitempty"`
+
+	// ActorGrant records which sort of grant put the actors on this session.
+	// Empty when Actors is empty.
+	ActorGrant principal.GrantKind `json:"actor_grant,omitempty"`
+
+	// DelegationID is the grant this session was minted against. Zero for an
+	// ordinary session.
+	DelegationID id.DelegationID `json:"delegation_id,omitempty"`
+}
+
+// Subject returns the principal this session is for.
+//
+// An empty PrincipalKind means "user", which is what every row written before
+// the field existed carries. Normalizing it on read would make a legacy row
+// indistinguishable from one deliberately stamped, so the zero value is
+// interpreted here and not rewritten in the store.
+func (s *Session) Subject() principal.Ref {
+	switch s.PrincipalKind {
+	case "", principal.KindUser:
+		return principal.Ref{Kind: principal.KindUser, ID: s.UserID.String()}
+	default:
+		return principal.Ref{Kind: s.PrincipalKind, ID: s.ServiceAccountID.String()}
+	}
+}
+
+// IsHumanPrincipal reports whether a person owns this session.
+func (s *Session) IsHumanPrincipal() bool {
+	return s.PrincipalKind == "" || s.PrincipalKind == principal.KindUser
+}
+
+// ImpersonatedBy returns the admin acting as this session's user, or the zero
+// ID when nobody is.
+//
+// Derived from Actors rather than stored. The grant kind is checked first: an
+// agent acting for a user is also a session with two principals, and reporting
+// that as impersonation would put an admin-takeover banner and an admin-
+// severity audit record on ordinary delegated traffic.
+func (s *Session) ImpersonatedBy() id.UserID {
+	if s.ActorGrant != principal.GrantImpersonation {
+		return id.Nil
+	}
+	for i := len(s.Actors) - 1; i >= 0; i-- {
+		if s.Actors[i].Kind != principal.KindUser {
+			continue
+		}
+		uid, err := id.ParseUserID(s.Actors[i].ID)
+		if err != nil {
+			continue
+		}
+		return uid
+	}
+	return id.Nil
+}
+
+// SetImpersonatedBy marks this session as adminID acting as its user.
+func (s *Session) SetImpersonatedBy(adminID id.UserID) {
+	if adminID.IsNil() {
+		return
+	}
+	s.Actors = principal.Chain{{Kind: principal.KindUser, ID: adminID.String()}}
+	s.ActorGrant = principal.GrantImpersonation
+}
+
+// MarshalJSON keeps impersonated_by on the wire now that it is no longer a
+// struct field. Consumers outside this repository read that key, and the
+// chain is an addition for them, not a replacement.
+func (s Session) MarshalJSON() ([]byte, error) {
+	type alias Session
+	out := struct {
+		alias
+		ImpersonatedBy string `json:"impersonated_by,omitempty"`
+	}{alias: alias(s)}
+	if imp := s.ImpersonatedBy(); !imp.IsNil() {
+		out.ImpersonatedBy = imp.String()
+	}
+	return json.Marshal(out)
+}
+
+// UnmarshalJSON accepts either representation: a payload carrying only the
+// legacy impersonated_by key rebuilds the chain from it, and one carrying
+// actors is taken as written.
+func (s *Session) UnmarshalJSON(data []byte) error {
+	type alias Session
+	in := struct {
+		*alias
+		ImpersonatedBy string `json:"impersonated_by,omitempty"`
+	}{alias: (*alias)(s)}
+	if err := json.Unmarshal(data, &in); err != nil {
+		return err
+	}
+	if len(s.Actors) == 0 && in.ImpersonatedBy != "" {
+		uid, err := id.ParseUserID(in.ImpersonatedBy)
+		if err != nil {
+			return fmt.Errorf("session: parse impersonated_by: %w", err)
+		}
+		s.SetImpersonatedBy(uid)
+	}
+	return nil
 }

@@ -53,6 +53,18 @@ func (s *MemoryStore) GetClientByID(_ context.Context, clientID id.OAuth2ClientI
 	return nil, ErrClientNotFound
 }
 
+func (s *MemoryStore) UpdateClient(_ context.Context, c *OAuth2Client) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	existing, ok := s.clients[c.ClientID]
+	if !ok || existing.ID != c.ID {
+		return ErrClientNotFound
+	}
+	c.UpdatedAt = time.Now()
+	s.clients[c.ClientID] = c
+	return nil
+}
+
 func (s *MemoryStore) ListClients(_ context.Context, appID id.AppID) ([]*OAuth2Client, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

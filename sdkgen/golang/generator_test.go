@@ -1,6 +1,7 @@
 package golang_test
 
 import (
+	"go/format"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -256,4 +257,75 @@ func TestGenerate_ContextInMethods(t *testing.T) {
 	// All methods should accept context.Context
 	assert.Contains(t, clientContent, "ctx context.Context")
 	assert.Contains(t, clientContent, `"context"`)
+}
+
+func TestGenerate_OutputIsGofmtClean(t *testing.T) {
+	gen := golang.NewGenerator(golang.GeneratorConfig{})
+	files, err := gen.Generate(testSpec())
+	require.NoError(t, err)
+
+	// The generated SDK is committed, so anything the templates emit that
+	// gofmt would rewrite shows up as noise in every regeneration diff.
+	// Formatting the render is what keeps `gofmt -l sdk/go` quiet.
+	for _, f := range files {
+		formatted, err := format.Source([]byte(f.Content))
+		require.NoErrorf(t, err, "%s does not parse", f.Path)
+		assert.Equalf(t, string(formatted), f.Content, "%s is not gofmt-clean", f.Path)
+	}
+}
+
+// formBodySpec builds a spec whose only operation carries its request body as
+// application/x-www-form-urlencoded, the encoding RFC 6749 mandates for the
+// OAuth2 token endpoint. Forge describes those routes this way because the Go
+// struct behind them is form-tagged, and nothing about that should stop the
+// generated request struct from having the fields in it.
+func formBodySpec() *openapi.Spec {
+	return &openapi.Spec{
+		OpenAPI: "3.0.3",
+		Info:    openapi.Info{Title: "Test API", Version: "1"},
+		Paths: map[string]*openapi.PathItem{
+			"/v1/oauth/token": {
+				Post: &openapi.Operation{
+					OperationID: "oauth2Token",
+					Summary:     "Token",
+					RequestBody: &openapi.RequestBody{
+						Required: true,
+						Content: map[string]openapi.MediaType{
+							"application/x-www-form-urlencoded": {
+								Schema: &openapi.Schema{
+									Type:     "object",
+									Required: []string{"grant_type"},
+									Properties: map[string]*openapi.Schema{
+										"grant_type": {Type: "string"},
+										"code":       {Type: "string"},
+									},
+								},
+							},
+						},
+					},
+					Responses: map[string]*openapi.Response{},
+				},
+			},
+		},
+	}
+}
+
+func TestGenerate_FormEncodedBodyKeepsItsFields(t *testing.T) {
+	gen := golang.NewGenerator(golang.GeneratorConfig{})
+	files, err := gen.Generate(formBodySpec())
+	require.NoError(t, err)
+
+	var typesContent string
+	for _, f := range files {
+		if f.Path == "types.go" {
+			typesContent = f.Content
+			break
+		}
+	}
+	require.NotEmpty(t, typesContent)
+
+	assert.Contains(t, typesContent, "type Oauth2TokenRequest struct")
+	// gofmt aligns the field types, so match across the padding.
+	assert.Regexp(t, `GrantType\s+string\s+`+"`"+`json:"grant_type"`+"`", typesContent)
+	assert.Regexp(t, `Code\s+string\s+`+"`"+`json:"code,omitempty"`+"`", typesContent)
 }

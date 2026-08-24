@@ -695,6 +695,7 @@ export interface DiscoveryResponse {
   id_token_signing_alg_values_supported: string[];
   issuer: string;
   jwks_uri: string;
+  registration_endpoint?: string;
   response_types_supported: string[];
   revocation_endpoint: string;
   scopes_supported: string[];
@@ -921,6 +922,7 @@ export interface LoginBeginResponse {
 }
 
 export interface LoginByDomainRequest {
+  connection_id?: string;
   email: string;
   return_url?: string;
 }
@@ -1012,13 +1014,17 @@ export interface Name {
 export interface OAuth2Client {
   app_id: string;
   client_id: string;
+  client_secret_expires_at?: string;
   created_at: string;
+  dynamically_registered: boolean;
   grant_types: string[];
   id: string;
+  metadata?: Record<string, unknown>;
   name: string;
   public: boolean;
   redirect_uris: string[];
   scopes: string[];
+  token_endpoint_auth_method?: string;
   updated_at: string;
 }
 
@@ -1135,6 +1141,44 @@ export interface RegisterBeginRequest {
 
 export interface RegisterBeginResponse {
   options: Record<string, unknown>;
+}
+
+export interface RegisterClientRequest {
+  client_name?: string;
+  client_uri?: string;
+  contacts?: string[];
+  grant_types?: string[];
+  logo_uri?: string;
+  policy_uri?: string;
+  redirect_uris: string[];
+  response_types?: string[];
+  scope?: string;
+  software_id?: string;
+  software_version?: string;
+  token_endpoint_auth_method?: string;
+  tos_uri?: string;
+}
+
+export interface RegisterClientResponse {
+  client_id: string;
+  client_id_issued_at: number;
+  client_name?: string;
+  client_secret?: string;
+  client_secret_expires_at: number;
+  client_uri?: string;
+  contacts?: string[];
+  grant_types: string[];
+  logo_uri?: string;
+  policy_uri?: string;
+  redirect_uris: string[];
+  registration_access_token?: string;
+  registration_client_uri?: string;
+  response_types: string[];
+  scope: string;
+  software_id?: string;
+  software_version?: string;
+  token_endpoint_auth_method: string;
+  tos_uri?: string;
 }
 
 export interface RegisterFinishResponse {
@@ -1465,6 +1509,23 @@ export interface UpdateOrgRequest {
   name?: string;
 }
 
+export interface UpdateRegistrationRequest {
+  client_id?: string;
+  client_name?: string;
+  client_secret?: string;
+  client_uri?: string;
+  contacts?: string[];
+  grant_types?: string[];
+  logo_uri?: string;
+  policy_uri?: string;
+  redirect_uris: string[];
+  scope?: string;
+  software_id?: string;
+  software_version?: string;
+  token_endpoint_auth_method?: string;
+  tos_uri?: string;
+}
+
 export interface UpdateRoleRequest {
   description?: string;
   name?: string;
@@ -1632,13 +1693,17 @@ export type SendSMSCodeRequest = SMSSendRequest;
 
 export type VerifySMSCodeRequest = SMSVerifyRequest;
 
-export type Oauth2DeviceAuthorizeRequest = Record<string, unknown>;
+export type Oauth2DeviceAuthorizeRequest = { client_id: string; scope?: string };
 
-export type Oauth2DeviceCompleteRequest = Record<string, unknown>;
+export type Oauth2DeviceCompleteRequest = { action: string; user_code: string };
 
-export type Oauth2RevokeRequest = Record<string, unknown>;
+export type Oauth2RegisterClientRequest = RegisterClientRequest;
 
-export type Oauth2TokenRequest = Record<string, unknown>;
+export type Oauth2UpdateRegistrationRequest = UpdateRegistrationRequest;
+
+export type Oauth2RevokeRequest = { token: string; token_type_hint?: string };
+
+export type Oauth2TokenRequest = { client_id?: string; client_secret?: string; code?: string; code_verifier?: string; device_code?: string; grant_type: string; redirect_uri?: string };
 
 export type CreateOrganizationRequest = CreateOrgRequest;
 

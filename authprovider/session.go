@@ -185,8 +185,8 @@ func BridgeToContext(ctx forge.Context, data *SessionData) {
 	if data.Session.EnvID.Prefix() != "" {
 		goCtx = authmw.WithEnvID(goCtx, data.Session.EnvID)
 	}
-	if data.Session.ImpersonatedBy.Prefix() != "" {
-		goCtx = authmw.WithImpersonator(goCtx, data.Session.ImpersonatedBy)
+	if imp := data.Session.ImpersonatedBy(); imp.Prefix() != "" {
+		goCtx = authmw.WithImpersonator(goCtx, imp)
 	}
 	if data.Session.OrgID.Prefix() != "" {
 		goCtx = authmw.WithOrgID(goCtx, data.Session.OrgID)

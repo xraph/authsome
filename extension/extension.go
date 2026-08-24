@@ -515,6 +515,18 @@ func (e *Extension) init(fapp forge.App) error {
 		router := fapp.Router()
 		if router != nil {
 			groupedRouter := router.Group(basePath)
+
+			// Origin-root routes first. Well-known discovery documents must
+			// answer at the host root, so they cannot go on groupedRouter.
+			// No duplicate-path risk: basePath is never empty (it defaults
+			// to /authsome above), so the prefixed mirror and the root
+			// registration always land on different literal paths.
+			for _, rp := range eng.Plugins().RootRouteProviders() {
+				if err := rp.RegisterRootRoutes(router); err != nil {
+					return fmt.Errorf("authsome: register plugin root routes (%T): %w", rp, err)
+				}
+			}
+
 			if err := e.apiHandler.RegisterRoutes(groupedRouter); err != nil {
 				return fmt.Errorf("authsome: register forge routes: %w", err)
 			}
@@ -1267,6 +1279,9 @@ func (e *Extension) buildEngineConfig() authsome.Config {
 		cfg.BasePath = e.config.BasePath
 	}
 	cfg.Debug = e.config.Debug
+	if e.config.ProtectedResourceMetadataURL != "" {
+		cfg.ProtectedResourceMetadataURL = e.config.ProtectedResourceMetadataURL
+	}
 	cfg.DisableRoutes = e.config.DisableRoutes
 	cfg.DisableMigrate = e.config.DisableMigrate
 

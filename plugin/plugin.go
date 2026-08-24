@@ -22,6 +22,7 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -129,6 +130,11 @@ type Engine interface {
 	// - Create blocking middleware via Middleware("session", "api-key")
 	// - Use forge.WithGroupAuth("session") for OpenAPI + enforcement
 	AuthRegistry() auth.Registry
+
+	// ── Rate limiting ──
+
+	// RateLimiter returns the engine's rate limiter. May be nil.
+	RateLimiter() ratelimit.Limiter
 
 	// ── Config accessors ──
 	// These expose commonly-needed config values without importing
@@ -345,6 +351,15 @@ type AuthMethodUnlinker interface {
 // RouteProvider allows a plugin to register additional HTTP routes.
 type RouteProvider interface {
 	RegisterRoutes(router forge.Router) error
+}
+
+// RootRouteProvider is implemented by plugins that must serve routes at the
+// origin root rather than under the extension's mount prefix. Well-known
+// discovery documents are the only legitimate use: RFC 8414 and RFC 9728
+// define their locations relative to the origin, so a prefixed copy is
+// invisible to a client that only knows the host.
+type RootRouteProvider interface {
+	RegisterRootRoutes(router forge.Router) error
 }
 
 // MigrationProvider allows a plugin to register its own grove migration
