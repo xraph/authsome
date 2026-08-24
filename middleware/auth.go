@@ -128,6 +128,11 @@ type SessionExistsChecker func(sessionID string) (*session.Session, error)
 // When nil, the default "authsome_session_token" is used.
 type CookieNameResolver func(ctx context.Context) string
 
+// ExpectedAudienceResolver returns the resource identifiers this deployment
+// answers to for the current request. Nil, or an empty result, disables the
+// audience check.
+type ExpectedAudienceResolver func(ctx context.Context) []string
+
 // SessionBindingConfig controls session binding validation.
 type SessionBindingConfig struct {
 	// BindToIP rejects requests when the client IP differs from the
@@ -146,6 +151,17 @@ type SessionBindingConfig struct {
 	// store. This enables JWT revocation — revoked sessions are rejected even
 	// if the JWT signature is valid. Also enables IP/device binding for JWTs.
 	JWTSessionChecker SessionExistsChecker
+
+	// ExpectedAudienceResolver returns the resource identifiers this
+	// deployment answers to for the current request's app. Nil, or an empty
+	// result, disables the check.
+	//
+	// Per app rather than per process: two apps in one deployment are two
+	// different resources, and a token minted for one must not authenticate at
+	// the other. This runs per request on the same path as
+	// CookieNameResolver, so it should read a cached setting rather than hit
+	// the database.
+	ExpectedAudienceResolver ExpectedAudienceResolver
 }
 
 // AuthMiddleware extracts the session token from the Authorization header,
@@ -376,6 +392,19 @@ func tryJWTAuth(
 		return false
 	}
 
+	// Resource indicator guard (RFC 8707): a token audienced at a resource
+	// this deployment does not answer to must not authenticate here. Values
+	// are resource URIs supplied by the caller, so they are never logged.
+	if bindCfg.ExpectedAudienceResolver != nil {
+		expected := bindCfg.ExpectedAudienceResolver(ctx.Context())
+		if !audienceAllowed(claims.Audience, expected) {
+			logger.Warn("auth middleware: JWT audience mismatch",
+				log.String("session_id", claims.SessionID),
+			)
+			return false
+		}
+	}
+
 	// When a session checker is configured, cross-check the JWT's session ID
 	// against the store. This enables revocation and IP/device binding for JWTs.
 	// The checker returns (nil, nil) when the feature is disabled via settings.
@@ -487,6 +516,19 @@ func trySessionAuth(
 			log.String("session_id", sess.ID.String()),
 		)
 		return false
+	}
+
+	// Resource indicator guard (RFC 8707): a token audienced at a resource
+	// this deployment does not answer to must not authenticate here. Values
+	// are resource URIs supplied by the caller, so they are never logged.
+	if bindCfg.ExpectedAudienceResolver != nil {
+		expected := bindCfg.ExpectedAudienceResolver(ctx.Context())
+		if !audienceAllowed(sess.Audience, expected) {
+			logger.Warn("auth middleware: session audience mismatch",
+				log.String("session_id", sess.ID.String()),
+			)
+			return false
+		}
 	}
 
 	// Session binding: validate IP and/or device match.
@@ -704,6 +746,28 @@ func requestAppIDMismatch(ctx context.Context, boundAppID string) bool {
 		return false
 	}
 	return reqAppID.String() != boundAppID
+}
+
+// audienceAllowed reports whether a token may be used at this resource.
+//
+// An empty expected set means the deployment has not declared what it
+// answers to, so no check is possible. An empty token audience means an
+// unrestricted token, which every token issued before RFC 8707 support
+// carries, so it passes. Anything else has to intersect.
+func audienceAllowed(tokenAudience, expected []string) bool {
+	if len(expected) == 0 || len(tokenAudience) == 0 {
+		return true
+	}
+	want := make(map[string]struct{}, len(expected))
+	for _, e := range expected {
+		want[e] = struct{}{}
+	}
+	for _, a := range tokenAudience {
+		if _, ok := want[a]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func extractBearerToken(r *http.Request, cookieName string) string {
