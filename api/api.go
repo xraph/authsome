@@ -144,6 +144,7 @@ func (a *API) RegisterRoutes(router forge.Router) error {
 		a.registerHealthRoutes,
 		a.registerSettingsRoutes,
 		a.registerIntrospectRoutes,
+		a.registerPrincipalRoutes,
 	}
 	for _, fn := range registerers {
 		if err := fn(router); err != nil {

@@ -3,10 +3,13 @@ package authsome
 import (
 	"context"
 	"fmt"
+	"time"
 
 	log "github.com/xraph/go-utils/log"
 	"github.com/xraph/warden"
 
+	"github.com/xraph/authsome/hook"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/principal"
 )
 
@@ -77,22 +80,35 @@ func (e *Engine) Can(
 		return false, err
 	}
 	if !result.Allowed {
-		// Debug, not Warn: a subject-only denial is exactly the case
-		// HasPermission's own wrapper already logs at Warn with tenant and
-		// scope diagnostics attached, and permission checks are a
-		// high-volume hot path. Doubling every denial into two Warn lines
-		// would double the operational log cost for no new information at
-		// the subject-only call site. The actor-hop case below stays at
-		// Warn: that is the case a plain subject-only caller like
-		// HasPermission can never produce, and its decision/reason are not
-		// available anywhere else.
-		e.logger.Debug("authsome: Can denied by subject",
-			log.String("subject", subject.String()),
-			log.String("action", action),
-			log.String("resource", resource),
-			log.String("decision", string(result.Decision)),
-			log.String("reason", result.Reason),
-		)
+		if len(actors) > 0 {
+			// Warn, not Debug: with a non-empty chain this is no longer
+			// HasPermission's own nil-chain call site, the only place whose
+			// wrapper already logs a subject-only denial at Warn. Nothing
+			// else logs this one, so a delegated permission denial would be
+			// invisible at default log level if it stayed at Debug. This is
+			// exactly the traffic an operator most wants to see.
+			e.logger.Warn("authsome: Can denied by subject",
+				log.String("subject", subject.String()),
+				log.String("action", action),
+				log.String("resource", resource),
+				log.String("decision", string(result.Decision)),
+				log.String("reason", result.Reason),
+			)
+		} else {
+			// Debug, not Warn: a subject-only denial with no actor chain is
+			// exactly the case HasPermission's own wrapper already logs at
+			// Warn with tenant and scope diagnostics attached, and
+			// permission checks are a high-volume hot path. Doubling every
+			// denial into two Warn lines would double the operational log
+			// cost for no new information at the subject-only call site.
+			e.logger.Debug("authsome: Can denied by subject",
+				log.String("subject", subject.String()),
+				log.String("action", action),
+				log.String("resource", resource),
+				log.String("decision", string(result.Decision)),
+				log.String("reason", result.Reason),
+			)
+		}
 		return false, nil
 	}
 
@@ -144,3 +160,104 @@ func (e *Engine) ResolvePrincipal(ctx context.Context, ref principal.Ref) (*prin
 
 // PrincipalStore returns the principal and delegation store.
 func (e *Engine) PrincipalStore() principal.Store { return e.store }
+
+// GrantDelegation records that actor may act for subject.
+//
+// grantedBy is who consented and is recorded for audit. The caller is
+// responsible for having checked that grantedBy is entitled to consent: for an
+// ordinary delegation that means grantedBy is the subject or an admin over it,
+// and the API layer enforces it before calling here.
+func (e *Engine) GrantDelegation(
+	ctx context.Context, appID id.AppID, actor, subject principal.Ref,
+	scopes []string, grantedBy principal.Ref, expiresAt *time.Time,
+) (*principal.Delegation, error) {
+	if err := e.requireStarted(); err != nil {
+		return nil, err
+	}
+	if appID.IsNil() {
+		return nil, fmt.Errorf("authsome: app_id is required")
+	}
+	if actor.IsZero() || subject.IsZero() {
+		return nil, fmt.Errorf("authsome: actor and subject are required")
+	}
+	if actor == subject {
+		// Acting for yourself is not a delegation, and storing one would put a
+		// chain on a session that has no second principal on it.
+		return nil, fmt.Errorf("authsome: a principal cannot be delegated to itself")
+	}
+
+	now := time.Now()
+	d := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     appID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantDelegation,
+		Scopes:    scopes,
+		GrantedBy: grantedBy,
+		ExpiresAt: expiresAt,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := e.store.CreateDelegation(ctx, d); err != nil {
+		return nil, fmt.Errorf("authsome: grant delegation: %w", err)
+	}
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionDelegationGrant,
+		Resource:   hook.ResourceSession,
+		ResourceID: d.ID.String(),
+		ActorID:    grantedBy.ID,
+		Tenant:     appID.String(),
+		Metadata: map[string]string{
+			"actor":   actor.String(),
+			"subject": subject.String(),
+		},
+	})
+	return d, nil
+}
+
+// RevokeDelegation ends a grant.
+func (e *Engine) RevokeDelegation(ctx context.Context, delID id.DelegationID) error {
+	if err := e.requireStarted(); err != nil {
+		return err
+	}
+	// Read first so the hook event can carry the actor/subject the grant
+	// named. RevokeDelegation itself only takes the ID: the caller may be
+	// revoking a grant by ID alone (e.g. from a listing) without having
+	// either ref in hand. A grant already gone is not fatal here — the
+	// revoke below still runs and its own not-found is what the caller sees.
+	d, getErr := e.store.GetDelegation(ctx, delID)
+
+	if err := e.store.RevokeDelegation(ctx, delID, time.Now()); err != nil {
+		return fmt.Errorf("authsome: revoke delegation: %w", err)
+	}
+
+	evt := &hook.Event{
+		Action:     hook.ActionDelegationRevoke,
+		Resource:   hook.ResourceSession,
+		ResourceID: delID.String(),
+	}
+	if getErr == nil && d != nil {
+		evt.Tenant = d.AppID.String()
+		evt.Metadata = map[string]string{
+			"actor":   d.Actor.String(),
+			"subject": d.Subject.String(),
+		}
+	}
+	e.hooks.Emit(ctx, evt)
+	return nil
+}
+
+// ListDelegationsForSubject returns what may act for subject, so a person can
+// see and revoke the agents holding authority over their account.
+func (e *Engine) ListDelegationsForSubject(
+	ctx context.Context, appID id.AppID, subject principal.Ref,
+) ([]*principal.Delegation, error) {
+	if err := e.requireStarted(); err != nil {
+		return nil, err
+	}
+	return e.store.ListDelegations(ctx, &principal.DelegationQuery{
+		AppID: appID, Subject: &subject, ActiveOnly: true, ActiveAsOf: time.Now(),
+	})
+}
