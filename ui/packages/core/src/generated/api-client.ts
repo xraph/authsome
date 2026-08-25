@@ -294,13 +294,27 @@ function stripTrailingSlashes(url: string): string {
  * Encodes a body as application/x-www-form-urlencoded, which RFC 6749 section
  * 4.1.3 requires at the OAuth2 token endpoint. Absent values stay off the wire
  * entirely, the same as the JSON path omits them.
+ *
+ * An array field is written once per element rather than as one value. A form
+ * body carries repeated fields, not lists, and RFC 8707 relies on that: the
+ * token endpoint reads every `resource` it is given. Stringifying the array
+ * instead would join it on commas, which reaches the server as a single value
+ * that is not a URI, so one resource would arrive mangled and the rest would
+ * vanish. An empty array leaves the field off, matching the Go client.
  */
 function encodeForm(body: unknown): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
-    if (value !== undefined && value !== null) {
-      params.set(key, String(value));
+    if (value === undefined || value === null) {
+      continue;
     }
+    if (Array.isArray(value)) {
+      for (const element of value) {
+        params.append(key, String(element));
+      }
+      continue;
+    }
+    params.set(key, String(value));
   }
   return params.toString();
 }

@@ -2754,12 +2754,25 @@ class AuthClient {
   /// Encodes a body as application/x-www-form-urlencoded, which RFC 6749
   /// section 4.1.3 requires at the OAuth2 token endpoint. Absent values stay
   /// off the wire entirely, the same as toJson() leaves them out.
+  ///
+  /// A list field is written once per element rather than as one value. A form
+  /// body carries repeated fields, not lists, and RFC 8707 relies on that: the
+  /// token endpoint reads every `resource` it is given. Calling toString() on
+  /// the list instead would send Dart's own bracket notation, so even a single
+  /// resource arrived as "[https://api.example.com]" and the server rejected
+  /// it for not being an absolute URI. An empty list leaves the field off,
+  /// matching the Go client.
   String _encodeForm(Map<String, dynamic> body) {
-    final params = <String, String>{};
+    final params = <String, dynamic>{};
     body.forEach((key, value) {
-      if (value != null) {
-        params[key] = value.toString();
+      if (value == null) {
+        return;
       }
+      if (value is Iterable) {
+        params[key] = value.map((element) => element.toString()).toList();
+        return;
+      }
+      params[key] = value.toString();
     });
     return Uri(queryParameters: params).query;
   }
