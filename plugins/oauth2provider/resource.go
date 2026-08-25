@@ -26,12 +26,12 @@ import (
 // the value can go. The two POST endpoints carry it as a body field instead, for
 // the reason on TokenRequest.Resource.
 //
-// This replaced forge.WithParameter, which as of v1.9.11 wrote route metadata
+// This replaced forge.WithParameter, which up to v1.9.11 wrote route metadata
 // that the OpenAPI generator never read: it compiled, ran, returned no error,
-// and put nothing in the document. That has since been fixed upstream, but the
-// struct stays. WithParameter has no type argument and infers one from the
-// example, and a field that says []string beats an example a later edit could
-// quietly change to a bare string.
+// and put nothing in the document. Forge v1.9.12 fixed that, and the struct
+// still stays. WithParameter takes no type argument and infers one from its
+// example, so a field that says []string beats an example a later edit could
+// quietly trim to a bare string.
 type resourceQuery struct {
 	Resource []string `query:"resource" description:"RFC 8707 resource indicator. Repeatable. Absolute URI, no fragment." optional:"true"`
 }
