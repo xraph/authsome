@@ -6441,6 +6441,37 @@ class RoleListResponse {
   String toString() => 'RoleListResponse(${toJson()})';
 }
 
+class RotateClientSecretResponse {
+  final String clientId;
+  final String clientSecret;
+  final String id;
+
+  const RotateClientSecretResponse({
+    required this.clientId,
+    required this.clientSecret,
+    required this.id,
+  });
+
+  factory RotateClientSecretResponse.fromJson(Map<String, dynamic> json) {
+    return RotateClientSecretResponse(
+      clientId: json['client_id'] as String,
+      clientSecret: json['client_secret'] as String,
+      id: json['id'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'client_id': clientId,
+      'client_secret': clientSecret,
+      'id': id,
+    };
+  }
+
+  @override
+  String toString() => 'RotateClientSecretResponse(${toJson()})';
+}
+
 class SMSSendRequest {
   final String? phone;
 
@@ -7600,6 +7631,112 @@ class UnlinkAuthMethodResponse {
 
   @override
   String toString() => 'UnlinkAuthMethodResponse(${toJson()})';
+}
+
+class UpdateClientRequest {
+  final String? appId;
+  final String? clientId;
+  final List<String>? grantTypes;
+  final String? name;
+  final bool? public;
+  final List<String>? redirectUris;
+  final List<String>? resources;
+  final List<String>? scopes;
+  final String? tokenEndpointAuthMethod;
+
+  const UpdateClientRequest({
+    this.appId,
+    this.clientId,
+    this.grantTypes,
+    this.name,
+    this.public,
+    this.redirectUris,
+    this.resources,
+    this.scopes,
+    this.tokenEndpointAuthMethod,
+  });
+
+  factory UpdateClientRequest.fromJson(Map<String, dynamic> json) {
+    return UpdateClientRequest(
+      appId: json['app_id'] as String?,
+      clientId: json['client_id'] as String?,
+      grantTypes: json['grant_types'] == null ? null : (json['grant_types'] as List).map((e) => e as String).toList(),
+      name: json['name'] as String?,
+      public: json['public'] as bool?,
+      redirectUris: json['redirect_uris'] == null ? null : (json['redirect_uris'] as List).map((e) => e as String).toList(),
+      resources: json['resources'] == null ? null : (json['resources'] as List).map((e) => e as String).toList(),
+      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+      tokenEndpointAuthMethod: json['token_endpoint_auth_method'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (appId != null) 'app_id': appId,
+      if (clientId != null) 'client_id': clientId,
+      if (grantTypes != null) 'grant_types': grantTypes,
+      if (name != null) 'name': name,
+      if (public != null) 'public': public,
+      if (redirectUris != null) 'redirect_uris': redirectUris,
+      if (resources != null) 'resources': resources,
+      if (scopes != null) 'scopes': scopes,
+      if (tokenEndpointAuthMethod != null) 'token_endpoint_auth_method': tokenEndpointAuthMethod,
+    };
+  }
+
+  @override
+  String toString() => 'UpdateClientRequest(${toJson()})';
+}
+
+class UpdateClientResponse {
+  final String clientId;
+  final List<String> grantTypes;
+  final String id;
+  final String name;
+  final bool public;
+  final List<String> redirectUris;
+  final List<String> resources;
+  final List<String> scopes;
+
+  const UpdateClientResponse({
+    required this.clientId,
+    required this.grantTypes,
+    required this.id,
+    required this.name,
+    required this.public,
+    required this.redirectUris,
+    required this.resources,
+    required this.scopes,
+  });
+
+  factory UpdateClientResponse.fromJson(Map<String, dynamic> json) {
+    return UpdateClientResponse(
+      clientId: json['client_id'] as String,
+      grantTypes: (json['grant_types'] as List).map((e) => e as String).toList(),
+      id: json['id'] as String,
+      name: json['name'] as String,
+      public: json['public'] as bool,
+      redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
+      resources: (json['resources'] as List).map((e) => e as String).toList(),
+      scopes: (json['scopes'] as List).map((e) => e as String).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'client_id': clientId,
+      'grant_types': grantTypes,
+      'id': id,
+      'name': name,
+      'public': public,
+      'redirect_uris': redirectUris,
+      'resources': resources,
+      'scopes': scopes,
+    };
+  }
+
+  @override
+  String toString() => 'UpdateClientResponse(${toJson()})';
 }
 
 class UpdateEnvironmentRequest {

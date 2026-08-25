@@ -461,6 +461,25 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
+	if err := admin.PATCH("/clients/:clientId", p.handleUpdateClient,
+		forge.WithSummary("Update OAuth2 client"),
+		forge.WithOperationID("updateOAuth2Client"),
+		forge.WithRequestSchema(UpdateClientRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Client updated", UpdateClientResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	if err := admin.POST("/clients/:clientId/secret", p.handleRotateClientSecret,
+		forge.WithSummary("Rotate OAuth2 client secret"),
+		forge.WithOperationID("rotateOAuth2ClientSecret"),
+		forge.WithResponseSchema(http.StatusOK, "Secret rotated", RotateClientSecretResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
 	return admin.DELETE("/clients/:clientId", p.handleDeleteClient,
 		forge.WithSummary("Delete OAuth2 client"),
 		forge.WithOperationID("deleteOAuth2Client"),
@@ -1342,6 +1361,14 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 	}
 	if len(req.RedirectURIs) == 0 && !req.Public {
 		return nil, forge.BadRequest("redirect_uris required for confidential clients")
+	}
+	// Same rule the update path and dynamic registration apply. Leaving create
+	// more permissive would mean a client could be registered with a URI that
+	// can never be edited afterwards, since any later edit would be refused.
+	for _, u := range req.RedirectURIs {
+		if uriErr := validateRedirectURI(u); uriErr != nil {
+			return nil, forge.BadRequest(registrationErrorDescription(uriErr))
+		}
 	}
 
 	// manage:oauth2_client says the caller may administer clients. It does not
