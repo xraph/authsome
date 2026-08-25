@@ -864,6 +864,9 @@
           "rotate_refresh_token": {
             "type": "boolean"
           },
+          "token_exchange_ttl_seconds": {
+            "type": "integer"
+          },
           "token_format": {
             "type": "string"
           },
@@ -1471,6 +1474,9 @@
               "skip_email_verification": {
                 "type": "boolean"
               },
+              "token_exchange_ttl_seconds": {
+                "type": "integer"
+              },
               "token_ttl_seconds": {
                 "type": "integer"
               },
@@ -1771,6 +1777,12 @@
             },
             "type": "array"
           },
+          "resources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "scopes": {
             "items": {
               "type": "string"
@@ -1814,6 +1826,12 @@
             },
             "type": "array"
           },
+          "resources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "scopes": {
             "items": {
               "type": "string"
@@ -1827,6 +1845,7 @@
           "name",
           "redirect_uris",
           "scopes",
+          "resources",
           "grant_types",
           "public"
         ],
@@ -1934,6 +1953,9 @@
               },
               "skip_email_verification": {
                 "type": "boolean"
+              },
+              "token_exchange_ttl_seconds": {
+                "type": "integer"
               },
               "token_ttl_seconds": {
                 "type": "integer"
@@ -2518,6 +2540,12 @@
           "jwks_uri": {
             "type": "string"
           },
+          "registration_endpoint": {
+            "type": "string"
+          },
+          "resource_indicators_supported": {
+            "type": "boolean"
+          },
           "response_types_supported": {
             "items": {
               "type": "string"
@@ -2566,7 +2594,8 @@
           "id_token_signing_alg_values_supported",
           "scopes_supported",
           "token_endpoint_auth_methods_supported",
-          "code_challenge_methods_supported"
+          "code_challenge_methods_supported",
+          "resource_indicators_supported"
         ],
         "type": "object"
       },
@@ -2953,6 +2982,13 @@
             "description": "Application ID",
             "type": "string"
           },
+          "aud": {
+            "description": "Resource identifiers this token is valid for (RFC 8707)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "env_id": {
             "description": "Environment ID",
             "type": "string"
@@ -3299,6 +3335,10 @@
       },
       "LoginByDomainRequest": {
         "properties": {
+          "connection_id": {
+            "description": "Exact SSO connection to use (from home-realm discovery); disambiguates a domain shared across orgs",
+            "type": "string"
+          },
           "email": {
             "description": "Work email; its domain routes to the matching SSO connection",
             "type": "string"
@@ -3595,9 +3635,15 @@
           "client_id": {
             "type": "string"
           },
+          "client_secret_expires_at": {
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "dynamically_registered": {
+            "type": "boolean"
           },
           "grant_types": {
             "items": {
@@ -3607,6 +3653,10 @@
           },
           "id": {
             "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object"
           },
           "name": {
             "type": "string"
@@ -3620,11 +3670,20 @@
             },
             "type": "array"
           },
+          "resources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "scopes": {
             "items": {
               "type": "string"
             },
             "type": "array"
+          },
+          "token_endpoint_auth_method": {
+            "type": "string"
           },
           "updated_at": {
             "format": "date-time",
@@ -3638,8 +3697,10 @@
           "client_id",
           "redirect_uris",
           "scopes",
+          "resources",
           "grant_types",
           "public",
+          "dynamically_registered",
           "created_at",
           "updated_at"
         ],
@@ -4014,6 +4075,149 @@
         },
         "required": [
           "options"
+        ],
+        "type": "object"
+      },
+      "RegisterClientRequest": {
+        "properties": {
+          "client_name": {
+            "type": "string"
+          },
+          "client_uri": {
+            "type": "string"
+          },
+          "contacts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "grant_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "logo_uri": {
+            "type": "string"
+          },
+          "policy_uri": {
+            "type": "string"
+          },
+          "redirect_uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "response_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "software_id": {
+            "type": "string"
+          },
+          "software_version": {
+            "type": "string"
+          },
+          "token_endpoint_auth_method": {
+            "type": "string"
+          },
+          "tos_uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "redirect_uris"
+        ],
+        "type": "object"
+      },
+      "RegisterClientResponse": {
+        "properties": {
+          "client_id": {
+            "type": "string"
+          },
+          "client_id_issued_at": {
+            "type": "integer"
+          },
+          "client_name": {
+            "type": "string"
+          },
+          "client_secret": {
+            "type": "string"
+          },
+          "client_secret_expires_at": {
+            "type": "integer"
+          },
+          "client_uri": {
+            "type": "string"
+          },
+          "contacts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "grant_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "logo_uri": {
+            "type": "string"
+          },
+          "policy_uri": {
+            "type": "string"
+          },
+          "redirect_uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "registration_access_token": {
+            "type": "string"
+          },
+          "registration_client_uri": {
+            "type": "string"
+          },
+          "response_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "software_id": {
+            "type": "string"
+          },
+          "software_version": {
+            "type": "string"
+          },
+          "token_endpoint_auth_method": {
+            "type": "string"
+          },
+          "tos_uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "client_id_issued_at",
+          "client_secret_expires_at",
+          "redirect_uris",
+          "grant_types",
+          "response_types",
+          "scope",
+          "token_endpoint_auth_method"
         ],
         "type": "object"
       },
@@ -4509,6 +4713,10 @@
             "description": "Rotate refresh token on use (nil = inherit)",
             "type": "boolean"
           },
+          "token_exchange_ttl_seconds": {
+            "description": "RFC 8693 token exchange TTL in seconds (nil = inherit)",
+            "type": "integer"
+          },
           "token_format": {
             "description": "Token format: opaque or jwt (empty = inherit)",
             "type": "string"
@@ -4618,6 +4826,9 @@
           },
           "skip_email_verification": {
             "type": "boolean"
+          },
+          "token_exchange_ttl_seconds": {
+            "type": "integer"
           },
           "token_ttl_seconds": {
             "type": "integer"
@@ -5011,6 +5222,9 @@
           "skip_email_verification": {
             "type": "boolean"
           },
+          "token_exchange_ttl_seconds": {
+            "type": "integer"
+          },
           "token_ttl_seconds": {
             "type": "integer"
           },
@@ -5064,6 +5278,65 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "UpdateRegistrationRequest": {
+        "properties": {
+          "client_id": {
+            "type": "string"
+          },
+          "client_name": {
+            "type": "string"
+          },
+          "client_secret": {
+            "type": "string"
+          },
+          "client_uri": {
+            "type": "string"
+          },
+          "contacts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "grant_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "logo_uri": {
+            "type": "string"
+          },
+          "policy_uri": {
+            "type": "string"
+          },
+          "redirect_uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "software_id": {
+            "type": "string"
+          },
+          "software_version": {
+            "type": "string"
+          },
+          "token_endpoint_auth_method": {
+            "type": "string"
+          },
+          "tos_uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "redirect_uris"
+        ],
         "type": "object"
       },
       "UpdateRoleRequest": {
@@ -5837,7 +6110,7 @@
     },
     "/.well-known/openid-configuration": {
       "get": {
-        "operationId": "oidcDiscovery",
+        "operationId": "oidcDiscoveryPrefixed",
         "responses": {
           "200": {
             "content": {
@@ -27122,6 +27395,712 @@
         ]
       }
     },
+    "/v1/oauth/register": {
+      "post": {
+        "description": "RFC 7591 dynamic client registration.",
+        "operationId": "oauth2RegisterClient",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterClientRequest"
+              }
+            }
+          },
+          "description": "Request body",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterClientResponse"
+                }
+              }
+            },
+            "description": "Client registered"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Register OAuth2 client",
+        "tags": [
+          "OAuth2"
+        ]
+      }
+    },
+    "/v1/oauth/register/{clientId}": {
+      "delete": {
+        "operationId": "oauth2DeleteRegistration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clientId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete OAuth2 client registration",
+        "tags": [
+          "OAuth2"
+        ]
+      },
+      "get": {
+        "operationId": "oauth2ReadRegistration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clientId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterClientResponse"
+                }
+              }
+            },
+            "description": "Client information"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read OAuth2 client registration",
+        "tags": [
+          "OAuth2"
+        ]
+      },
+      "put": {
+        "operationId": "oauth2UpdateRegistration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clientId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRegistrationRequest"
+              }
+            }
+          },
+          "description": "Request body",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterClientResponse"
+                }
+              }
+            },
+            "description": "Client information"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update OAuth2 client registration",
+        "tags": [
+          "OAuth2"
+        ]
+      }
+    },
     "/v1/oauth/revoke": {
       "post": {
         "description": "Revokes an access or refresh token.",
@@ -27330,6 +28309,12 @@
                   },
                   "redirect_uri": {
                     "type": "string"
+                  },
+                  "resource": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
                   }
                 },
                 "required": [

@@ -157,6 +157,8 @@ import type {
   RefreshRequest,
   RegisterBeginRequest,
   RegisterBeginResponse,
+  RegisterClientRequest,
+  RegisterClientResponse,
   RegisterFinishResponse,
   ResendVerificationRequest,
   ResetPasswordRequest,
@@ -205,6 +207,7 @@ import type {
   UpdateMeRequest,
   UpdateMemberRequest,
   UpdateOrgRequest,
+  UpdateRegistrationRequest,
   UpdateRoleRequest,
   UpdateTeamRequest,
   UpdateWebhookRequest,
@@ -242,6 +245,8 @@ import type {
   VerifySMSCodeRequest,
   Oauth2DeviceAuthorizeRequest,
   Oauth2DeviceCompleteRequest,
+  Oauth2RegisterClientRequest,
+  Oauth2UpdateRegistrationRequest,
   Oauth2RevokeRequest,
   Oauth2TokenRequest,
   CreateOrganizationRequest,
@@ -360,7 +365,7 @@ export class AuthClient {
    * OpenID Connect Discovery
    * GET /.well-known/openid-configuration
    */
-  async oidcDiscovery(): Promise<DiscoveryResponse> {
+  async oidcDiscoveryPrefixed(): Promise<DiscoveryResponse> {
     const path = "/.well-known/openid-configuration";
     return this.request<DiscoveryResponse>(
       'GET',
@@ -2150,6 +2155,58 @@ export class AuthClient {
       path,
       body,
       true,
+    );
+  }
+
+  /**
+   * Register OAuth2 client
+   * POST /v1/oauth/register
+   */
+  async oauth2RegisterClient(body: Oauth2RegisterClientRequest): Promise<RegisterClientResponse> {
+    const path = "/v1/oauth/register";
+    return this.request<RegisterClientResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * Read OAuth2 client registration
+   * GET /v1/oauth/register/{clientId}
+   */
+  async oauth2ReadRegistration(clientId: string): Promise<RegisterClientResponse> {
+    const path = `/v1/oauth/register/${clientId}`;
+    return this.request<RegisterClientResponse>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Update OAuth2 client registration
+   * PUT /v1/oauth/register/{clientId}
+   */
+  async oauth2UpdateRegistration(clientId: string, body: Oauth2UpdateRegistrationRequest): Promise<RegisterClientResponse> {
+    const path = `/v1/oauth/register/${clientId}`;
+    return this.request<RegisterClientResponse>(
+      'PUT',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * Delete OAuth2 client registration
+   * DELETE /v1/oauth/register/{clientId}
+   */
+  async oauth2DeleteRegistration(clientId: string): Promise<void> {
+    const path = `/v1/oauth/register/${clientId}`;
+    return this.request<void>(
+      'DELETE',
+      path,
+      undefined,
     );
   }
 

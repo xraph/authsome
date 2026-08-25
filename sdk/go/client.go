@@ -290,8 +290,8 @@ func (c *Client) GetOpenAPI(ctx context.Context) (*map[string]any, error) {
 	return &result, nil
 }
 
-// OidcDiscovery — OpenID Connect Discovery
-func (c *Client) OidcDiscovery(ctx context.Context) (*DiscoveryResponse, error) {
+// OidcDiscoveryPrefixed — OpenID Connect Discovery
+func (c *Client) OidcDiscoveryPrefixed(ctx context.Context) (*DiscoveryResponse, error) {
 	path := "/.well-known/openid-configuration"
 	var result DiscoveryResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
@@ -2123,6 +2123,53 @@ func (c *Client) Oauth2DeviceComplete(ctx context.Context, req *Oauth2DeviceComp
 	return &result, nil
 }
 
+// Oauth2RegisterClient — Register OAuth2 client
+func (c *Client) Oauth2RegisterClient(ctx context.Context, req *Oauth2RegisterClientRequest) (*RegisterClientResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/oauth/register"
+	var result RegisterClientResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Oauth2ReadRegistration — Read OAuth2 client registration
+func (c *Client) Oauth2ReadRegistration(ctx context.Context, clientId string) (*RegisterClientResponse, error) {
+	path := "/v1/oauth/register/{clientId}"
+	path = strings.Replace(path, "{clientId}", clientId, 1)
+	var result RegisterClientResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Oauth2UpdateRegistration — Update OAuth2 client registration
+func (c *Client) Oauth2UpdateRegistration(ctx context.Context, clientId string, req *Oauth2UpdateRegistrationRequest) (*RegisterClientResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/oauth/register/{clientId}"
+	path = strings.Replace(path, "{clientId}", clientId, 1)
+	var result RegisterClientResponse
+	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Oauth2DeleteRegistration — Delete OAuth2 client registration
+func (c *Client) Oauth2DeleteRegistration(ctx context.Context, clientId string) error {
+	path := "/v1/oauth/register/{clientId}"
+	path = strings.Replace(path, "{clientId}", clientId, 1)
+	return c.do(ctx, "DELETE", path, nil, nil)
+}
+
 // Oauth2Revoke — Revoke token
 func (c *Client) Oauth2Revoke(ctx context.Context, req *Oauth2RevokeRequest) error {
 	form := url.Values{}
@@ -2139,32 +2186,13 @@ func (c *Client) Oauth2Revoke(ctx context.Context, req *Oauth2RevokeRequest) err
 
 // Oauth2Token — OAuth2 Token
 func (c *Client) Oauth2Token(ctx context.Context, req *Oauth2TokenRequest) (*Oauth2providerTokenResponse, error) {
-	form := url.Values{}
-	if req != nil {
-		if req.ClientID != "" {
-			form.Set("client_id", req.ClientID)
-		}
-		if req.ClientSecret != "" {
-			form.Set("client_secret", req.ClientSecret)
-		}
-		if req.Code != "" {
-			form.Set("code", req.Code)
-		}
-		if req.CodeVerifier != "" {
-			form.Set("code_verifier", req.CodeVerifier)
-		}
-		if req.DeviceCode != "" {
-			form.Set("device_code", req.DeviceCode)
-		}
-		form.Set("grant_type", req.GrantType)
-		if req.RedirectURI != "" {
-			form.Set("redirect_uri", req.RedirectURI)
-		}
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	body := []byte(form.Encode())
 	path := "/v1/oauth/token"
 	var result Oauth2providerTokenResponse
-	if err := c.doForm(ctx, "POST", path, body, &result); err != nil {
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil

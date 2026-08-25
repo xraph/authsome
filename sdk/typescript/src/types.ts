@@ -251,6 +251,7 @@ export interface AppsessionconfigConfig {
   max_active_sessions?: number;
   refresh_token_ttl_seconds?: number;
   rotate_refresh_token?: boolean;
+  token_exchange_ttl_seconds?: number;
   token_format?: string;
   token_ttl_seconds?: number;
   updated_at: string;
@@ -498,6 +499,7 @@ export interface CreateClientRequest {
   name: string;
   public?: boolean;
   redirect_uris: string[];
+  resources?: string[];
   scopes?: string[];
 }
 
@@ -509,6 +511,7 @@ export interface CreateClientResponse {
   name: string;
   public: boolean;
   redirect_uris: string[];
+  resources: string[];
   scopes: string[];
 }
 
@@ -695,6 +698,8 @@ export interface DiscoveryResponse {
   id_token_signing_alg_values_supported: string[];
   issuer: string;
   jwks_uri: string;
+  registration_endpoint?: string;
+  resource_indicators_supported: boolean;
   response_types_supported: string[];
   revocation_endpoint: string;
   scopes_supported: string[];
@@ -824,6 +829,7 @@ export interface IntrospectRequest {
 export interface IntrospectResponse {
   active: boolean;
   app_id?: string;
+  aud?: string[];
   env_id?: string;
   expires_at?: string;
   org_id?: string;
@@ -921,6 +927,7 @@ export interface LoginBeginResponse {
 }
 
 export interface LoginByDomainRequest {
+  connection_id?: string;
   email: string;
   return_url?: string;
 }
@@ -1012,13 +1019,18 @@ export interface Name {
 export interface OAuth2Client {
   app_id: string;
   client_id: string;
+  client_secret_expires_at?: string;
   created_at: string;
+  dynamically_registered: boolean;
   grant_types: string[];
   id: string;
+  metadata?: Record<string, unknown>;
   name: string;
   public: boolean;
   redirect_uris: string[];
+  resources: string[];
   scopes: string[];
+  token_endpoint_auth_method?: string;
   updated_at: string;
 }
 
@@ -1135,6 +1147,44 @@ export interface RegisterBeginRequest {
 
 export interface RegisterBeginResponse {
   options: Record<string, unknown>;
+}
+
+export interface RegisterClientRequest {
+  client_name?: string;
+  client_uri?: string;
+  contacts?: string[];
+  grant_types?: string[];
+  logo_uri?: string;
+  policy_uri?: string;
+  redirect_uris: string[];
+  response_types?: string[];
+  scope?: string;
+  software_id?: string;
+  software_version?: string;
+  token_endpoint_auth_method?: string;
+  tos_uri?: string;
+}
+
+export interface RegisterClientResponse {
+  client_id: string;
+  client_id_issued_at: number;
+  client_name?: string;
+  client_secret?: string;
+  client_secret_expires_at: number;
+  client_uri?: string;
+  contacts?: string[];
+  grant_types: string[];
+  logo_uri?: string;
+  policy_uri?: string;
+  redirect_uris: string[];
+  registration_access_token?: string;
+  registration_client_uri?: string;
+  response_types: string[];
+  scope: string;
+  software_id?: string;
+  software_version?: string;
+  token_endpoint_auth_method: string;
+  tos_uri?: string;
 }
 
 export interface RegisterFinishResponse {
@@ -1290,6 +1340,7 @@ export interface SetAppSessionConfigRequest {
   max_active_sessions?: number;
   refresh_token_ttl_seconds?: number;
   rotate_refresh_token?: boolean;
+  token_exchange_ttl_seconds?: number;
   token_format?: string;
   token_ttl_seconds?: number;
 }
@@ -1323,6 +1374,7 @@ export interface Settings {
   signin_rate_limit?: number;
   signup_rate_limit?: number;
   skip_email_verification?: boolean;
+  token_exchange_ttl_seconds?: number;
   token_ttl_seconds?: number;
   webhook_url_override?: string;
 }
@@ -1445,6 +1497,7 @@ export interface UpdateEnvironmentSettingsRequest {
   signin_rate_limit?: number;
   signup_rate_limit?: number;
   skip_email_verification?: boolean;
+  token_exchange_ttl_seconds?: number;
   token_ttl_seconds?: number;
   webhook_url_override?: string;
 }
@@ -1463,6 +1516,23 @@ export interface UpdateMemberRequest {
 export interface UpdateOrgRequest {
   logo?: string;
   name?: string;
+}
+
+export interface UpdateRegistrationRequest {
+  client_id?: string;
+  client_name?: string;
+  client_secret?: string;
+  client_uri?: string;
+  contacts?: string[];
+  grant_types?: string[];
+  logo_uri?: string;
+  policy_uri?: string;
+  redirect_uris: string[];
+  scope?: string;
+  software_id?: string;
+  software_version?: string;
+  token_endpoint_auth_method?: string;
+  tos_uri?: string;
 }
 
 export interface UpdateRoleRequest {
@@ -1636,9 +1706,13 @@ export type Oauth2DeviceAuthorizeRequest = { client_id: string; scope?: string }
 
 export type Oauth2DeviceCompleteRequest = { action: string; user_code: string };
 
+export type Oauth2RegisterClientRequest = RegisterClientRequest;
+
+export type Oauth2UpdateRegistrationRequest = UpdateRegistrationRequest;
+
 export type Oauth2RevokeRequest = { token: string; token_type_hint?: string };
 
-export type Oauth2TokenRequest = { client_id?: string; client_secret?: string; code?: string; code_verifier?: string; device_code?: string; grant_type: string; redirect_uri?: string };
+export type Oauth2TokenRequest = { client_id?: string; client_secret?: string; code?: string; code_verifier?: string; device_code?: string; grant_type: string; redirect_uri?: string; resource?: string[] };
 
 export type CreateOrganizationRequest = CreateOrgRequest;
 

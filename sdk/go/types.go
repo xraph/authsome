@@ -279,17 +279,18 @@ type AppclientconfigConfig struct {
 
 // AppsessionconfigConfig represents the AppsessionconfigConfig schema.
 type AppsessionconfigConfig struct {
-	AppID                  string `json:"app_id"`
-	BindToDevice           bool   `json:"bind_to_device,omitempty"`
-	BindToIP               bool   `json:"bind_to_ip,omitempty"`
-	CreatedAt              string `json:"created_at"`
-	ID                     string `json:"id"`
-	MaxActiveSessions      int64  `json:"max_active_sessions,omitempty"`
-	RefreshTokenTtlSeconds int64  `json:"refresh_token_ttl_seconds,omitempty"`
-	RotateRefreshToken     bool   `json:"rotate_refresh_token,omitempty"`
-	TokenFormat            string `json:"token_format,omitempty"`
-	TokenTtlSeconds        int64  `json:"token_ttl_seconds,omitempty"`
-	UpdatedAt              string `json:"updated_at"`
+	AppID                   string `json:"app_id"`
+	BindToDevice            bool   `json:"bind_to_device,omitempty"`
+	BindToIP                bool   `json:"bind_to_ip,omitempty"`
+	CreatedAt               string `json:"created_at"`
+	ID                      string `json:"id"`
+	MaxActiveSessions       int64  `json:"max_active_sessions,omitempty"`
+	RefreshTokenTtlSeconds  int64  `json:"refresh_token_ttl_seconds,omitempty"`
+	RotateRefreshToken      bool   `json:"rotate_refresh_token,omitempty"`
+	TokenExchangeTtlSeconds int64  `json:"token_exchange_ttl_seconds,omitempty"`
+	TokenFormat             string `json:"token_format,omitempty"`
+	TokenTtlSeconds         int64  `json:"token_ttl_seconds,omitempty"`
+	UpdatedAt               string `json:"updated_at"`
 }
 
 // AssignRoleRequest represents the AssignRoleRequest schema.
@@ -567,6 +568,7 @@ type CreateClientRequest struct {
 	Name         string   `json:"name"`
 	Public       bool     `json:"public,omitempty"`
 	RedirectUris []string `json:"redirect_uris"`
+	Resources    []string `json:"resources,omitempty"`
 	Scopes       []string `json:"scopes,omitempty"`
 }
 
@@ -579,6 +581,7 @@ type CreateClientResponse struct {
 	Name         string   `json:"name"`
 	Public       bool     `json:"public"`
 	RedirectUris []string `json:"redirect_uris"`
+	Resources    []string `json:"resources"`
 	Scopes       []string `json:"scopes"`
 }
 
@@ -789,6 +792,8 @@ type DiscoveryResponse struct {
 	IDTokenSigningAlgValuesSupported  []string `json:"id_token_signing_alg_values_supported"`
 	Issuer                            string   `json:"issuer"`
 	JwksURI                           string   `json:"jwks_uri"`
+	RegistrationEndpoint              string   `json:"registration_endpoint,omitempty"`
+	ResourceIndicatorsSupported       bool     `json:"resource_indicators_supported"`
 	ResponseTypesSupported            []string `json:"response_types_supported"`
 	RevocationEndpoint                string   `json:"revocation_endpoint"`
 	ScopesSupported                   []string `json:"scopes_supported"`
@@ -937,6 +942,7 @@ type IntrospectRequest struct {
 type IntrospectResponse struct {
 	Active    bool            `json:"active"`
 	AppID     string          `json:"app_id,omitempty"`
+	Aud       []string        `json:"aud,omitempty"`
 	EnvID     string          `json:"env_id,omitempty"`
 	ExpiresAt string          `json:"expires_at,omitempty"`
 	OrgID     string          `json:"org_id,omitempty"`
@@ -1049,8 +1055,9 @@ type LoginBeginResponse struct {
 
 // LoginByDomainRequest represents the LoginByDomainRequest schema.
 type LoginByDomainRequest struct {
-	Email     string `json:"email"`
-	ReturnURL string `json:"return_url,omitempty"`
+	ConnectionID string `json:"connection_id,omitempty"`
+	Email        string `json:"email"`
+	ReturnURL    string `json:"return_url,omitempty"`
 }
 
 // LoginFinishResponse represents the LoginFinishResponse schema.
@@ -1150,16 +1157,21 @@ type Name struct {
 
 // OAuth2Client represents the OAuth2Client schema.
 type OAuth2Client struct {
-	AppID        string   `json:"app_id"`
-	ClientID     string   `json:"client_id"`
-	CreatedAt    string   `json:"created_at"`
-	GrantTypes   []string `json:"grant_types"`
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Public       bool     `json:"public"`
-	RedirectUris []string `json:"redirect_uris"`
-	Scopes       []string `json:"scopes"`
-	UpdatedAt    string   `json:"updated_at"`
+	AppID                   string         `json:"app_id"`
+	ClientID                string         `json:"client_id"`
+	ClientSecretExpiresAt   string         `json:"client_secret_expires_at,omitempty"`
+	CreatedAt               string         `json:"created_at"`
+	DynamicallyRegistered   bool           `json:"dynamically_registered"`
+	GrantTypes              []string       `json:"grant_types"`
+	ID                      string         `json:"id"`
+	Metadata                map[string]any `json:"metadata,omitempty"`
+	Name                    string         `json:"name"`
+	Public                  bool           `json:"public"`
+	RedirectUris            []string       `json:"redirect_uris"`
+	Resources               []string       `json:"resources"`
+	Scopes                  []string       `json:"scopes"`
+	TokenEndpointAuthMethod string         `json:"token_endpoint_auth_method,omitempty"`
+	UpdatedAt               string         `json:"updated_at"`
 }
 
 // Oauth2providerTokenResponse represents the Oauth2providerTokenResponse schema.
@@ -1293,6 +1305,46 @@ type RegisterBeginRequest struct {
 // RegisterBeginResponse represents the RegisterBeginResponse schema.
 type RegisterBeginResponse struct {
 	Options map[string]any `json:"options"`
+}
+
+// RegisterClientRequest represents the RegisterClientRequest schema.
+type RegisterClientRequest struct {
+	ClientName              string   `json:"client_name,omitempty"`
+	ClientURI               string   `json:"client_uri,omitempty"`
+	Contacts                []string `json:"contacts,omitempty"`
+	GrantTypes              []string `json:"grant_types,omitempty"`
+	LogoURI                 string   `json:"logo_uri,omitempty"`
+	PolicyURI               string   `json:"policy_uri,omitempty"`
+	RedirectUris            []string `json:"redirect_uris"`
+	ResponseTypes           []string `json:"response_types,omitempty"`
+	Scope                   string   `json:"scope,omitempty"`
+	SoftwareID              string   `json:"software_id,omitempty"`
+	SoftwareVersion         string   `json:"software_version,omitempty"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method,omitempty"`
+	TosURI                  string   `json:"tos_uri,omitempty"`
+}
+
+// RegisterClientResponse represents the RegisterClientResponse schema.
+type RegisterClientResponse struct {
+	ClientID                string   `json:"client_id"`
+	ClientIDIssuedAt        int64    `json:"client_id_issued_at"`
+	ClientName              string   `json:"client_name,omitempty"`
+	ClientSecret            string   `json:"client_secret,omitempty"`
+	ClientSecretExpiresAt   int64    `json:"client_secret_expires_at"`
+	ClientURI               string   `json:"client_uri,omitempty"`
+	Contacts                []string `json:"contacts,omitempty"`
+	GrantTypes              []string `json:"grant_types"`
+	LogoURI                 string   `json:"logo_uri,omitempty"`
+	PolicyURI               string   `json:"policy_uri,omitempty"`
+	RedirectUris            []string `json:"redirect_uris"`
+	RegistrationAccessToken string   `json:"registration_access_token,omitempty"`
+	RegistrationClientURI   string   `json:"registration_client_uri,omitempty"`
+	ResponseTypes           []string `json:"response_types"`
+	Scope                   string   `json:"scope"`
+	SoftwareID              string   `json:"software_id,omitempty"`
+	SoftwareVersion         string   `json:"software_version,omitempty"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
+	TosURI                  string   `json:"tos_uri,omitempty"`
 }
 
 // RegisterFinishResponse represents the RegisterFinishResponse schema.
@@ -1468,13 +1520,14 @@ type SetAppClientConfigRequest struct {
 
 // SetAppSessionConfigRequest represents the SetAppSessionConfigRequest schema.
 type SetAppSessionConfigRequest struct {
-	BindToDevice           bool   `json:"bind_to_device,omitempty"`
-	BindToIP               bool   `json:"bind_to_ip,omitempty"`
-	MaxActiveSessions      int64  `json:"max_active_sessions,omitempty"`
-	RefreshTokenTtlSeconds int64  `json:"refresh_token_ttl_seconds,omitempty"`
-	RotateRefreshToken     bool   `json:"rotate_refresh_token,omitempty"`
-	TokenFormat            string `json:"token_format,omitempty"`
-	TokenTtlSeconds        int64  `json:"token_ttl_seconds,omitempty"`
+	BindToDevice            bool   `json:"bind_to_device,omitempty"`
+	BindToIP                bool   `json:"bind_to_ip,omitempty"`
+	MaxActiveSessions       int64  `json:"max_active_sessions,omitempty"`
+	RefreshTokenTtlSeconds  int64  `json:"refresh_token_ttl_seconds,omitempty"`
+	RotateRefreshToken      bool   `json:"rotate_refresh_token,omitempty"`
+	TokenExchangeTtlSeconds int64  `json:"token_exchange_ttl_seconds,omitempty"`
+	TokenFormat             string `json:"token_format,omitempty"`
+	TokenTtlSeconds         int64  `json:"token_ttl_seconds,omitempty"`
 }
 
 // SetSettingRequest represents the SetSettingRequest schema.
@@ -1497,20 +1550,21 @@ type SettingValueResponse struct {
 
 // Settings represents the Settings schema.
 type Settings struct {
-	AllowTestCredentials   bool           `json:"allow_test_credentials,omitempty"`
-	CheckBreached          bool           `json:"check_breached,omitempty"`
-	LockoutEnabled         bool           `json:"lockout_enabled,omitempty"`
-	LockoutMaxAttempts     int64          `json:"lockout_max_attempts,omitempty"`
-	OauthOverrides         map[string]any `json:"oauth_overrides,omitempty"`
-	PasswordMinLength      int64          `json:"password_min_length,omitempty"`
-	RateLimitEnabled       bool           `json:"rate_limit_enabled,omitempty"`
-	RateLimitWindowSeconds int64          `json:"rate_limit_window_seconds,omitempty"`
-	RefreshTokenTtlSeconds int64          `json:"refresh_token_ttl_seconds,omitempty"`
-	SigninRateLimit        int64          `json:"signin_rate_limit,omitempty"`
-	SignupRateLimit        int64          `json:"signup_rate_limit,omitempty"`
-	SkipEmailVerification  bool           `json:"skip_email_verification,omitempty"`
-	TokenTtlSeconds        int64          `json:"token_ttl_seconds,omitempty"`
-	WebhookURLOverride     string         `json:"webhook_url_override,omitempty"`
+	AllowTestCredentials    bool           `json:"allow_test_credentials,omitempty"`
+	CheckBreached           bool           `json:"check_breached,omitempty"`
+	LockoutEnabled          bool           `json:"lockout_enabled,omitempty"`
+	LockoutMaxAttempts      int64          `json:"lockout_max_attempts,omitempty"`
+	OauthOverrides          map[string]any `json:"oauth_overrides,omitempty"`
+	PasswordMinLength       int64          `json:"password_min_length,omitempty"`
+	RateLimitEnabled        bool           `json:"rate_limit_enabled,omitempty"`
+	RateLimitWindowSeconds  int64          `json:"rate_limit_window_seconds,omitempty"`
+	RefreshTokenTtlSeconds  int64          `json:"refresh_token_ttl_seconds,omitempty"`
+	SigninRateLimit         int64          `json:"signin_rate_limit,omitempty"`
+	SignupRateLimit         int64          `json:"signup_rate_limit,omitempty"`
+	SkipEmailVerification   bool           `json:"skip_email_verification,omitempty"`
+	TokenExchangeTtlSeconds int64          `json:"token_exchange_ttl_seconds,omitempty"`
+	TokenTtlSeconds         int64          `json:"token_ttl_seconds,omitempty"`
+	WebhookURLOverride      string         `json:"webhook_url_override,omitempty"`
 }
 
 // SignInRequest represents the SignInRequest schema.
@@ -1636,20 +1690,21 @@ type UpdateEnvironmentRequest struct {
 
 // UpdateEnvironmentSettingsRequest represents the UpdateEnvironmentSettingsRequest schema.
 type UpdateEnvironmentSettingsRequest struct {
-	AllowTestCredentials   bool           `json:"allow_test_credentials,omitempty"`
-	CheckBreached          bool           `json:"check_breached,omitempty"`
-	LockoutEnabled         bool           `json:"lockout_enabled,omitempty"`
-	LockoutMaxAttempts     int64          `json:"lockout_max_attempts,omitempty"`
-	OauthOverrides         map[string]any `json:"oauth_overrides,omitempty"`
-	PasswordMinLength      int64          `json:"password_min_length,omitempty"`
-	RateLimitEnabled       bool           `json:"rate_limit_enabled,omitempty"`
-	RateLimitWindowSeconds int64          `json:"rate_limit_window_seconds,omitempty"`
-	RefreshTokenTtlSeconds int64          `json:"refresh_token_ttl_seconds,omitempty"`
-	SigninRateLimit        int64          `json:"signin_rate_limit,omitempty"`
-	SignupRateLimit        int64          `json:"signup_rate_limit,omitempty"`
-	SkipEmailVerification  bool           `json:"skip_email_verification,omitempty"`
-	TokenTtlSeconds        int64          `json:"token_ttl_seconds,omitempty"`
-	WebhookURLOverride     string         `json:"webhook_url_override,omitempty"`
+	AllowTestCredentials    bool           `json:"allow_test_credentials,omitempty"`
+	CheckBreached           bool           `json:"check_breached,omitempty"`
+	LockoutEnabled          bool           `json:"lockout_enabled,omitempty"`
+	LockoutMaxAttempts      int64          `json:"lockout_max_attempts,omitempty"`
+	OauthOverrides          map[string]any `json:"oauth_overrides,omitempty"`
+	PasswordMinLength       int64          `json:"password_min_length,omitempty"`
+	RateLimitEnabled        bool           `json:"rate_limit_enabled,omitempty"`
+	RateLimitWindowSeconds  int64          `json:"rate_limit_window_seconds,omitempty"`
+	RefreshTokenTtlSeconds  int64          `json:"refresh_token_ttl_seconds,omitempty"`
+	SigninRateLimit         int64          `json:"signin_rate_limit,omitempty"`
+	SignupRateLimit         int64          `json:"signup_rate_limit,omitempty"`
+	SkipEmailVerification   bool           `json:"skip_email_verification,omitempty"`
+	TokenExchangeTtlSeconds int64          `json:"token_exchange_ttl_seconds,omitempty"`
+	TokenTtlSeconds         int64          `json:"token_ttl_seconds,omitempty"`
+	WebhookURLOverride      string         `json:"webhook_url_override,omitempty"`
 }
 
 // UpdateMeRequest represents the UpdateMeRequest schema.
@@ -1669,6 +1724,24 @@ type UpdateMemberRequest struct {
 type UpdateOrgRequest struct {
 	Logo string `json:"logo,omitempty"`
 	Name string `json:"name,omitempty"`
+}
+
+// UpdateRegistrationRequest represents the UpdateRegistrationRequest schema.
+type UpdateRegistrationRequest struct {
+	ClientID                string   `json:"client_id,omitempty"`
+	ClientName              string   `json:"client_name,omitempty"`
+	ClientSecret            string   `json:"client_secret,omitempty"`
+	ClientURI               string   `json:"client_uri,omitempty"`
+	Contacts                []string `json:"contacts,omitempty"`
+	GrantTypes              []string `json:"grant_types,omitempty"`
+	LogoURI                 string   `json:"logo_uri,omitempty"`
+	PolicyURI               string   `json:"policy_uri,omitempty"`
+	RedirectUris            []string `json:"redirect_uris"`
+	Scope                   string   `json:"scope,omitempty"`
+	SoftwareID              string   `json:"software_id,omitempty"`
+	SoftwareVersion         string   `json:"software_version,omitempty"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method,omitempty"`
+	TosURI                  string   `json:"tos_uri,omitempty"`
 }
 
 // UpdateRoleRequest represents the UpdateRoleRequest schema.
@@ -1834,6 +1907,7 @@ type CreateOAuth2ClientRequest struct {
 	Name         string   `json:"name"`
 	Public       bool     `json:"public,omitempty"`
 	RedirectUris []string `json:"redirect_uris"`
+	Resources    []string `json:"resources,omitempty"`
 	Scopes       []string `json:"scopes,omitempty"`
 }
 
@@ -1978,6 +2052,41 @@ type Oauth2DeviceCompleteRequest struct {
 	UserCode string `json:"user_code"`
 }
 
+// Oauth2RegisterClientRequest is the request body for Oauth2RegisterClient.
+type Oauth2RegisterClientRequest struct {
+	ClientName              string   `json:"client_name,omitempty"`
+	ClientURI               string   `json:"client_uri,omitempty"`
+	Contacts                []string `json:"contacts,omitempty"`
+	GrantTypes              []string `json:"grant_types,omitempty"`
+	LogoURI                 string   `json:"logo_uri,omitempty"`
+	PolicyURI               string   `json:"policy_uri,omitempty"`
+	RedirectUris            []string `json:"redirect_uris"`
+	ResponseTypes           []string `json:"response_types,omitempty"`
+	Scope                   string   `json:"scope,omitempty"`
+	SoftwareID              string   `json:"software_id,omitempty"`
+	SoftwareVersion         string   `json:"software_version,omitempty"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method,omitempty"`
+	TosURI                  string   `json:"tos_uri,omitempty"`
+}
+
+// Oauth2UpdateRegistrationRequest is the request body for Oauth2UpdateRegistration.
+type Oauth2UpdateRegistrationRequest struct {
+	ClientID                string   `json:"client_id,omitempty"`
+	ClientName              string   `json:"client_name,omitempty"`
+	ClientSecret            string   `json:"client_secret,omitempty"`
+	ClientURI               string   `json:"client_uri,omitempty"`
+	Contacts                []string `json:"contacts,omitempty"`
+	GrantTypes              []string `json:"grant_types,omitempty"`
+	LogoURI                 string   `json:"logo_uri,omitempty"`
+	PolicyURI               string   `json:"policy_uri,omitempty"`
+	RedirectUris            []string `json:"redirect_uris"`
+	Scope                   string   `json:"scope,omitempty"`
+	SoftwareID              string   `json:"software_id,omitempty"`
+	SoftwareVersion         string   `json:"software_version,omitempty"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method,omitempty"`
+	TosURI                  string   `json:"tos_uri,omitempty"`
+}
+
 // Oauth2RevokeRequest is the request body for Oauth2Revoke.
 type Oauth2RevokeRequest struct {
 	Token         string `json:"token"`
@@ -1986,13 +2095,14 @@ type Oauth2RevokeRequest struct {
 
 // Oauth2TokenRequest is the request body for Oauth2Token.
 type Oauth2TokenRequest struct {
-	ClientID     string `json:"client_id,omitempty"`
-	ClientSecret string `json:"client_secret,omitempty"`
-	Code         string `json:"code,omitempty"`
-	CodeVerifier string `json:"code_verifier,omitempty"`
-	DeviceCode   string `json:"device_code,omitempty"`
-	GrantType    string `json:"grant_type"`
-	RedirectURI  string `json:"redirect_uri,omitempty"`
+	ClientID     string   `json:"client_id,omitempty"`
+	ClientSecret string   `json:"client_secret,omitempty"`
+	Code         string   `json:"code,omitempty"`
+	CodeVerifier string   `json:"code_verifier,omitempty"`
+	DeviceCode   string   `json:"device_code,omitempty"`
+	GrantType    string   `json:"grant_type"`
+	RedirectURI  string   `json:"redirect_uri,omitempty"`
+	Resource     []string `json:"resource,omitempty"`
 }
 
 // CreateOrganizationRequest is the request body for CreateOrganization.
@@ -2072,8 +2182,9 @@ type SsoExchangeRequest struct {
 
 // StartSSOLoginByDomainRequest is the request body for StartSSOLoginByDomain.
 type StartSSOLoginByDomainRequest struct {
-	Email     string `json:"email"`
-	ReturnURL string `json:"return_url,omitempty"`
+	ConnectionID string `json:"connection_id,omitempty"`
+	Email        string `json:"email"`
+	ReturnURL    string `json:"return_url,omitempty"`
 }
 
 // ResendEmailVerificationRequest is the request body for ResendEmailVerification.
