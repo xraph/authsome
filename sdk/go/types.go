@@ -742,11 +742,6 @@ type DelegationResponse struct {
 	Subject   string   `json:"subject"`
 }
 
-// DeleteClientRequest represents the DeleteClientRequest schema.
-type DeleteClientRequest struct {
-	ClientID string `json:"client_id"`
-}
-
 // DeleteResponse represents the DeleteResponse schema.
 type DeleteResponse struct {
 	Status string `json:"status"`
@@ -1747,11 +1742,6 @@ type UnassignRoleRequest struct {
 	UserID string `json:"user_id"`
 }
 
-// UnlinkAuthMethodRequest represents the UnlinkAuthMethodRequest schema.
-type UnlinkAuthMethodRequest struct {
-	Provider string `json:"provider"`
-}
-
 // UnlinkAuthMethodResponse represents the UnlinkAuthMethodResponse schema.
 type UnlinkAuthMethodResponse struct {
 	Status string `json:"status"`
@@ -1986,11 +1976,6 @@ type CreateOAuth2ClientRequest struct {
 	RedirectUris []string `json:"redirect_uris"`
 	Resources    []string `json:"resources,omitempty"`
 	Scopes       []string `json:"scopes,omitempty"`
-}
-
-// DeleteOAuth2ClientRequest is the request body for DeleteOAuth2Client.
-type DeleteOAuth2ClientRequest struct {
-	ClientID string `json:"client_id"`
 }
 
 // SocialAdminUpsertProviderRequest is the request body for SocialAdminUpsertProvider.

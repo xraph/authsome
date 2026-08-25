@@ -86,7 +86,6 @@ import type {
   DefinitionGroup,
   DelegationListResponse,
   DelegationResponse,
-  DeleteClientRequest,
   DeleteResponse,
   Device,
   DeviceAuthResponse,
@@ -209,7 +208,6 @@ import type {
   TokenExchangeResponse,
   UIMetadata,
   UnassignRoleRequest,
-  UnlinkAuthMethodRequest,
   UnlinkAuthMethodResponse,
   UpdateEnvironmentRequest,
   UpdateEnvironmentSettingsRequest,
@@ -236,7 +234,6 @@ import type {
   WebhookListResponse,
   AdminBulkImportUsersRequest,
   CreateOAuth2ClientRequest,
-  DeleteOAuth2ClientRequest,
   SocialAdminUpsertProviderRequest,
   SsoAdminCreateConnectionRequest,
   SsoAdminUpdateConnectionRequest,
@@ -788,12 +785,12 @@ export class AuthClient {
    * Delete OAuth2 client
    * DELETE /v1/admin/oauth/clients/{clientId}
    */
-  async deleteOAuth2Client(clientId: string, body: DeleteOAuth2ClientRequest, token: string): Promise<void> {
+  async deleteOAuth2Client(clientId: string, token: string): Promise<void> {
     const path = `/v1/admin/oauth/clients/${clientId}`;
     return this.request<void>(
       'DELETE',
       path,
-      body,
+      undefined,
       token,
     );
   }
@@ -2077,12 +2074,12 @@ export class AuthClient {
    * Unlink an auth method
    * DELETE /v1/me/auth-methods/{provider}
    */
-  async unlinkAuthMethod(provider: string, body: UnlinkAuthMethodRequest, token: string): Promise<UnlinkAuthMethodResponse> {
+  async unlinkAuthMethod(provider: string, token: string): Promise<UnlinkAuthMethodResponse> {
     const path = `/v1/me/auth-methods/${provider}`;
     return this.request<UnlinkAuthMethodResponse>(
       'DELETE',
       path,
-      body,
+      undefined,
       token,
     );
   }

@@ -466,12 +466,11 @@ class AuthClient {
 
   /// Delete OAuth2 client
   /// DELETE /v1/admin/oauth/clients/{clientId}
-  Future<void> deleteOAuth2Client({required String clientId, required DeleteClientRequest body, required String token}) async {
+  Future<void> deleteOAuth2Client({required String clientId, required String token}) async {
     final path = '/v1/admin/oauth/clients/$clientId';
     await _request(
 'DELETE',
       path,
-      body: body.toJson(),
       token: token,
     );
   }
@@ -1651,12 +1650,11 @@ class AuthClient {
 
   /// Unlink an auth method
   /// DELETE /v1/me/auth-methods/{provider}
-  Future<UnlinkAuthMethodResponse> unlinkAuthMethod({required String provider, required UnlinkAuthMethodRequest body, required String token}) async {
+  Future<UnlinkAuthMethodResponse> unlinkAuthMethod({required String provider, required String token}) async {
     final path = '/v1/me/auth-methods/$provider';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
       token: token,
     );
     return UnlinkAuthMethodResponse.fromJson(Map<String, dynamic>.from(res as Map));

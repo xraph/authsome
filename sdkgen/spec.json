@@ -2410,17 +2410,6 @@
         ],
         "type": "object"
       },
-      "DeleteClientRequest": {
-        "properties": {
-          "ClientID": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ClientID"
-        ],
-        "type": "object"
-      },
       "DeleteResponse": {
         "properties": {
           "status": {
@@ -5393,17 +5382,6 @@
         },
         "required": [
           "user_id"
-        ],
-        "type": "object"
-      },
-      "UnlinkAuthMethodRequest": {
-        "properties": {
-          "Provider": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "Provider"
         ],
         "type": "object"
       },
@@ -9458,7 +9436,6 @@
         "operationId": "deleteOAuth2Client",
         "parameters": [
           {
-            "description": "Path parameter: clientId",
             "in": "path",
             "name": "clientId",
             "required": true,
@@ -9467,17 +9444,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeleteClientRequest"
-              }
-            }
-          },
-          "description": "Request body",
-          "required": true
-        },
         "responses": {
           "400": {
             "content": {
@@ -25153,26 +25119,16 @@
         "operationId": "unlinkAuthMethod",
         "parameters": [
           {
-            "description": "Path parameter: provider",
+            "description": "Auth method provider (password, google, ...)",
             "in": "path",
             "name": "provider",
             "required": true,
             "schema": {
+              "description": "Auth method provider (password, google, ...)",
               "type": "string"
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UnlinkAuthMethodRequest"
-              }
-            }
-          },
-          "description": "Request body",
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {

@@ -3217,29 +3217,6 @@ class DelegationResponse {
   String toString() => 'DelegationResponse(${toJson()})';
 }
 
-class DeleteClientRequest {
-  final String clientID;
-
-  const DeleteClientRequest({
-    required this.clientID,
-  });
-
-  factory DeleteClientRequest.fromJson(Map<String, dynamic> json) {
-    return DeleteClientRequest(
-      clientID: json['ClientID'] as String,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'ClientID': clientID,
-    };
-  }
-
-  @override
-  String toString() => 'DeleteClientRequest(${toJson()})';
-}
-
 class DeleteResponse {
   final String status;
 
@@ -7600,29 +7577,6 @@ class UnassignRoleRequest {
 
   @override
   String toString() => 'UnassignRoleRequest(${toJson()})';
-}
-
-class UnlinkAuthMethodRequest {
-  final String provider;
-
-  const UnlinkAuthMethodRequest({
-    required this.provider,
-  });
-
-  factory UnlinkAuthMethodRequest.fromJson(Map<String, dynamic> json) {
-    return UnlinkAuthMethodRequest(
-      provider: json['Provider'] as String,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'Provider': provider,
-    };
-  }
-
-  @override
-  String toString() => 'UnlinkAuthMethodRequest(${toJson()})';
 }
 
 class UnlinkAuthMethodResponse {
