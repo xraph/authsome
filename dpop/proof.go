@@ -92,8 +92,8 @@ func Parse(raw string) (*Proof, error) {
 		return nil, fmt.Errorf("%w: decode header: %w", ErrMalformedProof, err)
 	}
 	var h proofHeader
-	if err := json.Unmarshal(headerBytes, &h); err != nil {
-		return nil, fmt.Errorf("%w: decode header json: %w", ErrMalformedProof, err)
+	if hdrErr := json.Unmarshal(headerBytes, &h); hdrErr != nil {
+		return nil, fmt.Errorf("%w: decode header json: %w", ErrMalformedProof, hdrErr)
 	}
 
 	// typ before alg. A caller who reads alg first and dispatches on it has
@@ -123,8 +123,8 @@ func Parse(raw string) (*Proof, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: decode signature: %w", ErrMalformedProof, err)
 	}
-	if err := method.Verify(parts[0]+"."+parts[1], sig, pub); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrBadSignature, err)
+	if sigErr := method.Verify(parts[0]+"."+parts[1], sig, pub); sigErr != nil {
+		return nil, fmt.Errorf("%w: %w", ErrBadSignature, sigErr)
 	}
 
 	claimBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
@@ -132,8 +132,8 @@ func Parse(raw string) (*Proof, error) {
 		return nil, fmt.Errorf("%w: decode claims: %w", ErrMalformedProof, err)
 	}
 	var c proofClaims
-	if err := json.Unmarshal(claimBytes, &c); err != nil {
-		return nil, fmt.Errorf("%w: decode claims json: %w", ErrMalformedProof, err)
+	if claimErr := json.Unmarshal(claimBytes, &c); claimErr != nil {
+		return nil, fmt.Errorf("%w: decode claims json: %w", ErrMalformedProof, claimErr)
 	}
 	if c.JTI == "" || c.HTM == "" || c.HTU == "" || c.IAT == nil {
 		return nil, fmt.Errorf("%w: missing one of jti, htm, htu, iat", ErrMalformedProof)

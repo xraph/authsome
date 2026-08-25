@@ -585,7 +585,7 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 		if len(opts) > 0 {
 			o = opts[0]
 		}
-		if err := e.verifyRefreshDPoP(ctx, sess, o); err != nil {
+		if dpopErr := e.verifyRefreshDPoP(ctx, sess, o); dpopErr != nil {
 			return nil, account.ErrInvalidCredentials
 		}
 	}

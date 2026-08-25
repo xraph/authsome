@@ -8,6 +8,7 @@ package jwkutil
 
 import (
 	"crypto"
+	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -131,13 +132,17 @@ func ParseJSON(raw json.RawMessage) (crypto.PublicKey, *JWK, error) {
 
 func parseEC(j *JWK) (*ecdsa.PublicKey, error) {
 	var curve elliptic.Curve
+	var ecdhCurve ecdh.Curve
 	switch j.CRV {
 	case "P-256":
 		curve = elliptic.P256()
+		ecdhCurve = ecdh.P256()
 	case "P-384":
 		curve = elliptic.P384()
+		ecdhCurve = ecdh.P384()
 	case "P-521":
 		curve = elliptic.P521()
+		ecdhCurve = ecdh.P521()
 	default:
 		return nil, fmt.Errorf("%w: curve %q", ErrUnsupportedKey, j.CRV)
 	}
@@ -151,11 +156,25 @@ func parseEC(j *JWK) (*ecdsa.PublicKey, error) {
 		return nil, fmt.Errorf("jwkutil: decode y: %w", err)
 	}
 
-	// Without this check a caller can hand us a point off the curve, which
-	// invalidates the hardness assumption the signature verification rests on.
-	if !curve.IsOnCurve(x, y) {
-		return nil, fmt.Errorf("%w: point is not on curve %s", ErrUnsupportedKey, j.CRV)
+	// The jwk header this decodes is entirely attacker-controlled (it comes
+	// straight off a DPoP proof), so the point it names has to be validated,
+	// not trusted. crypto/ecdh.NewPublicKey is the maintained way to do that:
+	// it rejects a point that is not on the curve, and it also rejects the
+	// identity/infinity encoding, which a bare on-curve check does not cover.
+	// Build the uncompressed SEC1 form (0x04 || X || Y, each field-size
+	// padded) and let NewPublicKey be the judge.
+	bitSize := curve.Params().BitSize
+	sec1 := make([]byte, 0, 1+2*fieldSize(bitSize))
+	sec1 = append(sec1, 0x04)
+	sec1 = append(sec1, paddedCoordinate(x, bitSize)...)
+	sec1 = append(sec1, paddedCoordinate(y, bitSize)...)
+	if _, ecdhErr := ecdhCurve.NewPublicKey(sec1); ecdhErr != nil {
+		return nil, fmt.Errorf("%w: point is not on curve %s: %w", ErrUnsupportedKey, j.CRV, ecdhErr)
 	}
+
+	// golang-jwt verifies ES* signatures against *ecdsa.PublicKey, so build
+	// that from the same, now-validated, x and y rather than anything ecdh
+	// hands back.
 	return &ecdsa.PublicKey{Curve: curve, X: x, Y: y}, nil
 }
 
@@ -227,7 +246,12 @@ func Encode(pub crypto.PublicKey, kid, alg string) (*JWK, error) {
 		}
 		return &JWK{
 			KTY: "EC", Use: "sig", KID: kid, ALG: alg, CRV: crv,
-			X: coordinate(k.X, bits), Y: coordinate(k.Y, bits),
+			// k.X and k.Y: the JWK wire format needs the affine coordinates as
+			// big-endian integers, and this key is our own (the JWKS endpoint's),
+			// never attacker input. Moving off the affine fields here would
+			// change published JWKS output and every existing RFC 7638
+			// thumbprint DPoP has bound a token to.
+			X: coordinate(k.X, bits), Y: coordinate(k.Y, bits), //nolint:staticcheck // SA1019: see comment above, our own key, wire format needs affine ints
 		}, nil
 
 	case *rsa.PublicKey:
@@ -249,19 +273,35 @@ func Encode(pub crypto.PublicKey, kid, alg string) (*JWK, error) {
 	}
 }
 
-// coordinate renders an EC coordinate left-padded to the curve's field size.
+// fieldSize returns the byte length of a curve's field elements.
+func fieldSize(bitSize int) int {
+	return (bitSize + 7) / 8
+}
+
+// paddedCoordinate renders v as big-endian bytes, left-padded to the curve's
+// field size.
 //
 // big.Int.Bytes() drops leading zero bytes, so a coordinate whose high byte is
-// zero would serialise one byte short and produce a JWK that strict verifiers
-// reject. That happens for roughly 1 key in 256 per coordinate, which survives
-// casual testing and then fails intermittently in production.
-func coordinate(v *big.Int, bitSize int) string {
-	size := (bitSize + 7) / 8
+// zero would serialise one byte short. coordinate (the JWK encoder) and
+// parseEC (the SEC1 point it validates a jwk header against) both need that
+// padding, so it lives here once rather than twice.
+func paddedCoordinate(v *big.Int, bitSize int) []byte {
+	size := fieldSize(bitSize)
 	b := v.Bytes()
 	if len(b) < size {
 		padded := make([]byte, size)
 		copy(padded[size-len(b):], b)
 		b = padded
 	}
-	return base64.RawURLEncoding.EncodeToString(b)
+	return b
+}
+
+// coordinate renders an EC coordinate left-padded to the curve's field size.
+//
+// A coordinate whose high byte is zero would otherwise serialise one byte
+// short and produce a JWK that strict verifiers reject. That happens for
+// roughly 1 key in 256 per coordinate, which survives casual testing and then
+// fails intermittently in production.
+func coordinate(v *big.Int, bitSize int) string {
+	return base64.RawURLEncoding.EncodeToString(paddedCoordinate(v, bitSize))
 }

@@ -29,7 +29,7 @@ func TestValidate_HappyPath(t *testing.T) {
 	claims := validClaims()
 	claims["iat"] = now.Unix()
 
-	p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", claims))
+	p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", claims))
 	require.NoError(t, err)
 
 	v := newTestValidator(now)
@@ -42,7 +42,7 @@ func TestValidate_MethodAndURI(t *testing.T) {
 	key := testKey(t)
 	claims := validClaims()
 	claims["iat"] = now.Unix()
-	p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", claims))
+	p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", claims))
 	require.NoError(t, err)
 
 	v := newTestValidator(now)
@@ -63,7 +63,7 @@ func TestValidate_URIIgnoresQueryAndFragment(t *testing.T) {
 	key := testKey(t)
 	claims := validClaims()
 	claims["iat"] = now.Unix()
-	p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", claims))
+	p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", claims))
 	require.NoError(t, err)
 
 	v := newTestValidator(now)
@@ -96,7 +96,7 @@ func TestValidate_IatBoundaries(t *testing.T) {
 			key := testKey(t)
 			claims := validClaims()
 			claims["iat"] = now.Add(tc.offset).Unix()
-			p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", claims))
+			p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", claims))
 			require.NoError(t, err)
 
 			v := newTestValidator(now)
@@ -115,7 +115,7 @@ func TestValidate_ReplayedJTI(t *testing.T) {
 	key := testKey(t)
 	claims := validClaims()
 	claims["iat"] = now.Unix()
-	raw := mintProof(t, key, "dpop+jwt", "ES256", claims)
+	raw := mintProof(t, key, "dpop+jwt", claims)
 
 	v := newTestValidator(now)
 	ctx := context.Background()
@@ -138,7 +138,7 @@ func TestValidate_FailedProofDoesNotBurnJTI(t *testing.T) {
 	key := testKey(t)
 	claims := validClaims()
 	claims["iat"] = now.Unix()
-	raw := mintProof(t, key, "dpop+jwt", "ES256", claims)
+	raw := mintProof(t, key, "dpop+jwt", claims)
 
 	v := newTestValidator(now)
 	ctx := context.Background()
@@ -161,7 +161,7 @@ func TestValidate_ATH(t *testing.T) {
 		claims := validClaims()
 		claims["iat"] = now.Unix()
 		claims["ath"] = dpop.AccessTokenHash(token)
-		p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", claims))
+		p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", claims))
 		require.NoError(t, err)
 
 		v := newTestValidator(now)
@@ -173,7 +173,7 @@ func TestValidate_ATH(t *testing.T) {
 	t.Run("missing ath is rejected when a token is presented", func(t *testing.T) {
 		claims := validClaims()
 		claims["iat"] = now.Unix()
-		p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", claims))
+		p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", claims))
 		require.NoError(t, err)
 
 		v := newTestValidator(now)
@@ -186,7 +186,7 @@ func TestValidate_ATH(t *testing.T) {
 		claims := validClaims()
 		claims["iat"] = now.Unix()
 		claims["ath"] = dpop.AccessTokenHash("some-other-token")
-		p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", claims))
+		p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", claims))
 		require.NoError(t, err)
 
 		v := newTestValidator(now)
@@ -200,7 +200,7 @@ func TestValidate_KeyMismatch(t *testing.T) {
 	now := time.Now()
 	claims := validClaims()
 	claims["iat"] = now.Unix()
-	p, err := dpop.Parse(mintProof(t, testKey(t), "dpop+jwt", "ES256", claims))
+	p, err := dpop.Parse(mintProof(t, testKey(t), "dpop+jwt", claims))
 	require.NoError(t, err)
 
 	t.Run("mismatched jkt is rejected", func(t *testing.T) {
@@ -235,7 +235,7 @@ func TestValidate_NonceRequired(t *testing.T) {
 		claims := validClaims()
 		claims["iat"] = now.Unix()
 		claims["nonce"] = "server-issued-nonce"
-		p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", claims))
+		p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", claims))
 		require.NoError(t, err)
 
 		v := newTestValidator(now)
@@ -247,7 +247,7 @@ func TestValidate_NonceRequired(t *testing.T) {
 	t.Run("missing nonce claim is rejected", func(t *testing.T) {
 		claims := validClaims()
 		claims["iat"] = now.Unix()
-		p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", claims))
+		p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", claims))
 		require.NoError(t, err)
 
 		v := newTestValidator(now)

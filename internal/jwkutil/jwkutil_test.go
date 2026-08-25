@@ -62,13 +62,28 @@ func TestParseJSON_RejectsPrivateMembers(t *testing.T) {
 
 // TestParseJSON_RejectsOffCurvePoint guards against an attacker supplying a
 // point that is not on P-256. Go's elliptic package will happily hold such a
-// point in a struct; only an explicit IsOnCurve check refuses it.
+// point in a struct; parseEC validates the SEC1 encoding through
+// crypto/ecdh.NewPublicKey before trusting it.
 func TestParseJSON_RejectsOffCurvePoint(t *testing.T) {
 	raw := json.RawMessage(`{"kty":"EC","crv":"P-256",` +
-		`"x":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",` +
-		`"y":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}`)
+		`"x":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE",` +
+		`"y":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAI"}`)
 	_, _, err := jwkutil.ParseJSON(raw)
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, jwkutil.ErrUnsupportedKey)
+}
+
+// TestParseJSON_RejectsIdentityPoint is the all-zero case: x = y = 0. In
+// affine coordinates that pair is not a valid curve point for any of our
+// curves (b in the Weierstrass equation is nonzero), and it also happens to
+// be the pair some code historically used as a stand-in for the point at
+// infinity, which cannot itself be expressed in affine form. Building the
+// uncompressed SEC1 encoding and handing it to crypto/ecdh.NewPublicKey
+// refuses it outright rather than relying on an on-curve check alone to
+// catch the coincidence.
+func TestParseJSON_RejectsIdentityPoint(t *testing.T) {
+	raw := json.RawMessage(`{"kty":"EC","crv":"P-256","x":"AA","y":"AA"}`)
+	_, _, err := jwkutil.ParseJSON(raw)
+	assert.ErrorIs(t, err, jwkutil.ErrUnsupportedKey)
 }
 
 // TestParseJSON_RejectsWeakRSA refuses a modulus below 2048 bits.
@@ -146,7 +161,11 @@ func TestRoundTrip(t *testing.T) {
 // exists to keep at exactly 32 bytes for P-256 regardless of leading zeros.
 func TestEncode_PadsShortCoordinate(t *testing.T) {
 	curve := elliptic.P256()
-	x, y := curve.ScalarBaseMult(big.NewInt(43).Bytes())
+	// ScalarBaseMult is deprecated in favor of crypto/ecdh, but no modern API
+	// lets a caller choose the scalar. Deriving from the fixed value 43 is
+	// what makes this fixture's short Y coordinate reproducible rather than a
+	// matter of luck; that determinism is the point of the test.
+	x, y := curve.ScalarBaseMult(big.NewInt(43).Bytes()) //nolint:staticcheck // SA1019: fixed scalar needed for a deterministic fixture, see comment above
 	require.LessOrEqualf(t, y.BitLen(), 248,
 		"fixture scalar k=43 no longer produces a short Y coordinate (BitLen=%d); pick a new scalar", y.BitLen())
 
