@@ -29,7 +29,7 @@ func TestDiscovery_AdvertisesDPoPAlgs(t *testing.T) {
 	mux := forge.NewRouter()
 	require.NoError(t, p.RegisterRoutes(mux))
 
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/openid-configuration", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/openid-configuration", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
