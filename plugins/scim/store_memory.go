@@ -6,6 +6,8 @@ import (
 	"sort"
 	"sync"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/xraph/authsome/id"
 )
 
@@ -163,11 +165,15 @@ func (s *MemoryStore) DeleteToken(_ context.Context, tokenID id.SCIMTokenID) err
 	return nil
 }
 
-func (s *MemoryStore) FindTokenByHash(_ context.Context, tokenHash string) (*Token, *SCIMConfig, error) {
+// FindTokenByPlaintext linearly scans stored tokens and bcrypt-compares each
+// one against the presented plaintext. Bcrypt digests are salted, so an index
+// lookup is not possible; a production store would want a lookup key (for
+// example a token prefix column) to narrow the scan first.
+func (s *MemoryStore) FindTokenByPlaintext(_ context.Context, plaintext string) (*Token, *SCIMConfig, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, t := range s.tokens {
-		if t.TokenHash != tokenHash {
+		if bcrypt.CompareHashAndPassword([]byte(t.TokenHash), []byte(plaintext)) != nil {
 			continue
 		}
 		cp := *t
