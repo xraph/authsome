@@ -1288,16 +1288,16 @@ func backfillDefaultEnvironments(ctx context.Context, mexec *mongomigrate.Execut
 			ID string `bson:"_id"`
 		}
 		if decErr := appCur.Decode(&a); decErr != nil {
-			appCur.Close(ctx)
+			_ = appCur.Close(ctx)
 			return fmt.Errorf("decode app: %w", decErr)
 		}
 		appIDs = append(appIDs, a.ID)
 	}
 	if curErr := appCur.Err(); curErr != nil {
-		appCur.Close(ctx)
+		_ = appCur.Close(ctx)
 		return fmt.Errorf("iterate apps: %w", curErr)
 	}
-	appCur.Close(ctx)
+	_ = appCur.Close(ctx)
 
 	envs := db.Collection(colEnvironments)
 	for _, appID := range appIDs {

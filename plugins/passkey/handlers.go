@@ -47,7 +47,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if err := g.POST("/register/finish", p.handleRegisterFinish,
 		forge.WithSummary("Complete passkey registration"),
 		forge.WithOperationID("passkeyRegisterFinish"),
-		forge.WithRequestBodySchema(PasskeyAttestation{}),
+		forge.WithRequestBodySchema(Attestation{}),
 		forge.WithResponseSchema(http.StatusOK, "Registered", RegisterFinishResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
@@ -66,7 +66,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if err := g.POST("/login/finish", p.handleLoginFinish,
 		forge.WithSummary("Complete passkey login"),
 		forge.WithOperationID("passkeyLoginFinish"),
-		forge.WithRequestBodySchema(PasskeyAssertion{}),
+		forge.WithRequestBodySchema(Assertion{}),
 		forge.WithResponseSchema(http.StatusOK, "Authenticated", LoginFinishResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
@@ -143,37 +143,37 @@ type LoginFinishRequest struct{}
 // serializeCredential in ui/packages/core/src/webauthn.ts; the buffers are
 // base64url strings on the wire.
 
-// PasskeyAttestationResponse is the attestation half of a registration credential.
-type PasskeyAttestationResponse struct {
+// AttestationResponse is the attestation half of a registration credential.
+type AttestationResponse struct {
 	ClientDataJSON    string `json:"clientDataJSON"`
 	AttestationObject string `json:"attestationObject"`
 }
 
-// PasskeyAttestation is the credential navigator.credentials.create() returns,
+// Attestation is the credential navigator.credentials.create() returns,
 // posted to /v1/passkeys/register/finish.
-type PasskeyAttestation struct {
-	ID       string                     `json:"id"`
-	RawID    string                     `json:"rawId"`
-	Type     string                     `json:"type"`
-	Response PasskeyAttestationResponse `json:"response"`
+type Attestation struct {
+	ID       string              `json:"id"`
+	RawID    string              `json:"rawId"`
+	Type     string              `json:"type"`
+	Response AttestationResponse `json:"response"`
 }
 
-// PasskeyAssertionResponse is the assertion half of a login credential.
+// AssertionResponse is the assertion half of a login credential.
 // UserHandle is present only for discoverable (passwordless) login.
-type PasskeyAssertionResponse struct {
+type AssertionResponse struct {
 	ClientDataJSON    string `json:"clientDataJSON"`
 	AuthenticatorData string `json:"authenticatorData"`
 	Signature         string `json:"signature"`
 	UserHandle        string `json:"userHandle,omitempty"`
 }
 
-// PasskeyAssertion is the credential navigator.credentials.get() returns,
+// Assertion is the credential navigator.credentials.get() returns,
 // posted to /v1/passkeys/login/finish.
-type PasskeyAssertion struct {
-	ID       string                   `json:"id"`
-	RawID    string                   `json:"rawId"`
-	Type     string                   `json:"type"`
-	Response PasskeyAssertionResponse `json:"response"`
+type Assertion struct {
+	ID       string            `json:"id"`
+	RawID    string            `json:"rawId"`
+	Type     string            `json:"type"`
+	Response AssertionResponse `json:"response"`
 }
 
 // LoginFinishResponse confirms successful authentication. For passwordless

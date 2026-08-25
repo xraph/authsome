@@ -1380,16 +1380,16 @@ WHERE NOT EXISTS (
 	for rows.Next() {
 		var aID string
 		if scanErr := rows.Scan(&aID); scanErr != nil {
-			rows.Close()
+			_ = rows.Close()
 			return fmt.Errorf("scan app row: %w", scanErr)
 		}
 		appIDs = append(appIDs, aID)
 	}
 	if rowsErr := rows.Err(); rowsErr != nil {
-		rows.Close()
+		_ = rows.Close()
 		return fmt.Errorf("iterate apps: %w", rowsErr)
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	for _, aID := range appIDs {
 		if _, err := exec.Exec(ctx,

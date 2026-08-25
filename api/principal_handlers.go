@@ -15,10 +15,10 @@ import (
 )
 
 // issuedTokenTypeAccessToken is the RFC 8693 §3 URN for an OAuth 2.0 access
-// token, the only token type this engine issues from an exchange.
-// a public identifier from the spec, not a credential.
+// token, the only token type this engine issues from an exchange. It is the
+// RFC 8693 token-type URI, a public identifier from the spec, not a credential.
 //
-//nolint:gosec // G101 false positive: this is the RFC 8693 token-type URI,
+// #nosec G101 -- public RFC 8693 URI, not a credential
 const issuedTokenTypeAccessToken = "urn:ietf:params:oauth:token-type:access_token"
 
 // ──────────────────────────────────────────────────
