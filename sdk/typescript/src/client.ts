@@ -335,6 +335,9 @@ import type {
   UpdateWebhookRequest,
 } from './types';
 
+import { DPoPSession } from './dpop';
+import type { DPoPKeyStore } from './dpop';
+
 export interface AuthClientConfig {
   /** Base URL of the AuthSome API (e.g., "https://api.example.com") */
   baseURL: string;
@@ -358,6 +361,8 @@ export class AuthClient {
   private token: string | undefined;
   private publishableKey: string | undefined;
   private fetchFn: typeof globalThis.fetch;
+  private dpop?: DPoPSession;
+  private dpopNonce?: string;
 
   constructor(config: AuthClientConfig) {
     this.baseURL = config.baseURL.replace(/\/+$/, '');
@@ -384,6 +389,11 @@ export class AuthClient {
   /** Get the current publishable key. */
   getPublishableKey(): string | undefined {
     return this.publishableKey;
+  }
+
+  /** Enables RFC 9449 proof-of-possession for this client. */
+  async enableDPoP(store?: DPoPKeyStore): Promise<void> {
+    this.dpop = await DPoPSession.create(store);
   }
 
   // ──────────────────────────────────────────────────
@@ -2894,24 +2904,44 @@ export class AuthClient {
     method: string,
     path: string,
     body?: unknown,
+    options?: { isRetry?: boolean },
   ): Promise<T> {
+    const url = `${this.baseURL}${path}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
 
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
+    const token = this.token;
+    if (token) {
+      if (this.dpop) {
+        headers['Authorization'] = `DPoP ${token}`;
+        headers['DPoP'] = await this.dpop.proof(method, url, {
+          accessToken: token,
+          nonce: this.dpopNonce,
+        });
+      } else {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
     }
     if (this.publishableKey) {
       headers['X-Publishable-Key'] = this.publishableKey;
     }
 
-    const response = await this.fetchFn(`${this.baseURL}${path}`, {
+    const response = await this.fetchFn(url, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
     });
+
+    const nonce = response.headers.get('DPoP-Nonce');
+    if (nonce) this.dpopNonce = nonce;
+
+    // Retry exactly once. A server stuck re-challenging must surface as an
+    // error, not as a loop hammering your own auth server.
+    if (response.status === 401 && this.dpop && nonce && !options?.isRetry) {
+      return this.request<T>(method, path, body, { isRetry: true });
+    }
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({ error: response.statusText }));

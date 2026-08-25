@@ -104,6 +104,12 @@ func (g *Generator) Generate(spec *openapi.Spec) ([]GeneratedFile, error) {
 	}
 	files = append(files, GeneratedFile{Path: "src/index.ts", Content: content})
 
+	content, err = g.renderTemplate("templates/dpop.ts.tmpl", data)
+	if err != nil {
+		return nil, fmt.Errorf("render dpop.ts: %w", err)
+	}
+	files = append(files, GeneratedFile{Path: "src/dpop.ts", Content: content})
+
 	content, err = g.renderTemplate("templates/package.json.tmpl", data)
 	if err != nil {
 		return nil, fmt.Errorf("render package.json: %w", err)

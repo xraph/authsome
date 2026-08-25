@@ -253,3 +253,65 @@ func TestGenerate_FilesNotEmpty(t *testing.T) {
 		assert.True(t, len(f.Content) > 10, "file %s should have meaningful content", f.Path)
 	}
 }
+
+func TestGenerate_DPoPFile(t *testing.T) {
+	gen := typescript.NewGenerator(typescript.GeneratorConfig{})
+	files, err := gen.Generate(testSpec())
+	require.NoError(t, err)
+
+	var dpopContent string
+	for _, f := range files {
+		if f.Path == "src/dpop.ts" {
+			dpopContent = f.Content
+			break
+		}
+	}
+	require.NotEmpty(t, dpopContent, "standalone mode should produce src/dpop.ts")
+
+	// The non-extractable generateKey call is the entire security proposition:
+	// signing stays possible, reading the private key never does.
+	assert.Contains(t, dpopContent, `generateKey(ALG, false, ["sign", "verify"])`)
+	assert.Contains(t, dpopContent, "export interface DPoPKeyStore")
+	assert.Contains(t, dpopContent, "export class DPoPSession")
+	assert.Contains(t, dpopContent, "export class IndexedDBKeyStore")
+	assert.Contains(t, dpopContent, "indexedDB.open")
+}
+
+func TestGenerate_ClientWiresDPoP(t *testing.T) {
+	gen := typescript.NewGenerator(typescript.GeneratorConfig{})
+	files, err := gen.Generate(testSpec())
+	require.NoError(t, err)
+
+	var clientContent, indexContent string
+	for _, f := range files {
+		switch f.Path {
+		case "src/client.ts":
+			clientContent = f.Content
+		case "src/index.ts":
+			indexContent = f.Content
+		}
+	}
+	require.NotEmpty(t, clientContent)
+	require.NotEmpty(t, indexContent)
+
+	assert.Contains(t, clientContent, "import { DPoPSession } from './dpop'")
+	assert.Contains(t, clientContent, "enableDPoP")
+	assert.Contains(t, clientContent, "`DPoP ${token}`")
+	assert.Contains(t, clientContent, "headers['DPoP']")
+	assert.Contains(t, clientContent, "DPoP-Nonce")
+	// Threaded retry flag so the one-shot retry cannot recurse into a loop.
+	assert.Contains(t, clientContent, "isRetry")
+
+	assert.Contains(t, indexContent, "export { DPoPSession, IndexedDBKeyStore } from './dpop'")
+}
+
+func TestGenerate_EmbeddedModeHasNoDPoP(t *testing.T) {
+	gen := typescript.NewGenerator(typescript.GeneratorConfig{OutputMode: "embedded"})
+	files, err := gen.Generate(testSpec())
+	require.NoError(t, err)
+
+	for _, f := range files {
+		assert.NotEqual(t, "src/dpop.ts", f.Path, "embedded mode should not emit dpop.ts")
+		assert.NotContains(t, f.Content, "./dpop", "embedded output should not reference the standalone-only dpop module")
+	}
+}
