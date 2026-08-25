@@ -93,6 +93,7 @@ func TestCrossPublishableKeySessionRejected(t *testing.T) {
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
+		authsome.WithConfig(testEngineConfig()),
 		authsome.WithAppID(xpkPlatformAppIDStr),
 	)
 	require.NoError(t, err)

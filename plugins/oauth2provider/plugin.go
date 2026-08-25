@@ -999,7 +999,7 @@ func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenReque
 		return nil, forge.BadRequest("client is not registered for the client_credentials grant")
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(req.ClientSecret)); err != nil {
+	if cmpErr := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(req.ClientSecret)); cmpErr != nil {
 		return nil, forge.Unauthorized("invalid client_secret")
 	}
 
@@ -1234,7 +1234,7 @@ func (p *Plugin) handleDeleteClient(ctx forge.Context, req *DeleteClientRequest)
 // Token Issuance
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) issueTokens(ctx context.Context, _ *OAuth2Client, userID id.UserID, appID id.AppID, scopes []string, resources []string) (*TokenResponse, error) {
+func (p *Plugin) issueTokens(ctx context.Context, _ *OAuth2Client, userID id.UserID, appID id.AppID, scopes, resources []string) (*TokenResponse, error) {
 	// Resolve session config for the app.
 	sessCfg := account.SessionConfig{
 		TokenTTL:        p.config.AccessTokenTTL,

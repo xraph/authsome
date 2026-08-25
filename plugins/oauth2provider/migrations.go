@@ -366,5 +366,4 @@ UPDATE authsome_oauth2_clients
 			},
 		},
 	)
-
 }

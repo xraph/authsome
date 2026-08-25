@@ -62,6 +62,7 @@ func e2eEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *memory
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
+		authsome.WithConfig(testEngineConfig()),
 		authsome.WithAppID("aapp_01jf0000000000000000000000"),
 	}
 	eng, err := authsome.NewEngine(append(baseOpts, opts...)...)
@@ -163,6 +164,7 @@ func e2eEngineWithOrg(t *testing.T) (*authsome.Engine, *memory.Store, *orgplugin
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
+		authsome.WithConfig(testEngineConfig()),
 		authsome.WithAppID("aapp_01jf0000000000000000000000"),
 		authsome.WithPlugin(op),
 	)

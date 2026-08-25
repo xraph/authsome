@@ -18,7 +18,7 @@ import (
 func TestDiscoveryResourceIndicators(t *testing.T) {
 	_, _, mux := newFixture(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/openid-configuration", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/openid-configuration", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
