@@ -150,6 +150,38 @@ func (p *Plugin) Authorize(ctx context.Context, sess *session.Session, action, r
 // opinion on) passes through untouched, and every denial gets the response
 // AuthorizeHTTP built for it, headers included, since forge's own error
 // handling would otherwise drop them on the floor.
+// denyAgentPrincipal refuses any request whose resolved session is
+// agent-principal, before the wrapped handler ever runs.
+//
+// agentauth's own admin and /me routes (RegisterRoutes) are guarded by
+// plugin.SessionGuard and plugin.AdminGuard, both of which resolve to
+// middleware.RequirePermission — checking a Warden permission against
+// sess.UserID with no awareness of PrincipalKind at all. An agent session
+// carries its delegating human's UserID by design (see session.go), so an
+// agent belonging to an org admin would otherwise reach these routes with
+// that admin's full permission and no granted scope required for any of
+// it: PUT /admin/agents/policy could set the agent's own governing org to
+// open with unrestricted scopes, PATCH /admin/agents/:id/status could
+// unblock a blocked agent, and DELETE /me/agents/:id could revoke a
+// competing grant. This plugin ships the intersection guard (Guard, above)
+// for every route a host app protects; it must not leave its own policy
+// surface outside that same discipline.
+//
+// A missing session is not this middleware's business — SessionGuard (or
+// its absence, in a minimal test wiring) already governs whether an
+// unauthenticated request reaches this far.
+func denyAgentPrincipal() forge.Middleware {
+	return func(next forge.Handler) forge.Handler {
+		return func(ctx forge.Context) error {
+			if sess, ok := middleware.SessionFrom(ctx.Context()); ok && sess != nil &&
+				sess.PrincipalKind == session.PrincipalKindAgent {
+				return forge.Forbidden("agent sessions may not access this endpoint")
+			}
+			return next(ctx)
+		}
+	}
+}
+
 func (p *Plugin) Guard(action, resource string) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {

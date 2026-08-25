@@ -172,7 +172,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	me := router.Group(p.basePath+"/me/agents",
 		forge.WithGroupTags("agentauth"),
 		forge.WithGroupAuth("session"),
-		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
+		forge.WithGroupMiddleware(append([]forge.Middleware{denyAgentPrincipal()}, plugin.SessionGuard(p.engine)...)...),
 	)
 	if err := me.GET("", p.handleListMyGrants,
 		forge.WithSummary("List agents acting on my behalf"),
@@ -192,7 +192,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	admin := router.Group(p.basePath+"/admin/agents",
 		forge.WithGroupTags("agentauth-admin"),
 		forge.WithGroupAuth("session"),
-		forge.WithGroupMiddleware(plugin.AdminGuard(p.engine, "read", "agent")...),
+		forge.WithGroupMiddleware(append([]forge.Middleware{denyAgentPrincipal()}, plugin.AdminGuard(p.engine, "read", "agent")...)...),
 	)
 	if err := admin.GET("", p.handleListAgents,
 		forge.WithSummary("List registered agents"),
