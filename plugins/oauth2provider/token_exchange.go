@@ -18,13 +18,20 @@ import (
 )
 
 // tokenExchangeGrantType is the IANA grant type for RFC 8693.
+//
+// #nosec G101 -- an IANA-registered grant type URN, not a credential. G101
+// keys off the identifier containing "token", which every name in this file
+// legitimately does; deviceCodeGrantType escapes it only by being called
+// "device" instead.
 const tokenExchangeGrantType = "urn:ietf:params:oauth:grant-type:token-exchange"
 
 // Supported token type URNs. Both access-token forms resolve to a session,
 // because in this codebase an OAuth access token is a session row.
 const (
+	// #nosec G101 -- IANA token type URNs naming a token's format, not a token.
 	tokenTypeAccessToken = "urn:ietf:params:oauth:token-type:access_token"
-	tokenTypeSession     = "urn:x-authsome:params:oauth:token-type:session"
+	// #nosec G101 -- as above; the authsome-namespaced spelling of the same thing.
+	tokenTypeSession = "urn:x-authsome:params:oauth:token-type:session"
 )
 
 // Denial reasons recorded on a refused exchange. Closed set: scope_escalation

@@ -398,7 +398,7 @@ func TestRFC8693_SurfacesEngineRefusalAsInvalidGrant(t *testing.T) {
 
 func TestRFC8693_DiscoveryAdvertisesTheGrant(t *testing.T) {
 	_, _, mux := newFixture(t)
-	req := httptest.NewRequest("GET", "/.well-known/openid-configuration", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/.well-known/openid-configuration", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
