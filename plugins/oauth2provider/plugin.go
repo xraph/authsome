@@ -113,6 +113,9 @@ type Config struct {
 	// keyed by the path suffix they are served under. AuthSome always
 	// describes itself at the unsuffixed path regardless of this map.
 	ProtectedResources map[string]ProtectedResource
+	// ConsentGate, if set, is consulted before every authorization code is
+	// issued. See SetConsentGate for post-construction wiring.
+	ConsentGate ConsentGate
 }
 
 // Plugin is the OAuth2 provider plugin.
@@ -127,7 +130,8 @@ type Plugin struct {
 	// the engine has no rate limiter configured (extension.Config.RateLimit
 	// defaults off, and most embedders never set one either). See
 	// registrationLimiter.
-	regLimiter ratelimit.Limiter
+	regLimiter  ratelimit.Limiter
+	consentGate ConsentGate
 }
 
 // New creates a new OAuth2 provider plugin.
@@ -155,7 +159,7 @@ func New(cfg ...Config) *Plugin {
 		c.RegistrationRateLimit = RateLimit{Limit: 10, Window: time.Hour}
 	}
 
-	p := &Plugin{config: c, logger: log.NewNoopLogger()}
+	p := &Plugin{config: c, logger: log.NewNoopLogger(), consentGate: c.ConsentGate}
 	return p
 }
 
@@ -787,6 +791,14 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
 		return nil, forge.Unauthorized("authentication required to authorize")
+	}
+
+	// Give a registered gate (e.g. an agent-delegation policy) a chance to
+	// veto the authorization before a code is issued. orgID is whatever the
+	// session carries; it may be the zero value when the session has none.
+	orgID, _ := middleware.OrgIDFrom(ctx.Context())
+	if gateErr := p.EvaluateConsent(ctx.Context(), req.ClientID, userID, orgID, client.AppID, scopes); gateErr != nil {
+		return nil, gateErr
 	}
 
 	// Generate authorization code.
@@ -1895,6 +1907,12 @@ func (p *Plugin) handleDeviceComplete(ctx forge.Context, req *DeviceCompleteRequ
 
 	// Apply the user's decision.
 	if req.Action == "approve" {
+		// Same veto point as the authorization-code flow: a gate refusal
+		// must block the approval, not be undone after the fact.
+		orgID, _ := middleware.OrgIDFrom(ctx.Context())
+		if gateErr := p.EvaluateConsent(ctx.Context(), dc.ClientID, userID, orgID, dc.AppID, dc.Scopes); gateErr != nil {
+			return nil, gateErr
+		}
 		dc.Status = DeviceCodeStatusAuthorized
 		dc.UserID = userID
 	} else {

@@ -14,6 +14,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/lockout"
 	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
@@ -399,6 +400,47 @@ func TestRefresh_InvalidToken(t *testing.T) {
 
 	_, err := eng.Refresh(ctx, "nonexistent-refresh-token")
 	assert.ErrorIs(t, err, account.ErrInvalidCredentials)
+}
+
+// TestRefresh_RefusesAgentPrincipalSession pins Engine.Refresh's fix-round-2
+// guard: the generic refresh path has no agentauth.AgentGrant to consult, so
+// rotating an agent-principal session here would let it outlive a revoked or
+// expired grant indefinitely (account.RefreshSession sets ExpiresAt to now
+// plus the app's configured TokenTTL with no grant awareness at all).
+// Refusing outright, rather than rotating unclamped, is the deliberate
+// choice — see service.go's comment on this branch and the task report for
+// why no seam into agentauth's grant store was built instead.
+func TestRefresh_RefusesAgentPrincipalSession(t *testing.T) {
+	eng, _ := newTestEngine(t)
+	ctx := context.Background()
+	appID := testAppID(t)
+
+	sess := &session.Session{
+		ID:                    id.NewSessionID(),
+		AppID:                 appID,
+		UserID:                id.NewUserID(),
+		PrincipalKind:         session.PrincipalKindAgent,
+		AgentID:               id.NewAgentID(),
+		GrantID:               id.NewAgentGrantID(),
+		Token:                 "agent-access-token",
+		RefreshToken:          "agent-refresh-token",
+		ExpiresAt:             time.Now().Add(15 * time.Minute),
+		RefreshTokenExpiresAt: time.Now().Add(15 * time.Minute),
+		CreatedAt:             time.Now(),
+		UpdatedAt:             time.Now(),
+	}
+	require.NoError(t, eng.Store().CreateSession(ctx, sess))
+
+	_, err := eng.Refresh(ctx, "agent-refresh-token")
+	assert.ErrorIs(t, err, account.ErrInvalidCredentials)
+
+	// The refusal must land before any rotation: the persisted row must be
+	// byte-for-byte what was written, not partially rotated.
+	got, getErr := eng.Store().GetSession(ctx, sess.ID)
+	require.NoError(t, getErr)
+	assert.Equal(t, "agent-access-token", got.Token, "an agent session's access token must not be rotated")
+	assert.Equal(t, "agent-refresh-token", got.RefreshToken, "an agent session's refresh token must not be rotated")
+	assert.WithinDuration(t, sess.ExpiresAt, got.ExpiresAt, time.Second, "a refused refresh must not extend ExpiresAt")
 }
 
 // ──────────────────────────────────────────────────

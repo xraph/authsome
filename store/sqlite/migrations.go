@@ -1060,6 +1060,36 @@ ALTER TABLE authsome_sessions DROP COLUMN principal_kind;
 			},
 		},
 
+		&migrate.Migration{
+			Name:    "add_session_agent_principal",
+			Version: "20260824000110",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions ADD COLUMN agent_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_sessions ADD COLUMN grant_id TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_authsome_sessions_grant_id
+    ON authsome_sessions (grant_id);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				// Agent rows carry no CHECK on sqlite to violate, so dropping
+				// the columns without removing them first would silently
+				// orphan authenticating agent sessions: rows left with
+				// principal_kind='agent' and no agent_id/grant_id, still
+				// matched by token lookup and permanently unreachable by
+				// grant revocation. Delete them first, matching the postgres
+				// Down above.
+				_, err := exec.Exec(ctx, `
+DELETE FROM authsome_sessions WHERE principal_kind = 'agent';
+DROP INDEX IF EXISTS idx_authsome_sessions_grant_id;
+ALTER TABLE authsome_sessions DROP COLUMN agent_id;
+ALTER TABLE authsome_sessions DROP COLUMN grant_id;
+`)
+				return err
+			},
+		},
+
 		// Migration: service accounts, the sqlite twin of the postgres
 		// authsome_service_accounts table. Timestamp columns are declared
 		// TIMESTAMP rather than TEXT: modernc.org/sqlite only converts a

@@ -142,6 +142,34 @@ func TestCreateSessionSkipsServiceAccounts(t *testing.T) {
 	}
 }
 
+// TestCreateSessionSkipsAgents guards the other non-human principal kind
+// that still carries a delegating human's UserID: agentauth.Authorize
+// enforces the grant's scope intersected with that human's own permission,
+// and stamping the human's full role set onto the session would let a
+// role-gated route's requirement be satisfied straight off sess.Roles,
+// bypassing the scope half of that intersection without agentauth.Authorize
+// ever being consulted.
+func TestCreateSessionSkipsAgents(t *testing.T) {
+	s, inner := stampingStore(t, func(context.Context, id.AppID, id.UserID) ([]string, error) {
+		t.Error("stamper ran for an agent session")
+
+		return nil, errors.New("should not be called")
+	})
+
+	sess := testSession()
+	sess.PrincipalKind = session.PrincipalKindAgent
+	sess.AgentID = id.NewAgentID()
+	sess.GrantID = id.NewAgentGrantID()
+
+	if err := s.CreateSession(context.Background(), sess); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	if len(inner.created.Roles) != 0 {
+		t.Errorf("agent session carried roles: %v", inner.created.Roles)
+	}
+}
+
 // TestRotateSessionReStampsRoles is why rotation is decorated at all: without
 // it, a role granted after sign-in waits for the user to sign out and back in.
 func TestRotateSessionReStampsRoles(t *testing.T) {
@@ -184,5 +212,34 @@ func TestRotateSessionKeepsRolesWhenRefreshFails(t *testing.T) {
 
 	if got := inner.rotated.Roles; len(got) != 1 || got[0] != "admin" {
 		t.Errorf("rotated roles = %v, want the previously stamped [admin]", got)
+	}
+}
+
+// TestRotateSessionSkipsAgents is the refresh-time counterpart to
+// TestCreateSessionSkipsAgents. Before this fix, an agent session presented
+// for refresh (which requires a real, non-empty RefreshToken — the very
+// thing plugins/agentauth's C1 fix supplies) would be re-stamped with the
+// delegating human's full role set on every rotation, restoring the exact
+// role-gated bypass shouldStamp closes at issue time. Engine.Refresh also
+// now refuses to rotate an agent-principal session at all (service.go), but
+// this decorator is the one place every RotateSession call funnels through
+// regardless of what calls it, so the exclusion has to hold here
+// independently of that upstream refusal.
+func TestRotateSessionSkipsAgents(t *testing.T) {
+	s, inner := stampingStore(t, func(context.Context, id.AppID, id.UserID) ([]string, error) {
+		return []string{"admin", "owner"}, nil
+	})
+
+	sess := testSession()
+	sess.PrincipalKind = session.PrincipalKindAgent
+	sess.AgentID = id.NewAgentID()
+	sess.GrantID = id.NewAgentGrantID()
+
+	if _, err := s.RotateSession(context.Background(), sess, "old-token"); err != nil {
+		t.Fatalf("RotateSession: %v", err)
+	}
+
+	if got := inner.rotated.Roles; len(got) != 0 {
+		t.Errorf("roles after rotate on agent session = %v, want none", got)
 	}
 }

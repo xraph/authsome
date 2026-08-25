@@ -61,6 +61,9 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"SessionAudienceRoundTrip", testSessionAudienceRoundTrip},
 		{"SessionPrincipalKindRoundTrip", testSessionPrincipalKindRoundTrip},
 		{"ServiceAccountSessionRoundTrip", testServiceAccountSessionRoundTrip},
+		{"AgentSessionRoundTrip", testAgentSessionRoundTrip},
+		{"DeleteSessionsByGrant", testDeleteSessionsByGrant},
+		{"DeleteSessionsByGrantNilIDIsNoop", testDeleteSessionsByGrantNilIDIsNoop},
 		{"RotateSessionCAS", testRotateSessionCAS},
 		{"RefreshTokenRevocation", testRefreshTokenRevocation},
 		{"RefreshTokenReplayIsIdempotent", testRefreshTokenReplayIsIdempotent},
@@ -727,6 +730,158 @@ func testServiceAccountSessionRoundTrip(t *testing.T, s store.Store) {
 			assert.True(t, got.UserID.IsNil(), "a service-account session must not acquire a UserID")
 		})
 	}
+}
+
+// testAgentSessionRoundTrip is the regression test for the postgres CHECK
+// constraint rewrite in migration 20260824000060, the way
+// testServiceAccountSessionRoundTrip guards the 20260620000002 constraint it
+// is modeled on. Memory has no CHECK, no migrations and no SQL at all, so a
+// hand test against memory.New() alone cannot catch a broken constraint —
+// this one runs through storetest.RunConformance and so exercises every
+// backend that hooks into it, postgres included.
+//
+// Unlike a service-account session, an agent session keeps UserID populated
+// with the delegating human: that is the entire reason this shape does not
+// collapse into the service-account one, and it is the thing this test
+// exists to pin down alongside PrincipalKind, AgentID and GrantID.
+func testAgentSessionRoundTrip(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "agent-delegator@example.com")
+
+	agentID := id.NewAgentID()
+	grantID := id.NewAgentGrantID()
+	sess := &session.Session{
+		ID:                    id.NewSessionID(),
+		AppID:                 tn.AppID,
+		EnvID:                 tn.EnvID,
+		UserID:                u.ID,
+		Token:                 "tok-agent",
+		RefreshToken:          "rtok-agent",
+		FamilyID:              id.NewSessionFamilyID(),
+		PrincipalKind:         session.PrincipalKindAgent,
+		AgentID:               agentID,
+		GrantID:               grantID,
+		ExpiresAt:             now().Add(time.Hour),
+		RefreshTokenExpiresAt: now().Add(24 * time.Hour),
+		CreatedAt:             now(),
+		UpdatedAt:             now(),
+	}
+	require.NoError(t, s.CreateSession(ctx, sess), "an agent session must be persistable alongside its delegating user")
+
+	// Every read path must reconstruct the principal, not just the by-id one:
+	// middleware resolves sessions by token, and refresh goes by refresh token.
+	for _, tc := range []struct {
+		name string
+		get  func() (*session.Session, error)
+	}{
+		{"GetSession", func() (*session.Session, error) { return s.GetSession(ctx, sess.ID) }},
+		{"GetSessionByToken", func() (*session.Session, error) { return s.GetSessionByToken(ctx, "tok-agent") }},
+		{"GetSessionByRefreshToken", func() (*session.Session, error) { return s.GetSessionByRefreshToken(ctx, "rtok-agent") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.get()
+			require.NoError(t, err)
+			assert.Equal(t, session.PrincipalKindAgent, got.PrincipalKind, "PrincipalKind must survive the round trip")
+			assert.Equal(t, agentID.String(), got.AgentID.String(), "AgentID must survive the round trip")
+			assert.Equal(t, grantID.String(), got.GrantID.String(), "GrantID must survive the round trip")
+			assert.Equal(t, u.ID.String(), got.UserID.String(), "the delegating human must survive the round trip, unlike a service-account session")
+		})
+	}
+}
+
+// testDeleteSessionsByGrant proves the mechanism agentauth.RevokeGrant leans
+// on to close a critical gap: revoking a delegation must kill the session it
+// issued, or that session (which carries the delegating human's UserID) keeps
+// authenticating as that human on any route not guarded by agentauth's own
+// scope check, until it separately expires.
+func testDeleteSessionsByGrant(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "grant-delegator@example.com")
+
+	targetGrant := id.NewAgentGrantID()
+	otherGrant := id.NewAgentGrantID()
+	agentID := id.NewAgentID()
+
+	targetSess := &session.Session{
+		ID: id.NewSessionID(), AppID: tn.AppID, EnvID: tn.EnvID, UserID: u.ID,
+		Token: "tok-target-grant", RefreshToken: "rtok-target-grant", FamilyID: id.NewSessionFamilyID(),
+		PrincipalKind: session.PrincipalKindAgent, AgentID: agentID, GrantID: targetGrant,
+		ExpiresAt: now().Add(time.Hour), RefreshTokenExpiresAt: now().Add(24 * time.Hour),
+		CreatedAt: now(), UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateSession(ctx, targetSess))
+
+	// A second session under the same grant: a grant can be used to mint more
+	// than one session, and revocation must sweep every one of them, not just
+	// the first.
+	targetSess2 := &session.Session{
+		ID: id.NewSessionID(), AppID: tn.AppID, EnvID: tn.EnvID, UserID: u.ID,
+		Token: "tok-target-grant-2", RefreshToken: "rtok-target-grant-2", FamilyID: id.NewSessionFamilyID(),
+		PrincipalKind: session.PrincipalKindAgent, AgentID: agentID, GrantID: targetGrant,
+		ExpiresAt: now().Add(time.Hour), RefreshTokenExpiresAt: now().Add(24 * time.Hour),
+		CreatedAt: now(), UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateSession(ctx, targetSess2))
+
+	// A session under a different grant, and an ordinary human session with
+	// no grant at all: neither must be touched by deleting the target grant's
+	// sessions.
+	otherSess := &session.Session{
+		ID: id.NewSessionID(), AppID: tn.AppID, EnvID: tn.EnvID, UserID: u.ID,
+		Token: "tok-other-grant", RefreshToken: "rtok-other-grant", FamilyID: id.NewSessionFamilyID(),
+		PrincipalKind: session.PrincipalKindAgent, AgentID: agentID, GrantID: otherGrant,
+		ExpiresAt: now().Add(time.Hour), RefreshTokenExpiresAt: now().Add(24 * time.Hour),
+		CreatedAt: now(), UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateSession(ctx, otherSess))
+	humanSess := seedSession(t, s, tn, u.ID, "tok-human-no-grant", "rtok-human-no-grant")
+
+	require.NoError(t, s.DeleteSessionsByGrant(ctx, targetGrant))
+
+	_, err := s.GetSession(ctx, targetSess.ID)
+	assert.ErrorIs(t, err, store.ErrNotFound, "the first session issued under the revoked grant must be gone")
+	_, err = s.GetSession(ctx, targetSess2.ID)
+	assert.ErrorIs(t, err, store.ErrNotFound, "every session issued under the revoked grant must be gone")
+
+	_, err = s.GetSession(ctx, otherSess.ID)
+	assert.NoError(t, err, "a session under a different grant must survive")
+	_, err = s.GetSession(ctx, humanSess.ID)
+	assert.NoError(t, err, "an ordinary session carrying no grant at all must survive")
+}
+
+// testDeleteSessionsByGrantNilIDIsNoop guards a sharp edge in
+// DeleteSessionsByGrant's own contract: id.ID.String() returns "" for the
+// zero value, and on postgres/sqlite grant_id is TEXT NOT NULL DEFAULT ”,
+// so a caller that mishandled grant-id resolution and passed the zero value
+// through could otherwise delete every ordinary human session in the store,
+// not just agent sessions under a genuine grant. Not reachable through
+// agentauth today (RevokeGrant's own grantID always comes from a real
+// AgentGrant), but this is a newly exported method on the CORE session.Store
+// interface with no guard of its own, so it must refuse a nil id on its own
+// terms rather than relying on every future caller to check first.
+func testDeleteSessionsByGrantNilIDIsNoop(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "nil-grant-guard@example.com")
+
+	humanSess := seedSession(t, s, tn, u.ID, "tok-human-nilguard", "rtok-human-nilguard")
+	agentSess := &session.Session{ //nolint:gosec // test fixture token literals, not credentials
+		ID: id.NewSessionID(), AppID: tn.AppID, EnvID: tn.EnvID, UserID: u.ID,
+		Token: "tok-agent-nilguard", RefreshToken: "rtok-agent-nilguard", FamilyID: id.NewSessionFamilyID(),
+		PrincipalKind: session.PrincipalKindAgent, AgentID: id.NewAgentID(), GrantID: id.NewAgentGrantID(),
+		ExpiresAt: now().Add(time.Hour), RefreshTokenExpiresAt: now().Add(24 * time.Hour),
+		CreatedAt: now(), UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateSession(ctx, agentSess))
+
+	require.NoError(t, s.DeleteSessionsByGrant(ctx, id.AgentGrantID{}))
+
+	_, err := s.GetSession(ctx, humanSess.ID)
+	assert.NoError(t, err, "a nil grant id must delete nothing, not every human session")
+	_, err = s.GetSession(ctx, agentSess.ID)
+	assert.NoError(t, err, "a nil grant id must not touch an unrelated agent session either")
 }
 
 func testRotateSessionCAS(t *testing.T, s store.Store) {

@@ -11,6 +11,13 @@ import (
 	"github.com/xraph/authsome/store"
 )
 
+// principalKindServiceAccount is the PrincipalKind a service-account session
+// carries. Service accounts are authorized by scope rather than by role, and
+// their UserID is the zero value, so there is nothing for the stamper to look
+// up. Aliased to session.PrincipalKindServiceAccount rather than redefined as
+// a literal, so the two cannot drift apart.
+const principalKindServiceAccount = session.PrincipalKindServiceAccount
+
 // roleStamper resolves the role slugs a user holds within an app.
 //
 // Slugs rather than names or IDs: GetRoleBySlug and ListUsersWithRole already
@@ -165,6 +172,19 @@ func (s *roleStampingStore) shouldRestamp(sess *session.Session) bool {
 		return false
 	case !sess.IsHumanPrincipal():
 		return false
+	case sess.PrincipalKind == session.PrincipalKindAgent:
+		// Same reasoning as the identical case in shouldStamp: re-stamping
+		// here would hand an agent session the delegating human's full role
+		// set on every refresh, letting a role-gated route be satisfied
+		// straight off sess.Roles without agentauth.Authorize's scope
+		// intersection ever running. Engine.Refresh (service.go) refuses to
+		// rotate an agent-principal session at all today, so this case is
+		// currently unreachable through the generic refresh path — but this
+		// decorator is the one place every CreateSession/RotateSession call
+		// funnels through, exactly the property that makes shouldStamp's
+		// agent case effective, so it must hold here independently of
+		// whatever refuses or allows rotation upstream.
+		return false
 	case sess.AppID.IsNil() || sess.UserID.IsNil():
 		return false
 	default:
@@ -182,6 +202,17 @@ func (s *roleStampingStore) shouldStamp(sess *session.Session) bool {
 		return false
 	case !sess.IsHumanPrincipal():
 		// Authorized by scope, and UserID is the zero value here.
+		return false
+	case sess.PrincipalKind == session.PrincipalKindAgent:
+		// agentauth.Authorize enforces the intersection of the grant's scope
+		// and the delegating human's own permission — an agent may do
+		// something only if both allow it. Stamping the human's full role
+		// set here would let forge's auth extension satisfy a route's role
+		// requirement straight off sess.Roles without ever calling
+		// agentauth.Authorize, silently dropping the scope half of that
+		// intersection on every role-gated route. Same reasoning as the
+		// service-account case above, applied to the other non-human
+		// principal kind that carries a UserID.
 		return false
 	case sess.AppID.IsNil() || sess.UserID.IsNil():
 		// Nothing to scope a lookup by. Reached by fixtures and by the

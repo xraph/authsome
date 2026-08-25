@@ -392,6 +392,14 @@ type AfterMemberAdd interface {
 	OnAfterMemberAdd(ctx context.Context, m *organization.Member) error
 }
 
+// BeforeMemberRemove is called before a member is removed from an
+// organization, while the member record can still be read. AfterMemberRemove
+// carries only the id and fires after deletion, so a plugin that needs to know
+// which user left which org has to use this hook.
+type BeforeMemberRemove interface {
+	OnBeforeMemberRemove(ctx context.Context, m *organization.Member) error
+}
+
 // AfterMemberRemove is called after a member is removed from an organization.
 type AfterMemberRemove interface {
 	OnAfterMemberRemove(ctx context.Context, memberID id.MemberID) error

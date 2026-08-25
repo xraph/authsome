@@ -223,6 +223,10 @@ type sessionModel struct {
 	Actors       []actorModel `grove:"actors"        bson:"actors,omitempty"`
 	ActorGrant   string       `grove:"actor_grant"   bson:"actor_grant,omitempty"`
 	DelegationID string       `grove:"delegation_id" bson:"delegation_id,omitempty"`
+	// AgentID and GrantID carry the agent principal and the grant that
+	// authorized it, mapped the same way as ServiceAccountID above.
+	AgentID string `grove:"agent_id"                  bson:"agent_id,omitempty"`
+	GrantID string `grove:"grant_id"                  bson:"grant_id,omitempty"`
 	// Mongo stores the slugs as a native array, the way WebhookModel.Events
 	// does. The SQL stores encode JSON into a text column because they have
 	// no array type worth using here; there is no reason to flatten it twice.
@@ -257,6 +261,12 @@ func toSessionModel(s *session.Session) *sessionModel {
 	}
 	if !s.ServiceAccountID.IsNil() {
 		m.ServiceAccountID = s.ServiceAccountID.String()
+	}
+	if !s.AgentID.IsNil() {
+		m.AgentID = s.AgentID.String()
+	}
+	if !s.GrantID.IsNil() {
+		m.GrantID = s.GrantID.String()
 	}
 	if s.OrgID.Prefix() != "" {
 		m.OrgID = s.OrgID.String()
@@ -343,6 +353,20 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 			return nil, err
 		}
 		s.ServiceAccountID = svcID
+	}
+	if m.AgentID != "" {
+		agentID, err := id.ParseAgentID(m.AgentID)
+		if err != nil {
+			return nil, err
+		}
+		s.AgentID = agentID
+	}
+	if m.GrantID != "" {
+		grantID, err := id.ParseAgentGrantID(m.GrantID)
+		if err != nil {
+			return nil, err
+		}
+		s.GrantID = grantID
 	}
 	if m.OrgID != "" {
 		orgID, err := id.ParseOrgID(m.OrgID)

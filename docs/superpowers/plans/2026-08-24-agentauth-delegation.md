@@ -20,6 +20,7 @@
 - Do not modify `rbac/warden_store.go`. The service-account TODO at line 326 is out of scope.
 - Agent session issuance must emit `BeforeSessionCreate` and `AfterSignIn`. Never hand-build a `session.Session` the way `plugins/apikey/plugin.go:567` does.
 - Test command is `go test ./... ` scoped to the package under test. Lint with `make lint` before each commit.
+- Migration versions are fixed: `20260824000060` for the core `authsome` group change to `authsome_sessions` (Task 5), and `20260824000061` for the `authsome-agentauth` group (Task 13). Do not renumber them. Six sibling branches dated today register migrations, and `20260824000001` through `20260824000003`, `20260824000030`, `20260824000040` and `20260824000050` through `20260824000052` are already claimed. Two migrations sharing a version inside one group fails at startup.
 
 ## File structure
 
@@ -1130,7 +1131,7 @@ Add a postgres migration in `store/postgres/migrations.go`. The constraint rewri
 ```go
 		&migrate.Migration{
 			Name:    "add_session_agent_principal",
-			Version: "20260824000001",
+			Version: "20260824000060",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				// The principal CHECK added in 20260620000002 admits only a
 				// service-account session (no user) or a user session (no
@@ -1188,7 +1189,7 @@ Add the sqlite counterpart in `store/sqlite/migrations.go`, matching the style a
 ```go
 		&migrate.Migration{
 			Name:    "add_session_agent_principal",
-			Version: "20260824000001",
+			Version: "20260824000060",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `
 ALTER TABLE authsome_sessions ADD COLUMN agent_id TEXT NOT NULL DEFAULT '';
@@ -1231,7 +1232,9 @@ This is the only change permitted to `plugins/oauth2provider`. Keep it additive.
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
-- Produces: `oauth2provider.ConsentGate` interface with the single method `Evaluate(ctx context.Context, clientID string, userID id.UserID, orgID id.OrgID, scopes []string) error`, and `oauth2provider.WithConsentGate(g ConsentGate) Option`.
+- Produces: `oauth2provider.ConsentGate` interface with the single method `Evaluate(ctx context.Context, clientID string, userID id.UserID, orgID id.OrgID, scopes []string) error`; a `ConsentGate ConsentGate` field on the existing `oauth2provider.Config`; and the setter `(*Plugin).SetConsentGate(g ConsentGate)`.
+
+Note on idiom: `oauth2provider.New` takes `cfg ...Config`, not functional options, and this package has no `Option` type. Do not invent one. Configuration goes on `Config`, and post-construction wiring uses a `SetX` method, matching `SetConsentStore` in `plugins/consent/plugin.go`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1266,9 +1269,9 @@ func (g *recordingGate) Evaluate(_ context.Context, clientID string, _ id.UserID
 	return g.err
 }
 
-func TestWithConsentGate_GateIsConsulted(t *testing.T) {
+func TestConsentGate_GateIsConsulted(t *testing.T) {
 	gate := &recordingGate{}
-	p := oauth2provider.New(oauth2provider.WithConsentGate(gate))
+	p := oauth2provider.New(oauth2provider.Config{ConsentGate: gate})
 
 	err := p.EvaluateConsent(context.Background(), "client_abc", id.NewUserID(), id.NewOrgID(), []string{"invoices:read"})
 
@@ -1278,9 +1281,9 @@ func TestWithConsentGate_GateIsConsulted(t *testing.T) {
 	assert.Equal(t, []string{"invoices:read"}, gate.scopes)
 }
 
-func TestWithConsentGate_RefusalPropagates(t *testing.T) {
+func TestConsentGate_RefusalPropagates(t *testing.T) {
 	denied := errors.New("org policy blocks this agent")
-	p := oauth2provider.New(oauth2provider.WithConsentGate(&recordingGate{err: denied}))
+	p := oauth2provider.New(oauth2provider.Config{ConsentGate: &recordingGate{err: denied}})
 
 	err := p.EvaluateConsent(context.Background(), "client_abc", id.NewUserID(), id.NewOrgID(), nil)
 
@@ -1288,6 +1291,15 @@ func TestWithConsentGate_RefusalPropagates(t *testing.T) {
 }
 
 // Without a gate the provider must behave exactly as it does today.
+func TestConsentGate_SetterWiresGate(t *testing.T) {
+	gate := &recordingGate{}
+	p := oauth2provider.New()
+	p.SetConsentGate(gate)
+
+	require.NoError(t, p.EvaluateConsent(context.Background(), "client_abc", id.NewUserID(), id.NewOrgID(), nil))
+	assert.True(t, gate.called, "the setter must wire the gate as effectively as Config does")
+}
+
 func TestEvaluateConsent_NoGateAllows(t *testing.T) {
 	p := oauth2provider.New()
 
@@ -1300,7 +1312,7 @@ func TestEvaluateConsent_NoGateAllows(t *testing.T) {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `go test ./plugins/oauth2provider/ -run ConsentGate -v`
-Expected: FAIL, compile error `undefined: oauth2provider.WithConsentGate`.
+Expected: FAIL, compile error `unknown field ConsentGate in struct literal`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -1329,11 +1341,10 @@ type ConsentGate interface {
 	Evaluate(ctx context.Context, clientID string, userID id.UserID, orgID id.OrgID, scopes []string) error
 }
 
-// WithConsentGate registers a gate consulted before every authorization code
-// is issued.
-func WithConsentGate(g ConsentGate) Option {
-	return func(p *Plugin) { p.consentGate = g }
-}
+// SetConsentGate registers a gate consulted before every authorization code is
+// issued. Use it when the gate is only available after the provider has been
+// constructed; otherwise set Config.ConsentGate.
+func (p *Plugin) SetConsentGate(g ConsentGate) { p.consentGate = g }
 
 // EvaluateConsent runs the registered gate, if any.
 func (p *Plugin) EvaluateConsent(ctx context.Context, clientID string, userID id.UserID, orgID id.OrgID, scopes []string) error {
@@ -1344,7 +1355,7 @@ func (p *Plugin) EvaluateConsent(ctx context.Context, clientID string, userID id
 }
 ```
 
-Add the field `consentGate ConsentGate` to the `Plugin` struct in `plugins/oauth2provider/plugin.go`.
+Add the field `consentGate ConsentGate` to the `Plugin` struct in `plugins/oauth2provider/plugin.go`, add `ConsentGate ConsentGate` to the `Config` struct there, and carry it across in `New` alongside the existing default-filling (`p.consentGate = c.ConsentGate`).
 
 In the authorize handler, immediately before the authorization code is created, insert:
 
@@ -1499,6 +1510,28 @@ func TestEvaluate_OpenOrgAllowsMappedScope(t *testing.T) {
 
 // An org with no policy row falls back to open. Changing this default is a
 // policy decision, not an implementation detail, so it gets its own test.
+// The org that registered an agent governs it, even when the consenting
+// session carries no org context of its own. Keying policy off the session's
+// org alone would let a member of a blocked org authorize the agent simply by
+// signing in without an active organization.
+func TestEvaluate_AgentOrgGovernsWhenSessionHasNoOrg(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(
+		agentauth.WithStore(store),
+		agentauth.WithScope("invoices:read", agentauth.Grants("read", "invoice")),
+	)
+	org := id.NewOrgID()
+	approvedAgent(t, store, org, "client_orgowned")
+	require.NoError(t, store.PutOrgPolicy(context.Background(), &agentauth.OrgAgentPolicy{
+		OrgID: org, Mode: agentauth.ModeBlocked,
+	}))
+
+	// Zero org id, as an app-scoped session would produce.
+	err := p.Evaluate(context.Background(), "client_orgowned", id.NewUserID(), id.OrgID{}, []string{"invoices:read"})
+
+	require.Error(t, err, "the agent's own org policy must apply when the session carries no org")
+}
+
 func TestEvaluate_MissingPolicyDefaultsToOpen(t *testing.T) {
 	store := agentauth.NewMemoryStore()
 	p := agentauth.New(
@@ -1598,7 +1631,7 @@ func (p *Plugin) Evaluate(ctx context.Context, clientID string, _ id.UserID, org
 		return forge.Forbidden("agent is blocked")
 	}
 
-	policy, err := p.policyFor(ctx, orgID)
+	policy, err := p.policyFor(ctx, effectiveOrg(agent, orgID))
 	if err != nil {
 		return err
 	}
@@ -1667,6 +1700,29 @@ func (p *Plugin) clampTTL(policy *OrgAgentPolicy, requested time.Duration) time.
 		ttl = policy.MaxGrantTTL
 	}
 	return ttl
+}
+
+// effectiveOrg decides which organization's policy governs this consent.
+//
+// The orgID the provider hands us comes from the caller's session, and the
+// auth middleware populates it only when that session is org-scoped. An
+// app-scoped session therefore arrives with the zero value, and keying policy
+// off that would mean an org that set ModeBlocked never had it enforced
+// against its own members signing in without an active org. So the agent's own
+// record wins when it has one: an org-registered agent carries the org that
+// registered it, which is a more trustworthy source than ambient session
+// scope, and it cannot be dodged by dropping org context from the request.
+//
+// When neither source yields an org, no org policy applies. That is the
+// single-tenant and app-scoped case, where there is no organization to have an
+// opinion. A self-registered agent authorized from a session with no org
+// context is the one combination this leaves ungoverned; see the plan's
+// deferred notes.
+func effectiveOrg(agent *Agent, sessionOrg id.OrgID) id.OrgID {
+	if !agent.OrgID.IsNil() {
+		return agent.OrgID
+	}
+	return sessionOrg
 }
 
 // policyFor returns the org's policy, defaulting to open when no row exists.
@@ -3104,7 +3160,7 @@ func init() {
 	PostgresMigrations.MustRegister(
 		&migrate.Migration{
 			Name:    "create_agentauth_tables",
-			Version: "20260824000002",
+			Version: "20260824000061",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `
 CREATE TABLE IF NOT EXISTS authsome_agents (
@@ -3428,14 +3484,15 @@ agents := agentauth.New(
 engine, err := authsome.NewEngine(
     authsome.WithStore(store),
     authsome.WithWarden(wardenEngine),
-    authsome.WithPlugin(oauth2provider.New(
-        oauth2provider.WithConsentGate(agents),
-    )),
+    authsome.WithPlugin(oauth2provider.New(oauth2provider.Config{
+        Issuer:       "https://auth.example.com",
+        ConsentGate:  agents,
+    })),
     authsome.WithPlugin(agents),
 )
 ```
 
-`oauth2provider` must be registered before `agentauth`, since the gate is read at construction.
+Build `agents` before the provider, since the provider's `Config` holds the gate. If your wiring makes that awkward, construct the provider first and call `provider.SetConsentGate(agents)` instead.
 
 ## Deferred, and why
 

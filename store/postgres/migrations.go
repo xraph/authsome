@@ -1295,6 +1295,60 @@ ALTER TABLE authsome_sessions
 			},
 		},
 
+		&migrate.Migration{
+			Name:    "add_session_agent_principal",
+			Version: "20260824000110",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				// The principal CHECK added in 20260620000002 admits only a
+				// service-account session (no user) or a user session (no
+				// service account). An agent session is neither: it names an
+				// agent AND the human who delegated to it, so every insert
+				// would fail with SQLSTATE 23514 until this widens.
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions
+    ADD COLUMN IF NOT EXISTS agent_id TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS grant_id TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE authsome_sessions
+    DROP CONSTRAINT IF EXISTS authsome_sessions_principal_check;
+ALTER TABLE authsome_sessions
+    ADD CONSTRAINT authsome_sessions_principal_check CHECK (
+        (principal_kind = 'service_account'
+             AND service_account_id <> '' AND user_id = '' AND agent_id = '')
+        OR (principal_kind = 'agent'
+             AND agent_id <> '' AND grant_id <> '' AND user_id <> '' AND service_account_id = '')
+        OR (principal_kind IN ('', 'user')
+             AND user_id <> '' AND service_account_id = '' AND agent_id = '')
+    );
+
+CREATE INDEX IF NOT EXISTS idx_authsome_sessions_grant_id
+    ON authsome_sessions (grant_id)
+    WHERE grant_id <> '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				// Agent sessions cannot satisfy the narrower constraint, so
+				// they go before it is restored.
+				_, err := exec.Exec(ctx, `
+DELETE FROM authsome_sessions WHERE principal_kind = 'agent';
+DROP INDEX IF EXISTS idx_authsome_sessions_grant_id;
+ALTER TABLE authsome_sessions
+    DROP CONSTRAINT IF EXISTS authsome_sessions_principal_check;
+ALTER TABLE authsome_sessions
+    ADD CONSTRAINT authsome_sessions_principal_check CHECK (
+        (principal_kind = 'service_account'
+             AND service_account_id <> '' AND user_id = '')
+        OR (principal_kind IN ('', 'user')
+             AND user_id <> '' AND service_account_id = '')
+    );
+ALTER TABLE authsome_sessions DROP COLUMN IF EXISTS agent_id;
+ALTER TABLE authsome_sessions DROP COLUMN IF EXISTS grant_id;
+`)
+				return err
+			},
+		},
+
 		// Migration: the non-human principal table. postgres never had one:
 		// the store methods were stubs, so no rows exist to preserve and this
 		// creates the current shape directly rather than in two steps.

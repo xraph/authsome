@@ -14,6 +14,7 @@ import (
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
@@ -43,6 +44,7 @@ type fullPlugin struct {
 	afterUserCreateCalled     bool
 	beforeSessionCreateCalled bool
 	afterSessionCreateCalled  bool
+	beforeMemberRemoveCalled  bool
 	err                       error // if set, hooks return this error
 }
 
@@ -93,6 +95,11 @@ func (p *fullPlugin) OnBeforeSessionCreate(_ context.Context, _ *session.Session
 
 func (p *fullPlugin) OnAfterSessionCreate(_ context.Context, _ *session.Session) error {
 	p.afterSessionCreateCalled = true
+	return p.err
+}
+
+func (p *fullPlugin) OnBeforeMemberRemove(_ context.Context, _ *organization.Member) error {
+	p.beforeMemberRemoveCalled = true
 	return p.err
 }
 
@@ -179,6 +186,49 @@ func TestRegistry_BeforeSignUp_AbortsOnError(t *testing.T) {
 
 	// Second plugin's BeforeSignUp should NOT have been called
 	assert.False(t, p2.beforeSignUpCalled)
+}
+
+// TestRegistry_TypeCaching_BeforeMemberRemove pins the type-cache
+// registration added at Register-time for BeforeMemberRemove. Deleting that
+// registration (the `if h, ok := p.(BeforeMemberRemove); ok { ... }` block in
+// Register) would break the hook silently: EmitBeforeMemberRemove would
+// iterate an empty slice and always report success, and nothing else in the
+// suite would notice.
+func TestRegistry_TypeCaching_BeforeMemberRemove(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+	ctx := context.Background()
+
+	// Register a plugin that implements BeforeMemberRemove
+	p := &fullPlugin{basePlugin: basePlugin{name: "member-remove-check"}}
+	r.Register(p)
+
+	// Also register one that doesn't implement BeforeMemberRemove
+	r.Register(&basePlugin{name: "base-only"})
+
+	m := &organization.Member{ID: id.NewMemberID(), OrgID: id.NewOrgID(), UserID: id.NewUserID()}
+	err := r.EmitBeforeMemberRemove(ctx, m)
+
+	require.NoError(t, err)
+	assert.True(t, p.beforeMemberRemoveCalled)
+}
+
+func TestRegistry_BeforeMemberRemove_AbortsOnError(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+	ctx := context.Background()
+
+	errBlocked := errors.New("member remove blocked")
+	p1 := &fullPlugin{basePlugin: basePlugin{name: "blocker"}, err: errBlocked}
+	p2 := &fullPlugin{basePlugin: basePlugin{name: "after"}}
+
+	r.Register(p1)
+	r.Register(p2)
+
+	m := &organization.Member{ID: id.NewMemberID(), OrgID: id.NewOrgID(), UserID: id.NewUserID()}
+	err := r.EmitBeforeMemberRemove(ctx, m)
+	assert.ErrorIs(t, err, errBlocked)
+
+	// Second plugin's BeforeMemberRemove should NOT have been called
+	assert.False(t, p2.beforeMemberRemoveCalled)
 }
 
 func TestRegistry_AfterSignUp_LogsErrorButContinues(t *testing.T) {

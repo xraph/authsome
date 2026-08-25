@@ -21,6 +21,7 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store/memory"
 
@@ -268,6 +269,38 @@ func OnAfterOrgDelete(t *testing.T, eng *authsome.Engine, fn func(context.Contex
 	name := "secutil-after-org-delete-" + itoa(onAfterOrgDeleteSeq)
 	onAfterOrgDeleteMu.Unlock()
 	eng.Plugins().Register(&afterOrgDeleteTestPlugin{name: name, fn: fn})
+}
+
+// beforeMemberRemoveTestPlugin is a minimal plugin that fires fn whenever the
+// BeforeMemberRemove hook is emitted. It exists so tests can observe (or
+// veto) the hook without booting an entire downstream plugin.
+type beforeMemberRemoveTestPlugin struct {
+	name string
+	fn   func(context.Context, *organization.Member) error
+}
+
+func (p *beforeMemberRemoveTestPlugin) Name() string { return p.name }
+func (p *beforeMemberRemoveTestPlugin) OnBeforeMemberRemove(ctx context.Context, m *organization.Member) error {
+	return p.fn(ctx, m)
+}
+
+// onBeforeMemberRemoveSeq is a process-wide counter used to give each
+// OnBeforeMemberRemove test plugin a unique name, for the same reason as
+// onAfterOrgDeleteSeq above.
+var onBeforeMemberRemoveSeq int64
+var onBeforeMemberRemoveMu sync.Mutex
+
+// OnBeforeMemberRemove registers an additional BeforeMemberRemove hook for
+// the test. The registered plugin leaks for the engine's lifetime (no
+// Unregister API exists yet), which is acceptable because the engine is
+// scoped to the test via NewTestEngine.
+func OnBeforeMemberRemove(t *testing.T, eng *authsome.Engine, fn func(context.Context, *organization.Member) error) {
+	t.Helper()
+	onBeforeMemberRemoveMu.Lock()
+	onBeforeMemberRemoveSeq++
+	name := "secutil-before-member-remove-" + itoa(onBeforeMemberRemoveSeq)
+	onBeforeMemberRemoveMu.Unlock()
+	eng.Plugins().Register(&beforeMemberRemoveTestPlugin{name: name, fn: fn})
 }
 
 func itoa(n int64) string {

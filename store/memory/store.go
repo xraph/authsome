@@ -480,6 +480,25 @@ func (s *Store) DeleteUserSessions(_ context.Context, userID id.UserID) error {
 	return nil
 }
 
+func (s *Store) DeleteSessionsByGrant(_ context.Context, grantID id.AgentGrantID) error {
+	if grantID.IsNil() {
+		// A nil grant id must never match: GrantID.String() is "" for both a
+		// zero grant id and every non-agent session's unset GrantID, so
+		// without this guard, a caller that failed to resolve a real grant
+		// id and passed the zero value anyway would delete every ordinary
+		// human session instead of doing nothing.
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, sess := range s.sessions {
+		if sess.GrantID.String() == grantID.String() {
+			delete(s.sessions, k)
+		}
+	}
+	return nil
+}
+
 func (s *Store) ListUserSessions(_ context.Context, userID id.UserID) ([]*session.Session, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

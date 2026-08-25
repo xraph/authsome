@@ -43,6 +43,13 @@ type Store interface {
 	TouchSession(ctx context.Context, sessionID id.SessionID, lastActivityAt, expiresAt time.Time) error
 	DeleteSession(ctx context.Context, sessionID id.SessionID) error
 	DeleteUserSessions(ctx context.Context, userID id.UserID) error
+	// DeleteSessionsByGrant deletes every session issued under grantID. An
+	// agent session carries the delegating human's UserID (see Session.GrantID
+	// below), so revoking the grant that authorized it must also delete the
+	// session itself: otherwise it keeps authenticating as that human on any
+	// route not guarded by agentauth's own scope check until it separately
+	// expires.
+	DeleteSessionsByGrant(ctx context.Context, grantID id.AgentGrantID) error
 	ListUserSessions(ctx context.Context, userID id.UserID) ([]*Session, error)
 	// ListSessions returns the most recent sessions across all users, up to limit.
 	ListSessions(ctx context.Context, limit int) ([]*Session, error)
