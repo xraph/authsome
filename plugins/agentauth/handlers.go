@@ -409,6 +409,34 @@ func (p *Plugin) handleSetAgentStatus(ctx forge.Context, req *SetAgentStatusRequ
 		// exist" by probing this endpoint.
 		return nil, forge.NotFound("agent not found")
 	}
+	// Status is a global field on the agent record, not scoped by grant —
+	// the org floor callerOrgOrReject enforces below only bounds which
+	// GRANTS get revoked when blocking, it does not bound which agent's
+	// STATUS changes. Without this, an org-A admin holding write on agent
+	// could flip the status of an org-B agent in the same app, and the
+	// dangerous direction is not blocking, it's approving: org A could
+	// un-block an agent org B deliberately blocked, and org B would have no
+	// way to see or prevent it. A caller with no org context at all keeps
+	// the app-wide behavior, consistent with callerOrgOrReject's own
+	// fallback.
+	// Status is a global field on the agent record, not scoped by grant —
+	// the org floor callerOrgOrReject enforces below only bounds which
+	// GRANTS get revoked when blocking, it does not bound which agent's
+	// STATUS changes. Without this, an org-A admin holding write on agent
+	// could flip the status of an org-B agent in the same app, and the
+	// dangerous direction is not blocking, it's approving: org A could
+	// un-block an agent org B deliberately blocked, and org B would have no
+	// way to see or prevent it. A caller with no org context at all keeps
+	// the app-wide behavior, consistent with callerOrgOrReject's own
+	// fallback.
+	if callerOrgID, hasOrg := middleware.OrgIDFrom(ctx.Context()); hasOrg && !callerOrgID.IsNil() {
+		if agent.OrgID.String() != callerOrgID.String() {
+			// Same response as a missing agent, for the same reason as the
+			// cross-app check above: an org-scoped caller must not be able
+			// to tell "exists in another org" apart from "doesn't exist".
+			return nil, forge.NotFound("agent not found")
+		}
+	}
 	orgID, err := callerOrgOrReject(ctx.Context(), req.OrgID)
 	if err != nil {
 		return nil, err

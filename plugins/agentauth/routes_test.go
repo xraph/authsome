@@ -324,6 +324,172 @@ func TestHandleSetAgentStatus_RefusesCrossAppTarget(t *testing.T) {
 	assert.Equal(t, agentauth.StatusApproved, got.Status, "the cross-app attempt must not have taken effect")
 }
 
+// TestHandleSetAgentStatus_RefusesCrossOrgTarget is item 1 of round 3: Status
+// is a global field on the agent record, not scoped by grant, so the org
+// floor added in round 2 (which only bounds which GRANTS get revoked) did
+// not stop an org-A admin from flipping an org-B agent's status. The
+// dangerous direction is not blocking, it is approving: org A could un-block
+// an agent org B deliberately blocked, and org B would have no way to see or
+// prevent it — which is exactly what this test exercises.
+func TestHandleSetAgentStatus_RefusesCrossOrgTarget(t *testing.T) {
+	agentStore, mux := newRoutesTestPlugin(t)
+	appID, orgA, orgB := id.NewAppID(), id.NewOrgID(), id.NewOrgID()
+	blocked := &agentauth.Agent{
+		ID: id.NewAgentID(), AppID: appID, OrgID: orgB, ClientID: "client_org_b_blocked",
+		Name: "Org B's Agent", Origin: agentauth.OriginOrgRegistered, Status: agentauth.StatusBlocked,
+	}
+	require.NoError(t, agentStore.CreateAgent(context.Background(), blocked))
+
+	// Org A's admin tries to un-block org B's deliberately-blocked agent.
+	ctx := adminCtx(id.NewUserID(), appID, orgA)
+	w := doRequest(ctx, t, mux, http.MethodPatch, "/v1/admin/agents/"+blocked.ID.String()+"/status",
+		map[string]any{"status": "approved"})
+
+	assert.Equal(t, http.StatusNotFound, w.Code,
+		"an org-A admin must not be able to change an org-B agent's status — same response as a missing agent")
+
+	got, err := agentStore.GetAgent(context.Background(), blocked.ID)
+	require.NoError(t, err)
+	assert.Equal(t, agentauth.StatusBlocked, got.Status,
+		"org B's deliberate block must survive an org-A admin's attempt to un-block it")
+}
+
+// TestHandleSetAgentStatus_AllowsOwnOrgTarget is the positive case: an
+// org-scoped admin must still be able to manage their own org's agents.
+func TestHandleSetAgentStatus_AllowsOwnOrgTarget(t *testing.T) {
+	agentStore, mux := newRoutesTestPlugin(t)
+	appID, myOrg := id.NewAppID(), id.NewOrgID()
+	mine := &agentauth.Agent{
+		ID: id.NewAgentID(), AppID: appID, OrgID: myOrg, ClientID: "client_own_org_status",
+		Name: "My Org's Agent", Origin: agentauth.OriginOrgRegistered, Status: agentauth.StatusApproved,
+	}
+	require.NoError(t, agentStore.CreateAgent(context.Background(), mine))
+
+	ctx := adminCtx(id.NewUserID(), appID, myOrg)
+	w := doRequest(ctx, t, mux, http.MethodPatch, "/v1/admin/agents/"+mine.ID.String()+"/status",
+		map[string]any{"status": "blocked"})
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	got, err := agentStore.GetAgent(context.Background(), mine.ID)
+	require.NoError(t, err)
+	assert.Equal(t, agentauth.StatusBlocked, got.Status, "an org-scoped admin must still be able to manage their own org's agents")
+}
+
+// ──────────────────────────────────────────────────
+// ITEM 2 (fix round 3) — body-decode coverage for the five handlers round 2's
+// double-JSON-write fix touched but never individually proved. Round 1's bug
+// (every handler double-writing its response, `{"agents":[...]}\n{"agents":[...]}\n`)
+// was invisible for five of six endpoints precisely because nothing decoded
+// their bodies — only GET /v1/admin/agents did, in the ITEM 1 (round 2)
+// tests above, which is what actually caught it. Fixing five of six blind
+// spots is how a double-write regression comes back unnoticed on whichever
+// one is still status-only, so every remaining handler gets one here.
+// ──────────────────────────────────────────────────
+
+func TestHandleListMyGrants_ResponseBodyDecodes(t *testing.T) {
+	agentStore, mux := newRoutesTestPlugin(t)
+	userID := id.NewUserID()
+	agent := &agentauth.Agent{
+		ID: id.NewAgentID(), AppID: id.NewAppID(), ClientID: "client_decode_me",
+		Name: "Decode Me", Origin: agentauth.OriginOrgRegistered, Status: agentauth.StatusApproved,
+	}
+	require.NoError(t, agentStore.CreateAgent(context.Background(), agent))
+	grant := &agentauth.AgentGrant{
+		ID: id.NewAgentGrantID(), AppID: agent.AppID, AgentID: agent.ID, UserID: userID,
+		OrgID: id.NewOrgID(), Scopes: []string{"invoices:read"}, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	require.NoError(t, agentStore.CreateAgentGrant(context.Background(), grant))
+
+	ctx := middleware.WithUserID(context.Background(), userID)
+	w := doRequest(ctx, t, mux, http.MethodGet, "/v1/me/agents", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var resp struct {
+		Grants []struct {
+			ID string `json:"id"`
+		} `json:"grants"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp), "response body must be valid, single-encoded JSON")
+	require.Len(t, resp.Grants, 1)
+	assert.Equal(t, grant.ID.String(), resp.Grants[0].ID)
+}
+
+func TestHandleRevokeMyGrant_ResponseBodyDecodes(t *testing.T) {
+	agentStore, mux := newRoutesTestPlugin(t)
+	userID := id.NewUserID()
+	grant := &agentauth.AgentGrant{
+		ID: id.NewAgentGrantID(), AppID: id.NewAppID(), AgentID: id.NewAgentID(), UserID: userID,
+		OrgID: id.NewOrgID(), Scopes: []string{"invoices:read"}, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	require.NoError(t, agentStore.CreateAgentGrant(context.Background(), grant))
+
+	ctx := middleware.WithUserID(context.Background(), userID)
+	w := doRequest(ctx, t, mux, http.MethodDelete, "/v1/me/agents/"+grant.ID.String(), nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var resp struct {
+		Status string `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp), "response body must be valid, single-encoded JSON")
+	assert.Equal(t, "revoked", resp.Status)
+}
+
+func TestHandleRegisterAgent_ResponseBodyDecodes(t *testing.T) {
+	_, mux := newRoutesTestPlugin(t)
+	ctx := adminCtx(id.NewUserID(), id.NewAppID(), id.OrgID{})
+
+	w := doRequest(ctx, t, mux, http.MethodPost, "/v1/admin/agents",
+		map[string]any{"client_id": "client_decode_register", "name": "Decode Register"})
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	var resp struct {
+		ID       string `json:"id"`
+		ClientID string `json:"client_id"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp), "response body must be valid, single-encoded JSON")
+	assert.NotEmpty(t, resp.ID)
+	assert.Equal(t, "client_decode_register", resp.ClientID)
+}
+
+func TestHandleSetAgentStatus_ResponseBodyDecodes(t *testing.T) {
+	agentStore, mux := newRoutesTestPlugin(t)
+	appID, myOrg := id.NewAppID(), id.NewOrgID()
+	agent := &agentauth.Agent{
+		ID: id.NewAgentID(), AppID: appID, OrgID: myOrg, ClientID: "client_decode_status",
+		Name: "Decode Status", Origin: agentauth.OriginOrgRegistered, Status: agentauth.StatusApproved,
+	}
+	require.NoError(t, agentStore.CreateAgent(context.Background(), agent))
+
+	ctx := adminCtx(id.NewUserID(), appID, myOrg)
+	w := doRequest(ctx, t, mux, http.MethodPatch, "/v1/admin/agents/"+agent.ID.String()+"/status",
+		map[string]any{"status": "blocked"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var resp struct {
+		Status string `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp), "response body must be valid, single-encoded JSON")
+	assert.Equal(t, "updated", resp.Status)
+}
+
+func TestHandlePutOrgPolicy_ResponseBodyDecodes(t *testing.T) {
+	_, mux := newRoutesTestPlugin(t)
+	orgID := id.NewOrgID()
+	ctx := adminCtx(id.NewUserID(), id.NewAppID(), orgID)
+
+	w := doRequest(ctx, t, mux, http.MethodPut, "/v1/admin/agents/policy",
+		map[string]any{"org_id": orgID.String(), "mode": "allowlist", "max_grant_ttl_seconds": 3600})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var resp struct {
+		OrgID string `json:"org_id"`
+		Mode  string `json:"mode"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp), "response body must be valid, single-encoded JSON")
+	assert.Equal(t, orgID.String(), resp.OrgID)
+	assert.Equal(t, "allowlist", resp.Mode)
+}
+
 // ──────────────────────────────────────────────────
 // ITEM 1 (fix round 2) — the caller's own org must be a FLOOR, not an
 // optional filter a request can opt out of by leaving org_id out. Before
@@ -404,8 +570,13 @@ func TestHandleListAgents_AdminWithNoOrgContextSeesAppWide(t *testing.T) {
 func TestHandleSetAgentStatus_OrgScopedAdminOmittingOrgIDOnlyRevokesOwnOrgsGrants(t *testing.T) {
 	agentStore, mux := newRoutesTestPlugin(t)
 	appID, myOrg, otherOrg := id.NewAppID(), id.NewOrgID(), id.NewOrgID()
+	// The agent itself belongs to the caller's org (item 1 of round 3
+	// requires that for the caller to be able to act on it at all); its
+	// grants nonetheless span two different orgs, which is what this test
+	// actually exercises: the org floor on the GRANTS the status change
+	// revokes, not on the agent record's own org.
 	agent := &agentauth.Agent{
-		ID: id.NewAgentID(), AppID: appID, ClientID: "client_org_floor_status",
+		ID: id.NewAgentID(), AppID: appID, OrgID: myOrg, ClientID: "client_org_floor_status",
 		Name: "Shared Agent", Origin: agentauth.OriginOrgRegistered, Status: agentauth.StatusApproved,
 	}
 	require.NoError(t, agentStore.CreateAgent(context.Background(), agent))
