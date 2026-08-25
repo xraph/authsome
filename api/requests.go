@@ -1,6 +1,10 @@
 package api
 
-import "github.com/xraph/authsome/environment"
+import (
+	"time"
+
+	"github.com/xraph/authsome/environment"
+)
 
 // ---------------------------------------------------------------------------
 // Auth requests
@@ -763,4 +767,32 @@ type DelegationResponse struct {
 // DelegationListResponse wraps a list of delegation grants.
 type DelegationListResponse struct {
 	Delegations []DelegationResponse `json:"delegations"`
+}
+
+// ---------------------------------------------------------------------------
+// Ephemeral child principals
+// ---------------------------------------------------------------------------
+
+// MintChildRequest binds the path + body for POST /principals/:id/children.
+// ID is the calling principal's own id: a parent may only mint children
+// under itself, and the handler checks that against the authenticated
+// caller rather than trusting this field for anything but routing.
+type MintChildRequest struct {
+	ID         string   `path:"id" description:"The calling parent principal's own ID"`
+	Name       string   `json:"name" description:"Name for the ephemeral child"`
+	Scopes     []string `json:"scopes,omitempty" description:"Scopes for the child; must be a subset of the parent's own scopes"`
+	TTLSeconds int      `json:"ttl_seconds" description:"How long the child may live, in seconds. Capped by the parent's own expiry, if it has one"`
+}
+
+// MintChildResponse is the wire shape of a newly minted ephemeral child
+// principal, including its one-time credential.
+type MintChildResponse struct {
+	ID        string     `json:"id"`
+	ParentID  string     `json:"parent_id"`
+	Name      string     `json:"name"`
+	Scopes    []string   `json:"scopes,omitempty"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	Key       string     `json:"key" description:"Plaintext API key secret; returned once and never stored"`
+	KeyPrefix string     `json:"key_prefix"`
+	CreatedAt time.Time  `json:"created_at"`
 }

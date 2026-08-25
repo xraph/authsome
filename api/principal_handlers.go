@@ -42,11 +42,21 @@ func (a *API) registerPrincipalRoutes(router forge.Router) error {
 		return err
 	}
 
-	return g.GET("/principals/me/delegations", a.handleListMyDelegations,
+	if err := g.GET("/principals/me/delegations", a.handleListMyDelegations,
 		forge.WithSummary("List what may act on your behalf"),
 		forge.WithDescription("Lists the live delegation grants naming the calling principal as subject, so it can see the agents holding authority over it. There is no revoke route yet; Engine.RevokeDelegation is reachable only from engine-embedding code today."),
 		forge.WithOperationID("listMyDelegations"),
 		forge.WithResponseSchema(http.StatusOK, "Delegations", DelegationListResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	return g.POST("/principals/:id/children", a.handleMintChild,
+		forge.WithSummary("Mint an ephemeral child principal"),
+		forge.WithDescription("Creates a short-lived principal under the calling parent, with its own credential. Scopes must be a subset of the parent's and the TTL is capped by the parent's expiry."),
+		forge.WithOperationID("mintChildPrincipal"),
+		forge.WithResponseSchema(http.StatusCreated, "Child principal", MintChildResponse{}),
 		forge.WithErrorResponses(),
 	)
 }
@@ -162,4 +172,50 @@ func (a *API) handleListMyDelegations(ctx forge.Context, _ *apitypes.Empty) (*De
 		resp.Delegations = append(resp.Delegations, item)
 	}
 	return resp, nil
+}
+
+// handleMintChild mints an ephemeral child principal under the calling
+// parent.
+//
+// The path id names whose children are being created, but the parent comes
+// from the request context, never from the body: req.ID is checked against
+// the authenticated caller and refused on any mismatch, so a principal can
+// only ever mint children under itself, not under some other id it happens
+// to know.
+func (a *API) handleMintChild(ctx forge.Context, req *MintChildRequest) (*MintChildResponse, error) {
+	caller, ok := middleware.PrincipalFrom(ctx.Context())
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+	if req.ID != caller.ID {
+		return nil, forge.Forbidden("can only mint children under your own principal")
+	}
+	if req.Name == "" {
+		return nil, forge.BadRequest("name is required")
+	}
+	if req.TTLSeconds <= 0 {
+		return nil, forge.BadRequest("ttl_seconds must be positive")
+	}
+
+	parentID, err := id.ParseServiceAccountID(req.ID)
+	if err != nil {
+		return nil, forge.BadRequest("invalid principal id")
+	}
+
+	child, key, secret, err := a.engine.MintChildPrincipal(ctx.Context(), parentID,
+		req.Name, req.Scopes, time.Duration(req.TTLSeconds)*time.Second)
+	if err != nil {
+		return nil, mapError(err)
+	}
+
+	return &MintChildResponse{
+		ID:        child.ID.String(),
+		ParentID:  child.ParentID.String(),
+		Name:      child.Name,
+		Scopes:    child.Scopes,
+		ExpiresAt: child.ExpiresAt,
+		Key:       secret,
+		KeyPrefix: key.KeyPrefix,
+		CreatedAt: child.CreatedAt,
+	}, nil
 }

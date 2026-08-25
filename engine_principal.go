@@ -8,9 +8,11 @@ import (
 	log "github.com/xraph/go-utils/log"
 	"github.com/xraph/warden"
 
+	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/serviceaccount"
 )
 
 // wardenSubjectKind maps a principal kind onto a Warden subject kind.
@@ -280,4 +282,136 @@ func (e *Engine) ListDelegationsForSubject(
 	return e.store.ListDelegations(ctx, &principal.DelegationQuery{
 		AppID: appID, Subject: &subject, ActiveOnly: true, ActiveAsOf: time.Now(),
 	})
+}
+
+// MintChildPrincipal creates a short-lived principal under a registered
+// parent, with its own API key.
+//
+// This is what makes per-task agents workable: one durable registration, N
+// ephemeral instances, each with its own identity for attribution and its own
+// credential to revoke. The two caps are what keep it from being an
+// escalation: a child's scopes are a subset of its parent's, and a child's
+// expiry never passes its parent's.
+//
+// ttl is not required to be positive. A caller normally passes a positive
+// duration, but a zero or negative one is accepted rather than rejected: it
+// mints a child that is already expired, which is exactly what
+// ReapExpiredPrincipals needs to be provable against without waiting out a
+// real clock. The HTTP handler is where a positive ttl is actually enforced
+// for real callers.
+//
+// The secret is returned once and is not stored.
+func (e *Engine) MintChildPrincipal(
+	ctx context.Context, parentID id.ServiceAccountID, name string, scopes []string, ttl time.Duration,
+) (*serviceaccount.ServiceAccount, *apikey.APIKey, string, error) {
+	if err := e.requireStarted(); err != nil {
+		return nil, nil, "", err
+	}
+
+	parent, err := e.store.GetServiceAccount(ctx, parentID)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("authsome: mint child: get parent: %w", err)
+	}
+	if !parent.Active {
+		return nil, nil, "", fmt.Errorf("authsome: mint child: parent is inactive")
+	}
+	if !parent.ParentID.IsNil() {
+		// One level only. A tree of ephemeral principals is a revocation
+		// problem nobody can reason about, and nothing needs it.
+		return nil, nil, "", fmt.Errorf("authsome: mint child: an ephemeral principal cannot mint children")
+	}
+
+	if err := requireScopeSubset(scopes, parent.Scopes); err != nil {
+		return nil, nil, "", fmt.Errorf("authsome: mint child: %w", err)
+	}
+
+	now := time.Now()
+	expires := now.Add(ttl)
+	if parent.ExpiresAt != nil && expires.After(*parent.ExpiresAt) {
+		expires = *parent.ExpiresAt
+	}
+
+	kind := parent.Kind
+	if kind == "" {
+		kind = principal.KindService
+	}
+	child := &serviceaccount.ServiceAccount{
+		ID:          id.NewServiceAccountID(),
+		AppID:       parent.AppID,
+		EnvID:       parent.EnvID,
+		OrgID:       parent.OrgID,
+		Kind:        kind,
+		Name:        name,
+		ParentID:    parent.ID,
+		OwnerUserID: parent.OwnerUserID,
+		Scopes:      scopes,
+		ExpiresAt:   &expires,
+		Active:      true,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if err := e.store.CreateServiceAccount(ctx, child); err != nil {
+		return nil, nil, "", fmt.Errorf("authsome: mint child: %w", err)
+	}
+
+	key, secret, err := e.CreateServiceAccountAPIKey(ctx, child.ID, name, scopes, &expires)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("authsome: mint child: create key: %w", err)
+	}
+	return child, key, secret, nil
+}
+
+// requireScopeSubset refuses any scope the parent does not itself hold. A
+// parent with no scopes at all places no restriction, matching how an empty
+// scope list is read everywhere else in this package.
+func requireScopeSubset(child, parent []string) error {
+	if len(parent) == 0 || len(child) == 0 {
+		return nil
+	}
+	has := make(map[string]bool, len(parent))
+	for _, s := range parent {
+		has[s] = true
+	}
+	for _, s := range child {
+		if !has[s] {
+			return fmt.Errorf("scope %q is outside the parent's scopes", s)
+		}
+	}
+	return nil
+}
+
+// ReapExpiredPrincipals deletes lapsed ephemeral children and returns how
+// many went.
+//
+// Only children are reaped. A durable principal with an expiry set is one an
+// operator chose to time-limit, and deleting it out from under them would
+// destroy a registration they can see in the dashboard.
+func (e *Engine) ReapExpiredPrincipals(ctx context.Context, appID id.AppID) (int, error) {
+	if err := e.requireStarted(); err != nil {
+		return 0, err
+	}
+	all, err := e.store.ListPrincipals(ctx, &principal.Query{AppID: appID})
+	if err != nil {
+		return 0, fmt.Errorf("authsome: reap: list principals: %w", err)
+	}
+	now := time.Now()
+	reaped := 0
+	for _, p := range all {
+		if p.Parent == nil || !p.IsExpired(now) {
+			continue
+		}
+		svcID, parseErr := id.ParseServiceAccountID(p.ID)
+		if parseErr != nil {
+			continue
+		}
+		if delErr := e.store.DeleteServiceAccount(ctx, svcID); delErr != nil {
+			e.logger.Warn("authsome: reap: delete failed",
+				log.String("principal", p.Ref.String()),
+				log.String("error", delErr.Error()),
+			)
+			continue
+		}
+		reaped++
+	}
+	return reaped, nil
 }
