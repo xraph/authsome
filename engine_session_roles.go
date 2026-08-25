@@ -11,13 +11,6 @@ import (
 	"github.com/xraph/authsome/store"
 )
 
-// principalKindServiceAccount is the PrincipalKind a service-account session
-// carries. Service accounts are authorized by scope rather than by role, and
-// their UserID is the zero value, so there is nothing for the stamper to look
-// up. Aliased to session.PrincipalKindServiceAccount rather than redefined as
-// a literal, so the two cannot drift apart.
-const principalKindServiceAccount = session.PrincipalKindServiceAccount
-
 // roleStamper resolves the role slugs a user holds within an app.
 //
 // Slugs rather than names or IDs: GetRoleBySlug and ListUsersWithRole already
