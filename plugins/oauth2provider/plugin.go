@@ -1018,7 +1018,7 @@ func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenReque
 		return nil, forge.BadRequest("client is not registered for the client_credentials grant")
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(req.ClientSecret)); err != nil {
+	if cmpErr := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(req.ClientSecret)); cmpErr != nil {
 		return nil, forge.Unauthorized("invalid client_secret")
 	}
 
@@ -1334,7 +1334,7 @@ func (p *Plugin) bindDPoP(ctx forge.Context, client *OAuth2Client, appID id.AppI
 // retried: the retry the RFC requires would arrive against a code the
 // store already rejects as used. See handleAuthorizationCodeGrant and
 // handleDeviceCodeGrant for where jkt is actually resolved.
-func (p *Plugin) issueTokens(ctx forge.Context, _ *OAuth2Client, userID id.UserID, appID id.AppID, scopes []string, resources []string, jkt string) (*TokenResponse, error) {
+func (p *Plugin) issueTokens(ctx forge.Context, _ *OAuth2Client, userID id.UserID, appID id.AppID, scopes, resources []string, jkt string) (*TokenResponse, error) {
 	// Resolve session config for the app.
 	sessCfg := account.SessionConfig{
 		TokenTTL:        p.config.AccessTokenTTL,

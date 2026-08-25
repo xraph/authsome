@@ -151,12 +151,35 @@ func parseEC(j *JWK) (*ecdsa.PublicKey, error) {
 		return nil, fmt.Errorf("jwkutil: decode y: %w", err)
 	}
 
-	// Without this check a caller can hand us a point off the curve, which
-	// invalidates the hardness assumption the signature verification rests on.
-	if !curve.IsOnCurve(x, y) {
+	// A caller must not be able to hand us a point off the curve; that
+	// invalidates the hardness assumption signature verification rests on.
+	// This used to be an explicit elliptic.Curve.IsOnCurve call followed by a
+	// struct literal, which is the right instinct and the wrong API: Go 1.26
+	// deprecated IsOnCurve along with assigning X and Y, precisely because
+	// building the key by hand lets an unchecked point through.
+	// ParseUncompressedPublicKey makes the same check and refuses the point at
+	// infinity too, so the guard moves inside the constructor rather than
+	// being dropped.
+	byteLen := (curve.Params().BitSize + 7) / 8
+	xb, yb := x.Bytes(), y.Bytes()
+
+	if len(xb) > byteLen || len(yb) > byteLen {
+		return nil, fmt.Errorf("%w: coordinate wider than curve %s", ErrUnsupportedKey, j.CRV)
+	}
+
+	// SEC 1 uncompressed form, left-padded: decodeBigInt drops leading zero
+	// bytes, and an unpadded coordinate would shift the whole point.
+	point := make([]byte, 1+2*byteLen)
+	point[0] = 4
+	copy(point[1+byteLen-len(xb):1+byteLen], xb)
+	copy(point[1+2*byteLen-len(yb):], yb)
+
+	pub, err := ecdsa.ParseUncompressedPublicKey(curve, point)
+	if err != nil {
 		return nil, fmt.Errorf("%w: point is not on curve %s", ErrUnsupportedKey, j.CRV)
 	}
-	return &ecdsa.PublicKey{Curve: curve, X: x, Y: y}, nil
+
+	return pub, nil
 }
 
 func parseRSA(j *JWK) (*rsa.PublicKey, error) {
@@ -225,9 +248,24 @@ func Encode(pub crypto.PublicKey, kid, alg string) (*JWK, error) {
 		default:
 			return nil, fmt.Errorf("%w: EC curve with %d bits", ErrUnsupportedKey, bits)
 		}
+		// Bytes() is the non-deprecated way to read the coordinates back out,
+		// and it hands them over already at the curve's fixed width: SEC 1
+		// uncompressed form, 0x04 followed by X and Y. That is exactly the
+		// padding the JWK encoding needs, so there is nothing left to pad.
+		point, err := k.Bytes()
+		if err != nil {
+			return nil, fmt.Errorf("jwkutil: encode EC key: %w", err)
+		}
+
+		size := (bits + 7) / 8
+		if len(point) != 1+2*size {
+			return nil, fmt.Errorf("%w: unexpected point length %d for %s", ErrUnsupportedKey, len(point), crv)
+		}
+
 		return &JWK{
 			KTY: "EC", Use: "sig", KID: kid, ALG: alg, CRV: crv,
-			X: coordinate(k.X, bits), Y: coordinate(k.Y, bits),
+			X: base64.RawURLEncoding.EncodeToString(point[1 : 1+size]),
+			Y: base64.RawURLEncoding.EncodeToString(point[1+size:]),
 		}, nil
 
 	case *rsa.PublicKey:
@@ -247,21 +285,4 @@ func Encode(pub crypto.PublicKey, kid, alg string) (*JWK, error) {
 	default:
 		return nil, fmt.Errorf("%w: %T", ErrUnsupportedKey, pub)
 	}
-}
-
-// coordinate renders an EC coordinate left-padded to the curve's field size.
-//
-// big.Int.Bytes() drops leading zero bytes, so a coordinate whose high byte is
-// zero would serialise one byte short and produce a JWK that strict verifiers
-// reject. That happens for roughly 1 key in 256 per coordinate, which survives
-// casual testing and then fails intermittently in production.
-func coordinate(v *big.Int, bitSize int) string {
-	size := (bitSize + 7) / 8
-	b := v.Bytes()
-	if len(b) < size {
-		padded := make([]byte, size)
-		copy(padded[size-len(b):], b)
-		b = padded
-	}
-	return base64.RawURLEncoding.EncodeToString(b)
 }
