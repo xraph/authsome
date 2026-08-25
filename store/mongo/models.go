@@ -369,6 +369,28 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 		}
 		s.FamilyID = famID
 	}
+	// After the impersonated_by fallback above on purpose: a document that
+	// carries both is one written since the chain landed, and there the chain
+	// is authoritative. A document carrying only impersonated_by predates it
+	// and keeps the rebuilt impersonation chain. Same precedence as
+	// Session.UnmarshalJSON and store/postgres.
+	if len(m.Actors) > 0 {
+		chain := make(principal.Chain, 0, len(m.Actors))
+		for _, a := range m.Actors {
+			chain = append(chain, principal.Ref{Kind: principal.Kind(a.Kind), ID: a.ID})
+		}
+		s.Actors = chain
+	}
+	if m.ActorGrant != "" {
+		s.ActorGrant = principal.GrantKind(m.ActorGrant)
+	}
+	if m.DelegationID != "" {
+		delID, err := id.ParseDelegationID(m.DelegationID)
+		if err != nil {
+			return nil, err
+		}
+		s.DelegationID = delID
+	}
 	if len(m.Roles) > 0 {
 		s.Roles = append([]string(nil), m.Roles...)
 	}

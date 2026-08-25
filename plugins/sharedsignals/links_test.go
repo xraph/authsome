@@ -56,6 +56,6 @@ func TestLinkSubject_RejectsEmptyArguments(t *testing.T) {
 
 // The interface is what sso asserts against, so it has to be satisfied by the
 // concrete plugin or the wiring silently does nothing.
-func TestPlugin_IsSubjectLinker(t *testing.T) {
+func TestPlugin_IsSubjectLinker(_ *testing.T) {
 	var _ SubjectLinker = New()
 }

@@ -112,7 +112,10 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 
 	// Check username uniqueness (if provided)
 	if req.Username != "" {
-		_, lookupErr := e.store.GetUserByUsername(ctx, req.AppID, req.Username)
+		// id.Nil on purpose: a handle is claimed across the whole app, the
+		// same way the email check above is app-wide, even though storage
+		// only enforces uniqueness per environment.
+		_, lookupErr := e.store.GetUserByUsername(ctx, req.AppID, id.Nil, req.Username)
 		if lookupErr == nil {
 			return nil, nil, account.ErrUsernameTaken
 		}
@@ -244,14 +247,24 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 		req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	}
 
+	// Resolve the environment before the lookup, not after. Sign-in must
+	// resolve the credential inside the environment the session will belong
+	// to, or a staging request could authenticate a production account that
+	// happens to share an address or handle.
+	if req.EnvID.IsNil() {
+		if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil { //nolint:errcheck // best-effort env lookup
+			req.EnvID = env.ID
+		}
+	}
+
 	// Lookup user
 	var u *user.User
 	var err error
 	switch {
 	case req.Email != "":
-		u, err = e.store.GetUserByEmail(ctx, req.AppID, req.Email)
+		u, err = e.store.GetUserByEmail(ctx, req.AppID, req.EnvID, req.Email)
 	case req.Username != "":
-		u, err = e.store.GetUserByUsername(ctx, req.AppID, req.Username)
+		u, err = e.store.GetUserByUsername(ctx, req.AppID, req.EnvID, req.Username)
 	default:
 		return nil, nil, account.ErrInvalidCredentials
 	}
@@ -259,13 +272,6 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	if err != nil {
 		e.recordFailedSignin(ctx, req, lockoutKey)
 		return nil, nil, account.ErrInvalidCredentials
-	}
-
-	// Resolve default environment when not explicitly provided.
-	if req.EnvID.IsNil() {
-		if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil { //nolint:errcheck // best-effort env lookup
-			req.EnvID = env.ID
-		}
 	}
 
 	// Check banned
@@ -744,6 +750,17 @@ func (e *Engine) ResolveUser(userIDStr string) (*user.User, error) {
 		return nil, err
 	}
 	return e.store.GetUser(ctx, userID)
+}
+
+// ResolvePrincipalByRef adapts Engine.ResolvePrincipal to
+// middleware.PrincipalResolver's no-context shape (for middleware).
+//
+// Same trade as ResolveUser above: the resolver signature this mirrors
+// (middleware.UserResolver) carries no request context, so neither does
+// this one, and a request's cancellation or deadline does not propagate
+// into the store lookup it triggers.
+func (e *Engine) ResolvePrincipalByRef(ref principal.Ref) (*principal.Principal, error) {
+	return e.ResolvePrincipal(context.Background(), ref)
 }
 
 // ──────────────────────────────────────────────────
@@ -2278,7 +2295,8 @@ func (e *Engine) AdminUpdateUser(ctx context.Context, adminID, userID id.UserID,
 	if updates.Username != nil {
 		newUsername := *updates.Username
 		if newUsername != u.Username && newUsername != "" {
-			if _, lookupErr := e.store.GetUserByUsername(ctx, u.AppID, newUsername); lookupErr == nil {
+			// App-wide by design, matching the signup guard.
+			if _, lookupErr := e.store.GetUserByUsername(ctx, u.AppID, id.Nil, newUsername); lookupErr == nil {
 				return account.ErrUsernameTaken
 			}
 		}
@@ -2328,7 +2346,8 @@ func (e *Engine) AdminCreateUser(ctx context.Context, adminID id.UserID, appID i
 
 	// Check username uniqueness
 	if username != "" {
-		if _, err := e.store.GetUserByUsername(ctx, appID, username); err == nil {
+		// App-wide by design, matching the signup guard.
+		if _, err := e.store.GetUserByUsername(ctx, appID, id.Nil, username); err == nil {
 			return nil, account.ErrUsernameTaken
 		}
 	}
@@ -2509,7 +2528,8 @@ func (e *Engine) AdminBulkImportUsers(ctx context.Context, adminID id.UserID, us
 
 		// Check username uniqueness
 		if u.Username != "" {
-			if _, err := e.store.GetUserByUsername(ctx, u.AppID, u.Username); err == nil {
+			// App-wide by design, matching the signup guard.
+			if _, err := e.store.GetUserByUsername(ctx, u.AppID, id.Nil, u.Username); err == nil {
 				result.Errors = append(result.Errors, BulkError{Index: i, Email: u.Email, Error: "username already taken"})
 				result.Skipped++
 				continue

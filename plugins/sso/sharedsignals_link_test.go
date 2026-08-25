@@ -2,8 +2,9 @@ package sso
 
 import (
 	"context"
-	"github.com/xraph/authsome/ratelimit"
 	"testing"
+
+	"github.com/xraph/authsome/ratelimit"
 
 	log "github.com/xraph/go-utils/log"
 	"github.com/xraph/grove"
@@ -20,6 +21,7 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
@@ -97,6 +99,13 @@ func (s stubEngineWithPlugin) GetUser(context.Context, id.UserID) (*user.User, e
 	return nil, nil
 }
 func (s stubEngineWithPlugin) EnsureDefaultRole(context.Context, id.AppID, id.UserID) {}
+func (s stubEngineWithPlugin) ResolvePrincipal(context.Context, principal.Ref) (*principal.Principal, error) {
+	return nil, principal.ErrNotFound
+}
+func (s stubEngineWithPlugin) PrincipalStore() principal.Store { return nil }
+func (s stubEngineWithPlugin) Can(context.Context, principal.Ref, principal.Chain, string, string) (bool, error) {
+	return false, nil
+}
 
 // newSSOPluginWithPlugin builds an sso Plugin whose engine returns p under
 // "sharedsignals" and nil for every other name.
@@ -108,7 +117,7 @@ func newSSOPluginWithPlugin(t *testing.T, p plugin.Plugin) *Plugin {
 	return pl
 }
 
-func TestLinkSharedSignalsSubject_SkipsWhenPluginAbsent(t *testing.T) {
+func TestLinkSharedSignalsSubject_SkipsWhenPluginAbsent(_ *testing.T) {
 	p := &Plugin{}
 	// No engine means no plugin registry; this must not panic.
 	p.linkSharedSignalsSubject(context.Background(),

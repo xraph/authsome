@@ -275,7 +275,7 @@ func (s *MongoStore) ListInboundStreams(ctx context.Context, appID id.AppID) ([]
 	if err != nil {
 		return nil, mongoErr(err)
 	}
-	defer cur.Close(ctx) //nolint:errcheck // cursor close
+	defer cur.Close(ctx)
 
 	out := make([]*InboundStream, 0)
 	for cur.Next(ctx) {
@@ -367,6 +367,18 @@ func (s *MongoStore) UpdateReceivedEvent(ctx context.Context, e *ReceivedEvent) 
 	return nil
 }
 
+func (s *MongoStore) DeleteReceivedEvent(ctx context.Context, eventID id.SSFEventID) error {
+	res, err := s.mdb.Collection(colReceivedEvents).
+		DeleteOne(ctx, bson.M{"_id": eventID.String()})
+	if err != nil {
+		return mongoErr(err)
+	}
+	if res.DeletedCount == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *MongoStore) CountActionsSince(ctx context.Context,
 	streamID id.SSFStreamID, since time.Time) (int, error) {
 	n, err := s.mdb.Collection(colReceivedEvents).CountDocuments(ctx, bson.M{
@@ -397,7 +409,7 @@ func (s *MongoStore) ListActiveSignals(ctx context.Context, appID id.AppID,
 	if err != nil {
 		return nil, mongoErr(err)
 	}
-	defer cur.Close(ctx) //nolint:errcheck // cursor close
+	defer cur.Close(ctx)
 
 	out := make([]*Signal, 0)
 	for cur.Next(ctx) {

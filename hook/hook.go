@@ -72,6 +72,11 @@ const (
 	ActionSignIn  = "auth.signin"
 	ActionSignOut = "auth.signout"
 	ActionRefresh = "auth.refresh"
+	// ActionPrincipalAuth fires after a non-human caller has authenticated.
+	// The typed BeforePrincipalAuth hook is what denies; this is the audit
+	// and relay signal, so Chronicle picks up machine auth without any
+	// subscriber implementing a plugin interface.
+	ActionPrincipalAuth = "auth.principal"
 
 	ActionUserCreate = "user.create"
 	ActionUserUpdate = "user.update"

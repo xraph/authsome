@@ -114,6 +114,10 @@ type SessionResolver func(token string) (*session.Session, error)
 // UserResolver loads a user by ID string.
 type UserResolver func(userID string) (*user.User, error)
 
+// PrincipalResolver resolves a caller by ref. Middleware takes this as a
+// function rather than an engine so it does not import the engine package.
+type PrincipalResolver func(principal.Ref) (*principal.Principal, error)
+
 // JWTValidator validates JWT access tokens and returns claims.
 // The engine implements this via its TokenFormatForApp method.
 type JWTValidator interface {
@@ -170,6 +174,12 @@ type SessionBindingConfig struct {
 	// CookieNameResolver, so it should read a cached setting rather than hit
 	// the database.
 	ExpectedAudienceResolver ExpectedAudienceResolver
+	// PrincipalResolver, when set, resolves the session's subject onto the
+	// context as a *principal.Principal after every auth path that produces a
+	// session. Threaded through this config (rather than as a standalone
+	// parameter on each middleware constructor) so it defaults to nil and
+	// every existing caller keeps working unchanged.
+	PrincipalResolver PrincipalResolver
 }
 
 // AuthMiddleware extracts the session token from the Authorization header,
@@ -259,6 +269,7 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 			if imp := sess.ImpersonatedBy(); imp.Prefix() != "" {
 				goCtx = WithImpersonator(goCtx, imp)
 			}
+			goCtx = setPrincipalContext(goCtx, sess, bindCfg.PrincipalResolver, logger)
 
 			if sess.OrgID.Prefix() != "" {
 				goCtx = WithOrgID(goCtx, sess.OrgID)
@@ -325,7 +336,7 @@ func AuthMiddlewareWithStrategies(
 
 			// Fall back to strategy registry.
 			if strategies != nil {
-				if resolved := tryStrategyAuth(ctx, strategies, resolveUser, logger); resolved {
+				if resolved := tryStrategyAuth(ctx, strategies, resolveUser, bindCfg.PrincipalResolver, logger); resolved {
 					return next(ctx)
 				}
 			}
@@ -388,7 +399,7 @@ func AuthMiddlewareWithJWT(
 
 			// Fall back to strategy registry.
 			if strategies != nil {
-				if resolved := tryStrategyAuth(ctx, strategies, resolveUser, logger); resolved {
+				if resolved := tryStrategyAuth(ctx, strategies, resolveUser, bindCfg.PrincipalResolver, logger); resolved {
 					return next(ctx)
 				}
 			}
@@ -672,7 +683,7 @@ func trySessionAuth(
 		}
 	}
 
-	setSessionContext(ctx, sess, resolveUser, logger)
+	setSessionContext(ctx, sess, resolveUser, bindCfg.PrincipalResolver, logger)
 	return true
 }
 
@@ -682,6 +693,7 @@ func tryStrategyAuth(
 	ctx forge.Context,
 	strategies StrategyAuthenticator,
 	_ UserResolver,
+	resolvePrincipal PrincipalResolver,
 	logger log.Logger,
 ) bool {
 	result, err := strategies.Authenticate(ctx.Context(), ctx.Request())
@@ -764,6 +776,7 @@ func tryStrategyAuth(
 		} else {
 			goCtx = forge.WithScope(goCtx, forge.NewAppScope(result.Session.AppID.String()))
 		}
+		goCtx = setPrincipalContext(goCtx, result.Session, resolvePrincipal, logger)
 	}
 
 	if result.User != nil {
@@ -775,8 +788,41 @@ func tryStrategyAuth(
 	return true
 }
 
+// setPrincipalContext resolves the session's subject and puts it, and the
+// actor chain, on the context.
+//
+// A resolution failure is logged and passed over rather than failing the
+// request. The session already authenticated the caller; this is enrichment,
+// and refusing the request over it would turn a principal-store blip into an
+// outage on traffic that is otherwise fine.
+func setPrincipalContext(
+	goCtx context.Context, sess *session.Session, resolve PrincipalResolver, logger log.Logger,
+) context.Context {
+	if len(sess.Actors) > 0 {
+		goCtx = WithActors(goCtx, sess.Actors)
+	}
+	if resolve == nil {
+		return goCtx
+	}
+	ref := sess.Subject()
+	if ref.IsZero() {
+		return goCtx
+	}
+	p, err := resolve(ref)
+	if err != nil {
+		logger.Warn("auth middleware: failed to resolve principal",
+			log.String("principal", ref.String()),
+			log.String("error", err.Error()),
+		)
+		return goCtx
+	}
+	return WithPrincipal(goCtx, p)
+}
+
 // setSessionContext populates the forge context with session and user data.
-func setSessionContext(ctx forge.Context, sess *session.Session, resolveUser UserResolver, logger log.Logger) {
+func setSessionContext(
+	ctx forge.Context, sess *session.Session, resolveUser UserResolver, resolvePrincipal PrincipalResolver, logger log.Logger,
+) {
 	goCtx := ctx.Context()
 	goCtx = WithSession(goCtx, sess)
 	goCtx = WithSessionID(goCtx, sess.ID)
@@ -789,6 +835,7 @@ func setSessionContext(ctx forge.Context, sess *session.Session, resolveUser Use
 	if imp := sess.ImpersonatedBy(); imp.Prefix() != "" {
 		goCtx = WithImpersonator(goCtx, imp)
 	}
+	goCtx = setPrincipalContext(goCtx, sess, resolvePrincipal, logger)
 
 	if sess.OrgID.Prefix() != "" {
 		goCtx = WithOrgID(goCtx, sess.OrgID)

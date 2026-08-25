@@ -2,6 +2,7 @@ package sharedsignals
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -205,6 +206,38 @@ DROP TABLE IF EXISTS authsome_ssf_subject_links;
 DROP TABLE IF EXISTS authsome_ssf_inbound_streams;
 `
 
+// fixEventDedupeIndexSQL replaces the received-events unique index with one
+// keyed on (stream_id, jti, event_type) instead of just (stream_id, jti).
+//
+// RFC 8417 keys a SET's `events` object by event type URI, so a single
+// delivery carries at most one event of a given type under one jti but may
+// legitimately carry several different types. The two-column index made the
+// second event of a multi-event SET collide with the dedupe row the first
+// event had just inserted -- on the very first delivery, before any replay
+// ever happened. This is syntax-compatible across Postgres and SQLite, so
+// one string serves both migration groups.
+//
+// The prior migration has already shipped, so this is a NEW version that
+// alters the index rather than an edit to the original -- an already-applied
+// migration must not be rewritten.
+const fixEventDedupeIndexSQL = `
+DROP INDEX IF EXISTS idx_authsome_ssf_events_jti;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_ssf_events_jti_type
+    ON authsome_ssf_received_events (stream_id, jti, event_type);
+`
+
+// revertEventDedupeIndexSQL is fixEventDedupeIndexSQL's Down: it restores
+// the original two-column unique index. Any received-event rows written
+// under the three-column index that share (stream_id, jti) across different
+// event_type values will make the CREATE UNIQUE INDEX below fail, which is
+// the correct outcome -- a downgrade cannot silently discard the rows that
+// only the fixed key made possible to store.
+const revertEventDedupeIndexSQL = `
+DROP INDEX IF EXISTS idx_authsome_ssf_events_jti_type;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_ssf_events_jti
+    ON authsome_ssf_received_events (stream_id, jti);
+`
+
 func init() {
 	PostgresMigrations.MustRegister(&migrate.Migration{
 		Name:    "create_sharedsignals_tables",
@@ -303,4 +336,93 @@ func init() {
 			return nil
 		},
 	})
+
+	// Fixes the dedupe key from (stream_id, jti) to (stream_id, jti,
+	// event_type). See fixEventDedupeIndexSQL for why. The prior migration
+	// has already shipped, so this alters the index in a new version rather
+	// than editing "create_sharedsignals_tables" in place.
+	PostgresMigrations.MustRegister(&migrate.Migration{
+		Name:    "fix_event_dedupe_key",
+		Version: "20260824000002",
+		Up: func(ctx context.Context, exec migrate.Executor) error {
+			_, err := exec.Exec(ctx, fixEventDedupeIndexSQL)
+			return err
+		},
+		Down: func(ctx context.Context, exec migrate.Executor) error {
+			_, err := exec.Exec(ctx, revertEventDedupeIndexSQL)
+			return err
+		},
+	})
+
+	SqliteMigrations.MustRegister(&migrate.Migration{
+		Name:    "fix_event_dedupe_key",
+		Version: "20260824000002",
+		Up: func(ctx context.Context, exec migrate.Executor) error {
+			_, err := exec.Exec(ctx, fixEventDedupeIndexSQL)
+			return err
+		},
+		Down: func(ctx context.Context, exec migrate.Executor) error {
+			_, err := exec.Exec(ctx, revertEventDedupeIndexSQL)
+			return err
+		},
+	})
+
+	MongoMigrations.MustRegister(&migrate.Migration{
+		Name:    "fix_event_dedupe_key",
+		Version: "20260824000002",
+		Up: func(ctx context.Context, exec migrate.Executor) error {
+			mexec, ok := exec.(*mongomigrate.Executor)
+			if !ok {
+				return fmt.Errorf("sharedsignals: expected mongomigrate executor, got %T", exec)
+			}
+			coll := mexec.DB().Collection(colReceivedEvents)
+			// Mongo auto-names an index from its keys when no name is
+			// given, so the original unique index from version 1 is
+			// "stream_id_1_jti_1".
+			if err := dropIndexIfExists(ctx, coll, "stream_id_1_jti_1"); err != nil {
+				return err
+			}
+			return mexec.CreateIndexes(ctx, colReceivedEvents, []mongo.IndexModel{
+				{
+					Keys: bson.D{
+						{Key: "stream_id", Value: 1}, {Key: "jti", Value: 1},
+						{Key: "event_type", Value: 1},
+					},
+					Options: options.Index().SetUnique(true),
+				},
+			})
+		},
+		Down: func(ctx context.Context, exec migrate.Executor) error {
+			mexec, ok := exec.(*mongomigrate.Executor)
+			if !ok {
+				return fmt.Errorf("sharedsignals: expected mongomigrate executor, got %T", exec)
+			}
+			coll := mexec.DB().Collection(colReceivedEvents)
+			if err := dropIndexIfExists(ctx, coll, "stream_id_1_jti_1_event_type_1"); err != nil {
+				return err
+			}
+			return mexec.CreateIndexes(ctx, colReceivedEvents, []mongo.IndexModel{
+				{
+					Keys:    bson.D{{Key: "stream_id", Value: 1}, {Key: "jti", Value: 1}},
+					Options: options.Index().SetUnique(true),
+				},
+			})
+		},
+	})
+}
+
+// dropIndexIfExists drops a Mongo index by name, tolerating the case where
+// it is already gone (IndexNotFound, server error code 27) so the migration
+// stays safe to reason about even if it is ever re-applied against a
+// database that was partially migrated by hand.
+func dropIndexIfExists(ctx context.Context, coll *mongo.Collection, name string) error {
+	err := coll.Indexes().DropOne(ctx, name)
+	if err == nil {
+		return nil
+	}
+	var cmdErr mongo.CommandError
+	if errors.As(err, &cmdErr) && cmdErr.Code == 27 { // IndexNotFound
+		return nil
+	}
+	return err
 }

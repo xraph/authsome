@@ -250,7 +250,6 @@ func TestValidate_RejectsUnknownKid(t *testing.T) {
 
 	opts := baseOpts(key)
 	opts.Keys = staticKeys{err: assertKeyMissError{}}
-	opts.Keys = staticKeys{err: assertKeyMiss{}}
 
 	_, err := Validate(context.Background(), raw, opts)
 	require.ErrorIs(t, err, ErrInvalidKey)
@@ -297,9 +296,6 @@ func TestValidate_RejectsIATAsString(t *testing.T) {
 type assertKeyMissError struct{}
 
 func (assertKeyMissError) Error() string { return "no such kid" }
-type assertKeyMiss struct{}
-
-func (assertKeyMiss) Error() string { return "no such kid" }
 
 func TestErrCode(t *testing.T) {
 	assert.Equal(t, "invalid_request", ErrCode(ErrInvalidRequest))
@@ -307,5 +303,4 @@ func TestErrCode(t *testing.T) {
 	assert.Equal(t, "invalid_issuer", ErrCode(ErrInvalidIssuer))
 	assert.Equal(t, "invalid_audience", ErrCode(ErrInvalidAudience))
 	assert.Equal(t, "invalid_request", ErrCode(assertKeyMissError{}))
-	assert.Equal(t, "invalid_request", ErrCode(assertKeyMiss{}))
 }

@@ -43,7 +43,7 @@ func domainAllowed(s *InboundStream, email string) bool {
 	}
 	domain := strings.ToLower(email[at+1:])
 	for _, d := range s.VerifiedDomains {
-		if strings.ToLower(d) == domain {
+		if strings.EqualFold(d, domain) {
 			return true
 		}
 	}

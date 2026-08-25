@@ -378,7 +378,7 @@ const (
 	mediaTypeForm = "application/x-www-form-urlencoded"
 )
 
-func requestBodyContent(rb *openapi.RequestBody) (*openapi.Schema, string) {
+func requestBodyContent(rb *openapi.RequestBody) (schema *openapi.Schema, mediaType string) {
 	if ct, ok := rb.Content[mediaTypeJSON]; ok && ct.Schema != nil {
 		return ct.Schema, mediaTypeJSON
 	}

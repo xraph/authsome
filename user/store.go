@@ -10,11 +10,16 @@ import (
 type Store interface {
 	CreateUser(ctx context.Context, u *User) error
 	GetUser(ctx context.Context, userID id.UserID) (*User, error)
-	GetUserByEmail(ctx context.Context, appID id.AppID, email string) (*User, error)
+	// GetUserByEmail resolves the user whose primary email matches within
+	// (appID, envID). A nil envID matches app-wide, mirroring GetUserByAnyEmail.
+	GetUserByEmail(ctx context.Context, appID id.AppID, envID id.EnvironmentID, email string) (*User, error)
 	// GetUserByPhone resolves the user owning phone within (appID, envID).
 	// A nil envID matches app-wide, mirroring GetUserByAnyEmail.
 	GetUserByPhone(ctx context.Context, appID id.AppID, envID id.EnvironmentID, phone string) (*User, error)
-	GetUserByUsername(ctx context.Context, appID id.AppID, username string) (*User, error)
+	// GetUserByUsername resolves the user owning username within (appID,
+	// envID). A nil envID matches app-wide, which is what the signup and
+	// rename guards rely on to keep handles unique across a whole app.
+	GetUserByUsername(ctx context.Context, appID id.AppID, envID id.EnvironmentID, username string) (*User, error)
 	UpdateUser(ctx context.Context, u *User) error
 	DeleteUser(ctx context.Context, userID id.UserID) error
 	ListUsers(ctx context.Context, q *Query) (*List, error)

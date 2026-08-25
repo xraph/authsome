@@ -1417,7 +1417,7 @@ func TestSignIn_MFAChallenge_RoundTripIssuesSession(t *testing.T) {
 	require.NotEmpty(t, sessionToken, "signup helper must return a session token")
 
 	// Resolve the user so we can attach an enrollment.
-	u, err := eng.Store().GetUserByEmail(context.Background(), appID, "mfa-roundtrip@example.com")
+	u, err := eng.Store().GetUserByEmail(context.Background(), appID, id.Nil, "mfa-roundtrip@example.com")
 	require.NoError(t, err)
 
 	totpKey, err := mfa.GenerateTOTPKey(mfa.TOTPConfig{
@@ -1528,7 +1528,7 @@ func TestMFAChallenge_BadCodeKeepsTicketUsable(t *testing.T) {
 
 	appID, _ := id.ParseAppID(testAppIDStr)
 	signUp(t, eng, "mfa-retry@example.com", "SecureP@ss1")
-	u, _ := eng.Store().GetUserByEmail(context.Background(), appID, "mfa-retry@example.com")
+	u, _ := eng.Store().GetUserByEmail(context.Background(), appID, id.Nil, "mfa-retry@example.com")
 
 	totpKey, _ := mfa.GenerateTOTPKey(mfa.TOTPConfig{Issuer: "TestApp", AccountName: "mfa-retry@example.com"})
 	require.NoError(t, mfaStore.CreateEnrollment(context.Background(), &mfa.Enrollment{
@@ -1612,7 +1612,7 @@ func mfaGateFixture(t *testing.T, email string) (http.Handler, string, mfa.Store
 	_, sessionToken, _ := signUp(t, eng, email, "SecureP@ss1")
 	require.NotEmpty(t, sessionToken)
 
-	u, err := eng.Store().GetUserByEmail(context.Background(), appID, email)
+	u, err := eng.Store().GetUserByEmail(context.Background(), appID, id.Nil, email)
 	require.NoError(t, err)
 
 	totpKey, err := mfa.GenerateTOTPKey(mfa.TOTPConfig{Issuer: "TestApp", AccountName: email})
