@@ -43,7 +43,7 @@ func (s *MemoryStore) CreateEntry(_ context.Context, e *WaitlistEntry) error {
 	}
 	e.UpdatedAt = now
 
-	s.entries = append(s.entries, e)
+	s.entries = append(s.entries, cloneEntry(e))
 	return nil
 }
 
@@ -53,7 +53,7 @@ func (s *MemoryStore) GetEntry(_ context.Context, entryID id.WaitlistID) (*Waitl
 
 	for _, e := range s.entries {
 		if e.ID == entryID {
-			return e, nil
+			return cloneEntry(e), nil
 		}
 	}
 	return nil, ErrNotFound
@@ -65,7 +65,7 @@ func (s *MemoryStore) GetEntryByEmail(_ context.Context, appID id.AppID, email s
 
 	for _, e := range s.entries {
 		if e.AppID == appID && strings.EqualFold(e.Email, email) {
-			return e, nil
+			return cloneEntry(e), nil
 		}
 	}
 	return nil, ErrNotFound
@@ -116,7 +116,7 @@ func (s *MemoryStore) ListEntries(_ context.Context, q *WaitlistQuery) (*Waitlis
 			continue
 		}
 
-		filtered = append(filtered, e)
+		filtered = append(filtered, cloneEntry(e))
 		if len(filtered) > limit {
 			break
 		}
@@ -166,4 +166,26 @@ func (s *MemoryStore) DeleteEntry(_ context.Context, entryID id.WaitlistID) erro
 		}
 	}
 	return ErrNotFound
+}
+
+// cloneEntry copies e so the store never hands out, or retains, a pointer
+// into its own slice.
+//
+// UpdateEntryStatus writes Status, Note and UpdatedAt on a stored entry in
+// place under the write lock, and GetEntry, GetEntryByEmail and ListEntries
+// used to return that same pointer. Reading Status off what you got back was
+// therefore a read of a field another goroutine could be writing, unordered
+// against it. Status is the field that decides whether someone is through the
+// waitlist, so a caller could also rewrite it, or a note, straight into the
+// store just by assigning to the value it was handed.
+//
+// UserID is a *id.UserID whose pointer is replaced rather than written
+// through, so a shallow copy suffices today. A slice or map field would need
+// copying explicitly, as agentauth's cloneGrant does for Scopes.
+func cloneEntry(e *WaitlistEntry) *WaitlistEntry {
+	if e == nil {
+		return nil
+	}
+	cp := *e
+	return &cp
 }

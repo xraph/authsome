@@ -31,7 +31,7 @@ func (s *MemoryStore) GrantConsent(_ context.Context, c *Consent) error {
 	// Check for existing consent with same user+app+purpose
 	for i, existing := range s.consents {
 		if existing.UserID == c.UserID && existing.AppID == c.AppID && existing.Purpose == c.Purpose {
-			s.consents[i] = c
+			s.consents[i] = cloneConsent(c)
 			return nil
 		}
 	}
@@ -45,7 +45,7 @@ func (s *MemoryStore) GrantConsent(_ context.Context, c *Consent) error {
 	}
 	c.UpdatedAt = now
 
-	s.consents = append(s.consents, c)
+	s.consents = append(s.consents, cloneConsent(c))
 	return nil
 }
 
@@ -73,7 +73,7 @@ func (s *MemoryStore) GetConsent(_ context.Context, userID id.UserID, appID id.A
 
 	for _, c := range s.consents {
 		if c.UserID == userID && c.AppID == appID && c.Purpose == purpose {
-			return c, nil
+			return cloneConsent(c), nil
 		}
 	}
 
@@ -114,7 +114,7 @@ func (s *MemoryStore) ListConsents(_ context.Context, q *Query) ([]*Consent, str
 			continue
 		}
 
-		results = append(results, c)
+		results = append(results, cloneConsent(c))
 		idx++
 
 		if len(results) >= limit {
@@ -128,4 +128,26 @@ func (s *MemoryStore) ListConsents(_ context.Context, q *Query) ([]*Consent, str
 	}
 
 	return results, cursor, nil
+}
+
+// cloneConsent copies c so the store never hands out, or retains, a pointer
+// into its own storage.
+//
+// This is not a nicety here. RevokeConsent mutates a stored *Consent in place
+// (Granted, RevokedAt, UpdatedAt) while holding the write lock, and GetConsent
+// and ListConsents used to return that same pointer. A caller reading Granted
+// off the value it got back was reading a field another goroutine's
+// RevokeConsent could be writing, with no synchronization between the two,
+// which is a data race and also lets a revocation appear or disappear
+// mid-decision.
+//
+// RevokedAt is a *time.Time, so the copy shares that pointer. That is safe as
+// written, because every write replaces the pointer rather than writing
+// through it, but a caller must still treat what it gets back as read-only.
+func cloneConsent(c *Consent) *Consent {
+	if c == nil {
+		return nil
+	}
+	cp := *c
+	return &cp
 }

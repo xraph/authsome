@@ -36,7 +36,7 @@ func (s *MemoryStore) CreateCredential(_ context.Context, c *Credential) error {
 		c.CreatedAt = time.Now()
 	}
 	c.UpdatedAt = c.CreatedAt
-	s.credentials[credKey(c.CredentialID)] = c
+	s.credentials[credKey(c.CredentialID)] = cloneCredential(c)
 	return nil
 }
 
@@ -48,7 +48,7 @@ func (s *MemoryStore) GetCredential(_ context.Context, credentialID []byte) (*Cr
 	if !ok {
 		return nil, ErrCredentialNotFound
 	}
-	return c, nil
+	return cloneCredential(c), nil
 }
 
 // ListUserCredentials returns all credentials for a user.
@@ -58,7 +58,7 @@ func (s *MemoryStore) ListUserCredentials(_ context.Context, userID id.UserID) (
 	var result []*Credential
 	for _, c := range s.credentials {
 		if c.UserID == userID {
-			result = append(result, c)
+			result = append(result, cloneCredential(c))
 		}
 	}
 	return result, nil
@@ -88,4 +88,30 @@ func (s *MemoryStore) UpdateSignCount(_ context.Context, credentialID []byte, co
 	c.SignCount = count
 	c.UpdatedAt = time.Now()
 	return nil
+}
+
+// cloneCredential deep-copies c, every byte slice included.
+//
+// The store mutates credentials in place: UpdateSignCount writes SignCount
+// and UpdatedAt on the stored record under the write lock. Handing that same
+// pointer back from GetCredential and ListUserCredentials meant a caller was
+// reading fields another goroutine could be writing, with nothing ordering
+// the two. For SignCount that is worse than a generic race, because the sign
+// counter is WebAuthn's clone-detection signal and a verifier comparing a
+// torn read against the authenticator's value is checking nothing.
+//
+// CredentialID, PublicKey, AAGUID and Transport are all reference types, so a
+// shallow `cp := *c` would leave the authentication material itself shared
+// between the store and every caller. They are copied explicitly here for the
+// same reason agentauth's cloneGrant copies Scopes.
+func cloneCredential(c *Credential) *Credential {
+	if c == nil {
+		return nil
+	}
+	cp := *c
+	cp.CredentialID = append([]byte(nil), c.CredentialID...)
+	cp.PublicKey = append([]byte(nil), c.PublicKey...)
+	cp.AAGUID = append([]byte(nil), c.AAGUID...)
+	cp.Transport = append([]string(nil), c.Transport...)
+	return &cp
 }

@@ -29,7 +29,7 @@ var _ Store = (*MemoryStore)(nil)
 func (s *MemoryStore) CreateConnection(_ context.Context, c *Connection) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.conns[c.ID] = c
+	s.conns[c.ID] = cloneConnection(c)
 	return nil
 }
 
@@ -40,7 +40,7 @@ func (s *MemoryStore) GetConnection(_ context.Context, connID id.SSOConnectionID
 	if !ok {
 		return nil, ErrConnectionNotFound
 	}
-	return c, nil
+	return cloneConnection(c), nil
 }
 
 func (s *MemoryStore) GetConnectionByDomain(_ context.Context, appID id.AppID, domain string) (*Connection, error) {
@@ -48,7 +48,7 @@ func (s *MemoryStore) GetConnectionByDomain(_ context.Context, appID id.AppID, d
 	defer s.mu.RUnlock()
 	for _, c := range s.conns {
 		if c.AppID == appID && c.Domain == domain && c.Active {
-			return c, nil
+			return cloneConnection(c), nil
 		}
 	}
 	return nil, ErrConnectionNotFound
@@ -59,7 +59,7 @@ func (s *MemoryStore) GetConnectionByDomainAndOrg(_ context.Context, appID id.Ap
 	defer s.mu.RUnlock()
 	for _, c := range s.conns {
 		if c.AppID == appID && c.OrgID == orgID && c.Domain == domain && c.Active {
-			return c, nil
+			return cloneConnection(c), nil
 		}
 	}
 	return nil, ErrConnectionNotFound
@@ -70,7 +70,7 @@ func (s *MemoryStore) GetConnectionByProvider(_ context.Context, appID id.AppID,
 	defer s.mu.RUnlock()
 	for _, c := range s.conns {
 		if c.AppID == appID && c.Provider == provider && c.Active {
-			return c, nil
+			return cloneConnection(c), nil
 		}
 	}
 	return nil, ErrConnectionNotFound
@@ -82,7 +82,7 @@ func (s *MemoryStore) ListConnections(_ context.Context, appID id.AppID) ([]*Con
 	var result []*Connection
 	for _, c := range s.conns {
 		if c.AppID == appID {
-			result = append(result, c)
+			result = append(result, cloneConnection(c))
 		}
 	}
 	return result, nil
@@ -94,7 +94,7 @@ func (s *MemoryStore) UpdateConnection(_ context.Context, c *Connection) error {
 	if _, ok := s.conns[c.ID]; !ok {
 		return ErrConnectionNotFound
 	}
-	s.conns[c.ID] = c
+	s.conns[c.ID] = cloneConnection(c)
 	return nil
 }
 
@@ -106,4 +106,30 @@ func (s *MemoryStore) DeleteConnection(_ context.Context, connID id.SSOConnectio
 	}
 	delete(s.conns, connID)
 	return nil
+}
+
+// cloneConnection copies c so the store never hands out, or retains, a
+// pointer into its own map.
+//
+// Without this a caller could write through what GetConnection returned and
+// silently rewrite the stored connection: its Domain, its Active flag, its
+// IDP certificate. That write is also unsynchronized against every concurrent
+// read, since it happens after the read lock is released.
+//
+// AttributeMappings is a map, so it is copied explicitly. A shallow
+// `cp := *c` shares it, which would leave an SSO attribute mapping (the thing
+// that decides which IdP claim becomes which local identity field) writable
+// by any caller that ever received the connection.
+func cloneConnection(c *Connection) *Connection {
+	if c == nil {
+		return nil
+	}
+	cp := *c
+	if c.AttributeMappings != nil {
+		cp.AttributeMappings = make(map[string]string, len(c.AttributeMappings))
+		for k, v := range c.AttributeMappings {
+			cp.AttributeMappings[k] = v
+		}
+	}
+	return &cp
 }

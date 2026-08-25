@@ -275,6 +275,11 @@ func (p *Plugin) check(ctx context.Context, ipAddress, appID string) error {
 	return nil
 }
 
+// getCached returns a copy of the cached reputation, not the stored pointer.
+// One cached entry backs every check for that IP for the whole ttl, so a
+// caller mutating what it got back would corrupt the verdict every other
+// request sees, and that write races every concurrent getCached because it
+// happens outside the lock.
 func (p *Plugin) getCached(ip string) *IPReputation {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -282,14 +287,33 @@ func (p *Plugin) getCached(ip string) *IPReputation {
 	if !ok || time.Now().After(entry.expiresAt) {
 		return nil
 	}
-	return entry.rep
+	return cloneReputation(entry.rep)
 }
 
+// setCache copies on the way in for the mirror-image reason. rep comes
+// straight from Provider.CheckIP, and a provider that reuses or later mutates
+// the struct it returned would otherwise be writing into this cache.
 func (p *Plugin) setCache(ip string, rep *IPReputation) {
+	if rep == nil {
+		return
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.cache[ip] = &cachedReputation{
-		rep:       rep,
+		rep:       cloneReputation(rep),
 		expiresAt: time.Now().Add(p.config.CacheTTL),
 	}
+}
+
+// cloneReputation deep-copies rep, Categories included. Categories is a
+// slice, so a shallow `cp := *rep` shares the backing array both ways and
+// leaves the aliasing bug in place for that field alone. This is the same
+// reason agentauth's cloneGrant copies Scopes explicitly.
+func cloneReputation(rep *IPReputation) *IPReputation {
+	if rep == nil {
+		return nil
+	}
+	cp := *rep
+	cp.Categories = append([]string(nil), rep.Categories...)
+	return &cp
 }

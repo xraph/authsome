@@ -33,7 +33,7 @@ var _ Store = (*MemoryStore)(nil)
 func (s *MemoryStore) CreateEnrollment(_ context.Context, e *Enrollment) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.enrollments[e.ID] = e
+	s.enrollments[e.ID] = cloneEnrollment(e)
 	return nil
 }
 
@@ -43,7 +43,7 @@ func (s *MemoryStore) GetEnrollment(_ context.Context, userID id.UserID, method 
 	defer s.mu.RUnlock()
 	for _, e := range s.enrollments {
 		if e.UserID == userID && e.Method == method {
-			return e, nil
+			return cloneEnrollment(e), nil
 		}
 	}
 	return nil, ErrEnrollmentNotFound
@@ -57,7 +57,7 @@ func (s *MemoryStore) GetEnrollmentByID(_ context.Context, mfaID id.MFAID) (*Enr
 	if !ok {
 		return nil, ErrEnrollmentNotFound
 	}
-	return e, nil
+	return cloneEnrollment(e), nil
 }
 
 // UpdateEnrollment updates an existing enrollment.
@@ -67,7 +67,7 @@ func (s *MemoryStore) UpdateEnrollment(_ context.Context, e *Enrollment) error {
 	if _, ok := s.enrollments[e.ID]; !ok {
 		return ErrEnrollmentNotFound
 	}
-	s.enrollments[e.ID] = e
+	s.enrollments[e.ID] = cloneEnrollment(e)
 	return nil
 }
 
@@ -89,7 +89,7 @@ func (s *MemoryStore) ListEnrollments(_ context.Context, userID id.UserID) ([]*E
 	var result []*Enrollment
 	for _, e := range s.enrollments {
 		if e.UserID == userID {
-			result = append(result, e)
+			result = append(result, cloneEnrollment(e))
 		}
 	}
 	return result, nil
@@ -104,7 +104,7 @@ func (s *MemoryStore) CreateRecoveryCodes(_ context.Context, codes []*RecoveryCo
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, c := range codes {
-		s.recoveryCodes[c.ID] = c
+		s.recoveryCodes[c.ID] = cloneRecoveryCode(c)
 	}
 	return nil
 }
@@ -116,7 +116,7 @@ func (s *MemoryStore) GetRecoveryCodes(_ context.Context, userID id.UserID) ([]*
 	var result []*RecoveryCode
 	for _, c := range s.recoveryCodes {
 		if c.UserID == userID {
-			result = append(result, c)
+			result = append(result, cloneRecoveryCode(c))
 		}
 	}
 	return result, nil
@@ -146,4 +146,41 @@ func (s *MemoryStore) DeleteRecoveryCodes(_ context.Context, userID id.UserID) e
 		}
 	}
 	return nil
+}
+
+// cloneEnrollment and cloneRecoveryCode keep the store's own records
+// unreachable from outside it, in both directions.
+//
+// This store mutates records in place. ConsumeRecoveryCode writes Used and
+// UsedAt on the stored code while holding the write lock, and
+// GetRecoveryCodes used to return those very pointers. A caller reading Used
+// off what it got back was reading a field another goroutine could be
+// writing, with nothing ordering the two.
+//
+// Used is not an ordinary field to race on: it is what makes a recovery code
+// single-use. Note the copy fixes the data race, not the check-then-consume
+// window above it. A caller that reads a code as unused and only later calls
+// ConsumeRecoveryCode still races another caller doing the same, because
+// nothing holds a lock across both steps. Callers that need single-use to be
+// airtight have to make consumption itself the test, rather than reading
+// first and consuming after.
+//
+// Both structs are value types apart from UsedAt, which is a *time.Time whose
+// pointer is replaced rather than written through, so a shallow copy is
+// enough here. Add a slice or map field and it stops being enough, the way
+// agentauth's cloneGrant has to copy Scopes.
+func cloneEnrollment(e *Enrollment) *Enrollment {
+	if e == nil {
+		return nil
+	}
+	cp := *e
+	return &cp
+}
+
+func cloneRecoveryCode(c *RecoveryCode) *RecoveryCode {
+	if c == nil {
+		return nil
+	}
+	cp := *c
+	return &cp
 }
