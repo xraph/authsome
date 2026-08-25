@@ -32,11 +32,24 @@ func IsKnownEventType(t string) bool {
 	return ok
 }
 
+// IsStreamLevel reports whether an event describes the STREAM rather than a
+// principal on it. A stream-level event carries no subject at all, so it can
+// neither be resolved to a user nor be refused for failing to resolve to one.
+// SSF's verification event is the only one today.
+func IsStreamLevel(t string) bool { return t == EventVerification }
+
 // Event is one decoded event payload from a SET's events map.
 type Event struct {
-	Type             string
-	Subject          SubjectID
-	EventTimestamp   int64
+	Type string
+	// Subject is the zero SubjectID for a stream-level event.
+	Subject SubjectID
+	// RawSubject is the exact subject JSON the transmitter sent, kept
+	// verbatim for the audit row. The receiver deliberately keeps offending
+	// values out of its error responses on the grounds that they belong in
+	// the audit record instead, which only works if the audit record
+	// actually gets them. Empty for a stream-level event.
+	RawSubject     json.RawMessage
+	EventTimestamp int64
 	InitiatingEntity string
 	ReasonAdmin      map[string]string
 	ReasonUser       map[string]string
@@ -92,6 +105,11 @@ type eventWire struct {
 // ParseEvent decodes one event payload. It accepts the subject under either
 // `sub_id` (CAEP 1.0 final) or `subject` (what Okta and Google ship today),
 // preferring `sub_id` when a payload carries both.
+//
+// Every CAEP event names a principal and is refused without one. A
+// stream-level event (see IsStreamLevel) is the exception: SSF's verification
+// event describes the stream itself and carries only `state`, so requiring a
+// subject there made the entire verification handshake unprocessable.
 func ParseEvent(eventType string, payload json.RawMessage) (Event, error) {
 	var w eventWire
 	if err := json.Unmarshal(payload, &w); err != nil {
@@ -102,18 +120,24 @@ func ParseEvent(eventType string, payload json.RawMessage) (Event, error) {
 	if len(rawSubject) == 0 {
 		rawSubject = w.Subject
 	}
-	if len(rawSubject) == 0 {
-		return Event{}, fmt.Errorf("caep: event has neither sub_id nor subject")
-	}
 
-	subject, err := ParseSubjectID(rawSubject)
-	if err != nil {
-		return Event{}, err
+	var subject SubjectID
+	if len(rawSubject) == 0 {
+		if !IsStreamLevel(eventType) {
+			return Event{}, fmt.Errorf("caep: event has neither sub_id nor subject")
+		}
+	} else {
+		var err error
+		subject, err = ParseSubjectID(rawSubject)
+		if err != nil {
+			return Event{}, err
+		}
 	}
 
 	return Event{
 		Type:             eventType,
 		Subject:          subject,
+		RawSubject:       rawSubject,
 		EventTimestamp:   w.EventTimestamp,
 		InitiatingEntity: w.InitiatingEntity,
 		ReasonAdmin:      w.ReasonAdmin,

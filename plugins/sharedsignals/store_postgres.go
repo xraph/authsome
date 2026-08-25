@@ -193,11 +193,12 @@ func (s *PostgresStore) DeleteReceivedEvent(ctx context.Context, eventID id.SSFE
 	return nil
 }
 
-func (s *PostgresStore) CountActionsSince(ctx context.Context,
+func (s *PostgresStore) CountEventsSince(ctx context.Context,
 	streamID id.SSFStreamID, since time.Time) (int, error) {
+	// Every recorded event counts, not just the ones that acted -- see
+	// Store.CountEventsSince.
 	count, err := s.pg.NewSelect((*receivedEventModel)(nil)).
 		Where("stream_id = ?", streamID.String()).
-		Where("action_taken <> ?", "").
 		Where("received_at > ?", since).
 		Count(ctx)
 	if err != nil {

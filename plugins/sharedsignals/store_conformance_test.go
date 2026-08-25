@@ -236,23 +236,56 @@ func runStoreConformance(t *testing.T, newStore func(*testing.T) Store) {
 		require.ErrorIs(t, s.DeleteReceivedEvent(ctx, id.NewSSFEventID()), ErrNotFound,
 			"deleting an event ID that was never inserted must not silently succeed")
 
-		// This event lives on a DIFFERENT stream and already carries an
-		// ActionTaken, so a backend that dropped the stream_id filter in
-		// CountActionsSince would count it too and the assertion below
-		// would see 2 instead of 1.
-		require.NoError(t, s.InsertReceivedEvent(ctx, &ReceivedEvent{
-			ID: id.NewSSFEventID(), StreamID: id.NewSSFStreamID(), JTI: "jti-1",
-			EventType: "e", Outcome: OutcomeApplied, ActionTaken: "revoked_all",
-			ReceivedAt: now,
-		}))
-
 		ev.Outcome = OutcomeApplied
 		ev.ActionTaken = "revoked_all"
 		require.NoError(t, s.UpdateReceivedEvent(ctx, ev))
+	})
 
-		count, err := s.CountActionsSince(ctx, streamID, now.Add(-time.Hour))
+	t.Run("circuit breaker counts every recorded event", func(t *testing.T) {
+		// The breaker's counter used to skip any row whose action_taken was
+		// empty, which left the whole signal-only half of the action matrix
+		// unbounded: an authentic but hostile transmitter could push
+		// risk-level-change at HIGH forever with the counter at zero. Every
+		// backend must now count every recorded event in the window.
+		ctx := context.Background()
+		s := newStore(t)
+		streamID := id.NewSSFStreamID()
+		now := time.Now().UTC().Truncate(time.Second)
+
+		// Took an action.
+		require.NoError(t, s.InsertReceivedEvent(ctx, &ReceivedEvent{
+			ID: id.NewSSFEventID(), StreamID: streamID, JTI: "acted",
+			EventType: "e", Outcome: OutcomeApplied, ActionTaken: "revoke_all",
+			ReceivedAt: now,
+		}))
+		// Signal only: no action, still counts.
+		require.NoError(t, s.InsertReceivedEvent(ctx, &ReceivedEvent{
+			ID: id.NewSSFEventID(), StreamID: streamID, JTI: "signal-only",
+			EventType: "e", Outcome: OutcomeApplied, ReceivedAt: now,
+		}))
+		// Never resolved to anyone: no action, still counts.
+		require.NoError(t, s.InsertReceivedEvent(ctx, &ReceivedEvent{
+			ID: id.NewSSFEventID(), StreamID: streamID, JTI: "unresolved",
+			EventType: "e", Outcome: OutcomeUnresolved, ReceivedAt: now,
+		}))
+		// Outside the window.
+		require.NoError(t, s.InsertReceivedEvent(ctx, &ReceivedEvent{
+			ID: id.NewSSFEventID(), StreamID: streamID, JTI: "old",
+			EventType: "e", Outcome: OutcomeApplied, ActionTaken: "revoke_all",
+			ReceivedAt: now.Add(-2 * time.Hour),
+		}))
+		// Another stream entirely, so a backend that dropped the stream_id
+		// filter would over-count.
+		require.NoError(t, s.InsertReceivedEvent(ctx, &ReceivedEvent{
+			ID: id.NewSSFEventID(), StreamID: id.NewSSFStreamID(), JTI: "other-stream",
+			EventType: "e", Outcome: OutcomeApplied, ActionTaken: "revoke_all",
+			ReceivedAt: now,
+		}))
+
+		count, err := s.CountEventsSince(ctx, streamID, now.Add(-time.Hour))
 		require.NoError(t, err)
-		assert.Equal(t, 1, count, "CountActionsSince must be scoped to stream_id")
+		assert.Equal(t, 3, count,
+			"every event recorded for this stream in the window counts, action or not")
 	})
 
 	t.Run("signals expire", func(t *testing.T) {

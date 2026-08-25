@@ -125,7 +125,7 @@ func TestMemoryStore_ReceivedEventDedupe(t *testing.T) {
 	require.NoError(t, s.UpdateReceivedEvent(ctx, first))
 }
 
-func TestMemoryStore_CountActionsSince(t *testing.T) {
+func TestMemoryStore_CountEventsSince(t *testing.T) {
 	ctx := context.Background()
 	s := NewMemoryStore()
 	streamID := id.NewSSFStreamID()
@@ -138,20 +138,23 @@ func TestMemoryStore_CountActionsSince(t *testing.T) {
 			Outcome: OutcomeApplied, ActionTaken: "revoked_all", ReceivedAt: now,
 		}))
 	}
-	// Old, and one with no action taken. Neither counts.
+	// Outside the window, so it does not count.
 	require.NoError(t, s.InsertReceivedEvent(ctx, &ReceivedEvent{
 		ID: id.NewSSFEventID(), StreamID: streamID, JTI: "old", EventType: "e",
 		Outcome: OutcomeApplied, ActionTaken: "revoked_all",
 		ReceivedAt: now.Add(-2 * time.Hour),
 	}))
+	// Inside the window and took no action, so it DOES count: the breaker
+	// bounds what an authentic transmitter can make us record, not just
+	// what it can make us revoke.
 	require.NoError(t, s.InsertReceivedEvent(ctx, &ReceivedEvent{
 		ID: id.NewSSFEventID(), StreamID: streamID, JTI: "noop", EventType: "e",
 		Outcome: OutcomeIgnored, ReceivedAt: now,
 	}))
 
-	count, err := s.CountActionsSince(ctx, streamID, now.Add(-time.Hour))
+	count, err := s.CountEventsSince(ctx, streamID, now.Add(-time.Hour))
 	require.NoError(t, err)
-	assert.Equal(t, 3, count)
+	assert.Equal(t, 4, count)
 }
 
 func TestMemoryStore_StreamTimestampIsolation(t *testing.T) {

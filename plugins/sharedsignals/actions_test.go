@@ -2,6 +2,7 @@ package sharedsignals
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -333,14 +334,29 @@ func TestApplyEvent_ClampsImplausibleEventTimestamp(t *testing.T) {
 		"an implausible timestamp must be clamped to now, not stored as a year-5138 date")
 }
 
-func TestApplyEvent_VerificationTakesNoUserAction(t *testing.T) {
+// The verification event is stream-level: it never reaches applyEvent at all,
+// because processOneEvent dispatches it ahead of subject resolution. Drive it
+// through that path rather than through applyEvent, which would be asserting
+// on code no delivery can reach.
+func TestProcessOneEvent_VerificationTakesNoUserAction(t *testing.T) {
+	ctx := context.Background()
 	f := newActionFixture(t)
-	action, err := f.plugin.applyEvent(context.Background(), f.stream,
-		caep.Event{Type: caep.EventVerification, State: "abc"},
-		Resolution{Outcome: OutcomeApplied})
-	require.NoError(t, err)
-	assert.Equal(t, "", action)
+	f.stream.AllowedEventTypes = nil // accept every type we understand
+	f.stream.PendingVerifyState = "abc"
+	require.NoError(t, f.plugin.store.UpdateInboundStream(ctx, f.stream))
+
+	result := f.plugin.processOneEvent(ctx, f.stream, caep.EventVerification,
+		json.RawMessage(`{"state":"abc"}`))
+
+	require.NoError(t, result.Failure)
+	assert.False(t, result.Infra)
+	assert.Equal(t, OutcomeApplied, result.Outcome)
+	assert.Equal(t, "", result.Action)
 	assert.Empty(t, f.revoker.revoked)
+
+	after, err := f.plugin.store.GetInboundStream(ctx, f.stream.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, after.LastVerifiedAt)
 }
 
 func TestCircuitBreaker_TripsAndPausesStream(t *testing.T) {

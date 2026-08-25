@@ -165,9 +165,16 @@ type Store interface {
 	// reprocessed, not read back later as a replay of a delivery that was
 	// never really handled.
 	DeleteReceivedEvent(ctx context.Context, id id.SSFEventID) error
-	// CountActionsSince counts events on a stream that actually did
-	// something since a cutoff. It backs the circuit breaker.
-	CountActionsSince(ctx context.Context, streamID id.SSFStreamID, since time.Time) (int, error)
+	// CountEventsSince counts every event RECORDED for a stream since a
+	// cutoff, whatever outcome it reached. It backs the circuit breaker.
+	//
+	// It deliberately does not filter on action_taken. Counting only the
+	// events that produced an action left the entire signal-only half of
+	// the matrix outside the breaker: an authentic but hostile transmitter
+	// could push unlimited risk-level-change events at HIGH, raising every
+	// user's risk score, while the counter stayed at zero. The breaker
+	// exists to bound authentic traffic, so it has to count all of it.
+	CountEventsSince(ctx context.Context, streamID id.SSFStreamID, since time.Time) (int, error)
 
 	CreateSignal(ctx context.Context, s *Signal) error
 	ListActiveSignals(ctx context.Context, appID id.AppID, envID id.EnvironmentID,

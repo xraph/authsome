@@ -179,9 +179,20 @@ func (p *Plugin) CreateStream(ctx context.Context, appID id.AppID,
 		return nil, fmt.Errorf("sharedsignals: unknown enforcement mode %q", mode)
 	}
 
+	// An empty effective audience is not a usable stream. audienceFor would
+	// return "", setjwt would then require the token's aud to contain "",
+	// and every real SET the IdP ever sends would be refused. It fails
+	// closed, which is the right direction, but it fails looking exactly
+	// like an IdP problem when it is a misconfiguration on our side, so
+	// refuse to create the stream instead and say which knob is missing.
 	audience := req.Audience
 	if audience == "" {
 		audience = p.config.Audience
+	}
+	if audience == "" {
+		return nil, errors.New(
+			"sharedsignals: audience is required; set it on the stream or " +
+				"configure the plugin's Audience")
 	}
 
 	limit := req.MaxActionsPerHour

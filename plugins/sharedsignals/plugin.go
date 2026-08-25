@@ -187,13 +187,28 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 
 	if p.store == nil {
 		if db := engine.DB(); db != nil {
-			switch db.Driver().Name() {
+			driver := db.Driver().Name()
+			switch driver {
 			case "pg":
 				p.store = NewPostgresStore(db)
 			case "sqlite":
 				p.store = NewSqliteStore(db)
 			case "mongo":
 				p.store = NewMongoStore(db)
+			default:
+				// The host has a database, we just do not know how to talk
+				// to it, and the fall-through below is about to hand this
+				// plugin a process-local store. For most plugins that is a
+				// degraded cache. For this one it is three security
+				// controls going soft at once, so it is an error, not a
+				// debug line.
+				p.logger.Error(
+					"sharedsignals: unrecognised database driver, falling back to the in-memory store",
+					logString("driver", driver),
+					logString("impact",
+						"the replay guard, the circuit breaker counter and the signal history "+
+							"are process-local and will not survive a restart"),
+				)
 			}
 		}
 	}

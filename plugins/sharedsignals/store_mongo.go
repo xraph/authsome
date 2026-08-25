@@ -379,12 +379,13 @@ func (s *MongoStore) DeleteReceivedEvent(ctx context.Context, eventID id.SSFEven
 	return nil
 }
 
-func (s *MongoStore) CountActionsSince(ctx context.Context,
+func (s *MongoStore) CountEventsSince(ctx context.Context,
 	streamID id.SSFStreamID, since time.Time) (int, error) {
+	// Every recorded event counts, not just the ones that acted -- see
+	// Store.CountEventsSince.
 	n, err := s.mdb.Collection(colReceivedEvents).CountDocuments(ctx, bson.M{
-		"stream_id":    streamID.String(),
-		"action_taken": bson.M{"$ne": ""},
-		"received_at":  bson.M{"$gt": since},
+		"stream_id":   streamID.String(),
+		"received_at": bson.M{"$gt": since},
 	})
 	if err != nil {
 		return 0, mongoErr(err)

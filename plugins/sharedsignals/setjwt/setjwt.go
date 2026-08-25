@@ -25,6 +25,20 @@ var (
 	ErrInvalidAudience = errors.New("setjwt: invalid_audience")
 )
 
+// ErrKeyUnavailable says the key set could not be loaded, so the token was
+// never actually checked. It is deliberately NOT one of the RFC 8935 codes:
+// none of them describe "our side could not look", and every one of them
+// tells a well-behaved transmitter that the token is wrong and retrying is
+// pointless. A caller that sees this must answer with a 5xx and let the
+// transmitter deliver the same SET again.
+//
+// A KeyResolver signals it by returning an error that wraps this sentinel;
+// Validate passes such an error through instead of flattening it into
+// ErrInvalidKey. A resolver that just cannot find the kid keeps returning a
+// plain error and still gets invalid_key, which is the right permanent
+// answer for a token naming a key the issuer does not publish.
+var ErrKeyUnavailable = errors.New("setjwt: key set unavailable")
+
 // ErrCode maps an error to its RFC 8935 code, defaulting to invalid_request.
 func ErrCode(err error) string {
 	switch {
@@ -119,6 +133,9 @@ func Validate(ctx context.Context, raw []byte, opts Options) (*Token, error) {
 
 	key, err := opts.Keys.Key(ctx, kid)
 	if err != nil {
+		if errors.Is(err, ErrKeyUnavailable) {
+			return nil, fmt.Errorf("setjwt: resolve key for kid: %w", err)
+		}
 		return nil, fmt.Errorf("%w: no key for kid", ErrInvalidKey)
 	}
 

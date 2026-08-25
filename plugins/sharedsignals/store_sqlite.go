@@ -158,11 +158,12 @@ func (s *SqliteStore) DeleteReceivedEvent(ctx context.Context, eventID id.SSFEve
 	return nil
 }
 
-func (s *SqliteStore) CountActionsSince(ctx context.Context,
+func (s *SqliteStore) CountEventsSince(ctx context.Context,
 	streamID id.SSFStreamID, since time.Time) (int, error) {
+	// Every recorded event counts, not just the ones that acted -- see
+	// Store.CountEventsSince.
 	count, err := s.sdb.NewSelect((*receivedEventModel)(nil)).
 		Where("stream_id = ?", streamID.String()).
-		Where("action_taken <> ?", "").
 		Where("received_at > ?", since).
 		Count(ctx)
 	if err != nil {

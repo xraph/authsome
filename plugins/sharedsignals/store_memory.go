@@ -194,13 +194,15 @@ func (m *MemoryStore) DeleteReceivedEvent(_ context.Context, eventID id.SSFEvent
 	return ErrNotFound
 }
 
-func (m *MemoryStore) CountActionsSince(_ context.Context, streamID id.SSFStreamID,
+func (m *MemoryStore) CountEventsSince(_ context.Context, streamID id.SSFStreamID,
 	since time.Time) (int, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	// Every recorded event counts, not just the ones that acted -- see
+	// Store.CountEventsSince.
 	count := 0
 	for _, e := range m.events {
-		if e.StreamID == streamID && e.ActionTaken != "" && e.ReceivedAt.After(since) {
+		if e.StreamID == streamID && e.ReceivedAt.After(since) {
 			count++
 		}
 	}
