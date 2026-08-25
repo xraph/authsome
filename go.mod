@@ -15,7 +15,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	github.com/xraph/chronicle v1.6.2
 	github.com/xraph/forge v1.9.13
-	github.com/xraph/forge/extensions/auth v1.9.11
+	github.com/xraph/forge/extensions/auth v1.9.13
 	github.com/xraph/forgeui v1.4.1
 	github.com/xraph/grove v1.6.2
 	github.com/xraph/grove/drivers/mongodriver v1.6.2
