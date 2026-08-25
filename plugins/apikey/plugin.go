@@ -156,9 +156,22 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	// minted. Fetched via the optional provider interface rather than an
 	// *authsome.Engine type assertion so this package does not import
 	// authsome.
+	//
+	// The provider returns any (see plugin.PrincipalAuthGateProvider), so a
+	// signature drift between the concrete gate and PrincipalAuthGate below
+	// would compile cleanly and silently leave p.gate nil, turning off
+	// scoring for every machine caller with no error anywhere. That failure
+	// mode is worse than never having wired the gate at all, so it is not
+	// allowed to be silent: warn loudly when the provider is present but its
+	// value does not satisfy this package's gate interface.
 	if gp, ok := engine.(plugin.PrincipalAuthGateProvider); ok {
-		if gate, ok := gp.PrincipalAuthGate().(PrincipalAuthGate); ok {
+		got := gp.PrincipalAuthGate()
+		if gate, ok := got.(PrincipalAuthGate); ok {
 			p.gate = gate
+		} else if p.logger != nil {
+			p.logger.Warn("apikey: principal auth scoring disabled, engine's gate does not satisfy apikey.PrincipalAuthGate",
+				log.String("received_type", fmt.Sprintf("%T", got)),
+			)
 		}
 	}
 

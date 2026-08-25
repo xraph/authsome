@@ -97,3 +97,24 @@ func TestPrincipalAuthGateExpiresEntries(t *testing.T) {
 	require.NoError(t, g.Authorize(ctx, attempt("akey_1", "1.2.3.4")))
 	assert.Equal(t, 2, calls)
 }
+
+// An attempt with no credential id must never be cached, or every such
+// attempt collapses onto the same key ("|" plus whatever IP, empty or not)
+// and one caller's allow gets served to every other caller missing a
+// credential id. This gate is a general engine API, not apikey-only, so a
+// future caller leaving CredentialID unset is a real scenario, not a
+// hypothetical.
+func TestPrincipalAuthGateDoesNotCacheWithoutCredentialID(t *testing.T) {
+	var calls int
+	g := newPrincipalAuthGate(func(_ context.Context, _ *principal.AuthAttempt) error {
+		calls++
+		return nil
+	}, nil, time.Minute, log.NewNoopLogger())
+
+	ctx := context.Background()
+	first := attempt("", "")
+	second := attempt("", "")
+	require.NoError(t, g.Authorize(ctx, first))
+	require.NoError(t, g.Authorize(ctx, second))
+	assert.Equal(t, 2, calls, "an attempt with no credential id must be scored fresh every time, never cached")
+}
