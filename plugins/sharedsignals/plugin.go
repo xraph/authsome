@@ -23,6 +23,7 @@ import (
 var (
 	_ plugin.Plugin            = (*Plugin)(nil)
 	_ plugin.OnInit            = (*Plugin)(nil)
+	_ plugin.OnShutdown        = (*Plugin)(nil)
 	_ plugin.MigrationProvider = (*Plugin)(nil)
 	_ plugin.SettingsProvider  = (*Plugin)(nil)
 	_ plugin.RouteProvider     = (*Plugin)(nil)
@@ -108,6 +109,13 @@ type Config struct {
 
 	// MaxBodyBytes bounds the push request body.
 	MaxBodyBytes int64
+
+	// KeyRefreshInterval is how often cached JWKS entries are re-fetched in
+	// the background. A value of zero takes the default; a negative value
+	// turns the ticker off entirely, for an embedder that does not want a
+	// background goroutine and accepts that key freshness then depends
+	// wholly on inbound traffic.
+	KeyRefreshInterval time.Duration
 }
 
 func (c *Config) defaults() {
@@ -125,6 +133,15 @@ func (c *Config) defaults() {
 	}
 	if c.MaxBodyBytes == 0 {
 		c.MaxBodyBytes = 64 * 1024
+	}
+	if c.KeyRefreshInterval == 0 {
+		// Four times inside the JWKS client's one-hour MaxKeyAge, so an
+		// entry is re-confirmed well before ordinary traffic would ever find
+		// it stale, and roughly fifty times inside its twelve-hour hard
+		// limit. That ratio is the point: hitting the hard limit cannot be a
+		// blip or an unlucky gap in traffic, it can only be an endpoint that
+		// has been unreachable for half a day.
+		c.KeyRefreshInterval = 15 * time.Minute
 	}
 }
 
@@ -144,6 +161,7 @@ type Plugin struct {
 	relay       bridge.EventRelay
 	hooks       *hook.Bus
 	settingsMgr *settings.Manager
+	refresher   *refresher
 }
 
 // New builds the plugin. Config is optional.
@@ -218,6 +236,38 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 
 	p.jwks = jwksclient.New(jwksclient.Options{})
 
+	if p.config.KeyRefreshInterval > 0 {
+		p.refresher = newRefresher(p.config.KeyRefreshInterval, p.refreshKeys)
+		p.refresher.start()
+	}
+
+	return nil
+}
+
+// refreshKeys is one background round: re-fetch every JWKS URI the client
+// has cached and report the ones that did not answer.
+//
+// The failures are logged at Warn rather than swallowed because nothing else
+// in the process can see them. An inbound token failing verification is
+// visible in the receiver's own error path, but an endpoint that has quietly
+// stopped answering the ticker produces no traffic at all -- and the first
+// symptom, twelve hours later, is a stream that starts refusing SETs.
+func (p *Plugin) refreshKeys(ctx context.Context) {
+	for _, failure := range p.jwks.RefreshAll(ctx) {
+		p.logger.Warn("sharedsignals: background JWKS refresh failed",
+			logString("jwks_uri", failure.URI),
+			logString("error", failure.Err.Error()),
+		)
+	}
+}
+
+// OnShutdown stops the background JWKS refresh and waits for any round
+// already in flight, so the process does not exit with an outbound fetch
+// still open against an IdP.
+func (p *Plugin) OnShutdown(_ context.Context) error {
+	if p.refresher != nil {
+		p.refresher.stop()
+	}
 	return nil
 }
 
