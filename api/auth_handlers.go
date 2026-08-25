@@ -392,8 +392,11 @@ func (a *API) handleSignOut(ctx forge.Context, _ *SignOutRequest) (*StatusRespon
 func (a *API) handleRefresh(ctx forge.Context, req *RefreshRequest) (*TokenResponse, error) {
 	httpReq := ctx.Request()
 	opts := authsome.RefreshOpts{
-		IPAddress: clientIPFromRequest(httpReq),
-		UserAgent: httpReq.UserAgent(),
+		IPAddress:  clientIPFromRequest(httpReq),
+		UserAgent:  httpReq.UserAgent(),
+		DPoPProof:  httpReq.Header.Get("DPoP"),
+		Method:     httpReq.Method,
+		RequestURL: middleware.RequestURL(httpReq),
 	}
 
 	// Cookie-first: when the request carries a valid session cookie, rotate via

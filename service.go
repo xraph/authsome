@@ -23,6 +23,7 @@ import (
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/device"
+	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
@@ -447,6 +448,13 @@ type RefreshOpts struct {
 	IPAddress string
 	// UserAgent is the client User-Agent to validate against the session's stored UA.
 	UserAgent string
+
+	// DPoPProof is the raw DPoP header from the refresh request. Required when
+	// the session being refreshed is bound; ignored when it is not.
+	DPoPProof string
+	// Method and RequestURL describe the refresh request, for htm and htu.
+	Method     string
+	RequestURL string
 }
 
 // hashRefreshToken returns the canonical hex-encoded SHA-256 of a refresh
@@ -558,6 +566,23 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 		}
 	}
 
+	// DPoP: a bound session may only be refreshed by the key it is bound to,
+	// and the rotated session keeps that binding.
+	//
+	// Both halves matter. Skipping the check lets a stolen refresh token be
+	// redeemed by anyone; skipping the inheritance lets it be redeemed once
+	// and traded for an unbound access token, which is the same outcome one
+	// rotation later.
+	if sess.DPoPJKT != "" {
+		o := RefreshOpts{}
+		if len(opts) > 0 {
+			o = opts[0]
+		}
+		if err := e.verifyRefreshDPoP(ctx, sess, o); err != nil {
+			return nil, account.ErrInvalidCredentials
+		}
+	}
+
 	// Lazily backfill FamilyID for legacy sessions that pre-date Phase 3E.2.
 	// Without a family, replay-cascade can't link siblings — but a single
 	// session is still safer than refusing every legacy refresh.
@@ -584,6 +609,7 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 			UserID:    sess.UserID.String(),
 			AppID:     sess.AppID.String(),
 			SessionID: sess.ID.String(),
+			DPoPJKT:   sess.DPoPJKT,
 			IssuedAt:  sess.UpdatedAt,
 			ExpiresAt: sess.ExpiresAt,
 		})
@@ -638,6 +664,50 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 	})
 
 	return sess, nil
+}
+
+// verifyRefreshDPoP checks that a refresh of a bound session carries a proof
+// for the key it is bound to.
+//
+// A wrong-key proof gets its own audit action. A changed IP has innocent
+// explanations, a mobile network hand-off among them; a structurally valid
+// proof signed by a different key does not, so it should not sit in the same
+// bucket as ordinary client breakage.
+func (e *Engine) verifyRefreshDPoP(ctx context.Context, sess *session.Session, o RefreshOpts) error {
+	if o.DPoPProof == "" {
+		return dpop.ErrMalformedProof
+	}
+
+	proof, err := dpop.Parse(o.DPoPProof)
+	if err != nil {
+		return err
+	}
+
+	err = e.DPoPValidator().Validate(ctx, proof, dpop.Expectation{
+		Method:      o.Method,
+		URL:         o.RequestURL,
+		ExpectedJKT: sess.DPoPJKT,
+	})
+	if err == nil {
+		return nil
+	}
+
+	if errors.Is(err, dpop.ErrKeyMismatch) {
+		md := map[string]string{
+			"session_id": sess.ID.String(),
+			"bound_jkt":  sess.DPoPJKT,
+			"proof_jkt":  proof.JKT,
+			"ip":         o.IPAddress,
+		}
+		e.hooks.Emit(ctx, &hook.Event{
+			Action:   hook.ActionDPoPKeyMismatch,
+			Resource: hook.ResourceSession,
+			Metadata: md,
+		})
+		e.audit(ctx, bridge.SeverityWarning, bridge.OutcomeFailure,
+			"dpop_key_mismatch", "session", sess.ID.String(), "", "", "auth", md)
+	}
+	return err
 }
 
 // GetMe returns the current user by ID.
