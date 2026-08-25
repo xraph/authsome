@@ -549,3 +549,229 @@ func TestKey_AgedEntryRefetchesAndDropsARetiredKey(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, replacement.N, pub.N)
 }
+
+// ──────────────────────────────────────────────────
+// The hard limit: availability has a ceiling
+// ──────────────────────────────────────────────────
+
+// flakyJWKS serves a one-key set until fail is set, then answers 503. It is
+// the shape every hard-limit test needs: an IdP that was reachable when we
+// warmed the cache and is not reachable now.
+func flakyJWKS(t *testing.T, pub *rsa.PublicKey) (*httptest.Server, *atomic.Bool) {
+	t.Helper()
+	fail := new(atomic.Bool)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if fail.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		fmt.Fprint(w, rsaJWKS(t, "kid-1", pub))
+	}))
+	return srv, fail
+}
+
+// hardLimitOptions is the shared setup for the pair of tests below. They
+// differ in exactly one thing -- how much time passes before the lookup --
+// so anything else differing between them would muddy what they prove.
+func hardLimitOptions(srv *httptest.Server, now *time.Time) Options {
+	opts := testOptions(srv)
+	opts.MinRefetchInterval = 5 * time.Minute
+	opts.MaxKeyAge = time.Hour
+	opts.MaxKeyUsableAge = 12 * time.Hour
+	opts.Now = func() time.Time { return *now }
+	return opts
+}
+
+// Past MaxKeyUsableAge the trade stops: a key we can no longer confirm is
+// refused. An IdP that retired a compromised key and then went unreachable --
+// or an attacker holding that endpoint down precisely so we keep honouring
+// the key -- must not be able to buy unlimited time.
+//
+// The refusal has to wrap ErrFetchFailed, not ErrKeyNotFound. That is what
+// makes the receiver answer 503 "we cannot verify right now" instead of a
+// 400 invalid_key that tells the transmitter to stop retrying.
+func TestKey_PastTheHardLimitAFailedRefreshRefuses(t *testing.T) {
+	key := newKey(t)
+	srv, fail := flakyJWKS(t, &key.PublicKey)
+	defer srv.Close()
+
+	now := time.Now()
+	c := New(hardLimitOptions(srv, &now))
+
+	_, err := c.Key(context.Background(), srv.URL, "kid-1")
+	require.NoError(t, err, "warming the cache")
+
+	// The endpoint goes dark and stays dark past the hard limit.
+	fail.Store(true)
+	now = now.Add(12*time.Hour + time.Minute)
+
+	_, err = c.Key(context.Background(), srv.URL, "kid-1")
+	require.Error(t, err,
+		"a key unconfirmed for longer than MaxKeyUsableAge must not still verify tokens")
+	assert.ErrorIs(t, err, ErrFetchFailed,
+		"refusing past the hard limit is a statement about our own reach, so it must "+
+			"produce the 503 that keeps the transmitter retrying")
+	assert.NotErrorIs(t, err, ErrKeyNotFound,
+		"the IdP never told us this kid was gone -- we simply could not look")
+}
+
+// The other half of the same trade, and the reason the hard limit is a
+// SECOND threshold rather than a shortening of MaxKeyAge. An entry that is
+// merely stale still serves through a failed refresh, because that is the
+// bug MaxKeyAge's failure handling was written to fix: one transient 503
+// must not blind the receiver to a genuine compromise event.
+func TestKey_PastOnlyTheSoftLimitAFailedRefreshStillServes(t *testing.T) {
+	key := newKey(t)
+	srv, fail := flakyJWKS(t, &key.PublicKey)
+	defer srv.Close()
+
+	now := time.Now()
+	c := New(hardLimitOptions(srv, &now))
+
+	_, err := c.Key(context.Background(), srv.URL, "kid-1")
+	require.NoError(t, err, "warming the cache")
+
+	// Past MaxKeyAge (1h), nowhere near MaxKeyUsableAge (12h).
+	fail.Store(true)
+	now = now.Add(2 * time.Hour)
+
+	got, err := c.Key(context.Background(), srv.URL, "kid-1")
+	require.NoError(t, err,
+		"a stale-but-not-expired key must survive a failed refresh")
+	pub, ok := got.(*rsa.PublicKey)
+	require.True(t, ok)
+	assert.Equal(t, key.N, pub.N)
+}
+
+// Requirement three, at the boundary that is easiest to get wrong. Past the
+// hard limit the entry is untrusted, but if the refresh SUCCEEDS we have a
+// real answer from the IdP again -- and "this key set does not carry that
+// kid" is a permanent verdict on the token, not a failure of ours.
+func TestKey_PastTheHardLimitASuccessfulRefreshStillReportsAnUnknownKid(t *testing.T) {
+	retired, replacement := newKey(t), newKey(t)
+	serveReplacement := new(atomic.Bool)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if serveReplacement.Load() {
+			fmt.Fprint(w, rsaJWKS(t, "kid-2", &replacement.PublicKey))
+			return
+		}
+		fmt.Fprint(w, rsaJWKS(t, "kid-1", &retired.PublicKey))
+	}))
+	defer srv.Close()
+
+	now := time.Now()
+	c := New(hardLimitOptions(srv, &now))
+
+	_, err := c.Key(context.Background(), srv.URL, "kid-1")
+	require.NoError(t, err, "warming the cache")
+
+	serveReplacement.Store(true)
+	now = now.Add(13 * time.Hour)
+
+	_, err = c.Key(context.Background(), srv.URL, "kid-1")
+	require.ErrorIs(t, err, ErrKeyNotFound,
+		"the IdP answered and does not publish this kid: that is the token's problem")
+	assert.NotErrorIs(t, err, ErrFetchFailed,
+		"a fetch that worked must not be reported as a fetch that did not")
+}
+
+// A hard limit shorter than the soft one would let freshKey hand back a key
+// the hard limit has already expired, silently defeating the ceiling. The
+// two thresholds are ordered by construction rather than by documentation.
+func TestOptions_HardLimitNeverSitsBelowTheSoftLimit(t *testing.T) {
+	opts := Options{MaxKeyAge: 6 * time.Hour, MaxKeyUsableAge: time.Minute}
+	opts.defaults()
+	assert.GreaterOrEqual(t, opts.MaxKeyUsableAge, opts.MaxKeyAge,
+		"a hard limit below MaxKeyAge is unreachable and would be a silent no-op")
+}
+
+func TestOptions_HardLimitDefaultsToTwelveHours(t *testing.T) {
+	var opts Options
+	opts.defaults()
+	assert.Equal(t, 12*time.Hour, opts.MaxKeyUsableAge)
+}
+
+// ──────────────────────────────────────────────────
+// Background refresh
+// ──────────────────────────────────────────────────
+
+// The spec promised a background timer so a real key rotation is noticed
+// without waiting for traffic. RefreshAll is the half of it this package
+// owns: it re-fetches every URI already in the cache, which is exactly the
+// set of entries that can age out.
+func TestRefreshAll_NoticesARotationWithoutAnyInboundTraffic(t *testing.T) {
+	old, rotated := newKey(t), newKey(t)
+	serveRotated := new(atomic.Bool)
+	var hits int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt64(&hits, 1)
+		if serveRotated.Load() {
+			fmt.Fprint(w, rsaJWKS(t, "kid-2", &rotated.PublicKey))
+			return
+		}
+		fmt.Fprint(w, rsaJWKS(t, "kid-1", &old.PublicKey))
+	}))
+	defer srv.Close()
+
+	now := time.Now()
+	c := New(hardLimitOptions(srv, &now))
+
+	_, err := c.Key(context.Background(), srv.URL, "kid-1")
+	require.NoError(t, err)
+	require.Equal(t, int64(1), atomic.LoadInt64(&hits))
+
+	// The IdP rotates. Nothing arrives on the wire; only the ticker fires.
+	// Move past MinRefetchInterval, since RefreshAll honours the same rate
+	// guard every other fetch does.
+	serveRotated.Store(true)
+	now = now.Add(10 * time.Minute)
+	require.Empty(t, c.RefreshAll(context.Background()))
+	require.Equal(t, int64(2), atomic.LoadInt64(&hits),
+		"RefreshAll must actually go and look")
+
+	// The clock has not moved since, so both lookups are inside MaxKeyAge
+	// and inside MinRefetchInterval: neither can fetch. A stub RefreshAll
+	// cannot make these pass, which is the point of pinning the hit count.
+	_, err = c.Key(context.Background(), srv.URL, "kid-2")
+	assert.NoError(t, err, "the rotated-in key must be usable without inbound traffic")
+
+	_, err = c.Key(context.Background(), srv.URL, "kid-1")
+	assert.Error(t, err, "the rotated-out key must be gone")
+
+	assert.Equal(t, int64(2), atomic.LoadInt64(&hits),
+		"the ticker already paid for this fetch; traffic must not pay again")
+}
+
+// A failing refresh has to reach the operator. Nothing else in the process
+// knows the ticker has been unable to confirm a key set for hours.
+func TestRefreshAll_ReportsTheURIsItCouldNotRefresh(t *testing.T) {
+	key := newKey(t)
+	srv, fail := flakyJWKS(t, &key.PublicKey)
+	defer srv.Close()
+
+	now := time.Now()
+	c := New(hardLimitOptions(srv, &now))
+
+	_, err := c.Key(context.Background(), srv.URL, "kid-1")
+	require.NoError(t, err)
+
+	fail.Store(true)
+	now = now.Add(10 * time.Minute)
+
+	failures := c.RefreshAll(context.Background())
+	require.Len(t, failures, 1)
+	assert.Equal(t, srv.URL, failures[0].URI)
+	assert.ErrorIs(t, failures[0].Err, ErrFetchFailed)
+}
+
+// RefreshAll on a client nothing has ever asked about is a no-op. After a
+// restart there is no cache to keep warm, and the first inbound token pays
+// for the fetch exactly as it always did.
+func TestRefreshAll_IsANoOpOnAColdCache(t *testing.T) {
+	srv, _ := flakyJWKS(t, &newKey(t).PublicKey)
+	defer srv.Close()
+
+	now := time.Now()
+	c := New(hardLimitOptions(srv, &now))
+	assert.Empty(t, c.RefreshAll(context.Background()))
+}

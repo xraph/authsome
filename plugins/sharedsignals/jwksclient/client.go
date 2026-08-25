@@ -53,7 +53,23 @@ type Options struct {
 	// simpler than a background goroutine and needs no lifecycle of its
 	// own: the next inbound token pays for the refresh.
 	MaxKeyAge time.Duration
-	Now       func() time.Time
+	// MaxKeyUsableAge is the hard ceiling above MaxKeyAge's soft staleness,
+	// and it is the only limit in here that can refuse a key.
+	//
+	// MaxKeyAge only ever ASKS for a refresh; freshness is restored solely by
+	// a fetch that succeeds. So an IdP that retires a compromised signing key
+	// and then becomes unreachable -- an outage, or an attacker holding that
+	// endpoint down precisely to preserve the retired key -- leaves us
+	// honouring it for as long as the process lives. A SET is an instruction
+	// to revoke somebody's sessions, so that is forged revocations honoured
+	// indefinitely.
+	//
+	// Past this age the entry stops being usable even though we cannot
+	// replace it, which turns the failure mode from "we trust a key the IdP
+	// withdrew" into "we cannot verify right now". The caller sees
+	// ErrFetchFailed and answers 503, so the transmitter keeps retrying.
+	MaxKeyUsableAge time.Duration
+	Now             func() time.Time
 	// ValidateURI gates every fetch. Defaults to the package-level
 	// ValidateURI. Tests substitute a permissive validator so they can serve
 	// a key set from an httptest loopback server; production must not.
@@ -94,6 +110,36 @@ func (o *Options) defaults() {
 		// a fetch, and short enough that a key an IdP retired stops being
 		// honoured on the same day somebody noticed.
 		o.MaxKeyAge = time.Hour
+	}
+	if o.MaxKeyUsableAge == 0 {
+		// Twelve hours, chosen against three numbers rather than by feel.
+		//
+		// Against MaxKeyAge (1h): reaching this means the endpoint was
+		// unreachable for twelve consecutive hours. With the background
+		// refresh running, an entry is re-confirmed dozens of times over
+		// that span, so arriving here is a sustained outage or an attack,
+		// never a blip. Anything much shorter starts reintroducing the bug
+		// this cache's failure handling exists to fix: a receiver blinded to
+		// a genuine compromise event because the IdP had a bad few minutes.
+		//
+		// Against the transmitter (Config.MaxSETAge, 24h): this sits at half
+		// of it deliberately. Refusing is a 503, and a SET refused during
+		// hours 12 to 24 is still inside the age we will accept once the IdP
+		// comes back, so a transmitter that keeps retrying loses nothing.
+		// Being wrong on the short side costs delay; being wrong on the long
+		// side costs forged revocations. Only the first is recoverable.
+		//
+		// Against a day: a full 24 hours of acting on a key the IdP has
+		// already withdrawn is too long to be defensible when the whole
+		// point of the subsystem is reacting to compromise quickly.
+		o.MaxKeyUsableAge = 12 * time.Hour
+	}
+	if o.MaxKeyUsableAge < o.MaxKeyAge {
+		// A ceiling below the soft limit is unreachable: freshKey would keep
+		// serving inside MaxKeyAge and the hard limit would silently never
+		// fire. Order the two by construction so a misconfiguration cannot
+		// quietly disable the control.
+		o.MaxKeyUsableAge = o.MaxKeyAge
 	}
 	if o.Now == nil {
 		o.Now = time.Now
@@ -192,12 +238,19 @@ func New(opts Options) *Client {
 // replaces the entry wholesale, so a retired kid does disappear, while a
 // transient 503 on the IdP's side must not blind the receiver to a
 // compromise event signed with a key we already hold and already trust.
+//
+// That trade has a ceiling. Past MaxKeyUsableAge the cached key is refused
+// even though the refresh failed, and the error stays wrapped in
+// ErrFetchFailed so the caller answers "we cannot verify right now" rather
+// than a permanent rejection. A successful refresh past that age is not
+// affected: it replaces the entry, and a kid missing from the set the IdP
+// just served is still ErrKeyNotFound, which is the token's problem.
 func (c *Client) Key(ctx context.Context, jwksURI, kid string) (crypto.PublicKey, error) {
 	if key, ok := c.freshKey(jwksURI, kid); ok {
 		return key, nil
 	}
 	refreshErr := c.refresh(ctx, jwksURI)
-	if key, ok := c.cachedKey(jwksURI, kid); ok {
+	if key, ok := c.usableKey(jwksURI, kid); ok {
 		return key, nil
 	}
 	if refreshErr != nil {
@@ -223,11 +276,19 @@ func (c *Client) freshKey(jwksURI, kid string) (crypto.PublicKey, bool) {
 	return key, ok
 }
 
-func (c *Client) cachedKey(jwksURI, kid string) (crypto.PublicKey, bool) {
+// usableKey returns a cached key when the set it came from was last
+// confirmed within MaxKeyUsableAge. It is what Key falls back to after a
+// refresh, so it is the point where a failed refresh either preserves the
+// old keys (inside the ceiling) or gives up on them (past it).
+func (c *Client) usableKey(jwksURI, kid string) (crypto.PublicKey, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	e, ok := c.cache[jwksURI]
 	if !ok {
+		return nil, false
+	}
+	if e.lastSuccess.IsZero() ||
+		c.opts.Now().Sub(e.lastSuccess) >= c.opts.MaxKeyUsableAge {
 		return nil, false
 	}
 	key, ok := e.keys[kid]
@@ -335,6 +396,45 @@ func (c *Client) refresh(ctx context.Context, jwksURI string) (err error) {
 
 	keys, err = c.fetch(ctx, jwksURI)
 	return err
+}
+
+// RefreshFailure names one URI whose background refresh did not succeed.
+type RefreshFailure struct {
+	URI string
+	Err error
+}
+
+// RefreshAll re-fetches every JWKS URI this client has cached and returns
+// the ones it could not reach. It is the background half of key freshness:
+// without it, an IdP's key rotation is only ever noticed by an inbound token
+// unlucky enough to arrive after MaxKeyAge, and an entry drifts towards
+// MaxKeyUsableAge on quiet streams that receive nothing for hours.
+//
+// It refreshes what is already cached rather than what is registered, which
+// is the same set for this purpose: an entry can only age out if it exists,
+// and it only exists because a token used it. A cold cache after a restart
+// therefore has nothing to keep warm, and the first inbound token pays for
+// the fetch exactly as it always did.
+//
+// Fetches go through refresh, so the MinRefetchInterval rate guard still
+// applies and a ticker configured too tightly cannot turn into a hammer on
+// somebody else's endpoint. Being inside that window is not a failure --
+// only an error that reached the network and came back wrong is reported.
+func (c *Client) RefreshAll(ctx context.Context) []RefreshFailure {
+	c.mu.Lock()
+	uris := make([]string, 0, len(c.cache))
+	for uri := range c.cache {
+		uris = append(uris, uri)
+	}
+	c.mu.Unlock()
+
+	var failures []RefreshFailure
+	for _, uri := range uris {
+		if err := c.refresh(ctx, uri); err != nil && errors.Is(err, ErrFetchFailed) {
+			failures = append(failures, RefreshFailure{URI: uri, Err: err})
+		}
+	}
+	return failures
 }
 
 type jwk struct {
