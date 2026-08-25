@@ -14,11 +14,11 @@ import (
 	"github.com/xraph/authsome/principal"
 )
 
-func attempt(ip string) *principal.AuthAttempt {
+func attempt(credID, ip string) *principal.AuthAttempt {
 	return &principal.AuthAttempt{
 		Subject:        principal.Ref{Kind: principal.KindService, ID: "svc_1"},
 		CredentialKind: "api_key",
-		CredentialID:   "akey_1",
+		CredentialID:   credID,
 		IPAddress:      ip,
 		At:             time.Now(),
 	}
@@ -32,7 +32,7 @@ func TestPrincipalAuthGateDenies(t *testing.T) {
 		return denied
 	}, nil, time.Minute, log.NewNoopLogger())
 
-	err := g.Authorize(context.Background(), attempt("1.2.3.4"))
+	err := g.Authorize(context.Background(), attempt("akey_1", "1.2.3.4"))
 	assert.ErrorIs(t, err, denied)
 }
 
@@ -47,8 +47,8 @@ func TestPrincipalAuthGateCachesTheVerdict(t *testing.T) {
 	}, nil, time.Minute, log.NewNoopLogger())
 
 	ctx := context.Background()
-	require.NoError(t, g.Authorize(ctx, attempt("1.2.3.4")))
-	require.NoError(t, g.Authorize(ctx, attempt("1.2.3.4")))
+	require.NoError(t, g.Authorize(ctx, attempt("akey_1", "1.2.3.4")))
+	require.NoError(t, g.Authorize(ctx, attempt("akey_1", "1.2.3.4")))
 	assert.Equal(t, 1, calls, "the second call must be served from the cache")
 }
 
@@ -63,8 +63,8 @@ func TestPrincipalAuthGateKeysOnIP(t *testing.T) {
 	}, nil, time.Minute, log.NewNoopLogger())
 
 	ctx := context.Background()
-	require.NoError(t, g.Authorize(ctx, attempt("1.2.3.4")))
-	require.NoError(t, g.Authorize(ctx, attempt("5.6.7.8")))
+	require.NoError(t, g.Authorize(ctx, attempt("akey_1", "1.2.3.4")))
+	require.NoError(t, g.Authorize(ctx, attempt("akey_1", "5.6.7.8")))
 	assert.Equal(t, 2, calls, "a new source IP must be scored fresh")
 }
 
@@ -78,8 +78,8 @@ func TestPrincipalAuthGateDoesNotCacheDenials(t *testing.T) {
 	}, nil, time.Minute, log.NewNoopLogger())
 
 	ctx := context.Background()
-	_ = g.Authorize(ctx, attempt("1.2.3.4"))
-	_ = g.Authorize(ctx, attempt("1.2.3.4"))
+	_ = g.Authorize(ctx, attempt("akey_1", "1.2.3.4"))
+	_ = g.Authorize(ctx, attempt("akey_1", "1.2.3.4"))
 	assert.Equal(t, 2, calls, "a denial must be re-evaluated, not cached")
 }
 
@@ -92,8 +92,29 @@ func TestPrincipalAuthGateExpiresEntries(t *testing.T) {
 	}, nil, time.Nanosecond, log.NewNoopLogger())
 
 	ctx := context.Background()
-	require.NoError(t, g.Authorize(ctx, attempt("1.2.3.4")))
+	require.NoError(t, g.Authorize(ctx, attempt("akey_1", "1.2.3.4")))
 	time.Sleep(time.Millisecond)
-	require.NoError(t, g.Authorize(ctx, attempt("1.2.3.4")))
+	require.NoError(t, g.Authorize(ctx, attempt("akey_1", "1.2.3.4")))
 	assert.Equal(t, 2, calls)
+}
+
+// An attempt with no credential id must never be cached, or every such
+// attempt collapses onto the same key ("|" plus whatever IP, empty or not)
+// and one caller's allow gets served to every other caller missing a
+// credential id. This gate is a general engine API, not apikey-only, so a
+// future caller leaving CredentialID unset is a real scenario, not a
+// hypothetical.
+func TestPrincipalAuthGateDoesNotCacheWithoutCredentialID(t *testing.T) {
+	var calls int
+	g := newPrincipalAuthGate(func(_ context.Context, _ *principal.AuthAttempt) error {
+		calls++
+		return nil
+	}, nil, time.Minute, log.NewNoopLogger())
+
+	ctx := context.Background()
+	first := attempt("", "")
+	second := attempt("", "")
+	require.NoError(t, g.Authorize(ctx, first))
+	require.NoError(t, g.Authorize(ctx, second))
+	assert.Equal(t, 2, calls, "an attempt with no credential id must be scored fresh every time, never cached")
 }

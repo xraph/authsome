@@ -47,8 +47,22 @@ func newPrincipalAuthGate(
 	}
 }
 
-func cacheKey(a *principal.AuthAttempt) string {
-	return a.CredentialID + "|" + a.IPAddress
+// cacheKey returns the cache key for a and whether the verdict may be cached
+// at all.
+//
+// a.CredentialID is required. id.ID.String() returns "" for a nil ID, so an
+// attempt with no credential id (and, worse, no IP either) would collapse to
+// the same key, "|" or "|<ip>", as every other caller missing a credential
+// id, letting one such caller's allow be served to all of them for the TTL.
+// This gate is a general engine API reachable from any plugin via
+// PrincipalAuthGate() any, so that is not a theoretical caller, it is one
+// this function must not trust to always fill the field in. Score those
+// attempts fresh every time instead of sharing a key for them.
+func cacheKey(a *principal.AuthAttempt) (key string, cacheable bool) {
+	if a.CredentialID == "" {
+		return "", false
+	}
+	return a.CredentialID + "|" + a.IPAddress, true
 }
 
 // Authorize scores a, denying if any plugin does.
@@ -62,27 +76,34 @@ func (g *principalAuthGate) Authorize(ctx context.Context, a *principal.AuthAtte
 		return nil
 	}
 
-	key := cacheKey(a)
-	now := a.At
-	if now.IsZero() {
-		now = time.Now()
-	}
+	// Cache bookkeeping, the expiry stored and compared below, always runs
+	// on server time. a.At is caller-supplied (the apikey strategy sets it
+	// to its own time.Now(), but this is a general API) and is passed to
+	// g.authorize below unchanged for the risk contributors' own use; letting
+	// it drive the cache too would let a caller push an entry's expiry
+	// arbitrarily into the future.
+	now := time.Now()
 
-	g.mu.Lock()
-	expires, cached := g.entries[key]
-	g.mu.Unlock()
-	if cached && now.Before(expires) {
-		return nil
+	key, cacheable := cacheKey(a)
+	if cacheable {
+		g.mu.Lock()
+		expires, cached := g.entries[key]
+		g.mu.Unlock()
+		if cached && now.Before(expires) {
+			return nil
+		}
 	}
 
 	if err := g.authorize(ctx, a); err != nil {
 		return err
 	}
 
-	g.mu.Lock()
-	g.entries[key] = now.Add(g.ttl)
-	g.evictLocked(now)
-	g.mu.Unlock()
+	if cacheable {
+		g.mu.Lock()
+		g.entries[key] = now.Add(g.ttl)
+		g.evictLocked(now)
+		g.mu.Unlock()
+	}
 	return nil
 }
 
