@@ -967,6 +967,22 @@ func (p *Plugin) linkableExistingUser(ctx context.Context, appID id.AppID, envID
 }
 
 func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Provider, conn *Connection, params map[string]string) (*CallbackResponse, error) {
+	// Every SSO entry point funnels through here: the JSON callback, the OIDC
+	// browser landing and the SAML ACS. All three are the identity
+	// provider delivering the user agent. The client holding the DPoP key is
+	// never the caller, so an app on mode=required cannot complete an SSO
+	// sign-in and says so rather than minting a session exempt from its own
+	// mandate.
+	//
+	// Ahead of HandleCallback because that is where the authorization code is
+	// redeemed or the SAML assertion consumed. IssueSession would refuse this
+	// regardless, but only after the single-use artifact had been spent.
+	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
+		if bindErr := eng.DPoPBindingUnavailable(ctx.Context(), appID); bindErr != nil {
+			return nil, bindErr
+		}
+	}
+
 	ssoUser, err := provider.HandleCallback(ctx.Context(), params)
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("sso: callback failed: %w", err))
@@ -1043,6 +1059,14 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 		}
 	} else {
 		return nil, forge.BadRequest("SSO provider did not return an email address")
+	}
+
+	// Record the upstream (issuer, sub) pair so a later CAEP event naming it
+	// can find this user. iss_sub is the OIDC id_token's sub claim; SAML's
+	// NameID is not the same kind of stable subject, so this only fires for
+	// the OIDC protocol.
+	if provider.Protocol() == "oidc" && conn != nil {
+		p.linkSharedSignalsSubject(goCtx, u, conn.Issuer, ssoUser.ProviderUserID)
 	}
 
 	// Org-level SSO: enroll the user into the connection's org so signing in via
@@ -1135,6 +1159,39 @@ func (p *Plugin) ensureOrgMembership(ctx context.Context, orgID id.OrgID, userID
 			log.String("org_id", orgID.String()),
 			log.String("user_id", userID.String()),
 			log.String("error", err.Error()))
+	}
+}
+
+// subjectLinker is the slice of the sharedsignals plugin sso needs. Declared
+// here rather than imported so sso does not depend on that plugin being
+// compiled in.
+type subjectLinker interface {
+	LinkSubject(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
+		issuer, subject string, userID id.UserID, source string) error
+}
+
+// linkSharedSignalsSubject records the IdP subject we just authenticated so a
+// later CAEP event naming (issuer, sub) can find this user. A no-op when the
+// sharedsignals plugin is not registered, and never fatal to a sign-in: a
+// failure here costs a future signal, not this login.
+func (p *Plugin) linkSharedSignalsSubject(ctx context.Context, u *user.User,
+	issuer, subject string) {
+	if p.engine == nil || issuer == "" || subject == "" {
+		return
+	}
+	target := p.engine.Plugin("sharedsignals")
+	if target == nil {
+		return
+	}
+	linker, ok := target.(subjectLinker)
+	if !ok {
+		return
+	}
+	if err := linker.LinkSubject(ctx, u.AppID, u.EnvID, issuer, subject, u.ID, "sso"); err != nil && p.logger != nil {
+		p.logger.Warn("sso: record shared signals subject link",
+			log.String("issuer", issuer),
+			log.String("error", err.Error()),
+		)
 	}
 }
 

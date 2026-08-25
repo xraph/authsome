@@ -1,6 +1,8 @@
 package authsome
 
 import (
+	"time"
+
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/account"
@@ -10,6 +12,7 @@ import (
 	"github.com/xraph/authsome/bridge/ledgeradapter"
 	"github.com/xraph/authsome/bridge/wardenadapter"
 	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/lockout"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/ratelimit"
@@ -269,12 +272,34 @@ func WithMetrics(m bridge.MetricsCollector) Option {
 	}
 }
 
+// WithPrincipalAuthTTL sets how long a machine caller's allow verdict is
+// cached, keyed on credential and source IP together. Defaults to five
+// minutes. Denials are never cached regardless of this setting: see
+// principalAuthGate.Authorize.
+func WithPrincipalAuthTTL(d time.Duration) Option {
+	return func(e *Engine) {
+		e.principalAuthTTL = d
+	}
+}
+
 // WithCeremonyStore sets the ceremony state store for short-lived auth
 // ceremony sessions (passkey, social OAuth, SSO, MFA SMS challenges).
 // When not set, plugins fall back to an in-memory store.
 func WithCeremonyStore(s ceremony.Store) Option {
 	return func(e *Engine) {
 		e.ceremonyStore = s
+	}
+}
+
+// WithDPoPReplayCache overrides the DPoP proof replay cache.
+//
+// The default is a bounded in-process cache, which means replay detection does
+// not span instances. Supply dpop.NewCeremonyReplayCache with a distributed
+// ceremony store to close that gap, accepting one store round trip per
+// authenticated request in exchange.
+func WithDPoPReplayCache(c dpop.ReplayCache) Option {
+	return func(e *Engine) {
+		e.dpopReplayCache = c
 	}
 }
 

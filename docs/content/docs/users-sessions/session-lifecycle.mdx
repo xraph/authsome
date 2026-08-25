@@ -19,19 +19,23 @@ type Session struct {
     IPAddress             string           `json:"ip_address,omitempty"`
     UserAgent             string           `json:"user_agent,omitempty"`
     DeviceID              id.DeviceID      `json:"device_id,omitempty"`
-    ImpersonatedBy        id.UserID        `json:"impersonated_by,omitempty"`
+    Actors                principal.Chain  `json:"actors,omitempty"`
     ExpiresAt             time.Time        `json:"expires_at"`
     RefreshTokenExpiresAt time.Time        `json:"refresh_token_expires_at"`
     CreatedAt             time.Time        `json:"created_at"`
     UpdatedAt             time.Time        `json:"updated_at"`
 }
+
+// ImpersonatedBy returns the admin acting as this session's user, or the
+// zero ID when nobody is. Derived from Actors rather than stored.
+func (s *Session) ImpersonatedBy() id.UserID
 ```
 
 Key fields:
 
 - **`Token`** and **`RefreshToken`** are tagged `json:"-"` and only returned in authentication responses, never in session list endpoints.
 - **`DeviceID`** links the session to a tracked device (see [Device Tracking](/docs/users-sessions/device-tracking)).
-- **`ImpersonatedBy`** is set when an admin creates a session on behalf of another user (see [Impersonation](/docs/users-sessions/impersonation)).
+- **`Actors`** carries the admin when one creates a session on behalf of another user; call **`ImpersonatedBy()`** to read it back (see [Impersonation](/docs/users-sessions/impersonation)).
 - **`OrgID`** is set when the session is scoped to a specific organization.
 - Session IDs have the prefix `ases_`.
 

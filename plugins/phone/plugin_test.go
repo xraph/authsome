@@ -14,10 +14,15 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/xraph/forge"
 
+	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/environment"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugins/phone"
+	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/store/memory"
+	"github.com/xraph/authsome/user"
 )
 
 const (
@@ -200,4 +205,89 @@ func TestVerify_WithoutChallengeIsRejected(t *testing.T) {
 	rec := submitCode(t, mux, "123456")
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	assert.NotContains(t, rec.Body.String(), "session_token")
+}
+
+// newTestPluginWithStore is newTestPlugin plus a handle on the backing store,
+// for tests that need to inspect the rows the flow wrote.
+func newTestPluginWithStore(t *testing.T) (*phone.Plugin, *mockSMS, store.Store) {
+	t.Helper()
+	sms := &mockSMS{}
+	st := memory.New()
+	p := phone.New(phone.Config{SMSSender: sms, CodeTTL: 5 * time.Minute})
+	p.SetStore(st)
+	p.SetAppID(testAppIDStr)
+	p.SetCeremonyStore(ceremony.NewMemory())
+	return p, sms, st
+}
+
+// seedAppWithDefaultEnv gives the store the app and default environment the
+// phone flow is expected to resolve against.
+func seedAppWithDefaultEnv(t *testing.T, st store.Store) *environment.Environment {
+	t.Helper()
+	ctx := context.Background()
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+	require.NoError(t, st.CreateApp(ctx, &app.App{
+		ID: appID, Name: "Phone App", Slug: "phone-app",
+		PublishableKey: "pk_test_phone",
+		CreatedAt:      time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}))
+	env := &environment.Environment{
+		ID: id.NewEnvironmentID(), AppID: appID,
+		Name: "Production", Slug: "production",
+		Type: environment.TypeProduction, IsDefault: true,
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	require.NoError(t, st.CreateEnvironment(ctx, env))
+	return env
+}
+
+// A user minted by the phone flow must carry the app's default environment.
+// Without it the account lands with a nil EnvID, which both breaks the
+// env-scoped phone lookup on the user's next sign-in and leaves a row that no
+// environment owns.
+func TestVerify_NewUserGetsDefaultEnvironment(t *testing.T) {
+	p, sms, st := newTestPluginWithStore(t)
+	env := seedAppWithDefaultEnv(t, st)
+
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	code := startChallenge(t, mux, sms)
+	rec := submitCode(t, mux, code)
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+	u, err := st.GetUserByPhone(context.Background(), appID, env.ID, testPhone)
+	require.NoError(t, err, "phone user must be findable in the default environment")
+	assert.Equal(t, env.ID.String(), u.EnvID.String(),
+		"a phone signup must be stamped with the app's default environment")
+}
+
+// A second sign-in with the same number must re-find the existing account
+// rather than minting a duplicate. This is what regresses if the flow writes
+// users into one environment but looks them up in another.
+func TestVerify_ReturningUserIsNotDuplicated(t *testing.T) {
+	p, sms, st := newTestPluginWithStore(t)
+	env := seedAppWithDefaultEnv(t, st)
+
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	require.Equal(t, http.StatusOK, submitCode(t, mux, startChallenge(t, mux, sms)).Code)
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+	first, err := st.GetUserByPhone(context.Background(), appID, env.ID, testPhone)
+	require.NoError(t, err)
+
+	sms.mu.Lock()
+	sms.sent = nil
+	sms.mu.Unlock()
+
+	require.Equal(t, http.StatusOK, submitCode(t, mux, startChallenge(t, mux, sms)).Code)
+	list, err := st.ListUsers(context.Background(), &user.Query{AppID: appID, Limit: 50})
+	require.NoError(t, err)
+	assert.Len(t, list.Users, 1, "returning phone user must not be duplicated")
+	assert.Equal(t, first.ID.String(), list.Users[0].ID.String())
 }

@@ -266,18 +266,36 @@ through the middleware it takes today, with the same session lookup, the same
 context population and the same downstream behaviour, which is what lets you
 roll this out across a live fleet without a flag day.
 
-Scheme matching is strict. A bound token presented as `Authorization: Bearer`
-is rejected even with a valid `DPoP` header alongside it. RFC 9449 section 7.1
-specifies the `DPoP` scheme, and since bound tokens only exist after somebody
-opts in, strictness costs no compatibility.
+Scheme matching is strict for credentials that arrive in the `Authorization`
+header. A bound token presented as `Authorization: Bearer` is rejected even
+with a valid `DPoP` header alongside it. RFC 9449 section 7.1 specifies the
+`DPoP` scheme, and since bound tokens only exist after somebody opts in,
+strictness costs no compatibility.
 
 Three edges worth naming:
 
 - Cookie transport. Enforcement follows the token, not the transport, so a
-  bound session in a cookie still needs a proof. In practice this never fires,
-  because browser sign-in without a proof never binds. The rule stays
-  unconditional anyway instead of carving out an exception somebody widens
-  later.
+  bound session in a cookie still needs a proof. What it does not need is the
+  `DPoP` authorization scheme: section 7.1 is a rule about the `Authorization`
+  header, a cookie is not one, and a browser cannot set a scheme on a cookie.
+  So a bound session presented by cookie is honoured when a valid proof
+  accompanies it and refused when one does not, with `ath` over the session
+  token exactly as on the header path.
+
+  This used to say the case never fired, on the grounds that browser sign-in
+  never binds. That stopped being true when `handleSignIn` and `handleSignUp`
+  started resolving a binding through `dpopBindingForRequest`: under
+  `mode=required` every first-party sign-in now mints a bound session and sets
+  a cookie for it. The engine's cookie-to-header bridge rewrites that cookie
+  into `Authorization: Bearer <token>` before the inner middleware runs, so
+  strict scheme matching turned every such session into a permanent 401. The
+  bridge records the value it wrote, and the enforcement path treats a bridged
+  cookie as the cookie it is.
+
+  A client that only holds an `HttpOnly` cookie and never sees its own token
+  cannot compute `ath` and so cannot use a bound session. That is not a gap:
+  under `mode=required` the client already had to mint a proof to sign in, and
+  the sign-in response hands it the session token.
 - API keys with the `ask_` prefix go through `tryStrategyAuth` and are
   untouched. They are not issued by a token endpoint and carry no `cnf`.
 - `ath` is mandatory at a protected resource. A proof valid in every other
@@ -293,6 +311,165 @@ which is a positive signal that something is wrong, and degrading that to
 anonymous would hand an attacker a way to strip the proof off a bound token and
 fall through to any endpoint in your API that tolerates anonymous access.
 
+### Auto-refresh
+
+`AutoRefreshMiddleware` rotates a session that is close to expiry and hands the
+new access token back in `X-Auth-Token`. It runs on an ordinary request, not on
+a call to `/v1/refresh`, so the bindings are re-checked against that request:
+the proof the client already sent, the method and URL it was minted for, and
+that request's IP and User-Agent.
+
+Reusing the proof is safe, for a reason worth spelling out. Two enforcement
+points look at it on one request: the auth middleware checks it first and
+records its `jti`, then `Engine.Refresh` checks it again underneath
+auto-refresh, and without help that second check would read the request's own
+proof as a replay of itself and refuse a rotation that was never in doubt.
+`WithRequestScope` is the help. It remembers, for the life of one request,
+which proofs already cleared the replay cache. A proof genuinely replayed on a
+second request arrives with a fresh context, finds nothing recorded, and is
+caught exactly as before.
+
+The other option was to skip auto-refresh for bound sessions and point those
+clients at `/v1/refresh`. That punishes the clients who adopted the stronger
+control, which is backwards.
+
+A bound session that fails to refresh anyway logs at Warn. The auth middleware
+already accepted a valid proof for this request, so a refusal here means clock
+skew, a nonce rotating mid-request, or a validator configured differently from
+the issuer, and none of those should sit at Debug where nobody will see them.
+A quiet Debug line is how bound sessions lost auto-refresh without anyone
+noticing.
+
+The IP and User-Agent travel for a reason that has nothing to do with DPoP.
+`Refresh` skips the IP and device checks when the values it is handed are
+empty, so a caller that passes no options at all silently gets no session
+binding either. Auto-refresh is a caller like any other and passes both.
+
+## The other two paths to an identity
+
+`middleware/auth.go` is not the only place a token turns into an authenticated
+request. Two other paths resolve a credential, and a rule that holds in one
+place and not the others is not an invariant, so both apply the same check.
+
+Client mode is the one that was genuinely open. A service running with
+`WithClientMode` has no engine and no session table, so it validates tokens by
+calling the identity server's `/v1/introspect` and using what comes back. The
+introspection response now carries `cnf` with the `jkt` whenever the token is
+bound, which is what RFC 9449 section 7.3 asks for. Without it the calling
+service has no way to find out that the token in its hand is bound to a key,
+and it accepts a stolen one. The client middleware reads that claim and runs
+the same `enforceDPoP` the engine path runs. None of the checking moves to the
+identity server, because the request never goes there.
+
+So the service validates the proof itself, with its own `dpop.Validator` and
+its own replay cache, built by the extension on first use. It mints no tokens,
+so it has no nonce secret and never demands a nonce. If you assemble the
+middleware yourself and pass no validator, a bound token is refused rather than
+admitted, matching what the engine path does when its validator is missing.
+
+The second path is `authprovider.SessionProvider`, registered with the forge
+auth registry and reached by plugin authz, organization, waitlist and consent.
+In a normal deployment the global middleware rejects a bad presentation long
+before this runs, so it was closed in practice. It was closed by accident of
+chain ordering, though, and it opens the moment somebody assembles a chain
+without the global middleware. The provider now checks the binding itself. It
+answers with an auth context rather than a response, so it cannot write an RFC
+9449 challenge and returns `ErrInvalidCredentials` instead. The client learns
+less from that than it would from the middleware, which is a reason to keep the
+middleware in front of it.
+
+All three call one implementation. `checkDPoP` holds the rule and touches no
+response, `enforceDPoP` wraps it for the middleware and writes the challenge,
+and `EnforceDPoPForRequest` wraps it for callers that only get to say yes or
+no. Two copies of a rule this important would drift, and the copy nobody reads
+is the one that drifts first.
+
+## Issuance coverage
+
+Enforcement follows the token. `enforceDPoP` returns nil the moment it sees an
+empty thumbprint, which is the right rule for a deployment part way through a
+rollout, and it has a consequence worth stating plainly: an unbound session is
+exempt from proof of possession for its whole life, whatever the app is set to.
+A path that mints without resolving a binding does not produce a weaker
+session. It produces one the mandate never applies to.
+
+That makes every mint site a policy decision. The first version of this design
+only made the decision at the OAuth2 token endpoint and at first-party sign-in
+and sign-up, so `required` was true in three places and quietly false in eight
+others. Sharpest of those was MFA. Sign-in proved a thumbprint, `IssueSession`
+returned `MFARequiredError` before minting anything, and the MFA plugin then
+issued its own session with no thumbprint at all, so turning MFA on turned DPoP
+off for that user.
+
+The rule now lives in `IssueSession`, ahead of the MFA gate:
+
+```go
+if req.DPoPJKT == "" && e.DPoPModeForApp(ctx, req.AppID) == dpop.ModeRequired {
+    return nil, &DPoPRequiredError{}
+}
+```
+
+Ahead of the MFA gate because both refuse the same request, but the MFA gate
+refuses by persisting a ticket first, and there is no reason to spend a
+ceremony-store write on a login that cannot complete however the second factor
+goes. `DPoPRequiredError` renders as `400 invalid_dpop_proof`, the same shape
+the token endpoint returns.
+
+`Engine.DPoPBindingForRequest` is the shared resolver, moved out of the `api`
+package so plugins can reach it. It is the old `dpopBindingForRequest` with no
+behaviour change: mode off returns no binding, a proof is validated against
+method, URL and nonce, and a missing proof under `required` is refused.
+
+Every path that mints a session now falls into one of three groups.
+
+Most of them resolve a proof directly. First-party sign-in and sign-up, magic
+link, passkey, phone OTP, email-verification auto-login and admin
+impersonation are each a POST from the client that holds the key, so a proof is
+available and the session carries one. Magic link is the one that looks like an
+exception and is not: `/v1/magic-link/verify` is an SDK call with the token in
+the body, not the browser following the link.
+
+MFA carries a proof across a ceremony instead, because it is the only path
+where the session is minted on a different request from the one that proved the
+key. The thumbprint goes into the partial-auth ticket at sign-in and comes back
+out at `/v1/mfa/challenge`, so the session minted after the second factor keeps
+the binding the first factor established. The client never mints a second
+proof. A ticket that predates the mandate carries no thumbprint and is refused
+at challenge time, which is what happens to tickets in flight when you raise
+the mode.
+
+Carrying it buys something else worth having. A stolen ticket redeemed with a
+stolen code yields a session bound to the victim's key, which the thief cannot
+use.
+
+Social and SSO callbacks cannot obtain a proof at all, so they refuse. At both,
+the request is the identity provider redirecting the user agent, so the client
+holding the key is not the caller and has no opportunity to present anything.
+No version of these paths mints a bound session.
+
+Refusing is the deliberate part. An app on `required` is stating a mandate for
+every session under it, and if social sign-in quietly issued sessions the
+mandate could never apply to, anyone able to pick the sign-in method could opt
+out of it. If you need social or SSO on such an app, move the app back to
+`optional`. That is the same answer this design already gives for a legacy
+OAuth client, and for the same reason: explicit, visible and audited beats a
+hole nobody wrote down.
+
+`Engine.DPoPBindingUnavailable` is what they call, and they call it before the
+provider round trip. `IssueSession` would refuse them anyway, but by then the
+authorization code has been redeemed or the SAML assertion consumed, and the
+user gets an error for an artifact that is already spent. Social checks once
+the app ID is resolved from the OAuth state. SSO checks at the top of
+`authenticateUser`, where the JSON callback, the OIDC browser landing and the
+SAML ACS all converge.
+
+One thing is deliberately not covered. Magic link, social, SSO and phone each
+keep a fallback that mints through `account.NewSession` when the engine is not
+a concrete `*authsome.Engine`. Those bypass the MFA gate today and they bypass
+this too. They exist for test wiring that does not build a full engine, no
+production deployment reaches them, and folding them in is a separate change
+from this one.
+
 ## Nonce
 
 Stateless HMAC, built the same way as `dashboard/nonce.go`, keyed from
@@ -304,9 +481,21 @@ one client is useless to another.
 `Engine.NonceSecret()` returns nil when there is no HMAC JWT key and no
 `AUTHSOME_DASHBOARD_NONCE_SECRET`, which the dashboard handles by logging a
 warning and leaving its signer uninitialised. DPoP must not copy that. If an
-app has nonces switched on and no secret can be derived, fail at startup with a
-clear error. The alternative is a per-process random secret, which mints nonces
-no other instance can verify and turns a security feature into an intermittent
+app has nonces switched on and no secret can be derived, that is a
+misconfiguration and it has to fail closed with a clear error.
+
+Where it fails is the setting, not startup. `initDPoP` runs before any app has
+resolved `dpop.nonce_required`, so refusing to start there would refuse every
+deployment that has no HMAC JWT key, and almost none of those asked for nonces.
+So `initDPoP` logs a warning naming what would break and carries on, and
+`Engine.DPoPNonceRequiredForApp` answers true when it finds the setting on with
+no signer behind it, logging an error that names the app. Every DPoP request
+for that app is then refused, which is loud and takes one config change to fix.
+Answering false instead would leave the control switched on in the dashboard,
+switched off in reality, and nothing anywhere saying so.
+
+The alternative to both is a per-process random secret, which mints nonces no
+other instance can verify and turns a security feature into an intermittent
 outage that only shows up once you scale past one replica.
 
 One thing diverges sharply from the file we are copying, and it wants a comment

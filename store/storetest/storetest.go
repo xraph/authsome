@@ -23,6 +23,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/serviceaccount"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
@@ -32,8 +33,16 @@ import (
 type Factory func(t *testing.T) store.Store
 
 // RunConformance runs every contract test against stores produced by newStore.
-func RunConformance(t *testing.T, newStore Factory) {
+//
+// skip names cases the backend does not yet implement. Each is still
+// registered as a subtest and calls t.Skip from inside it, so a skipped case
+// shows up in `go test -v` output rather than silently not existing.
+func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 	t.Helper()
+	skipSet := make(map[string]bool, len(skip))
+	for _, name := range skip {
+		skipSet[name] = true
+	}
 	cases := []struct {
 		name string
 		fn   func(t *testing.T, s store.Store)
@@ -41,6 +50,9 @@ func RunConformance(t *testing.T, newStore Factory) {
 		{"AppCRUD", testAppCRUD},
 		{"DeleteAppCascade", testDeleteAppCascade},
 		{"UserEmailIsAppScoped", testUserEmailIsAppScoped},
+		{"UserPhoneLookupIsEnvScoped", testUserPhoneLookupIsEnvScoped},
+		{"UserEmailLookupIsEnvScoped", testUserEmailLookupIsEnvScoped},
+		{"UserUsernameLookupIsEnvScoped", testUserUsernameLookupIsEnvScoped},
 		{"ListUsersTotalAndFilter", testListUsersTotalAndFilter},
 		{"ListUsersEmailMetacharsAreSafe", testListUsersEmailMetacharsAreSafe},
 		{"SessionCRUD", testSessionCRUD},
@@ -54,10 +66,20 @@ func RunConformance(t *testing.T, newStore Factory) {
 		{"RefreshTokenReplayIsIdempotent", testRefreshTokenReplayIsIdempotent},
 		{"OrgMemberLookupAndCascade", testOrgMemberLookupAndCascade},
 		{"ListUserSessionsIsScopedToUser", testListUserSessionsIsScopedToUser},
+		{"PrincipalRoundTrip", testPrincipalRoundTrip},
+		{"EphemeralPrincipalExpiry", testEphemeralPrincipalExpiry},
+		{"DelegationLifecycle", testDelegationLifecycle},
+		{"ExpiredDelegationDoesNotBlockAFreshOne", testExpiredDelegationDoesNotBlockAFreshOne},
+		{"SessionActorChainRoundTrip", testSessionActorChainRoundTrip},
+		{"ServiceAccountKindDefaultsToService", testServiceAccountKindDefaultsToService},
+		{"SessionDPoPJKTRoundTrip", testSessionDPoPJKTRoundTrip},
 	}
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			if skipSet[tc.name] {
+				t.Skip("skipped by caller")
+			}
 			tc.fn(t, newStore(t))
 		})
 	}
@@ -119,6 +141,54 @@ func seedUser(t *testing.T, s store.Store, tn tenant, email string) *user.User {
 		Email:     email,
 		CreatedAt: now(),
 		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateUser(context.Background(), u))
+	return u
+}
+
+// seedSiblingEnv adds another environment to an existing app, so a test can
+// exercise the boundary between two environments of the same tenant.
+func seedSiblingEnv(t *testing.T, s store.Store, tn tenant) tenant {
+	t.Helper()
+	env := &environment.Environment{
+		ID:        id.NewEnvironmentID(),
+		AppID:     tn.AppID,
+		Name:      "Staging",
+		Slug:      "staging-" + suffix(id.NewEnvironmentID().String()),
+		Type:      environment.TypeStaging,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateEnvironment(context.Background(), env))
+	return tenant{AppID: tn.AppID, EnvID: env.ID}
+}
+
+func seedUserWithUsername(t *testing.T, s store.Store, tn tenant, email, username string) *user.User {
+	t.Helper()
+	u := &user.User{
+		ID:        id.NewUserID(),
+		AppID:     tn.AppID,
+		EnvID:     tn.EnvID,
+		Email:     email,
+		Username:  username,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateUser(context.Background(), u))
+	return u
+}
+
+func seedUserWithPhone(t *testing.T, s store.Store, tn tenant, email, phone string) *user.User {
+	t.Helper()
+	u := &user.User{
+		ID:            id.NewUserID(),
+		AppID:         tn.AppID,
+		EnvID:         tn.EnvID,
+		Email:         email,
+		Phone:         phone,
+		PhoneVerified: true,
+		CreatedAt:     now(),
+		UpdatedAt:     now(),
 	}
 	require.NoError(t, s.CreateUser(context.Background(), u))
 	return u
@@ -233,18 +303,144 @@ func testUserEmailIsAppScoped(t *testing.T, s store.Store) {
 	ub := seedUser(t, s, b, "shared@test.com")
 	assert.NotEqual(t, ua.ID.String(), ub.ID.String())
 
-	gotA, err := s.GetUserByEmail(ctx, a.AppID, "shared@test.com")
+	gotA, err := s.GetUserByEmail(ctx, a.AppID, id.Nil, "shared@test.com")
 	require.NoError(t, err)
 	assert.Equal(t, ua.ID.String(), gotA.ID.String(), "lookup must return this app's user")
 
-	gotB, err := s.GetUserByEmail(ctx, b.AppID, "shared@test.com")
+	gotB, err := s.GetUserByEmail(ctx, b.AppID, id.Nil, "shared@test.com")
 	require.NoError(t, err)
 	assert.Equal(t, ub.ID.String(), gotB.ID.String(), "lookup must be scoped per app")
 
 	// An app that has no such user must not resolve one from a sibling app.
 	empty := seedTenant(t, s)
-	_, err = s.GetUserByEmail(ctx, empty.AppID, "shared@test.com")
+	_, err = s.GetUserByEmail(ctx, empty.AppID, id.Nil, "shared@test.com")
 	assert.ErrorIs(t, err, store.ErrNotFound, "email lookup must not cross tenants")
+}
+
+// testUserPhoneLookupIsEnvScoped proves a phone lookup cannot reach across
+// environments of the same app. Two environments of one app may legitimately
+// hold different people behind the same number (a staging fixture and a real
+// production account), and a caller scoped to one environment must never be
+// handed the other's user. That is the hole that would let a staging Shared
+// Signals stream revoke a production user's sessions.
+func testUserPhoneLookupIsEnvScoped(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	prod := seedTenant(t, s)
+	staging := seedSiblingEnv(t, s, prod)
+
+	const phone = "+15550001111"
+	prodUser := seedUserWithPhone(t, s, prod, "prod@test.com", phone)
+	stagingUser := seedUserWithPhone(t, s, staging, "staging@test.com", phone)
+	require.NotEqual(t, prodUser.ID.String(), stagingUser.ID.String())
+
+	gotProd, err := s.GetUserByPhone(ctx, prod.AppID, prod.EnvID, phone)
+	require.NoError(t, err)
+	assert.Equal(t, prodUser.ID.String(), gotProd.ID.String(),
+		"lookup must return this environment's user")
+
+	gotStaging, err := s.GetUserByPhone(ctx, staging.AppID, staging.EnvID, phone)
+	require.NoError(t, err)
+	assert.Equal(t, stagingUser.ID.String(), gotStaging.ID.String(),
+		"lookup must be scoped per environment, not merely per app")
+
+	// An environment holding no such user must not be handed one from a
+	// sibling environment of the same app.
+	bare := seedSiblingEnv(t, s, prod)
+	_, err = s.GetUserByPhone(ctx, bare.AppID, bare.EnvID, phone)
+	assert.ErrorIs(t, err, store.ErrNotFound,
+		"phone lookup must not cross environments within an app")
+
+	// A nil environment keeps the historical app-wide behaviour, matching
+	// GetUserByAnyEmail, so a caller with no environment in hand still
+	// resolves rather than silently finding nothing.
+	anyEnv, err := s.GetUserByPhone(ctx, prod.AppID, id.Nil, phone)
+	require.NoError(t, err)
+	assert.Contains(t, []string{prodUser.ID.String(), stagingUser.ID.String()},
+		anyEnv.ID.String(), "a nil env must still match app-wide")
+
+	// The app boundary still holds alongside the new environment boundary.
+	other := seedTenant(t, s)
+	_, err = s.GetUserByPhone(ctx, other.AppID, other.EnvID, phone)
+	assert.ErrorIs(t, err, store.ErrNotFound, "phone lookup must not cross apps")
+}
+
+// testUserEmailLookupIsEnvScoped proves an email lookup cannot reach across
+// environments of the same app. Seeding the same address in two environments
+// is itself part of the contract: the users table is unique on
+// (app_id, env_id, email), so both rows must be accepted and each environment
+// must get its own back.
+func testUserEmailLookupIsEnvScoped(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	prod := seedTenant(t, s)
+	staging := seedSiblingEnv(t, s, prod)
+
+	const email = "lives-in-both@test.com"
+	prodUser := seedUser(t, s, prod, email)
+	stagingUser := seedUser(t, s, staging, email)
+	require.NotEqual(t, prodUser.ID.String(), stagingUser.ID.String())
+
+	gotProd, err := s.GetUserByEmail(ctx, prod.AppID, prod.EnvID, email)
+	require.NoError(t, err)
+	assert.Equal(t, prodUser.ID.String(), gotProd.ID.String(),
+		"the owning environment must resolve its own user")
+
+	gotStaging, err := s.GetUserByEmail(ctx, staging.AppID, staging.EnvID, email)
+	require.NoError(t, err)
+	assert.Equal(t, stagingUser.ID.String(), gotStaging.ID.String(),
+		"lookup must be scoped per environment, not merely per app")
+
+	bare := seedSiblingEnv(t, s, prod)
+	_, err = s.GetUserByEmail(ctx, bare.AppID, bare.EnvID, email)
+	assert.ErrorIs(t, err, store.ErrNotFound,
+		"email lookup must not cross environments within an app")
+
+	// A nil environment keeps the historical app-wide behaviour, which the
+	// signup and rename uniqueness guards depend on.
+	anyEnv, err := s.GetUserByEmail(ctx, prod.AppID, id.Nil, email)
+	require.NoError(t, err)
+	assert.Contains(t, []string{prodUser.ID.String(), stagingUser.ID.String()},
+		anyEnv.ID.String(), "a nil env must still match app-wide")
+
+	other := seedTenant(t, s)
+	_, err = s.GetUserByEmail(ctx, other.AppID, other.EnvID, email)
+	assert.ErrorIs(t, err, store.ErrNotFound, "email lookup must not cross apps")
+}
+
+// testUserUsernameLookupIsEnvScoped is the username half of the same
+// contract, against a (app_id, env_id, username) unique index.
+func testUserUsernameLookupIsEnvScoped(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	prod := seedTenant(t, s)
+	staging := seedSiblingEnv(t, s, prod)
+
+	const handle = "sharedhandle"
+	prodUser := seedUserWithUsername(t, s, prod, "handle-prod@test.com", handle)
+	stagingUser := seedUserWithUsername(t, s, staging, "handle-staging@test.com", handle)
+	require.NotEqual(t, prodUser.ID.String(), stagingUser.ID.String())
+
+	gotProd, err := s.GetUserByUsername(ctx, prod.AppID, prod.EnvID, handle)
+	require.NoError(t, err)
+	assert.Equal(t, prodUser.ID.String(), gotProd.ID.String(),
+		"the owning environment must resolve its own user")
+
+	gotStaging, err := s.GetUserByUsername(ctx, staging.AppID, staging.EnvID, handle)
+	require.NoError(t, err)
+	assert.Equal(t, stagingUser.ID.String(), gotStaging.ID.String(),
+		"lookup must be scoped per environment, not merely per app")
+
+	bare := seedSiblingEnv(t, s, prod)
+	_, err = s.GetUserByUsername(ctx, bare.AppID, bare.EnvID, handle)
+	assert.ErrorIs(t, err, store.ErrNotFound,
+		"username lookup must not cross environments within an app")
+
+	anyEnv, err := s.GetUserByUsername(ctx, prod.AppID, id.Nil, handle)
+	require.NoError(t, err)
+	assert.Contains(t, []string{prodUser.ID.String(), stagingUser.ID.String()},
+		anyEnv.ID.String(), "a nil env must still match app-wide")
+
+	other := seedTenant(t, s)
+	_, err = s.GetUserByUsername(ctx, other.AppID, other.EnvID, handle)
+	assert.ErrorIs(t, err, store.ErrNotFound, "username lookup must not cross apps")
 }
 
 func testListUsersTotalAndFilter(t *testing.T, s store.Store) {
@@ -582,6 +778,28 @@ func testListUserSessionsIsScopedToUser(t *testing.T, s store.Store) {
 	}
 }
 
+func testSessionDPoPJKTRoundTrip(t *testing.T, s store.Store) {
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "dpop-jkt@example.com")
+
+	const jkt = "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"
+
+	bound := seedSession(t, s, tn, u.ID, "tok-dpop-bound", "ref-dpop-bound")
+	bound.DPoPJKT = jkt
+	require.NoError(t, s.UpdateSession(context.Background(), bound))
+
+	got, err := s.GetSessionByToken(context.Background(), "tok-dpop-bound")
+	require.NoError(t, err)
+	assert.Equal(t, jkt, got.DPoPJKT)
+
+	// An unbound session must come back as the empty string and never as a
+	// driver-specific null. Mongo in particular has a history here.
+	unbound := seedSession(t, s, tn, u.ID, "tok-dpop-unbound", "ref-dpop-unbound")
+	fetched, err := s.GetSessionByToken(context.Background(), unbound.Token)
+	require.NoError(t, err)
+	assert.Empty(t, fetched.DPoPJKT)
+}
+
 // ──────────────────────────────────────────────────
 // Refresh-token revocation / replay
 // ──────────────────────────────────────────────────
@@ -646,4 +864,476 @@ func testOrgMemberLookupAndCascade(t *testing.T, s store.Store) {
 	members, err := s.ListMembers(ctx, org.ID)
 	require.NoError(t, err)
 	assert.Empty(t, members, "members must be cascaded with the org")
+}
+
+// ──────────────────────────────────────────────────
+// Principals and delegations
+// ──────────────────────────────────────────────────
+
+// seedPrincipal creates a non-human principal of the given kind.
+func seedPrincipal(t *testing.T, s store.Store, tn tenant, kind principal.Kind, name string) *serviceaccount.ServiceAccount { //nolint:unparam // kind kept parameterised for future non-agent conformance cases
+	t.Helper()
+	svc := &serviceaccount.ServiceAccount{
+		ID:        id.NewServiceAccountID(),
+		AppID:     tn.AppID,
+		EnvID:     tn.EnvID,
+		Kind:      kind,
+		Name:      name,
+		Scopes:    []string{"repo:read"},
+		Active:    true,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateServiceAccount(context.Background(), svc))
+	return svc
+}
+
+// testPrincipalRoundTrip pins that the kind and owner survive persistence and
+// that GetPrincipal resolves a stored row into the same ref it was written
+// under. A backend that drops Kind hands back a principal that every
+// authorization decision then treats as a plain service account.
+func testPrincipalRoundTrip(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	owner := seedUser(t, s, tn, "owner@test.com")
+
+	svc := seedPrincipal(t, s, tn, principal.KindAgent, "agent-one")
+	svc.OwnerUserID = owner.ID
+	require.NoError(t, s.UpdateServiceAccount(ctx, svc))
+
+	got, err := s.GetPrincipal(ctx, principal.Ref{Kind: principal.KindAgent, ID: svc.ID.String()})
+	require.NoError(t, err)
+	assert.Equal(t, principal.KindAgent, got.Kind)
+	assert.Equal(t, svc.ID.String(), got.ID)
+	assert.Equal(t, tn.AppID.String(), got.AppID.String())
+	require.NotNil(t, got.Owner, "the owning user must survive the round trip")
+	assert.Equal(t, principal.UserRef(owner.ID), *got.Owner)
+	assert.True(t, got.IsActive(now()))
+
+	// A user ref resolves too, out of the user table rather than this one.
+	gotUser, err := s.GetPrincipal(ctx, principal.UserRef(owner.ID))
+	require.NoError(t, err)
+	assert.Equal(t, principal.KindUser, gotUser.Kind)
+	assert.Equal(t, owner.ID.String(), gotUser.ID)
+
+	// A row written with no kind at all reads as a service account, which is
+	// what every row predating the column is.
+	legacy := &serviceaccount.ServiceAccount{
+		ID: id.NewServiceAccountID(), AppID: tn.AppID, Name: "legacy",
+		Active: true, CreatedAt: now(), UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateServiceAccount(ctx, legacy))
+	gotLegacy, err := s.GetPrincipal(ctx, principal.Ref{Kind: principal.KindService, ID: legacy.ID.String()})
+	require.NoError(t, err)
+	assert.Equal(t, principal.KindService, gotLegacy.Kind)
+}
+
+// testServiceAccountKindDefaultsToService pins that every backend answers
+// GetServiceAccount the same way for a row created with no Kind set.
+// ToPrincipal's empty-Kind-means-service_account fallback covers a row some
+// other tool wrote directly, but the store's own write path must not rely on
+// it: Kind carries `json:"kind,omitempty"`, so a handler serializing the
+// account would emit the key on a backend that normalizes at write time and
+// omit it on one that stores the blank straight through. Without this pinned
+// here, the two round trips already tested (ToPrincipal in
+// testPrincipalRoundTrip, GetPrincipal's own fallback) can each pass while
+// GetServiceAccount itself still disagrees across backends.
+func testServiceAccountKindDefaultsToService(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+
+	svc := &serviceaccount.ServiceAccount{
+		ID:        id.NewServiceAccountID(),
+		AppID:     tn.AppID,
+		EnvID:     tn.EnvID,
+		Name:      "no-kind-set",
+		Active:    true,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateServiceAccount(ctx, svc))
+
+	got, err := s.GetServiceAccount(ctx, svc.ID)
+	require.NoError(t, err)
+	assert.Equal(t, principal.KindService, got.Kind,
+		"a service account created with no Kind must read back as service_account on every backend")
+}
+
+// testEphemeralPrincipalExpiry pins the JIT-minted child contract: the parent
+// link survives, and a lapsed child is excluded from an active-only listing
+// rather than silently continuing to authenticate.
+func testEphemeralPrincipalExpiry(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	parent := seedPrincipal(t, s, tn, principal.KindAgent, "parent-agent")
+
+	past := now().Add(-time.Hour)
+	future := now().Add(time.Hour)
+
+	lapsed := seedPrincipal(t, s, tn, principal.KindAgent, "lapsed-child")
+	lapsed.ParentID = parent.ID
+	lapsed.ExpiresAt = &past
+	require.NoError(t, s.UpdateServiceAccount(ctx, lapsed))
+
+	live := seedPrincipal(t, s, tn, principal.KindAgent, "live-child")
+	live.ParentID = parent.ID
+	live.ExpiresAt = &future
+	require.NoError(t, s.UpdateServiceAccount(ctx, live))
+
+	gotLapsed, err := s.GetPrincipal(ctx, principal.Ref{Kind: principal.KindAgent, ID: lapsed.ID.String()})
+	require.NoError(t, err, "an expired principal must still be readable, so callers can report why")
+	require.NotNil(t, gotLapsed.Parent)
+	assert.Equal(t, parent.ID.String(), gotLapsed.Parent.ID)
+	assert.False(t, gotLapsed.IsActive(now()), "an expired principal must not read as active")
+
+	active, err := s.ListPrincipals(ctx, &principal.Query{
+		AppID: tn.AppID, Kind: principal.KindAgent, ActiveOnly: true, ActiveAsOf: now(),
+	})
+	require.NoError(t, err)
+	ids := make([]string, 0, len(active))
+	for _, p := range active {
+		ids = append(ids, p.ID)
+	}
+	assert.Contains(t, ids, live.ID.String())
+	assert.Contains(t, ids, parent.ID.String())
+	assert.NotContains(t, ids, lapsed.ID.String(), "an active-only listing must exclude the lapsed child")
+
+	// The exact boundary: a principal whose ExpiresAt equals the ActiveAsOf
+	// instant passed to the query is still active. principal.Principal.IsActive
+	// defines active as `!at.After(expiresAt)`, which is inclusive at
+	// equality, and every backend must agree with that method, not just with
+	// each other, or a token minted right up to its ExpiresAt would start
+	// failing mid-request depending only on which store answered it.
+	//
+	// The fixture's ExpiresAt and the query's ActiveAsOf below are the exact
+	// same time.Time value, not two separate now() calls: two calls even a
+	// few nanoseconds apart would make this test flaky for a reason that has
+	// nothing to do with the boundary itself, and now() truncates to the
+	// millisecond precisely because the SQL backends round-trip through their
+	// own timestamp formats and would not preserve anything finer.
+	boundary := now()
+	boundaryChild := seedPrincipal(t, s, tn, principal.KindAgent, "boundary-child")
+	boundaryChild.ParentID = parent.ID
+	boundaryChild.ExpiresAt = &boundary
+	require.NoError(t, s.UpdateServiceAccount(ctx, boundaryChild))
+
+	atBoundary, err := s.ListPrincipals(ctx, &principal.Query{
+		AppID: tn.AppID, Kind: principal.KindAgent, ActiveOnly: true, ActiveAsOf: boundary,
+	})
+	require.NoError(t, err)
+	atBoundaryIDs := make([]string, 0, len(atBoundary))
+	for _, p := range atBoundary {
+		atBoundaryIDs = append(atBoundaryIDs, p.ID)
+	}
+	assert.Contains(t, atBoundaryIDs, boundaryChild.ID.String(),
+		"a principal expiring at exactly ActiveAsOf must still be active, matching principal.Principal.IsActive")
+
+	// The Parent filter itself: unexercised above, and easy for a backend to
+	// get subtly wrong by comparing only the id half of the ref. ToPrincipal
+	// stamps a child's Parent ref with the child's own Kind, so the query
+	// below must match both children of `parent` and reject a ref that
+	// carries the right id under the wrong kind.
+	unrelated := seedPrincipal(t, s, tn, principal.KindAgent, "unrelated-agent")
+
+	byParent, err := s.ListPrincipals(ctx, &principal.Query{
+		AppID:  tn.AppID,
+		Parent: &principal.Ref{Kind: principal.KindAgent, ID: parent.ID.String()},
+	})
+	require.NoError(t, err)
+	byParentIDs := make([]string, 0, len(byParent))
+	for _, p := range byParent {
+		byParentIDs = append(byParentIDs, p.ID)
+	}
+	assert.Contains(t, byParentIDs, live.ID.String(), "the parent filter must return this child")
+	assert.Contains(t, byParentIDs, lapsed.ID.String(), "the parent filter is not an active filter, so the lapsed child must still appear")
+	assert.NotContains(t, byParentIDs, parent.ID.String(), "the parent itself must not appear as its own child")
+	assert.NotContains(t, byParentIDs, unrelated.ID.String(), "a principal with a different parent must not appear")
+
+	wrongKind, err := s.ListPrincipals(ctx, &principal.Query{
+		AppID:  tn.AppID,
+		Parent: &principal.Ref{Kind: principal.KindWorkload, ID: parent.ID.String()},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, wrongKind, "a parent ref naming the wrong kind must match nothing, even with a matching id")
+}
+
+// testDelegationLifecycle pins create, lookup and revoke. The revoke half is
+// the one that matters: a grant that stays findable after revocation is a
+// credential nobody can take away.
+func testDelegationLifecycle(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "delegator@test.com")
+	agent := seedPrincipal(t, s, tn, principal.KindAgent, "delegated-agent")
+
+	actor := principal.Ref{Kind: principal.KindAgent, ID: agent.ID.String()}
+	subject := principal.UserRef(u.ID)
+
+	d := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     tn.AppID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantDelegation,
+		Scopes:    []string{"repo:read"},
+		GrantedBy: subject,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateDelegation(ctx, d))
+
+	got, err := s.GetDelegation(ctx, d.ID)
+	require.NoError(t, err)
+	assert.Equal(t, actor, got.Actor)
+	assert.Equal(t, subject, got.Subject)
+	assert.Equal(t, []string{"repo:read"}, got.Scopes)
+	assert.True(t, got.IsActive(now()))
+
+	found, err := s.FindActiveDelegation(ctx, tn.AppID, actor, subject, principal.GrantDelegation)
+	require.NoError(t, err)
+	assert.Equal(t, d.ID.String(), found.ID.String())
+
+	// The wrong grant kind must not match. Impersonation and delegation are
+	// evaluated differently, so crossing them changes the decision.
+	_, err = s.FindActiveDelegation(ctx, tn.AppID, actor, subject, principal.GrantImpersonation)
+	assert.ErrorIs(t, err, principal.ErrNotFound)
+
+	listed, err := s.ListDelegations(ctx, &principal.DelegationQuery{AppID: tn.AppID, Subject: &subject})
+	require.NoError(t, err)
+	assert.Len(t, listed, 1, "the subject must be able to see what may act for them")
+
+	// A second live grant for the same (app, actor, subject, kind) must be
+	// rejected, not silently accepted alongside the first. Uniqueness here is
+	// enforced by a partial index on live rows in the SQL backends and by an
+	// explicit check in memory; a backend where this silently succeeds would
+	// let one actor hold two live grants over the same subject, so revoking
+	// the grant an admin can see would leave the other one still working.
+	dupe := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     tn.AppID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantDelegation,
+		GrantedBy: subject,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	err = s.CreateDelegation(ctx, dupe)
+	assert.ErrorIs(t, err, store.ErrConflict,
+		"a true duplicate live grant must be rejected: memory checks explicitly, and every other backend maps its duplicate-key error to store.ErrConflict the same way")
+
+	require.NoError(t, s.RevokeDelegation(ctx, d.ID, now()))
+	_, err = s.FindActiveDelegation(ctx, tn.AppID, actor, subject, principal.GrantDelegation)
+	assert.ErrorIs(t, err, principal.ErrNotFound, "a revoked grant must stop being findable")
+
+	afterRevoke, err := s.GetDelegation(ctx, d.ID)
+	require.NoError(t, err, "a revoked grant stays readable for audit")
+	assert.NotNil(t, afterRevoke.RevokedAt)
+
+	// Revoking twice is not an error. Revocation is the thing you want to
+	// succeed on a retry.
+	assert.NoError(t, s.RevokeDelegation(ctx, d.ID, now()))
+
+	// A revoked grant must free the (app, actor, subject, kind) slot rather
+	// than continue occupying it. The uniqueness constraint that backs this
+	// is a partial index on live rows only, so a naive full-tuple index
+	// would reject the fresh grant below and an agent whose grant was
+	// revoked could never be re-granted.
+	second := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     tn.AppID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantDelegation,
+		Scopes:    []string{"repo:read"},
+		GrantedBy: subject,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateDelegation(ctx, second), "revoking the first grant must free the slot for a fresh one")
+
+	foundSecond, err := s.FindActiveDelegation(ctx, tn.AppID, actor, subject, principal.GrantDelegation)
+	require.NoError(t, err)
+	assert.Equal(t, second.ID.String(), foundSecond.ID.String(), "the active grant must now be the fresh one, not the revoked one")
+
+	// The exact boundary: a grant whose ExpiresAt equals the ActiveAsOf
+	// instant passed to the query is still active. principal.Delegation.IsActive
+	// defines active as `!at.After(expiresAt)`, inclusive at equality, and
+	// ListDelegations must agree with that method, not just with the other
+	// backends. A different grant kind (impersonation, not delegation) keeps
+	// this from colliding with `second`'s live slot on the same actor/subject
+	// pair.
+	//
+	// The fixture's ExpiresAt and the query's ActiveAsOf below are the exact
+	// same time.Time value, not two separate now() calls: see the identical
+	// note in testEphemeralPrincipalExpiry.
+	boundary := now()
+	boundaryDelegation := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     tn.AppID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantImpersonation,
+		GrantedBy: subject,
+		ExpiresAt: &boundary,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateDelegation(ctx, boundaryDelegation))
+
+	atBoundary, err := s.ListDelegations(ctx, &principal.DelegationQuery{
+		AppID: tn.AppID, Subject: &subject, ActiveOnly: true, ActiveAsOf: boundary,
+	})
+	require.NoError(t, err)
+	atBoundaryIDs := make([]string, 0, len(atBoundary))
+	for _, d := range atBoundary {
+		atBoundaryIDs = append(atBoundaryIDs, d.ID.String())
+	}
+	assert.Contains(t, atBoundaryIDs, boundaryDelegation.ID.String(),
+		"a grant expiring at exactly ActiveAsOf must still be active, matching principal.Delegation.IsActive")
+}
+
+// testExpiredDelegationDoesNotBlockAFreshOne pins that live-grant uniqueness
+// means LIVE, not merely unrevoked.
+//
+// The original constraint filtered on revoked_at alone. StopImpersonation is
+// the only thing in the whole system that writes revoked_at, so an
+// impersonation session that simply ran out of time left an unrevoked, expired
+// row behind forever, and every later Impersonate for that admin and target
+// came back "already active and must be stopped first". An admin could
+// impersonate a given user exactly once, ever.
+//
+// All four backends are pinned here because all four had it, each in its own
+// idiom: a partial index predicate in postgres and sqlite, a
+// partialFilterExpression in mongo, and a loop over stored grants in memory.
+// A backend that skipped the fix would be the one that quietly stops letting
+// support staff into an account.
+func testExpiredDelegationDoesNotBlockAFreshOne(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "lapsed-grant@test.com")
+	admin := seedUser(t, s, tn, "lapsed-grant-admin@test.com")
+
+	actor := principal.UserRef(admin.ID)
+	subject := principal.UserRef(u.ID)
+
+	// Expired an hour ago, and deliberately never revoked. That combination
+	// is the whole point: nothing in the system revokes a grant on expiry.
+	lapsedAt := now().Add(-1 * time.Hour)
+	lapsed := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     tn.AppID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantImpersonation,
+		GrantedBy: actor,
+		ExpiresAt: &lapsedAt,
+		CreatedAt: now().Add(-2 * time.Hour),
+		UpdatedAt: now().Add(-2 * time.Hour),
+	}
+	require.NoError(t, s.CreateDelegation(ctx, lapsed))
+
+	_, err := s.FindActiveDelegation(ctx, tn.AppID, actor, subject, principal.GrantImpersonation)
+	require.ErrorIs(t, err, principal.ErrNotFound,
+		"sanity: the lapsed grant must already read as inactive, or this test proves nothing")
+
+	future := now().Add(1 * time.Hour)
+	fresh := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     tn.AppID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantImpersonation,
+		GrantedBy: actor,
+		ExpiresAt: &future,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateDelegation(ctx, fresh),
+		"an expired grant must not occupy the live slot: an admin who impersonated a user once must be able to do it again")
+
+	found, err := s.FindActiveDelegation(ctx, tn.AppID, actor, subject, principal.GrantImpersonation)
+	require.NoError(t, err)
+	assert.Equal(t, fresh.ID.String(), found.ID.String(),
+		"the live grant must be the fresh one, not the lapsed row it replaced")
+
+	// The other half of the constraint still has to hold. Freeing the slot on
+	// expiry must not have freed it while the grant is genuinely live, or
+	// revoking the grant an admin can see would leave a second one working.
+	dupe := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     tn.AppID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantImpersonation,
+		GrantedBy: actor,
+		ExpiresAt: &future,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	assert.ErrorIs(t, s.CreateDelegation(ctx, dupe), store.ErrConflict,
+		"a second grant while the first is still live must still be refused")
+}
+
+// testSessionActorChainRoundTrip pins that the chain survives every session
+// read path, not only the by-id one. Middleware resolves by token and refresh
+// resolves by refresh token, and a chain lost on either of those is an
+// authorization decision made against the wrong set of principals.
+func testSessionActorChainRoundTrip(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "chained@test.com")
+
+	delID := id.NewDelegationID()
+	chain := principal.Chain{
+		{Kind: principal.KindAgent, ID: "svc_child"},
+		{Kind: principal.KindAgent, ID: "svc_parent"},
+	}
+	sess := &session.Session{
+		ID:                    id.NewSessionID(),
+		AppID:                 tn.AppID,
+		EnvID:                 tn.EnvID,
+		UserID:                u.ID,
+		PrincipalKind:         principal.KindUser,
+		Token:                 "tok-chain",
+		RefreshToken:          "rtok-chain",
+		FamilyID:              id.NewSessionFamilyID(),
+		Actors:                chain,
+		ActorGrant:            principal.GrantDelegation,
+		DelegationID:          delID,
+		ExpiresAt:             now().Add(time.Hour),
+		RefreshTokenExpiresAt: now().Add(24 * time.Hour),
+		CreatedAt:             now(),
+		UpdatedAt:             now(),
+	}
+	require.NoError(t, s.CreateSession(ctx, sess))
+
+	for _, tc := range []struct {
+		name string
+		get  func() (*session.Session, error)
+	}{
+		{"GetSession", func() (*session.Session, error) { return s.GetSession(ctx, sess.ID) }},
+		{"GetSessionByToken", func() (*session.Session, error) { return s.GetSessionByToken(ctx, "tok-chain") }},
+		{"GetSessionByRefreshToken", func() (*session.Session, error) { return s.GetSessionByRefreshToken(ctx, "rtok-chain") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.get()
+			require.NoError(t, err)
+			assert.Equal(t, chain, got.Actors, "the actor chain must survive the round trip")
+			assert.Equal(t, principal.GrantDelegation, got.ActorGrant)
+			assert.Equal(t, delID.String(), got.DelegationID.String())
+			assert.True(t, got.ImpersonatedBy().IsNil(), "a delegation must not read back as impersonation")
+		})
+	}
+
+	// The impersonation shape must round-trip too, through whichever column
+	// the backend uses for it.
+	admin := seedUser(t, s, tn, "admin@test.com")
+	imp := seedSession(t, s, tn, u.ID, "tok-imp", "rtok-imp")
+	imp.SetImpersonatedBy(admin.ID)
+	require.NoError(t, s.UpdateSession(ctx, imp))
+
+	gotImp, err := s.GetSession(ctx, imp.ID)
+	require.NoError(t, err)
+	assert.Equal(t, admin.ID.String(), gotImp.ImpersonatedBy().String())
 }

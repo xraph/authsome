@@ -380,3 +380,30 @@ func TestBSONUnmarshalInvalidType(t *testing.T) {
 	err := restored.UnmarshalBSONValue(0x01, []byte{0x00, 0x00, 0x00, 0x00})
 	assert.Error(t, err)
 }
+
+func TestSSFPrefixes(t *testing.T) {
+	cases := []struct {
+		name   string
+		got    ID
+		prefix Prefix
+	}{
+		{"stream", NewSSFStreamID(), PrefixSSFStream},
+		{"link", NewSSFLinkID(), PrefixSSFLink},
+		{"event", NewSSFEventID(), PrefixSSFEvent},
+		{"signal", NewSSFSignalID(), PrefixSSFSignal},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got.Prefix() != tc.prefix {
+				t.Fatalf("prefix = %q, want %q", tc.got.Prefix(), tc.prefix)
+			}
+			parsed, err := ParseWithPrefix(tc.got.String(), tc.prefix)
+			if err != nil {
+				t.Fatalf("round trip: %v", err)
+			}
+			if parsed.String() != tc.got.String() {
+				t.Fatalf("round trip = %q, want %q", parsed, tc.got)
+			}
+		})
+	}
+}

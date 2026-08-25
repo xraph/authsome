@@ -12,7 +12,10 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/apikey"
+	"github.com/xraph/authsome/dpop"
+	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/strategy"
 	"github.com/xraph/authsome/tokenformat"
@@ -113,6 +116,10 @@ type SessionResolver func(token string) (*session.Session, error)
 // UserResolver loads a user by ID string.
 type UserResolver func(userID string) (*user.User, error)
 
+// PrincipalResolver resolves a caller by ref. Middleware takes this as a
+// function rather than an engine so it does not import the engine package.
+type PrincipalResolver func(principal.Ref) (*principal.Principal, error)
+
 // JWTValidator validates JWT access tokens and returns claims.
 // The engine implements this via its TokenFormatForApp method.
 type JWTValidator interface {
@@ -169,6 +176,28 @@ type SessionBindingConfig struct {
 	// CookieNameResolver, so it should read a cached setting rather than hit
 	// the database.
 	ExpectedAudienceResolver ExpectedAudienceResolver
+	// PrincipalResolver, when set, resolves the session's subject onto the
+	// context as a *principal.Principal after every auth path that produces a
+	// session. Threaded through this config (rather than as a standalone
+	// parameter on each middleware constructor) so it defaults to nil and
+	// every existing caller keeps working unchanged.
+	PrincipalResolver PrincipalResolver
+
+	// DPoPValidator enforces RFC 9449 proof-of-possession. When nil, DPoP is
+	// not enforced at all, which is only correct in tests: the engine always
+	// supplies one.
+	DPoPValidator *dpop.Validator
+
+	// DPoPNonceSigner mints the nonces served with a use_dpop_nonce challenge.
+	// Nil disables nonce challenges.
+	DPoPNonceSigner *dpop.NonceSigner
+
+	// DPoPNonceRequired reports whether the app owning this session demands a
+	// nonce. Nil means never.
+	DPoPNonceRequired func(ctx context.Context, appID string) bool
+
+	// DPoPAudit records a DPoP failure. Nil disables recording.
+	DPoPAudit func(ctx context.Context, action string, md map[string]string)
 }
 
 // AuthMiddleware extracts the session token from the Authorization header,
@@ -183,8 +212,9 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
+			installDPoPRequestScope(ctx)
 			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
-			token := extractBearerToken(ctx.Request(), cookieName)
+			scheme, token := extractCredentialCtx(ctx.Context(), ctx.Request(), cookieName)
 			if token == "" {
 				return next(ctx)
 			}
@@ -243,6 +273,10 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 				}
 			}
 
+			if dpopErr := enforceDPoP(ctx, bindCfg, sess.DPoPJKT, scheme, token, sess.AppID.String(), sess.ID.String(), logger); dpopErr != nil {
+				return dpopErr
+			}
+
 			goCtx := ctx.Context()
 			goCtx = WithSession(goCtx, sess)
 			goCtx = WithSessionID(goCtx, sess.ID)
@@ -258,6 +292,7 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 			if imp := sess.ImpersonatedBy(); imp.Prefix() != "" {
 				goCtx = WithImpersonator(goCtx, imp)
 			}
+			goCtx = setPrincipalContext(goCtx, sess, bindCfg.PrincipalResolver, logger)
 
 			if sess.OrgID.Prefix() != "" {
 				goCtx = WithOrgID(goCtx, sess.OrgID)
@@ -312,19 +347,24 @@ func AuthMiddlewareWithStrategies(
 
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
+			installDPoPRequestScope(ctx)
 			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
-			token := extractBearerToken(ctx.Request(), cookieName)
+			scheme, token := extractCredentialCtx(ctx.Context(), ctx.Request(), cookieName)
 
 			// Try bearer session resolution first (skip if token looks like an API key).
 			if token != "" && !isAPIKeyToken(token) {
-				if resolved := trySessionAuth(ctx, token, resolveSession, resolveUser, logger, bindCfg); resolved {
+				resolved, err := trySessionAuth(ctx, scheme, token, resolveSession, resolveUser, logger, bindCfg)
+				if err != nil {
+					return err
+				}
+				if resolved {
 					return next(ctx)
 				}
 			}
 
 			// Fall back to strategy registry.
 			if strategies != nil {
-				if resolved := tryStrategyAuth(ctx, strategies, resolveUser, logger); resolved {
+				if resolved := tryStrategyAuth(ctx, strategies, resolveUser, bindCfg.PrincipalResolver, logger); resolved {
 					return next(ctx)
 				}
 			}
@@ -353,13 +393,22 @@ func AuthMiddlewareWithJWT(
 
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
+			installDPoPRequestScope(ctx)
 			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
-			token := extractBearerToken(ctx.Request(), cookieName)
+			scheme, token := extractCredentialCtx(ctx.Context(), ctx.Request(), cookieName)
 
 			if token != "" {
 				// JWT detection: tokens with two dots are JWTs.
 				if tokenformat.IsJWT(token) && jwtValidator != nil {
-					switch tryJWTAuth(ctx, token, jwtValidator, resolveUser, logger, bindCfg) {
+					// A DPoP enforcement failure comes back as an error and
+					// not as a result, because it has to surface as an actual
+					// 401 carrying the RFC 9449 challenge rather than fall
+					// through to any other authentication path.
+					result, dpopErr := tryJWTAuth(ctx, scheme, token, jwtValidator, resolveUser, logger, bindCfg)
+					if dpopErr != nil {
+						return dpopErr
+					}
+					switch result {
 					case jwtAuthAuthenticated:
 						return next(ctx)
 					case jwtAuthRefused:
@@ -379,7 +428,11 @@ func AuthMiddlewareWithJWT(
 
 				// Try opaque session resolution (skip API key prefixed tokens).
 				if !isAPIKeyToken(token) {
-					if resolved := trySessionAuth(ctx, token, resolveSession, resolveUser, logger, bindCfg); resolved {
+					resolved, err := trySessionAuth(ctx, scheme, token, resolveSession, resolveUser, logger, bindCfg)
+					if err != nil {
+						return err
+					}
+					if resolved {
 						return next(ctx)
 					}
 				}
@@ -387,7 +440,7 @@ func AuthMiddlewareWithJWT(
 
 			// Fall back to strategy registry.
 			if strategies != nil {
-				if resolved := tryStrategyAuth(ctx, strategies, resolveUser, logger); resolved {
+				if resolved := tryStrategyAuth(ctx, strategies, resolveUser, bindCfg.PrincipalResolver, logger); resolved {
 					return next(ctx)
 				}
 			}
@@ -429,20 +482,26 @@ const (
 // Every rejection past the signature check returns jwtAuthRefused, not
 // jwtAuthNotHandled. Once the signature verifies, this deployment minted the
 // token and this function is the authority on it.
+//
+// The error return is reserved for one case: a DPoP-bound token that failed
+// proof-of-possession enforcement. That failure has to reach the caller as an
+// actual 401 carrying the RFC 9449 challenge, never as a silent "try
+// something else" signal, or a bound token could be laundered through a
+// fallback path that skips enforcement entirely.
 func tryJWTAuth(
 	ctx forge.Context,
-	token string,
+	scheme, token string,
 	validator JWTValidator,
 	resolveUser UserResolver,
 	logger log.Logger,
 	bindCfg SessionBindingConfig,
-) jwtAuthResult {
+) (jwtAuthResult, error) {
 	claims, err := validator.ValidateJWT(token)
 	if err != nil {
 		logger.Debug("auth middleware: JWT validation failed",
 			log.String("error", err.Error()),
 		)
-		return jwtAuthNotHandled
+		return jwtAuthNotHandled, nil
 	}
 
 	// Cross-tenant guard: a JWT minted under one app must not be honored when
@@ -451,7 +510,7 @@ func tryJWTAuth(
 		logger.Warn("auth middleware: JWT app mismatch (publishable key switched)",
 			log.String("session_id", claims.SessionID),
 		)
-		return jwtAuthRefused
+		return jwtAuthRefused, nil
 	}
 
 	// Resource indicator guard (RFC 8707): a token audienced at a resource
@@ -463,7 +522,7 @@ func tryJWTAuth(
 			logger.Warn("auth middleware: JWT audience mismatch",
 				log.String("session_id", claims.SessionID),
 			)
-			return jwtAuthRefused
+			return jwtAuthRefused, nil
 		}
 	}
 
@@ -476,7 +535,7 @@ func tryJWTAuth(
 			logger.Debug("auth middleware: JWT session not found in store (revoked?)",
 				log.String("session_id", claims.SessionID),
 			)
-			return jwtAuthRefused
+			return jwtAuthRefused, nil
 		}
 
 		// sess == nil && sessErr == nil means "feature disabled, skip checks".
@@ -490,7 +549,7 @@ func tryJWTAuth(
 						log.String("client_ip", clientIP),
 						log.String("session_id", sess.ID.String()),
 					)
-					return jwtAuthRefused
+					return jwtAuthRefused, nil
 				}
 			}
 
@@ -503,38 +562,96 @@ func tryJWTAuth(
 						log.String("client_ua", ua),
 						log.String("session_id", sess.ID.String()),
 					)
-					return jwtAuthRefused
+					return jwtAuthRefused, nil
 				}
 			}
 		}
 	}
 
+	if dpopErr := enforceDPoP(ctx, bindCfg, claims.DPoPJKT, scheme, token, claims.AppID, claims.SessionID, logger); dpopErr != nil {
+		return jwtAuthNotHandled, dpopErr
+	}
+
 	goCtx := ctx.Context()
 
 	// Build a virtual session from JWT claims (no DB record needed).
-	appID := id.MustParse(claims.AppID)
-	userID := id.MustParse(claims.UserID)
+	//
+	// Every id below arrives inside the token, so it is attacker-influenced
+	// even though a valid signature is required to reach this code. These
+	// parses used to be id.MustParse, which panics on anything malformed and
+	// panicked outright on a machine token, whose sub is a service account id
+	// and was empty before the principal claims existed. Refuse the token
+	// instead: a panic in auth middleware is a bad failure mode to leave in
+	// place for a case the signature check is the only thing preventing.
+	parse := func(field, raw string) (id.ID, bool) {
+		parsed, parseErr := id.Parse(raw)
+		if parseErr != nil {
+			logger.Warn("auth middleware: JWT carries a malformed id claim",
+				log.String("claim", field),
+				log.String("error", parseErr.Error()),
+			)
+			return id.Nil, false
+		}
+		return parsed, true
+	}
+
+	appID, ok := parse("app_id", claims.AppID)
+	if !ok {
+		return jwtAuthRefused, nil
+	}
+	subjectID, ok := parse("sub", claims.UserID)
+	if !ok {
+		return jwtAuthRefused, nil
+	}
 
 	goCtx = WithAppID(goCtx, appID)
-	goCtx = WithUserID(goCtx, userID)
 	goCtx = WithAuthMethod(goCtx, "jwt")
 
+	// An empty PrincipalKind means user, which is what every token minted
+	// before that claim existed carries.
+	kind := principal.Kind(claims.PrincipalKind)
+	isUser := kind == "" || kind == principal.KindUser
+	if isUser {
+		goCtx = WithUserID(goCtx, subjectID)
+	}
+
 	if claims.SessionID != "" {
-		sessionID := id.MustParse(claims.SessionID)
+		sessionID, sidOK := parse("sid", claims.SessionID)
+		if !sidOK {
+			return jwtAuthRefused, nil
+		}
 		goCtx = WithSessionID(goCtx, sessionID)
 	}
 
 	if claims.EnvID != "" {
-		envID := id.MustParse(claims.EnvID)
+		envID, envOK := parse("env_id", claims.EnvID)
+		if !envOK {
+			return jwtAuthRefused, nil
+		}
 		goCtx = WithEnvID(goCtx, envID)
 	}
 
 	if claims.OrgID != "" {
-		orgID := id.MustParse(claims.OrgID)
+		orgID, orgOK := parse("org_id", claims.OrgID)
+		if !orgOK {
+			return jwtAuthRefused, nil
+		}
 		goCtx = WithOrgID(goCtx, orgID)
 		goCtx = forge.WithScope(goCtx, forge.NewOrgScope(claims.AppID, claims.OrgID))
 	} else {
 		goCtx = forge.WithScope(goCtx, forge.NewAppScope(claims.AppID))
+	}
+
+	// A machine caller has no user row to resolve. Put the principal on the
+	// context so PrincipalRefFrom finds it, and stop.
+	if !isUser {
+		goCtx = principal.NewContext(goCtx, &principal.Principal{
+			Ref:    principal.Ref{Kind: kind, ID: subjectID.String()},
+			AppID:  appID,
+			Scopes: claims.Scopes,
+		})
+		ctx.WithContext(goCtx)
+		return jwtAuthAuthenticated, nil
 	}
 
 	// Resolve user from claims.
@@ -545,30 +662,37 @@ func tryJWTAuth(
 			log.String("error", err.Error()),
 		)
 		ctx.WithContext(goCtx)
-		return jwtAuthAuthenticated // Authenticated via JWT even if user lookup fails
+		return jwtAuthAuthenticated, nil // Authenticated via JWT even if user lookup fails
 	}
 	goCtx = WithUser(goCtx, u)
 
 	ctx.WithContext(goCtx)
-	return jwtAuthAuthenticated
+	return jwtAuthAuthenticated, nil
 }
 
 // trySessionAuth attempts to authenticate via session token resolution.
-// Returns true if authentication succeeded and context was updated.
+// Returns (true, nil) if authentication succeeded and context was updated,
+// (false, nil) when the token simply did not resolve to a session (so the
+// caller can fall back to strategy auth), and (false, err) when a
+// DPoP-bound session failed proof-of-possession enforcement. That last case
+// must surface as an actual 401 rather than "not resolved": otherwise a
+// bound token with a missing or invalid proof would just fall through to
+// the strategy chain and, finding nothing there either, be treated as an
+// ordinary unauthenticated request instead of a rejected one.
 func trySessionAuth(
 	ctx forge.Context,
-	token string,
+	scheme, token string,
 	resolveSession SessionResolver,
 	resolveUser UserResolver,
 	logger log.Logger,
 	bindCfg SessionBindingConfig,
-) bool {
+) (bool, error) {
 	sess, err := resolveSession(token)
 	if err != nil {
 		logger.Debug("auth middleware: invalid session token",
 			log.String("error", err.Error()),
 		)
-		return false
+		return false, nil
 	}
 
 	// Cross-tenant guard: a session minted under one app must not be honored
@@ -577,7 +701,7 @@ func trySessionAuth(
 		logger.Warn("auth middleware: session app mismatch (publishable key switched)",
 			log.String("session_id", sess.ID.String()),
 		)
-		return false
+		return false, nil
 	}
 
 	// Resource indicator guard (RFC 8707): a token audienced at a resource
@@ -589,7 +713,7 @@ func trySessionAuth(
 			logger.Warn("auth middleware: session audience mismatch",
 				log.String("session_id", sess.ID.String()),
 			)
-			return false
+			return false, nil
 		}
 	}
 
@@ -602,7 +726,7 @@ func trySessionAuth(
 				log.String("client_ip", clientIP),
 				log.String("session_id", sess.ID.String()),
 			)
-			return false
+			return false, nil
 		}
 	}
 	if bindCfg.BindToDevice && sess.UserAgent != "" {
@@ -613,12 +737,16 @@ func trySessionAuth(
 				log.String("client_ua", ua),
 				log.String("session_id", sess.ID.String()),
 			)
-			return false
+			return false, nil
 		}
 	}
 
-	setSessionContext(ctx, sess, resolveUser, logger)
-	return true
+	if dpopErr := enforceDPoP(ctx, bindCfg, sess.DPoPJKT, scheme, token, sess.AppID.String(), sess.ID.String(), logger); dpopErr != nil {
+		return false, dpopErr
+	}
+
+	setSessionContext(ctx, sess, resolveUser, bindCfg.PrincipalResolver, logger)
+	return true, nil
 }
 
 // tryStrategyAuth attempts to authenticate via the strategy registry.
@@ -627,6 +755,7 @@ func tryStrategyAuth(
 	ctx forge.Context,
 	strategies StrategyAuthenticator,
 	_ UserResolver,
+	resolvePrincipal PrincipalResolver,
 	logger log.Logger,
 ) bool {
 	result, err := strategies.Authenticate(ctx.Context(), ctx.Request())
@@ -709,6 +838,7 @@ func tryStrategyAuth(
 		} else {
 			goCtx = forge.WithScope(goCtx, forge.NewAppScope(result.Session.AppID.String()))
 		}
+		goCtx = setPrincipalContext(goCtx, result.Session, resolvePrincipal, logger)
 	}
 
 	if result.User != nil {
@@ -720,8 +850,52 @@ func tryStrategyAuth(
 	return true
 }
 
+// setPrincipalContext resolves the session's subject and puts it, and the
+// actor chain, on the context.
+//
+// A resolution failure is logged and passed over rather than failing the
+// request. The session already authenticated the caller; this is enrichment,
+// and refusing the request over it would turn a principal-store blip into an
+// outage on traffic that is otherwise fine.
+func setPrincipalContext(
+	goCtx context.Context, sess *session.Session, resolve PrincipalResolver, logger log.Logger,
+) context.Context {
+	// AuthzActors, not Actors. The two differ for exactly one case and it is
+	// the case that matters: on an impersonation, AuthzActors is empty,
+	// because impersonating somebody is precisely the request to evaluate as
+	// them. Putting sess.Actors here instead would let a chain-aware guard
+	// intersect the impersonating ADMIN's own permissions into every check,
+	// which inverts impersonation entirely: the admin would be able to do
+	// less than the person they are standing in for, not the same.
+	//
+	// The full chain, admin included, is still on the context as the session
+	// itself (WithSession) and still reaches audit through
+	// Session.ImpersonatedBy. This value is the authorization view of it.
+	if actors := sess.AuthzActors(); len(actors) > 0 {
+		goCtx = WithActors(goCtx, actors)
+	}
+	if resolve == nil {
+		return goCtx
+	}
+	ref := sess.Subject()
+	if ref.IsZero() {
+		return goCtx
+	}
+	p, err := resolve(ref)
+	if err != nil {
+		logger.Warn("auth middleware: failed to resolve principal",
+			log.String("principal", ref.String()),
+			log.String("error", err.Error()),
+		)
+		return goCtx
+	}
+	return WithPrincipal(goCtx, p)
+}
+
 // setSessionContext populates the forge context with session and user data.
-func setSessionContext(ctx forge.Context, sess *session.Session, resolveUser UserResolver, logger log.Logger) {
+func setSessionContext(
+	ctx forge.Context, sess *session.Session, resolveUser UserResolver, resolvePrincipal PrincipalResolver, logger log.Logger,
+) {
 	goCtx := ctx.Context()
 	goCtx = WithSession(goCtx, sess)
 	goCtx = WithSessionID(goCtx, sess.ID)
@@ -734,6 +908,7 @@ func setSessionContext(ctx forge.Context, sess *session.Session, resolveUser Use
 	if imp := sess.ImpersonatedBy(); imp.Prefix() != "" {
 		goCtx = WithImpersonator(goCtx, imp)
 	}
+	goCtx = setPrincipalContext(goCtx, sess, resolvePrincipal, logger)
 
 	if sess.OrgID.Prefix() != "" {
 		goCtx = WithOrgID(goCtx, sess.OrgID)
@@ -759,10 +934,15 @@ func setSessionContext(ctx forge.Context, sess *session.Session, resolveUser Use
 }
 
 // RequireAuth returns a forge middleware that rejects unauthenticated requests.
+//
+// Authenticated means a resolved principal of any kind, not a user
+// specifically. A machine caller carries no *user.User, so gating on one
+// turned away every service account, agent and workload credential before it
+// reached a handler.
 func RequireAuth() forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
-			if _, ok := UserFrom(ctx.Context()); !ok {
+			if _, ok := PrincipalRefFrom(ctx.Context()); !ok {
 				body := map[string]any{
 					"error": "authentication required",
 					"code":  http.StatusUnauthorized,
@@ -832,22 +1012,87 @@ func audienceAllowed(tokenAudience, expected []string) bool {
 	return false
 }
 
-func extractBearerToken(r *http.Request, cookieName string) string {
+// Credential schemes returned by extractCredential.
+const (
+	schemeBearer = "bearer"
+	schemeDPoP   = "dpop"
+	schemeCookie = "cookie"
+)
+
+// cookieBridgeKey carries the token that a cookie-to-header bridge wrote into
+// the Authorization header for this request.
+type cookieBridgeKey struct{}
+
+// WithCookieBridgedToken records that the Authorization header on this request
+// was synthesized from a session cookie rather than sent by the client.
+//
+// The engine bridges the cookie into "Authorization: Bearer <token>" so every
+// downstream reader sees one credential shape. That is convenient and it also
+// erased the one fact RFC 9449 section 7.1 turns on, namely whether the
+// credential arrived in an Authorization header at all. Recording the bridged
+// value here puts the fact back without changing what downstream readers see.
+func WithCookieBridgedToken(ctx context.Context, token string) context.Context {
+	return context.WithValue(ctx, cookieBridgeKey{}, token)
+}
+
+// cookieBridgedTokenFrom returns the token the bridge wrote, or "".
+func cookieBridgedTokenFrom(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	v, _ := ctx.Value(cookieBridgeKey{}).(string) //nolint:errcheck // type-safe via key
+	return v
+}
+
+// ExtractCredentialFromContext pulls the token out of a request and reports
+// which scheme carried it, accounting for a cookie the engine bridged into the
+// Authorization header earlier in this request. Auth paths outside this
+// package that hold a request context should prefer it over ExtractCredential,
+// which cannot tell a bridged cookie from a real Bearer header.
+func ExtractCredentialFromContext(ctx context.Context, r *http.Request, cookieName string) (scheme, token string) {
+	return extractCredentialCtx(ctx, r, cookieName)
+}
+
+// extractCredentialCtx is extractCredential plus the knowledge of whether the
+// Authorization header holds a value the cookie bridge put there.
+//
+// The comparison is against the exact token the bridge recorded, so a request
+// that also carries a real Authorization header keeps the bearer scheme and
+// the strict rule that goes with it.
+func extractCredentialCtx(ctx context.Context, r *http.Request, cookieName string) (scheme, token string) {
+	scheme, token = extractCredential(r, cookieName)
+	if scheme == schemeBearer && token != "" && token == cookieBridgedTokenFrom(ctx) {
+		return schemeCookie, token
+	}
+	return scheme, token
+}
+
+// extractCredential pulls the token out of the request and reports which
+// scheme carried it.
+//
+// The scheme matters because a DPoP-bound token must be presented under the
+// DPoP scheme (RFC 9449 section 7.1). Returning it here rather than discarding
+// it lets the enforcement path refuse a bound token sent as Bearer.
+func extractCredential(r *http.Request, cookieName string) (scheme, token string) {
 	auth := r.Header.Get("Authorization")
 	if auth != "" {
 		parts := strings.SplitN(auth, " ", 2)
-		if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
-			return parts[1]
+		if len(parts) == 2 {
+			switch {
+			case strings.EqualFold(parts[0], "bearer"):
+				return schemeBearer, parts[1]
+			case strings.EqualFold(parts[0], "dpop"):
+				return schemeDPoP, parts[1]
+			}
 		}
 	}
-	// Fallback: read session token from httpOnly cookie set by the backend.
 	if cookieName == "" {
 		cookieName = "authsome_session_token"
 	}
 	if cookie, err := r.Cookie(cookieName); err == nil && cookie.Value != "" {
-		return cookie.Value
+		return schemeCookie, cookie.Value
 	}
-	return ""
+	return "", ""
 }
 
 // resolveCookieName returns the session cookie name using the resolver, or the default.
@@ -866,4 +1111,247 @@ func resolveCookieName(resolver CookieNameResolver, ctx context.Context) string 
 // its IP). Kept as a thin alias so existing call sites read naturally.
 func clientIPFromRequest(r *http.Request) string {
 	return ClientIP(r)
+}
+
+// installDPoPRequestScope marks the request context so that every enforcement
+// point on this request shares one record of which proofs already cleared the
+// replay cache.
+//
+// Without it the second point to look at a proof sees the jti the first one
+// recorded and refuses the request as a replay of itself. That is not
+// hypothetical: the global auth middleware and a route's own session auth
+// provider both enforce, and so do the refresh and token endpoints when a
+// bound token rides along in the Authorization header.
+//
+// Requests with no DPoP header carry no proof for anything to re-check, so
+// they skip the allocation and take the path they took before this existed.
+func installDPoPRequestScope(ctx forge.Context) {
+	if ctx.Request().Header.Get("DPoP") == "" {
+		return
+	}
+	ctx.WithContext(dpop.WithRequestScope(ctx.Context()))
+}
+
+// dpopCheck is the outcome of applying RFC 9449 to a presented credential. It
+// makes no HTTP response decisions, so the middleware (which can answer with a
+// challenge) and the forge auth provider (which only gets to say yes or no)
+// run one rule instead of two that drift apart.
+type dpopCheck struct {
+	ok    bool
+	proof *dpop.Proof
+
+	// code is the RFC 9449 error code for the challenge. Empty means refuse
+	// without a challenge: the server could not check the binding at all, so
+	// there is no proof the client could retry with.
+	code string
+
+	// action and reason describe the audit record. action is empty when
+	// there is nothing worth auditing.
+	action string
+	reason string
+
+	// nonceRequired carries what the app's nonce policy said, so a caller
+	// that rotates the nonce does not resolve the setting a second time.
+	nonceRequired bool
+}
+
+// checkDPoP runs the RFC 9449 checks for a credential already known to be
+// bound. Callers deal with the unbound case before getting here.
+func checkDPoP(
+	ctx context.Context,
+	cfg SessionBindingConfig,
+	r *http.Request,
+	boundJKT, scheme, token, appID string,
+	logger log.Logger,
+) dpopCheck {
+	if cfg.DPoPValidator == nil {
+		// A bound token with no validator configured cannot be checked. Refuse
+		// rather than admit it: failing closed here turns a misconfiguration
+		// into an outage, and failing open turns it into a silent bypass.
+		logger.Error("auth middleware: DPoP-bound token but no validator configured")
+		return dpopCheck{}
+	}
+
+	// RFC 9449 section 7.1 governs the Authorization header, so strict scheme
+	// matching applies to credentials that actually arrived in one. A cookie is
+	// not an Authorization header and has no scheme to match, so a bound
+	// session presented by cookie is honoured when a valid proof accompanies it
+	// and refused when one does not. The binding still holds either way: what
+	// changes is only which of the two ways of failing applies.
+	//
+	// Bearer stays strict. A bound token sent as "Authorization: Bearer" with a
+	// proof alongside is exactly the case section 7.1 speaks to, and it is
+	// still refused.
+	if scheme != schemeDPoP && scheme != schemeCookie {
+		logger.Warn("auth middleware: DPoP-bound token presented under the wrong scheme",
+			log.String("scheme", scheme),
+		)
+		return dpopCheck{code: dpopErrInvalidToken, action: hook.ActionDPoPProofInvalid, reason: "wrong_scheme"}
+	}
+
+	raw := r.Header.Get("DPoP")
+	if raw == "" {
+		return dpopCheck{code: dpopErrInvalidToken, action: hook.ActionDPoPProofInvalid, reason: "missing_proof"}
+	}
+
+	proof, err := dpop.Parse(raw)
+	if err != nil {
+		logger.Warn("auth middleware: DPoP proof rejected",
+			log.String("error", err.Error()),
+		)
+		return dpopCheck{code: dpopErrInvalidToken, action: hook.ActionDPoPProofInvalid, reason: "parse_failed"}
+	}
+
+	nonceRequired := cfg.DPoPNonceRequired != nil && cfg.DPoPNonceRequired(ctx, appID)
+
+	err = cfg.DPoPValidator.Validate(ctx, proof, dpop.Expectation{
+		Method:        r.Method,
+		URL:           RequestURL(r),
+		AccessToken:   token,
+		ExpectedJKT:   boundJKT,
+		NonceRequired: nonceRequired,
+	})
+	switch {
+	case err == nil:
+		return dpopCheck{ok: true, proof: proof, nonceRequired: nonceRequired}
+
+	case errors.Is(err, dpop.ErrNonceRequired), errors.Is(err, dpop.ErrNonceMismatch):
+		return dpopCheck{proof: proof, code: dpopErrUseNonce}
+
+	case errors.Is(err, dpop.ErrKeyMismatch):
+		// A structurally valid proof for the wrong key has no innocent
+		// explanation the way a changed IP does, so it is logged apart from
+		// ordinary client breakage.
+		logger.Warn("auth middleware: DPoP key mismatch",
+			log.String("bound_jkt", boundJKT),
+			log.String("proof_jkt", proof.JKT),
+		)
+		return dpopCheck{proof: proof, code: dpopErrInvalidToken, action: hook.ActionDPoPProofInvalid, reason: "key_mismatch"}
+
+	case errors.Is(err, dpop.ErrReplayed):
+		// Rare, and interesting when it happens: it means somebody captured a
+		// proof and the token it was minted for.
+		logger.Warn("auth middleware: DPoP proof replayed",
+			log.String("proof_jkt", proof.JKT),
+		)
+		return dpopCheck{proof: proof, code: dpopErrInvalidToken, action: hook.ActionDPoPProofReplayed}
+
+	default:
+		logger.Warn("auth middleware: DPoP validation failed",
+			log.String("error", err.Error()),
+		)
+		return dpopCheck{proof: proof, code: dpopErrInvalidToken, action: hook.ActionDPoPProofInvalid, reason: "validation_failed"}
+	}
+}
+
+// RFC 9449 error codes carried in a WWW-Authenticate challenge.
+const (
+	dpopErrInvalidToken = "invalid_token"
+	dpopErrUseNonce     = "use_dpop_nonce"
+)
+
+// auditDPoP records a DPoP failure. session_id and app_id identify who tripped
+// the rule; the raw proof and the token itself never go in, since metadata
+// routinely ends up in longer-lived audit storage than the request that
+// produced it.
+func auditDPoP(ctx context.Context, cfg SessionBindingConfig, result dpopCheck, appID, sessionID string) {
+	if cfg.DPoPAudit == nil || result.action == "" {
+		return
+	}
+	md := map[string]string{"session_id": sessionID, "app_id": appID}
+	if result.reason != "" {
+		md["reason"] = result.reason
+	}
+	cfg.DPoPAudit(ctx, result.action, md)
+}
+
+// enforceDPoP applies RFC 9449 to a resolved credential.
+//
+// Enforcement follows the token, not the route and not the configuration. A
+// token with no binding takes one string comparison and the identical path it
+// took before this function existed, which is what lets DPoP roll out without
+// a flag day. A token that is bound cannot be used without a matching proof,
+// whatever the app or client mode says at the time of the request.
+func enforceDPoP(
+	ctx forge.Context,
+	cfg SessionBindingConfig,
+	boundJKT, scheme, token, appID, sessionID string,
+	logger log.Logger,
+) error {
+	if boundJKT == "" {
+		return nil // Unbound. Nothing to enforce.
+	}
+
+	result := checkDPoP(ctx.Context(), cfg, ctx.Request(), boundJKT, scheme, token, appID, logger)
+	auditDPoP(ctx.Context(), cfg, result, appID, sessionID)
+
+	switch {
+	case result.ok:
+		// Rotate the nonce before the client's current one expires, so a
+		// long-lived client never has to eat a challenge round trip.
+		if result.nonceRequired && cfg.DPoPNonceSigner != nil && cfg.DPoPNonceSigner.NeedsRefresh(result.proof.Nonce) {
+			ctx.Response().Header().Set("DPoP-Nonce", cfg.DPoPNonceSigner.Issue(result.proof.JKT))
+		}
+		return nil
+
+	case result.code == "":
+		// The binding could not be checked at all, so there is no retry to
+		// point the client at and no challenge to write.
+		return forge.Unauthorized("token requires proof of possession")
+
+	case result.code == dpopErrUseNonce:
+		return dpopChallenge(ctx, cfg, result.proof.JKT, result.code)
+
+	default:
+		return dpopChallenge(ctx, cfg, "", result.code)
+	}
+}
+
+// ErrDPoPBindingFailed reports a bound token presented without an acceptable
+// proof, for callers outside the middleware chain that only get to answer yes
+// or no and cannot write an RFC 9449 challenge.
+var ErrDPoPBindingFailed = errors.New("authsome: token requires proof of possession")
+
+// EnforceDPoPForRequest applies the rule enforceDPoP applies, for a credential
+// resolved outside the HTTP middleware chain. The forge auth providers are the
+// case that needs it: they return an auth context rather than a response, so
+// they cannot answer with a challenge, but the binding still has to hold. A
+// caller that can write a response should go through the middleware instead,
+// so the client learns which retry would work.
+func EnforceDPoPForRequest(
+	ctx context.Context,
+	cfg SessionBindingConfig,
+	r *http.Request,
+	boundJKT, scheme, token, appID, sessionID string,
+	logger log.Logger,
+) error {
+	if boundJKT == "" {
+		return nil // Unbound. Nothing to enforce.
+	}
+
+	result := checkDPoP(ctx, cfg, r, boundJKT, scheme, token, appID, logger)
+	auditDPoP(ctx, cfg, result, appID, sessionID)
+	if result.ok {
+		return nil
+	}
+	return ErrDPoPBindingFailed
+}
+
+// ExtractCredential pulls the token out of a request and reports which scheme
+// carried it, for auth paths outside this package that have to read a
+// credential the way the middleware reads it. cookieName may be empty for the
+// default session cookie.
+func ExtractCredential(r *http.Request, cookieName string) (scheme, token string) {
+	return extractCredential(r, cookieName)
+}
+
+// dpopChallenge writes an RFC 9449 challenge and returns the 401 to propagate.
+func dpopChallenge(ctx forge.Context, cfg SessionBindingConfig, jkt, code string) error {
+	header := `DPoP error="` + code + `", algs="` + strings.Join(dpop.SupportedAlgs(), " ") + `"`
+	ctx.Response().Header().Set("WWW-Authenticate", header)
+
+	if code == "use_dpop_nonce" && cfg.DPoPNonceSigner != nil && jkt != "" {
+		ctx.Response().Header().Set("DPoP-Nonce", cfg.DPoPNonceSigner.Issue(jkt))
+	}
+	return forge.Unauthorized("invalid proof of possession")
 }

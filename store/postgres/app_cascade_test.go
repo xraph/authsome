@@ -14,7 +14,6 @@ import (
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/appclientconfig"
 	"github.com/xraph/authsome/device"
-	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/notification"
 	"github.com/xraph/authsome/organization"
@@ -25,20 +24,6 @@ import (
 	"github.com/xraph/authsome/webhook"
 )
 
-// createDefaultEnv creates and returns a default Production environment for an app.
-func createDefaultEnv(t *testing.T, s interface {
-	CreateEnvironment(context.Context, *environment.Environment) error
-}, appID id.AppID,
-) *environment.Environment {
-	t.Helper()
-	env := &environment.Environment{
-		ID: id.NewEnvironmentID(), AppID: appID, Name: "Production",
-		Slug: "production", Type: environment.TypeProduction, IsDefault: true,
-	}
-	require.NoError(t, s.CreateEnvironment(context.Background(), env))
-	return env
-}
-
 // TestApp_DeleteCascade verifies that, with the app_id foreign keys recreated
 // ON DELETE CASCADE, deleting an app that has children succeeds and removes
 // every child row, while another app's data is left untouched.
@@ -47,50 +32,50 @@ func TestApp_DeleteCascade(t *testing.T) {
 	c := context.Background()
 
 	a := createTestApp(t, s, "cascade-doomed")
-	env := createDefaultEnv(t, s, a.ID)
+	envID := testEnvID(t, a.ID)
 
 	u := &user.User{
-		ID: id.NewUserID(), AppID: a.ID, EnvID: env.ID,
+		ID: id.NewUserID(), AppID: a.ID, EnvID: envID,
 		Email: "u@doomed.test", Username: "doomed-u", CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	require.NoError(t, s.CreateUser(c, u))
 
 	sess := &session.Session{
-		ID: id.NewSessionID(), AppID: a.ID, EnvID: env.ID, UserID: u.ID,
+		ID: id.NewSessionID(), AppID: a.ID, EnvID: envID, UserID: u.ID,
 		Token: "tok_" + id.NewSessionID().String(), RefreshToken: "rtok_" + id.NewSessionID().String(),
 		ExpiresAt: time.Now().Add(time.Hour), RefreshTokenExpiresAt: time.Now().Add(24 * time.Hour),
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	require.NoError(t, s.CreateSession(c, sess))
 
-	wh := &webhook.Webhook{ID: id.NewWebhookID(), AppID: a.ID, EnvID: env.ID, URL: "https://x.test", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	wh := &webhook.Webhook{ID: id.NewWebhookID(), AppID: a.ID, EnvID: envID, URL: "https://x.test", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, s.CreateWebhook(c, wh))
 
-	dev := &device.Device{ID: id.NewDeviceID(), AppID: a.ID, EnvID: env.ID, UserID: u.ID, Name: "phone", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	dev := &device.Device{ID: id.NewDeviceID(), AppID: a.ID, EnvID: envID, UserID: u.ID, Name: "phone", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, s.CreateDevice(c, dev))
 
 	ak := &apikey.APIKey{
-		ID: id.NewAPIKeyID(), AppID: a.ID, EnvID: env.ID, UserID: u.ID, Name: "key",
+		ID: id.NewAPIKeyID(), AppID: a.ID, EnvID: envID, UserID: u.ID, Name: "key",
 		KeyHash: "hash_" + id.NewAPIKeyID().String(), KeyPrefix: "pfx_" + id.NewAPIKeyID().String(),
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	require.NoError(t, s.CreateAPIKey(c, ak))
 
 	notif := &notification.Notification{
-		ID: id.NewNotificationID(), AppID: a.ID, EnvID: env.ID, UserID: u.ID,
+		ID: id.NewNotificationID(), AppID: a.ID, EnvID: envID, UserID: u.ID,
 		Type: "welcome", Channel: notification.ChannelEmail, CreatedAt: time.Now(),
 	}
 	require.NoError(t, s.CreateNotification(c, notif))
 
 	v := &account.Verification{
-		ID: id.NewVerificationID(), AppID: a.ID, EnvID: env.ID, UserID: u.ID,
+		ID: id.NewVerificationID(), AppID: a.ID, EnvID: envID, UserID: u.ID,
 		Token: "vtok_" + id.NewVerificationID().String(), Type: account.VerificationEmail,
 		ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now(),
 	}
 	require.NoError(t, s.CreateVerification(c, v))
 
 	org := &organization.Organization{
-		ID: id.NewOrgID(), AppID: a.ID, EnvID: env.ID, Name: "Org", Slug: "org",
+		ID: id.NewOrgID(), AppID: a.ID, EnvID: envID, Name: "Org", Slug: "org",
 		CreatedBy: u.ID, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	require.NoError(t, s.CreateOrganization(c, org))
@@ -99,7 +84,7 @@ func TestApp_DeleteCascade(t *testing.T) {
 	require.NoError(t, s.CreateMember(c, mem))
 
 	email := &user.UserEmail{
-		ID: id.NewUserEmailID(), UserID: u.ID, AppID: a.ID, EnvID: env.ID,
+		ID: id.NewUserEmailID(), UserID: u.ID, AppID: a.ID, EnvID: envID,
 		Email: "u@doomed.test", IsPrimary: true, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	require.NoError(t, s.AddUserEmail(c, email))
@@ -109,9 +94,9 @@ func TestApp_DeleteCascade(t *testing.T) {
 
 	// Survivor app whose data must remain after the cascade.
 	other := createTestApp(t, s, "cascade-keeper")
-	otherEnv := createDefaultEnv(t, s, other.ID)
+	otherEnvID := testEnvID(t, other.ID)
 	otherUser := &user.User{
-		ID: id.NewUserID(), AppID: other.ID, EnvID: otherEnv.ID,
+		ID: id.NewUserID(), AppID: other.ID, EnvID: otherEnvID,
 		Email: "u@keeper.test", Username: "keeper-u", CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	require.NoError(t, s.CreateUser(c, otherUser))
@@ -173,9 +158,9 @@ func TestApp_DeleteCascade_OAuth2(t *testing.T) {
 	require.NoError(t, s.Migrate(c, oauth2provider.PostgresMigrations), "migrate oauth2 plugin")
 
 	a := createTestApp(t, s, "cascade-oauth2")
-	env := createDefaultEnv(t, s, a.ID)
+	envID := testEnvID(t, a.ID)
 	u := &user.User{
-		ID: id.NewUserID(), AppID: a.ID, EnvID: env.ID,
+		ID: id.NewUserID(), AppID: a.ID, EnvID: envID,
 		Email: "o@oauth2.test", Username: "oauth2-u", CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	require.NoError(t, s.CreateUser(c, u))

@@ -12,6 +12,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/session"
@@ -56,6 +57,10 @@ type IssueSessionRequest struct {
 	// lifetime an operator set centrally.
 	SessionTTL time.Duration
 	RefreshTTL time.Duration
+
+	// DPoPJKT binds the issued session to a client-held key (RFC 9449).
+	// Empty issues an ordinary unbound session.
+	DPoPJKT string
 }
 
 // IssueSessionResult is the gate's success output. On the
@@ -113,6 +118,10 @@ type mfaTicketPayload struct {
 	IPAddress  string    `json:"ip_address"`
 	UserAgent  string    `json:"user_agent"`
 	IssuedAt   time.Time `json:"issued_at"`
+	// DPoPJKT is the thumbprint the first factor proved. Public by
+	// construction (it is a hash of a public key), so it needs no more
+	// protection here than the ticket itself already has.
+	DPoPJKT string `json:"dpop_jkt,omitempty"`
 	// Attempts counts wrong codes submitted against this ticket.
 	Attempts int `json:"attempts"`
 }
@@ -138,6 +147,11 @@ type MFATicketPayload struct {
 	IPAddress  string
 	UserAgent  string
 	IssuedAt   time.Time
+
+	// DPoPJKT is the thumbprint proved at sign-in, carried across the
+	// ceremony so the session minted after the second factor keeps the
+	// binding the first factor established.
+	DPoPJKT string
 }
 
 // IssueSession is the centralized session-mint chokepoint. Every login
@@ -164,6 +178,19 @@ func (e *Engine) IssueSession(ctx context.Context, req *IssueSessionRequest) (*I
 		if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil { //nolint:errcheck // best-effort env lookup
 			req.EnvID = env.ID
 		}
+	}
+
+	// DPoP gate. An app on mode=required is stating that every session
+	// under it is bound; a caller that resolved no thumbprint cannot
+	// satisfy that, so it is refused rather than quietly granted a
+	// session the mandate will never apply to.
+	//
+	// Ahead of the MFA gate deliberately. Both refuse the same request,
+	// but the MFA gate refuses by persisting a ticket first, and there is
+	// no reason to spend a ceremony-store write on a login that cannot
+	// complete however the second factor goes.
+	if req.DPoPJKT == "" && e.DPoPModeForApp(ctx, req.AppID) == dpop.ModeRequired {
+		return nil, &DPoPRequiredError{}
 	}
 
 	// MFA gate. When the per-app config sets MFARequired and the
@@ -196,7 +223,7 @@ func (e *Engine) IssueSession(ctx context.Context, req *IssueSessionRequest) (*I
 
 	sessCfg := e.sessionConfigForApp(ctx, req.AppID, req.EnvID)
 	applySessionTTLOverride(&sessCfg, req.SessionTTL, req.RefreshTTL)
-	sess, err := e.newSession(req.AppID, req.User.ID, sessCfg)
+	sess, err := e.newSession(req.AppID, req.User.ID, sessCfg, req.DPoPJKT)
 	if err != nil {
 		return nil, fmt.Errorf("authsome: build session: %w", err)
 	}
@@ -299,6 +326,7 @@ func (e *Engine) persistMFATicket(ctx context.Context, req *IssueSessionRequest)
 		IPAddress:  req.IPAddress,
 		UserAgent:  req.UserAgent,
 		IssuedAt:   time.Now().UTC(),
+		DPoPJKT:    req.DPoPJKT,
 	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
@@ -336,6 +364,7 @@ func (e *Engine) LoadMFATicket(ctx context.Context, ticket string) (*MFATicketPa
 		IPAddress:  pl.IPAddress,
 		UserAgent:  pl.UserAgent,
 		IssuedAt:   pl.IssuedAt,
+		DPoPJKT:    pl.DPoPJKT,
 	}
 	if pl.AppID != "" {
 		if a, err := id.ParseAppID(pl.AppID); err == nil {

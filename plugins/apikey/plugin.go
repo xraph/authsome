@@ -88,6 +88,11 @@ type Config struct {
 // UserResolver resolves a user by ID string.
 type UserResolver func(userID string) (*user.User, error)
 
+// PrincipalResolver resolves any caller, human or otherwise, by ref. Taken as
+// a function rather than the whole engine so the strategy keeps its narrow
+// dependency surface, matching UserResolver above.
+type PrincipalResolver func(ctx context.Context, ref principal.Ref) (*principal.Principal, error)
+
 // Plugin is the API key authentication plugin.
 type Plugin struct {
 	config       Config
@@ -95,12 +100,23 @@ type Plugin struct {
 	defaultAppID string
 
 	resolveUser UserResolver
-	chronicle   bridge.Chronicle
-	relay       bridge.EventRelay
-	hooks       *hook.Bus
-	logger      log.Logger
-	engine      plugin.Engine
-	permChecker plugin.PermissionChecker
+	// resolvePrincipal reads a service account's real kind off the principal
+	// store. Without it a service-account key authenticates as KindService
+	// whatever the account was actually registered as, and the caller's kind
+	// then disagrees with itself within a single request.
+	resolvePrincipal PrincipalResolver
+	chronicle        bridge.Chronicle
+	relay            bridge.EventRelay
+	hooks            *hook.Bus
+	logger           log.Logger
+	engine           plugin.Engine
+	permChecker      plugin.PermissionChecker
+
+	// gate scores every machine caller through the principal-auth hooks
+	// before a session is minted. Populated from the engine during OnInit
+	// when the engine implements plugin.PrincipalAuthGateProvider; nil
+	// otherwise, in which case Authenticate skips scoring entirely.
+	gate PrincipalAuthGate
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -138,6 +154,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.hooks = engine.Hooks()
 	p.logger = engine.Logger()
 	p.resolveUser = engine.ResolveUser
+	p.resolvePrincipal = engine.ResolvePrincipal
 	p.defaultAppID = engine.DefaultAppID()
 	p.engine = engine
 
@@ -145,12 +162,41 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		p.permChecker = pc
 	}
 
+	// A gate lets the engine score this machine caller through the
+	// principal-auth hooks (risk, reputation, geo) before a session is
+	// minted. Fetched via the optional provider interface rather than an
+	// *authsome.Engine type assertion so this package does not import
+	// authsome.
+	//
+	// The provider returns any (see plugin.PrincipalAuthGateProvider), so a
+	// signature drift between the concrete gate and PrincipalAuthGate below
+	// would compile cleanly and silently leave p.gate nil, turning off
+	// scoring for every machine caller with no error anywhere. That failure
+	// mode is worse than never having wired the gate at all, so it is not
+	// allowed to be silent: warn loudly when the provider is present but its
+	// value does not satisfy this package's gate interface.
+	if gp, ok := engine.(plugin.PrincipalAuthGateProvider); ok {
+		got := gp.PrincipalAuthGate()
+		if gate, ok := got.(PrincipalAuthGate); ok {
+			p.gate = gate
+		} else if p.logger != nil {
+			p.logger.Warn("apikey: principal auth scoring disabled, engine's gate does not satisfy apikey.PrincipalAuthGate",
+				log.String("received_type", fmt.Sprintf("%T", got)),
+			)
+		}
+	}
+
 	return nil
 }
 
 // Strategy returns the API key authentication strategy.
 func (p *Plugin) Strategy() strategy.Strategy {
-	return &apikeyStrategy{store: p.store, resolveUser: p.resolveUser}
+	return &apikeyStrategy{
+		store:            p.store,
+		resolveUser:      p.resolveUser,
+		resolvePrincipal: p.resolvePrincipal,
+		gate:             p.gate,
+	}
 }
 
 // StrategyPriority returns the evaluation priority for the API key strategy.
@@ -503,6 +549,37 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeKeyRequest) (*apityp
 type apikeyStrategy struct {
 	store       apikey.Store
 	resolveUser UserResolver
+	// resolvePrincipal reads the service account's registered kind. Nil in
+	// minimal test wiring, in which case Authenticate falls back to
+	// KindService and says so in the session it mints.
+	resolvePrincipal PrincipalResolver
+	// gate scores the caller through the principal-auth hooks. Nil when the
+	// engine does not provide one (e.g. in isolated unit tests), in which
+	// case Authenticate does not score at all.
+	gate PrincipalAuthGate
+}
+
+// serviceAccountKind returns the kind the service account was registered
+// with, falling back to KindService.
+//
+// The fallback is not a silent one in spirit: KindService is what an
+// unclassified machine caller has always been, and it is also the kind the
+// serviceaccount store itself defaults to, so a resolution failure lands on
+// the same value the row would most likely have carried anyway. The lookup is
+// one read against the principal store, on a path that already does one for
+// the key itself.
+func (s *apikeyStrategy) serviceAccountKind(ctx context.Context, saID id.ServiceAccountID) principal.Kind {
+	if s.resolvePrincipal == nil {
+		return principal.KindService
+	}
+	// The store resolves any non-user ref by ID and ignores the kind on the
+	// way in, so seeding the lookup with KindService is not an assumption
+	// about the answer.
+	p, err := s.resolvePrincipal(ctx, principal.Ref{Kind: principal.KindService, ID: saID.String()})
+	if err != nil || p == nil || p.Kind == "" {
+		return principal.KindService
+	}
+	return p.Kind
 }
 
 var _ strategy.Strategy = (*apikeyStrategy)(nil)
@@ -563,6 +640,42 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 	key.LastUsedAt = &now
 	_ = s.store.UpdateAPIKey(ctx, key) //nolint:errcheck // best-effort update
 
+	// Score this machine caller through the principal-auth hooks before
+	// minting a session. Static API key traffic used to reach here and fire
+	// none of the sign-in hooks, so the risk plugins (impossibletravel,
+	// ipreputation, anomaly, geofence, vpndetect, riskengine) never saw it.
+	// A user-bound key goes through this too: it is machine traffic
+	// whoever it is billed to.
+	// The kind comes off the registration, not off a constant. A caller whose
+	// service account is registered as an agent must read as agent_x
+	// everywhere in this request: in Warden's principal_kind attribute, in the
+	// ActionPrincipalAuth hook metadata, and in the synthetic session's own
+	// Subject(). Hardcoding KindService here made sess.Subject() report
+	// service_account:X while the resolved principal reported agent:X for the
+	// same caller, so an ABAC policy written on principal_kind == "agent"
+	// missed every API-key request an agent ever made.
+	subject := principal.Ref{Kind: principal.KindUser, ID: key.UserID.String()}
+	subjectKind := principal.KindUser
+	if !key.ServiceAccountID.IsNil() {
+		subjectKind = s.serviceAccountKind(ctx, key.ServiceAccountID)
+		subject = principal.Ref{Kind: subjectKind, ID: key.ServiceAccountID.String()}
+	}
+	att := &principal.AuthAttempt{
+		Subject:        subject,
+		AppID:          key.AppID,
+		EnvID:          key.EnvID,
+		CredentialKind: "api_key",
+		CredentialID:   key.ID.String(),
+		IPAddress:      middleware.ClientIP(r),
+		UserAgent:      r.UserAgent(),
+		At:             now,
+	}
+	if s.gate != nil {
+		if authErr := s.gate.Authorize(ctx, att); authErr != nil {
+			return nil, fmt.Errorf("apikey: %w", authErr)
+		}
+	}
+
 	// Handle service-account keys: create a synthetic session without a user.
 	if !key.ServiceAccountID.IsNil() {
 		syntheticSession := &session.Session{
@@ -571,8 +684,11 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 			EnvID:            key.EnvID,
 			CreatedAt:        now,
 			ExpiresAt:        now.Add(24 * time.Hour),
-			PrincipalKind:    principal.KindService,
+			PrincipalKind:    subjectKind,
 			ServiceAccountID: key.ServiceAccountID,
+		}
+		if s.gate != nil {
+			s.gate.Observe(ctx, att, syntheticSession)
 		}
 		return &strategy.Result{Session: syntheticSession}, nil
 	}
@@ -603,6 +719,9 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 		EnvID:     key.EnvID,
 		CreatedAt: now,
 		ExpiresAt: now.Add(24 * time.Hour),
+	}
+	if s.gate != nil {
+		s.gate.Observe(ctx, att, syntheticSession)
 	}
 
 	return &strategy.Result{User: u, Session: syntheticSession}, nil

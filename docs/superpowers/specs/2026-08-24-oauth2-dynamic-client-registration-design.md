@@ -199,7 +199,7 @@ New columns on `authsome_oauth2_clients`:
 | `registration_token_hash` | TEXT | bcrypt of the RFC 7592 registration access token. Empty for admin-created clients |
 | `dynamically_registered` | BOOLEAN | Drives policy, and lets the dashboard and audit log tell the two populations apart |
 | `client_secret_expires_at` | TIMESTAMPTZ NULL | RFC 7591 requires it in the response. NULL means never expires, serialised as `0` |
-| `metadata` | JSONB | `client_uri`, `logo_uri`, `contacts`, `tos_uri`, `policy_uri`, `software_id`, `software_version` |
+| `metadata` | JSONB | `client_name`, `client_uri`, `logo_uri`, `contacts`, `tos_uri`, `policy_uri`, `software_id`, `software_version`, plus any unrecognised field the client sent |
 
 `client_id_issued_at` maps onto the existing `created_at`, and `client_name`
 maps onto the existing `Name`.

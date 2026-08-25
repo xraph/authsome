@@ -53,6 +53,7 @@ type oauth2ClientDoc struct {
 	DynamicallyRegistered   bool           `bson:"dynamically_registered"`
 	ClientSecretExpiresAt   *time.Time     `bson:"client_secret_expires_at,omitempty"`
 	Metadata                map[string]any `bson:"metadata"`
+	DPoPMode                string         `bson:"dpop_mode"`
 
 	CreatedAt time.Time `bson:"created_at"`
 	UpdatedAt time.Time `bson:"updated_at"`
@@ -126,6 +127,7 @@ func oauth2ClientDocToModel(d *oauth2ClientDoc) (*OAuth2Client, error) {
 		DynamicallyRegistered:   d.DynamicallyRegistered,
 		ClientSecretExpiresAt:   d.ClientSecretExpiresAt,
 		Metadata:                metadata,
+		DPoPMode:                d.DPoPMode,
 		CreatedAt:               d.CreatedAt,
 		UpdatedAt:               d.UpdatedAt,
 	}, nil
@@ -170,6 +172,7 @@ func oauth2ClientToDoc(c *OAuth2Client) *oauth2ClientDoc {
 		DynamicallyRegistered:   c.DynamicallyRegistered,
 		ClientSecretExpiresAt:   c.ClientSecretExpiresAt,
 		Metadata:                metadata,
+		DPoPMode:                c.DPoPMode,
 		CreatedAt:               c.CreatedAt,
 		UpdatedAt:               c.UpdatedAt,
 	}

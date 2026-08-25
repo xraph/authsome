@@ -864,6 +864,9 @@
           "rotate_refresh_token": {
             "type": "boolean"
           },
+          "token_exchange_ttl_seconds": {
+            "type": "integer"
+          },
           "token_format": {
             "type": "string"
           },
@@ -1471,6 +1474,9 @@
               "skip_email_verification": {
                 "type": "boolean"
               },
+              "token_exchange_ttl_seconds": {
+                "type": "integer"
+              },
               "token_ttl_seconds": {
                 "type": "integer"
               },
@@ -1753,6 +1759,9 @@
           "app_id": {
             "type": "string"
           },
+          "dpop_mode": {
+            "type": "string"
+          },
           "grant_types": {
             "items": {
               "type": "string"
@@ -1766,6 +1775,12 @@
             "type": "boolean"
           },
           "redirect_uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "resources": {
             "items": {
               "type": "string"
             },
@@ -1814,6 +1829,12 @@
             },
             "type": "array"
           },
+          "resources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "scopes": {
             "items": {
               "type": "string"
@@ -1827,6 +1848,7 @@
           "name",
           "redirect_uris",
           "scopes",
+          "resources",
           "grant_types",
           "public"
         ],
@@ -1934,6 +1956,9 @@
               },
               "skip_email_verification": {
                 "type": "boolean"
+              },
+              "token_exchange_ttl_seconds": {
+                "type": "integer"
               },
               "token_ttl_seconds": {
                 "type": "integer"
@@ -2327,17 +2352,6 @@
         ],
         "type": "object"
       },
-      "DeleteClientRequest": {
-        "properties": {
-          "ClientID": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ClientID"
-        ],
-        "type": "object"
-      },
       "DeleteResponse": {
         "properties": {
           "status": {
@@ -2500,6 +2514,12 @@
           "device_authorization_endpoint": {
             "type": "string"
           },
+          "dpop_signing_alg_values_supported": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "grant_types_supported": {
             "items": {
               "type": "string"
@@ -2520,6 +2540,9 @@
           },
           "registration_endpoint": {
             "type": "string"
+          },
+          "resource_indicators_supported": {
+            "type": "boolean"
           },
           "response_types_supported": {
             "items": {
@@ -2569,7 +2592,8 @@
           "id_token_signing_alg_values_supported",
           "scopes_supported",
           "token_endpoint_auth_methods_supported",
-          "code_challenge_methods_supported"
+          "code_challenge_methods_supported",
+          "resource_indicators_supported"
         ],
         "type": "object"
       },
@@ -2934,6 +2958,18 @@
         ],
         "type": "object"
       },
+      "IntrospectConfirmation": {
+        "properties": {
+          "jkt": {
+            "description": "RFC 7638 thumbprint of the confirmation key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "jkt"
+        ],
+        "type": "object"
+      },
       "IntrospectRequest": {
         "properties": {
           "token": {
@@ -2955,6 +2991,17 @@
           "app_id": {
             "description": "Application ID",
             "type": "string"
+          },
+          "aud": {
+            "description": "Resource identifiers this token is valid for (RFC 8707)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cnf": {
+            "$ref": "#/components/schemas/IntrospectConfirmation",
+            "description": "Proof-of-possession confirmation for a DPoP-bound token"
           },
           "env_id": {
             "description": "Environment ID",
@@ -3609,6 +3656,9 @@
             "format": "date-time",
             "type": "string"
           },
+          "dpop_mode": {
+            "type": "string"
+          },
           "dynamically_registered": {
             "type": "boolean"
           },
@@ -3637,6 +3687,12 @@
             },
             "type": "array"
           },
+          "resources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "scopes": {
             "items": {
               "type": "string"
@@ -3658,6 +3714,7 @@
           "client_id",
           "redirect_uris",
           "scopes",
+          "resources",
           "grant_types",
           "public",
           "dynamically_registered",
@@ -4673,6 +4730,10 @@
             "description": "Rotate refresh token on use (nil = inherit)",
             "type": "boolean"
           },
+          "token_exchange_ttl_seconds": {
+            "description": "RFC 8693 token exchange TTL in seconds (nil = inherit)",
+            "type": "integer"
+          },
           "token_format": {
             "description": "Token format: opaque or jwt (empty = inherit)",
             "type": "string"
@@ -4782,6 +4843,9 @@
           },
           "skip_email_verification": {
             "type": "boolean"
+          },
+          "token_exchange_ttl_seconds": {
+            "type": "integer"
           },
           "token_ttl_seconds": {
             "type": "integer"
@@ -5097,17 +5161,6 @@
         ],
         "type": "object"
       },
-      "UnlinkAuthMethodRequest": {
-        "properties": {
-          "Provider": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "Provider"
-        ],
-        "type": "object"
-      },
       "UnlinkAuthMethodResponse": {
         "properties": {
           "status": {
@@ -5174,6 +5227,9 @@
           },
           "skip_email_verification": {
             "type": "boolean"
+          },
+          "token_exchange_ttl_seconds": {
+            "type": "integer"
           },
           "token_ttl_seconds": {
             "type": "integer"
@@ -9146,7 +9202,6 @@
         "operationId": "deleteOAuth2Client",
         "parameters": [
           {
-            "description": "Path parameter: clientId",
             "in": "path",
             "name": "clientId",
             "required": true,
@@ -9155,17 +9210,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeleteClientRequest"
-              }
-            }
-          },
-          "description": "Request body",
-          "required": true
-        },
         "responses": {
           "400": {
             "content": {
@@ -24841,26 +24885,16 @@
         "operationId": "unlinkAuthMethod",
         "parameters": [
           {
-            "description": "Path parameter: provider",
+            "description": "Auth method provider (password, google, ...)",
             "in": "path",
             "name": "provider",
             "required": true,
             "schema": {
+              "description": "Auth method provider (password, google, ...)",
               "type": "string"
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UnlinkAuthMethodRequest"
-              }
-            }
-          },
-          "description": "Request body",
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
@@ -28259,6 +28293,12 @@
                   },
                   "redirect_uri": {
                     "type": "string"
+                  },
+                  "resource": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
                   }
                 },
                 "required": [

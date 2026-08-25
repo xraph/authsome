@@ -263,7 +263,15 @@ func (p *Plugin) handleSend(ctx forge.Context, req *SendRequest) (*SendResponse,
 	// Resolve the real user by email. The verification token must be bound to
 	// their actual user id so /verify can resolve them — binding it to a random
 	// id (the previous behavior) made every real magic-link login fail.
-	u, lookupErr := p.store.GetUserByEmail(ctx.Context(), appID, req.Email)
+	// Scope the lookup to the app's default environment, the way SSO and
+	// password sign-in do. A magic link grants a session, so resolving an
+	// address app-wide would let one environment mint a session for an
+	// account that lives in another.
+	var envID id.EnvironmentID
+	if env, _ := p.store.GetDefaultEnvironment(ctx.Context(), appID); env != nil { //nolint:errcheck // best-effort env lookup
+		envID = env.ID
+	}
+	u, lookupErr := p.store.GetUserByEmail(ctx.Context(), appID, envID, req.Email)
 	if lookupErr != nil {
 		// Anti-enumeration: return the same success response whether or not the
 		// email is registered, and never mint a token or send a link for an
@@ -352,10 +360,20 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 	// to a direct mint if the engine isn't the concrete *authsome.Engine.
 	var sess *session.Session
 	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
+		// /verify is a POST from the SDK, not the browser following the link,
+		// so the client holding the DPoP key is the caller here and can prove
+		// possession. Resolve the binding before minting: under mode=required
+		// IssueSession refuses an unbound session, and without this the whole
+		// magic-link route would be refused rather than bound.
+		dpopJKT, bindErr := eng.DPoPBindingForRequest(ctx, v.AppID)
+		if bindErr != nil {
+			return nil, bindErr
+		}
 		result, issueErr := eng.IssueSession(ctx.Context(), &authsome.IssueSessionRequest{
 			User:       u,
 			AppID:      v.AppID,
 			AuthMethod: "magiclink",
+			DPoPJKT:    dpopJKT,
 			IPAddress:  ctx.Request().RemoteAddr,
 			UserAgent:  ctx.Request().UserAgent(),
 			SessionTTL: p.resolveTTL(ctx.Context(), v.AppID, SettingSessionTokenTTLSeconds, p.config.SessionTokenTTL),

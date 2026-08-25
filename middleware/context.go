@@ -7,6 +7,7 @@ import (
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/user"
 )
@@ -38,6 +39,64 @@ func WithUser(ctx context.Context, u *user.User) context.Context {
 func UserFrom(ctx context.Context) (*user.User, bool) {
 	u, ok := ctx.Value(ctxKeyUser).(*user.User)
 	return u, ok
+}
+
+// PrincipalRefFrom returns the authenticated caller as a principal ref,
+// whatever kind of caller it is.
+//
+// Three sources, in order, which is what lets this work now and keep working
+// once the principal package is wired all the way through the middleware.
+// First a principal already resolved onto the context. Then a user, which is
+// every human request today. Then a session whose subject is not a person,
+// which is how service accounts, agents and workloads arrive before that
+// wiring exists.
+//
+// A session with no resolved user behind it is deliberately not a caller. An
+// empty PrincipalKind means user, so such a session is a human one whose user
+// could not be loaded, and treating it as authenticated would turn a failed
+// lookup into an authorization bypass.
+func PrincipalRefFrom(ctx context.Context) (principal.Ref, bool) {
+	if p, ok := principal.FromContext(ctx); ok && p != nil {
+		return p.Ref, true
+	}
+
+	if u, ok := UserFrom(ctx); ok && u != nil {
+		return principal.UserRef(u.ID), true
+	}
+
+	if s, ok := SessionFrom(ctx); ok && s != nil && !s.IsHumanPrincipal() {
+		return s.Subject(), true
+	}
+
+	return principal.Ref{}, false
+}
+
+// WithPrincipal returns ctx carrying the resolved caller.
+//
+// This delegates to the principal package's own context functions rather
+// than defining a separate key, so a plugin reading through
+// principal.FromContext sees the exact value this middleware wrote, and
+// PrincipalRefFrom's first branch (above) resolves against it.
+func WithPrincipal(ctx context.Context, p *principal.Principal) context.Context {
+	return principal.NewContext(ctx, p)
+}
+
+// PrincipalFrom returns the resolved caller previously stored with
+// WithPrincipal.
+func PrincipalFrom(ctx context.Context) (*principal.Principal, bool) {
+	return principal.FromContext(ctx)
+}
+
+// WithActors returns ctx carrying the actor chain acting on the subject's
+// behalf. Delegates to the principal package's own context functions for the
+// same shared-key reason as WithPrincipal.
+func WithActors(ctx context.Context, c principal.Chain) context.Context {
+	return principal.NewActorsContext(ctx, c)
+}
+
+// ActorsFrom returns the actor chain previously stored with WithActors.
+func ActorsFrom(ctx context.Context) (principal.Chain, bool) {
+	return principal.ActorsFromContext(ctx)
 }
 
 // WithSession stores a session in the context.

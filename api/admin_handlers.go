@@ -449,11 +449,21 @@ func (a *API) handleAdminImpersonate(ctx forge.Context, req *AdminImpersonateReq
 		return nil, forge.BadRequest("cannot impersonate yourself")
 	}
 
-	if _, err = a.userInCallerApp(ctx, targetID); err != nil {
+	target, err := a.userInCallerApp(ctx, targetID)
+	if err != nil {
 		return nil, err
 	}
 
-	u, sess, err := a.engine.Impersonate(ctx.Context(), adminID, targetID)
+	// The admin console is an ordinary HTTP client, so it can prove possession
+	// like any other. Without this an app on mode=required would have no way
+	// to impersonate at all, since the engine refuses an unbound one.
+	dpopJKT, err := a.engine.DPoPBindingForRequest(ctx, target.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	u, sess, err := a.engine.Impersonate(ctx.Context(), adminID, targetID,
+		authsome.WithImpersonationDPoPBinding(dpopJKT))
 	if err != nil {
 		return nil, mapError(err)
 	}

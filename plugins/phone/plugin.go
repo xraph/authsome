@@ -396,10 +396,19 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 	// MFARequired gate fires for phone-OTP sign-ins too.
 	var sess *session.Session
 	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
+		// /verify is a POST from the SDK, so the key-holding client is the
+		// caller and can prove possession. Under mode=required IssueSession
+		// refuses an unbound session, so resolving this is what keeps the
+		// phone route working rather than what makes it stricter.
+		dpopJKT, bindErr := eng.DPoPBindingForRequest(ctx, appID)
+		if bindErr != nil {
+			return nil, bindErr
+		}
 		result, issueErr := eng.IssueSession(ctx.Context(), &authsome.IssueSessionRequest{
 			User:       u,
 			AppID:      appID,
 			AuthMethod: "phone",
+			DPoPJKT:    dpopJKT,
 			IPAddress:  ctx.Request().RemoteAddr,
 			UserAgent:  ctx.Request().UserAgent(),
 		})
@@ -435,8 +444,18 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 }
 
 // resolveOrCreateUser looks up a user by phone or creates a new one.
+//
+// Both the lookup and the create are scoped to the app's default environment,
+// the same way SSO and password sign-ups place their users. A phone number is
+// only unique within an environment, so an app-wide lookup here would let one
+// environment's account answer for another's.
 func (p *Plugin) resolveOrCreateUser(ctx context.Context, appID id.AppID, phone string) (*user.User, bool, error) {
-	u, err := p.store.GetUserByPhone(ctx, appID, phone)
+	var envID id.EnvironmentID
+	if env, _ := p.store.GetDefaultEnvironment(ctx, appID); env != nil { //nolint:errcheck // best-effort env lookup
+		envID = env.ID
+	}
+
+	u, err := p.store.GetUserByPhone(ctx, appID, envID, phone)
 	if err == nil {
 		return u, false, nil
 	}
@@ -450,6 +469,7 @@ func (p *Plugin) resolveOrCreateUser(ctx context.Context, appID id.AppID, phone 
 	newUser := &user.User{
 		ID:            id.NewUserID(),
 		AppID:         appID,
+		EnvID:         envID,
 		Phone:         phone,
 		PhoneVerified: true,
 		CreatedAt:     time.Now(),

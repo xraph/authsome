@@ -65,6 +65,7 @@ func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*Intr
 			ExpiresAt: claims.ExpiresAt.Format(time.RFC3339),
 			Audience:  claims.Audience,
 		}
+		resp.Confirmation = confirmationFor(claims.DPoPJKT)
 
 		// Optionally resolve user details
 		if claims.UserID != "" {
@@ -96,6 +97,7 @@ func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*Intr
 		ExpiresAt: sess.ExpiresAt.Format(time.RFC3339),
 		Audience:  sess.Audience,
 	}
+	resp.Confirmation = confirmationFor(sess.DPoPJKT)
 
 	if sess.OrgID.String() != "" {
 		resp.OrgID = sess.OrgID.String()
@@ -116,6 +118,17 @@ func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*Intr
 	}
 
 	return resp, nil
+}
+
+// confirmationFor builds the cnf claim for a bound token, or nil when the
+// token is unbound. RFC 9449 section 7.3: the calling resource server needs
+// the thumbprint to enforce the binding itself, since introspection is the
+// only thing it can see.
+func confirmationFor(jkt string) *IntrospectConfirmation {
+	if jkt == "" {
+		return nil
+	}
+	return &IntrospectConfirmation{JKT: jkt}
 }
 
 // isJWT detects JWT tokens by the presence of two dots (header.payload.signature).

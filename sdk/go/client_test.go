@@ -3,8 +3,11 @@ package authclient_test
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1052,4 +1055,40 @@ func TestClient_UserFactory(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, user3.ID)
 	assert.NotEqual(t, user1.ID, user3.ID)
+}
+
+// The token endpoint takes application/x-www-form-urlencoded, per RFC 6749
+// section 4.1.3, and the only way to know what the client actually put on the
+// wire is to read it off the wire. Asserting through a live server would not
+// do: it accepts JSON as well, so a client that regressed to JSON would still
+// come back 200 and the test would pass while the encoding was wrong.
+func TestClient_Oauth2Token_PostsFormEncoded(t *testing.T) {
+	var gotContentType, gotBody string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotContentType = r.Header.Get("Content-Type")
+		raw, _ := io.ReadAll(r.Body)
+		gotBody = string(raw)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"t","token_type":"Bearer"}`))
+	}))
+	defer srv.Close()
+
+	client := authclient.NewClient(srv.URL)
+
+	_, err := client.Oauth2Token(context.Background(), &authclient.Oauth2TokenRequest{
+		GrantType: "authorization_code",
+		Code:      "abc",
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, "application/x-www-form-urlencoded", gotContentType)
+
+	form, parseErr := url.ParseQuery(gotBody)
+	require.NoError(t, parseErr)
+	assert.Equal(t, "authorization_code", form.Get("grant_type"))
+	assert.Equal(t, "abc", form.Get("code"))
+
+	// An unset optional stays off the wire, the same as omitempty would do.
+	assert.NotContains(t, gotBody, "client_secret")
 }

@@ -25,7 +25,7 @@ import (
 // opaque access token (the fixture runs no JWT engine) carries no claims of
 // its own, so the session's Audience field is the only place a test can read
 // back what a grant actually issued.
-func tokenFixture(t *testing.T) (*oauth2provider.Plugin, oauth2provider.Store, authstore.Store, forge.Router) {
+func tokenFixture(t *testing.T) (oauth2provider.Store, authstore.Store, forge.Router) {
 	t.Helper()
 	p := oauth2provider.New(oauth2provider.Config{Issuer: "https://auth.example.com"})
 	st := oauth2provider.NewMemoryStore()
@@ -60,7 +60,7 @@ func tokenFixture(t *testing.T) (*oauth2provider.Plugin, oauth2provider.Store, a
 
 	mux := forge.NewRouter()
 	require.NoError(t, p.RegisterRoutes(mux))
-	return p, st, acct, mux
+	return st, acct, mux
 }
 
 // postTokenJSON posts an arbitrary JSON body to /v1/oauth/token. Unlike
@@ -125,7 +125,7 @@ func TestTokenResource(t *testing.T) {
 	// the full granted set. That is what proves narrowing (not just
 	// pass-through) is happening.
 	t.Run("redemption narrows to the resource requested at the token endpoint", func(t *testing.T) {
-		_, st, acct, mux := tokenFixture(t)
+		st, acct, mux := tokenFixture(t)
 		grantResources(t, st, resAPI, resFiles)
 
 		q := baseAuthorizeQuery(confidentialID)
@@ -153,7 +153,7 @@ func TestTokenResource(t *testing.T) {
 	// checks share the invalid_target code, so only the wording tells them
 	// apart.
 	t.Run("redemption cannot widen past what the code was granted", func(t *testing.T) {
-		_, st, _, mux := tokenFixture(t)
+		st, _, mux := tokenFixture(t)
 		grantResources(t, st, resAPI, resFiles)
 
 		q := baseAuthorizeQuery(confidentialID)
@@ -180,7 +180,7 @@ func TestTokenResource(t *testing.T) {
 	// The token must carry both. Omission inherits the whole granted set
 	// rather than clearing it.
 	t.Run("omitting resource at redemption inherits the whole granted set", func(t *testing.T) {
-		_, st, acct, mux := tokenFixture(t)
+		st, acct, mux := tokenFixture(t)
 		grantResources(t, st, resAPI, resFiles)
 
 		q := baseAuthorizeQuery(confidentialID)
@@ -205,7 +205,7 @@ func TestTokenResource(t *testing.T) {
 	// the client's own allowlist (resolveResources), and the session must
 	// carry the result.
 	t.Run("client credentials carries a registered resource", func(t *testing.T) {
-		_, st, acct, mux := tokenFixture(t)
+		st, acct, mux := tokenFixture(t)
 		grantResources(t, st, resAPI)
 
 		rec := postTokenJSON(t, mux, map[string]any{
@@ -226,7 +226,7 @@ func TestTokenResource(t *testing.T) {
 	// through narrowResources(nil, requested) would also reject the request,
 	// but with the wrong message. This is what catches that.
 	t.Run("client credentials refuses an unregistered resource via the allowlist rule", func(t *testing.T) {
-		_, st, _, mux := tokenFixture(t)
+		st, _, mux := tokenFixture(t)
 		grantResources(t, st, resAPI)
 
 		rec := postTokenJSON(t, mux, map[string]any{
@@ -248,7 +248,7 @@ func TestTokenResource(t *testing.T) {
 	// middleware this fixture does not wire up. The polling path under test
 	// is the token endpoint, not the completion endpoint.
 	t.Run("device flow carries the resource through to the polled token", func(t *testing.T) {
-		_, st, acct, mux := tokenFixture(t)
+		st, acct, mux := tokenFixture(t)
 		grantResources(t, st, resAPI)
 
 		authRec := postDeviceAuthorize(t, mux, confidentialID, resAPI)
@@ -267,9 +267,10 @@ func TestTokenResource(t *testing.T) {
 		require.NoError(t, st.UpdateDeviceCode(context.Background(), dc))
 
 		rec := postToken(t, mux, map[string]string{
-			"grant_type":  "urn:ietf:params:oauth:grant-type:device_code",
-			"device_code": authResp.DeviceCode,
-			"client_id":   confidentialID,
+			"grant_type":    "urn:ietf:params:oauth:grant-type:device_code",
+			"device_code":   authResp.DeviceCode,
+			"client_id":     confidentialID,
+			"client_secret": confidentialSecret,
 		})
 
 		resp := decodeTokenResponse(t, rec)
@@ -282,7 +283,7 @@ func TestTokenResource(t *testing.T) {
 	// all, so it only ever exercises the pass-through branch: delete the
 	// narrowing call from the device grant entirely and case 5 stays green.
 	t.Run("device redemption narrows to the resource requested at the token endpoint", func(t *testing.T) {
-		_, st, acct, mux := tokenFixture(t)
+		st, acct, mux := tokenFixture(t)
 		grantResources(t, st, resAPI, resFiles)
 
 		authRec := postDeviceAuthorize(t, mux, confidentialID, resAPI, resFiles)
@@ -300,10 +301,11 @@ func TestTokenResource(t *testing.T) {
 		require.NoError(t, st.UpdateDeviceCode(context.Background(), dc))
 
 		rec := postTokenJSON(t, mux, map[string]any{
-			"grant_type":  "urn:ietf:params:oauth:grant-type:device_code",
-			"device_code": authResp.DeviceCode,
-			"client_id":   confidentialID,
-			"resource":    []string{resFiles},
+			"grant_type":    "urn:ietf:params:oauth:grant-type:device_code",
+			"device_code":   authResp.DeviceCode,
+			"client_id":     confidentialID,
+			"client_secret": confidentialSecret,
+			"resource":      []string{resFiles},
 		})
 
 		resp := decodeTokenResponse(t, rec)
@@ -318,7 +320,7 @@ func TestTokenResource(t *testing.T) {
 	// resolveResources would also reject it, with the wrong message. Only the
 	// wording tells the two apart, since both answer invalid_target.
 	t.Run("device redemption cannot widen past what the device code was granted", func(t *testing.T) {
-		_, st, _, mux := tokenFixture(t)
+		st, _, mux := tokenFixture(t)
 		grantResources(t, st, resAPI, resFiles)
 
 		authRec := postDeviceAuthorize(t, mux, confidentialID, resAPI)
@@ -333,10 +335,11 @@ func TestTokenResource(t *testing.T) {
 		require.NoError(t, st.UpdateDeviceCode(context.Background(), dc))
 
 		rec := postTokenJSON(t, mux, map[string]any{
-			"grant_type":  "urn:ietf:params:oauth:grant-type:device_code",
-			"device_code": authResp.DeviceCode,
-			"client_id":   confidentialID,
-			"resource":    []string{resFiles},
+			"grant_type":    "urn:ietf:params:oauth:grant-type:device_code",
+			"device_code":   authResp.DeviceCode,
+			"client_id":     confidentialID,
+			"client_secret": confidentialSecret,
+			"resource":      []string{resFiles},
 		})
 
 		assert.Equal(t, http.StatusBadRequest, rec.Code, "body: %s", rec.Body.String())
@@ -352,7 +355,7 @@ func TestTokenResource(t *testing.T) {
 	// nothing and the only way narrowResources ever sees the value is through
 	// TokenRequest.Resource's json tag decoding it.
 	t.Run("a JSON resource array binds through encoding/json, not resourceParams", func(t *testing.T) {
-		_, st, acct, mux := tokenFixture(t)
+		st, acct, mux := tokenFixture(t)
 		grantResources(t, st, resAPI, resFiles)
 
 		q := baseAuthorizeQuery(confidentialID)

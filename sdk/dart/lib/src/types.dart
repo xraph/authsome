@@ -1210,6 +1210,7 @@ class AppsessionconfigConfig {
   final int? maxActiveSessions;
   final int? refreshTokenTtlSeconds;
   final bool? rotateRefreshToken;
+  final int? tokenExchangeTtlSeconds;
   final String? tokenFormat;
   final int? tokenTtlSeconds;
   final String updatedAt;
@@ -1223,6 +1224,7 @@ class AppsessionconfigConfig {
     this.maxActiveSessions,
     this.refreshTokenTtlSeconds,
     this.rotateRefreshToken,
+    this.tokenExchangeTtlSeconds,
     this.tokenFormat,
     this.tokenTtlSeconds,
     required this.updatedAt,
@@ -1238,6 +1240,7 @@ class AppsessionconfigConfig {
       maxActiveSessions: json['max_active_sessions'] == null ? null : (json['max_active_sessions'] as num).toInt(),
       refreshTokenTtlSeconds: json['refresh_token_ttl_seconds'] == null ? null : (json['refresh_token_ttl_seconds'] as num).toInt(),
       rotateRefreshToken: json['rotate_refresh_token'] as bool?,
+      tokenExchangeTtlSeconds: json['token_exchange_ttl_seconds'] == null ? null : (json['token_exchange_ttl_seconds'] as num).toInt(),
       tokenFormat: json['token_format'] as String?,
       tokenTtlSeconds: json['token_ttl_seconds'] == null ? null : (json['token_ttl_seconds'] as num).toInt(),
       updatedAt: json['updated_at'] as String,
@@ -1254,6 +1257,7 @@ class AppsessionconfigConfig {
       if (maxActiveSessions != null) 'max_active_sessions': maxActiveSessions,
       if (refreshTokenTtlSeconds != null) 'refresh_token_ttl_seconds': refreshTokenTtlSeconds,
       if (rotateRefreshToken != null) 'rotate_refresh_token': rotateRefreshToken,
+      if (tokenExchangeTtlSeconds != null) 'token_exchange_ttl_seconds': tokenExchangeTtlSeconds,
       if (tokenFormat != null) 'token_format': tokenFormat,
       if (tokenTtlSeconds != null) 'token_ttl_seconds': tokenTtlSeconds,
       'updated_at': updatedAt,
@@ -2434,28 +2438,34 @@ class CouponResponse {
 
 class CreateClientRequest {
   final String appId;
+  final String? dpopMode;
   final List<String>? grantTypes;
   final String name;
   final bool? public;
   final List<String> redirectUris;
+  final List<String>? resources;
   final List<String>? scopes;
 
   const CreateClientRequest({
     required this.appId,
+    this.dpopMode,
     this.grantTypes,
     required this.name,
     this.public,
     required this.redirectUris,
+    this.resources,
     this.scopes,
   });
 
   factory CreateClientRequest.fromJson(Map<String, dynamic> json) {
     return CreateClientRequest(
       appId: json['app_id'] as String,
+      dpopMode: json['dpop_mode'] as String?,
       grantTypes: json['grant_types'] == null ? null : (json['grant_types'] as List).map((e) => e as String).toList(),
       name: json['name'] as String,
       public: json['public'] as bool?,
       redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
+      resources: json['resources'] == null ? null : (json['resources'] as List).map((e) => e as String).toList(),
       scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
     );
   }
@@ -2463,10 +2473,12 @@ class CreateClientRequest {
   Map<String, dynamic> toJson() {
     return {
       'app_id': appId,
+      if (dpopMode != null) 'dpop_mode': dpopMode,
       if (grantTypes != null) 'grant_types': grantTypes,
       'name': name,
       if (public != null) 'public': public,
       'redirect_uris': redirectUris,
+      if (resources != null) 'resources': resources,
       if (scopes != null) 'scopes': scopes,
     };
   }
@@ -2483,6 +2495,7 @@ class CreateClientResponse {
   final String name;
   final bool public;
   final List<String> redirectUris;
+  final List<String> resources;
   final List<String> scopes;
 
   const CreateClientResponse({
@@ -2493,6 +2506,7 @@ class CreateClientResponse {
     required this.name,
     required this.public,
     required this.redirectUris,
+    required this.resources,
     required this.scopes,
   });
 
@@ -2505,6 +2519,7 @@ class CreateClientResponse {
       name: json['name'] as String,
       public: json['public'] as bool,
       redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
+      resources: (json['resources'] as List).map((e) => e as String).toList(),
       scopes: (json['scopes'] as List).map((e) => e as String).toList(),
     );
   }
@@ -2518,6 +2533,7 @@ class CreateClientResponse {
       'name': name,
       'public': public,
       'redirect_uris': redirectUris,
+      'resources': resources,
       'scopes': scopes,
     };
   }
@@ -3127,29 +3143,6 @@ class DefinitionGroup {
   String toString() => 'DefinitionGroup(${toJson()})';
 }
 
-class DeleteClientRequest {
-  final String clientID;
-
-  const DeleteClientRequest({
-    required this.clientID,
-  });
-
-  factory DeleteClientRequest.fromJson(Map<String, dynamic> json) {
-    return DeleteClientRequest(
-      clientID: json['ClientID'] as String,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'ClientID': clientID,
-    };
-  }
-
-  @override
-  String toString() => 'DeleteClientRequest(${toJson()})';
-}
-
 class DeleteResponse {
   final String status;
 
@@ -3391,11 +3384,13 @@ class DiscoveryResponse {
   final String authorizationEndpoint;
   final List<String> codeChallengeMethodsSupported;
   final String deviceAuthorizationEndpoint;
+  final List<String>? dpopSigningAlgValuesSupported;
   final List<String> grantTypesSupported;
   final List<String> idTokenSigningAlgValuesSupported;
   final String issuer;
   final String jwksUri;
   final String? registrationEndpoint;
+  final bool resourceIndicatorsSupported;
   final List<String> responseTypesSupported;
   final String revocationEndpoint;
   final List<String> scopesSupported;
@@ -3408,11 +3403,13 @@ class DiscoveryResponse {
     required this.authorizationEndpoint,
     required this.codeChallengeMethodsSupported,
     required this.deviceAuthorizationEndpoint,
+    this.dpopSigningAlgValuesSupported,
     required this.grantTypesSupported,
     required this.idTokenSigningAlgValuesSupported,
     required this.issuer,
     required this.jwksUri,
     this.registrationEndpoint,
+    required this.resourceIndicatorsSupported,
     required this.responseTypesSupported,
     required this.revocationEndpoint,
     required this.scopesSupported,
@@ -3427,11 +3424,13 @@ class DiscoveryResponse {
       authorizationEndpoint: json['authorization_endpoint'] as String,
       codeChallengeMethodsSupported: (json['code_challenge_methods_supported'] as List).map((e) => e as String).toList(),
       deviceAuthorizationEndpoint: json['device_authorization_endpoint'] as String,
+      dpopSigningAlgValuesSupported: json['dpop_signing_alg_values_supported'] == null ? null : (json['dpop_signing_alg_values_supported'] as List).map((e) => e as String).toList(),
       grantTypesSupported: (json['grant_types_supported'] as List).map((e) => e as String).toList(),
       idTokenSigningAlgValuesSupported: (json['id_token_signing_alg_values_supported'] as List).map((e) => e as String).toList(),
       issuer: json['issuer'] as String,
       jwksUri: json['jwks_uri'] as String,
       registrationEndpoint: json['registration_endpoint'] as String?,
+      resourceIndicatorsSupported: json['resource_indicators_supported'] as bool,
       responseTypesSupported: (json['response_types_supported'] as List).map((e) => e as String).toList(),
       revocationEndpoint: json['revocation_endpoint'] as String,
       scopesSupported: (json['scopes_supported'] as List).map((e) => e as String).toList(),
@@ -3447,11 +3446,13 @@ class DiscoveryResponse {
       'authorization_endpoint': authorizationEndpoint,
       'code_challenge_methods_supported': codeChallengeMethodsSupported,
       'device_authorization_endpoint': deviceAuthorizationEndpoint,
+      if (dpopSigningAlgValuesSupported != null) 'dpop_signing_alg_values_supported': dpopSigningAlgValuesSupported,
       'grant_types_supported': grantTypesSupported,
       'id_token_signing_alg_values_supported': idTokenSigningAlgValuesSupported,
       'issuer': issuer,
       'jwks_uri': jwksUri,
       if (registrationEndpoint != null) 'registration_endpoint': registrationEndpoint,
+      'resource_indicators_supported': resourceIndicatorsSupported,
       'response_types_supported': responseTypesSupported,
       'revocation_endpoint': revocationEndpoint,
       'scopes_supported': scopesSupported,
@@ -4036,6 +4037,29 @@ class HealthResponse {
   String toString() => 'HealthResponse(${toJson()})';
 }
 
+class IntrospectConfirmation {
+  final String jkt;
+
+  const IntrospectConfirmation({
+    required this.jkt,
+  });
+
+  factory IntrospectConfirmation.fromJson(Map<String, dynamic> json) {
+    return IntrospectConfirmation(
+      jkt: json['jkt'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'jkt': jkt,
+    };
+  }
+
+  @override
+  String toString() => 'IntrospectConfirmation(${toJson()})';
+}
+
 class IntrospectRequest {
   final String token;
 
@@ -4062,6 +4086,8 @@ class IntrospectRequest {
 class IntrospectResponse {
   final bool active;
   final String? appId;
+  final List<String>? aud;
+  final IntrospectConfirmation? cnf;
   final String? envId;
   final String? expiresAt;
   final String? orgId;
@@ -4072,6 +4098,8 @@ class IntrospectResponse {
   const IntrospectResponse({
     required this.active,
     this.appId,
+    this.aud,
+    this.cnf,
     this.envId,
     this.expiresAt,
     this.orgId,
@@ -4084,6 +4112,8 @@ class IntrospectResponse {
     return IntrospectResponse(
       active: json['active'] as bool,
       appId: json['app_id'] as String?,
+      aud: json['aud'] == null ? null : (json['aud'] as List).map((e) => e as String).toList(),
+      cnf: json['cnf'] == null ? null : IntrospectConfirmation.fromJson(Map<String, dynamic>.from(json['cnf'] as Map)),
       envId: json['env_id'] as String?,
       expiresAt: json['expires_at'] as String?,
       orgId: json['org_id'] as String?,
@@ -4097,6 +4127,8 @@ class IntrospectResponse {
     return {
       'active': active,
       if (appId != null) 'app_id': appId,
+      if (aud != null) 'aud': aud,
+      if (cnf != null) 'cnf': cnf?.toJson(),
       if (envId != null) 'env_id': envId,
       if (expiresAt != null) 'expires_at': expiresAt,
       if (orgId != null) 'org_id': orgId,
@@ -5009,6 +5041,7 @@ class OAuth2Client {
   final String clientId;
   final String? clientSecretExpiresAt;
   final String createdAt;
+  final String? dpopMode;
   final bool dynamicallyRegistered;
   final List<String> grantTypes;
   final String id;
@@ -5016,6 +5049,7 @@ class OAuth2Client {
   final String name;
   final bool public;
   final List<String> redirectUris;
+  final List<String> resources;
   final List<String> scopes;
   final String? tokenEndpointAuthMethod;
   final String updatedAt;
@@ -5025,6 +5059,7 @@ class OAuth2Client {
     required this.clientId,
     this.clientSecretExpiresAt,
     required this.createdAt,
+    this.dpopMode,
     required this.dynamicallyRegistered,
     required this.grantTypes,
     required this.id,
@@ -5032,6 +5067,7 @@ class OAuth2Client {
     required this.name,
     required this.public,
     required this.redirectUris,
+    required this.resources,
     required this.scopes,
     this.tokenEndpointAuthMethod,
     required this.updatedAt,
@@ -5043,6 +5079,7 @@ class OAuth2Client {
       clientId: json['client_id'] as String,
       clientSecretExpiresAt: json['client_secret_expires_at'] as String?,
       createdAt: json['created_at'] as String,
+      dpopMode: json['dpop_mode'] as String?,
       dynamicallyRegistered: json['dynamically_registered'] as bool,
       grantTypes: (json['grant_types'] as List).map((e) => e as String).toList(),
       id: json['id'] as String,
@@ -5050,6 +5087,7 @@ class OAuth2Client {
       name: json['name'] as String,
       public: json['public'] as bool,
       redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
+      resources: (json['resources'] as List).map((e) => e as String).toList(),
       scopes: (json['scopes'] as List).map((e) => e as String).toList(),
       tokenEndpointAuthMethod: json['token_endpoint_auth_method'] as String?,
       updatedAt: json['updated_at'] as String,
@@ -5062,6 +5100,7 @@ class OAuth2Client {
       'client_id': clientId,
       if (clientSecretExpiresAt != null) 'client_secret_expires_at': clientSecretExpiresAt,
       'created_at': createdAt,
+      if (dpopMode != null) 'dpop_mode': dpopMode,
       'dynamically_registered': dynamicallyRegistered,
       'grant_types': grantTypes,
       'id': id,
@@ -5069,6 +5108,7 @@ class OAuth2Client {
       'name': name,
       'public': public,
       'redirect_uris': redirectUris,
+      'resources': resources,
       'scopes': scopes,
       if (tokenEndpointAuthMethod != null) 'token_endpoint_auth_method': tokenEndpointAuthMethod,
       'updated_at': updatedAt,
@@ -6590,6 +6630,7 @@ class SetAppSessionConfigRequest {
   final int? maxActiveSessions;
   final int? refreshTokenTtlSeconds;
   final bool? rotateRefreshToken;
+  final int? tokenExchangeTtlSeconds;
   final String? tokenFormat;
   final int? tokenTtlSeconds;
 
@@ -6599,6 +6640,7 @@ class SetAppSessionConfigRequest {
     this.maxActiveSessions,
     this.refreshTokenTtlSeconds,
     this.rotateRefreshToken,
+    this.tokenExchangeTtlSeconds,
     this.tokenFormat,
     this.tokenTtlSeconds,
   });
@@ -6610,6 +6652,7 @@ class SetAppSessionConfigRequest {
       maxActiveSessions: json['max_active_sessions'] == null ? null : (json['max_active_sessions'] as num).toInt(),
       refreshTokenTtlSeconds: json['refresh_token_ttl_seconds'] == null ? null : (json['refresh_token_ttl_seconds'] as num).toInt(),
       rotateRefreshToken: json['rotate_refresh_token'] as bool?,
+      tokenExchangeTtlSeconds: json['token_exchange_ttl_seconds'] == null ? null : (json['token_exchange_ttl_seconds'] as num).toInt(),
       tokenFormat: json['token_format'] as String?,
       tokenTtlSeconds: json['token_ttl_seconds'] == null ? null : (json['token_ttl_seconds'] as num).toInt(),
     );
@@ -6622,6 +6665,7 @@ class SetAppSessionConfigRequest {
       if (maxActiveSessions != null) 'max_active_sessions': maxActiveSessions,
       if (refreshTokenTtlSeconds != null) 'refresh_token_ttl_seconds': refreshTokenTtlSeconds,
       if (rotateRefreshToken != null) 'rotate_refresh_token': rotateRefreshToken,
+      if (tokenExchangeTtlSeconds != null) 'token_exchange_ttl_seconds': tokenExchangeTtlSeconds,
       if (tokenFormat != null) 'token_format': tokenFormat,
       if (tokenTtlSeconds != null) 'token_ttl_seconds': tokenTtlSeconds,
     };
@@ -6722,6 +6766,7 @@ class Settings {
   final int? signinRateLimit;
   final int? signupRateLimit;
   final bool? skipEmailVerification;
+  final int? tokenExchangeTtlSeconds;
   final int? tokenTtlSeconds;
   final String? webhookUrlOverride;
 
@@ -6738,6 +6783,7 @@ class Settings {
     this.signinRateLimit,
     this.signupRateLimit,
     this.skipEmailVerification,
+    this.tokenExchangeTtlSeconds,
     this.tokenTtlSeconds,
     this.webhookUrlOverride,
   });
@@ -6756,6 +6802,7 @@ class Settings {
       signinRateLimit: json['signin_rate_limit'] == null ? null : (json['signin_rate_limit'] as num).toInt(),
       signupRateLimit: json['signup_rate_limit'] == null ? null : (json['signup_rate_limit'] as num).toInt(),
       skipEmailVerification: json['skip_email_verification'] as bool?,
+      tokenExchangeTtlSeconds: json['token_exchange_ttl_seconds'] == null ? null : (json['token_exchange_ttl_seconds'] as num).toInt(),
       tokenTtlSeconds: json['token_ttl_seconds'] == null ? null : (json['token_ttl_seconds'] as num).toInt(),
       webhookUrlOverride: json['webhook_url_override'] as String?,
     );
@@ -6775,6 +6822,7 @@ class Settings {
       if (signinRateLimit != null) 'signin_rate_limit': signinRateLimit,
       if (signupRateLimit != null) 'signup_rate_limit': signupRateLimit,
       if (skipEmailVerification != null) 'skip_email_verification': skipEmailVerification,
+      if (tokenExchangeTtlSeconds != null) 'token_exchange_ttl_seconds': tokenExchangeTtlSeconds,
       if (tokenTtlSeconds != null) 'token_ttl_seconds': tokenTtlSeconds,
       if (webhookUrlOverride != null) 'webhook_url_override': webhookUrlOverride,
     };
@@ -7239,29 +7287,6 @@ class UnassignRoleRequest {
   String toString() => 'UnassignRoleRequest(${toJson()})';
 }
 
-class UnlinkAuthMethodRequest {
-  final String provider;
-
-  const UnlinkAuthMethodRequest({
-    required this.provider,
-  });
-
-  factory UnlinkAuthMethodRequest.fromJson(Map<String, dynamic> json) {
-    return UnlinkAuthMethodRequest(
-      provider: json['Provider'] as String,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'Provider': provider,
-    };
-  }
-
-  @override
-  String toString() => 'UnlinkAuthMethodRequest(${toJson()})';
-}
-
 class UnlinkAuthMethodResponse {
   final String status;
 
@@ -7329,6 +7354,7 @@ class UpdateEnvironmentSettingsRequest {
   final int? signinRateLimit;
   final int? signupRateLimit;
   final bool? skipEmailVerification;
+  final int? tokenExchangeTtlSeconds;
   final int? tokenTtlSeconds;
   final String? webhookUrlOverride;
 
@@ -7345,6 +7371,7 @@ class UpdateEnvironmentSettingsRequest {
     this.signinRateLimit,
     this.signupRateLimit,
     this.skipEmailVerification,
+    this.tokenExchangeTtlSeconds,
     this.tokenTtlSeconds,
     this.webhookUrlOverride,
   });
@@ -7363,6 +7390,7 @@ class UpdateEnvironmentSettingsRequest {
       signinRateLimit: json['signin_rate_limit'] == null ? null : (json['signin_rate_limit'] as num).toInt(),
       signupRateLimit: json['signup_rate_limit'] == null ? null : (json['signup_rate_limit'] as num).toInt(),
       skipEmailVerification: json['skip_email_verification'] as bool?,
+      tokenExchangeTtlSeconds: json['token_exchange_ttl_seconds'] == null ? null : (json['token_exchange_ttl_seconds'] as num).toInt(),
       tokenTtlSeconds: json['token_ttl_seconds'] == null ? null : (json['token_ttl_seconds'] as num).toInt(),
       webhookUrlOverride: json['webhook_url_override'] as String?,
     );
@@ -7382,6 +7410,7 @@ class UpdateEnvironmentSettingsRequest {
       if (signinRateLimit != null) 'signin_rate_limit': signinRateLimit,
       if (signupRateLimit != null) 'signup_rate_limit': signupRateLimit,
       if (skipEmailVerification != null) 'skip_email_verification': skipEmailVerification,
+      if (tokenExchangeTtlSeconds != null) 'token_exchange_ttl_seconds': tokenExchangeTtlSeconds,
       if (tokenTtlSeconds != null) 'token_ttl_seconds': tokenTtlSeconds,
       if (webhookUrlOverride != null) 'webhook_url_override': webhookUrlOverride,
     };
@@ -8275,6 +8304,7 @@ class Oauth2TokenRequest {
   final String? deviceCode;
   final String grantType;
   final String? redirectUri;
+  final List<String>? resource;
 
   const Oauth2TokenRequest({
     this.clientId,
@@ -8284,6 +8314,7 @@ class Oauth2TokenRequest {
     this.deviceCode,
     required this.grantType,
     this.redirectUri,
+    this.resource,
   });
 
   factory Oauth2TokenRequest.fromJson(Map<String, dynamic> json) {
@@ -8295,6 +8326,7 @@ class Oauth2TokenRequest {
       deviceCode: json['device_code'] as String?,
       grantType: json['grant_type'] as String,
       redirectUri: json['redirect_uri'] as String?,
+      resource: json['resource'] == null ? null : (json['resource'] as List).map((e) => e as String).toList(),
     );
   }
 
@@ -8307,6 +8339,7 @@ class Oauth2TokenRequest {
       if (deviceCode != null) 'device_code': deviceCode,
       'grant_type': grantType,
       if (redirectUri != null) 'redirect_uri': redirectUri,
+      if (resource != null) 'resource': resource,
     };
   }
 

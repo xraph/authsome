@@ -168,33 +168,24 @@ func (s *Service) RotateToken(ctx context.Context, oldTokenID id.SCIMTokenID, ne
 // ValidateToken checks a bearer token against stored hashes.
 // Returns the matching token and its associated config, or an error.
 func (s *Service) ValidateToken(ctx context.Context, plaintext string) (*Token, *SCIMConfig, error) {
-	// We need to iterate and bcrypt-compare since we can't reverse the hash.
-	// For the in-memory store, FindTokenByHash does a linear scan with bcrypt.Compare.
-	// For production, consider a token prefix lookup table.
-	configs, err := s.store.ListConfigs(ctx, "")
+	// We can't reverse a salted bcrypt digest, so resolution is delegated to the
+	// store, which scans candidates and bcrypt-compares. For production, consider
+	// a token prefix lookup table to narrow that scan.
+	t, cfg, err := s.store.FindTokenByPlaintext(ctx, plaintext)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("scim: invalid token")
 	}
 
-	for _, cfg := range configs {
-		tokens, err := s.store.ListTokens(ctx, cfg.ID)
-		if err != nil {
-			continue
-		}
-		for _, t := range tokens {
-			if err := bcrypt.CompareHashAndPassword([]byte(t.TokenHash), []byte(plaintext)); err == nil {
-				if t.IsExpired() {
-					return nil, nil, fmt.Errorf("scim: token expired")
-				}
-				// Update last used.
-				now := time.Now()
-				t.LastUsedAt = &now
-				return t, cfg, nil
-			}
-		}
+	if t.IsExpired() {
+		return nil, nil, fmt.Errorf("scim: token expired")
 	}
 
-	return nil, nil, fmt.Errorf("scim: invalid token")
+	// Record last use. Best-effort: a failed write must not fail the request.
+	now := time.Now()
+	t.LastUsedAt = &now
+	_ = s.store.UpdateToken(ctx, t) //nolint:errcheck // best-effort usage tracking
+
+	return t, cfg, nil
 }
 
 // ──────────────────────────────────────────────────

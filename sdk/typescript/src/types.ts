@@ -251,6 +251,7 @@ export interface AppsessionconfigConfig {
   max_active_sessions?: number;
   refresh_token_ttl_seconds?: number;
   rotate_refresh_token?: boolean;
+  token_exchange_ttl_seconds?: number;
   token_format?: string;
   token_ttl_seconds?: number;
   updated_at: string;
@@ -494,10 +495,12 @@ export interface CouponResponse {
 
 export interface CreateClientRequest {
   app_id: string;
+  dpop_mode?: string;
   grant_types?: string[];
   name: string;
   public?: boolean;
   redirect_uris: string[];
+  resources?: string[];
   scopes?: string[];
 }
 
@@ -509,6 +512,7 @@ export interface CreateClientResponse {
   name: string;
   public: boolean;
   redirect_uris: string[];
+  resources: string[];
   scopes: string[];
 }
 
@@ -636,10 +640,6 @@ export interface DefinitionGroup {
   namespace: string;
 }
 
-export interface DeleteClientRequest {
-  ClientID: string;
-}
-
 export interface DeleteResponse {
   status: string;
 }
@@ -691,11 +691,13 @@ export interface DiscoveryResponse {
   authorization_endpoint: string;
   code_challenge_methods_supported: string[];
   device_authorization_endpoint: string;
+  dpop_signing_alg_values_supported?: string[];
   grant_types_supported: string[];
   id_token_signing_alg_values_supported: string[];
   issuer: string;
   jwks_uri: string;
   registration_endpoint?: string;
+  resource_indicators_supported: boolean;
   response_types_supported: string[];
   revocation_endpoint: string;
   scopes_supported: string[];
@@ -818,6 +820,10 @@ export interface HealthResponse {
   status: string;
 }
 
+export interface IntrospectConfirmation {
+  jkt: string;
+}
+
 export interface IntrospectRequest {
   token: string;
 }
@@ -825,6 +831,8 @@ export interface IntrospectRequest {
 export interface IntrospectResponse {
   active: boolean;
   app_id?: string;
+  aud?: string[];
+  cnf?: IntrospectConfirmation;
   env_id?: string;
   expires_at?: string;
   org_id?: string;
@@ -1016,6 +1024,7 @@ export interface OAuth2Client {
   client_id: string;
   client_secret_expires_at?: string;
   created_at: string;
+  dpop_mode?: string;
   dynamically_registered: boolean;
   grant_types: string[];
   id: string;
@@ -1023,6 +1032,7 @@ export interface OAuth2Client {
   name: string;
   public: boolean;
   redirect_uris: string[];
+  resources: string[];
   scopes: string[];
   token_endpoint_auth_method?: string;
   updated_at: string;
@@ -1334,6 +1344,7 @@ export interface SetAppSessionConfigRequest {
   max_active_sessions?: number;
   refresh_token_ttl_seconds?: number;
   rotate_refresh_token?: boolean;
+  token_exchange_ttl_seconds?: number;
   token_format?: string;
   token_ttl_seconds?: number;
 }
@@ -1367,6 +1378,7 @@ export interface Settings {
   signin_rate_limit?: number;
   signup_rate_limit?: number;
   skip_email_verification?: boolean;
+  token_exchange_ttl_seconds?: number;
   token_ttl_seconds?: number;
   webhook_url_override?: string;
 }
@@ -1462,10 +1474,6 @@ export interface UnassignRoleRequest {
   user_id: string;
 }
 
-export interface UnlinkAuthMethodRequest {
-  Provider: string;
-}
-
 export interface UnlinkAuthMethodResponse {
   status: string;
 }
@@ -1489,6 +1497,7 @@ export interface UpdateEnvironmentSettingsRequest {
   signin_rate_limit?: number;
   signup_rate_limit?: number;
   skip_email_verification?: boolean;
+  token_exchange_ttl_seconds?: number;
   token_ttl_seconds?: number;
   webhook_url_override?: string;
 }
@@ -1661,8 +1670,6 @@ export type AdminBulkImportUsersRequest = BulkImportUsersRequest;
 
 export type CreateOAuth2ClientRequest = CreateClientRequest;
 
-export type DeleteOAuth2ClientRequest = DeleteClientRequest;
-
 export type SocialAdminUpsertProviderRequest = AdminUpsertProviderRequest;
 
 export type SsoAdminCreateConnectionRequest = AdminCreateConnectionRequest;
@@ -1703,7 +1710,7 @@ export type Oauth2UpdateRegistrationRequest = UpdateRegistrationRequest;
 
 export type Oauth2RevokeRequest = { token: string; token_type_hint?: string };
 
-export type Oauth2TokenRequest = { client_id?: string; client_secret?: string; code?: string; code_verifier?: string; device_code?: string; grant_type: string; redirect_uri?: string };
+export type Oauth2TokenRequest = { client_id?: string; client_secret?: string; code?: string; code_verifier?: string; device_code?: string; grant_type: string; redirect_uri?: string; resource?: string[] };
 
 export type CreateOrganizationRequest = CreateOrgRequest;
 

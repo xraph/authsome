@@ -276,10 +276,30 @@ func (c *Client) {{ .Name }}(ctx context.Context
 {{- if .HasBody }}, req *{{ .Name }}Request{{ end }}
 {{- if .HasQueryParams }}, params *{{ .Name }}Params{{ end }}) ({{ if .ResponseType }}*{{ .ResponseType }}, {{ end }}error) {
 {{- if .HasBody }}
+{{- if .FormBody }}
+	form := url.Values{}
+	if req != nil {
+{{- range .BodyFields }}
+{{- if eq .Type "[]string" }}
+		for _, v := range req.{{ .Name }} {
+			form.Add("{{ jsonKey .JSONTag }}", v)
+		}
+{{- else if .Optional }}
+		if req.{{ .Name }} != "" {
+			form.Set("{{ jsonKey .JSONTag }}", req.{{ .Name }})
+		}
+{{- else }}
+		form.Set("{{ jsonKey .JSONTag }}", req.{{ .Name }})
+{{- end }}
+{{- end }}
+	}
+	body := []byte(form.Encode())
+{{- else }}
 	body, err := json.Marshal(req)
 	if err != nil {
 		return {{ if .ResponseType }}nil, {{ end }}fmt.Errorf("marshal request: %w", err)
 	}
+{{- end }}
 {{- end }}
 	path := "{{ .Path }}"
 {{- range .PathParams }}
@@ -311,12 +331,12 @@ func (c *Client) {{ .Name }}(ctx context.Context
 {{- end }}
 {{- if .ResponseType }}
 	var result {{ .ResponseType }}
-	if err := c.do(ctx, "{{ .Method }}", path, {{ if .HasBody }}body{{ else }}nil{{ end }}, &result); err != nil {
+	if err := c.{{ if .FormBody }}doForm{{ else }}do{{ end }}(ctx, "{{ .Method }}", path, {{ if .HasBody }}body{{ else }}nil{{ end }}, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 {{- else }}
-	return c.do(ctx, "{{ .Method }}", path, {{ if .HasBody }}body{{ else }}nil{{ end }}, nil)
+	return c.{{ if .FormBody }}doForm{{ else }}do{{ end }}(ctx, "{{ .Method }}", path, {{ if .HasBody }}body{{ else }}nil{{ end }}, nil)
 {{- end }}
 }
 {{ end }}
@@ -378,7 +398,20 @@ func firstNonEmptyClientErrorMessage(s ...string) string {
 	return ""
 }
 
+// do issues a request with a JSON body, which is every route but the OAuth2
+// ones.
 func (c *Client) do(ctx context.Context, method, path string, body []byte, result any) error {
+	return c.doTyped(ctx, method, path, body, "application/json", result)
+}
+
+// doForm issues a request with a form-encoded body. RFC 6749 section 4.1.3
+// requires it at the token endpoint, and a conformant server is entitled to
+// reject JSON there.
+func (c *Client) doForm(ctx context.Context, method, path string, body []byte, result any) error {
+	return c.doTyped(ctx, method, path, body, "application/x-www-form-urlencoded", result)
+}
+
+func (c *Client) doTyped(ctx context.Context, method, path string, body []byte, contentType string, result any) error {
 	// Surface configure-time validation errors before touching the
 	// network (e.g. WithAPIKey was called with a publishable key).
 	if c.apiKeyConfigErr != nil {
@@ -402,7 +435,7 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, resul
 		c.tryDiscoverAppID(ctx)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", "application/json")
 	// Send both Authorization (session token) and X-API-Key (API
 	// key) when both are configured — supports the

@@ -2,6 +2,8 @@ package oauth2provider
 
 import (
 	"github.com/xraph/forge"
+
+	"github.com/xraph/authsome/dpop"
 )
 
 // AuthServerMetadata is the RFC 8414 authorization server metadata document.
@@ -36,6 +38,12 @@ type AuthServerMetadata struct {
 	// It is the convention that came out of the MCP ecosystem and it is what
 	// clients look for, so do not read it as standardised.
 	ResourceIndicatorsSupported bool `json:"resource_indicators_supported"`
+
+	// DPoPSigningAlgValuesSupported lists the JWS algorithms accepted in DPoP
+	// proofs (RFC 9449 section 5.1). Advertised unconditionally: this document
+	// is not app scoped, and a server that can validate ES256 proofs can do so
+	// whoever is asking. Per-client mode is discovered at registration.
+	DPoPSigningAlgValuesSupported []string `json:"dpop_signing_alg_values_supported,omitempty"`
 }
 
 // ProtectedResourceMetadata is the RFC 9728 protected resource metadata
@@ -86,6 +94,7 @@ func (p *Plugin) buildAuthServerMetadata() *AuthServerMetadata {
 		},
 		CodeChallengeMethodsSupported: []string{"S256", "plain"},
 		ResourceIndicatorsSupported:   true,
+		DPoPSigningAlgValuesSupported: dpop.SupportedAlgs(),
 	}
 
 	// Only advertise registration when it will actually answer. Pointing a

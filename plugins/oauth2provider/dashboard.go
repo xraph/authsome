@@ -110,7 +110,7 @@ func (p *Plugin) renderClientsPage(ctx context.Context, params contributor.Param
 			data.Error = errMsg
 		}
 	case "delete":
-		if err := p.handleDashboardDeleteClient(ctx, params); err != nil {
+		if err := p.handleDashboardDeleteClient(ctx, appID, params); err != nil {
 			data.Error = "Failed to delete OAuth2 client: " + err.Error()
 		} else if params.FormData["client_id"] != "" {
 			data.Success = "OAuth2 client deleted successfully."
@@ -288,7 +288,16 @@ func parseGrantTypeCheckboxes(formData map[string]string) []string {
 }
 
 // handleDashboardDeleteClient deletes an OAuth2 client from form data.
-func (p *Plugin) handleDashboardDeleteClient(ctx context.Context, params contributor.Params) error {
+//
+// appID is the app the page resolved, and the client has to belong to it. The
+// id arrives in a form field, so without this check a caller could post any
+// client id at all and have it deleted out of whatever app owned it. Create
+// and list on this page were already scoped; delete was the one that was not.
+//
+// A client owned by another app is reported as ErrClientNotFound, the same
+// answer an id that exists nowhere gets, so the rendered error cannot be used
+// to tell the two apart.
+func (p *Plugin) handleDashboardDeleteClient(ctx context.Context, appID id.AppID, params contributor.Params) error {
 	clientIDStr := params.FormData["client_id"]
 	if clientIDStr == "" {
 		return nil
@@ -297,6 +306,14 @@ func (p *Plugin) handleDashboardDeleteClient(ctx context.Context, params contrib
 	clientID, err := id.ParseOAuth2ClientID(clientIDStr)
 	if err != nil {
 		return fmt.Errorf("invalid client ID: %w", err)
+	}
+
+	client, err := p.oauth2Store.GetClientByID(ctx, clientID)
+	if err != nil {
+		return err
+	}
+	if client.AppID != appID {
+		return ErrClientNotFound
 	}
 
 	return p.oauth2Store.DeleteClient(ctx, clientID)

@@ -58,6 +58,7 @@ func e2eEngineWithAPIKey(t *testing.T) (*authsome.Engine, *memory.Store) {
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
+		authsome.WithConfig(testEngineConfig()),
 		authsome.WithAppID("aapp_01jf0000000000000000000000"),
 		authsome.WithPlugin(akPlugin),
 	)

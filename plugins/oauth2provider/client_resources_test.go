@@ -13,6 +13,7 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugins/oauth2provider"
 )
 
@@ -20,11 +21,18 @@ import (
 // registers a new OAuth2 client. newFixture wires no engine, so the group's
 // AdminGuard middleware resolves to nil and the route is reachable directly
 // in tests, the same way the fixture leaves every other route unauthenticated.
-func createClient(t *testing.T, mux forge.Router, body map[string]any) *httptest.ResponseRecorder {
+//
+// callerApp is put on the request context the way authprovider.BridgeToContext
+// does in production once SessionGuard has resolved the session. The handler
+// requires it, so these tests pass the same app they name in the body: they
+// are about resource-allowlist validation, and the tenancy rule that makes the
+// two have to agree has its own coverage in admin_client_scope_test.go.
+func createClient(t *testing.T, mux forge.Router, callerApp id.AppID, body map[string]any) *httptest.ResponseRecorder {
 	t.Helper()
 	b, err := json.Marshal(body)
 	require.NoError(t, err)
-	req := httptest.NewRequestWithContext(context.Background(), "POST",
+	ctx := middleware.WithAppID(context.Background(), callerApp)
+	req := httptest.NewRequestWithContext(ctx, "POST",
 		"/v1/admin/oauth/clients", bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -41,7 +49,7 @@ func TestCreateClientResources(t *testing.T) {
 		_, st, mux := newFixture(t)
 		appID := id.NewAppID()
 
-		rec := createClient(t, mux, map[string]any{
+		rec := createClient(t, mux, appID, map[string]any{
 			"app_id":        appID.String(),
 			"name":          "Resource Client",
 			"redirect_uris": []string{registeredURI},
@@ -62,9 +70,10 @@ func TestCreateClientResources(t *testing.T) {
 
 	t.Run("a non-absolute URI is rejected", func(t *testing.T) {
 		_, _, mux := newFixture(t)
+		appID := id.NewAppID()
 
-		rec := createClient(t, mux, map[string]any{
-			"app_id":        id.NewAppID().String(),
+		rec := createClient(t, mux, appID, map[string]any{
+			"app_id":        appID.String(),
 			"name":          "Bad Resource Client",
 			"redirect_uris": []string{registeredURI},
 			"resources":     []string{"not-a-uri"},
@@ -80,9 +89,10 @@ func TestCreateClientResources(t *testing.T) {
 
 	t.Run("a fragment is rejected", func(t *testing.T) {
 		_, _, mux := newFixture(t)
+		appID := id.NewAppID()
 
-		rec := createClient(t, mux, map[string]any{
-			"app_id":        id.NewAppID().String(),
+		rec := createClient(t, mux, appID, map[string]any{
+			"app_id":        appID.String(),
 			"name":          "Fragment Resource Client",
 			"redirect_uris": []string{registeredURI},
 			"resources":     []string{"https://api.example.com#frag"},
@@ -101,7 +111,7 @@ func TestCreateClientResources(t *testing.T) {
 		_, st, mux := newFixture(t)
 		appID := id.NewAppID()
 
-		rec := createClient(t, mux, map[string]any{
+		rec := createClient(t, mux, appID, map[string]any{
 			"app_id":        appID.String(),
 			"name":          "No Resources Client",
 			"redirect_uris": []string{registeredURI},

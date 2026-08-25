@@ -475,14 +475,30 @@ type authChecker struct {
 var _ dashauth.AuthChecker = (*authChecker)(nil)
 
 // CheckAuth inspects the request and returns a UserInfo if authenticated.
-func (c *authChecker) CheckAuth(_ context.Context, r *http.Request) (*dashauth.UserInfo, error) {
-	token := extractToken(r)
+//
+// The DPoP binding is enforced here rather than assumed to have been enforced
+// upstream. Ordering in a middleware chain is not an invariant, and this
+// checker gates the dashboard, which is the highest-privilege surface in the
+// product. It has no way to write an RFC 9449 challenge, so a binding it
+// cannot satisfy resolves to no identity at all, the same answer
+// authprovider.SessionProvider gives for the same reason.
+func (c *authChecker) CheckAuth(ctx context.Context, r *http.Request) (*dashauth.UserInfo, error) {
+	scheme, token := middleware.ExtractCredentialFromContext(ctx, r, dashboardCookieName)
 	if token == "" {
 		return nil, nil
 	}
 
 	sess, err := c.engine.ResolveSessionByToken(token)
 	if err != nil {
+		return nil, nil
+	}
+
+	if dpopErr := middleware.EnforceDPoPForRequest(
+		ctx, c.engine.DPoPBindingConfig(), r,
+		sess.DPoPJKT, scheme, token,
+		sess.AppID.String(), sess.ID.String(),
+		c.engine.Logger(),
+	); dpopErr != nil {
 		return nil, nil
 	}
 

@@ -77,7 +77,7 @@ func EnvironmentMiddleware(cfg EnvironmentMiddlewareConfig) forge.Middleware {
 
 			// 2. Try API key prefix-based detection.
 			if env == nil && cfg.DetectFromKey != nil {
-				token := extractBearerToken(ctx.Request(), "")
+				_, token := extractCredential(ctx.Request(), "")
 				if token != "" {
 					if envType, detected := cfg.DetectFromKey(token); detected {
 						slug := envType.String()

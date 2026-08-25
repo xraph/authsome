@@ -2,6 +2,8 @@
 
 export { AuthClient, AuthClientError, createAuthClient } from './client';
 export type { AuthClientConfig } from './client';
+export { DPoPSession, IndexedDBKeyStore } from './dpop';
+export type { DPoPKeyStore } from './dpop';
 export type {
   AcceptInvitationRequest,
   AddMemberRequest,
@@ -86,7 +88,6 @@ export type {
   DeclineInvitationRequest,
   Definition,
   DefinitionGroup,
-  DeleteClientRequest,
   DeleteResponse,
   Device,
   DeviceAuthResponse,
@@ -112,6 +113,7 @@ export type {
   GroupRef,
   GroupResource,
   HealthResponse,
+  IntrospectConfirmation,
   IntrospectRequest,
   IntrospectResponse,
   IntrospectUser,
@@ -202,7 +204,6 @@ export type {
   TeamListResponse,
   UIMetadata,
   UnassignRoleRequest,
-  UnlinkAuthMethodRequest,
   UnlinkAuthMethodResponse,
   UpdateEnvironmentRequest,
   UpdateEnvironmentSettingsRequest,
@@ -229,7 +230,6 @@ export type {
   WebhookListResponse,
   AdminBulkImportUsersRequest,
   CreateOAuth2ClientRequest,
-  DeleteOAuth2ClientRequest,
   SocialAdminUpsertProviderRequest,
   SsoAdminCreateConnectionRequest,
   SsoAdminUpdateConnectionRequest,
