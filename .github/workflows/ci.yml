@@ -44,7 +44,19 @@ jobs:
   #
   # The path covers ./plugins/... as well as ./store/..., because plugins ship
   # their own four-backend stores and drift between those is the same class of
-  # bug. Packages with no TestConformance simply match nothing.
+  # bug. Packages with no matching test simply match nothing.
+  #
+  # The -run pattern matches TestStoreConformance_ too. plugins/agentauth
+  # already had a four-backend suite under that name, and its postgres and
+  # mongo halves are integration-tagged, so before this they were built by
+  # nothing and run by nothing.
+  #
+  # -p 1 is load-bearing. Every package here shares the one mongo database
+  # this job starts, and at least one drops it during teardown, so running
+  # package binaries concurrently produced "database is in the process of
+  # being dropped" and IX lock timeouts in roughly one run in three. It did
+  # not bite while the path was ./store/... alone, because store/mongo was
+  # the only package touching mongo.
   integration:
     name: Store Conformance (pg + mongo)
     runs-on: ubuntu-latest
@@ -82,7 +94,7 @@ jobs:
       - name: Run store conformance suite
         env:
           AUTHSOME_MONGO_URI: mongodb://localhost:27017/authsome_test?replicaSet=rs0&directConnection=true
-        run: go test -tags integration -run 'TestConformance$' -count=1 -timeout 12m ./store/... ./plugins/...
+        run: go test -tags integration -p 1 -run '^TestConformance$|^TestStoreConformance_' -count=1 -timeout 15m ./store/... ./plugins/...
 
   # ─── Lint ───────────────────────────────────────────────────────────
   lint:
