@@ -1242,6 +1242,43 @@ CREATE UNIQUE INDEX idx_authsome_users_username
 				return err
 			},
 		},
+
+		// Migration: stop a lapsed grant from blocking a fresh one. Sqlite's
+		// counterpart to postgres's delegation_live_index_excludes_expired,
+		// and the reasoning is identical, down to the same constraint on the
+		// predicate: sqlite requires a partial index WHERE clause to be
+		// deterministic, so datetime('now') is no more usable here than
+		// clock_timestamp() is there.
+		//
+		// The predicate therefore covers only what the database can decide by
+		// itself, never-revoked AND never-expiring, and CreateDelegation
+		// carries the liveness check for grants that do expire. See the
+		// postgres migration for the concurrency trade that leaves.
+		&migrate.Migration{
+			Name:    "delegation_live_index_excludes_expired",
+			Version: "20260824000081",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_delegations_live;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_delegations_live
+    ON authsome_delegations (app_id, actor_kind, actor_id, subject_kind, subject_id, grant_kind)
+    WHERE revoked_at IS NULL AND expires_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_authsome_delegations_lookup
+    ON authsome_delegations (app_id, actor_kind, actor_id, subject_kind, subject_id, grant_kind);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_delegations_lookup;
+DROP INDEX IF EXISTS idx_authsome_delegations_live;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_delegations_live
+    ON authsome_delegations (app_id, actor_kind, actor_id, subject_kind, subject_id, grant_kind)
+    WHERE revoked_at IS NULL;
+`)
+				return err
+			},
+		},
 	)
 }
 

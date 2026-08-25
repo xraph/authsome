@@ -10,7 +10,6 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
-	"github.com/xraph/authsome/tokenformat"
 )
 
 // ErrExchangeRefused wraps every reason ExchangeToken declines to mint a
@@ -142,7 +141,11 @@ func (e *Engine) ExchangeToken(ctx context.Context, req *ExchangeRequest) (*sess
 		cfg.RefreshTokenTTL = cfg.TokenExchangeTTL
 	}
 
-	sess, err := e.newSession(req.AppID, userID, cfg)
+	// newOpaqueSession, not newSession: an exchanged session carries an actor
+	// chain, and a JWT-format token would strand that chain in the database
+	// where no request ever reads it. See newOpaqueSession's own comment for
+	// why that is a security hole and not just a missing feature.
+	sess, err := e.newOpaqueSession(req.AppID, userID, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("authsome: exchange: create session: %w", err)
 	}
@@ -154,36 +157,16 @@ func (e *Engine) ExchangeToken(ctx context.Context, req *ExchangeRequest) (*sess
 	// microseconds of drift between them, and any positive drift here would
 	// let the session's expiry land after the grant's, precisely the
 	// outcome this exists to rule out.
-	clamped := false
+	//
+	// There is no token-side clamp to mirror any more. The access token is
+	// opaque by construction here, so it asserts no lifetime of its own and
+	// the session row is the only thing a verifier can consult.
 	if grant.ExpiresAt != nil {
 		if sess.ExpiresAt.After(*grant.ExpiresAt) {
 			sess.ExpiresAt = *grant.ExpiresAt
-			clamped = true
 		}
 		if sess.RefreshTokenExpiresAt.After(*grant.ExpiresAt) {
 			sess.RefreshTokenExpiresAt = *grant.ExpiresAt
-		}
-	}
-
-	// newSession already minted a JWT (if the app is configured for one)
-	// against the pre-clamp expiry. A clamp after the fact must be reflected
-	// in the token's own exp claim too, or the bearer credential itself would
-	// keep asserting a lifetime the grant no longer backs, regardless of what
-	// the session row now says.
-	if clamped {
-		tokFmt := e.TokenFormatForApp(req.AppID.String())
-		if tokFmt.Name() == "jwt" {
-			jwtToken, genErr := tokFmt.GenerateAccessToken(tokenformat.TokenClaims{
-				UserID:    userID.String(),
-				AppID:     req.AppID.String(),
-				SessionID: sess.ID.String(),
-				IssuedAt:  sess.CreatedAt,
-				ExpiresAt: sess.ExpiresAt,
-			})
-			if genErr != nil {
-				return nil, fmt.Errorf("authsome: exchange: regenerate jwt: %w", genErr)
-			}
-			sess.Token = jwtToken
 		}
 	}
 
@@ -231,6 +214,13 @@ func (e *Engine) ExchangeToken(ctx context.Context, req *ExchangeRequest) (*sess
 // without it fails later, far from the cause, and reads as a bug in the
 // agent rather than as the refusal it actually is.
 //
+// Asking for NOTHING is not asking for everything. An empty requested list
+// resolves to the intersection of the grant's filter and the actor's own
+// scopes (see defaultScopes), never to nil: empty scopes read as "no
+// restriction" everywhere else in this package, so returning nil for a grant
+// limited to repo:read would hand back a session broader than the grant that
+// justified it, which is the one thing narrowing exists to prevent.
+//
 // An actor with no recorded scopes ([]string(nil) or empty) is read the same
 // way principal.Delegation.Scopes reads empty: no restriction of its own,
 // rather than "may hold nothing." That is a deliberate choice, not an
@@ -245,7 +235,7 @@ func (e *Engine) ExchangeToken(ctx context.Context, req *ExchangeRequest) (*sess
 // the zero value meaning it.
 func intersectScopes(requested []string, grant *principal.Delegation, actorScopes []string) ([]string, error) {
 	if len(requested) == 0 {
-		return nil, nil
+		return defaultScopes(grant, actorScopes)
 	}
 	actorHas := make(map[string]bool, len(actorScopes))
 	for _, s := range actorScopes {
@@ -260,6 +250,46 @@ func intersectScopes(requested []string, grant *principal.Delegation, actorScope
 			return nil, fmt.Errorf("scope %q is outside the actor's own scopes", s)
 		}
 		out = append(out, s)
+	}
+	return out, nil
+}
+
+// defaultScopes resolves what an exchange gets when the caller asked for no
+// scopes in particular: the intersection of the grant's filter and the actor's
+// own scopes.
+//
+// Both sides empty is the only case that yields nil, and there it is honest:
+// neither party carries a restriction, so the session carries none either.
+// With one side empty the other side is the whole answer, matching how an
+// empty scope list is read as "no restriction of its own" throughout this
+// package.
+//
+// A non-empty pair that shares nothing is an error rather than an empty
+// result, for the same reason the requested path errors on an out-of-grant
+// scope: an empty slice would read downstream as "unrestricted", turning the
+// tightest possible pairing into the loosest possible session.
+func defaultScopes(grant *principal.Delegation, actorScopes []string) ([]string, error) {
+	switch {
+	case len(grant.Scopes) == 0 && len(actorScopes) == 0:
+		return nil, nil
+	case len(grant.Scopes) == 0:
+		return append([]string(nil), actorScopes...), nil
+	case len(actorScopes) == 0:
+		return append([]string(nil), grant.Scopes...), nil
+	}
+
+	actorHas := make(map[string]bool, len(actorScopes))
+	for _, s := range actorScopes {
+		actorHas[s] = true
+	}
+	out := make([]string, 0, len(grant.Scopes))
+	for _, s := range grant.Scopes {
+		if actorHas[s] {
+			out = append(out, s)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("the grant's scopes and the actor's own scopes do not overlap")
 	}
 	return out, nil
 }

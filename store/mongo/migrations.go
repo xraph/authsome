@@ -1133,6 +1133,53 @@ func init() {
 				})
 			},
 		},
+
+		// Migration: stop a lapsed grant from blocking a fresh one. Mongo's
+		// counterpart to postgres's delegation_live_index_excludes_expired.
+		//
+		// Mongo has the same limitation as the SQL backends here, for its own
+		// reason: a partialFilterExpression admits only equality, $exists,
+		// $type, the range operators against a CONSTANT, $and, $or and $in.
+		// There is no way to name "now" inside one, so expiry cannot live in
+		// the filter any more than it can live in a postgres index predicate.
+		//
+		// The filter therefore adds expires_at being null alongside revoked_at
+		// being null: never-revoked AND never-expiring, the rows whose
+		// liveness mongo can decide by itself. Grants that carry an expiry are
+		// checked in CreateDelegation instead, against
+		// principal.Delegation.IsActive, the same method every other backend
+		// now agrees with. See the postgres migration for the concurrency
+		// trade that leaves.
+		//
+		// $type: "null" rather than $exists, for the reason spelled out on
+		// create_authsome_delegations above: grove writes every mapped field
+		// whatever omitempty says, so an unset expiry reaches mongo as an
+		// explicit null and never as an absent key.
+		//
+		// The reshape goes through createIndexesReshapeConflicting because the
+		// keys are unchanged and only the options move. Mongo refuses that as
+		// an index conflict, and the helper's whole job is to drop the
+		// conflicting index by name and retry.
+		&migrate.Migration{
+			Name:    "delegation_live_index_excludes_expired",
+			Version: "20260824000083",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				return createIndexesReshapeConflicting(ctx, mexec.DB().Collection(colDelegations),
+					[]mongo.IndexModel{delegationLiveIndex(true)})
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				return createIndexesReshapeConflicting(ctx, mexec.DB().Collection(colDelegations),
+					[]mongo.IndexModel{delegationLiveIndex(false)})
+			},
+		},
 	)
 }
 
@@ -1217,4 +1264,31 @@ func backfillDefaultEnvironments(ctx context.Context, mexec *mongomigrate.Execut
 		}
 	}
 	return nil
+}
+
+// delegationLiveIndex builds the unique index that holds one live grant per
+// (app, actor, subject, kind).
+//
+// excludeExpired chooses the partial filter. True is the current shape, which
+// covers only grants that neither expire nor have been revoked. False is the
+// original revoked-only shape, kept so the migration that introduced the
+// change has a Down that actually restores what was there.
+func delegationLiveIndex(excludeExpired bool) mongo.IndexModel {
+	filter := bson.D{
+		{Key: "revoked_at", Value: bson.D{{Key: "$type", Value: "null"}}},
+	}
+	if excludeExpired {
+		filter = append(filter, bson.E{
+			Key: "expires_at", Value: bson.D{{Key: "$type", Value: "null"}},
+		})
+	}
+	return mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "app_id", Value: 1},
+			{Key: "actor_kind", Value: 1}, {Key: "actor_id", Value: 1},
+			{Key: "subject_kind", Value: 1}, {Key: "subject_id", Value: 1},
+			{Key: "grant_kind", Value: 1},
+		},
+		Options: options.Index().SetUnique(true).SetPartialFilterExpression(filter),
+	}
 }

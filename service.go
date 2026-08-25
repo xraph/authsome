@@ -846,6 +846,32 @@ func (e *Engine) newSession(appID id.AppID, userID id.UserID, cfg account.Sessio
 	return sess, nil
 }
 
+// newOpaqueSession mints a session whose access token is always the opaque
+// random string, even on an app configured to issue JWTs.
+//
+// This exists for the two paths that put an actor chain on a session: a token
+// exchange and an impersonation. A JWT carries no RFC 8693 act claim in this
+// codebase (tokenformat.TokenClaims has UserID, AppID, SessionID and the
+// scopes, and nothing else), and AuthMiddlewareWithJWT tries JWT validation
+// FIRST and returns on success, so a JWT-format credential never causes the
+// session row to be loaded. The chain would simply not exist on the request:
+// no WithSession, no WithActors, no chain for a guard to narrow against and
+// none for the token-exchange endpoint to refuse a second exchange on.
+//
+// An opaque token has no dots, so tokenformat.IsJWT rejects it and the
+// middleware falls through to trySessionAuth, which loads the row and with it
+// the chain. The invariant that buys is worth stating plainly: a session
+// carrying actors is always an opaque token whose row carries those actors.
+//
+// The alternative was carrying the chain in an act claim and populating the
+// actor context from it in tryJWTAuth. That is more faithful to RFC 8693 and
+// considerably more work, and it would have to round-trip through every
+// token format. It is the right follow-up; this is the small, total and
+// reversible version of it.
+func (e *Engine) newOpaqueSession(appID id.AppID, userID id.UserID, cfg account.SessionConfig) (*session.Session, error) {
+	return account.NewSession(appID, userID, cfg)
+}
+
 // bindSessionToDevice populates connection info on a session and registers
 // (or finds) the associated device via fingerprint-based upsert. Device
 // registration failure is non-fatal so it never blocks authentication.
@@ -2719,7 +2745,14 @@ func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID) (
 	cfg.TokenTTL = 1 * time.Hour
 	cfg.RefreshTokenTTL = 1 * time.Hour // same as token — not meant to be refreshed
 
-	sess, err := e.newSession(u.AppID, u.ID, cfg)
+	// newOpaqueSession, not newSession, for the same reason ExchangeToken
+	// uses it: an impersonation session carries an actor chain, and a
+	// JWT-format token would leave that chain unread on every request. The
+	// concrete loss on a JWT-configured app is the token-exchange endpoint's
+	// chained-exchange refusal, which can only see a chain the middleware
+	// actually loaded, so an admin could spend an impersonation JWT
+	// exchanging for a third party the impersonated user holds a grant over.
+	sess, err := e.newOpaqueSession(u.AppID, u.ID, cfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("authsome: impersonate: create session: %w", err)
 	}

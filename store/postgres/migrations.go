@@ -1470,5 +1470,57 @@ ALTER TABLE authsome_sessions
 				return err
 			},
 		},
+
+		// Migration: stop a lapsed grant from blocking a fresh one.
+		//
+		// The live-grant unique index filtered on `revoked_at IS NULL` alone,
+		// which ignores expiry. StopImpersonation is the only thing that ever
+		// writes revoked_at, so an impersonation session that simply ran out
+		// of time left an unrevoked, expired row behind forever, and every
+		// later Impersonate for that same admin and target hit the index and
+		// came back "already active and must be stopped first". An admin could
+		// impersonate a given user exactly once, ever.
+		//
+		// Expiry cannot go in the index predicate. Postgres requires a partial
+		// index WHERE clause to be immutable, and every way of naming the
+		// current time (now(), clock_timestamp(), CURRENT_TIMESTAMP) is not.
+		// So the predicate narrows to the rows whose liveness the database CAN
+		// decide on its own: never-revoked AND never-expiring. Those are still
+		// hard-refused at the storage layer.
+		//
+		// Grants that DO carry an expiry are checked in Go instead, in
+		// CreateDelegation, against the same principal.Delegation.IsActive the
+		// rest of the system uses. That check is a read followed by a write
+		// rather than one atomic statement, so two concurrent Impersonate
+		// calls for the same admin and target could both land. The outcome is
+		// two live impersonation sessions where one was intended, which is a
+		// tidiness loss and not an escalation: both sessions belong to an
+		// admin who was already authorized for exactly this, and the audit
+		// record names them both.
+		&migrate.Migration{
+			Name:    "delegation_live_index_excludes_expired",
+			Version: "20260824000080",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_delegations_live;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_delegations_live
+    ON authsome_delegations (app_id, actor_kind, actor_id, subject_kind, subject_id, grant_kind)
+    WHERE revoked_at IS NULL AND expires_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_authsome_delegations_lookup
+    ON authsome_delegations (app_id, actor_kind, actor_id, subject_kind, subject_id, grant_kind);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_delegations_lookup;
+DROP INDEX IF EXISTS idx_authsome_delegations_live;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_delegations_live
+    ON authsome_delegations (app_id, actor_kind, actor_id, subject_kind, subject_id, grant_kind)
+    WHERE revoked_at IS NULL;
+`)
+				return err
+			},
+		},
 	)
 }

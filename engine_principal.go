@@ -334,6 +334,16 @@ func (e *Engine) MintChildPrincipal(
 			parentID, ErrChildMintNotPermitted)
 	}
 
+	// An empty child scope list inherits the parent's, it does not mean
+	// "unrestricted". Empty scopes read as "no restriction" everywhere they
+	// are consumed, so minting a child with no scopes under a parent capped
+	// to repo:read would produce a child BROADER than the parent it hangs
+	// off, which is the opposite of the subset cap this method exists to
+	// enforce.
+	if len(scopes) == 0 {
+		scopes = append([]string(nil), parent.Scopes...)
+	}
+
 	if err := requireScopeSubset(scopes, parent.Scopes); err != nil {
 		return nil, nil, "", fmt.Errorf("authsome: mint child: %w: %w", ErrChildScopeExceedsParent, err)
 	}
@@ -377,6 +387,11 @@ func (e *Engine) MintChildPrincipal(
 // requireScopeSubset refuses any scope the parent does not itself hold. A
 // parent with no scopes at all places no restriction, matching how an empty
 // scope list is read everywhere else in this package.
+//
+// The len(child) == 0 short-circuit only fires when the parent is itself
+// unscoped: MintChildPrincipal fills an empty child list from the parent
+// before calling here, so an unscoped request against a scoped parent arrives
+// already carrying the parent's own list rather than nothing.
 func requireScopeSubset(child, parent []string) error {
 	if len(parent) == 0 || len(child) == 0 {
 		return nil

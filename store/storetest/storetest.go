@@ -68,6 +68,7 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"PrincipalRoundTrip", testPrincipalRoundTrip},
 		{"EphemeralPrincipalExpiry", testEphemeralPrincipalExpiry},
 		{"DelegationLifecycle", testDelegationLifecycle},
+		{"ExpiredDelegationDoesNotBlockAFreshOne", testExpiredDelegationDoesNotBlockAFreshOne},
 		{"SessionActorChainRoundTrip", testSessionActorChainRoundTrip},
 		{"ServiceAccountKindDefaultsToService", testServiceAccountKindDefaultsToService},
 	}
@@ -1110,6 +1111,88 @@ func testDelegationLifecycle(t *testing.T, s store.Store) {
 	}
 	assert.Contains(t, atBoundaryIDs, boundaryDelegation.ID.String(),
 		"a grant expiring at exactly ActiveAsOf must still be active, matching principal.Delegation.IsActive")
+}
+
+// testExpiredDelegationDoesNotBlockAFreshOne pins that live-grant uniqueness
+// means LIVE, not merely unrevoked.
+//
+// The original constraint filtered on revoked_at alone. StopImpersonation is
+// the only thing in the whole system that writes revoked_at, so an
+// impersonation session that simply ran out of time left an unrevoked, expired
+// row behind forever, and every later Impersonate for that admin and target
+// came back "already active and must be stopped first". An admin could
+// impersonate a given user exactly once, ever.
+//
+// All four backends are pinned here because all four had it, each in its own
+// idiom: a partial index predicate in postgres and sqlite, a
+// partialFilterExpression in mongo, and a loop over stored grants in memory.
+// A backend that skipped the fix would be the one that quietly stops letting
+// support staff into an account.
+func testExpiredDelegationDoesNotBlockAFreshOne(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "lapsed-grant@test.com")
+	admin := seedUser(t, s, tn, "lapsed-grant-admin@test.com")
+
+	actor := principal.UserRef(admin.ID)
+	subject := principal.UserRef(u.ID)
+
+	// Expired an hour ago, and deliberately never revoked. That combination
+	// is the whole point: nothing in the system revokes a grant on expiry.
+	lapsedAt := now().Add(-1 * time.Hour)
+	lapsed := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     tn.AppID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantImpersonation,
+		GrantedBy: actor,
+		ExpiresAt: &lapsedAt,
+		CreatedAt: now().Add(-2 * time.Hour),
+		UpdatedAt: now().Add(-2 * time.Hour),
+	}
+	require.NoError(t, s.CreateDelegation(ctx, lapsed))
+
+	_, err := s.FindActiveDelegation(ctx, tn.AppID, actor, subject, principal.GrantImpersonation)
+	require.ErrorIs(t, err, principal.ErrNotFound,
+		"sanity: the lapsed grant must already read as inactive, or this test proves nothing")
+
+	future := now().Add(1 * time.Hour)
+	fresh := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     tn.AppID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantImpersonation,
+		GrantedBy: actor,
+		ExpiresAt: &future,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateDelegation(ctx, fresh),
+		"an expired grant must not occupy the live slot: an admin who impersonated a user once must be able to do it again")
+
+	found, err := s.FindActiveDelegation(ctx, tn.AppID, actor, subject, principal.GrantImpersonation)
+	require.NoError(t, err)
+	assert.Equal(t, fresh.ID.String(), found.ID.String(),
+		"the live grant must be the fresh one, not the lapsed row it replaced")
+
+	// The other half of the constraint still has to hold. Freeing the slot on
+	// expiry must not have freed it while the grant is genuinely live, or
+	// revoking the grant an admin can see would leave a second one working.
+	dupe := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     tn.AppID,
+		Actor:     actor,
+		Subject:   subject,
+		GrantKind: principal.GrantImpersonation,
+		GrantedBy: actor,
+		ExpiresAt: &future,
+		CreatedAt: now(),
+		UpdatedAt: now(),
+	}
+	assert.ErrorIs(t, s.CreateDelegation(ctx, dupe), store.ErrConflict,
+		"a second grant while the first is still live must still be refused")
 }
 
 // testSessionActorChainRoundTrip pins that the chain survives every session

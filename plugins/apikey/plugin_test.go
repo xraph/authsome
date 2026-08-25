@@ -46,6 +46,9 @@ import (
 type mockEngine struct {
 	logger log.Logger
 	store  apikey.Store
+	// principals, when set, backs ResolvePrincipal so a test can register a
+	// service account with a real kind and see whether the strategy reads it.
+	principals map[string]*principal.Principal
 	// gate, when set, is returned from PrincipalAuthGate so OnInit picks it
 	// up via plugin.PrincipalAuthGateProvider, exactly as *authsome.Engine
 	// does in production.
@@ -60,10 +63,14 @@ type fakeGate struct {
 	authorizeErr error
 	authorizeN   int
 	observeN     int
+	// lastAttempt is what the gate was handed, so a test can assert on the
+	// subject the risk plugins actually see.
+	lastAttempt *principal.AuthAttempt
 }
 
-func (g *fakeGate) Authorize(_ context.Context, _ *principal.AuthAttempt) error {
+func (g *fakeGate) Authorize(_ context.Context, a *principal.AuthAttempt) error {
 	g.authorizeN++
+	g.lastAttempt = a
 	return g.authorizeErr
 }
 
@@ -102,7 +109,10 @@ func (m *mockEngine) GetUser(_ context.Context, _ id.UserID) (*user.User, error)
 	return nil, errors.New("not implemented")
 }
 func (m *mockEngine) EnsureDefaultRole(_ context.Context, _ id.AppID, _ id.UserID) {}
-func (m *mockEngine) ResolvePrincipal(_ context.Context, _ principal.Ref) (*principal.Principal, error) {
+func (m *mockEngine) ResolvePrincipal(_ context.Context, ref principal.Ref) (*principal.Principal, error) {
+	if p, ok := m.principals[ref.ID]; ok {
+		return p, nil
+	}
 	return nil, principal.ErrNotFound
 }
 func (m *mockEngine) PrincipalStore() principal.Store { return nil }
@@ -790,6 +800,91 @@ func TestPlugin_Strategy_Authenticate_GateObservesAllow_ServiceAccount(t *testin
 	assert.Equal(t, svcID, result.Session.ServiceAccountID)
 	assert.Equal(t, 1, gate.authorizeN, "the service-account branch must consult the gate")
 	assert.Equal(t, 1, gate.observeN, "the service-account branch must call Observe with its synthetic session")
+}
+
+// The caller's kind must come off the registration, not off a constant.
+//
+// PrincipalKind was hardcoded to KindService on the synthetic session, so
+// sess.Subject() reported service_account:X while the resolved principal
+// reported agent:X for the same caller in the same request. Warden's
+// principal_kind attribute and the ActionPrincipalAuth hook metadata therefore
+// disagreed with the registration, and an ABAC policy written on
+// principal_kind == "agent" missed every API-key request an agent ever made.
+func TestPlugin_Strategy_Authenticate_UsesTheRegisteredPrincipalKind(t *testing.T) {
+	p, store := newTestPlugin()
+	gate := &fakeGate{}
+
+	appID := id.NewAppID()
+	svcID := id.NewServiceAccountID()
+	eng := &mockEngine{
+		logger: log.NewNoopLogger(), store: store, gate: gate,
+		principals: map[string]*principal.Principal{
+			svcID.String(): {
+				Ref:   principal.Ref{Kind: principal.KindAgent, ID: svcID.String()},
+				AppID: appID,
+			},
+		},
+	}
+	require.NoError(t, p.OnInit(context.Background(), eng))
+	s := p.Strategy()
+
+	raw, hash, prefix, err := apikey.GenerateKey()
+	require.NoError(t, err)
+
+	now := time.Now()
+	require.NoError(t, store.CreateAPIKey(context.Background(), &apikey.APIKey{
+		ID: id.NewAPIKeyID(), AppID: appID, ServiceAccountID: svcID,
+		Name: "Agent Key", KeyHash: hash, KeyPrefix: prefix,
+		CreatedAt: now, UpdatedAt: now,
+	}))
+
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/data", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	req.Header.Set("X-App-ID", appID.String())
+
+	result, err := s.Authenticate(context.Background(), req)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Session)
+
+	assert.Equal(t, principal.KindAgent, result.Session.PrincipalKind,
+		"the synthetic session must carry the kind the service account was registered with")
+	assert.Equal(t, principal.Ref{Kind: principal.KindAgent, ID: svcID.String()}, result.Session.Subject(),
+		"Subject() must agree with the resolved principal, not report a different kind for the same caller")
+	require.NotNil(t, gate.lastAttempt, "the gate must have been consulted")
+	assert.Equal(t, principal.KindAgent, gate.lastAttempt.Subject.Kind,
+		"the risk plugins must be told the real kind, or a policy on principal_kind never matches")
+}
+
+// With no resolver wired, the kind falls back to KindService, which is what an
+// unclassified machine caller has always been and what the service account
+// store itself defaults to.
+func TestPlugin_Strategy_Authenticate_FallsBackToServiceKind(t *testing.T) {
+	p, store := newTestPlugin()
+	require.NoError(t, p.OnInit(context.Background(),
+		&mockEngine{logger: log.NewNoopLogger(), store: store}))
+	s := p.Strategy()
+
+	appID := id.NewAppID()
+	svcID := id.NewServiceAccountID()
+	raw, hash, prefix, err := apikey.GenerateKey()
+	require.NoError(t, err)
+
+	now := time.Now()
+	require.NoError(t, store.CreateAPIKey(context.Background(), &apikey.APIKey{
+		ID: id.NewAPIKeyID(), AppID: appID, ServiceAccountID: svcID,
+		Name: "Unresolvable Key", KeyHash: hash, KeyPrefix: prefix,
+		CreatedAt: now, UpdatedAt: now,
+	}))
+
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/data", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	req.Header.Set("X-App-ID", appID.String())
+
+	result, err := s.Authenticate(context.Background(), req)
+	require.NoError(t, err)
+	require.NotNil(t, result.Session)
+	assert.Equal(t, principal.KindService, result.Session.PrincipalKind)
 }
 
 // TestPlugin_OnInit_PrincipalAuthGateSignatureMatchesRealEngine catches

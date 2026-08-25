@@ -94,6 +94,24 @@ func TestMintChildRefusesScopesTheParentLacks(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// A child minted with no scopes inherits its parent's, it does not come out
+// unrestricted.
+//
+// Empty scopes read as "no restriction" everywhere they are consumed, so a
+// child left empty under a repo:read parent would be BROADER than the parent
+// it hangs off, which is the exact inversion the subset cap exists to prevent.
+func TestMintChildWithNoScopesInheritsTheParents(t *testing.T) {
+	e, _, parent := setupParentFixture(t, []string{"repo:read"})
+
+	child, key, _, err := e.MintChildPrincipal(context.Background(), parent.ID,
+		"child", nil, time.Hour)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"repo:read"}, child.Scopes,
+		"an unscoped child must inherit the parent's cap, not escape it")
+	assert.Equal(t, []string{"repo:read"}, key.Scopes,
+		"the child's own credential must carry the same cap as the child")
+}
+
 // A child may not outlive its parent, or revoking the parent leaves its
 // children running.
 func TestMintChildCapsTTLByParentExpiry(t *testing.T) {

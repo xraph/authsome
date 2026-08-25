@@ -176,11 +176,15 @@ func TestExchangeRefusesImpersonationSession(t *testing.T) {
 	assert.Error(t, err, "a session that is itself the result of impersonation must not be exchangeable")
 }
 
-// The grant's expiry must bound the JWT's own exp claim, not just the
-// session row. A stateless verifier reads the token, not the database, so a
-// JWT whose exp outlives the grant defeats the clamp entirely regardless of
-// what ExpiresAt says in storage.
-func TestExchangeClampsJWTExpiryToGrant(t *testing.T) {
+// An exchanged credential must be opaque even when the app is configured to
+// issue JWTs, and the session row must still be clamped to the grant.
+//
+// tokenformat.TokenClaims carries no RFC 8693 act claim, and
+// AuthMiddlewareWithJWT tries JWT validation first and returns on success, so
+// a JWT-format exchanged token would never cause the session row to be loaded
+// and the actor chain would not exist on the request at all. Opaque is what
+// keeps the chain reachable. See newOpaqueSession.
+func TestExchangeIssuesAnOpaqueTokenOnAJWTApp(t *testing.T) {
 	jwtFmt, err := tokenformat.NewJWT(tokenformat.JWTConfig{
 		SigningMethod: jwt.SigningMethodHS256,
 		SigningKey:    []byte("test-signing-key-0123456789abcdef"),
@@ -199,12 +203,93 @@ func TestExchangeClampsJWTExpiryToGrant(t *testing.T) {
 		AppID: appID, Actor: agent, RequestedSubject: userRef,
 	})
 	require.NoError(t, err)
-	require.True(t, tokenformat.IsJWT(sess.Token), "the app is JWT-configured; the exchanged token must be too")
 
-	claims, err := jwtFmt.ValidateAccessToken(sess.Token)
+	assert.False(t, tokenformat.IsJWT(sess.Token),
+		"an exchanged token must be opaque even on a JWT app, or the actor chain never reaches the request")
+	assert.False(t, sess.ExpiresAt.After(soon),
+		"the session must still not outlive the grant")
+}
+
+// The chained-exchange refusal must hold on a JWT-configured app, not only on
+// an opaque one.
+//
+// This is the seam the refusal used to fall through. The engine-level check
+// reads ExchangeRequest.CallerActors, and the HTTP handler fills that from
+// middleware.SessionFrom. On a JWT app the exchanged credential used to be a
+// JWT, tryJWTAuth resolved it without ever loading the session row, no session
+// reached the context, and the handler passed an empty chain: the engine was
+// told the caller had no chain and could not refuse what it could not see.
+//
+// The proof runs at the layer where the credential's format decides the
+// outcome. The exchanged token must be opaque, so the middleware resolves it
+// through the session path, so the row's chain is what the second exchange is
+// judged on.
+func TestExchangedCredentialCannotBeReExchangedOnAJWTApp(t *testing.T) {
+	jwtFmt, err := tokenformat.NewJWT(tokenformat.JWTConfig{
+		SigningMethod: jwt.SigningMethodHS256,
+		SigningKey:    []byte("test-signing-key-0123456789abcdef"),
+	})
 	require.NoError(t, err)
-	assert.False(t, claims.ExpiresAt.After(soon),
-		"the JWT's own exp claim must not outlive the grant, or a stateless verifier honors a lifetime the grant no longer backs")
+
+	e, appID, agent, alice := setupExchangeFixture(t,
+		authsome.WithJWTFormat("aapp_01jf0000000000000000000000", jwtFmt))
+	ctx := context.Background()
+	bob := newExchangeUserRef(t, e, appID)
+
+	_, err = e.GrantDelegation(ctx, appID, agent, alice, []string{"repo:read"}, alice, nil)
+	require.NoError(t, err)
+	_, err = e.GrantDelegation(ctx, appID, alice, bob, nil, bob, nil)
+	require.NoError(t, err)
+
+	aliceSess, err := e.ExchangeToken(ctx, &authsome.ExchangeRequest{
+		AppID: appID, Actor: agent, RequestedSubject: alice,
+		Scopes: []string{"repo:read"},
+	})
+	require.NoError(t, err)
+
+	// The load-bearing assertion. A JWT here means the credential resolves
+	// through tryJWTAuth, which loads no session row, which means the chain
+	// below is not something a real request could ever have recovered.
+	require.False(t, tokenformat.IsJWT(aliceSess.Token),
+		"the exchanged credential must be opaque, or the chain never reaches the second exchange and the refusal below is unreachable in production")
+
+	// What the session lookup hands the handler on the replay attempt.
+	// ResolveSessionByToken is exactly what middleware.trySessionAuth calls,
+	// so this is the chain a real replay would arrive carrying.
+	stored, err := e.ResolveSessionByToken(aliceSess.Token)
+	require.NoError(t, err, "an opaque exchanged token must resolve back to its own row")
+	require.Equal(t, principal.Chain{agent}, stored.Actors,
+		"the row the middleware loads must carry the chain")
+
+	_, err = e.ExchangeToken(ctx, &authsome.ExchangeRequest{
+		AppID: appID, Actor: alice, RequestedSubject: bob,
+		CallerActors:       stored.Actors,
+		CallerDelegationID: stored.DelegationID,
+	})
+	assert.Error(t, err,
+		"a credential minted by a prior exchange must not itself be exchangeable, JWT-configured app included")
+}
+
+// An exchange that names no scopes must land on the intersection of the grant
+// and the actor, never on nil.
+//
+// Empty scopes read as "no restriction" everywhere they are consumed, so
+// returning nil for a grant limited to repo:read would hand back a session
+// broader than the grant that justified it. Asking for nothing is not asking
+// for everything.
+func TestExchangeWithNoRequestedScopesInheritsTheGrant(t *testing.T) {
+	e, appID, agent, userRef := setupExchangeFixture(t)
+	ctx := context.Background()
+
+	_, err := e.GrantDelegation(ctx, appID, agent, userRef, []string{"repo:read"}, userRef, nil)
+	require.NoError(t, err)
+
+	sess, err := e.ExchangeToken(ctx, &authsome.ExchangeRequest{
+		AppID: appID, Actor: agent, RequestedSubject: userRef,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"repo:read"}, sess.Scopes,
+		"an unscoped request must inherit the grant's filter, not discard it")
 }
 
 // RevokeDelegation must refuse a delegation id from a different app: without
