@@ -130,6 +130,14 @@ func (s *MemoryStore) ConsumeRecoveryCode(_ context.Context, codeID id.RecoveryC
 	if !ok {
 		return ErrEnrollmentNotFound
 	}
+	// Consume only an unspent code. The SQL and mongo backends carry a
+	// "used = false" predicate on the update; without the same guard here a
+	// replayed code rewrites UsedAt and the audit trail records the wrong
+	// moment. The code stays spent either way, so this is about accuracy
+	// rather than access.
+	if c.Used {
+		return nil
+	}
 	c.Used = true
 	now := time.Now()
 	c.UsedAt = &now
