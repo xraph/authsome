@@ -143,8 +143,8 @@ func (p *Plugin) CreateGrant(ctx context.Context, in CreateGrantInput) (*AgentGr
 	// GetActiveGrant returning ErrNotFound is the ordinary "first consent"
 	// case, not a failure.
 	if existing, err := p.store.GetActiveGrant(ctx, in.AgentID, in.UserID, grantOrg); err == nil {
-		if err := p.RevokeGrant(ctx, existing.ID); err != nil {
-			return nil, err
+		if revokeErr := p.RevokeGrant(ctx, existing.ID); revokeErr != nil {
+			return nil, revokeErr
 		}
 	} else if !errors.Is(err, ErrNotFound) {
 		return nil, forge.InternalError(fmt.Errorf("agentauth: load active grant: %w", err))
