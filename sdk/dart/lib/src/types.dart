@@ -1210,6 +1210,7 @@ class AppsessionconfigConfig {
   final int? maxActiveSessions;
   final int? refreshTokenTtlSeconds;
   final bool? rotateRefreshToken;
+  final int? tokenExchangeTtlSeconds;
   final String? tokenFormat;
   final int? tokenTtlSeconds;
   final String updatedAt;
@@ -1223,6 +1224,7 @@ class AppsessionconfigConfig {
     this.maxActiveSessions,
     this.refreshTokenTtlSeconds,
     this.rotateRefreshToken,
+    this.tokenExchangeTtlSeconds,
     this.tokenFormat,
     this.tokenTtlSeconds,
     required this.updatedAt,
@@ -1238,6 +1240,7 @@ class AppsessionconfigConfig {
       maxActiveSessions: json['max_active_sessions'] == null ? null : (json['max_active_sessions'] as num).toInt(),
       refreshTokenTtlSeconds: json['refresh_token_ttl_seconds'] == null ? null : (json['refresh_token_ttl_seconds'] as num).toInt(),
       rotateRefreshToken: json['rotate_refresh_token'] as bool?,
+      tokenExchangeTtlSeconds: json['token_exchange_ttl_seconds'] == null ? null : (json['token_exchange_ttl_seconds'] as num).toInt(),
       tokenFormat: json['token_format'] as String?,
       tokenTtlSeconds: json['token_ttl_seconds'] == null ? null : (json['token_ttl_seconds'] as num).toInt(),
       updatedAt: json['updated_at'] as String,
@@ -1254,6 +1257,7 @@ class AppsessionconfigConfig {
       if (maxActiveSessions != null) 'max_active_sessions': maxActiveSessions,
       if (refreshTokenTtlSeconds != null) 'refresh_token_ttl_seconds': refreshTokenTtlSeconds,
       if (rotateRefreshToken != null) 'rotate_refresh_token': rotateRefreshToken,
+      if (tokenExchangeTtlSeconds != null) 'token_exchange_ttl_seconds': tokenExchangeTtlSeconds,
       if (tokenFormat != null) 'token_format': tokenFormat,
       if (tokenTtlSeconds != null) 'token_ttl_seconds': tokenTtlSeconds,
       'updated_at': updatedAt,
@@ -6400,6 +6404,7 @@ class SetAppSessionConfigRequest {
   final int? maxActiveSessions;
   final int? refreshTokenTtlSeconds;
   final bool? rotateRefreshToken;
+  final int? tokenExchangeTtlSeconds;
   final String? tokenFormat;
   final int? tokenTtlSeconds;
 
@@ -6409,6 +6414,7 @@ class SetAppSessionConfigRequest {
     this.maxActiveSessions,
     this.refreshTokenTtlSeconds,
     this.rotateRefreshToken,
+    this.tokenExchangeTtlSeconds,
     this.tokenFormat,
     this.tokenTtlSeconds,
   });
@@ -6420,6 +6426,7 @@ class SetAppSessionConfigRequest {
       maxActiveSessions: json['max_active_sessions'] == null ? null : (json['max_active_sessions'] as num).toInt(),
       refreshTokenTtlSeconds: json['refresh_token_ttl_seconds'] == null ? null : (json['refresh_token_ttl_seconds'] as num).toInt(),
       rotateRefreshToken: json['rotate_refresh_token'] as bool?,
+      tokenExchangeTtlSeconds: json['token_exchange_ttl_seconds'] == null ? null : (json['token_exchange_ttl_seconds'] as num).toInt(),
       tokenFormat: json['token_format'] as String?,
       tokenTtlSeconds: json['token_ttl_seconds'] == null ? null : (json['token_ttl_seconds'] as num).toInt(),
     );
@@ -6432,6 +6439,7 @@ class SetAppSessionConfigRequest {
       if (maxActiveSessions != null) 'max_active_sessions': maxActiveSessions,
       if (refreshTokenTtlSeconds != null) 'refresh_token_ttl_seconds': refreshTokenTtlSeconds,
       if (rotateRefreshToken != null) 'rotate_refresh_token': rotateRefreshToken,
+      if (tokenExchangeTtlSeconds != null) 'token_exchange_ttl_seconds': tokenExchangeTtlSeconds,
       if (tokenFormat != null) 'token_format': tokenFormat,
       if (tokenTtlSeconds != null) 'token_ttl_seconds': tokenTtlSeconds,
     };
@@ -6532,6 +6540,7 @@ class Settings {
   final int? signinRateLimit;
   final int? signupRateLimit;
   final bool? skipEmailVerification;
+  final int? tokenExchangeTtlSeconds;
   final int? tokenTtlSeconds;
   final String? webhookUrlOverride;
 
@@ -6548,6 +6557,7 @@ class Settings {
     this.signinRateLimit,
     this.signupRateLimit,
     this.skipEmailVerification,
+    this.tokenExchangeTtlSeconds,
     this.tokenTtlSeconds,
     this.webhookUrlOverride,
   });
@@ -6566,6 +6576,7 @@ class Settings {
       signinRateLimit: json['signin_rate_limit'] == null ? null : (json['signin_rate_limit'] as num).toInt(),
       signupRateLimit: json['signup_rate_limit'] == null ? null : (json['signup_rate_limit'] as num).toInt(),
       skipEmailVerification: json['skip_email_verification'] as bool?,
+      tokenExchangeTtlSeconds: json['token_exchange_ttl_seconds'] == null ? null : (json['token_exchange_ttl_seconds'] as num).toInt(),
       tokenTtlSeconds: json['token_ttl_seconds'] == null ? null : (json['token_ttl_seconds'] as num).toInt(),
       webhookUrlOverride: json['webhook_url_override'] as String?,
     );
@@ -6585,6 +6596,7 @@ class Settings {
       if (signinRateLimit != null) 'signin_rate_limit': signinRateLimit,
       if (signupRateLimit != null) 'signup_rate_limit': signupRateLimit,
       if (skipEmailVerification != null) 'skip_email_verification': skipEmailVerification,
+      if (tokenExchangeTtlSeconds != null) 'token_exchange_ttl_seconds': tokenExchangeTtlSeconds,
       if (tokenTtlSeconds != null) 'token_ttl_seconds': tokenTtlSeconds,
       if (webhookUrlOverride != null) 'webhook_url_override': webhookUrlOverride,
     };
@@ -7139,6 +7151,7 @@ class UpdateEnvironmentSettingsRequest {
   final int? signinRateLimit;
   final int? signupRateLimit;
   final bool? skipEmailVerification;
+  final int? tokenExchangeTtlSeconds;
   final int? tokenTtlSeconds;
   final String? webhookUrlOverride;
 
@@ -7155,6 +7168,7 @@ class UpdateEnvironmentSettingsRequest {
     this.signinRateLimit,
     this.signupRateLimit,
     this.skipEmailVerification,
+    this.tokenExchangeTtlSeconds,
     this.tokenTtlSeconds,
     this.webhookUrlOverride,
   });
@@ -7173,6 +7187,7 @@ class UpdateEnvironmentSettingsRequest {
       signinRateLimit: json['signin_rate_limit'] == null ? null : (json['signin_rate_limit'] as num).toInt(),
       signupRateLimit: json['signup_rate_limit'] == null ? null : (json['signup_rate_limit'] as num).toInt(),
       skipEmailVerification: json['skip_email_verification'] as bool?,
+      tokenExchangeTtlSeconds: json['token_exchange_ttl_seconds'] == null ? null : (json['token_exchange_ttl_seconds'] as num).toInt(),
       tokenTtlSeconds: json['token_ttl_seconds'] == null ? null : (json['token_ttl_seconds'] as num).toInt(),
       webhookUrlOverride: json['webhook_url_override'] as String?,
     );
@@ -7192,6 +7207,7 @@ class UpdateEnvironmentSettingsRequest {
       if (signinRateLimit != null) 'signin_rate_limit': signinRateLimit,
       if (signupRateLimit != null) 'signup_rate_limit': signupRateLimit,
       if (skipEmailVerification != null) 'skip_email_verification': skipEmailVerification,
+      if (tokenExchangeTtlSeconds != null) 'token_exchange_ttl_seconds': tokenExchangeTtlSeconds,
       if (tokenTtlSeconds != null) 'token_ttl_seconds': tokenTtlSeconds,
       if (webhookUrlOverride != null) 'webhook_url_override': webhookUrlOverride,
     };

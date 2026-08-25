@@ -279,17 +279,18 @@ type AppclientconfigConfig struct {
 
 // AppsessionconfigConfig represents the AppsessionconfigConfig schema.
 type AppsessionconfigConfig struct {
-	AppID                  string `json:"app_id"`
-	BindToDevice           bool   `json:"bind_to_device,omitempty"`
-	BindToIP               bool   `json:"bind_to_ip,omitempty"`
-	CreatedAt              string `json:"created_at"`
-	ID                     string `json:"id"`
-	MaxActiveSessions      int64  `json:"max_active_sessions,omitempty"`
-	RefreshTokenTtlSeconds int64  `json:"refresh_token_ttl_seconds,omitempty"`
-	RotateRefreshToken     bool   `json:"rotate_refresh_token,omitempty"`
-	TokenFormat            string `json:"token_format,omitempty"`
-	TokenTtlSeconds        int64  `json:"token_ttl_seconds,omitempty"`
-	UpdatedAt              string `json:"updated_at"`
+	AppID                   string `json:"app_id"`
+	BindToDevice            bool   `json:"bind_to_device,omitempty"`
+	BindToIP                bool   `json:"bind_to_ip,omitempty"`
+	CreatedAt               string `json:"created_at"`
+	ID                      string `json:"id"`
+	MaxActiveSessions       int64  `json:"max_active_sessions,omitempty"`
+	RefreshTokenTtlSeconds  int64  `json:"refresh_token_ttl_seconds,omitempty"`
+	RotateRefreshToken      bool   `json:"rotate_refresh_token,omitempty"`
+	TokenExchangeTtlSeconds int64  `json:"token_exchange_ttl_seconds,omitempty"`
+	TokenFormat             string `json:"token_format,omitempty"`
+	TokenTtlSeconds         int64  `json:"token_ttl_seconds,omitempty"`
+	UpdatedAt               string `json:"updated_at"`
 }
 
 // AssignRoleRequest represents the AssignRoleRequest schema.
@@ -1468,13 +1469,14 @@ type SetAppClientConfigRequest struct {
 
 // SetAppSessionConfigRequest represents the SetAppSessionConfigRequest schema.
 type SetAppSessionConfigRequest struct {
-	BindToDevice           bool   `json:"bind_to_device,omitempty"`
-	BindToIP               bool   `json:"bind_to_ip,omitempty"`
-	MaxActiveSessions      int64  `json:"max_active_sessions,omitempty"`
-	RefreshTokenTtlSeconds int64  `json:"refresh_token_ttl_seconds,omitempty"`
-	RotateRefreshToken     bool   `json:"rotate_refresh_token,omitempty"`
-	TokenFormat            string `json:"token_format,omitempty"`
-	TokenTtlSeconds        int64  `json:"token_ttl_seconds,omitempty"`
+	BindToDevice            bool   `json:"bind_to_device,omitempty"`
+	BindToIP                bool   `json:"bind_to_ip,omitempty"`
+	MaxActiveSessions       int64  `json:"max_active_sessions,omitempty"`
+	RefreshTokenTtlSeconds  int64  `json:"refresh_token_ttl_seconds,omitempty"`
+	RotateRefreshToken      bool   `json:"rotate_refresh_token,omitempty"`
+	TokenExchangeTtlSeconds int64  `json:"token_exchange_ttl_seconds,omitempty"`
+	TokenFormat             string `json:"token_format,omitempty"`
+	TokenTtlSeconds         int64  `json:"token_ttl_seconds,omitempty"`
 }
 
 // SetSettingRequest represents the SetSettingRequest schema.
@@ -1497,20 +1499,21 @@ type SettingValueResponse struct {
 
 // Settings represents the Settings schema.
 type Settings struct {
-	AllowTestCredentials   bool           `json:"allow_test_credentials,omitempty"`
-	CheckBreached          bool           `json:"check_breached,omitempty"`
-	LockoutEnabled         bool           `json:"lockout_enabled,omitempty"`
-	LockoutMaxAttempts     int64          `json:"lockout_max_attempts,omitempty"`
-	OauthOverrides         map[string]any `json:"oauth_overrides,omitempty"`
-	PasswordMinLength      int64          `json:"password_min_length,omitempty"`
-	RateLimitEnabled       bool           `json:"rate_limit_enabled,omitempty"`
-	RateLimitWindowSeconds int64          `json:"rate_limit_window_seconds,omitempty"`
-	RefreshTokenTtlSeconds int64          `json:"refresh_token_ttl_seconds,omitempty"`
-	SigninRateLimit        int64          `json:"signin_rate_limit,omitempty"`
-	SignupRateLimit        int64          `json:"signup_rate_limit,omitempty"`
-	SkipEmailVerification  bool           `json:"skip_email_verification,omitempty"`
-	TokenTtlSeconds        int64          `json:"token_ttl_seconds,omitempty"`
-	WebhookURLOverride     string         `json:"webhook_url_override,omitempty"`
+	AllowTestCredentials    bool           `json:"allow_test_credentials,omitempty"`
+	CheckBreached           bool           `json:"check_breached,omitempty"`
+	LockoutEnabled          bool           `json:"lockout_enabled,omitempty"`
+	LockoutMaxAttempts      int64          `json:"lockout_max_attempts,omitempty"`
+	OauthOverrides          map[string]any `json:"oauth_overrides,omitempty"`
+	PasswordMinLength       int64          `json:"password_min_length,omitempty"`
+	RateLimitEnabled        bool           `json:"rate_limit_enabled,omitempty"`
+	RateLimitWindowSeconds  int64          `json:"rate_limit_window_seconds,omitempty"`
+	RefreshTokenTtlSeconds  int64          `json:"refresh_token_ttl_seconds,omitempty"`
+	SigninRateLimit         int64          `json:"signin_rate_limit,omitempty"`
+	SignupRateLimit         int64          `json:"signup_rate_limit,omitempty"`
+	SkipEmailVerification   bool           `json:"skip_email_verification,omitempty"`
+	TokenExchangeTtlSeconds int64          `json:"token_exchange_ttl_seconds,omitempty"`
+	TokenTtlSeconds         int64          `json:"token_ttl_seconds,omitempty"`
+	WebhookURLOverride      string         `json:"webhook_url_override,omitempty"`
 }
 
 // SignInRequest represents the SignInRequest schema.
@@ -1636,20 +1639,21 @@ type UpdateEnvironmentRequest struct {
 
 // UpdateEnvironmentSettingsRequest represents the UpdateEnvironmentSettingsRequest schema.
 type UpdateEnvironmentSettingsRequest struct {
-	AllowTestCredentials   bool           `json:"allow_test_credentials,omitempty"`
-	CheckBreached          bool           `json:"check_breached,omitempty"`
-	LockoutEnabled         bool           `json:"lockout_enabled,omitempty"`
-	LockoutMaxAttempts     int64          `json:"lockout_max_attempts,omitempty"`
-	OauthOverrides         map[string]any `json:"oauth_overrides,omitempty"`
-	PasswordMinLength      int64          `json:"password_min_length,omitempty"`
-	RateLimitEnabled       bool           `json:"rate_limit_enabled,omitempty"`
-	RateLimitWindowSeconds int64          `json:"rate_limit_window_seconds,omitempty"`
-	RefreshTokenTtlSeconds int64          `json:"refresh_token_ttl_seconds,omitempty"`
-	SigninRateLimit        int64          `json:"signin_rate_limit,omitempty"`
-	SignupRateLimit        int64          `json:"signup_rate_limit,omitempty"`
-	SkipEmailVerification  bool           `json:"skip_email_verification,omitempty"`
-	TokenTtlSeconds        int64          `json:"token_ttl_seconds,omitempty"`
-	WebhookURLOverride     string         `json:"webhook_url_override,omitempty"`
+	AllowTestCredentials    bool           `json:"allow_test_credentials,omitempty"`
+	CheckBreached           bool           `json:"check_breached,omitempty"`
+	LockoutEnabled          bool           `json:"lockout_enabled,omitempty"`
+	LockoutMaxAttempts      int64          `json:"lockout_max_attempts,omitempty"`
+	OauthOverrides          map[string]any `json:"oauth_overrides,omitempty"`
+	PasswordMinLength       int64          `json:"password_min_length,omitempty"`
+	RateLimitEnabled        bool           `json:"rate_limit_enabled,omitempty"`
+	RateLimitWindowSeconds  int64          `json:"rate_limit_window_seconds,omitempty"`
+	RefreshTokenTtlSeconds  int64          `json:"refresh_token_ttl_seconds,omitempty"`
+	SigninRateLimit         int64          `json:"signin_rate_limit,omitempty"`
+	SignupRateLimit         int64          `json:"signup_rate_limit,omitempty"`
+	SkipEmailVerification   bool           `json:"skip_email_verification,omitempty"`
+	TokenExchangeTtlSeconds int64          `json:"token_exchange_ttl_seconds,omitempty"`
+	TokenTtlSeconds         int64          `json:"token_ttl_seconds,omitempty"`
+	WebhookURLOverride      string         `json:"webhook_url_override,omitempty"`
 }
 
 // UpdateMeRequest represents the UpdateMeRequest schema.

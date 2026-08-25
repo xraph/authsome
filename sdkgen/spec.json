@@ -864,6 +864,9 @@
           "rotate_refresh_token": {
             "type": "boolean"
           },
+          "token_exchange_ttl_seconds": {
+            "type": "integer"
+          },
           "token_format": {
             "type": "string"
           },
@@ -1471,6 +1474,9 @@
               "skip_email_verification": {
                 "type": "boolean"
               },
+              "token_exchange_ttl_seconds": {
+                "type": "integer"
+              },
               "token_ttl_seconds": {
                 "type": "integer"
               },
@@ -1934,6 +1940,9 @@
               },
               "skip_email_verification": {
                 "type": "boolean"
+              },
+              "token_exchange_ttl_seconds": {
+                "type": "integer"
               },
               "token_ttl_seconds": {
                 "type": "integer"
@@ -4509,6 +4518,10 @@
             "description": "Rotate refresh token on use (nil = inherit)",
             "type": "boolean"
           },
+          "token_exchange_ttl_seconds": {
+            "description": "RFC 8693 token exchange TTL in seconds (nil = inherit)",
+            "type": "integer"
+          },
           "token_format": {
             "description": "Token format: opaque or jwt (empty = inherit)",
             "type": "string"
@@ -4618,6 +4631,9 @@
           },
           "skip_email_verification": {
             "type": "boolean"
+          },
+          "token_exchange_ttl_seconds": {
+            "type": "integer"
           },
           "token_ttl_seconds": {
             "type": "integer"
@@ -5010,6 +5026,9 @@
           },
           "skip_email_verification": {
             "type": "boolean"
+          },
+          "token_exchange_ttl_seconds": {
+            "type": "integer"
           },
           "token_ttl_seconds": {
             "type": "integer"

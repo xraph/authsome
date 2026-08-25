@@ -251,6 +251,7 @@ export interface AppsessionconfigConfig {
   max_active_sessions?: number;
   refresh_token_ttl_seconds?: number;
   rotate_refresh_token?: boolean;
+  token_exchange_ttl_seconds?: number;
   token_format?: string;
   token_ttl_seconds?: number;
   updated_at: string;
@@ -1290,6 +1291,7 @@ export interface SetAppSessionConfigRequest {
   max_active_sessions?: number;
   refresh_token_ttl_seconds?: number;
   rotate_refresh_token?: boolean;
+  token_exchange_ttl_seconds?: number;
   token_format?: string;
   token_ttl_seconds?: number;
 }
@@ -1323,6 +1325,7 @@ export interface Settings {
   signin_rate_limit?: number;
   signup_rate_limit?: number;
   skip_email_verification?: boolean;
+  token_exchange_ttl_seconds?: number;
   token_ttl_seconds?: number;
   webhook_url_override?: string;
 }
@@ -1445,6 +1448,7 @@ export interface UpdateEnvironmentSettingsRequest {
   signin_rate_limit?: number;
   signup_rate_limit?: number;
   skip_email_verification?: boolean;
+  token_exchange_ttl_seconds?: number;
   token_ttl_seconds?: number;
   webhook_url_override?: string;
 }
