@@ -842,7 +842,11 @@ func (e *Extension) RegisterDashboardAuth(dashExt *dashboard.Extension) {
 			client:   e.client,
 			basePath: basePath,
 		})
-		dashExt.SetAuthChecker(&clientAuthChecker{client: e.client})
+		dashExt.SetAuthChecker(&clientAuthChecker{
+			client:  e.client,
+			binding: e.clientDPoPBinding(),
+			logger:  e.Logger(),
+		})
 	default:
 		if e.engine == nil {
 			e.Logger().Warn("authsome: engine not initialised; skipping dashboard auth registration")
