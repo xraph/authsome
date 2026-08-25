@@ -1279,7 +1279,7 @@ ALTER TABLE authsome_sessions
 		},
 		&migrate.Migration{
 			Name:    "add_session_agent_principal",
-			Version: "20260824000060",
+			Version: "20260824000100",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				// The principal CHECK added in 20260620000002 admits only a
 				// service-account session (no user) or a user session (no

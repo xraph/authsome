@@ -1043,7 +1043,7 @@ ALTER TABLE authsome_sessions DROP COLUMN principal_kind;
 		},
 		&migrate.Migration{
 			Name:    "add_session_agent_principal",
-			Version: "20260824000060",
+			Version: "20260824000100",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `
 ALTER TABLE authsome_sessions ADD COLUMN agent_id TEXT NOT NULL DEFAULT '';

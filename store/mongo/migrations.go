@@ -900,5 +900,75 @@ func init() {
 			// dropping the index only costs a scan.
 			Down: func(_ context.Context, _ migrate.Executor) error { return nil },
 		},
+
+		// Migration: session agent principal index. A session may now be
+		// owned by an AI agent acting under a human's grant (AgentID/GrantID
+		// on session.Session), mirroring postgres/sqlite's
+		// add_session_agent_principal migration — same version
+		// (20260824000100) on all three backends, since this is one logical
+		// change.
+		//
+		// Mongo needs no column added and no CHECK constraint: sessionModel
+		// already carries AgentID/GrantID (bson agent_id/grant_id,
+		// omitempty), and the store already round-trips them (see
+		// toSessionModel/fromSessionModel and DeleteSessionsByGrant in
+		// session.go). What is missing is what DeleteSessionsByGrant needs:
+		// an index on grant_id. Without one, revoking a grant is a full
+		// collection scan on the one path where revocation latency matters
+		// most.
+		//
+		// RefreshValidator follows the same precedent as
+		// add_session_principal_identity above: agent_id/grant_id are new
+		// fields on sessionModel, so an existing deployment's validator does
+		// not know them until the schema is reapplied via collMod. Fresh
+		// installs are unaffected.
+		//
+		// The index is partial on {$gt: ""}, not sparse, for the same reason
+		// as service_account_id above: grove writes grant_id: "" on every
+		// non-agent session rather than omitting it, so a sparse index would
+		// cover the whole collection. $gt: "" selects only the agent
+		// sessions. This mirrors the postgres partial index
+		// (idx_authsome_sessions_grant_id, WHERE grant_id <> '').
+		&migrate.Migration{
+			Name:    "add_session_agent_principal_index",
+			Version: "20260824000100",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				if err := mexec.RefreshValidator(ctx, (*sessionModel)(nil)); err != nil {
+					return fmt.Errorf("refresh session validator: %w", err)
+				}
+				return mexec.CreateIndexes(ctx, colSessions, []mongo.IndexModel{
+					{
+						Keys: bson.D{{Key: "grant_id", Value: 1}},
+						Options: options.Index().SetPartialFilterExpression(
+							bson.D{{Key: "grant_id", Value: bson.D{{Key: "$gt", Value: ""}}}},
+						),
+					},
+				})
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				// Drop the index by its auto-derived name. Mongo names a
+				// single-key index after its key — grant_id_1 — regardless
+				// of the partial filter. Tolerate IndexNotFound (code 27)
+				// so this is safe to re-run.
+				coll := mexec.DB().Collection(colSessions)
+				if err := coll.Indexes().DropOne(ctx, "grant_id_1"); err != nil {
+					if !mongoIsIndexNotFound(err) {
+						return fmt.Errorf("drop grant_id index: %w", err)
+					}
+				}
+				// Forward-only on the validator, matching
+				// add_session_principal_identity: rolling it back would
+				// reject the agent sessions this migration makes storable.
+				return nil
+			},
+		},
 	)
 }
