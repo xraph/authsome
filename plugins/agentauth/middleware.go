@@ -140,16 +140,6 @@ func (p *Plugin) Authorize(ctx context.Context, sess *session.Session, action, r
 	return nil
 }
 
-// Guard returns middleware enforcing the agent intersection for a route that
-// requires action on resource. It resolves the session with
-// middleware.SessionFrom — the whole *session.Session, not just a user id,
-// since Authorize needs PrincipalKind, AgentID and GrantID off it, which is
-// why this is not middleware/rbac.go's UserIDFrom (rbac.go's two middlewares
-// only ever need the id). It then delegates the decision entirely to
-// AuthorizeHTTP: a human session (or a request AuthorizeHTTP otherwise has no
-// opinion on) passes through untouched, and every denial gets the response
-// AuthorizeHTTP built for it, headers included, since forge's own error
-// handling would otherwise drop them on the floor.
 // denyAgentPrincipal refuses any request whose resolved session is
 // agent-principal, before the wrapped handler ever runs.
 //
@@ -163,13 +153,27 @@ func (p *Plugin) Authorize(ctx context.Context, sess *session.Session, action, r
 // it: PUT /admin/agents/policy could set the agent's own governing org to
 // open with unrestricted scopes, PATCH /admin/agents/:id/status could
 // unblock a blocked agent, and DELETE /me/agents/:id could revoke a
-// competing grant. This plugin ships the intersection guard (Guard, above)
+// competing grant. This plugin ships the intersection guard (Guard, below)
 // for every route a host app protects; it must not leave its own policy
 // surface outside that same discipline.
 //
-// A missing session is not this middleware's business — SessionGuard (or
-// its absence, in a minimal test wiring) already governs whether an
-// unauthenticated request reaches this far.
+// This middleware MUST be mounted AFTER plugin.SessionGuard/AdminGuard in
+// the group's middleware slice, not before. forge applies group middleware
+// by wrapping from the last index inward (see
+// forge@v1.9.10/internal/router/router_impl.go's applyMiddleware /
+// applyMiddlewareAndInterceptors: `for i := len(middleware)-1; i >= 0; i--`),
+// which makes index 0 the OUTERMOST handler — the first one to run on a
+// request. SessionGuard is what resolves the session and puts it in context
+// (authprovider.RegistryMiddleware -> BridgeToContext -> WithSession); this
+// middleware only has anything to check once that has already happened.
+// Mounted first/outermost, middleware.SessionFrom always reports ok=false
+// here (no session yet), so this fails OPEN — the one case Guard's own
+// missing-session branch below handles the opposite way, by design: Guard
+// fails CLOSED (401) on a missing session, because Guard's contract is "deny
+// unless proven otherwise". This middleware's contract is "the session
+// already resolved by SessionGuard/AdminGuard is not an agent's" — it has no
+// business opining on a session it never got a chance to see, which is why
+// it must run after those guards, not instead of a missing-session check.
 func denyAgentPrincipal() forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
@@ -182,6 +186,16 @@ func denyAgentPrincipal() forge.Middleware {
 	}
 }
 
+// Guard returns middleware enforcing the agent intersection for a route that
+// requires action on resource. It resolves the session with
+// middleware.SessionFrom — the whole *session.Session, not just a user id,
+// since Authorize needs PrincipalKind, AgentID and GrantID off it, which is
+// why this is not middleware/rbac.go's UserIDFrom (rbac.go's two middlewares
+// only ever need the id). It then delegates the decision entirely to
+// AuthorizeHTTP: a human session (or a request AuthorizeHTTP otherwise has no
+// opinion on) passes through untouched, and every denial gets the response
+// AuthorizeHTTP built for it, headers included, since forge's own error
+// handling would otherwise drop them on the floor.
 func (p *Plugin) Guard(action, resource string) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {

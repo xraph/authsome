@@ -134,14 +134,20 @@ func (s *MemoryStore) GetAgentGrant(_ context.Context, grantID id.AgentGrantID) 
 }
 
 // GetActiveGrant returns the most recently created matching grant when more
-// than one exists. Duplicates are the normal state, not an edge case:
-// CreateGrant always inserts a fresh grant rather than upserting, so an
-// ordinary re-consent leaves an older active grant for the same
-// agent+user+org triple lying around alongside the new one. Ranging over
-// s.grants in Go's randomized map-iteration order and returning the first
-// match would make this backend disagree, run to run, with the SQL/Mongo
-// backends' deterministic "newest wins" — this scans every match instead of
-// stopping at the first, to agree with them.
+// than one exists. Plugin.CreateGrant no longer leaves duplicates lying
+// around in the ordinary case — it now revokes any existing active grant for
+// the same agent+user+org triple before inserting the new one, so an
+// ordinary re-consent leaves exactly one active row. This method's own
+// invariant is still "at most one match may legitimately be active", not
+// "exactly one row exists": a caller writing to this Store directly, without
+// going through Plugin.CreateGrant (this store exposes CreateAgentGrant with
+// no uniqueness enforcement of its own), or two CreateGrant calls racing
+// between the read-existing and revoke-then-insert steps, can still leave
+// more than one matching row simultaneously active. Ranging over s.grants in
+// Go's randomized map-iteration order and returning the first match would
+// make this backend disagree, run to run, with the SQL/Mongo backends'
+// deterministic "newest wins" in that scenario — this scans every match
+// instead of stopping at the first, to agree with them.
 func (s *MemoryStore) GetActiveGrant(_ context.Context, agentID id.AgentID, userID id.UserID, orgID id.OrgID) (*AgentGrant, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
