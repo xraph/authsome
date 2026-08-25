@@ -65,6 +65,15 @@ func NewJWT(cfg JWTConfig) (*JWT, error) {
 
 func (j *JWT) Name() string { return "jwt" }
 
+// ConfiguredAudience returns the app-wide default "aud" this format stamps on
+// tokens whose claims carry no audience of their own. Empty when unset.
+//
+// Callers need it so a session row can record the same audience the minted
+// token actually carries. When the row says nothing and the claim says
+// "https://api.example.com", the two disagree, and any check that reads one
+// after the other gets two different answers about the same credential.
+func (j *JWT) ConfiguredAudience() string { return j.config.Audience }
+
 // customClaims embeds jwt.RegisteredClaims and adds our custom fields.
 type customClaims struct {
 	jwt.RegisteredClaims
@@ -94,7 +103,13 @@ func (j *JWT) GenerateAccessToken(claims TokenClaims) (string, error) {
 	if j.config.Issuer != "" {
 		jwtClaims.Issuer = j.config.Issuer
 	}
-	if j.config.Audience != "" {
+	// A per-token audience is the resource the client actually asked for, so
+	// it wins. The configured value is an app-wide default from before
+	// resource indicators existed.
+	switch {
+	case len(claims.Audience) > 0:
+		jwtClaims.Audience = jwt.ClaimStrings(claims.Audience)
+	case j.config.Audience != "":
 		jwtClaims.Audience = jwt.ClaimStrings{j.config.Audience}
 	}
 
@@ -147,6 +162,7 @@ func (j *JWT) ValidateAccessToken(tokenStr string) (*TokenClaims, error) {
 		OrgID:     claims.OrgID,
 		SessionID: claims.SessionID,
 		Scopes:    claims.Scopes,
+		Audience:  []string(claims.Audience),
 		IssuedAt:  issuedAt,
 		ExpiresAt: expiresAt,
 	}, nil

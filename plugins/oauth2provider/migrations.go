@@ -191,6 +191,36 @@ ALTER TABLE authsome_oauth2_clients
 		},
 	)
 
+	// Add the RFC 8707 resource indicator allowlist to clients, and the
+	// per-grant resource audience to authorization codes and device codes.
+	// Every existing row defaults to an empty array, so existing clients,
+	// codes and device codes keep working exactly as before.
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_oauth2_resources",
+			Version: "20260824000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_oauth2_clients
+    ADD COLUMN IF NOT EXISTS resources JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE authsome_oauth2_auth_codes
+    ADD COLUMN IF NOT EXISTS resources JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE authsome_oauth2_device_codes
+    ADD COLUMN IF NOT EXISTS resources JSONB NOT NULL DEFAULT '[]'::jsonb;
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_oauth2_clients DROP COLUMN IF EXISTS resources;
+ALTER TABLE authsome_oauth2_auth_codes DROP COLUMN IF EXISTS resources;
+ALTER TABLE authsome_oauth2_device_codes DROP COLUMN IF EXISTS resources;
+`)
+				return err
+			},
+		},
+	)
+
 	// ──────────────────────────────────────────────────
 	// SQLite migrations
 	// ──────────────────────────────────────────────────
@@ -310,4 +340,31 @@ UPDATE authsome_oauth2_clients
 			},
 		},
 	)
+
+	// The SQLite counterpart of add_oauth2_resources. SQLite takes one
+	// ADD COLUMN per statement, so these run as three separate execs.
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_oauth2_resources",
+			Version: "20260824000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				for _, stmt := range []string{
+					`ALTER TABLE authsome_oauth2_clients ADD COLUMN resources TEXT NOT NULL DEFAULT '[]';`,
+					`ALTER TABLE authsome_oauth2_auth_codes ADD COLUMN resources TEXT NOT NULL DEFAULT '[]';`,
+					`ALTER TABLE authsome_oauth2_device_codes ADD COLUMN resources TEXT NOT NULL DEFAULT '[]';`,
+				} {
+					if _, err := exec.Exec(ctx, stmt); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			// Older SQLite cannot drop columns, so Down is a no-op, matching
+			// the migration above.
+			Down: func(_ context.Context, _ migrate.Executor) error {
+				return nil
+			},
+		},
+	)
+
 }

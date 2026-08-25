@@ -152,6 +152,7 @@ func (p *Plugin) renderClientsPage(ctx context.Context, params contributor.Param
 			ClientID:     c.ClientID,
 			RedirectURIs: c.RedirectURIs,
 			Scopes:       c.Scopes,
+			Resources:    c.Resources,
 			GrantTypes:   c.GrantTypes,
 			Public:       c.Public,
 			CreatedAt:    c.CreatedAt,
@@ -193,6 +194,23 @@ func (p *Plugin) handleDashboardCreateClient(ctx context.Context, appID id.AppID
 		scopes = []string{"openid", "profile", "email"}
 	}
 
+	// Parse resources (comma or space separated). Unlike scopes, this has no
+	// default: an omitted field stores an empty allowlist, same as the admin
+	// API, since a client that never asks for a resource should never be
+	// handed one just because the form was left blank.
+	resourcesRaw := params.FormData["resources"]
+	var resources []string
+	for _, r := range strings.FieldsFunc(resourcesRaw, func(r rune) bool { return r == ',' || r == ' ' }) {
+		r = strings.TrimSpace(r)
+		if r == "" {
+			continue
+		}
+		if msg := resourceURISyntaxError(r); msg != "" {
+			return nil, "Invalid resource: " + msg
+		}
+		resources = append(resources, r)
+	}
+
 	// Parse grant types from individual checkboxes.
 	grantTypes := parseGrantTypeCheckboxes(params.FormData)
 	if len(grantTypes) == 0 {
@@ -231,6 +249,7 @@ func (p *Plugin) handleDashboardCreateClient(ctx context.Context, appID id.AppID
 		ClientSecret:            hashedSecret,
 		RedirectURIs:            redirectURIs,
 		Scopes:                  scopes,
+		Resources:               resources,
 		GrantTypes:              grantTypes,
 		Public:                  isPublic,
 		TokenEndpointAuthMethod: authMethodForPublic(isPublic),

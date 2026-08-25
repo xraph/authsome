@@ -1277,5 +1277,23 @@ ALTER TABLE authsome_sessions
 				return err
 			},
 		},
+
+		&migrate.Migration{
+			Name:    "add_session_audience",
+			Version: "20260824000060",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions
+    ADD COLUMN IF NOT EXISTS audience JSONB NOT NULL DEFAULT '[]'::jsonb;
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions DROP COLUMN IF EXISTS audience;
+`)
+				return err
+			},
+		},
 	)
 }

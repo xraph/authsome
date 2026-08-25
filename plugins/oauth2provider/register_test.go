@@ -365,13 +365,19 @@ func postRegisterWithKey(t *testing.T, router http.Handler, key, body string) *h
 // even when the plugin has no configured fallback at all.
 func TestRegister_PublishableKeySelectsApp(t *testing.T) {
 	appA := &app.App{ID: id.NewAppID(), Name: "App A"}
+	// Only the ID is read; govet flags an unused Name write.
+	appFallback := &app.App{ID: id.NewAppID()}
 	resolver := stubAppResolver{byKey: map[string]*app.App{"pk_test_a": appA}}
 
+	// RegistrationAppID is set to a THIRD app on purpose. With it unset, the
+	// fallback branch is empty and skipped, so the key would still win even
+	// if resolveRegistrationAppID consulted config first: the test would
+	// pass against an inverted precedence and pin nothing. Giving the
+	// fallback a real value is what makes the two branches compete.
 	p := oauth2provider.New(oauth2provider.Config{
 		Issuer:              "https://auth.example.com",
 		DynamicRegistration: true,
-		// RegistrationAppID deliberately unset: the publishable key is the
-		// only thing that can resolve an app for this request.
+		RegistrationAppID:   appFallback.ID.String(),
 	})
 	st := oauth2provider.NewMemoryStore()
 	p.SetOAuth2Store(st)
@@ -386,6 +392,8 @@ func TestRegister_PublishableKeySelectsApp(t *testing.T) {
 	stored, err := st.GetClient(t.Context(), got["client_id"].(string))
 	require.NoError(t, err)
 	assert.Equal(t, appA.ID, stored.AppID)
+	assert.NotEqual(t, appFallback.ID, stored.AppID,
+		"the publishable key must outrank Config.RegistrationAppID, not merely be consulted when it is empty")
 }
 
 // The cross-tenant boundary: a client registered under app A's publishable
@@ -396,14 +404,20 @@ func TestRegister_PublishableKeySelectsApp(t *testing.T) {
 func TestRegister_PublishableKeyDoesNotCrossTenants(t *testing.T) {
 	appA := &app.App{ID: id.NewAppID(), Name: "App A"}
 	appB := &app.App{ID: id.NewAppID(), Name: "App B"}
+	// Only the ID is read; govet flags an unused Name write.
+	appFallback := &app.App{ID: id.NewAppID()}
 	resolver := stubAppResolver{byKey: map[string]*app.App{
 		"pk_test_a": appA,
 		"pk_test_b": appB,
 	}}
 
+	// A third app on RegistrationAppID, for the reason spelled out in
+	// TestRegister_PublishableKeySelectsApp: without it the fallback branch
+	// is empty and an inverted precedence would still land on app A.
 	p := oauth2provider.New(oauth2provider.Config{
 		Issuer:              "https://auth.example.com",
 		DynamicRegistration: true,
+		RegistrationAppID:   appFallback.ID.String(),
 	})
 	st := oauth2provider.NewMemoryStore()
 	p.SetOAuth2Store(st)
@@ -419,6 +433,8 @@ func TestRegister_PublishableKeyDoesNotCrossTenants(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, appA.ID, stored.AppID)
 	assert.NotEqual(t, appB.ID, stored.AppID)
+	assert.NotEqual(t, appFallback.ID, stored.AppID,
+		"the publishable key must outrank Config.RegistrationAppID")
 
 	bClients, err := st.ListClients(t.Context(), appB.ID)
 	require.NoError(t, err)

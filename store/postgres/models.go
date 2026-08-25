@@ -220,7 +220,11 @@ type SessionModel struct {
 	// comma would split into two role names nobody was ever granted, and
 	// these strings are read back as an authorization decision, so the
 	// encoding must not be able to invent a member.
-	Roles                 json.RawMessage `grove:"roles,type:jsonb"`
+	Roles json.RawMessage `grove:"roles,type:jsonb"`
+	// Audience is JSON for the same reason Roles is. A resource identifier is
+	// a URI and may contain a comma, and these strings are compared to decide
+	// whether a token is allowed to authenticate at all.
+	Audience              json.RawMessage `grove:"audience,type:jsonb"`
 	LastActivityAt        time.Time       `grove:"last_activity_at"`
 	ExpiresAt             time.Time       `grove:"expires_at,notnull"`
 	RefreshTokenExpiresAt time.Time       `grove:"refresh_token_expires_at,notnull"`
@@ -305,6 +309,9 @@ func toSession(m *SessionModel) (*session.Session, error) {
 	if len(m.Roles) > 0 {
 		_ = json.Unmarshal(m.Roles, &s.Roles) //nolint:errcheck // best-effort decode
 	}
+	if len(m.Audience) > 0 {
+		_ = json.Unmarshal(m.Audience, &s.Audience) //nolint:errcheck // best-effort decode
+	}
 	return s, nil
 }
 
@@ -343,7 +350,8 @@ func fromSession(s *session.Session) *SessionModel {
 	// Always encoded, never left nil: the roles column is NOT NULL and
 	// json.RawMessage cannot scan a NULL back. nil marshals to "null", which
 	// the decode guard above reads as no roles.
-	m.Roles, _ = json.Marshal(s.Roles) //nolint:errcheck // best-effort encode
+	m.Roles, _ = json.Marshal(s.Roles)       //nolint:errcheck // best-effort encode
+	m.Audience, _ = json.Marshal(s.Audience) //nolint:errcheck // best-effort encode
 	return m
 }
 

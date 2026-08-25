@@ -33,6 +33,7 @@ type OAuth2ClientView struct {
 	ClientID     string
 	RedirectURIs []string
 	Scopes       []string
+	Resources    []string
 	GrantTypes   []string
 	Public       bool
 	CreatedAt    time.Time
@@ -103,7 +104,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 			var templ_7745c5c3_Var2 string
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(data.CreatedClient.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 72, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 73, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 			if templ_7745c5c3_Err != nil {
@@ -116,7 +117,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(data.CreatedClient.ClientID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 79, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 80, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -159,7 +160,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(data.CreatedClient.ClientSecret)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 97, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 98, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 				if templ_7745c5c3_Err != nil {
@@ -220,7 +221,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(data.Error)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 120, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 121, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -259,7 +260,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(data.Success)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 134, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 135, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -396,7 +397,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, " <form method=\"POST\" class=\"mt-4 space-y-4\"><input type=\"hidden\" name=\"action\" value=\"create\"><div class=\"grid gap-4 md:grid-cols-2\"><div class=\"space-y-1.5\"><label for=\"client-name\" class=\"text-sm font-medium\">Client Name</label> <input id=\"client-name\" name=\"name\" type=\"text\" required placeholder=\"e.g. My Web App, Mobile Client\" class=\"flex h-9 w-full rounded-sm border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring\"></div><div class=\"space-y-1.5\"><label for=\"client-scopes\" class=\"text-sm font-medium\">Scopes</label> <input id=\"client-scopes\" name=\"scopes\" type=\"text\" placeholder=\"openid profile email (space-separated)\" class=\"flex h-9 w-full rounded-sm border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring\"><p class=\"text-[10px] text-muted-foreground\">Defaults to: openid profile email</p></div></div><div class=\"space-y-1.5\"><label for=\"redirect-uris\" class=\"text-sm font-medium\">Redirect URIs</label> <textarea id=\"redirect-uris\" name=\"redirect_uris\" rows=\"3\" placeholder=\"https://app.example.com/callback&#10;https://localhost:3000/callback\" class=\"flex w-full rounded-sm border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring\"></textarea><p class=\"text-[10px] text-muted-foreground\">One URI per line</p></div><div class=\"space-y-1.5\"><span class=\"text-sm font-medium\">Grant Types</span><div class=\"grid gap-3 sm:grid-cols-2 rounded-sm border border-input p-3\"><label class=\"flex items-start gap-2 text-sm cursor-pointer\"><input type=\"checkbox\" name=\"grant_authorization_code\" value=\"on\" checked class=\"h-4 w-4 rounded border-input mt-0.5\"><div><span class=\"font-medium\">Authorization Code</span><p class=\"text-[10px] text-muted-foreground leading-tight\">Web apps with server-side backend</p></div></label> <label class=\"flex items-start gap-2 text-sm cursor-pointer\"><input type=\"checkbox\" name=\"grant_client_credentials\" value=\"on\" class=\"h-4 w-4 rounded border-input mt-0.5\"><div><span class=\"font-medium\">Client Credentials</span><p class=\"text-[10px] text-muted-foreground leading-tight\">Machine-to-machine / service accounts</p></div></label> <label class=\"flex items-start gap-2 text-sm cursor-pointer\"><input type=\"checkbox\" name=\"grant_device_code\" value=\"on\" class=\"h-4 w-4 rounded border-input mt-0.5\"><div><span class=\"font-medium\">Device Code</span><p class=\"text-[10px] text-muted-foreground leading-tight\">CLI tools and input-constrained devices</p></div></label> <label class=\"flex items-start gap-2 text-sm cursor-pointer\"><input type=\"checkbox\" name=\"grant_refresh_token\" value=\"on\" class=\"h-4 w-4 rounded border-input mt-0.5\"><div><span class=\"font-medium\">Refresh Token</span><p class=\"text-[10px] text-muted-foreground leading-tight\">Allow token refresh without re-auth</p></div></label></div><p class=\"text-[10px] text-muted-foreground\">Select one or more. Defaults to Authorization Code if none selected.</p></div><div class=\"flex items-center\"><label class=\"flex items-center gap-2 text-sm cursor-pointer\"><input type=\"checkbox\" name=\"public\" class=\"h-4 w-4 rounded border-input\"> <span class=\"font-medium\">Public Client</span> <span class=\"text-muted-foreground text-xs\">(no client secret, e.g. SPAs or mobile apps)</span></label></div><div class=\"flex justify-end\"><button type=\"submit\" class=\"inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-sm bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, " <form method=\"POST\" class=\"mt-4 space-y-4\"><input type=\"hidden\" name=\"action\" value=\"create\"><div class=\"grid gap-4 md:grid-cols-2\"><div class=\"space-y-1.5\"><label for=\"client-name\" class=\"text-sm font-medium\">Client Name</label> <input id=\"client-name\" name=\"name\" type=\"text\" required placeholder=\"e.g. My Web App, Mobile Client\" class=\"flex h-9 w-full rounded-sm border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring\"></div><div class=\"space-y-1.5\"><label for=\"client-scopes\" class=\"text-sm font-medium\">Scopes</label> <input id=\"client-scopes\" name=\"scopes\" type=\"text\" placeholder=\"openid profile email (space-separated)\" class=\"flex h-9 w-full rounded-sm border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring\"><p class=\"text-[10px] text-muted-foreground\">Defaults to: openid profile email</p></div></div><div class=\"space-y-1.5\"><label for=\"client-resources\" class=\"text-sm font-medium\">Resources</label> <input id=\"client-resources\" name=\"resources\" type=\"text\" placeholder=\"https://api.example.com (space-separated)\" class=\"flex h-9 w-full rounded-sm border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring\"><p class=\"text-[10px] text-muted-foreground\">Leave empty and the client may not request any resource.</p></div><div class=\"space-y-1.5\"><label for=\"redirect-uris\" class=\"text-sm font-medium\">Redirect URIs</label> <textarea id=\"redirect-uris\" name=\"redirect_uris\" rows=\"3\" placeholder=\"https://app.example.com/callback&#10;https://localhost:3000/callback\" class=\"flex w-full rounded-sm border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring\"></textarea><p class=\"text-[10px] text-muted-foreground\">One URI per line</p></div><div class=\"space-y-1.5\"><span class=\"text-sm font-medium\">Grant Types</span><div class=\"grid gap-3 sm:grid-cols-2 rounded-sm border border-input p-3\"><label class=\"flex items-start gap-2 text-sm cursor-pointer\"><input type=\"checkbox\" name=\"grant_authorization_code\" value=\"on\" checked class=\"h-4 w-4 rounded border-input mt-0.5\"><div><span class=\"font-medium\">Authorization Code</span><p class=\"text-[10px] text-muted-foreground leading-tight\">Web apps with server-side backend</p></div></label> <label class=\"flex items-start gap-2 text-sm cursor-pointer\"><input type=\"checkbox\" name=\"grant_client_credentials\" value=\"on\" class=\"h-4 w-4 rounded border-input mt-0.5\"><div><span class=\"font-medium\">Client Credentials</span><p class=\"text-[10px] text-muted-foreground leading-tight\">Machine-to-machine / service accounts</p></div></label> <label class=\"flex items-start gap-2 text-sm cursor-pointer\"><input type=\"checkbox\" name=\"grant_device_code\" value=\"on\" class=\"h-4 w-4 rounded border-input mt-0.5\"><div><span class=\"font-medium\">Device Code</span><p class=\"text-[10px] text-muted-foreground leading-tight\">CLI tools and input-constrained devices</p></div></label> <label class=\"flex items-start gap-2 text-sm cursor-pointer\"><input type=\"checkbox\" name=\"grant_refresh_token\" value=\"on\" class=\"h-4 w-4 rounded border-input mt-0.5\"><div><span class=\"font-medium\">Refresh Token</span><p class=\"text-[10px] text-muted-foreground leading-tight\">Allow token refresh without re-auth</p></div></label></div><p class=\"text-[10px] text-muted-foreground\">Select one or more. Defaults to Authorization Code if none selected.</p></div><div class=\"flex items-center\"><label class=\"flex items-center gap-2 text-sm cursor-pointer\"><input type=\"checkbox\" name=\"public\" class=\"h-4 w-4 rounded border-input\"> <span class=\"font-medium\">Public Client</span> <span class=\"text-muted-foreground text-xs\">(no client secret, e.g. SPAs or mobile apps)</span></label></div><div class=\"flex justify-end\"><button type=\"submit\" class=\"inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-sm bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -792,7 +793,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 										var templ_7745c5c3_Var31 string
 										templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(c.Name)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 316, Col: 45}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 328, Col: 45}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 										if templ_7745c5c3_Err != nil {
@@ -831,7 +832,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 										var templ_7745c5c3_Var33 string
 										templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(truncateClientID(c.ClientID))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 319, Col: 94}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 331, Col: 94}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 										if templ_7745c5c3_Err != nil {
@@ -939,7 +940,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 										var templ_7745c5c3_Var38 string
 										templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Join(c.GrantTypes, ", "))
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 333, Col: 89}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 345, Col: 89}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 										if templ_7745c5c3_Err != nil {
@@ -979,7 +980,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 										var templ_7745c5c3_Var40 string
 										templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(created)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 337, Col: 64}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 349, Col: 64}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 										if templ_7745c5c3_Err != nil {
@@ -1018,7 +1019,7 @@ func ClientsPage(data ClientsPageData) templ.Component {
 										var templ_7745c5c3_Var42 string
 										templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(c.ID)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 342, Col: 62}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/oauth2provider/dashui/page.templ`, Line: 354, Col: 62}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 										if templ_7745c5c3_Err != nil {

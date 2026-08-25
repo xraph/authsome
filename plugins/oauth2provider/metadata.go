@@ -27,6 +27,15 @@ type AuthServerMetadata struct {
 	ScopesSupported                   []string `json:"scopes_supported"`
 	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
 	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
+
+	// ResourceIndicatorsSupported advertises RFC 8707.
+	//
+	// This name is not registered. RFC 8707 registers the `resource`
+	// parameter and the `invalid_target` error and defines no discovery
+	// metadata at all, and the RFC 8414 IANA registry has no entry for it.
+	// It is the convention that came out of the MCP ecosystem and it is what
+	// clients look for, so do not read it as standardised.
+	ResourceIndicatorsSupported bool `json:"resource_indicators_supported"`
 }
 
 // ProtectedResourceMetadata is the RFC 9728 protected resource metadata
@@ -76,6 +85,7 @@ func (p *Plugin) buildAuthServerMetadata() *AuthServerMetadata {
 			"client_secret_post", "client_secret_basic", "none",
 		},
 		CodeChallengeMethodsSupported: []string{"S256", "plain"},
+		ResourceIndicatorsSupported:   true,
 	}
 
 	// Only advertise registration when it will actually answer. Pointing a
