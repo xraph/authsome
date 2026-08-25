@@ -58,3 +58,7 @@ _project_files/
 # Subagent-driven-development workspaces (ledgers, briefs, review packages).
 # Ephemeral coordination state; git history is the record.
 .superpowers/
+
+# Superpowers working documents: design specs and implementation plans.
+# Kept on disk for whoever is mid-task against them, but not committed.
+docs/superpowers/
