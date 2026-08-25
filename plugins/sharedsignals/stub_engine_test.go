@@ -15,6 +15,7 @@ import (
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
@@ -33,23 +34,30 @@ type stubEngine struct{}
 
 var _ plugin.Engine = stubEngine{}
 
-func (stubEngine) Store() store.Store                          { return nil }
-func (stubEngine) DB() *grove.DB                               { return nil }
-func (stubEngine) Plugins() *plugin.Registry                   { return nil }
-func (stubEngine) Plugin(string) plugin.Plugin                 { return nil }
-func (stubEngine) Hooks() *hook.Bus                            { return nil }
-func (stubEngine) Logger() log.Logger                          { return log.NewNoopLogger() }
-func (stubEngine) Settings() *settings.Manager                 { return nil }
-func (stubEngine) Chronicle() bridge.Chronicle                 { return nil }
-func (stubEngine) Relay() bridge.EventRelay                    { return nil }
-func (stubEngine) Herald() bridge.Herald                       { return nil }
-func (stubEngine) Mailer() bridge.Mailer                       { return nil }
-func (stubEngine) SMSSender() bridge.SMSSender                 { return nil }
-func (stubEngine) Ledger() bridge.Ledger                       { return nil }
-func (stubEngine) TokenEncryptor() bridge.Encryptor            { return nil }
-func (stubEngine) CeremonyStore() ceremony.Store               { return nil }
-func (stubEngine) APIKeyStore() apikey.Store                   { return nil }
-func (stubEngine) SecurityEvents() securityevent.Store         { return nil }
+func (stubEngine) Store() store.Store                  { return nil }
+func (stubEngine) DB() *grove.DB                       { return nil }
+func (stubEngine) Plugins() *plugin.Registry           { return nil }
+func (stubEngine) Plugin(string) plugin.Plugin         { return nil }
+func (stubEngine) Hooks() *hook.Bus                    { return nil }
+func (stubEngine) Logger() log.Logger                  { return log.NewNoopLogger() }
+func (stubEngine) Settings() *settings.Manager         { return nil }
+func (stubEngine) Chronicle() bridge.Chronicle         { return nil }
+func (stubEngine) Relay() bridge.EventRelay            { return nil }
+func (stubEngine) Herald() bridge.Herald               { return nil }
+func (stubEngine) Mailer() bridge.Mailer               { return nil }
+func (stubEngine) SMSSender() bridge.SMSSender         { return nil }
+func (stubEngine) Ledger() bridge.Ledger               { return nil }
+func (stubEngine) TokenEncryptor() bridge.Encryptor    { return nil }
+func (stubEngine) CeremonyStore() ceremony.Store       { return nil }
+func (stubEngine) APIKeyStore() apikey.Store           { return nil }
+func (stubEngine) SecurityEvents() securityevent.Store { return nil }
+func (stubEngine) DPoPValidator() *dpop.Validator      { return nil }
+func (stubEngine) DPoPNonceSigner() *dpop.NonceSigner  { return nil }
+
+func (stubEngine) DPoPModeForApp(context.Context, id.AppID) dpop.Mode { return dpop.ModeOff }
+
+func (stubEngine) DPoPNonceRequiredForApp(context.Context, id.AppID) bool { return false }
+
 func (stubEngine) AuthMiddleware() forge.Middleware            { return nil }
 func (stubEngine) AuthRegistry() auth.Registry                 { return nil }
 func (stubEngine) PlatformAppID() id.AppID                     { return id.Nil }

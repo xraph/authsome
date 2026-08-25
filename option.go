@@ -12,6 +12,7 @@ import (
 	"github.com/xraph/authsome/bridge/ledgeradapter"
 	"github.com/xraph/authsome/bridge/wardenadapter"
 	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/lockout"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/ratelimit"
@@ -287,6 +288,18 @@ func WithPrincipalAuthTTL(d time.Duration) Option {
 func WithCeremonyStore(s ceremony.Store) Option {
 	return func(e *Engine) {
 		e.ceremonyStore = s
+	}
+}
+
+// WithDPoPReplayCache overrides the DPoP proof replay cache.
+//
+// The default is a bounded in-process cache, which means replay detection does
+// not span instances. Supply dpop.NewCeremonyReplayCache with a distributed
+// ceremony store to close that gap, accepting one store round trip per
+// authenticated request in exchange.
+func WithDPoPReplayCache(c dpop.ReplayCache) Option {
+	return func(e *Engine) {
+		e.dpopReplayCache = c
 	}
 }
 

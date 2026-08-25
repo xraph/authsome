@@ -41,14 +41,27 @@ type introspectCacheEntry struct {
 // This middleware sets the same context keys as the engine-based AuthMiddleware
 // (WithUser, WithUserID, WithAppID, WithOrgID, WithSessionID, WithAuthMethod)
 // so downstream code works identically regardless of which middleware is used.
-func ClientAuthMiddleware(client *authclient.Client, logger log.Logger) forge.Middleware {
+//
+// bind is optional and at most one is read. It carries the DPoP validator this
+// service enforces RFC 9449 with. Enforcement is a property of the token, not
+// of the service holding it, so a token whose introspection response carries a
+// cnf claim needs a proof here exactly as it would at the identity server.
+// Pass no config and a bound token is refused outright, because a service that
+// cannot check a binding must not admit it unchecked.
+func ClientAuthMiddleware(client *authclient.Client, logger log.Logger, bind ...SessionBindingConfig) forge.Middleware {
 	cacheMu := &sync.RWMutex{}
 	cache := make(map[string]*introspectCacheEntry)
 	cacheTTL := 30 * time.Second
 
+	var bindCfg SessionBindingConfig
+	if len(bind) > 0 {
+		bindCfg = bind[0]
+	}
+
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
-			token := extractBearerToken(ctx.Request(), "")
+			installDPoPRequestScope(ctx)
+			scheme, token := extractCredential(ctx.Request(), "")
 			if token == "" {
 				return next(ctx)
 			}
@@ -114,6 +127,14 @@ func ClientAuthMiddleware(client *authclient.Client, logger log.Logger) forge.Mi
 				return next(ctx)
 			}
 
+			// RFC 9449 section 7.3: introspection reports the binding in
+			// cnf, and enforcing it is this service's job. An unbound
+			// token returns from here on one string comparison and takes
+			// the path it took before DPoP existed.
+			if dpopErr := enforceDPoP(ctx, bindCfg, introspectJKT(resp), scheme, token, resp.AppID, resp.SessionID, logger); dpopErr != nil {
+				return dpopErr
+			}
+
 			// Set context from introspect response
 			goCtx = setContextFromIntrospect(goCtx, resp)
 			goCtx = WithAuthMethod(goCtx, "session")
@@ -121,6 +142,16 @@ func ClientAuthMiddleware(client *authclient.Client, logger log.Logger) forge.Mi
 			return next(ctx)
 		}
 	}
+}
+
+// introspectJKT reads the confirmation thumbprint out of an introspection
+// response. Empty means the identity server reported an unbound token, which
+// is also what an identity server too old to send cnf reports.
+func introspectJKT(resp *authclient.IntrospectResponse) string {
+	if resp == nil || resp.Cnf == nil {
+		return ""
+	}
+	return resp.Cnf.Jkt
 }
 
 // setContextFromIntrospect populates the middleware context from an introspect response.

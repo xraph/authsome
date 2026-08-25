@@ -43,10 +43,13 @@ var timestampRebuilds = []sqliteschema.TableRebuild{
     metadata                   TEXT NOT NULL DEFAULT '{}',
     -- Added by 20260824000001 (RFC 8707 resource indicators), which runs
     -- before this rebuild, so the live table already has it.
-    resources                  TEXT NOT NULL DEFAULT '[]'
+    resources                  TEXT NOT NULL DEFAULT '[]',
+    -- Added by 20260824000041 (RFC 9449 DPoP), which also runs before this
+    -- rebuild. Leave it out and the rebuild aborts on a column mismatch.
+    dpop_mode                  TEXT NOT NULL DEFAULT ''
 );`,
 		Columns: "id, app_id, name, client_id, client_secret, redirect_uris, scopes, grant_types, public, created_at, updated_at, " +
-			"token_endpoint_auth_method, registration_token_hash, dynamically_registered, client_secret_expires_at, metadata, resources",
+			"token_endpoint_auth_method, registration_token_hash, dynamically_registered, client_secret_expires_at, metadata, resources, dpop_mode",
 		Indexes: `CREATE INDEX IF NOT EXISTS idx_authsome_oauth2_clients_app
     ON authsome_oauth2_clients (app_id);`,
 	},

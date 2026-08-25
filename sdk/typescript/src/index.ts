@@ -2,6 +2,8 @@
 
 export { AuthClient, AuthClientError, createAuthClient } from './client';
 export type { AuthClientConfig } from './client';
+export { DPoPSession, IndexedDBKeyStore } from './dpop';
+export type { DPoPKeyStore } from './dpop';
 export type {
   AcceptInvitationRequest,
   AddMemberRequest,
@@ -112,6 +114,7 @@ export type {
   GroupRef,
   GroupResource,
   HealthResponse,
+  IntrospectConfirmation,
   IntrospectRequest,
   IntrospectResponse,
   IntrospectUser,

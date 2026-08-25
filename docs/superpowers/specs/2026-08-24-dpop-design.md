@@ -266,18 +266,36 @@ through the middleware it takes today, with the same session lookup, the same
 context population and the same downstream behaviour, which is what lets you
 roll this out across a live fleet without a flag day.
 
-Scheme matching is strict. A bound token presented as `Authorization: Bearer`
-is rejected even with a valid `DPoP` header alongside it. RFC 9449 section 7.1
-specifies the `DPoP` scheme, and since bound tokens only exist after somebody
-opts in, strictness costs no compatibility.
+Scheme matching is strict for credentials that arrive in the `Authorization`
+header. A bound token presented as `Authorization: Bearer` is rejected even
+with a valid `DPoP` header alongside it. RFC 9449 section 7.1 specifies the
+`DPoP` scheme, and since bound tokens only exist after somebody opts in,
+strictness costs no compatibility.
 
 Three edges worth naming:
 
 - Cookie transport. Enforcement follows the token, not the transport, so a
-  bound session in a cookie still needs a proof. In practice this never fires,
-  because browser sign-in without a proof never binds. The rule stays
-  unconditional anyway instead of carving out an exception somebody widens
-  later.
+  bound session in a cookie still needs a proof. What it does not need is the
+  `DPoP` authorization scheme: section 7.1 is a rule about the `Authorization`
+  header, a cookie is not one, and a browser cannot set a scheme on a cookie.
+  So a bound session presented by cookie is honoured when a valid proof
+  accompanies it and refused when one does not, with `ath` over the session
+  token exactly as on the header path.
+
+  This used to say the case never fired, on the grounds that browser sign-in
+  never binds. That stopped being true when `handleSignIn` and `handleSignUp`
+  started resolving a binding through `dpopBindingForRequest`: under
+  `mode=required` every first-party sign-in now mints a bound session and sets
+  a cookie for it. The engine's cookie-to-header bridge rewrites that cookie
+  into `Authorization: Bearer <token>` before the inner middleware runs, so
+  strict scheme matching turned every such session into a permanent 401. The
+  bridge records the value it wrote, and the enforcement path treats a bridged
+  cookie as the cookie it is.
+
+  A client that only holds an `HttpOnly` cookie and never sees its own token
+  cannot compute `ath` and so cannot use a bound session. That is not a gap:
+  under `mode=required` the client already had to mint a proof to sign in, and
+  the sign-in response hands it the session token.
 - API keys with the `ask_` prefix go through `tryStrategyAuth` and are
   untouched. They are not issued by a token endpoint and carry no `cnf`.
 - `ath` is mandatory at a protected resource. A proof valid in every other
@@ -293,6 +311,45 @@ which is a positive signal that something is wrong, and degrading that to
 anonymous would hand an attacker a way to strip the proof off a bound token and
 fall through to any endpoint in your API that tolerates anonymous access.
 
+## The other two paths to an identity
+
+`middleware/auth.go` is not the only place a token turns into an authenticated
+request. Two other paths resolve a credential, and a rule that holds in one
+place and not the others is not an invariant, so both apply the same check.
+
+Client mode is the one that was genuinely open. A service running with
+`WithClientMode` has no engine and no session table, so it validates tokens by
+calling the identity server's `/v1/introspect` and using what comes back. The
+introspection response now carries `cnf` with the `jkt` whenever the token is
+bound, which is what RFC 9449 section 7.3 asks for. Without it the calling
+service has no way to find out that the token in its hand is bound to a key,
+and it accepts a stolen one. The client middleware reads that claim and runs
+the same `enforceDPoP` the engine path runs. None of the checking moves to the
+identity server, because the request never goes there.
+
+So the service validates the proof itself, with its own `dpop.Validator` and
+its own replay cache, built by the extension on first use. It mints no tokens,
+so it has no nonce secret and never demands a nonce. If you assemble the
+middleware yourself and pass no validator, a bound token is refused rather than
+admitted, matching what the engine path does when its validator is missing.
+
+The second path is `authprovider.SessionProvider`, registered with the forge
+auth registry and reached by plugin authz, organization, waitlist and consent.
+In a normal deployment the global middleware rejects a bad presentation long
+before this runs, so it was closed in practice. It was closed by accident of
+chain ordering, though, and it opens the moment somebody assembles a chain
+without the global middleware. The provider now checks the binding itself. It
+answers with an auth context rather than a response, so it cannot write an RFC
+9449 challenge and returns `ErrInvalidCredentials` instead. The client learns
+less from that than it would from the middleware, which is a reason to keep the
+middleware in front of it.
+
+All three call one implementation. `checkDPoP` holds the rule and touches no
+response, `enforceDPoP` wraps it for the middleware and writes the challenge,
+and `EnforceDPoPForRequest` wraps it for callers that only get to say yes or
+no. Two copies of a rule this important would drift, and the copy nobody reads
+is the one that drifts first.
+
 ## Nonce
 
 Stateless HMAC, built the same way as `dashboard/nonce.go`, keyed from
@@ -304,9 +361,21 @@ one client is useless to another.
 `Engine.NonceSecret()` returns nil when there is no HMAC JWT key and no
 `AUTHSOME_DASHBOARD_NONCE_SECRET`, which the dashboard handles by logging a
 warning and leaving its signer uninitialised. DPoP must not copy that. If an
-app has nonces switched on and no secret can be derived, fail at startup with a
-clear error. The alternative is a per-process random secret, which mints nonces
-no other instance can verify and turns a security feature into an intermittent
+app has nonces switched on and no secret can be derived, that is a
+misconfiguration and it has to fail closed with a clear error.
+
+Where it fails is the setting, not startup. `initDPoP` runs before any app has
+resolved `dpop.nonce_required`, so refusing to start there would refuse every
+deployment that has no HMAC JWT key, and almost none of those asked for nonces.
+So `initDPoP` logs a warning naming what would break and carries on, and
+`Engine.DPoPNonceRequiredForApp` answers true when it finds the setting on with
+no signer behind it, logging an error that names the app. Every DPoP request
+for that app is then refused, which is loud and takes one config change to fix.
+Answering false instead would leave the control switched on in the dashboard,
+switched off in reality, and nothing anywhere saying so.
+
+The alternative to both is a per-process random secret, which mints nonces no
+other instance can verify and turns a security feature into an intermittent
 outage that only shows up once you scale past one replica.
 
 One thing diverges sharply from the file we are copying, and it wants a comment

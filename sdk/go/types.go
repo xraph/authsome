@@ -564,6 +564,7 @@ type CouponResponse struct {
 // CreateClientRequest represents the CreateClientRequest schema.
 type CreateClientRequest struct {
 	AppID        string   `json:"app_id"`
+	DpopMode     string   `json:"dpop_mode,omitempty"`
 	GrantTypes   []string `json:"grant_types,omitempty"`
 	Name         string   `json:"name"`
 	Public       bool     `json:"public,omitempty"`
@@ -788,6 +789,7 @@ type DiscoveryResponse struct {
 	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
 	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
 	DeviceAuthorizationEndpoint       string   `json:"device_authorization_endpoint"`
+	DpopSigningAlgValuesSupported     []string `json:"dpop_signing_alg_values_supported,omitempty"`
 	GrantTypesSupported               []string `json:"grant_types_supported"`
 	IDTokenSigningAlgValuesSupported  []string `json:"id_token_signing_alg_values_supported"`
 	Issuer                            string   `json:"issuer"`
@@ -933,6 +935,11 @@ type HealthResponse struct {
 	Status string `json:"status"`
 }
 
+// IntrospectConfirmation represents the IntrospectConfirmation schema.
+type IntrospectConfirmation struct {
+	Jkt string `json:"jkt"`
+}
+
 // IntrospectRequest represents the IntrospectRequest schema.
 type IntrospectRequest struct {
 	Token string `json:"token"`
@@ -940,15 +947,16 @@ type IntrospectRequest struct {
 
 // IntrospectResponse represents the IntrospectResponse schema.
 type IntrospectResponse struct {
-	Active    bool            `json:"active"`
-	AppID     string          `json:"app_id,omitempty"`
-	Aud       []string        `json:"aud,omitempty"`
-	EnvID     string          `json:"env_id,omitempty"`
-	ExpiresAt string          `json:"expires_at,omitempty"`
-	OrgID     string          `json:"org_id,omitempty"`
-	SessionID string          `json:"session_id,omitempty"`
-	User      *IntrospectUser `json:"user,omitempty"`
-	UserID    string          `json:"user_id,omitempty"`
+	Active    bool                    `json:"active"`
+	AppID     string                  `json:"app_id,omitempty"`
+	Aud       []string                `json:"aud,omitempty"`
+	Cnf       *IntrospectConfirmation `json:"cnf,omitempty"`
+	EnvID     string                  `json:"env_id,omitempty"`
+	ExpiresAt string                  `json:"expires_at,omitempty"`
+	OrgID     string                  `json:"org_id,omitempty"`
+	SessionID string                  `json:"session_id,omitempty"`
+	User      *IntrospectUser         `json:"user,omitempty"`
+	UserID    string                  `json:"user_id,omitempty"`
 }
 
 // IntrospectUser represents the IntrospectUser schema.
@@ -1161,6 +1169,7 @@ type OAuth2Client struct {
 	ClientID                string         `json:"client_id"`
 	ClientSecretExpiresAt   string         `json:"client_secret_expires_at,omitempty"`
 	CreatedAt               string         `json:"created_at"`
+	DpopMode                string         `json:"dpop_mode,omitempty"`
 	DynamicallyRegistered   bool           `json:"dynamically_registered"`
 	GrantTypes              []string       `json:"grant_types"`
 	ID                      string         `json:"id"`
@@ -1903,6 +1912,7 @@ type AdminBulkImportUsersRequest struct {
 // CreateOAuth2ClientRequest is the request body for CreateOAuth2Client.
 type CreateOAuth2ClientRequest struct {
 	AppID        string   `json:"app_id"`
+	DpopMode     string   `json:"dpop_mode,omitempty"`
 	GrantTypes   []string `json:"grant_types,omitempty"`
 	Name         string   `json:"name"`
 	Public       bool     `json:"public,omitempty"`

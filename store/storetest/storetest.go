@@ -71,6 +71,7 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"DelegationLifecycle", testDelegationLifecycle},
 		{"SessionActorChainRoundTrip", testSessionActorChainRoundTrip},
 		{"ServiceAccountKindDefaultsToService", testServiceAccountKindDefaultsToService},
+		{"SessionDPoPJKTRoundTrip", testSessionDPoPJKTRoundTrip},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -758,6 +759,28 @@ func testListUserSessionsIsScopedToUser(t *testing.T, s store.Store) {
 	for _, se := range aSessions {
 		assert.Equal(t, ua.ID.String(), se.UserID.String())
 	}
+}
+
+func testSessionDPoPJKTRoundTrip(t *testing.T, s store.Store) {
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "dpop-jkt@example.com")
+
+	const jkt = "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"
+
+	bound := seedSession(t, s, tn, u.ID, "tok-dpop-bound", "ref-dpop-bound")
+	bound.DPoPJKT = jkt
+	require.NoError(t, s.UpdateSession(context.Background(), bound))
+
+	got, err := s.GetSessionByToken(context.Background(), "tok-dpop-bound")
+	require.NoError(t, err)
+	assert.Equal(t, jkt, got.DPoPJKT)
+
+	// An unbound session must come back as the empty string and never as a
+	// driver-specific null. Mongo in particular has a history here.
+	unbound := seedSession(t, s, tn, u.ID, "tok-dpop-unbound", "ref-dpop-unbound")
+	fetched, err := s.GetSessionByToken(context.Background(), unbound.Token)
+	require.NoError(t, err)
+	assert.Empty(t, fetched.DPoPJKT)
 }
 
 // ──────────────────────────────────────────────────

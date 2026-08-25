@@ -74,6 +74,11 @@ func (j *JWT) Name() string { return "jwt" }
 // after the other gets two different answers about the same credential.
 func (j *JWT) ConfiguredAudience() string { return j.config.Audience }
 
+// Confirmation is the RFC 7800 cnf claim. Only the jkt member is used.
+type Confirmation struct {
+	JKT string `json:"jkt,omitempty"`
+}
+
 // customClaims embeds jwt.RegisteredClaims and adds our custom fields.
 type customClaims struct {
 	jwt.RegisteredClaims
@@ -89,6 +94,10 @@ type customClaims struct {
 	// Both stay absent on a human token.
 	PrincipalKind string `json:"pk,omitempty"`
 	PrincipalID   string `json:"pid,omitempty"`
+	// Confirmation is a pointer with omitempty so an unbound token carries no
+	// cnf member at all, rather than an empty object. Anything reading these
+	// tokens treats the presence of cnf as the signal that a proof is required.
+	Confirmation *Confirmation `json:"cnf,omitempty"`
 }
 
 func (j *JWT) GenerateAccessToken(claims TokenClaims) (string, error) {
@@ -108,6 +117,10 @@ func (j *JWT) GenerateAccessToken(claims TokenClaims) (string, error) {
 		Act:           claims.Act,
 		PrincipalKind: claims.PrincipalKind,
 		PrincipalID:   claims.PrincipalID,
+	}
+
+	if claims.DPoPJKT != "" {
+		jwtClaims.Confirmation = &Confirmation{JKT: claims.DPoPJKT}
 	}
 
 	if j.config.Issuer != "" {
@@ -173,6 +186,7 @@ func (j *JWT) ValidateAccessToken(tokenStr string) (*TokenClaims, error) {
 		SessionID:     claims.SessionID,
 		Scopes:        claims.Scopes,
 		Audience:      []string(claims.Audience),
+		DPoPJKT:       confirmationJKT(claims.Confirmation),
 		Act:           claims.Act,
 		PrincipalKind: claims.PrincipalKind,
 		PrincipalID:   claims.PrincipalID,
@@ -216,4 +230,13 @@ func (j *JWT) HMACKey() ([]byte, bool) {
 		return k, true
 	}
 	return nil, false
+}
+
+// confirmationJKT reads the thumbprint out of a cnf claim, tolerating both an
+// absent claim and a present but empty one.
+func confirmationJKT(c *Confirmation) string {
+	if c == nil {
+		return ""
+	}
+	return c.JKT
 }
