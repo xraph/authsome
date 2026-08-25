@@ -324,6 +324,10 @@ type DiscoveryResponse struct {
 	ScopesSupported                   []string `json:"scopes_supported"`
 	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
 	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
+
+	// DPoPSigningAlgValuesSupported lists the JWS algorithms accepted in DPoP
+	// proofs (RFC 9449 section 5.1).
+	DPoPSigningAlgValuesSupported []string `json:"dpop_signing_alg_values_supported,omitempty"`
 }
 
 // CreateClientRequest is the admin request to create an OAuth2 client.
@@ -770,6 +774,7 @@ func (p *Plugin) handleDiscovery(_ forge.Context, _ *DiscoveryRequest) (*Discove
 		ScopesSupported:                   []string{"openid", "profile", "email", "phone"},
 		TokenEndpointAuthMethodsSupported: []string{"client_secret_post", "client_secret_basic"},
 		CodeChallengeMethodsSupported:     []string{"S256", "plain"},
+		DPoPSigningAlgValuesSupported:     dpop.SupportedAlgs(),
 	}, nil
 }
 
