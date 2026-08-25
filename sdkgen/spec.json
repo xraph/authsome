@@ -27251,6 +27251,12 @@
                   "client_id": {
                     "type": "string"
                   },
+                  "resource": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
                   "scope": {
                     "type": "string"
                   }

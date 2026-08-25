@@ -261,9 +261,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("OAuth2 Authorization"),
 		forge.WithDescription("Authorization endpoint for the OAuth2 authorization code flow."),
 		forge.WithOperationID("oauth2Authorize"),
-		forge.WithParameter("resource", "query",
-			"RFC 8707 resource indicator. Repeatable. Absolute URI, no fragment.",
-			false, "https://api.example.com"),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -273,10 +270,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("OAuth2 Token"),
 		forge.WithDescription("Token endpoint for exchanging authorization codes or client credentials for access tokens."),
 		forge.WithOperationID("oauth2Token"),
-		forge.WithParameter("resource", "query",
-			"RFC 8707 resource indicator. Repeatable. Absolute URI, no fragment. "+
-				"May also be sent in the form body.",
-			false, "https://api.example.com"),
 		forge.WithResponseSchema(http.StatusOK, "Token response", TokenResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
@@ -307,10 +300,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Device Authorization"),
 		forge.WithDescription("Device authorization endpoint (RFC 8628). Returns a device_code and user_code for device/CLI authentication."),
 		forge.WithOperationID("oauth2DeviceAuthorize"),
-		forge.WithParameter("resource", "query",
-			"RFC 8707 resource indicator. Repeatable. Absolute URI, no fragment. "+
-				"May also be sent in the form body.",
-			false, "https://api.example.com"),
 		forge.WithResponseSchema(http.StatusOK, "Device authorization response", DeviceAuthResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
@@ -545,6 +534,11 @@ type AuthorizeRequest struct {
 	State               string `query:"state,omitempty"`
 	CodeChallenge       string `query:"code_challenge,omitempty"`
 	CodeChallengeMethod string `query:"code_challenge_method,omitempty"`
+	// No resource field. go-utils' bindFormParam gained multi-value binding in
+	// v1.1.7, but bindQueryParam still reads one value through c.Query, so a
+	// []string query field silently keeps the first value and drops the rest.
+	// That is worse than the error it used to raise, so the authorization
+	// endpoint reads the raw query; see resourceParams.
 }
 
 // TokenRequest is the OAuth2 token request.
@@ -556,10 +550,10 @@ type TokenRequest struct {
 	ClientSecret string `json:"client_secret,omitempty" form:"client_secret"`
 	CodeVerifier string `json:"code_verifier,omitempty" form:"code_verifier"`
 	DeviceCode   string `json:"device_code,omitempty" form:"device_code"`
-	// No form tag and no query tag. The binder cannot decode a slice from
-	// either, so the form-encoded case is handled by resourceParams; this
-	// field only carries the JSON body case, which BindJSON decodes natively.
-	Resource []string `json:"resource,omitempty"`
+	// RFC 8707, repeatable. RFC 6749 section 4.1.3 sends token-endpoint
+	// parameters as a form body, and a JSON body is accepted too, so the field
+	// carries both tags.
+	Resource []string `json:"resource,omitempty" form:"resource,omitempty"`
 }
 
 // RevokeRequest is the OAuth2 revocation request.
@@ -661,6 +655,9 @@ type DeleteClientResponse struct {
 type DeviceAuthRequest struct {
 	ClientID string `json:"client_id" form:"client_id"`
 	Scope    string `json:"scope,omitempty" form:"scope,omitempty"`
+	// RFC 8707, repeatable. RFC 8628 section 3.1 makes this endpoint
+	// form-encoded, the same as the token endpoint.
+	Resource []string `json:"resource,omitempty" form:"resource,omitempty"`
 }
 
 // DeviceAuthResponse is the device authorization response (RFC 8628 Section 3.2).
@@ -757,8 +754,8 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		return nil, err
 	}
 
-	// RFC 8707. Read off the raw request because the struct binder rejects a
-	// []string query field outright; see resourceParams.
+	// RFC 8707. Read off the raw query: the struct binder still collapses a
+	// repeated query parameter to its first value; see resourceParams.
 	resources, err := resolveResources(client, resourceParams(ctx.Request()))
 	if err != nil {
 		return nil, err
@@ -1152,7 +1149,7 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 
 	// The code carries what the user authorized; the token request may
 	// narrow it further but never widen it.
-	resources, err := narrowResources(authCode.Resources, tokenRequestResources(ctx.Request(), req))
+	resources, err := narrowResources(authCode.Resources, req.Resource)
 	if err != nil {
 		return nil, err
 	}
@@ -1183,7 +1180,7 @@ func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenReque
 
 	// There is no prior authorization to narrow against here, so the
 	// client's own allowlist is the only bound.
-	resources, err := resolveResources(client, tokenRequestResources(ctx.Request(), req))
+	resources, err := resolveResources(client, req.Resource)
 	if err != nil {
 		return nil, err
 	}
@@ -1726,7 +1723,7 @@ func (p *Plugin) handleDeviceAuthorize(ctx forge.Context, req *DeviceAuthRequest
 	// There is no prior authorization to narrow against at this endpoint
 	// either, so the client's own allowlist bounds what may be requested,
 	// same as client credentials.
-	resources, err := resolveResources(client, resourceParams(ctx.Request()))
+	resources, err := resolveResources(client, req.Resource)
 	if err != nil {
 		return nil, err
 	}
@@ -1856,7 +1853,7 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 			return nil, forge.InternalError(fmt.Errorf("oauth2: consume device code: %w", err))
 		}
 
-		resources, resErr := narrowResources(dc.Resources, tokenRequestResources(ctx.Request(), req))
+		resources, resErr := narrowResources(dc.Resources, req.Resource)
 		if resErr != nil {
 			return nil, resErr
 		}

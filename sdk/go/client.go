@@ -2086,6 +2086,9 @@ func (c *Client) Oauth2DeviceAuthorize(ctx context.Context, req *Oauth2DeviceAut
 	form := url.Values{}
 	if req != nil {
 		form.Set("client_id", req.ClientID)
+		for _, v := range req.Resource {
+			form.Add("resource", v)
+		}
 		if req.Scope != "" {
 			form.Set("scope", req.Scope)
 		}
