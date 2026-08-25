@@ -92,10 +92,14 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.hooks = engine.Hooks()
 	p.chronicle = engine.Chronicle()
 	p.logger = engine.Logger()
-	p.basePath = engine.BasePath()
-	if p.basePath == "" {
-		p.basePath = "/v1"
-	}
+	// The router plugins register on is already grouped at the app's base
+	// path (extension/extension.go groups it before handing plugins the
+	// router), so p.basePath must carry only the version segment, not the
+	// base path again. engine.BasePath() defaults to "/authsome", and using
+	// it here would have doubled up to "/authsome/authsome/me/agents".
+	// plugins/consent/plugin.go hardcodes "/v1" for the same reason; this
+	// matches it.
+	p.basePath = "/v1"
 	if pc, ok := engine.(plugin.PermissionChecker); ok {
 		p.permChecker = pc
 	}

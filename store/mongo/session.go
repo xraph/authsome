@@ -165,6 +165,16 @@ func (s *Store) DeleteUserSessions(ctx context.Context, userID id.UserID) error 
 // an agent's delegation must also kill the session it minted, or the session
 // keeps authenticating as the delegating human until it separately expires.
 func (s *Store) DeleteSessionsByGrant(ctx context.Context, grantID id.AgentGrantID) error {
+	if grantID.IsNil() {
+		// Mongo's grant_id carries `bson:"grant_id,omitempty"`, so this
+		// backend happens to store no grant_id field at all on a non-agent
+		// session and would not match here regardless. The guard is added
+		// anyway so all four backends behave identically rather than three
+		// of them relying on a schema detail (NOT NULL DEFAULT '' on
+		// postgres/sqlite, a bare map key on memory) to stay safe and one
+		// being safe by accident of an unrelated bson tag.
+		return nil
+	}
 	_, err := s.mdb.NewDelete((*sessionModel)(nil)).
 		Many().
 		Filter(bson.M{"grant_id": grantID.String()}).

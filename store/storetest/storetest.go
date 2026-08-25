@@ -49,6 +49,7 @@ func RunConformance(t *testing.T, newStore Factory) {
 		{"ServiceAccountSessionRoundTrip", testServiceAccountSessionRoundTrip},
 		{"AgentSessionRoundTrip", testAgentSessionRoundTrip},
 		{"DeleteSessionsByGrant", testDeleteSessionsByGrant},
+		{"DeleteSessionsByGrantNilIDIsNoop", testDeleteSessionsByGrantNilIDIsNoop},
 		{"RotateSessionCAS", testRotateSessionCAS},
 		{"RefreshTokenRevocation", testRefreshTokenRevocation},
 		{"RefreshTokenReplayIsIdempotent", testRefreshTokenReplayIsIdempotent},
@@ -594,6 +595,39 @@ func testDeleteSessionsByGrant(t *testing.T, s store.Store) {
 	assert.NoError(t, err, "a session under a different grant must survive")
 	_, err = s.GetSession(ctx, humanSess.ID)
 	assert.NoError(t, err, "an ordinary session carrying no grant at all must survive")
+}
+
+// testDeleteSessionsByGrantNilIDIsNoop guards a sharp edge in
+// DeleteSessionsByGrant's own contract: id.ID.String() returns "" for the
+// zero value, and on postgres/sqlite grant_id is TEXT NOT NULL DEFAULT ”,
+// so a caller that mishandled grant-id resolution and passed the zero value
+// through could otherwise delete every ordinary human session in the store,
+// not just agent sessions under a genuine grant. Not reachable through
+// agentauth today (RevokeGrant's own grantID always comes from a real
+// AgentGrant), but this is a newly exported method on the CORE session.Store
+// interface with no guard of its own, so it must refuse a nil id on its own
+// terms rather than relying on every future caller to check first.
+func testDeleteSessionsByGrantNilIDIsNoop(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "nil-grant-guard@example.com")
+
+	humanSess := seedSession(t, s, tn, u.ID, "tok-human-nilguard", "rtok-human-nilguard")
+	agentSess := &session.Session{ //nolint:gosec // test fixture token literals, not credentials
+		ID: id.NewSessionID(), AppID: tn.AppID, EnvID: tn.EnvID, UserID: u.ID,
+		Token: "tok-agent-nilguard", RefreshToken: "rtok-agent-nilguard", FamilyID: id.NewSessionFamilyID(),
+		PrincipalKind: session.PrincipalKindAgent, AgentID: id.NewAgentID(), GrantID: id.NewAgentGrantID(),
+		ExpiresAt: now().Add(time.Hour), RefreshTokenExpiresAt: now().Add(24 * time.Hour),
+		CreatedAt: now(), UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateSession(ctx, agentSess))
+
+	require.NoError(t, s.DeleteSessionsByGrant(ctx, id.AgentGrantID{}))
+
+	_, err := s.GetSession(ctx, humanSess.ID)
+	assert.NoError(t, err, "a nil grant id must delete nothing, not every human session")
+	_, err = s.GetSession(ctx, agentSess.ID)
+	assert.NoError(t, err, "a nil grant id must not touch an unrelated agent session either")
 }
 
 func testRotateSessionCAS(t *testing.T, s store.Store) {

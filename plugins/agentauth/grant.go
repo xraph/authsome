@@ -160,12 +160,27 @@ func (p *Plugin) RevokeGrant(ctx context.Context, grantID id.AgentGrantID) error
 	if err != nil {
 		return forge.InternalError(fmt.Errorf("agentauth: revoke grant: %w", err))
 	}
-	// p.engine is nil in tests that construct the plugin without OnInit
-	// (this package's own store-level tests among them); skip session
-	// cleanup rather than panic on a store that was never wired.
-	if p.engine != nil {
-		if sessErr := p.engine.Store().DeleteSessionsByGrant(ctx, grantID); sessErr != nil {
-			return forge.InternalError(fmt.Errorf("agentauth: delete grant sessions: %w", sessErr))
+	return p.sweepSessions(ctx, []id.AgentGrantID{grantID})
+}
+
+// sweepSessions deletes the sessions issued under each of the given grant
+// ids. RevokeGrant uses it for a single grant; every bulk-revoke path
+// (blocking an agent, a member leaving an org, an org being deleted, a user
+// being banned or deleted) uses it too, via the revoked-id lists their store
+// calls now return — the same live-session gap RevokeGrant closes for one
+// grant applies identically to a grant swept up in a bulk revocation.
+//
+// p.engine is nil in tests that construct the plugin without OnInit (several
+// of this package's own tests among them); skip session cleanup rather than
+// panic on a store that was never wired.
+func (p *Plugin) sweepSessions(ctx context.Context, grantIDs []id.AgentGrantID) error {
+	if p.engine == nil {
+		return nil
+	}
+	sessions := p.engine.Store()
+	for _, gid := range grantIDs {
+		if err := sessions.DeleteSessionsByGrant(ctx, gid); err != nil {
+			return forge.InternalError(fmt.Errorf("agentauth: delete grant sessions: %w", err))
 		}
 	}
 	return nil

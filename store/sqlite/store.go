@@ -422,6 +422,14 @@ func (s *Store) DeleteUserSessions(ctx context.Context, userID id.UserID) error 
 // DeleteSessionsByGrant deletes every session issued under grantID, backed by
 // idx_authsome_sessions_grant_id.
 func (s *Store) DeleteSessionsByGrant(ctx context.Context, grantID id.AgentGrantID) error {
+	if grantID.IsNil() {
+		// grant_id is TEXT NOT NULL DEFAULT '' here, and a nil grantID also
+		// stringifies to "" — so without this guard, a caller that failed to
+		// resolve a real grant id would delete every human session in the
+		// table (every non-agent row carries grant_id = '' too) instead of
+		// doing nothing.
+		return nil
+	}
 	_, err := s.sdb.NewDelete((*SessionModel)(nil)).Where("grant_id = ?", grantID.String()).Exec(ctx)
 	return sqliteError(err)
 }

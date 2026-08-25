@@ -29,6 +29,25 @@ func NewMemoryStore() *MemoryStore {
 func (s *MemoryStore) CreateAgent(_ context.Context, a *Agent) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// A ClientID must resolve to at most one agent: GetAgentByClientID ranges
+	// over this same map and returns the first match, in nondeterministic Go
+	// map-iteration order, so two agents sharing a ClientID would make
+	// whichever one Evaluate sees (approved or blocked) a coin flip. Checked
+	// under the same lock as the write below, so two concurrent registrations
+	// for the same ClientID cannot both pass the check and both land.
+	// A ClientID must resolve to at most one agent: GetAgentByClientID ranges
+	// over this same map and returns the first match, in nondeterministic Go
+	// map-iteration order, so two agents sharing a ClientID would make
+	// whichever one Evaluate sees (approved or blocked) a coin flip. Checked
+	// under the same lock as the write below, so two concurrent registrations
+	// for the same ClientID cannot both pass the check and both land.
+	if a.ClientID != "" {
+		for _, existing := range s.agents {
+			if existing.ClientID == a.ClientID {
+				return ErrConflict
+			}
+		}
+	}
 	cp := *a
 	s.agents[a.ID.String()] = &cp
 	return nil
@@ -161,46 +180,53 @@ func (s *MemoryStore) RevokeAgentGrant(_ context.Context, grantID id.AgentGrantI
 	return nil
 }
 
-func (s *MemoryStore) RevokeGrantsByUser(_ context.Context, userID id.UserID) error {
+func (s *MemoryStore) RevokeGrantsByUser(_ context.Context, userID id.UserID) ([]id.AgentGrantID, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var revoked []id.AgentGrantID
 	for _, g := range s.grants {
 		if g.UserID.String() == userID.String() {
 			s.revokeLocked(g)
+			revoked = append(revoked, g.ID)
 		}
 	}
-	return nil
+	return revoked, nil
 }
 
-func (s *MemoryStore) RevokeGrantsByUserOrg(_ context.Context, userID id.UserID, orgID id.OrgID) error {
+func (s *MemoryStore) RevokeGrantsByUserOrg(_ context.Context, userID id.UserID, orgID id.OrgID) ([]id.AgentGrantID, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var revoked []id.AgentGrantID
 	for _, g := range s.grants {
 		if g.UserID.String() == userID.String() && g.OrgID.String() == orgID.String() {
 			s.revokeLocked(g)
+			revoked = append(revoked, g.ID)
 		}
 	}
-	return nil
+	return revoked, nil
 }
 
 // RevokeGrantsByOrg revokes every grant scoped to orgID, regardless of which
 // user issued it. Deleting an organization has to disarm every agent acting
 // under it, not just one member's — that is the whole org's authorization
 // surface, not a single user-org pair the way RevokeGrantsByUserOrg is.
-func (s *MemoryStore) RevokeGrantsByOrg(_ context.Context, orgID id.OrgID) error {
+func (s *MemoryStore) RevokeGrantsByOrg(_ context.Context, orgID id.OrgID) ([]id.AgentGrantID, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var revoked []id.AgentGrantID
 	for _, g := range s.grants {
 		if g.OrgID.String() == orgID.String() {
 			s.revokeLocked(g)
+			revoked = append(revoked, g.ID)
 		}
 	}
-	return nil
+	return revoked, nil
 }
 
-func (s *MemoryStore) RevokeGrantsByAgent(_ context.Context, agentID id.AgentID, orgID id.OrgID) error {
+func (s *MemoryStore) RevokeGrantsByAgent(_ context.Context, agentID id.AgentID, orgID id.OrgID) ([]id.AgentGrantID, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var revoked []id.AgentGrantID
 	for _, g := range s.grants {
 		if g.AgentID.String() != agentID.String() {
 			continue
@@ -209,8 +235,9 @@ func (s *MemoryStore) RevokeGrantsByAgent(_ context.Context, agentID id.AgentID,
 			continue
 		}
 		s.revokeLocked(g)
+		revoked = append(revoked, g.ID)
 	}
-	return nil
+	return revoked, nil
 }
 
 // revokeLocked stamps RevokedAt. The caller holds s.mu.

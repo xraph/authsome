@@ -39,7 +39,7 @@ type StatusResponse struct {
 func (p *Plugin) ListMyGrants(ctx context.Context, userID id.UserID) (*ListGrantsResponse, error) {
 	grants, err := p.store.ListGrantsByUser(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("agentauth: list grants: %w", err)
+		return nil, forge.InternalError(fmt.Errorf("agentauth: list grants: %w", err))
 	}
 	now := time.Now()
 	out := &ListGrantsResponse{Grants: []GrantView{}}
@@ -82,39 +82,52 @@ func (p *Plugin) RevokeMyGrant(ctx context.Context, userID id.UserID, grantID id
 
 // SetAgentStatus changes an agent's approval state. Blocking also revokes
 // every grant the agent holds in that org, since leaving them live would mean
-// a blocked agent kept working until its sessions aged out.
+// a blocked agent kept working until its sessions aged out, and deletes the
+// sessions those grants issued: without that, a live agent session (which
+// carries the delegating human's UserID) keeps authenticating as that human
+// on any route not guarded by agentauth.Authorize, for up to its remaining
+// TTL, even though the agent that session belongs to has just been blocked.
 func (p *Plugin) SetAgentStatus(ctx context.Context, agentID id.AgentID, orgID id.OrgID, status AgentStatus) error {
 	a, err := p.store.GetAgent(ctx, agentID)
 	if errors.Is(err, ErrNotFound) {
 		return forge.NotFound("agent not found")
 	}
 	if err != nil {
-		return fmt.Errorf("agentauth: load agent: %w", err)
+		return forge.InternalError(fmt.Errorf("agentauth: load agent: %w", err))
 	}
 
 	a.Status = status
 	a.UpdatedAt = time.Now()
-	if err := p.store.UpdateAgent(ctx, a); err != nil {
-		return fmt.Errorf("agentauth: update agent: %w", err)
+	if updateErr := p.store.UpdateAgent(ctx, a); updateErr != nil {
+		return forge.InternalError(fmt.Errorf("agentauth: update agent: %w", updateErr))
 	}
 
 	if status != StatusBlocked {
 		return nil
 	}
-	if err := p.store.RevokeGrantsByAgent(ctx, agentID, orgID); err != nil {
-		return fmt.Errorf("agentauth: revoke agent grants: %w", err)
+	revoked, err := p.store.RevokeGrantsByAgent(ctx, agentID, orgID)
+	if err != nil {
+		return forge.InternalError(fmt.Errorf("agentauth: revoke agent grants: %w", err))
 	}
 	// The cache is keyed by grant id and the revoked grants are not enumerated
 	// here, so clear it wholesale. Blocking an agent is a rare admin action,
 	// so the cost of a cold cache does not matter.
 	p.cache.clear()
-	return nil
+	return p.sweepSessions(ctx, revoked)
 }
 
 // RegisterAgent creates a new org-registered agent. An org admin registering
 // an agent has already decided to trust it, so it starts approved, unlike a
 // self-registered agent (created elsewhere, outside this task's scope) which
 // would start pending review.
+//
+// ClientID must be unique: Evaluate resolves an agent by ClientID through
+// GetAgentByClientID, and a store that let two agents share one would make
+// that resolution nondeterministic — whichever record a range-based lookup
+// happens to visit first decides whether a blocked agent's client is treated
+// as blocked. CreateAgent enforces the invariant; this maps its ErrConflict
+// onto an HTTP 409 rather than the generic 500 forge.InternalError would give
+// every other store failure.
 func (p *Plugin) RegisterAgent(ctx context.Context, in *Agent) (*Agent, error) {
 	if in.ClientID == "" || in.Name == "" || in.AppID.IsNil() {
 		return nil, forge.BadRequest("app_id, client_id and name are required")
@@ -135,6 +148,9 @@ func (p *Plugin) RegisterAgent(ctx context.Context, in *Agent) (*Agent, error) {
 		UpdatedAt:   now,
 	}
 	if err := p.store.CreateAgent(ctx, a); err != nil {
+		if errors.Is(err, ErrConflict) {
+			return nil, forge.NewHTTPError(http.StatusConflict, "an agent is already registered for this client_id")
+		}
 		return nil, forge.InternalError(fmt.Errorf("agentauth: create agent: %w", err))
 	}
 	return a, nil
@@ -177,10 +193,90 @@ func (p *Plugin) handleRevokeMyGrant(ctx forge.Context, req *RevokeMyGrantReques
 	return resp, ctx.JSON(http.StatusOK, resp)
 }
 
-// ListAgentsRequest binds the query parameters for GET /admin/agents.
+// callerAppID resolves the authenticated caller's app from context. The
+// admin agent routes are tenant-scoped, but HasPermission("write", "agent")
+// carries no app or org dimension of its own (rbac/warden_store.go never
+// reads a scoping id off the permission check) — so without this, an app_id
+// or org_id taken straight from the request body or query would let any
+// caller who holds the "agent" permission act against an arbitrary tenant,
+// not just their own.
+func callerAppID(ctx context.Context) (id.AppID, error) {
+	appID, ok := middleware.AppIDFrom(ctx)
+	if !ok || appID.IsNil() {
+		return id.AppID{}, forge.Forbidden("an application context is required")
+	}
+	return appID, nil
+}
+
+// requestAppMatchesCaller validates an optional app_id field on a request
+// against the caller's own app, resolved from context. An empty field is not
+// a mismatch — the caller's app from context is authoritative either way,
+// this only catches a request that names a *different* app outright.
+func requestAppMatchesCaller(ctx context.Context, reqAppID string) error {
+	if reqAppID == "" {
+		return nil
+	}
+	appID, err := callerAppID(ctx)
+	if err != nil {
+		return err
+	}
+	parsed, perr := id.ParseAppID(reqAppID)
+	if perr != nil {
+		return forge.BadRequest("invalid app_id")
+	}
+	if parsed.String() != appID.String() {
+		return forge.Forbidden("app_id does not match the authenticated application")
+	}
+	return nil
+}
+
+// callerOrgOrReject resolves an optional org_id request field against the
+// caller's own org, taken from context (see callerAppID for why the request
+// body cannot be trusted on its own). An empty reqOrgID means the caller did
+// not scope the request to an org, which is valid for an app-global agent;
+// callerOrgOrReject then returns the zero org rather than rejecting.
+func callerOrgOrReject(ctx context.Context, reqOrgID string) (id.OrgID, error) {
+	if reqOrgID == "" {
+		return id.Nil, nil
+	}
+	parsed, err := id.ParseOrgID(reqOrgID)
+	if err != nil {
+		return id.Nil, forge.BadRequest("invalid org_id")
+	}
+	callerOrgID, hasOrg := middleware.OrgIDFrom(ctx)
+	if !hasOrg || parsed.String() != callerOrgID.String() {
+		return id.Nil, forge.Forbidden("org_id does not match the authenticated organization")
+	}
+	return parsed, nil
+}
+
+// requiredCallerOrgID is callerOrgOrReject for an endpoint where an org is
+// not optional — a delegation policy always belongs to exactly one org, so
+// there is no app-global reading of a request that omits or disagrees with
+// the caller's own org.
+func requiredCallerOrgID(ctx context.Context, reqOrgID string) (id.OrgID, error) {
+	callerOrgID, hasOrg := middleware.OrgIDFrom(ctx)
+	if !hasOrg || callerOrgID.IsNil() {
+		return id.Nil, forge.Forbidden("an organization context is required to set delegation policy")
+	}
+	parsed, err := id.ParseOrgID(reqOrgID)
+	if err != nil {
+		return id.Nil, forge.BadRequest("invalid org_id")
+	}
+	if parsed.String() != callerOrgID.String() {
+		return id.Nil, forge.Forbidden("cannot set delegation policy for another organization")
+	}
+	return parsed, nil
+}
+
+// ListAgentsRequest binds the query parameters for GET /admin/agents. Both
+// fields are optional and, when present, must agree with the caller's own
+// app/org from context — see requestAppMatchesCaller and callerOrgOrReject.
+// Without that check this endpoint let any admin caller enumerate another
+// app's agents just by naming its app_id in the query.
 type ListAgentsRequest struct {
-	AppID string `query:"app_id" description:"Application identifier"`
-	OrgID string `query:"org_id,omitempty" description:"Organization identifier"`
+	AppID string `query:"app_id,omitempty" description:"Application identifier; must match the caller's own app"`
+	OrgID string `query:"org_id,omitempty" description:"Organization identifier; must match the caller's own org"`
 }
 
 // ListAgentsResponse is the GET /admin/agents payload.
@@ -189,16 +285,19 @@ type ListAgentsResponse struct {
 }
 
 func (p *Plugin) handleListAgents(ctx forge.Context, req *ListAgentsRequest) (*ListAgentsResponse, error) {
-	appID, err := id.ParseAppID(req.AppID)
-	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+	if _, ok := middleware.UserIDFrom(ctx.Context()); !ok {
+		return nil, forge.Unauthorized("authentication required")
 	}
-	orgID := id.Nil
-	if req.OrgID != "" {
-		orgID, err = id.ParseOrgID(req.OrgID)
-		if err != nil {
-			return nil, forge.BadRequest("invalid org_id")
-		}
+	if err := requestAppMatchesCaller(ctx.Context(), req.AppID); err != nil {
+		return nil, err
+	}
+	appID, err := callerAppID(ctx.Context())
+	if err != nil {
+		return nil, err
+	}
+	orgID, err := callerOrgOrReject(ctx.Context(), req.OrgID)
+	if err != nil {
+		return nil, err
 	}
 	agents, err := p.store.ListAgents(ctx.Context(), appID, orgID)
 	if err != nil {
@@ -211,10 +310,13 @@ func (p *Plugin) handleListAgents(ctx forge.Context, req *ListAgentsRequest) (*L
 	return resp, ctx.JSON(http.StatusOK, resp)
 }
 
-// RegisterAgentRequest binds the body for POST /admin/agents.
+// RegisterAgentRequest binds the body for POST /admin/agents. AppID and OrgID
+// are optional and, when present, must agree with the caller's own app/org
+// from context (see requestAppMatchesCaller and callerOrgOrReject) — the
+// agent is always registered under the caller's actual app regardless.
 type RegisterAgentRequest struct {
-	AppID       string `json:"app_id" description:"Application identifier"`
-	OrgID       string `json:"org_id,omitempty" description:"Organization identifier"`
+	AppID       string `json:"app_id,omitempty" description:"Application identifier; must match the caller's own app"`
+	OrgID       string `json:"org_id,omitempty" description:"Organization identifier; must match the caller's own org"`
 	ClientID    string `json:"client_id" description:"The oauth2provider client id this agent authenticates as"`
 	Name        string `json:"name" description:"Human-readable agent name"`
 	Description string `json:"description,omitempty"`
@@ -222,17 +324,20 @@ type RegisterAgentRequest struct {
 }
 
 func (p *Plugin) handleRegisterAgent(ctx forge.Context, req *RegisterAgentRequest) (*Agent, error) {
-	userID, _ := middleware.UserIDFrom(ctx.Context())
-	appID, err := id.ParseAppID(req.AppID)
-	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+	userID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
 	}
-	orgID := id.Nil
-	if req.OrgID != "" {
-		orgID, err = id.ParseOrgID(req.OrgID)
-		if err != nil {
-			return nil, forge.BadRequest("invalid org_id")
-		}
+	if err := requestAppMatchesCaller(ctx.Context(), req.AppID); err != nil {
+		return nil, err
+	}
+	appID, err := callerAppID(ctx.Context())
+	if err != nil {
+		return nil, err
+	}
+	orgID, err := callerOrgOrReject(ctx.Context(), req.OrgID)
+	if err != nil {
+		return nil, err
 	}
 	a, err := p.RegisterAgent(ctx.Context(), &Agent{
 		AppID: appID, OrgID: orgID, ClientID: req.ClientID,
@@ -248,11 +353,14 @@ func (p *Plugin) handleRegisterAgent(ctx forge.Context, req *RegisterAgentReques
 // SetAgentStatusRequest binds the path and body for PATCH /admin/agents/:id/status.
 type SetAgentStatusRequest struct {
 	AgentID string `path:"id" description:"Agent identifier"`
-	OrgID   string `json:"org_id,omitempty" description:"Organization whose grants on this agent are revoked when blocking"`
+	OrgID   string `json:"org_id,omitempty" description:"Organization whose grants on this agent are revoked when blocking; must match the caller's own org"`
 	Status  string `json:"status" description:"pending, approved or blocked"`
 }
 
 func (p *Plugin) handleSetAgentStatus(ctx forge.Context, req *SetAgentStatusRequest) (*StatusResponse, error) {
+	if _, ok := middleware.UserIDFrom(ctx.Context()); !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
 	agentID, err := id.ParseAgentID(req.AgentID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid agent id")
@@ -262,12 +370,29 @@ func (p *Plugin) handleSetAgentStatus(ctx forge.Context, req *SetAgentStatusRequ
 	default:
 		return nil, forge.BadRequest(fmt.Sprintf("invalid status %q", req.Status))
 	}
-	orgID := id.Nil
-	if req.OrgID != "" {
-		orgID, err = id.ParseOrgID(req.OrgID)
-		if err != nil {
-			return nil, forge.BadRequest("invalid org_id")
-		}
+	appID, err := callerAppID(ctx.Context())
+	if err != nil {
+		return nil, err
+	}
+	// The target agent must belong to the caller's own app. Without this, an
+	// admin in app A holding "write agent" could block (or approve) an agent
+	// belonging to app B just by guessing or enumerating its agent id.
+	agent, err := p.store.GetAgent(ctx.Context(), agentID)
+	if errors.Is(err, ErrNotFound) {
+		return nil, forge.NotFound("agent not found")
+	}
+	if err != nil {
+		return nil, forge.InternalError(fmt.Errorf("agentauth: load agent: %w", err))
+	}
+	if agent.AppID.String() != appID.String() {
+		// Same response as a missing agent: a cross-tenant admin caller must
+		// not be able to tell "exists in another app" apart from "doesn't
+		// exist" by probing this endpoint.
+		return nil, forge.NotFound("agent not found")
+	}
+	orgID, err := callerOrgOrReject(ctx.Context(), req.OrgID)
+	if err != nil {
+		return nil, err
 	}
 	if err := p.SetAgentStatus(ctx.Context(), agentID, orgID, AgentStatus(req.Status)); err != nil {
 		return nil, err
@@ -276,24 +401,38 @@ func (p *Plugin) handleSetAgentStatus(ctx forge.Context, req *SetAgentStatusRequ
 	return resp, ctx.JSON(http.StatusOK, resp)
 }
 
-// PutOrgPolicyRequest binds the body for PUT /admin/agents/policy.
+// PutOrgPolicyRequest binds the body for PUT /admin/agents/policy. OrgID is
+// required and must match the caller's own org from context — see
+// requiredCallerOrgID. Without that check, any admin caller holding
+// "write agent" in any org could flip a different org's delegation policy
+// wide open, since HasPermission carries no org dimension of its own.
 type PutOrgPolicyRequest struct {
-	OrgID             string   `json:"org_id" description:"Organization identifier"`
+	OrgID             string   `json:"org_id" description:"Organization identifier; must match the caller's own org"`
 	Mode              string   `json:"mode" description:"open, allowlist or blocked"`
-	MaxGrantTTLSecond int64    `json:"max_grant_ttl_seconds,omitempty"`
+	MaxGrantTTLSecond int64    `json:"max_grant_ttl_seconds,omitempty" description:"Must not be negative"`
 	AllowedScopes     []string `json:"allowed_scopes,omitempty"`
 }
 
 func (p *Plugin) handlePutOrgPolicy(ctx forge.Context, req *PutOrgPolicyRequest) (*OrgAgentPolicy, error) {
-	orgID, err := id.ParseOrgID(req.OrgID)
+	if _, ok := middleware.UserIDFrom(ctx.Context()); !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+	orgID, err := requiredCallerOrgID(ctx.Context(), req.OrgID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid org_id")
+		return nil, err
 	}
 	mode := PolicyMode(req.Mode)
 	switch mode {
 	case ModeOpen, ModeAllowlist, ModeBlocked:
 	default:
 		return nil, forge.BadRequest(fmt.Sprintf("invalid policy mode %q", req.Mode))
+	}
+	if req.MaxGrantTTLSecond < 0 {
+		// clampTTL (grant.go) treats a non-positive MaxGrantTTL as "no
+		// ceiling" rather than "no time at all", so a negative value here
+		// would silently loosen the org's cap instead of tightening it —
+		// exactly backwards from what an operator setting it would expect.
+		return nil, forge.BadRequest("max_grant_ttl_seconds must not be negative")
 	}
 	policy := &OrgAgentPolicy{
 		OrgID:         orgID,

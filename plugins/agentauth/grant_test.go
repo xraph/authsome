@@ -441,7 +441,8 @@ func TestCreateGrant_StoresAgentOrgWhenCallerOrgIsZero(t *testing.T) {
 	assert.Equal(t, org.String(), g.OrgID.String(),
 		"a grant under an org-registered agent must never be stored org-less")
 
-	require.NoError(t, store.RevokeGrantsByUserOrg(context.Background(), userID, org))
+	_, err = store.RevokeGrantsByUserOrg(context.Background(), userID, org)
+	require.NoError(t, err)
 	got, err := store.GetAgentGrant(context.Background(), g.ID)
 	require.NoError(t, err)
 	assert.False(t, got.IsActive(time.Now()),

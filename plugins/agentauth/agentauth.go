@@ -14,6 +14,14 @@ import (
 // ErrNotFound is returned when an agent or grant cannot be found.
 var ErrNotFound = errors.New("agentauth: not found")
 
+// ErrConflict is returned when a write would violate a uniqueness invariant
+// this package depends on — currently just an agent's ClientID, which
+// GetAgentByClientID and Evaluate both assume resolves to at most one agent.
+// A store that let two agents share a ClientID would make that resolution
+// nondeterministic: whichever record a range-based lookup happens to visit
+// first decides whether a blocked agent's client is treated as blocked.
+var ErrConflict = errors.New("agentauth: conflict")
+
 // AgentOrigin records how an agent came to exist.
 type AgentOrigin string
 
@@ -107,10 +115,18 @@ type Store interface {
 	ListGrantsByUser(ctx context.Context, userID id.UserID) ([]*AgentGrant, error)
 	UpdateAgentGrant(ctx context.Context, g *AgentGrant) error
 	RevokeAgentGrant(ctx context.Context, grantID id.AgentGrantID) error
-	RevokeGrantsByUser(ctx context.Context, userID id.UserID) error
-	RevokeGrantsByUserOrg(ctx context.Context, userID id.UserID, orgID id.OrgID) error
-	RevokeGrantsByOrg(ctx context.Context, orgID id.OrgID) error
-	RevokeGrantsByAgent(ctx context.Context, agentID id.AgentID, orgID id.OrgID) error
+	// RevokeGrantsByUser, RevokeGrantsByUserOrg, RevokeGrantsByOrg and
+	// RevokeGrantsByAgent each return the ids of the grants they actually
+	// revoked, so the caller can sweep the sessions those grants issued
+	// through session.Store.DeleteSessionsByGrant. Without that, a bulk
+	// revocation (banning a user, a member leaving an org, an org being
+	// deleted, an agent being blocked) would revoke the grant but leave any
+	// session it already minted live — carrying the delegating human's
+	// UserID — until the session separately expired.
+	RevokeGrantsByUser(ctx context.Context, userID id.UserID) ([]id.AgentGrantID, error)
+	RevokeGrantsByUserOrg(ctx context.Context, userID id.UserID, orgID id.OrgID) ([]id.AgentGrantID, error)
+	RevokeGrantsByOrg(ctx context.Context, orgID id.OrgID) ([]id.AgentGrantID, error)
+	RevokeGrantsByAgent(ctx context.Context, agentID id.AgentID, orgID id.OrgID) ([]id.AgentGrantID, error)
 
 	GetOrgPolicy(ctx context.Context, orgID id.OrgID) (*OrgAgentPolicy, error)
 	PutOrgPolicy(ctx context.Context, p *OrgAgentPolicy) error

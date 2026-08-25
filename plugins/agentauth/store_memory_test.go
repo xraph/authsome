@@ -12,6 +12,16 @@ import (
 	"github.com/xraph/authsome/plugins/agentauth"
 )
 
+// idStrings renders a slice of AgentGrantID as strings, for assert.ElementsMatch
+// against a set of expected id.String() values.
+func idStrings(ids []id.AgentGrantID) []string {
+	out := make([]string, len(ids))
+	for i, gid := range ids {
+		out[i] = gid.String()
+	}
+	return out
+}
+
 func newGrant(t *testing.T, userID id.UserID, orgID id.OrgID, expires time.Time) *agentauth.AgentGrant {
 	t.Helper()
 	return &agentauth.AgentGrant{
@@ -60,11 +70,16 @@ func TestMemoryStore_RevokeGrantsByUser(t *testing.T) {
 		require.NoError(t, s.CreateAgentGrant(context.Background(), g))
 	}
 
-	require.NoError(t, s.RevokeGrantsByUser(context.Background(), victim))
+	revoked, err := s.RevokeGrantsByUser(context.Background(), victim)
+	require.NoError(t, err)
 
+	// The returned ids are what the caller sweeps sessions by
+	// (Plugin.sweepSessions), so the set must be exact: every grant actually
+	// revoked, nothing else.
+	assert.ElementsMatch(t, []string{g1.ID.String(), g2.ID.String()}, idStrings(revoked))
 	for _, gid := range []id.AgentGrantID{g1.ID, g2.ID} {
-		got, err := s.GetAgentGrant(context.Background(), gid)
-		require.NoError(t, err)
+		got, gerr := s.GetAgentGrant(context.Background(), gid)
+		require.NoError(t, gerr)
 		assert.NotNil(t, got.RevokedAt, "the victim's grants must be revoked")
 	}
 	survivor, err := s.GetAgentGrant(context.Background(), g3.ID)
@@ -82,7 +97,9 @@ func TestMemoryStore_RevokeGrantsByUserOrg_ScopedToThatOrg(t *testing.T) {
 	require.NoError(t, s.CreateAgentGrant(context.Background(), gone))
 	require.NoError(t, s.CreateAgentGrant(context.Background(), kept))
 
-	require.NoError(t, s.RevokeGrantsByUserOrg(context.Background(), user, leaving))
+	revoked, err := s.RevokeGrantsByUserOrg(context.Background(), user, leaving)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{gone.ID.String()}, idStrings(revoked))
 
 	g, err := s.GetAgentGrant(context.Background(), gone.ID)
 	require.NoError(t, err)
@@ -215,7 +232,9 @@ func TestMemoryStore_RevokeGrantsByAgent_WithOrg(t *testing.T) {
 	require.NoError(t, s.CreateAgentGrant(context.Background(), g2))
 
 	// Revoke the agent's grants only in org1
-	require.NoError(t, s.RevokeGrantsByAgent(context.Background(), agent, org1))
+	revokedIDs, err := s.RevokeGrantsByAgent(context.Background(), agent, org1)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{g1.ID.String()}, idStrings(revokedIDs))
 
 	// g1 should be revoked
 	revoked, err := s.GetAgentGrant(context.Background(), g1.ID)
@@ -245,7 +264,9 @@ func TestMemoryStore_RevokeGrantsByAgent_AllOrgs(t *testing.T) {
 	require.NoError(t, s.CreateAgentGrant(context.Background(), g2))
 
 	// Revoke the agent's grants across all orgs (zero-value orgID)
-	require.NoError(t, s.RevokeGrantsByAgent(context.Background(), agent, id.OrgID{}))
+	revokedIDs, err := s.RevokeGrantsByAgent(context.Background(), agent, id.OrgID{})
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{g1.ID.String(), g2.ID.String()}, idStrings(revokedIDs))
 
 	// Both grants should be revoked
 	r1, err := s.GetAgentGrant(context.Background(), g1.ID)
