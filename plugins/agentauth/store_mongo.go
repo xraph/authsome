@@ -400,6 +400,26 @@ func (s *MongoStore) UpdateAgentGrant(ctx context.Context, g *AgentGrant) error 
 	return nil
 }
 
+// StampLastUsed writes ONLY last_used_at and updated_at — never revoked_at,
+// which RevokeAgentGrant owns exclusively. See the Store interface doc
+// comment: a targeted $set that never mentions revoked_at cannot resurrect a
+// grant a concurrent revoke just set it on, the way a whole-document
+// ReplaceOne built from a stale read (UpdateAgentGrant) could.
+func (s *MongoStore) StampLastUsed(ctx context.Context, grantID id.AgentGrantID, t time.Time) error {
+	t = t.UTC()
+	res, err := s.mdb.Collection(agentGrantsColl).UpdateOne(ctx,
+		bson.M{"_id": grantID.String()},
+		bson.M{"$set": bson.M{"last_used_at": t, "updated_at": t}},
+	)
+	if err != nil {
+		return agentauthMongoError(err)
+	}
+	if res.MatchedCount == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *MongoStore) RevokeAgentGrant(ctx context.Context, grantID id.AgentGrantID) error {
 	doc := new(agentGrantDoc)
 	err := s.mdb.Collection(agentGrantsColl).FindOne(ctx, bson.M{"_id": grantID.String()}).Decode(doc)

@@ -115,6 +115,16 @@ type Store interface {
 	GetActiveGrant(ctx context.Context, agentID id.AgentID, userID id.UserID, orgID id.OrgID) (*AgentGrant, error)
 	ListGrantsByUser(ctx context.Context, userID id.UserID) ([]*AgentGrant, error)
 	UpdateAgentGrant(ctx context.Context, g *AgentGrant) error
+	// StampLastUsed records that grantID was used at t, touching ONLY
+	// LastUsedAt and UpdatedAt — never RevokedAt, Scopes or any other field.
+	// IssueAgentSession uses this instead of a read-modify-write through
+	// UpdateAgentGrant specifically because UpdateAgentGrant replaces the
+	// whole row: a grant read at the start of issuance and stamped after the
+	// session is persisted can have been revoked in between, and writing
+	// that stale copy back would silently restore RevokedAt to nil (and the
+	// pre-revocation Scopes with it). A targeted update can't do that,
+	// because it never reads RevokedAt in the first place.
+	StampLastUsed(ctx context.Context, grantID id.AgentGrantID, t time.Time) error
 	RevokeAgentGrant(ctx context.Context, grantID id.AgentGrantID) error
 	// RevokeGrantsByUser, RevokeGrantsByUserOrg, RevokeGrantsByOrg and
 	// RevokeGrantsByAgent each return the ids of the grants matched by their

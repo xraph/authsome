@@ -177,6 +177,28 @@ func (s *SqliteStore) UpdateAgentGrant(ctx context.Context, g *AgentGrant) error
 	return nil
 }
 
+// StampLastUsed writes ONLY last_used_at and updated_at — never revoked_at,
+// which RevokeAgentGrant owns exclusively. See the Store interface doc
+// comment: a targeted UPDATE that never mentions revoked_at cannot resurrect
+// a grant a concurrent revoke just set it on, the way a whole-row
+// UpdateAgentGrant built from a stale read could.
+func (s *SqliteStore) StampLastUsed(ctx context.Context, grantID id.AgentGrantID, t time.Time) error {
+	t = t.UTC()
+	res, err := s.sdb.NewUpdate((*agentGrantModel)(nil)).
+		Set("last_used_at = ?", t).
+		Set("updated_at = ?", t).
+		Where("id = ?", grantID.String()).
+		Exec(ctx)
+	if err != nil {
+		return agentauthSqliteError(err)
+	}
+	rows, _ := res.RowsAffected() //nolint:errcheck // driver always supports RowsAffected
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *SqliteStore) RevokeAgentGrant(ctx context.Context, grantID id.AgentGrantID) error {
 	m := new(agentGrantModel)
 	err := s.sdb.NewSelect(m).Where("id = ?", grantID.String()).Scan(ctx)

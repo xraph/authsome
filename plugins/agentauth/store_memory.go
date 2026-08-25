@@ -192,6 +192,22 @@ func (s *MemoryStore) UpdateAgentGrant(_ context.Context, g *AgentGrant) error {
 	return nil
 }
 
+// StampLastUsed mutates only LastUsedAt/UpdatedAt on the stored grant,
+// leaving RevokedAt and Scopes untouched — see the Store interface doc
+// comment for why that matters.
+func (s *MemoryStore) StampLastUsed(_ context.Context, grantID id.AgentGrantID, t time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	g, ok := s.grants[grantID.String()]
+	if !ok {
+		return ErrNotFound
+	}
+	stamp := t
+	g.LastUsedAt = &stamp
+	g.UpdatedAt = t
+	return nil
+}
+
 func (s *MemoryStore) RevokeAgentGrant(_ context.Context, grantID id.AgentGrantID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

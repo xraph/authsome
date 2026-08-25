@@ -183,19 +183,22 @@ func (p *Plugin) IssueAgentSession(ctx context.Context, grant *AgentGrant, meta 
 		}
 	}
 
-	// Stamped on a copy, and only swapped onto the caller's grant once the
-	// write actually succeeds. Mutating grant directly before the call would
-	// leave it holding a LastUsedAt/UpdatedAt that was never persisted if
-	// UpdateAgentGrant failed.
-	updated := *grant
-	stamp := now
-	updated.LastUsedAt = &stamp
-	updated.UpdatedAt = now
-	if err := p.store.UpdateAgentGrant(ctx, &updated); err != nil {
+	// StampLastUsed, not UpdateAgentGrant: UpdateAgentGrant replaces the
+	// whole row from this function's local grant, which was read before the
+	// session write above and can be stale by the time this runs. A revoke
+	// landing in that window would have its RevokedAt undone the moment this
+	// stale copy was written back — see the Store interface doc comment on
+	// StampLastUsed. A targeted update that only ever mentions
+	// last_used_at/updated_at cannot do that, because it never reads or
+	// writes RevokedAt at all. The caller's grant is only mutated once the
+	// write actually succeeds, so it never claims a stamp that wasn't
+	// persisted.
+	if err := p.store.StampLastUsed(ctx, grant.ID, now); err != nil {
 		p.logger.Warn("agentauth: could not stamp grant last-used", log.Error(err))
 	} else {
-		grant.LastUsedAt = updated.LastUsedAt
-		grant.UpdatedAt = updated.UpdatedAt
+		stamp := now
+		grant.LastUsedAt = &stamp
+		grant.UpdatedAt = now
 	}
 
 	return sess, nil

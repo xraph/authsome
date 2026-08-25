@@ -244,6 +244,35 @@ func runStoreConformance(t *testing.T, newStore func(t *testing.T) agentauth.Sto
 		assert.ErrorIs(t, err, agentauth.ErrNotFound)
 	})
 
+	// Final review item 4: issue.go used to stamp LastUsedAt by copying a
+	// grant read earlier in the request and writing the WHOLE row back
+	// through UpdateAgentGrant. A revoke landing between that read and the
+	// stamp write got silently undone: the stale copy's RevokedAt (nil) and
+	// Scopes (pre-revocation) were both written back over the real
+	// revocation. StampLastUsed must touch only last_used_at/updated_at, so
+	// this ordering — revoke, THEN stamp with a grant reference captured
+	// before the revoke — must leave the grant revoked.
+	t.Run("stamp last used never resurrects a grant revoked in between", func(t *testing.T) {
+		s := newStore(t)
+		g := newGrant(t, id.NewUserID(), id.NewOrgID(), time.Now().Add(time.Hour))
+		require.NoError(t, s.CreateAgentGrant(ctx, g))
+
+		require.NoError(t, s.RevokeAgentGrant(ctx, g.ID))
+
+		stampedAt := time.Now().UTC()
+		require.NoError(t, s.StampLastUsed(ctx, g.ID, stampedAt))
+
+		got, err := s.GetAgentGrant(ctx, g.ID)
+		require.NoError(t, err)
+		require.NotNil(t, got.RevokedAt, "a stamp landing after a revoke must never clear RevokedAt")
+		require.NotNil(t, got.LastUsedAt)
+		assert.WithinDuration(t, stampedAt, *got.LastUsedAt, time.Second)
+		assert.ElementsMatch(t, g.Scopes, got.Scopes, "the stamp must never touch Scopes either")
+
+		err = s.StampLastUsed(ctx, id.NewAgentGrantID(), time.Now())
+		assert.ErrorIs(t, err, agentauth.ErrNotFound)
+	})
+
 	t.Run("revoke agent grant is idempotent and rejects unknown id", func(t *testing.T) {
 		s := newStore(t)
 		g := newGrant(t, id.NewUserID(), id.NewOrgID(), time.Now().Add(time.Hour))
