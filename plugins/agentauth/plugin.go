@@ -12,6 +12,7 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/plugins/oauth2provider"
 
 	"github.com/xraph/grove/migrate"
 )
@@ -120,7 +121,48 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	if pc, ok := engine.(plugin.PermissionChecker); ok {
 		p.permChecker = pc
 	}
+	p.registerConsentGate(engine)
 	return nil
+}
+
+// consentGateSetter is implemented by oauth2provider.Plugin. Asserting
+// against this interface rather than the concrete type keeps agentauth from
+// importing more of that package's surface than this one call needs, and
+// keeps the wiring resilient to a test double or future re-implementation
+// that satisfies the same shape without being oauth2provider.Plugin itself.
+type consentGateSetter interface {
+	SetConsentGate(oauth2provider.ConsentGate)
+}
+
+// registerConsentGate wires agentauth as oauth2provider's ConsentGate when
+// an "oauth2provider" plugin is registered on the same engine, per the
+// design spec ("agentauth registers itself as the gate during OnInit") and
+// per oauth2provider's own consent_gate.go doc comment, which already
+// asserts this happens.
+//
+// Without this call the plugin enforces nothing at the point that matters
+// most: a host that follows the RegisterRoutes/RouteProvider wiring alone,
+// with no code of its own naming ConsentGate, would see an agent run the
+// ordinary OAuth2 flow and receive a plain human session — no PrincipalKind,
+// no grant, that user's full role set — because nothing ever told
+// oauth2provider a gate exists to consult.
+//
+// A missing oauth2provider plugin, or one that doesn't expose
+// SetConsentGate, is a no-op rather than an error: agentauth must remain
+// usable in a host that has not installed oauth2provider yet, or that wires
+// the gate some other way (see doc.go's host integration contract, point 1).
+func (p *Plugin) registerConsentGate(engine plugin.Engine) {
+	op := engine.Plugins().Plugin("oauth2provider")
+	if op == nil {
+		p.logger.Debug("agentauth: no oauth2provider plugin registered; consent gate not wired")
+		return
+	}
+	setter, ok := op.(consentGateSetter)
+	if !ok {
+		p.logger.Debug("agentauth: registered oauth2provider plugin does not expose SetConsentGate; consent gate not wired")
+		return
+	}
+	setter.SetConsentGate(p)
 }
 
 // RegisterRoutes registers the user and admin surfaces: a place for a user
