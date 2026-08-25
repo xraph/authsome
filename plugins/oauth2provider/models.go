@@ -23,7 +23,15 @@ type OAuth2Client struct {
 	// unaffected either way.
 	Resources  []string `json:"resources"`
 	GrantTypes []string `json:"grant_types"` // "authorization_code", "client_credentials"
-	Public     bool     `json:"public"`      // Public clients (SPAs, mobile) don't have a secret
+
+	// PrincipalID links this client to the non-human principal it acts as.
+	// Required for the RFC 8693 token exchange grant and unused by the other
+	// grants: Engine.ExchangeToken takes a principal.Ref actor and matches it
+	// against a delegation grant, so a client with no principal has no
+	// identity to act with and nothing a grant could have been written
+	// against. Zero for every client that only uses the other grants.
+	PrincipalID id.ServiceAccountID `json:"principal_id,omitempty"`
+	Public      bool                `json:"public"` // Public clients (SPAs, mobile) don't have a secret
 
 	// TokenEndpointAuthMethod is RFC 7591 token_endpoint_auth_method:
 	// "none", "client_secret_basic" or "client_secret_post". Every
@@ -102,6 +110,9 @@ type TokenResponse struct {
 	ExpiresIn    int    `json:"expires_in"`
 	RefreshToken string `json:"refresh_token,omitempty"`
 	Scope        string `json:"scope,omitempty"`
+	// IssuedTokenType is required by RFC 8693 section 2.2.1 and omitted by
+	// every other grant, which is why it carries omitempty.
+	IssuedTokenType string `json:"issued_token_type,omitempty"`
 }
 
 // DeviceCode represents an OAuth2 device authorization code (RFC 8628).

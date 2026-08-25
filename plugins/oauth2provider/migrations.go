@@ -242,6 +242,23 @@ ALTER TABLE authsome_oauth2_clients DROP COLUMN IF EXISTS dpop_mode;
 				return err
 			},
 		},
+		&migrate.Migration{
+			Name:    "add_oauth2_client_principal_id",
+			Version: "20260824000120",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_oauth2_clients
+    ADD COLUMN IF NOT EXISTS principal_id TEXT NOT NULL DEFAULT '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_oauth2_clients DROP COLUMN IF EXISTS principal_id;
+`)
+				return err
+			},
+		},
 	)
 
 	// ──────────────────────────────────────────────────
@@ -397,6 +414,18 @@ UPDATE authsome_oauth2_clients
 			Version: "20260824000041",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `ALTER TABLE authsome_oauth2_clients ADD COLUMN dpop_mode TEXT NOT NULL DEFAULT '';`)
+				return err
+			},
+			// SQLite does not support DROP COLUMN in older versions; best-effort.
+			Down: func(_ context.Context, _ migrate.Executor) error {
+				return nil
+			},
+		},
+		&migrate.Migration{
+			Name:    "add_oauth2_client_principal_id",
+			Version: "20260824000120",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_oauth2_clients ADD COLUMN principal_id TEXT NOT NULL DEFAULT '';`)
 				return err
 			},
 			// SQLite does not support DROP COLUMN in older versions; best-effort.
