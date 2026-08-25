@@ -20,8 +20,18 @@ import (
 
 // runStoreConformance is the single suite every agentauth.Store backend must
 // satisfy, memory included, so a backend can't silently drift from the
-// others. newStore must return a fresh, empty store for each call — every
-// subtest below calls it once, so subtests don't see each other's data.
+// others. newStore is called once per subtest below.
+//
+// Contract: newStore need not return a distinct physical store per call —
+// the Postgres and Mongo variants share one store across every subtest, to
+// avoid paying for a fresh container/database per subtest — but it MUST
+// return a store whose visible state is isolated from every other call's,
+// which subtests achieve by keying everything they write with fresh random
+// ids (id.New*ID()) rather than fixed literals. A subtest that needs a
+// human-readable literal (a ClientID, say) must still make it unique per
+// call — see "dup-client-"+id.NewAgentID().String() below — precisely
+// because the backing store may be shared and long-lived across an entire
+// test binary run, not because ids are pretty.
 func runStoreConformance(t *testing.T, newStore func(t *testing.T) agentauth.Store) {
 	ctx := context.Background()
 
@@ -48,14 +58,15 @@ func runStoreConformance(t *testing.T, newStore func(t *testing.T) agentauth.Sto
 
 	t.Run("agent lookup by client id", func(t *testing.T) {
 		s := newStore(t)
+		clientID := "client_lookup_" + id.NewAgentID().String()
 		a := &agentauth.Agent{
-			ID: id.NewAgentID(), AppID: id.NewAppID(), ClientID: "client_lookup",
+			ID: id.NewAgentID(), AppID: id.NewAppID(), ClientID: clientID,
 			Name: "Lookup", Origin: agentauth.OriginSelfRegistered,
 			Status: agentauth.StatusPending, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 		}
 		require.NoError(t, s.CreateAgent(ctx, a))
 
-		got, err := s.GetAgentByClientID(ctx, "client_lookup")
+		got, err := s.GetAgentByClientID(ctx, clientID)
 		require.NoError(t, err)
 		assert.Equal(t, a.ID.String(), got.ID.String())
 		assert.Equal(t, a.Name, got.Name)
@@ -75,15 +86,16 @@ func runStoreConformance(t *testing.T, newStore func(t *testing.T) agentauth.Sto
 	t.Run("duplicate client id is rejected", func(t *testing.T) {
 		s := newStore(t)
 		appID := id.NewAppID()
+		clientID := "dup-client-" + id.NewAgentID().String()
 		first := &agentauth.Agent{
-			ID: id.NewAgentID(), AppID: appID, ClientID: "dup-client",
+			ID: id.NewAgentID(), AppID: appID, ClientID: clientID,
 			Name: "First", Origin: agentauth.OriginSelfRegistered, Status: agentauth.StatusPending,
 			CreatedAt: time.Now(), UpdatedAt: time.Now(),
 		}
 		require.NoError(t, s.CreateAgent(ctx, first))
 
 		second := &agentauth.Agent{
-			ID: id.NewAgentID(), AppID: appID, ClientID: "dup-client",
+			ID: id.NewAgentID(), AppID: appID, ClientID: clientID,
 			Name: "Second", Origin: agentauth.OriginSelfRegistered, Status: agentauth.StatusPending,
 			CreatedAt: time.Now(), UpdatedAt: time.Now(),
 		}
@@ -119,7 +131,7 @@ func runStoreConformance(t *testing.T, newStore func(t *testing.T) agentauth.Sto
 	t.Run("update agent persists and rejects unknown id", func(t *testing.T) {
 		s := newStore(t)
 		a := &agentauth.Agent{
-			ID: id.NewAgentID(), AppID: id.NewAppID(), ClientID: "client_update",
+			ID: id.NewAgentID(), AppID: id.NewAppID(), ClientID: "client_update_" + id.NewAgentID().String(),
 			Name: "Before", Origin: agentauth.OriginOrgRegistered, Status: agentauth.StatusPending,
 			CreatedAt: time.Now(), UpdatedAt: time.Now(),
 		}
@@ -141,6 +153,38 @@ func runStoreConformance(t *testing.T, newStore func(t *testing.T) agentauth.Sto
 		}
 		err = s.UpdateAgent(ctx, unknown)
 		assert.ErrorIs(t, err, agentauth.ErrNotFound)
+	})
+
+	// I4: UpdateAgent must enforce the same ClientID collision rule
+	// CreateAgent does — MemoryStore originally didn't (a plain replace,
+	// no check), while all three SQL/mongo backends' unique index rejected
+	// it unconditionally. Real drift a shared suite exists to catch.
+	t.Run("update agent rejects retargeting onto another agent's client id", func(t *testing.T) {
+		s := newStore(t)
+		appID := id.NewAppID()
+		heldClientID := "held_" + id.NewAgentID().String()
+		held := &agentauth.Agent{
+			ID: id.NewAgentID(), AppID: appID, ClientID: heldClientID,
+			Name: "Holder", Origin: agentauth.OriginSelfRegistered, Status: agentauth.StatusPending,
+			CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		}
+		require.NoError(t, s.CreateAgent(ctx, held))
+
+		mover := &agentauth.Agent{
+			ID: id.NewAgentID(), AppID: appID, ClientID: "mover_" + id.NewAgentID().String(),
+			Name: "Mover", Origin: agentauth.OriginSelfRegistered, Status: agentauth.StatusPending,
+			CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		}
+		require.NoError(t, s.CreateAgent(ctx, mover))
+
+		mover.ClientID = heldClientID
+		err := s.UpdateAgent(ctx, mover)
+		require.ErrorIs(t, err, agentauth.ErrConflict)
+
+		// The holder's own record must be unaffected by the rejected update.
+		gotHeld, err := s.GetAgent(ctx, held.ID)
+		require.NoError(t, err)
+		assert.Equal(t, heldClientID, gotHeld.ClientID)
 	})
 
 	t.Run("list agents is scoped to app, nil org lists all orgs", func(t *testing.T) {
@@ -259,6 +303,33 @@ func runStoreConformance(t *testing.T, newStore func(t *testing.T) agentauth.Sto
 		// different org must not find the grant even though it's active.
 		_, err = s.GetActiveGrant(ctx, agent, user, id.NewOrgID())
 		assert.ErrorIs(t, err, agentauth.ErrNotFound, "org must match exactly, not fall back to any org")
+	})
+
+	// M6: two active grants for the same agent+user+org triple are the
+	// normal state, not a corrupt one — CreateGrant always inserts a fresh
+	// grant on every consent rather than upserting over an existing active
+	// one. GetActiveGrant must deterministically prefer the newest, the
+	// same way on every backend, rather than letting each backend's
+	// "whichever row a plain query happens to return first" differ.
+	t.Run("get active grant is deterministic under duplicates: newest wins", func(t *testing.T) {
+		s := newStore(t)
+		agent := id.NewAgentID()
+		user := id.NewUserID()
+		org := id.NewOrgID()
+
+		older := newGrant(t, user, org, time.Now().Add(time.Hour))
+		older.AgentID = agent
+		older.CreatedAt = time.Now().Add(-time.Hour).UTC()
+		require.NoError(t, s.CreateAgentGrant(ctx, older))
+
+		newer := newGrant(t, user, org, time.Now().Add(time.Hour))
+		newer.AgentID = agent
+		newer.CreatedAt = time.Now().UTC()
+		require.NoError(t, s.CreateAgentGrant(ctx, newer))
+
+		got, err := s.GetActiveGrant(ctx, agent, user, org)
+		require.NoError(t, err)
+		assert.Equal(t, newer.ID.String(), got.ID.String(), "the most recently created active grant must win")
 	})
 
 	t.Run("scopes round trip nil and empty consistently", func(t *testing.T) {
@@ -446,6 +517,27 @@ func runStoreConformance(t *testing.T, newStore func(t *testing.T) agentauth.Sto
 		s := newStore(t)
 		_, err := s.GetOrgPolicy(ctx, id.NewOrgID())
 		assert.ErrorIs(t, err, agentauth.ErrNotFound)
+	})
+
+	// I1: the zero-value OrgID is a real, meaningful policy key — it's what
+	// governingOrgs falls back to for the single-tenant / app-scoped case,
+	// where neither the agent nor the session carries an org — not an
+	// absent value. A converter that unconditionally parses the stored org
+	// id string turns "" into a parse error, and policyFor only maps
+	// ErrNotFound to the "no policy configured" default; any other error
+	// becomes a 500. One write through the exported Store must not
+	// permanently break every read of the single-tenant policy.
+	t.Run("zero-org policy round trips", func(t *testing.T) {
+		s := newStore(t)
+		require.NoError(t, s.PutOrgPolicy(ctx, &agentauth.OrgAgentPolicy{
+			OrgID: id.OrgID{}, Mode: agentauth.ModeBlocked, MaxGrantTTL: time.Hour,
+		}))
+
+		got, err := s.GetOrgPolicy(ctx, id.OrgID{})
+		require.NoError(t, err, "a zero-org policy must read back cleanly, not 500")
+		assert.True(t, got.OrgID.IsNil())
+		assert.Equal(t, agentauth.ModeBlocked, got.Mode)
+		assert.Equal(t, time.Hour, got.MaxGrantTTL)
 	})
 
 	// A policy with a mode nothing recognizes must never reach storage on

@@ -119,6 +119,16 @@ func (s *PostgresStore) GetAgentGrant(ctx context.Context, grantID id.AgentGrant
 	return toAgentGrant(m)
 }
 
+// GetActiveGrant returns the most recently created matching grant when more
+// than one exists. Duplicates are the normal state, not an edge case:
+// CreateGrant always inserts a fresh grant rather than upserting, so an
+// ordinary re-consent leaves an older active grant for the same
+// agent+user+org triple lying around alongside the new one. Without an
+// explicit order, which row a plain "one matching row" query returns is
+// backend-specific — Postgres/SQLite/Mongo have no defined tie-break and
+// MemoryStore's map iteration is randomized — so the four backends would
+// disagree about which grant is "the" active one. Ordering by CreatedAt
+// DESC makes all four agree: the newest grant wins.
 func (s *PostgresStore) GetActiveGrant(ctx context.Context, agentID id.AgentID, userID id.UserID, orgID id.OrgID) (*AgentGrant, error) {
 	m := new(agentGrantModel)
 	err := s.pg.NewSelect(m).
@@ -127,6 +137,8 @@ func (s *PostgresStore) GetActiveGrant(ctx context.Context, agentID id.AgentID, 
 		Where("org_id = ?", orgID.String()).
 		Where("revoked_at IS NULL").
 		Where("expires_at > ?", time.Now().UTC()).
+		OrderExpr("created_at DESC").
+		Limit(1).
 		Scan(ctx)
 	if err != nil {
 		return nil, agentauthPgError(err)
@@ -185,6 +197,7 @@ func (s *PostgresStore) RevokeAgentGrant(ctx context.Context, grantID id.AgentGr
 		Set("revoked_at = ?", now).
 		Set("updated_at = ?", now).
 		Where("id = ?", grantID.String()).
+		Where("revoked_at IS NULL").
 		Exec(ctx)
 	return agentauthPgError(err)
 }
@@ -215,10 +228,34 @@ func (s *PostgresStore) RevokeGrantsByAgent(ctx context.Context, agentID id.Agen
 // filter — whether or not it was already revoked, per the Store interface
 // contract documented on Store.RevokeGrantsByUser — and revokes any of them
 // that weren't revoked already.
+//
+// The write runs BEFORE the read, not after: a select-then-update (the
+// original shape here) leaves a window where a grant matching the filter,
+// inserted between the two statements, gets caught and revoked by the
+// UPDATE but was never in the SELECT's result — so its id is missing from
+// the return value and sweepSessions never deletes its sessions, which is
+// exactly the under-sweeping the interface comment warns against. Updating
+// first closes that: any row this call revokes has revoked_at set before
+// the SELECT ever runs, so "WHERE <filter> AND revoked_at IS NOT NULL"
+// afterward is guaranteed to include it. A row that starts existing only
+// after the UPDATE has run is, by construction, not one this call touched —
+// it's still unrevoked, so the revoked_at IS NOT NULL filter correctly
+// excludes it rather than falsely claiming it was swept.
 func (s *PostgresStore) revokeGrantsWhere(ctx context.Context, where string, args []any) ([]id.AgentGrantID, error) {
+	now := time.Now().UTC()
+	upd := s.pg.NewUpdate((*agentGrantModel)(nil)).
+		Set("revoked_at = ?", now).
+		Set("updated_at = ?", now)
+	upd = upd.Where(where, args...)
+	upd = upd.Where("revoked_at IS NULL")
+	if _, err := upd.Exec(ctx); err != nil {
+		return nil, agentauthPgError(err)
+	}
+
 	var models []agentGrantModel
 	sel := s.pg.NewSelect(&models)
 	sel = sel.Where(where, args...)
+	sel = sel.Where("revoked_at IS NOT NULL")
 	if err := sel.Scan(ctx); err != nil {
 		return nil, agentauthPgError(err)
 	}
@@ -229,19 +266,6 @@ func (s *PostgresStore) revokeGrantsWhere(ctx context.Context, where string, arg
 			return nil, err
 		}
 		ids = append(ids, gid)
-	}
-	if len(ids) == 0 {
-		return ids, nil
-	}
-
-	now := time.Now().UTC()
-	upd := s.pg.NewUpdate((*agentGrantModel)(nil)).
-		Set("revoked_at = ?", now).
-		Set("updated_at = ?", now)
-	upd = upd.Where(where, args...)
-	upd = upd.Where("revoked_at IS NULL")
-	if _, err := upd.Exec(ctx); err != nil {
-		return nil, agentauthPgError(err)
 	}
 	return ids, nil
 }

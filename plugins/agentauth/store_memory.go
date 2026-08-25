@@ -76,6 +76,20 @@ func (s *MemoryStore) UpdateAgent(_ context.Context, a *Agent) error {
 	if _, ok := s.agents[a.ID.String()]; !ok {
 		return ErrNotFound
 	}
+	// Same ClientID collision rule CreateAgent enforces, and for the same
+	// reason: GetAgentByClientID must resolve to at most one agent.
+	// Replacing a record wholesale (which is what this does) can retarget
+	// its ClientID onto one another agent already holds just as easily as
+	// CreateAgent can — the collision doesn't care which method produced
+	// it — so this checked here too, under the same lock, is what the SQL
+	// backends' unique index enforces unconditionally on every write.
+	if a.ClientID != "" {
+		for otherID, existing := range s.agents {
+			if otherID != a.ID.String() && existing.ClientID == a.ClientID {
+				return ErrConflict
+			}
+		}
+	}
 	cp := *a
 	s.agents[a.ID.String()] = &cp
 	return nil
@@ -119,10 +133,20 @@ func (s *MemoryStore) GetAgentGrant(_ context.Context, grantID id.AgentGrantID) 
 	return &cp, nil
 }
 
+// GetActiveGrant returns the most recently created matching grant when more
+// than one exists. Duplicates are the normal state, not an edge case:
+// CreateGrant always inserts a fresh grant rather than upserting, so an
+// ordinary re-consent leaves an older active grant for the same
+// agent+user+org triple lying around alongside the new one. Ranging over
+// s.grants in Go's randomized map-iteration order and returning the first
+// match would make this backend disagree, run to run, with the SQL/Mongo
+// backends' deterministic "newest wins" — this scans every match instead of
+// stopping at the first, to agree with them.
 func (s *MemoryStore) GetActiveGrant(_ context.Context, agentID id.AgentID, userID id.UserID, orgID id.OrgID) (*AgentGrant, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	now := time.Now()
+	var newest *AgentGrant
 	for _, g := range s.grants {
 		if g.AgentID.String() != agentID.String() || g.UserID.String() != userID.String() {
 			continue
@@ -130,11 +154,16 @@ func (s *MemoryStore) GetActiveGrant(_ context.Context, agentID id.AgentID, user
 		if g.OrgID.String() != orgID.String() || !g.IsActive(now) {
 			continue
 		}
-		cp := *g
-		cp.Scopes = append([]string(nil), g.Scopes...)
-		return &cp, nil
+		if newest == nil || g.CreatedAt.After(newest.CreatedAt) {
+			newest = g
+		}
 	}
-	return nil, ErrNotFound
+	if newest == nil {
+		return nil, ErrNotFound
+	}
+	cp := *newest
+	cp.Scopes = append([]string(nil), newest.Scopes...)
+	return &cp, nil
 }
 
 func (s *MemoryStore) ListGrantsByUser(_ context.Context, userID id.UserID) ([]*AgentGrant, error) {

@@ -121,9 +121,24 @@ DROP TABLE IF EXISTS authsome_agents;
 	// SQLite migrations
 	// ──────────────────────────────────────────────────
 	//
-	// Mirrors the Postgres group: TEXT timestamps, INTEGER for max_grant_ttl,
-	// and SQLite's own partial-index syntax (identical WHERE clause; SQLite
-	// has supported partial indexes since 3.8.0).
+	// Mirrors the Postgres group: TIMESTAMP-declared timestamp columns,
+	// INTEGER for max_grant_ttl, and SQLite's own partial-index syntax
+	// (identical WHERE clause; SQLite has supported partial indexes since
+	// 3.8.0).
+	//
+	// Timestamp columns are declared TIMESTAMP, not TEXT, deliberately:
+	// store/sqlite/migrations_timestamps.go (migration 23 in the core
+	// store) rebuilt every core table for exactly this reason.
+	// modernc.org/sqlite only converts a stored value back into time.Time
+	// when the column's DECLARED type is one of date/datetime/time/
+	// timestamp; a TEXT column returns the raw string and scanning it into
+	// a time.Time field fails. This plugin's schema is new, so unlike the
+	// core store there is no rebuild to do — declaring the columns
+	// correctly from the start avoids ever needing the workaround. (The
+	// store layer also normalizes every timestamp through .UTC() before
+	// writing regardless, since that closes a second, unrelated failure —
+	// see the utc() helper in store_models.go — so the store code is
+	// unaffected by this column-type fix either way.)
 
 	SqliteMigrations.MustRegister(
 		&migrate.Migration{
@@ -142,8 +157,8 @@ CREATE TABLE IF NOT EXISTS authsome_agents (
     origin      TEXT NOT NULL,
     status      TEXT NOT NULL,
     created_by  TEXT NOT NULL DEFAULT '',
-    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at  TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    updated_at  TIMESTAMP NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_agents_client_id
@@ -160,11 +175,11 @@ CREATE TABLE IF NOT EXISTS authsome_agent_grants (
     org_id       TEXT NOT NULL DEFAULT '',
     scopes       TEXT NOT NULL DEFAULT '[]',
     consent_id   TEXT NOT NULL DEFAULT '',
-    expires_at   TEXT NOT NULL,
-    last_used_at TEXT,
-    revoked_at   TEXT,
-    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at   TIMESTAMP NOT NULL,
+    last_used_at TIMESTAMP,
+    revoked_at   TIMESTAMP,
+    created_at   TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    updated_at   TIMESTAMP NOT NULL DEFAULT (datetime('now')),
     CHECK (user_id <> '')
 );
 
@@ -182,8 +197,8 @@ CREATE TABLE IF NOT EXISTS authsome_agent_policies (
     mode           TEXT NOT NULL,
     max_grant_ttl  INTEGER NOT NULL DEFAULT 0,
     allowed_scopes TEXT NOT NULL DEFAULT '[]',
-    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at     TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    updated_at     TIMESTAMP NOT NULL DEFAULT (datetime('now'))
 );
 `)
 				return err

@@ -265,14 +265,22 @@ func utc(t time.Time) time.Time { return t.UTC() }
 // ──────────────────────────────────────────────────
 
 func toOrgPolicy(m *orgPolicyModel) (*OrgAgentPolicy, error) {
-	orgID, err := id.ParseOrgID(m.OrgID)
-	if err != nil {
-		return nil, err
-	}
 	p := &OrgAgentPolicy{
-		OrgID:       orgID,
 		Mode:        PolicyMode(m.Mode),
 		MaxGrantTTL: time.Duration(m.MaxGrantTTL),
+	}
+	// Guarded like every other OrgID/ConsentID/CreatedBy parse in this file:
+	// the zero-value OrgID is a real, meaningful policy key (the single-
+	// tenant / app-scoped case governingOrgs falls back to), not an absent
+	// value, and it round-trips as "" — id.ParseOrgID("") errors, which
+	// turned every read of a zero-org policy into a 500 on every backend
+	// but memory until this was guarded.
+	if m.OrgID != "" {
+		orgID, err := id.ParseOrgID(m.OrgID)
+		if err != nil {
+			return nil, err
+		}
+		p.OrgID = orgID
 	}
 	if m.AllowedScopes != "" && m.AllowedScopes != "[]" {
 		var scopes []string

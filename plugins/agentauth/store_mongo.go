@@ -229,16 +229,24 @@ func agentGrantToDoc(g *AgentGrant) *agentGrantDoc {
 }
 
 func orgPolicyDocToModel(d *orgPolicyDoc) (*OrgAgentPolicy, error) {
-	orgID, err := id.ParseOrgID(d.ID)
-	if err != nil {
-		return nil, err
-	}
-	return &OrgAgentPolicy{
-		OrgID:         orgID,
+	p := &OrgAgentPolicy{
 		Mode:          PolicyMode(d.Mode),
 		MaxGrantTTL:   time.Duration(d.MaxGrantTTLNs),
 		AllowedScopes: d.AllowedScopes,
-	}, nil
+	}
+	// Guarded like agentDocToModel/agentGrantDocToModel's OrgID parses: the
+	// zero-org policy's _id is "", a real and meaningful key (the
+	// single-tenant / app-scoped case), not an absent value.
+	// id.ParseOrgID("") errors, which made every read of a zero-org policy
+	// 500 until this was guarded.
+	if d.ID != "" {
+		orgID, err := id.ParseOrgID(d.ID)
+		if err != nil {
+			return nil, err
+		}
+		p.OrgID = orgID
+	}
+	return p, nil
 }
 
 func orgPolicyToDoc(p *OrgAgentPolicy) *orgPolicyDoc {
@@ -335,6 +343,11 @@ func (s *MongoStore) GetAgentGrant(ctx context.Context, grantID id.AgentGrantID)
 	return agentGrantDocToModel(doc)
 }
 
+// GetActiveGrant returns the most recently created matching grant when more
+// than one exists. See the identical comment on PostgresStore.GetActiveGrant
+// for why duplicates are the normal state and why an explicit order is
+// required for the four backends to agree on which one "the" active grant
+// is.
 func (s *MongoStore) GetActiveGrant(ctx context.Context, agentID id.AgentID, userID id.UserID, orgID id.OrgID) (*AgentGrant, error) {
 	doc := new(agentGrantDoc)
 	err := s.mdb.Collection(agentGrantsColl).FindOne(ctx, bson.M{
@@ -343,7 +356,7 @@ func (s *MongoStore) GetActiveGrant(ctx context.Context, agentID id.AgentID, use
 		"org_id":     orgID.String(),
 		"revoked_at": nil,
 		"expires_at": bson.M{"$gt": time.Now()},
-	}).Decode(doc)
+	}, options.FindOne().SetSort(bson.M{"created_at": -1})).Decode(doc)
 	if err != nil {
 		return nil, agentauthMongoError(err)
 	}
@@ -397,9 +410,9 @@ func (s *MongoStore) RevokeAgentGrant(ctx context.Context, grantID id.AgentGrant
 		// Already revoked: a no-op, not an error — matches MemoryStore.
 		return nil
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	_, err = s.mdb.Collection(agentGrantsColl).UpdateOne(ctx,
-		bson.M{"_id": grantID.String()},
+		bson.M{"_id": grantID.String(), "revoked_at": nil},
 		bson.M{"$set": bson.M{"revoked_at": now, "updated_at": now}},
 	)
 	return agentauthMongoError(err)
@@ -432,9 +445,43 @@ func (s *MongoStore) RevokeGrantsByAgent(ctx context.Context, agentID id.AgentID
 // or not it was already revoked, per the Store interface contract documented
 // on Store.RevokeGrantsByUser — and revokes any of them that weren't
 // revoked already.
+// revokeGrantsWhere returns the ids of every grant matching filter — whether
+// or not it was already revoked, per the Store interface contract
+// documented on Store.RevokeGrantsByUser — and revokes any of them that
+// weren't revoked already.
+//
+// The write runs BEFORE the read, not after: a find-then-update (the
+// original shape here) leaves a window where a grant matching filter,
+// inserted between the two calls, gets caught and revoked by UpdateMany but
+// was never in the Find's result — so its id is missing from the return
+// value and sweepSessions never deletes its sessions, exactly the
+// under-sweeping the interface comment warns against. Updating first closes
+// that: any document this call revokes has revoked_at set before the Find
+// ever runs, so filtering on "revoked_at: {$ne: nil}" afterward is
+// guaranteed to include it. A document that starts existing only after
+// UpdateMany has run is, by construction, not one this call touched — it's
+// still unrevoked, so the $ne filter correctly excludes it.
 func (s *MongoStore) revokeGrantsWhere(ctx context.Context, filter bson.M) ([]id.AgentGrantID, error) {
 	coll := s.mdb.Collection(agentGrantsColl)
-	cursor, err := coll.Find(ctx, filter, options.Find().SetProjection(bson.M{"_id": 1}))
+	now := time.Now().UTC()
+
+	updateFilter := bson.M{}
+	for k, v := range filter {
+		updateFilter[k] = v
+	}
+	updateFilter["revoked_at"] = nil
+	if _, err := coll.UpdateMany(ctx, updateFilter,
+		bson.M{"$set": bson.M{"revoked_at": now, "updated_at": now}},
+	); err != nil {
+		return nil, agentauthMongoError(err)
+	}
+
+	selectFilter := bson.M{}
+	for k, v := range filter {
+		selectFilter[k] = v
+	}
+	selectFilter["revoked_at"] = bson.M{"$ne": nil}
+	cursor, err := coll.Find(ctx, selectFilter, options.Find().SetProjection(bson.M{"_id": 1}))
 	if err != nil {
 		return nil, agentauthMongoError(err)
 	}
@@ -453,21 +500,6 @@ func (s *MongoStore) revokeGrantsWhere(ctx context.Context, filter bson.M) ([]id
 			return nil, err
 		}
 		ids = append(ids, gid)
-	}
-	if len(ids) == 0 {
-		return ids, nil
-	}
-
-	now := time.Now()
-	revokeFilter := bson.M{}
-	for k, v := range filter {
-		revokeFilter[k] = v
-	}
-	revokeFilter["revoked_at"] = nil
-	if _, err := coll.UpdateMany(ctx, revokeFilter,
-		bson.M{"$set": bson.M{"revoked_at": now, "updated_at": now}},
-	); err != nil {
-		return nil, agentauthMongoError(err)
 	}
 	return ids, nil
 }
