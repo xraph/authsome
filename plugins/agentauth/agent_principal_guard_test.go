@@ -25,6 +25,21 @@ func withAgentPrincipalSession(ctx context.Context, userID id.UserID, appID id.A
 	return middleware.WithSession(ctx, sess)
 }
 
+// These two tests inject the session straight into the request's Go context
+// before the request ever reaches the router, via withAgentPrincipalSession
+// above — so the session is already present in context regardless of where
+// denyAgentPrincipal sits in the group's middleware slice. They correctly
+// prove denyAgentPrincipal denies WHEN GIVEN a session and that it is
+// present somewhere in the chain, but they cannot detect a middleware
+// ORDERING bug: in production the session is not ambient, it is written
+// into context by plugin.SessionGuard itself (authprovider.RegistryMiddleware
+// -> BridgeToContext -> middleware.WithSession), so denyAgentPrincipal only
+// sees a session if it runs AFTER that guard, and forge applies group
+// middleware outermost-first — index 0 runs before anything else, not last.
+// See agent_principal_guard_ordering_test.go for the test that drives a real
+// authprovider.SessionProvider through the actual router so this ordering is
+// exercised, not merely a pre-populated context.
+//
 // Final review item 3: agentauth's own admin and /me routes are guarded by
 // plugin.SessionGuard and plugin.AdminGuard, both of which resolve to
 // middleware.RequirePermission — not principal-kind aware. Once issuance is
