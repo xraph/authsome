@@ -305,3 +305,111 @@ func TestGenerate_FormEncodedBodyKeepsItsFields(t *testing.T) {
 	assert.Contains(t, typesContent, "code?: string")
 	assert.NotContains(t, typesContent, "Oauth2TokenRequest = Record<string, unknown>")
 }
+
+// RFC 6749 section 4.1.3 requires application/x-www-form-urlencoded at the
+// token endpoint, so the generated client has to encode those bodies as a form
+// rather than posting JSON at them.
+func TestGenerate_FormEncodedBodyIsPostedAsForm(t *testing.T) {
+	gen := typescript.NewGenerator(typescript.GeneratorConfig{})
+	files, err := gen.Generate(formBodySpec())
+	require.NoError(t, err)
+
+	var clientContent string
+	for _, f := range files {
+		if strings.HasSuffix(f.Path, "client.ts") {
+			clientContent = f.Content
+			break
+		}
+	}
+	require.NotEmpty(t, clientContent)
+
+	// The helper and the header live in the request plumbing and are emitted
+	// whether or not anything uses them, so asserting on those alone would pass
+	// with the encoder switched off. What proves the wiring is the call site
+	// electing to use it.
+	assert.Contains(t, clientContent, "      body,\n      true,\n    );")
+	assert.Contains(t, clientContent, "application/x-www-form-urlencoded")
+	assert.Contains(t, clientContent, "encodeForm")
+}
+
+func TestGenerate_DPoPFile(t *testing.T) {
+	gen := typescript.NewGenerator(typescript.GeneratorConfig{})
+	files, err := gen.Generate(testSpec())
+	require.NoError(t, err)
+
+	var dpopContent string
+	for _, f := range files {
+		if f.Path == "src/dpop.ts" {
+			dpopContent = f.Content
+			break
+		}
+	}
+	require.NotEmpty(t, dpopContent, "standalone mode should produce src/dpop.ts")
+
+	// The non-extractable generateKey call is the entire security proposition:
+	// signing stays possible, reading the private key never does.
+	assert.Contains(t, dpopContent, `generateKey(ALG, false, ["sign", "verify"])`)
+	assert.Contains(t, dpopContent, "export interface DPoPKeyStore")
+	assert.Contains(t, dpopContent, "export class DPoPSession")
+	assert.Contains(t, dpopContent, "export class IndexedDBKeyStore")
+	assert.Contains(t, dpopContent, "indexedDB.open")
+}
+
+func TestGenerate_ClientWiresDPoP(t *testing.T) {
+	gen := typescript.NewGenerator(typescript.GeneratorConfig{})
+	files, err := gen.Generate(testSpec())
+	require.NoError(t, err)
+
+	var clientContent, indexContent string
+	for _, f := range files {
+		switch f.Path {
+		case "src/client.ts":
+			clientContent = f.Content
+		case "src/index.ts":
+			indexContent = f.Content
+		}
+	}
+	require.NotEmpty(t, clientContent)
+	require.NotEmpty(t, indexContent)
+
+	assert.Contains(t, clientContent, "import { DPoPSession } from './dpop'")
+	assert.Contains(t, clientContent, "enableDPoP")
+	assert.Contains(t, clientContent, "`DPoP ${token}`")
+	assert.Contains(t, clientContent, "headers['DPoP']")
+	assert.Contains(t, clientContent, "DPoP-Nonce")
+	// Threaded retry flag so the one-shot retry cannot recurse into a loop.
+	assert.Contains(t, clientContent, "isRetry")
+
+	// The proof must be minted whenever DPoP is enabled, not only when a
+	// token exists -- sign-in/sign-up/token-exchange have no token yet but
+	// still need a proof to bind the token about to be issued. Pin the
+	// structural marker: `if (this.dpop)` guarding the proof mint, separate
+	// from and preceding the `if (token)` guarding the Authorization header.
+	dpopGuardIdx := strings.Index(clientContent, "if (this.dpop) {")
+	tokenGuardIdx := strings.Index(clientContent, "if (token) {")
+	require.NotEqual(t, -1, dpopGuardIdx, "proof-minting guard should exist")
+	require.NotEqual(t, -1, tokenGuardIdx, "Authorization guard should exist")
+	assert.Less(t, dpopGuardIdx, tokenGuardIdx, "the DPoP proof must be minted independently of, and before, the token-gated Authorization header")
+
+	// RFC 9449 section 8: the nonce challenge can be a 401 (resource server)
+	// or a 400 (token endpoint / sign-in and similar binding calls). Both
+	// shapes must be checked, and the body must be cloned so the later
+	// error-handling read still works.
+	assert.Contains(t, clientContent, "WWW-Authenticate")
+	assert.Contains(t, clientContent, "use_dpop_nonce")
+	assert.Contains(t, clientContent, "response.status === 400")
+	assert.Contains(t, clientContent, ".clone()")
+
+	assert.Contains(t, indexContent, "export { DPoPSession, IndexedDBKeyStore } from './dpop'")
+}
+
+func TestGenerate_EmbeddedModeHasNoDPoP(t *testing.T) {
+	gen := typescript.NewGenerator(typescript.GeneratorConfig{OutputMode: "embedded"})
+	files, err := gen.Generate(testSpec())
+	require.NoError(t, err)
+
+	for _, f := range files {
+		assert.NotEqual(t, "src/dpop.ts", f.Path, "embedded mode should not emit dpop.ts")
+		assert.NotContains(t, f.Content, "./dpop", "embedded output should not reference the standalone-only dpop module")
+	}
+}

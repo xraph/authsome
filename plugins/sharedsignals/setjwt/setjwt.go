@@ -25,6 +25,20 @@ var (
 	ErrInvalidAudience = errors.New("setjwt: invalid_audience")
 )
 
+// ErrKeyUnavailable says the key set could not be loaded, so the token was
+// never actually checked. It is deliberately NOT one of the RFC 8935 codes:
+// none of them describe "our side could not look", and every one of them
+// tells a well-behaved transmitter that the token is wrong and retrying is
+// pointless. A caller that sees this must answer with a 5xx and let the
+// transmitter deliver the same SET again.
+//
+// A KeyResolver signals it by returning an error that wraps this sentinel;
+// Validate passes such an error through instead of flattening it into
+// ErrInvalidKey. A resolver that just cannot find the kid keeps returning a
+// plain error and still gets invalid_key, which is the right permanent
+// answer for a token naming a key the issuer does not publish.
+var ErrKeyUnavailable = errors.New("setjwt: key set unavailable")
+
 // ErrCode maps an error to its RFC 8935 code, defaulting to invalid_request.
 func ErrCode(err error) string {
 	switch {
@@ -79,25 +93,19 @@ func Header(raw []byte) (kid, alg, typ string, err error) {
 	parser := jwt.NewParser()
 	tok, _, err := parser.ParseUnverified(string(raw), jwt.MapClaims{})
 	if err != nil {
-		return "", "", "", fmt.Errorf("%w: parse header: %w", ErrInvalidRequest, err)
+		// ErrInvalidRequest is wrapped with %w; err is secondary context on %v by design.
+		return "", "", "", fmt.Errorf("%w: parse header: %v", ErrInvalidRequest, err) //nolint:errorlint // sentinel already wrapped with %w; err is secondary context on %v
 	}
-	return headerString(tok.Header, "kid"),
-		headerString(tok.Header, "alg"),
-		headerString(tok.Header, "typ"),
-		nil
-}
-
-// headerString reads one JOSE header value as a string.
-//
-// A header that is missing and one holding a non-string both come back empty,
-// because every caller checks the value it gets rather than whether the key
-// was there. An alg of 42 is no more usable than no alg at all.
-func headerString(header map[string]any, key string) string {
-	if s, ok := header[key].(string); ok {
-		return s
+	if v, ok := tok.Header["kid"].(string); ok {
+		kid = v
 	}
-
-	return ""
+	if v, ok := tok.Header["alg"].(string); ok {
+		alg = v
+	}
+	if v, ok := tok.Header["typ"].(string); ok {
+		typ = v
+	}
+	return kid, alg, typ, nil
 }
 
 type setClaims struct {
@@ -123,15 +131,18 @@ func Validate(ctx context.Context, raw []byte, opts Options) (*Token, error) {
 	if err != nil {
 		return nil, err
 	}
-	if typ != "secevent+jwt" {
-		return nil, fmt.Errorf("%w: typ header must be secevent+jwt", ErrInvalidRequest)
-	}
 	if _, ok := allowedAlgs[alg]; !ok {
 		return nil, fmt.Errorf("%w: algorithm %q is not accepted", ErrInvalidKey, alg)
+	}
+	if typ != "secevent+jwt" {
+		return nil, fmt.Errorf("%w: typ header must be secevent+jwt", ErrInvalidRequest)
 	}
 
 	key, err := opts.Keys.Key(ctx, kid)
 	if err != nil {
+		if errors.Is(err, ErrKeyUnavailable) {
+			return nil, fmt.Errorf("setjwt: resolve key for kid: %w", err)
+		}
 		return nil, fmt.Errorf("%w: no key for kid", ErrInvalidKey)
 	}
 
@@ -140,15 +151,15 @@ func Validate(ctx context.Context, raw []byte, opts Options) (*Token, error) {
 		jwt.WithValidMethods(algList()),
 		jwt.WithoutClaimsValidation(),
 	)
-	if _, verifyErr := parser.ParseWithClaims(string(raw), &claims,
-		func(*jwt.Token) (any, error) { return key, nil }); verifyErr != nil {
+	if _, perr := parser.ParseWithClaims(string(raw), &claims,
+		func(*jwt.Token) (any, error) { return key, nil }); perr != nil {
 		// jwt/v5 decodes the claims JSON before it verifies the signature, so
 		// a claim with the wrong JSON shape (events as an array, iat as a
 		// string, ...) surfaces here as ErrTokenMalformed rather than a
 		// signature failure. That is a caller mistake, not a key problem, so
 		// it must map to invalid_request rather than invalid_key.
-		if errors.Is(verifyErr, jwt.ErrTokenMalformed) {
-			return nil, fmt.Errorf("%w: malformed claims: %w", ErrInvalidRequest, verifyErr)
+		if errors.Is(perr, jwt.ErrTokenMalformed) {
+			return nil, fmt.Errorf("%w: malformed claims: %v", ErrInvalidRequest, perr) //nolint:errorlint // sentinel already wrapped with %w; perr is secondary context on %v
 		}
 		return nil, fmt.Errorf("%w: signature verification failed", ErrInvalidKey)
 	}
@@ -159,7 +170,7 @@ func Validate(ctx context.Context, raw []byte, opts Options) (*Token, error) {
 
 	audience, err := normalizeAudience(claims.Audience)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInvalidAudience, err)
+		return nil, fmt.Errorf("%w: %v", ErrInvalidAudience, err) //nolint:errorlint // sentinel already wrapped with %w; err is secondary context on %v
 	}
 	if !contains(audience, opts.Audience) {
 		return nil, fmt.Errorf("%w: audience mismatch", ErrInvalidAudience)

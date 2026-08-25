@@ -85,3 +85,67 @@ func TestDefaultConfig_IntrospectLimit(t *testing.T) {
 	cfg := DefaultConfig()
 	assert.Equal(t, 20, cfg.RateLimit.IntrospectLimit, "introspect rate limit should default to 20")
 }
+
+// TestSettingResourceIdentifier_Validation drives the setting through the
+// manager's real write path, so it proves the validator is wired to the
+// definition and not merely that the function works.
+//
+// The value has to survive comparison against a token's aud, which the OAuth2
+// provider forces through the same RFC 8707 syntax rule. Accepting a host with
+// no scheme leaves a deployment that reads as configured while matching
+// nothing, and the symptom is every audienced token being refused.
+func TestSettingResourceIdentifier_Validation(t *testing.T) {
+	cases := []struct {
+		name    string
+		value   string
+		wantErr string
+	}{
+		{
+			name:  "empty means the check is off",
+			value: "",
+		},
+		{
+			name:  "an absolute URI is accepted",
+			value: "https://api.example.com",
+		},
+		{
+			name:  "a non-http scheme is still an absolute URI",
+			value: "urn:example:resource",
+		},
+		{
+			name:    "a bare host is refused",
+			value:   "api.example.com",
+			wantErr: "is not an absolute URI",
+		},
+		{
+			name:    "a path-only value is refused",
+			value:   "/api",
+			wantErr: "is not an absolute URI",
+		},
+		{
+			name:    "a fragment is refused",
+			value:   "https://api.example.com/#v1",
+			wantErr: "must not include a fragment",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mgr := settings.NewManager(settings.NilStore{}, log.NewNoopLogger())
+			require.NoError(t, registerCoreSessionSettings(mgr))
+
+			raw, err := json.Marshal(tc.value)
+			require.NoError(t, err)
+
+			err = mgr.Set(t.Context(), "session.resource_identifier", raw,
+				settings.ScopeGlobal, "", "", "", "test")
+
+			if tc.wantErr == "" {
+				assert.NoError(t, err)
+				return
+			}
+			require.Error(t, err, "a value that can never match a token must be refused at write time")
+			assert.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
+}

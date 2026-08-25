@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
@@ -37,6 +38,7 @@ import (
 	"github.com/xraph/authsome/bridge/maileradapter"
 	"github.com/xraph/authsome/bridge/relayadapter"
 	authdash "github.com/xraph/authsome/dashboard"
+	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/environment"
 	authcontract "github.com/xraph/authsome/extension/contract"
 	"github.com/xraph/authsome/id"
@@ -98,6 +100,11 @@ type Extension struct {
 	useGrove   bool
 	clientMode bool               // true when operating as a remote client
 	client     *authclient.Client // non-nil in client mode
+
+	// DPoP validator for client mode, built on first use. In engine mode
+	// the engine owns the validator and this stays nil.
+	dpopOnce      sync.Once
+	dpopValidator *dpop.Validator
 
 	// Standalone contract surface — populated in Register() when authsome
 	// is running with an engine. Lets OTHER Forge dashboards discover this
@@ -647,8 +654,12 @@ func (e *Extension) Middlewares() []forge.Middleware {
 	if e.clientMode {
 		// Client mode: use remote token validation via introspect.
 		// No session activity or auto-refresh — those are Portal's responsibility.
+		logger := e.Logger()
+		if logger == nil {
+			logger = log.NewNoopLogger()
+		}
 		return []forge.Middleware{
-			middleware.ClientAuthMiddleware(e.client, e.Logger()),
+			middleware.ClientAuthMiddleware(e.client, logger, e.clientDPoPBinding()),
 		}
 	}
 	if e.engine == nil {
@@ -659,6 +670,25 @@ func (e *Extension) Middlewares() []forge.Middleware {
 		e.sessionActivityMiddleware(),
 		e.autoRefreshMiddleware(),
 	}
+}
+
+// clientDPoPBinding returns the DPoP enforcement config client mode runs with.
+//
+// A client-mode service learns a token is bound from the cnf claim in the
+// introspection response (RFC 9449 section 7.3), and checking the proof is
+// then its own job: the identity server never sees this request, so it cannot
+// check it on the service's behalf. The validator is built here rather than at
+// registration so it exists however the extension was assembled, and it holds
+// its own replay cache because a client-mode service has no session store to
+// share one through. No nonce signer: this service issues no tokens, so it has
+// nothing to mint nonces from and never demands one.
+func (e *Extension) clientDPoPBinding() middleware.SessionBindingConfig {
+	e.dpopOnce.Do(func() {
+		e.dpopValidator = dpop.NewValidator(dpop.Config{
+			Replay: dpop.NewMemoryReplayCache(0),
+		})
+	})
+	return middleware.SessionBindingConfig{DPoPValidator: e.dpopValidator}
 }
 
 // AuthMiddleware returns the authentication middleware that resolves sessions
@@ -682,8 +712,14 @@ func (e *Extension) AuthMiddleware() forge.Middleware {
 // autoRefreshMiddleware returns a middleware that transparently refreshes
 // near-expiry access tokens based on the auto-refresh settings.
 func (e *Extension) autoRefreshMiddleware() forge.Middleware {
-	refresher := func(ctx context.Context, refreshToken string) (*session.Session, error) {
-		return e.engine.Refresh(ctx, refreshToken)
+	refresher := func(ctx context.Context, req middleware.RefreshRequest) (*session.Session, error) {
+		return e.engine.Refresh(ctx, req.RefreshToken, authsome.RefreshOpts{
+			IPAddress:  req.IPAddress,
+			UserAgent:  req.UserAgent,
+			DPoPProof:  req.DPoPProof,
+			Method:     req.Method,
+			RequestURL: req.RequestURL,
+		})
 	}
 	return middleware.AutoRefreshMiddleware(
 		refresher,
@@ -824,7 +860,11 @@ func (e *Extension) RegisterDashboardAuth(dashExt *dashboard.Extension) {
 			client:   e.client,
 			basePath: basePath,
 		})
-		dashExt.SetAuthChecker(&clientAuthChecker{client: e.client})
+		dashExt.SetAuthChecker(&clientAuthChecker{
+			client:  e.client,
+			binding: e.clientDPoPBinding(),
+			logger:  e.Logger(),
+		})
 	default:
 		if e.engine == nil {
 			e.Logger().Warn("authsome: engine not initialised; skipping dashboard auth registration")

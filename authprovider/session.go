@@ -7,7 +7,6 @@ package authprovider
 import (
 	"context"
 	"net/http"
-	"strings"
 
 	log "github.com/xraph/go-utils/log"
 
@@ -39,6 +38,11 @@ type SessionProvider struct {
 	resolveUser       authmw.UserResolver
 	resolveCookieName CookieNameResolver
 	logger            log.Logger
+
+	// dpopBinding carries the RFC 9449 validator this provider checks bound
+	// sessions with. Zero value means no validator, which makes a bound
+	// session fail closed here.
+	dpopBinding authmw.SessionBindingConfig
 }
 
 // NewSessionProvider creates a new session auth provider.
@@ -60,6 +64,19 @@ func NewSessionProvider(
 	return p
 }
 
+// WithDPoP sets the RFC 9449 enforcement config and returns the provider, so
+// engine wiring reads as one expression.
+//
+// This provider is a second path from a token to an authenticated context. In
+// a standard deployment the global auth middleware runs first and rejects a
+// bad presentation before this is reached, but enforcement is a property of
+// the token rather than of which chain happened to be assembled, so the rule
+// is applied here rather than assumed to have run somewhere upstream.
+func (p *SessionProvider) WithDPoP(cfg authmw.SessionBindingConfig) *SessionProvider {
+	p.dpopBinding = cfg
+	return p
+}
+
 // Name returns the provider name used in forge.WithAuth("session").
 func (p *SessionProvider) Name() string { return "session" }
 
@@ -70,27 +87,22 @@ func (p *SessionProvider) Type() auth.SecuritySchemeType { return auth.SecurityT
 // It checks the Authorization header first, then falls back to the
 // session cookie (resolved from dynamic settings per app).
 func (p *SessionProvider) Authenticate(ctx context.Context, r *http.Request) (*auth.AuthContext, error) {
-	// 1. Extract token from Authorization: Bearer <token>
-	token := extractBearerToken(r)
-
-	// 2. Fall back to session cookie (browser login).
-	// Resolve cookie name from dynamic settings (per-app), defaulting
-	// to "authsome_session_token".
-	if token == "" {
-		cookieName := "authsome_session_token"
-		if p.resolveCookieName != nil {
-			cookieName = p.resolveCookieName(ctx)
-		}
-		if cookie, err := r.Cookie(cookieName); err == nil && cookie.Value != "" {
-			token = cookie.Value
-		}
+	// 1. Extract the credential from the Authorization header (Bearer or
+	// DPoP), falling back to the session cookie for browser login. The
+	// cookie name comes from dynamic settings (per-app), defaulting to
+	// "authsome_session_token". Reading it through the middleware's own
+	// extractor keeps one parse of the header rather than two that drift.
+	cookieName := "authsome_session_token"
+	if p.resolveCookieName != nil {
+		cookieName = p.resolveCookieName(ctx)
 	}
+	scheme, token := authmw.ExtractCredentialFromContext(ctx, r, cookieName)
 
 	if token == "" {
 		return nil, auth.ErrMissingCredentials
 	}
 
-	// 3. Resolve session from token
+	// 2. Resolve session from token
 	sess, err := p.resolveSession(token)
 	if err != nil {
 		p.logger.Debug("session auth: invalid token",
@@ -99,7 +111,44 @@ func (p *SessionProvider) Authenticate(ctx context.Context, r *http.Request) (*a
 		return nil, auth.ErrInvalidCredentials
 	}
 
-	// 4. Resolve user from session
+	// 3. A bound session needs a proof, whatever else ran before this.
+	if dpopErr := authmw.EnforceDPoPForRequest(
+		ctx, p.dpopBinding, r,
+		sess.DPoPJKT, scheme, token,
+		sess.AppID.String(), sess.ID.String(),
+		p.logger,
+	); dpopErr != nil {
+		p.logger.Warn("session auth: DPoP binding not satisfied",
+			log.String("session_id", sess.ID.String()),
+		)
+		return nil, auth.ErrInvalidCredentials
+	}
+
+	// 4. A caller that is not a person has no user row to resolve. Answer with
+	//    the principal itself.
+	//
+	//    Without this branch resolveUser("") fails below and every route behind
+	//    forge.WithGroupAuth("session") or plugin.SessionGuard answers 401 to a
+	//    credential that is otherwise entirely valid, which is what made
+	//    service accounts unusable on any guarded route.
+	if !sess.IsHumanPrincipal() {
+		ref := sess.Subject()
+		return &auth.AuthContext{
+			Subject:      ref.ID,
+			ProviderName: "session",
+			// Same reasoning as the user branch below: forge's authorizer does
+			// set membership over this field, so a route declaring
+			// forge.WithAnyRole denies a machine caller until it is populated.
+			Roles: sess.Roles,
+			Data:  &SessionData{Session: sess},
+			Claims: map[string]any{
+				"principal_kind": string(ref.Kind),
+				"principal_id":   ref.ID,
+			},
+		}, nil
+	}
+
+	// 5. Resolve user from session
 	u, err := p.resolveUser(sess.UserID.String())
 	if err != nil {
 		p.logger.Debug("session auth: failed to resolve user",
@@ -199,8 +248,11 @@ func BridgeToContext(ctx forge.Context, data *SessionData) {
 
 	if data.User != nil {
 		goCtx = authmw.WithUser(goCtx, data.User)
-		goCtx = authmw.WithAuthMethod(goCtx, "session")
 	}
+	// Outside the guard above on purpose. A machine caller has no user, and
+	// leaving the auth method unset for it meant a request reached the handler
+	// with nothing recording how it got there.
+	goCtx = authmw.WithAuthMethod(goCtx, "session")
 
 	ctx.WithContext(goCtx)
 }
@@ -219,19 +271,6 @@ func RegistryMiddleware(registry auth.Registry, providers ...string) forge.Middl
 			return inner(next)(ctx)
 		}
 	}
-}
-
-// extractBearerToken extracts the bearer token from the Authorization header.
-func extractBearerToken(r *http.Request) string {
-	h := r.Header.Get("Authorization")
-	if h == "" {
-		return ""
-	}
-	const prefix = "Bearer "
-	if len(h) > len(prefix) && strings.EqualFold(h[:len(prefix)], prefix) {
-		return h[len(prefix):]
-	}
-	return ""
 }
 
 // DefaultSessionCookieName is the cookie SessionProvider falls back to when no

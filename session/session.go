@@ -10,6 +10,17 @@ import (
 	"github.com/xraph/authsome/principal"
 )
 
+// Principal kinds a session may carry. An empty PrincipalKind means
+// PrincipalKindUser, for rows written before the column existed.
+const (
+	PrincipalKindUser           principal.Kind = "user"
+	PrincipalKindServiceAccount principal.Kind = "service_account"
+	// PrincipalKindAgent marks a session issued to a delegated agent. Unlike
+	// a service-account session, UserID stays populated with the delegating
+	// human, so every consumer that resolves a session's user keeps working.
+	PrincipalKindAgent principal.Kind = "agent"
+)
+
 // Session represents an authenticated user session.
 type Session struct {
 	ID     id.SessionID     `json:"id"`
@@ -48,13 +59,43 @@ type Session struct {
 	// check against warden, not here.
 	Roles []string `json:"roles,omitempty"`
 
-	// PrincipalKind identifies the type of principal that owns this session.
-	// Valid values are "user" and "service_account". Empty string means "user"
-	// for backwards compatibility with existing sessions.
+	// Audience holds the resource identifiers this session's access token was
+	// granted for (RFC 8707). Empty means unrestricted, which is what every
+	// session issued before resource indicators existed carries, and what any
+	// client that sends no `resource` parameter still gets.
+	//
+	// This is the opaque-token half of the `aud` claim. A JWT carries its
+	// audience inside the token and is checked without a store read, while an
+	// opaque token is only a session lookup key, so the same value has to live
+	// here for introspection and for the middleware audience check to see it.
+	Audience []string `json:"aud,omitempty"`
+
+	// Scopes holds the OAuth scopes this session was issued with, stamped at
+	// issuance. Same trade as Roles: authoritative for what this token may
+	// do, stale with respect to anything granted afterwards.
+	//
+	// Empty does not mean "may do anything". A session minted by password
+	// sign-in carries no scopes, and the RFC 8693 token exchange grant treats
+	// that as "no subject-side ceiling" while still bounding the result by the
+	// delegation grant and the client's own registered scopes.
+	Scopes []string `json:"scopes,omitempty"`
+
+	// PrincipalKind identifies the type of principal that owns this session:
+	// principal.KindUser, principal.KindAgent, principal.KindWorkload, or
+	// principal.KindService. Empty string means KindUser, for backwards
+	// compatibility with sessions written before this field existed.
 	PrincipalKind principal.Kind `json:"principal_kind,omitempty"`
-	// ServiceAccountID is set when PrincipalKind is "service_account".
-	// UserID is left as the zero value in that case.
+	// ServiceAccountID is set when PrincipalKind is anything other than
+	// KindUser, i.e. for the three non-human kinds, which all share the
+	// service-account identity space. UserID is left as the zero value in
+	// that case.
 	ServiceAccountID id.ServiceAccountID `json:"service_account_id,omitempty"`
+	// AgentID is set when PrincipalKind is "agent". UserID remains the
+	// delegating human.
+	AgentID id.AgentID `json:"agent_id,omitempty"`
+	// GrantID names the AgentGrant that authorized this session, so revoking
+	// that grant can find and delete the sessions it issued.
+	GrantID id.AgentGrantID `json:"grant_id,omitempty"`
 
 	// Actors is the chain of principals acting on the subject's behalf,
 	// ordered nearest-caller-first. Empty on an ordinary session, where the
@@ -72,6 +113,15 @@ type Session struct {
 	// DelegationID is the grant this session was minted against. Zero for an
 	// ordinary session.
 	DelegationID id.DelegationID `json:"delegation_id,omitempty"`
+
+	// DPoPJKT is the RFC 7638 thumbprint of the public key this session is
+	// bound to (RFC 9449). Empty means an ordinary unbound bearer session,
+	// which is what every session created before this field existed will be.
+	//
+	// Enforcement follows this value and not any configuration: once it is
+	// set, the session cannot be used without a matching proof, whatever the
+	// app or client mode says at the time of the request.
+	DPoPJKT string `json:"dpop_jkt,omitempty"`
 }
 
 // Subject returns the principal this session is for.
@@ -92,6 +142,20 @@ func (s *Session) Subject() principal.Ref {
 // IsHumanPrincipal reports whether a person owns this session.
 func (s *Session) IsHumanPrincipal() bool {
 	return s.PrincipalKind == "" || s.PrincipalKind == principal.KindUser
+}
+
+// AuthzActors returns the actors Warden must independently authorize.
+//
+// Empty for an impersonation, and that is the point. Impersonating somebody is
+// precisely the request to evaluate as them, so the admin's own permissions
+// are not intersected in. The gate for impersonation sits on Engine.Impersonate,
+// which is where an admin is checked once, rather than on every subsequent
+// permission check made while impersonating.
+func (s *Session) AuthzActors() principal.Chain {
+	if s.ActorGrant == principal.GrantImpersonation {
+		return nil
+	}
+	return s.Actors
 }
 
 // ImpersonatedBy returns the admin acting as this session's user, or the zero
@@ -134,7 +198,13 @@ func (s Session) MarshalJSON() ([]byte, error) {
 	type alias Session
 	out := struct {
 		alias
-		ImpersonatedBy string `json:"impersonated_by,omitempty"`
+		// No ,omitempty here on purpose. Before this change ImpersonatedBy
+		// was an id.UserID, a struct, and encoding/json never omits a struct
+		// for omitempty, so the key was always present, holding "" when
+		// nobody was impersonating. Dropping the key on an unimpersonated
+		// session would move the wire format, which the store models and
+		// external consumers both depend on staying put.
+		ImpersonatedBy string `json:"impersonated_by"`
 	}{alias: alias(s)}
 	if imp := s.ImpersonatedBy(); !imp.IsNil() {
 		out.ImpersonatedBy = imp.String()

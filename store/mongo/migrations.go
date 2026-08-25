@@ -12,6 +12,7 @@ import (
 	"github.com/xraph/grove/migrate"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/user"
 )
 
@@ -900,5 +901,480 @@ func init() {
 			// dropping the index only costs a scan.
 			Down: func(_ context.Context, _ migrate.Executor) error { return nil },
 		},
+
+		// Migration: session agent principal index. A session may now be
+		// owned by an AI agent acting under a human's grant (AgentID/GrantID
+		// on session.Session), mirroring postgres/sqlite's
+		// add_session_agent_principal migration — same version
+		// (20260824000100) on all three backends, since this is one logical
+		// change.
+		//
+		// Mongo needs no column added and no CHECK constraint: sessionModel
+		// already carries AgentID/GrantID (bson agent_id/grant_id,
+		// omitempty), and the store already round-trips them (see
+		// toSessionModel/fromSessionModel and DeleteSessionsByGrant in
+		// session.go). What is missing is what DeleteSessionsByGrant needs:
+		// an index on grant_id. Without one, revoking a grant is a full
+		// collection scan on the one path where revocation latency matters
+		// most.
+		//
+		// RefreshValidator follows the same precedent as
+		// add_session_principal_identity above: agent_id/grant_id are new
+		// fields on sessionModel, so an existing deployment's validator does
+		// not know them until the schema is reapplied via collMod. Fresh
+		// installs are unaffected.
+		//
+		// The index is partial on {$gt: ""}, not sparse, for the same reason
+		// as service_account_id above: grove writes grant_id: "" on every
+		// non-agent session rather than omitting it, so a sparse index would
+		// cover the whole collection. $gt: "" selects only the agent
+		// sessions. This mirrors the postgres partial index
+		// (idx_authsome_sessions_grant_id, WHERE grant_id <> '').
+		&migrate.Migration{
+			Name:    "add_session_agent_principal_index",
+			Version: "20260824000110",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				if err := mexec.RefreshValidator(ctx, (*sessionModel)(nil)); err != nil {
+					return fmt.Errorf("refresh session validator: %w", err)
+				}
+				return mexec.CreateIndexes(ctx, colSessions, []mongo.IndexModel{
+					{
+						Keys: bson.D{{Key: "grant_id", Value: 1}},
+						Options: options.Index().SetPartialFilterExpression(
+							bson.D{{Key: "grant_id", Value: bson.D{{Key: "$gt", Value: ""}}}},
+						),
+					},
+				})
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				// Drop the index by its auto-derived name. Mongo names a
+				// single-key index after its key — grant_id_1 — regardless
+				// of the partial filter. Tolerate IndexNotFound (code 27)
+				// so this is safe to re-run.
+				coll := mexec.DB().Collection(colSessions)
+				if err := coll.Indexes().DropOne(ctx, "grant_id_1"); err != nil {
+					if !mongoIsIndexNotFound(err) {
+						return fmt.Errorf("drop grant_id index: %w", err)
+					}
+				}
+				// Forward-only on the validator, matching
+				// add_session_principal_identity: rolling it back would
+				// reject the agent sessions this migration makes storable.
+				return nil
+			},
+		},
+
+		// Migration: session actor chain. sessionModel gained actors,
+		// actor_grant and delegation_id, which carry the principals acting on
+		// the subject's behalf. Only impersonated_by was stored before, and
+		// that is a projection of the chain that is empty for a delegation, so
+		// a delegated session round-tripped with no actors at all.
+		//
+		// Mongo adds no columns, but the collection's $jsonSchema validator is
+		// generated from the model struct, so an existing deployment's
+		// validator does not know the three new fields. RefreshValidator
+		// reapplies the schema through collMod, the same way
+		// add_session_principal_identity does.
+		//
+		// No backfill of actors from impersonated_by. fromSessionModel rebuilds
+		// the impersonation chain from that field whenever actors is absent, so
+		// documents written before this migration already read back correctly;
+		// backfilling them is Task 7's job, alongside the delegation collection.
+		//
+		// The index is over actors.kind and actors.id, which mongo applies to
+		// each subdocument in the array. That answers "what has this agent
+		// acted on", which is the question the chain exists to make answerable.
+		&migrate.Migration{
+			Name:    "add_session_actor_chain",
+			Version: "20260824000049",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				if err := mexec.RefreshValidator(ctx, (*sessionModel)(nil)); err != nil {
+					return fmt.Errorf("refresh session validator: %w", err)
+				}
+				return mexec.CreateIndexes(ctx, colSessions, []mongo.IndexModel{
+					{Keys: bson.D{
+						{Key: "actors.kind", Value: 1},
+						{Key: "actors.id", Value: 1},
+					}},
+					{Keys: bson.D{{Key: "delegation_id", Value: 1}}},
+				})
+			},
+			// Forward-only, matching add_session_principal_identity: rolling the
+			// validator back would reject the delegated sessions this makes
+			// storable.
+			Down: func(_ context.Context, _ migrate.Executor) error { return nil },
+		},
+
+		// Migration: the delegation grants collection. A grant is the durable,
+		// revocable record that one principal may act for another. The chain on
+		// a session says who is acting; this says they were allowed to.
+		&migrate.Migration{
+			Name:    "create_authsome_delegations",
+			Version: "20260824000070",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				if err := mexec.CreateCollection(ctx, (*delegationModel)(nil)); err != nil {
+					return err
+				}
+				return mexec.CreateIndexes(ctx, colDelegations, []mongo.IndexModel{
+					{
+						// One live grant per (app, actor, subject, kind). The
+						// partial filter keys on revoked_at being null rather
+						// than absent, which is the whole point: grove writes
+						// every mapped field whatever the bson omitempty tag
+						// says, so a live grant stores revoked_at: null and
+						// never omits the key. Filtering on $exists would
+						// match no document at all and quietly enforce
+						// nothing, and mongo rejects $exists: false in a
+						// partial filter regardless. Revoking sets a date,
+						// which drops the row out of the index and frees the
+						// slot for a fresh grant.
+						Keys: bson.D{
+							{Key: "app_id", Value: 1},
+							{Key: "actor_kind", Value: 1}, {Key: "actor_id", Value: 1},
+							{Key: "subject_kind", Value: 1}, {Key: "subject_id", Value: 1},
+							{Key: "grant_kind", Value: 1},
+						},
+						Options: options.Index().SetUnique(true).
+							SetPartialFilterExpression(bson.D{
+								{Key: "revoked_at", Value: bson.D{{Key: "$type", Value: "null"}}},
+							}),
+					},
+					{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "subject_kind", Value: 1}, {Key: "subject_id", Value: 1}}},
+					{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "actor_kind", Value: 1}, {Key: "actor_id", Value: 1}}},
+				})
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				return mexec.DropCollection(ctx, (*delegationModel)(nil))
+			},
+		},
+
+		// Migration: principal fields on service accounts, and the actor-chain
+		// backfill. serviceAccountModel gained kind, env_id, org_id,
+		// owner_user_id, parent_id and expires_at, so an existing deployment's
+		// generated validator has to be reapplied before a row carrying them
+		// can be written.
+		//
+		// The backfill converts the legacy impersonation projection into a real
+		// chain. fromSessionModel already reads those documents correctly
+		// through its impersonated_by fallback, so this changes no behaviour;
+		// it means an operator querying actors.id sees impersonations too,
+		// rather than only sessions written since the chain landed.
+		&migrate.Migration{
+			Name:    "add_principal_fields_and_backfill_chain",
+			Version: "20260824000071",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				if err := mexec.RefreshValidator(ctx, (*serviceAccountModel)(nil)); err != nil {
+					return fmt.Errorf("refresh service account validator: %w", err)
+				}
+				if err := mexec.CreateIndexes(ctx, colServiceAccounts, []mongo.IndexModel{
+					{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "kind", Value: 1}}},
+					{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "parent_id", Value: 1}}},
+					{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "owner_user_id", Value: 1}}},
+				}); err != nil {
+					return fmt.Errorf("create service account indexes: %w", err)
+				}
+
+				// Only documents that carry the legacy field and no chain yet,
+				// so a re-run cannot overwrite a chain written since.
+				_, err := mexec.DB().Collection(colSessions).UpdateMany(ctx,
+					bson.M{
+						"impersonated_by": bson.M{"$gt": ""},
+						"actor_grant":     bson.M{"$in": bson.A{nil, ""}},
+					},
+					mongo.Pipeline{{{Key: "$set", Value: bson.D{
+						{Key: "actors", Value: bson.A{bson.D{
+							{Key: "kind", Value: string(principal.KindUser)},
+							{Key: "id", Value: "$impersonated_by"},
+						}}},
+						{Key: "actor_grant", Value: string(principal.GrantImpersonation)},
+					}}}},
+				)
+				if err != nil {
+					return fmt.Errorf("backfill session actor chain: %w", err)
+				}
+				return nil
+			},
+			// Forward-only. Undoing the backfill would strip chains this store
+			// now depends on, and the read path treats a chain as the truth.
+			Down: func(_ context.Context, _ migrate.Executor) error { return nil },
+		},
+
+		// Migration: stop a lapsed grant from blocking a fresh one. Mongo's
+		// counterpart to postgres's delegation_live_index_excludes_expired.
+		//
+		// Mongo has the same limitation as the SQL backends here, for its own
+		// reason: a partialFilterExpression admits only equality, $exists,
+		// $type, the range operators against a CONSTANT, $and, $or and $in.
+		// There is no way to name "now" inside one, so expiry cannot live in
+		// the filter any more than it can live in a postgres index predicate.
+		//
+		// The filter therefore adds expires_at being null alongside revoked_at
+		// being null: never-revoked AND never-expiring, the rows whose
+		// liveness mongo can decide by itself. Grants that carry an expiry are
+		// checked in CreateDelegation instead, against
+		// principal.Delegation.IsActive, the same method every other backend
+		// now agrees with. See the postgres migration for the concurrency
+		// trade that leaves.
+		//
+		// $type: "null" rather than $exists, for the reason spelled out on
+		// create_authsome_delegations above: grove writes every mapped field
+		// whatever omitempty says, so an unset expiry reaches mongo as an
+		// explicit null and never as an absent key.
+		//
+		// The reshape goes through createIndexesReshapeConflicting because the
+		// keys are unchanged and only the options move. Mongo refuses that as
+		// an index conflict, and the helper's whole job is to drop the
+		// conflicting index by name and retry.
+		&migrate.Migration{
+			Name:    "delegation_live_index_excludes_expired",
+			Version: "20260824000100",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				return createIndexesReshapeConflicting(ctx, mexec.DB().Collection(colDelegations),
+					[]mongo.IndexModel{delegationLiveIndex(true)})
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				return createIndexesReshapeConflicting(ctx, mexec.DB().Collection(colDelegations),
+					[]mongo.IndexModel{delegationLiveIndex(false)})
+			},
+		},
+
+		// Bring the users collection in line with postgres. Its unique
+		// indexes were still (app_id, email) and (app_id, username), so mongo
+		// forbade what postgres allows: the same address or handle in two
+		// environments of one app. Existing docs also never had env_id
+		// backfilled, so they belonged to no environment at all.
+		&migrate.Migration{
+			Name:    "env_scope_user_unique_indexes",
+			Version: "20260824000090",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				if err := backfillDefaultEnvironments(ctx, mexec); err != nil {
+					return err
+				}
+
+				coll := mexec.DB().Collection(colUsers)
+				for _, name := range []string{"app_id_1_email_1", "app_id_1_username_1"} {
+					if err := coll.Indexes().DropOne(ctx, name); err != nil {
+						if !mongoIsIndexNotFound(err) {
+							return fmt.Errorf("drop %s: %w", name, err)
+						}
+					}
+				}
+				// The email index stays non-partial for the reason given on
+				// the user_emails collection: mongo rejects $exists:false in a
+				// partial filter, so "deleted_at IS NULL" cannot be expressed
+				// here the way the SQL backends express it.
+				return mexec.CreateIndexes(ctx, colUsers, []mongo.IndexModel{
+					{
+						Keys: bson.D{
+							{Key: "app_id", Value: 1},
+							{Key: "env_id", Value: 1},
+							{Key: "email", Value: 1},
+						},
+						Options: options.Index().SetUnique(true),
+					},
+					{
+						Keys: bson.D{
+							{Key: "app_id", Value: 1},
+							{Key: "env_id", Value: 1},
+							{Key: "username", Value: 1},
+						},
+						Options: options.Index().
+							SetUnique(true).
+							SetPartialFilterExpression(bson.M{"username": bson.M{"$gt": ""}}),
+					},
+				})
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				// Indexes only. The backfilled env_id values stay: stripping
+				// them would strand docs the running code now depends on.
+				coll := mexec.DB().Collection(colUsers)
+				for _, name := range []string{
+					"app_id_1_env_id_1_email_1", "app_id_1_env_id_1_username_1",
+				} {
+					if err := coll.Indexes().DropOne(ctx, name); err != nil {
+						if !mongoIsIndexNotFound(err) {
+							return err
+						}
+					}
+				}
+				return mexec.CreateIndexes(ctx, colUsers, []mongo.IndexModel{
+					{
+						Keys:    bson.D{{Key: "app_id", Value: 1}, {Key: "email", Value: 1}},
+						Options: options.Index().SetUnique(true),
+					},
+					{
+						Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "username", Value: 1}},
+						Options: options.Index().
+							SetUnique(true).
+							SetPartialFilterExpression(bson.M{"username": bson.M{"$gt": ""}}),
+					},
+				})
+			},
+		},
+		&migrate.Migration{
+			Name:    "add_session_audience",
+			Version: "20260824000080",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				// The collection's $jsonSchema is generated from sessionModel,
+				// so an existing deployment's validator does not know the
+				// audience field and rejects every document carrying it.
+				return mexec.RefreshValidator(ctx, (*sessionModel)(nil))
+			},
+			Down: func(_ context.Context, _ migrate.Executor) error { return nil },
+		},
 	)
+}
+
+// backfillDefaultEnvironments gives every app a default environment if it has
+// none, then stamps every scoped doc whose env_id is missing or empty.
+//
+// Both halves are idempotent, so the migration is safe to re-run: an app that
+// already has a default environment keeps it, and a doc whose env_id is
+// already set is not touched.
+func backfillDefaultEnvironments(ctx context.Context, mexec *mongomigrate.Executor) error {
+	db := mexec.DB()
+
+	appCur, err := db.Collection(colApps).Find(ctx, bson.M{})
+	if err != nil {
+		return fmt.Errorf("list apps for env backfill: %w", err)
+	}
+	var appIDs []string
+	for appCur.Next(ctx) {
+		var a struct {
+			ID string `bson:"_id"`
+		}
+		if decErr := appCur.Decode(&a); decErr != nil {
+			_ = appCur.Close(ctx)
+			return fmt.Errorf("decode app: %w", decErr)
+		}
+		appIDs = append(appIDs, a.ID)
+	}
+	if curErr := appCur.Err(); curErr != nil {
+		_ = appCur.Close(ctx)
+		return fmt.Errorf("iterate apps: %w", curErr)
+	}
+	_ = appCur.Close(ctx)
+
+	envs := db.Collection(colEnvironments)
+	for _, appID := range appIDs {
+		var existing struct {
+			ID string `bson:"_id"`
+		}
+		findErr := envs.FindOne(ctx, bson.M{"app_id": appID, "is_default": true}).Decode(&existing)
+		envID := existing.ID
+		switch {
+		case findErr == nil:
+			// Already has one; reuse it below.
+		case isNoDocuments(findErr):
+			envID = id.NewEnvironmentID().String()
+			t := now()
+			if _, insErr := envs.InsertOne(ctx, bson.M{
+				"_id": envID, "app_id": appID,
+				"name": "Production", "slug": "production", "type": "production",
+				"is_default": true, "color": "#ef4444",
+				"created_at": t, "updated_at": t,
+			}); insErr != nil {
+				return fmt.Errorf("create default env for app %s: %w", appID, insErr)
+			}
+		default:
+			return fmt.Errorf("look up default env for app %s: %w", appID, findErr)
+		}
+
+		for _, col := range envScopedCollections {
+			if _, updErr := db.Collection(col).UpdateMany(ctx,
+				bson.M{"app_id": appID, "$or": []bson.M{
+					{"env_id": bson.M{"$exists": false}},
+					{"env_id": ""},
+				}},
+				bson.M{"$set": bson.M{"env_id": envID}},
+			); updErr != nil {
+				return fmt.Errorf("backfill env_id for %s: %w", col, updErr)
+			}
+		}
+	}
+	return nil
+}
+
+// delegationLiveIndex builds the unique index that holds one live grant per
+// (app, actor, subject, kind).
+//
+// excludeExpired chooses the partial filter. True is the current shape, which
+// covers only grants that neither expire nor have been revoked. False is the
+// original revoked-only shape, kept so the migration that introduced the
+// change has a Down that actually restores what was there.
+func delegationLiveIndex(excludeExpired bool) mongo.IndexModel {
+	filter := bson.D{
+		{Key: "revoked_at", Value: bson.D{{Key: "$type", Value: "null"}}},
+	}
+	if excludeExpired {
+		filter = append(filter, bson.E{
+			Key: "expires_at", Value: bson.D{{Key: "$type", Value: "null"}},
+		})
+	}
+	return mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "app_id", Value: 1},
+			{Key: "actor_kind", Value: 1}, {Key: "actor_id", Value: 1},
+			{Key: "subject_kind", Value: 1}, {Key: "subject_id", Value: 1},
+			{Key: "grant_kind", Value: 1},
+		},
+		Options: options.Index().SetUnique(true).SetPartialFilterExpression(filter),
+	}
+}
+
+// envScopedCollections are the collections whose models carry env_id.
+var envScopedCollections = []string{
+	colUsers,
+	colSessions,
+	colVerifications,
+	colPasswordResets,
+	colOrganizations,
+	colDevices,
+	colWebhooks,
+	colNotifications,
+	colAPIKeys,
 }

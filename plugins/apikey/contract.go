@@ -3,11 +3,14 @@
 package apikey
 
 import (
+	"context"
 	"fmt"
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/plugin"
 	akcontract "github.com/xraph/authsome/plugins/apikey/contract"
+	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/session"
 
 	"github.com/xraph/forge/extensions/dashboard/contract"
 	"github.com/xraph/forge/extensions/dashboard/contract/dispatcher"
@@ -26,4 +29,15 @@ func (p *Plugin) RegisterContract(
 		return fmt.Errorf("apikey: contract registration requires *authsome.Engine, got %T", engine)
 	}
 	return akcontract.Register(d, reg, wreg, akcontract.Deps{Engine: eng})
+}
+
+// PrincipalAuthGate scores a machine caller and may deny it. The apikey
+// plugin holds this rather than the engine so it does not import authsome.
+//
+// Authorize runs the BeforePrincipalAuth chain; a returned error must abort
+// the request. Observe runs after a session has been minted and never blocks
+// authentication: errors from it are logged, not propagated.
+type PrincipalAuthGate interface {
+	Authorize(ctx context.Context, a *principal.AuthAttempt) error
+	Observe(ctx context.Context, a *principal.AuthAttempt, s *session.Session)
 }

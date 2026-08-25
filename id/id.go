@@ -62,6 +62,12 @@ const (
 	PrefixServiceAccount  Prefix = "svc"
 	PrefixUserEmail       Prefix = "auem"
 	PrefixDelegation      Prefix = "adel"
+	PrefixSSFStream       Prefix = "assf"
+	PrefixSSFLink         Prefix = "assl"
+	PrefixSSFEvent        Prefix = "asse"
+	PrefixSSFSignal       Prefix = "assg"
+	PrefixAgent           Prefix = "aagt"
+	PrefixAgentGrant      Prefix = "aagr"
 )
 
 // ID is the primary identifier type for all AuthSome entities.
@@ -150,6 +156,12 @@ type SSOConnectionID = ID
 // ConsentID is a type-safe identifier for consent records (prefix: "acns").
 type ConsentID = ID
 
+// AgentID is a type-safe identifier for agents (prefix: "aagt").
+type AgentID = ID
+
+// AgentGrantID is a type-safe identifier for agent grants (prefix: "aagr").
+type AgentGrantID = ID
+
 // FormConfigID is a type-safe identifier for form configurations (prefix: "afcf").
 type FormConfigID = ID
 
@@ -201,6 +213,18 @@ type DelegationID = ID
 
 // AnyID is a TypeID that accepts any valid prefix.
 type AnyID = ID
+
+// SSFStreamID identifies a Shared Signals inbound stream.
+type SSFStreamID = ID
+
+// SSFLinkID identifies a Shared Signals subject link.
+type SSFLinkID = ID
+
+// SSFEventID identifies a received Security Event Token.
+type SSFEventID = ID
+
+// SSFSignalID identifies a stored Shared Signals risk signal.
+type SSFSignalID = ID
 
 // ──────────────────────────────────────────────────
 // Core functions
@@ -340,6 +364,12 @@ func NewSSOConnectionID() ID { return New(PrefixSSOConnection) }
 // NewConsentID generates a new unique consent record ID.
 func NewConsentID() ID { return New(PrefixConsent) }
 
+// NewAgentID generates a new unique agent ID.
+func NewAgentID() ID { return New(PrefixAgent) }
+
+// NewAgentGrantID generates a new unique agent grant ID.
+func NewAgentGrantID() ID { return New(PrefixAgentGrant) }
+
 // NewFormConfigID generates a new unique form config ID.
 func NewFormConfigID() ID { return New(PrefixFormConfig) }
 
@@ -385,6 +415,18 @@ func NewServiceAccountID() ID { return New(PrefixServiceAccount) }
 
 // NewDelegationID generates a new unique delegation ID.
 func NewDelegationID() ID { return New(PrefixDelegation) }
+
+// NewSSFStreamID generates a new Shared Signals stream ID.
+func NewSSFStreamID() ID { return New(PrefixSSFStream) }
+
+// NewSSFLinkID generates a new Shared Signals subject link ID.
+func NewSSFLinkID() ID { return New(PrefixSSFLink) }
+
+// NewSSFEventID generates a new received-event ID.
+func NewSSFEventID() ID { return New(PrefixSSFEvent) }
+
+// NewSSFSignalID generates a new Shared Signals risk signal ID.
+func NewSSFSignalID() ID { return New(PrefixSSFSignal) }
 
 // ──────────────────────────────────────────────────
 // Convenience parsers
@@ -462,6 +504,12 @@ func ParseSSOConnectionID(s string) (ID, error) { return ParseWithPrefix(s, Pref
 
 // ParseConsentID parses a string and validates the "acns" prefix.
 func ParseConsentID(s string) (ID, error) { return ParseWithPrefix(s, PrefixConsent) }
+
+// ParseAgentID parses a string and validates the "aagt" prefix.
+func ParseAgentID(s string) (ID, error) { return ParseWithPrefix(s, PrefixAgent) }
+
+// ParseAgentGrantID parses a string and validates the "aagr" prefix.
+func ParseAgentGrantID(s string) (ID, error) { return ParseWithPrefix(s, PrefixAgentGrant) }
 
 // ParseFormConfigID parses a string and validates the "afcf" prefix.
 func ParseFormConfigID(s string) (ID, error) { return ParseWithPrefix(s, PrefixFormConfig) }

@@ -189,8 +189,17 @@ func run(outPath, title, version string) error {
 		Title:       title,
 		Version:     version,
 		Description: "Authentication API powered by AuthSome",
+		// Every name a route can reach for via WithGroupAuth has to be declared
+		// here. Routes were already asking for "session" and "session-cookie",
+		// but nothing declared them, so the spec carried $refs to components
+		// that did not exist and the SDK generators had no scheme to inspect —
+		// which is how 87 operations ended up with no way to pass a token.
 		Security: map[string]forge.SecurityScheme{
 			"bearerAuth": {Type: "http", Scheme: "bearer", BearerFormat: "JWT"},
+			// Reads Authorization: Bearer first, then falls back to the cookie
+			// below. See extractToken in extension/auth_pages.go.
+			"session":        {Type: "http", Scheme: "bearer", BearerFormat: "JWT"},
+			"session-cookie": {Type: "apiKey", In: "cookie", Name: "auth_token"},
 		},
 	}))
 

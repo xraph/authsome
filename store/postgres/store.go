@@ -211,40 +211,46 @@ func (s *Store) GetUser(ctx context.Context, userID id.UserID) (*user.User, erro
 	return toUser(m)
 }
 
-func (s *Store) GetUserByEmail(ctx context.Context, appID id.AppID, email string) (*user.User, error) {
+func (s *Store) GetUserByEmail(ctx context.Context, appID id.AppID, envID id.EnvironmentID, email string) (*user.User, error) {
 	m := new(UserModel)
-	err := s.pg.NewSelect(m).
+	q := s.pg.NewSelect(m).
 		Where("app_id = ?", appID.String()).
 		Where("email = ?", email).
-		Where("deleted_at IS NULL").
-		Scan(ctx)
-	if err != nil {
+		Where("deleted_at IS NULL")
+	if !envID.IsNil() {
+		q = q.Where("env_id = ?", envID.String())
+	}
+	if err := q.Scan(ctx); err != nil {
 		return nil, pgError(err)
 	}
 	return toUser(m)
 }
 
-func (s *Store) GetUserByPhone(ctx context.Context, appID id.AppID, phone string) (*user.User, error) {
+func (s *Store) GetUserByPhone(ctx context.Context, appID id.AppID, envID id.EnvironmentID, phone string) (*user.User, error) {
 	m := new(UserModel)
-	err := s.pg.NewSelect(m).
+	q := s.pg.NewSelect(m).
 		Where("app_id = ?", appID.String()).
 		Where("phone = ?", phone).
-		Where("deleted_at IS NULL").
-		Scan(ctx)
-	if err != nil {
+		Where("deleted_at IS NULL")
+	if !envID.IsNil() {
+		q = q.Where("env_id = ?", envID.String())
+	}
+	if err := q.Scan(ctx); err != nil {
 		return nil, pgError(err)
 	}
 	return toUser(m)
 }
 
-func (s *Store) GetUserByUsername(ctx context.Context, appID id.AppID, username string) (*user.User, error) {
+func (s *Store) GetUserByUsername(ctx context.Context, appID id.AppID, envID id.EnvironmentID, username string) (*user.User, error) {
 	m := new(UserModel)
-	err := s.pg.NewSelect(m).
+	q := s.pg.NewSelect(m).
 		Where("app_id = ?", appID.String()).
 		Where("username = ?", username).
-		Where("deleted_at IS NULL").
-		Scan(ctx)
-	if err != nil {
+		Where("deleted_at IS NULL")
+	if !envID.IsNil() {
+		q = q.Where("env_id = ?", envID.String())
+	}
+	if err := q.Scan(ctx); err != nil {
 		return nil, pgError(err)
 	}
 	return toUser(m)
@@ -395,6 +401,34 @@ func (s *Store) DeleteSession(ctx context.Context, sessionID id.SessionID) error
 
 func (s *Store) DeleteUserSessions(ctx context.Context, userID id.UserID) error {
 	_, err := s.pg.NewDelete((*SessionModel)(nil)).Where("user_id = ?", userID.String()).Exec(ctx)
+	return pgError(err)
+}
+
+// DeleteSessionsByGrant deletes every session issued under grantID, backed by
+// idx_authsome_sessions_grant_id.
+func (s *Store) DeleteSessionsByGrant(ctx context.Context, grantID id.AgentGrantID) error {
+	if grantID.IsNil() {
+		// grant_id is TEXT NOT NULL DEFAULT '' here, and a nil grantID also
+		// stringifies to "" — so without this guard, a caller that failed to
+		// resolve a real grant id would delete every human session in the
+		// table (every non-agent row carries grant_id = '' too) instead of
+		// doing nothing.
+		return nil
+	}
+	// idx_authsome_sessions_grant_id is a PARTIAL index, WHERE grant_id <>
+	// ''. A bare "grant_id = ?" predicate binds grantID.String() as a query
+	// parameter, and Postgres's generic plan can't prove a bound parameter
+	// is non-empty at plan time the way it can prove a literal is — so
+	// nothing in the predicate itself lets the planner match the partial
+	// index's own WHERE clause. Adding "AND grant_id <> ''" is redundant
+	// with the guard above at the Go level (grantID.String() can't be empty
+	// past this point) but is not redundant to the planner, which reasons
+	// about the SQL text on its own; this is what actually lets it choose
+	// the partial index instead of a sequential scan.
+	_, err := s.pg.NewDelete((*SessionModel)(nil)).
+		Where("grant_id = ?", grantID.String()).
+		Where("grant_id <> ''").
+		Exec(ctx)
 	return pgError(err)
 }
 

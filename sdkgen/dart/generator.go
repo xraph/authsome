@@ -147,6 +147,7 @@ type OperationDef struct {
 	Path         string
 	Summary      string
 	HasBody      bool
+	FormBody     bool
 	BodyType     string // Dart type of the request body
 	ResponseType string // Dart type of the response
 	AuthRequired bool
@@ -235,7 +236,7 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 			}
 
 			// Determine if auth is required
-			opDef.AuthRequired = g.operationRequiresAuth(pair.op)
+			opDef.AuthRequired = openapi.OperationTakesToken(pair.op, spec.SecuritySchemes())
 
 			// Extract path and query parameters
 			for _, param := range pair.op.Parameters {
@@ -263,6 +264,8 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 			if pair.op.RequestBody != nil {
 				opDef.HasBody = true
 				opDef.BodyType = g.bodyType(pair.op, data, declared)
+				_, mediaType := requestBodyContent(pair.op.RequestBody)
+				opDef.FormBody = mediaType == mediaTypeForm
 			}
 
 			// Determine response type
@@ -369,9 +372,15 @@ func (g *Generator) schemaToDartType(s *openapi.Schema) string {
 //
 // Remaining content types are considered in sorted order, so a route offering
 // several does not generate a different signature from one run to the next.
-func requestBodySchema(rb *openapi.RequestBody) *openapi.Schema {
-	if ct, ok := rb.Content["application/json"]; ok && ct.Schema != nil {
-		return ct.Schema
+const (
+	mediaTypeJSON = "application/json"
+	// RFC 6749 section 4.1.3.
+	mediaTypeForm = "application/x-www-form-urlencoded"
+)
+
+func requestBodyContent(rb *openapi.RequestBody) (schema *openapi.Schema, mediaType string) {
+	if ct, ok := rb.Content[mediaTypeJSON]; ok && ct.Schema != nil {
+		return ct.Schema, mediaTypeJSON
 	}
 
 	mediaTypes := make([]string, 0, len(rb.Content))
@@ -382,11 +391,11 @@ func requestBodySchema(rb *openapi.RequestBody) *openapi.Schema {
 
 	for _, mt := range mediaTypes {
 		if ct := rb.Content[mt]; ct.Schema != nil {
-			return ct.Schema
+			return ct.Schema, mt
 		}
 	}
 
-	return nil
+	return nil, ""
 }
 
 // schemaToDartFields turns a schema's properties into class fields, sorted by
@@ -438,7 +447,7 @@ func (g *Generator) schemaToDartFields(schema *openapi.Schema) []FieldDef {
 func (g *Generator) bodyType(op *openapi.Operation, data *TemplateData, declared map[string]bool) string {
 	const fallback = "Map<String, dynamic>"
 
-	schema := requestBodySchema(op.RequestBody)
+	schema, _ := requestBodyContent(op.RequestBody)
 	if schema == nil {
 		return fallback
 	}
@@ -501,18 +510,6 @@ func (g *Generator) responseType(op *openapi.Operation) string {
 		return g.schemaToDartType(ct.Schema)
 	}
 	return "void"
-}
-
-func (g *Generator) operationRequiresAuth(op *openapi.Operation) bool {
-	if len(op.Security) == 0 {
-		return false
-	}
-	for _, sec := range op.Security {
-		if _, ok := sec["bearerAuth"]; ok {
-			return true
-		}
-	}
-	return false
 }
 
 // ── Template Rendering ─────────────────────────────

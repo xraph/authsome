@@ -519,7 +519,7 @@ func TestPlugin_ExistingUserByEmail(t *testing.T) {
 	err = coreStore.CreateUser(ctx, existingUser)
 	require.NoError(t, err)
 
-	found, err := coreStore.GetUserByEmail(ctx, appID, "existing@example.com")
+	found, err := coreStore.GetUserByEmail(ctx, appID, id.Nil, "existing@example.com")
 	require.NoError(t, err)
 	assert.Equal(t, existingUser.ID, found.ID)
 

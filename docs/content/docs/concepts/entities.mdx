@@ -72,7 +72,7 @@ type Session struct {
     IPAddress             string        `json:"ip_address,omitempty"`
     UserAgent             string        `json:"user_agent,omitempty"`
     DeviceID              id.DeviceID   `json:"device_id,omitempty"`
-    ImpersonatedBy        id.UserID     `json:"impersonated_by,omitempty"`
+    Actors                principal.Chain `json:"actors,omitempty"`
     CreatedAt             time.Time     `json:"created_at"`
     UpdatedAt             time.Time     `json:"updated_at"`
 }
@@ -86,7 +86,7 @@ type Session struct {
 | `RefreshTokenExpiresAt` | Expiry of the refresh token (default: 30 days). |
 | `IPAddress` | Client IP at session creation. Used for `BindToIP` enforcement. |
 | `UserAgent` | User-Agent at session creation. Used for `BindToDevice` enforcement. |
-| `ImpersonatedBy` | Non-nil when this is an admin impersonation session. Contains the admin's UserID. |
+| `Actors` | The chain of principals acting on the subject's behalf. Call `ImpersonatedBy()` to check whether this is an admin impersonation session; it returns the admin's non-nil UserID when it is. |
 
 ---
 

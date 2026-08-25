@@ -44,6 +44,7 @@ const (
 	colAppSessionConfigs    = "authsome_app_session_configs"
 	colRevokedRefreshTokens = "authsome_revoked_refresh_tokens"
 	colServiceAccounts      = "authsome_service_accounts"
+	colDelegations          = "authsome_delegations"
 	colUserEmails           = "authsome_user_emails"
 )
 
@@ -105,6 +106,21 @@ func (s *Store) Migrate(ctx context.Context, extraGroups ...*migrate.Group) erro
 // that finishes in seconds, so 5 minutes is well past any legitimate
 // in-flight migration window and well within the patience operators
 // will have for a wedged boot loop.
+// lockWaitBudget bounds how long the orchestrator waits for the migration
+// lock before giving up and returning a lock error. grove defaults this to
+// migrate.DefaultLockTimeout, which is 5 minutes, and that default starves the
+// stale-lock recovery below: the recovery only runs once orch.Migrate returns
+// ErrLockHeld, so a crashed migrator wedges every later boot for a full five
+// minutes before self-heal so much as begins. Two such waits in one test
+// binary run past the default go test timeout, which is how the migration lock
+// tests came to hang instead of fail.
+//
+// Every migration here is a no-op or a CreateCollection / CreateIndexes /
+// collMod that finishes in seconds, so a few seconds covers a genuinely
+// concurrent migrator. Waiting longer than that is the staleness check's job,
+// not the retry loop's.
+const lockWaitBudget = 10 * time.Second
+
 const staleLockThreshold = 5 * time.Minute
 
 // mongomigrateLockCollection / mongomigrateLockID mirror the unexported
@@ -143,7 +159,7 @@ func (s *Store) runMigrationsWithSelfHeal(ctx context.Context, groups []*migrate
 		return fmt.Errorf("authsome/mongo: create migration executor: %w", err)
 	}
 
-	orch := migrate.NewOrchestrator(executor, groups...)
+	orch := migrate.NewOrchestrator(executor, groups...).SetLockTimeout(lockWaitBudget)
 	_, err = orch.Migrate(ctx)
 	if err == nil {
 		return nil
@@ -164,7 +180,7 @@ func (s *Store) runMigrationsWithSelfHeal(ctx context.Context, groups []*migrate
 		if retryErr != nil {
 			return fmt.Errorf("authsome/mongo: rebuild executor after breaking stale lock: %w", retryErr)
 		}
-		retryOrch := migrate.NewOrchestrator(retryExec, groups...)
+		retryOrch := migrate.NewOrchestrator(retryExec, groups...).SetLockTimeout(lockWaitBudget)
 		if _, retryMigrateErr := retryOrch.Migrate(ctx); retryMigrateErr != nil {
 			return fmt.Errorf("authsome/mongo: migration retry after breaking stale lock: %w", retryMigrateErr)
 		}
@@ -182,7 +198,7 @@ func (s *Store) runMigrationsWithSelfHeal(ctx context.Context, groups []*migrate
 	if retryErr != nil {
 		return fmt.Errorf("authsome/mongo: rebuild executor after tracking reset: %w", retryErr)
 	}
-	retryOrch := migrate.NewOrchestrator(retryExec, groups...)
+	retryOrch := migrate.NewOrchestrator(retryExec, groups...).SetLockTimeout(lockWaitBudget)
 	if _, err := retryOrch.Migrate(ctx); err != nil {
 		return fmt.Errorf("authsome/mongo: migration retry after tracking reset failed: %w", err)
 	}
@@ -482,7 +498,15 @@ func migrationIndexes() map[string][]mongo.IndexModel {
 		},
 		colUsers: {
 			{
-				Keys:    bson.D{{Key: "app_id", Value: 1}, {Key: "email", Value: 1}},
+				// env_id is part of the key because an address belongs to
+				// one account within an environment, not within a whole app.
+				// Migration 20260824000090 reshapes this on deployments that
+				// predate it.
+				Keys: bson.D{
+					{Key: "app_id", Value: 1},
+					{Key: "env_id", Value: 1},
+					{Key: "email", Value: 1},
+				},
 				Options: options.Index().SetUnique(true),
 			},
 			{
@@ -493,7 +517,11 @@ func migrationIndexes() map[string][]mongo.IndexModel {
 				// excludes by VALUE so empty strings don't collide.
 				// (See migration 20260502000004 that backfills this on
 				// existing deployments.)
-				Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "username", Value: 1}},
+				Keys: bson.D{
+					{Key: "app_id", Value: 1},
+					{Key: "env_id", Value: 1},
+					{Key: "username", Value: 1},
+				},
 				Options: options.Index().
 					SetUnique(true).
 					SetPartialFilterExpression(bson.M{"username": bson.M{"$gt": ""}}),
@@ -613,6 +641,10 @@ func migrationIndexes() map[string][]mongo.IndexModel {
 				Options: options.Index().SetUnique(true),
 			},
 			{Keys: bson.D{{Key: "app_id", Value: 1}}},
+		},
+		colDelegations: {
+			{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "subject_kind", Value: 1}, {Key: "subject_id", Value: 1}}},
+			{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "actor_kind", Value: 1}, {Key: "actor_id", Value: 1}}},
 		},
 	}
 }

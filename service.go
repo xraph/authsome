@@ -23,11 +23,13 @@ import (
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/device"
+	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
@@ -111,7 +113,10 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 
 	// Check username uniqueness (if provided)
 	if req.Username != "" {
-		_, lookupErr := e.store.GetUserByUsername(ctx, req.AppID, req.Username)
+		// id.Nil on purpose: a handle is claimed across the whole app, the
+		// same way the email check above is app-wide, even though storage
+		// only enforces uniqueness per environment.
+		_, lookupErr := e.store.GetUserByUsername(ctx, req.AppID, id.Nil, req.Username)
 		if lookupErr == nil {
 			return nil, nil, account.ErrUsernameTaken
 		}
@@ -167,7 +172,7 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 	e.promoteFirstUserToOwner(ctx, req.AppID, u.ID)
 
 	// Create session (using per-app + per-env config; JWT if configured)
-	sess, err := e.newSession(req.AppID, u.ID, e.sessionConfigForApp(ctx, req.AppID, req.EnvID))
+	sess, err := e.newSession(req.AppID, u.ID, e.sessionConfigForApp(ctx, req.AppID, req.EnvID), req.DPoPJKT)
 	if err != nil {
 		return nil, nil, fmt.Errorf("authsome: create session token: %w", err)
 	}
@@ -243,14 +248,24 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 		req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	}
 
+	// Resolve the environment before the lookup, not after. Sign-in must
+	// resolve the credential inside the environment the session will belong
+	// to, or a staging request could authenticate a production account that
+	// happens to share an address or handle.
+	if req.EnvID.IsNil() {
+		if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil { //nolint:errcheck // best-effort env lookup
+			req.EnvID = env.ID
+		}
+	}
+
 	// Lookup user
 	var u *user.User
 	var err error
 	switch {
 	case req.Email != "":
-		u, err = e.store.GetUserByEmail(ctx, req.AppID, req.Email)
+		u, err = e.store.GetUserByEmail(ctx, req.AppID, req.EnvID, req.Email)
 	case req.Username != "":
-		u, err = e.store.GetUserByUsername(ctx, req.AppID, req.Username)
+		u, err = e.store.GetUserByUsername(ctx, req.AppID, req.EnvID, req.Username)
 	default:
 		return nil, nil, account.ErrInvalidCredentials
 	}
@@ -258,13 +273,6 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	if err != nil {
 		e.recordFailedSignin(ctx, req, lockoutKey)
 		return nil, nil, account.ErrInvalidCredentials
-	}
-
-	// Resolve default environment when not explicitly provided.
-	if req.EnvID.IsNil() {
-		if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil { //nolint:errcheck // best-effort env lookup
-			req.EnvID = env.ID
-		}
 	}
 
 	// Check banned
@@ -369,6 +377,7 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 		AuthMethod: "password",
 		IPAddress:  req.IPAddress,
 		UserAgent:  req.UserAgent,
+		DPoPJKT:    req.DPoPJKT,
 	})
 	if err != nil {
 		return u, nil, err
@@ -446,6 +455,13 @@ type RefreshOpts struct {
 	IPAddress string
 	// UserAgent is the client User-Agent to validate against the session's stored UA.
 	UserAgent string
+
+	// DPoPProof is the raw DPoP header from the refresh request. Required when
+	// the session being refreshed is bound; ignored when it is not.
+	DPoPProof string
+	// Method and RequestURL describe the refresh request, for htm and htu.
+	Method     string
+	RequestURL string
 }
 
 // hashRefreshToken returns the canonical hex-encoded SHA-256 of a refresh
@@ -523,6 +539,27 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 		return nil, account.ErrInvalidCredentials
 	}
 
+	// Refuse to rotate an agent-principal session. This generic path has no
+	// grant to consult: account.RefreshSession sets ExpiresAt to now plus the
+	// app's configured TokenTTL with no awareness that an agent session's
+	// lifetime is supposed to be bounded by an agentauth.AgentGrant, so a
+	// rotation here would let an agent session outlive a revoked or expired
+	// grant indefinitely — the "never outlives the grant" invariant
+	// IssueAgentSession clamps at mint time is otherwise undone by the first
+	// refresh. Reaching into agentauth's grant store from here to clamp and
+	// re-validate properly would mean this engine package importing a
+	// specific plugin's package, which is the dependency direction the
+	// plugin architecture exists to avoid: the engine does not know about
+	// individual plugins by type. Refusing outright is the safe default
+	// until a proper seam for agent-aware refresh exists (see
+	// plugins/agentauth/doc.go, point 5, for the current re-issue-don't-refresh
+	// contract this enforces); a refused refresh costs the caller a re-authentication,
+	// an unclamped one costs the grant model its only enforcement point on
+	// this path.
+	if sess.PrincipalKind == session.PrincipalKindAgent {
+		return nil, account.ErrInvalidCredentials
+	}
+
 	// Capture the pre-rotation access token. The rotation below is committed
 	// via a compare-and-swap keyed on this value, so two concurrent refreshes
 	// presenting the same token cannot both persist their (different) rotated
@@ -557,6 +594,23 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 		}
 	}
 
+	// DPoP: a bound session may only be refreshed by the key it is bound to,
+	// and the rotated session keeps that binding.
+	//
+	// Both halves matter. Skipping the check lets a stolen refresh token be
+	// redeemed by anyone; skipping the inheritance lets it be redeemed once
+	// and traded for an unbound access token, which is the same outcome one
+	// rotation later.
+	if sess.DPoPJKT != "" {
+		o := RefreshOpts{}
+		if len(opts) > 0 {
+			o = opts[0]
+		}
+		if dpopErr := e.verifyRefreshDPoP(ctx, sess, o); dpopErr != nil {
+			return nil, account.ErrInvalidCredentials
+		}
+	}
+
 	// Lazily backfill FamilyID for legacy sessions that pre-date Phase 3E.2.
 	// Without a family, replay-cascade can't link siblings — but a single
 	// session is still safer than refusing every legacy refresh.
@@ -575,14 +629,36 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 
 	// account.RefreshSession always mints an opaque access token. If the app is
 	// configured for JWT access tokens, re-derive a JWT here (mirroring
-	// newSession) so a refresh does not silently downgrade the token format —
+	// newSession) so a refresh does not silently downgrade the token format,
 	// which would break stateless verification and JWT-revocation binding.
+	//
+	// Unless the session carries an actor chain. A chain-carrying session must
+	// never be handed a credential that drops the chain: the middleware
+	// reconstructs the chain from the session row, and a JWT is validated
+	// statelessly and loads no row at all. The row would keep its actors while
+	// the credential stopped carrying anyone to them.
+	//
+	// Without this guard the escalation closed at mint time reopens one door
+	// along. ExchangeToken and Impersonate both mint opaque tokens
+	// (see newOpaqueSession), but a refresh re-derived a JWT regardless, and
+	// /v1/admin/impersonate returns the refresh token in its body. So an
+	// impersonating admin on a JWT app could refresh into a JWT, present it to
+	// /token/exchange, and have middleware.SessionFrom find nothing:
+	// CallerActors arrives empty and the chained-exchange refusal never fires.
+	//
+	// The format downgrade this accepts is the lesser harm, and it is not
+	// really a downgrade: the token was already opaque when the session was
+	// minted, so a client holding it never had a JWT to lose.
 	tokFmt := e.TokenFormatForApp(sess.AppID.String())
-	if tokFmt.Name() == "jwt" {
+	if tokFmt.Name() == "jwt" && len(sess.Actors) == 0 {
 		jwtToken, genErr := tokFmt.GenerateAccessToken(tokenformat.TokenClaims{
 			UserID:    sess.UserID.String(),
 			AppID:     sess.AppID.String(),
 			SessionID: sess.ID.String(),
+			// Without this the first refresh turns a token bound to one
+			// resource server into an unrestricted one, silently.
+			Audience:  sess.Audience,
+			DPoPJKT:   sess.DPoPJKT,
 			IssuedAt:  sess.UpdatedAt,
 			ExpiresAt: sess.ExpiresAt,
 		})
@@ -637,6 +713,53 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 	})
 
 	return sess, nil
+}
+
+// verifyRefreshDPoP checks that a refresh of a bound session carries a proof
+// for the key it is bound to.
+//
+// A wrong-key proof gets its own audit action. A changed IP has innocent
+// explanations, a mobile network hand-off among them; a structurally valid
+// proof signed by a different key does not, so it should not sit in the same
+// bucket as ordinary client breakage.
+func (e *Engine) verifyRefreshDPoP(ctx context.Context, sess *session.Session, o RefreshOpts) error {
+	if o.DPoPProof == "" {
+		return dpop.ErrMalformedProof
+	}
+
+	proof, err := dpop.Parse(o.DPoPProof)
+	if err != nil {
+		return err
+	}
+
+	err = e.DPoPValidator().Validate(ctx, proof, dpop.Expectation{
+		Method:      o.Method,
+		URL:         o.RequestURL,
+		ExpectedJKT: sess.DPoPJKT,
+	})
+	if err == nil {
+		return nil
+	}
+
+	if errors.Is(err, dpop.ErrKeyMismatch) {
+		md := map[string]string{
+			"session_id": sess.ID.String(),
+			"bound_jkt":  sess.DPoPJKT,
+			"proof_jkt":  proof.JKT,
+			"ip":         o.IPAddress,
+		}
+		e.hooks.Emit(ctx, &hook.Event{
+			Action:     hook.ActionDPoPKeyMismatch,
+			Resource:   hook.ResourceSession,
+			ResourceID: sess.ID.String(),
+			ActorID:    sess.UserID.String(),
+			Tenant:     sess.AppID.String(),
+			Metadata:   md,
+		})
+		e.audit(ctx, bridge.SeverityWarning, bridge.OutcomeFailure,
+			"dpop_key_mismatch", "session", sess.ID.String(), sess.UserID.String(), sess.AppID.String(), "auth", md)
+	}
+	return err
 }
 
 // GetMe returns the current user by ID.
@@ -742,6 +865,17 @@ func (e *Engine) ResolveUser(userIDStr string) (*user.User, error) {
 	return e.store.GetUser(ctx, userID)
 }
 
+// ResolvePrincipalByRef adapts Engine.ResolvePrincipal to
+// middleware.PrincipalResolver's no-context shape (for middleware).
+//
+// Same trade as ResolveUser above: the resolver signature this mirrors
+// (middleware.UserResolver) carries no request context, so neither does
+// this one, and a request's cancellation or deadline does not propagate
+// into the store lookup it triggers.
+func (e *Engine) ResolvePrincipalByRef(ref principal.Ref) (*principal.Principal, error) {
+	return e.ResolvePrincipal(context.Background(), ref)
+}
+
 // ──────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────
@@ -772,6 +906,9 @@ func (e *Engine) sessionConfig() account.SessionConfig {
 		RefreshTokenTTL:    e.config.Session.RefreshTokenTTL,
 		MaxActiveSessions:  e.config.Session.MaxActiveSessions,
 		RotateRefreshToken: e.config.Session.ShouldRotateRefreshToken(),
+		// Short by default. An exchanged token is meant to be re-minted rather
+		// than held, and nothing in the global config surfaces this yet.
+		TokenExchangeTTL: 5 * time.Minute,
 	}
 }
 
@@ -800,11 +937,20 @@ func (e *Engine) sessionConfigForApp(ctx context.Context, appID id.AppID, envIDs
 
 // newSession creates a new session, optionally generating a JWT access token
 // when the app is configured for JWT token format. Falls back to opaque tokens.
-func (e *Engine) newSession(appID id.AppID, userID id.UserID, cfg account.SessionConfig) (*session.Session, error) {
+//
+// dpopJKT is the RFC 9449 thumbprint to bind the session to; empty issues an
+// ordinary unbound session. It is threaded into the JWT's cnf claim here
+// rather than assigned to sess.DPoPJKT after the token is minted, because a
+// JWT-format token validates statelessly from its own claims: setting the
+// field on sess afterward would leave the DB row bound while the token
+// itself carries no proof-of-possession requirement, silently defeating the
+// binding for every JWT-format app.
+func (e *Engine) newSession(appID id.AppID, userID id.UserID, cfg account.SessionConfig, dpopJKT string) (*session.Session, error) {
 	sess, err := account.NewSession(appID, userID, cfg)
 	if err != nil {
 		return nil, err
 	}
+	sess.DPoPJKT = dpopJKT
 
 	// Check if app uses JWT for access tokens.
 	tokFmt := e.TokenFormatForApp(appID.String())
@@ -813,6 +959,7 @@ func (e *Engine) newSession(appID id.AppID, userID id.UserID, cfg account.Sessio
 			UserID:    userID.String(),
 			AppID:     appID.String(),
 			SessionID: sess.ID.String(),
+			DPoPJKT:   dpopJKT,
 			IssuedAt:  sess.CreatedAt,
 			ExpiresAt: sess.ExpiresAt,
 		})
@@ -820,8 +967,59 @@ func (e *Engine) newSession(appID id.AppID, userID id.UserID, cfg account.Sessio
 			return nil, genErr
 		}
 		sess.Token = jwtToken
+
+		// Record on the row whatever audience the token just went out with.
+		//
+		// The claims above carry none, so GenerateAccessToken falls back to
+		// JWTConfig.Audience, and leaving sess.Audience nil made the row and
+		// the claim disagree by construction. Both are read by the same
+		// audience guard, on the JWT path and the opaque path respectively,
+		// and a guard that gets two answers for one credential is not a guard.
+		//
+		// Nothing changes for a deployment that leaves JWTConfig.Audience
+		// unset, which is every deployment that has not opted into an audience.
+		if jwtFmt, ok := tokFmt.(*tokenformat.JWT); ok {
+			if aud := jwtFmt.ConfiguredAudience(); aud != "" {
+				sess.Audience = []string{aud}
+			}
+		}
 	}
 
+	return sess, nil
+}
+
+// newOpaqueSession mints a session whose access token is always the opaque
+// random string, even on an app configured to issue JWTs.
+//
+// This exists for the two paths that put an actor chain on a session: a token
+// exchange and an impersonation. A JWT carries no RFC 8693 act claim in this
+// codebase (tokenformat.TokenClaims has UserID, AppID, SessionID and the
+// scopes, and nothing else), and AuthMiddlewareWithJWT tries JWT validation
+// FIRST and returns on success, so a JWT-format credential never causes the
+// session row to be loaded. The chain would simply not exist on the request:
+// no WithSession, no WithActors, no chain for a guard to narrow against and
+// none for the token-exchange endpoint to refuse a second exchange on.
+//
+// An opaque token has no dots, so tokenformat.IsJWT rejects it and the
+// middleware falls through to trySessionAuth, which loads the row and with it
+// the chain. The invariant that buys is worth stating plainly: a session
+// carrying actors is always an opaque token whose row carries those actors.
+//
+// The alternative was carrying the chain in an act claim and populating the
+// actor context from it in tryJWTAuth. That is more faithful to RFC 8693 and
+// considerably more work, and it would have to round-trip through every
+// token format. It is the right follow-up; this is the small, total and
+// reversible version of it.
+func (e *Engine) newOpaqueSession(
+	appID id.AppID, userID id.UserID, cfg account.SessionConfig, dpopJKT string,
+) (*session.Session, error) {
+	sess, err := account.NewSession(appID, userID, cfg)
+	if err != nil {
+		return nil, err
+	}
+	// Same stamping newSession does. Opaque tokens carry the binding on the
+	// row, which is the only place a bound opaque token can carry it.
+	sess.DPoPJKT = dpopJKT
 	return sess, nil
 }
 
@@ -1911,15 +2109,15 @@ func (e *Engine) GetRoleChildren(ctx context.Context, roleID id.RoleID) ([]*rbac
 }
 
 // HasPermission checks whether a user has a specific permission.
-// The check walks the role hierarchy so permissions from parent roles are inherited.
+//
+// Preserved as-is for plugin.PermissionChecker and for every caller that has a
+// user ID and no chain: it is Can with an empty chain, so the walk of the role
+// hierarchy and the inheritance behaviour are exactly what they were before
+// Can existed. The decision and reason Can logs on denial come from checkOne,
+// which now carries the full *warden.CheckResult for every hop rather than
+// only the subject's, so nothing here is worse off for having moved.
 func (e *Engine) HasPermission(ctx context.Context, userID id.UserID, action, resource string) (bool, error) {
-	ctx = e.ensureWardenScope(ctx)
-
-	result, err := e.wardenEng.Check(ctx, &warden.CheckRequest{
-		Subject:  warden.Subject{Kind: warden.SubjectUser, ID: userID.String()},
-		Action:   warden.Action{Name: action},
-		Resource: warden.Resource{Type: resource},
-	})
+	allowed, err := e.Can(ctx, principal.UserRef(userID), nil, action, resource)
 	if err != nil {
 		e.logger.Warn("authsome: HasPermission error",
 			log.String("user_id", userID.String()),
@@ -1930,8 +2128,11 @@ func (e *Engine) HasPermission(ctx context.Context, userID id.UserID, action, re
 		return false, err
 	}
 
-	if !result.Allowed {
-		// Log tenant and decision for diagnostics.
+	if !allowed {
+		// Keep the existing tenant diagnostics verbatim: they are what
+		// operators use to work out which app a denial came from. The
+		// decision and reason fields are logged by Can itself, where they
+		// are available for whichever hop actually denied.
 		forgeAppID := ""
 		forgeOrgID := ""
 		if s, ok := forge.ScopeFrom(ctx); ok {
@@ -1943,15 +2144,13 @@ func (e *Engine) HasPermission(ctx context.Context, userID id.UserID, action, re
 			log.String("user_id", userID.String()),
 			log.String("action", action),
 			log.String("resource", resource),
-			log.String("decision", string(result.Decision)),
-			log.String("reason", result.Reason),
 			log.String("forge_app_id", forgeAppID),
 			log.String("forge_org_id", forgeOrgID),
 			log.String("platform_app_id", e.PlatformAppID().String()),
 		)
 	}
 
-	return result.Allowed, nil
+	return allowed, nil
 }
 
 // EnsureDefaultRole assigns the default Warden role to a user if they don't
@@ -2123,6 +2322,13 @@ func (e *Engine) AdminBanUser(ctx context.Context, adminID, userID id.UserID, re
 		return fmt.Errorf("authsome: admin ban user: %w", err)
 	}
 
+	// A ban is a user update as far as plugins are concerned: agentauth (and
+	// anything else watching AfterUserUpdate) needs to see it to revoke
+	// standing grants. UpdateMe fires the same event for a self-service edit;
+	// this path bypassed it entirely until now, which meant banning a user
+	// never actually disarmed the agents acting for them.
+	e.plugins.EmitAfterUserUpdate(ctx, u)
+
 	// Revoke all active sessions for the banned user
 	_ = e.store.DeleteUserSessions(ctx, userID) //nolint:errcheck // best-effort cleanup
 
@@ -2167,6 +2373,8 @@ func (e *Engine) AdminUnbanUser(ctx context.Context, adminID, userID id.UserID) 
 	if err := e.store.UpdateUser(ctx, u); err != nil {
 		return fmt.Errorf("authsome: admin unban user: %w", err)
 	}
+
+	e.plugins.EmitAfterUserUpdate(ctx, u)
 
 	e.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionAdminUnbanUser,
@@ -2254,7 +2462,8 @@ func (e *Engine) AdminUpdateUser(ctx context.Context, adminID, userID id.UserID,
 	if updates.Username != nil {
 		newUsername := *updates.Username
 		if newUsername != u.Username && newUsername != "" {
-			if _, lookupErr := e.store.GetUserByUsername(ctx, u.AppID, newUsername); lookupErr == nil {
+			// App-wide by design, matching the signup guard.
+			if _, lookupErr := e.store.GetUserByUsername(ctx, u.AppID, id.Nil, newUsername); lookupErr == nil {
 				return account.ErrUsernameTaken
 			}
 		}
@@ -2304,7 +2513,8 @@ func (e *Engine) AdminCreateUser(ctx context.Context, adminID id.UserID, appID i
 
 	// Check username uniqueness
 	if username != "" {
-		if _, err := e.store.GetUserByUsername(ctx, appID, username); err == nil {
+		// App-wide by design, matching the signup guard.
+		if _, err := e.store.GetUserByUsername(ctx, appID, id.Nil, username); err == nil {
 			return nil, account.ErrUsernameTaken
 		}
 	}
@@ -2485,7 +2695,8 @@ func (e *Engine) AdminBulkImportUsers(ctx context.Context, adminID id.UserID, us
 
 		// Check username uniqueness
 		if u.Username != "" {
-			if _, err := e.store.GetUserByUsername(ctx, u.AppID, u.Username); err == nil {
+			// App-wide by design, matching the signup guard.
+			if _, err := e.store.GetUserByUsername(ctx, u.AppID, id.Nil, u.Username); err == nil {
 				result.Errors = append(result.Errors, BulkError{Index: i, Email: u.Email, Error: "username already taken"})
 				result.Skipped++
 				continue
@@ -2677,7 +2888,12 @@ func (e *Engine) ExportUserData(ctx context.Context, userID id.UserID) (*UserExp
 // Impersonate creates a new session for the target user, marked as impersonated
 // by the admin. The resulting session behaves as if the target user is signed in,
 // but carries the impersonator's identity for audit purposes.
-func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID) (*user.User, *session.Session, error) {
+func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID, opts ...ImpersonateOption) (*user.User, *session.Session, error) {
+	var o impersonateOpts
+	for _, apply := range opts {
+		apply(&o)
+	}
+
 	// Prevent self-impersonation
 	if adminID == targetID {
 		return nil, nil, fmt.Errorf("authsome: cannot impersonate yourself")
@@ -2689,16 +2905,62 @@ func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID) (
 		return nil, nil, fmt.Errorf("authsome: impersonate: get target user: %w", err)
 	}
 
+	// Apply the app's DPoP mandate. This mint does not go through
+	// IssueSession, so the central gate never sees it, and an unbound
+	// impersonation session would be exempt from proof-of-possession for its
+	// whole life on an app that requires it, while acting as another user.
+	if o.dpopJKT == "" && e.DPoPModeForApp(ctx, u.AppID) == dpop.ModeRequired {
+		return nil, nil, &DPoPRequiredError{}
+	}
+
 	// Create an impersonation session (short-lived: 1 hour, non-refreshable)
 	cfg := e.sessionConfigForApp(ctx, u.AppID)
 	cfg.TokenTTL = 1 * time.Hour
 	cfg.RefreshTokenTTL = 1 * time.Hour // same as token — not meant to be refreshed
 
-	sess, err := e.newSession(u.AppID, u.ID, cfg)
+	// newOpaqueSession, not newSession, for the same reason ExchangeToken
+	// uses it: an impersonation session carries an actor chain, and a
+	// JWT-format token would leave that chain unread on every request. The
+	// concrete loss on a JWT-configured app is the token-exchange endpoint's
+	// chained-exchange refusal, which can only see a chain the middleware
+	// actually loaded, so an admin could spend an impersonation JWT
+	// exchanging for a third party the impersonated user holds a grant over.
+	//
+	// The thumbprint still has to reach the row: this mint bypasses
+	// IssueSession, so an unbound impersonation session on a required-mode
+	// app would be exempt from proof-of-possession for its whole life.
+	sess, err := e.newOpaqueSession(u.AppID, u.ID, cfg, o.dpopJKT)
 	if err != nil {
 		return nil, nil, fmt.Errorf("authsome: impersonate: create session: %w", err)
 	}
+
+	now := time.Now()
+	// Impersonation is a delegation with its own grant kind, so it appears in
+	// the same listing and revocation surface as every other way one principal
+	// comes to act for another. The one thing that stays special is how it is
+	// authorized: Session.AuthzActors returns nil for it, so the admin's own
+	// permissions are not intersected in.
+	expires := now.Add(cfg.TokenTTL)
+	grant := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     u.AppID,
+		Actor:     principal.UserRef(adminID),
+		Subject:   principal.UserRef(targetID),
+		GrantKind: principal.GrantImpersonation,
+		GrantedBy: principal.UserRef(adminID),
+		ExpiresAt: &expires,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := e.store.CreateDelegation(ctx, grant); err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			return nil, nil, fmt.Errorf("authsome: impersonate: an impersonation session for this admin and target is already active and must be stopped first: %w", err)
+		}
+		return nil, nil, fmt.Errorf("authsome: impersonate: record grant: %w", err)
+	}
+
 	sess.SetImpersonatedBy(adminID)
+	sess.DelegationID = grant.ID
 
 	if err := e.store.CreateSession(ctx, sess); err != nil {
 		return nil, nil, fmt.Errorf("authsome: impersonate: store session: %w", err)
@@ -2741,6 +3003,23 @@ func (e *Engine) StopImpersonation(ctx context.Context, sessionID id.SessionID) 
 
 	if err := e.store.DeleteSession(ctx, sessionID); err != nil {
 		return fmt.Errorf("authsome: stop impersonation: delete session: %w", err)
+	}
+
+	if !sess.DelegationID.IsNil() {
+		// Best effort. The session is already gone, so the impersonation has
+		// ended whatever happens here, and failing the call would report an
+		// unstopped impersonation that has in fact stopped.
+		//
+		// Uses the engine method, not the store one directly, so this grant
+		// revocation goes through the same authorization check and hook
+		// emission as every other RevokeDelegation caller. The admin is the
+		// grant's own actor, so the check passes.
+		if err := e.RevokeDelegation(ctx, sess.AppID, principal.UserRef(sess.ImpersonatedBy()), sess.DelegationID); err != nil {
+			e.logger.Warn("authsome: stop impersonation: revoke grant failed",
+				log.String("delegation_id", sess.DelegationID.String()),
+				log.String("error", err.Error()),
+			)
+		}
 	}
 
 	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "stop_impersonation", "session", sessionID.String(), sess.ImpersonatedBy().String(), sess.AppID.String(), "admin", map[string]string{

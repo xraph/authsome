@@ -9,6 +9,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/user"
 
@@ -48,6 +49,14 @@ type beforeSignOutEntry struct {
 type afterSignOutEntry struct {
 	name string
 	hook AfterSignOut
+}
+type beforePrincipalAuthEntry struct {
+	name string
+	hook BeforePrincipalAuth
+}
+type afterPrincipalAuthEntry struct {
+	name string
+	hook AfterPrincipalAuth
 }
 type beforeUserCreateEntry struct {
 	name string
@@ -105,6 +114,10 @@ type afterMemberAddEntry struct {
 	name string
 	hook AfterMemberAdd
 }
+type beforeMemberRemoveEntry struct {
+	name string
+	hook BeforeMemberRemove
+}
 type afterMemberRemoveEntry struct {
 	name string
 	hook AfterMemberRemove
@@ -145,6 +158,8 @@ type Registry struct {
 	afterSignIn            []afterSignInEntry
 	beforeSignOut          []beforeSignOutEntry
 	afterSignOut           []afterSignOutEntry
+	beforePrincipalAuth    []beforePrincipalAuthEntry
+	afterPrincipalAuth     []afterPrincipalAuthEntry
 	beforeUserCreate       []beforeUserCreateEntry
 	afterUserCreate        []afterUserCreateEntry
 	beforeUserUpdate       []beforeUserUpdateEntry
@@ -159,6 +174,7 @@ type Registry struct {
 	afterOrgUpdate         []afterOrgUpdateEntry
 	afterOrgDelete         []afterOrgDeleteEntry
 	afterMemberAdd         []afterMemberAddEntry
+	beforeMemberRemove     []beforeMemberRemoveEntry
 	afterMemberRemove      []afterMemberRemoveEntry
 	afterMemberRoleChange  []afterMemberRoleChangeEntry
 	routeProviders         []routeProviderEntry
@@ -211,6 +227,12 @@ func (r *Registry) Register(p Plugin) {
 	if h, ok := p.(AfterSignOut); ok {
 		r.afterSignOut = append(r.afterSignOut, afterSignOutEntry{name, h})
 	}
+	if h, ok := p.(BeforePrincipalAuth); ok {
+		r.beforePrincipalAuth = append(r.beforePrincipalAuth, beforePrincipalAuthEntry{name, h})
+	}
+	if h, ok := p.(AfterPrincipalAuth); ok {
+		r.afterPrincipalAuth = append(r.afterPrincipalAuth, afterPrincipalAuthEntry{name, h})
+	}
 	if h, ok := p.(BeforeUserCreate); ok {
 		r.beforeUserCreate = append(r.beforeUserCreate, beforeUserCreateEntry{name, h})
 	}
@@ -252,6 +274,9 @@ func (r *Registry) Register(p Plugin) {
 	}
 	if h, ok := p.(AfterMemberAdd); ok {
 		r.afterMemberAdd = append(r.afterMemberAdd, afterMemberAddEntry{name, h})
+	}
+	if h, ok := p.(BeforeMemberRemove); ok {
+		r.beforeMemberRemove = append(r.beforeMemberRemove, beforeMemberRemoveEntry{name, h})
 	}
 	if h, ok := p.(AfterMemberRemove); ok {
 		r.afterMemberRemove = append(r.afterMemberRemove, afterMemberRemoveEntry{name, h})
@@ -376,6 +401,27 @@ func (r *Registry) EmitAfterSignOut(ctx context.Context, sessionID id.SessionID)
 	for _, e := range r.afterSignOut {
 		if err := e.hook.OnAfterSignOut(ctx, sessionID); err != nil {
 			r.logHookError("OnAfterSignOut", e.name, err)
+		}
+	}
+}
+
+// EmitBeforePrincipalAuth notifies all plugins that implement
+// BeforePrincipalAuth, stopping at the first error.
+func (r *Registry) EmitBeforePrincipalAuth(ctx context.Context, a *principal.AuthAttempt) error {
+	for _, e := range r.beforePrincipalAuth {
+		if err := e.hook.OnBeforePrincipalAuth(ctx, a); err != nil {
+			return err // Before hooks can abort the operation
+		}
+	}
+	return nil
+}
+
+// EmitAfterPrincipalAuth notifies all plugins that implement
+// AfterPrincipalAuth. Errors are logged, never propagated.
+func (r *Registry) EmitAfterPrincipalAuth(ctx context.Context, a *principal.AuthAttempt, s *session.Session) {
+	for _, e := range r.afterPrincipalAuth {
+		if err := e.hook.OnAfterPrincipalAuth(ctx, a, s); err != nil {
+			r.logHookError("OnAfterPrincipalAuth", e.name, err)
 		}
 	}
 }
@@ -520,6 +566,20 @@ func (r *Registry) EmitAfterMemberAdd(ctx context.Context, m *organization.Membe
 			r.logHookError("OnAfterMemberAdd", e.name, err)
 		}
 	}
+}
+
+// EmitBeforeMemberRemove notifies all plugins that implement
+// BeforeMemberRemove. Unlike EmitAfterMemberRemove, which fires after
+// deletion and only logs a hook's error, this fires before deletion and
+// returns the first error so the caller can abort the removal, matching
+// EmitBeforeUserDelete.
+func (r *Registry) EmitBeforeMemberRemove(ctx context.Context, m *organization.Member) error {
+	for _, e := range r.beforeMemberRemove {
+		if err := e.hook.OnBeforeMemberRemove(ctx, m); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // EmitAfterMemberRemove notifies all plugins that implement AfterMemberRemove.

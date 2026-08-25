@@ -35,7 +35,9 @@ import type {
   ApiTokenResponse,
   AppclientconfigConfig,
   AppsessionconfigConfig,
+  AssertionResponse,
   AssignRoleRequest,
+  AttestationResponse,
   AuthMethod,
   AuthResponse,
   BulkError,
@@ -84,7 +86,8 @@ import type {
   DeclineInvitationRequest,
   Definition,
   DefinitionGroup,
-  DeleteClientRequest,
+  DelegationListResponse,
+  DelegationResponse,
   DeleteResponse,
   Device,
   DeviceAuthResponse,
@@ -110,6 +113,7 @@ import type {
   GroupRef,
   GroupResource,
   HealthResponse,
+  IntrospectConfirmation,
   IntrospectRequest,
   IntrospectResponse,
   IntrospectUser,
@@ -137,6 +141,8 @@ import type {
   MemberListResponse,
   MemberRef,
   Meta,
+  MintChildRequest,
+  MintChildResponse,
   Name,
   OAuth2Client,
   Oauth2providerTokenResponse,
@@ -198,9 +204,10 @@ import type {
   SwitchOrgResponse,
   Team,
   TeamListResponse,
+  TokenExchangeRequest,
+  TokenExchangeResponse,
   UIMetadata,
   UnassignRoleRequest,
-  UnlinkAuthMethodRequest,
   UnlinkAuthMethodResponse,
   UpdateEnvironmentRequest,
   UpdateEnvironmentSettingsRequest,
@@ -227,7 +234,6 @@ import type {
   WebhookListResponse,
   AdminBulkImportUsersRequest,
   CreateOAuth2ClientRequest,
-  DeleteOAuth2ClientRequest,
   SocialAdminUpsertProviderRequest,
   SsoAdminCreateConnectionRequest,
   SsoAdminUpdateConnectionRequest,
@@ -251,9 +257,12 @@ import type {
   Oauth2TokenRequest,
   CreateOrganizationRequest,
   UpdateOrganizationRequest,
+  PasskeyLoginFinishRequest,
   PasskeyRegisterBeginRequest,
+  PasskeyRegisterFinishRequest,
   PhoneAuthStartRequest,
   PhoneAuthVerifyRequest,
+  MintChildPrincipalRequest,
   RefreshTokensRequest,
   AuthsomeCreateRoleRequest,
   AuthsomeUpdateRoleRequest,
@@ -262,8 +271,43 @@ import type {
   AuthsomeUnassignRoleRequest,
   SsoExchangeRequest,
   StartSSOLoginByDomainRequest,
+  ExchangeTokenRequest,
   ResendEmailVerificationRequest,
 } from './types';
+
+import { DPoPSession } from './dpop';
+import type { DPoPKeyStore } from './dpop';
+/**
+ * Strips trailing slashes from a base URL.
+ *
+ * This was `replace(/\/+$/, '')`, which backtracks: a caller passing a URL
+ * ending in many slashes makes the engine retry from every one of them, so the
+ * work grows with the square of that run. The base URL comes from whoever
+ * constructs the client, which is not always a literal. Walking backwards is
+ * linear and needs no engine at all.
+ */
+function stripTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === 47) {
+    end--;
+  }
+  return url.slice(0, end);
+}
+
+/**
+ * Encodes a body as application/x-www-form-urlencoded, which RFC 6749 section
+ * 4.1.3 requires at the OAuth2 token endpoint. Absent values stay off the wire
+ * entirely, the same as the JSON path omits them.
+ */
+function encodeForm(body: unknown): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
+    if (value !== undefined && value !== null) {
+      params.set(key, String(value));
+    }
+  }
+  return params.toString();
+}
 
 export interface AuthClientConfig {
   /** Base URL of the AuthSome API (e.g., "https://api.example.com") */
@@ -288,9 +332,11 @@ export class AuthClient {
   private token: string | undefined;
   private publishableKey: string | undefined;
   private fetchFn: typeof globalThis.fetch;
+  private dpop?: DPoPSession;
+  private dpopNonce?: string;
 
   constructor(config: AuthClientConfig) {
-    this.baseURL = config.baseURL.replace(/\/+$/, '');
+    this.baseURL = stripTrailingSlashes(config.baseURL);
     this.token = config.token;
     this.publishableKey = config.publishableKey;
     this.fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis);
@@ -314,6 +360,11 @@ export class AuthClient {
   /** Get the current publishable key. */
   getPublishableKey(): string | undefined {
     return this.publishableKey;
+  }
+
+  /** Enables RFC 9449 proof-of-possession for this client. */
+  async enableDPoP(store?: DPoPKeyStore): Promise<void> {
+    this.dpop = await DPoPSession.create(store);
   }
 
   // ──────────────────────────────────────────────────
@@ -746,12 +797,12 @@ export class AuthClient {
    * Delete OAuth2 client
    * DELETE /v1/admin/oauth/clients/{clientId}
    */
-  async deleteOAuth2Client(clientId: string, body: DeleteOAuth2ClientRequest): Promise<void> {
+  async deleteOAuth2Client(clientId: string): Promise<void> {
     const path = `/v1/admin/oauth/clients/${clientId}`;
     return this.request<void>(
       'DELETE',
       path,
-      body,
+      undefined,
     );
   }
 
@@ -1954,12 +2005,12 @@ export class AuthClient {
    * Unlink an auth method
    * DELETE /v1/me/auth-methods/{provider}
    */
-  async unlinkAuthMethod(provider: string, body: UnlinkAuthMethodRequest): Promise<UnlinkAuthMethodResponse> {
+  async unlinkAuthMethod(provider: string): Promise<UnlinkAuthMethodResponse> {
     const path = `/v1/me/auth-methods/${provider}`;
     return this.request<UnlinkAuthMethodResponse>(
       'DELETE',
       path,
-      body,
+      undefined,
     );
   }
 
@@ -2125,6 +2176,7 @@ export class AuthClient {
       'POST',
       path,
       body,
+      true,
     );
   }
 
@@ -2138,6 +2190,7 @@ export class AuthClient {
       'POST',
       path,
       body,
+      true,
     );
   }
 
@@ -2203,6 +2256,7 @@ export class AuthClient {
       'POST',
       path,
       body,
+      true,
     );
   }
 
@@ -2216,6 +2270,7 @@ export class AuthClient {
       'POST',
       path,
       body,
+      true,
     );
   }
 
@@ -2513,12 +2568,12 @@ export class AuthClient {
    * Complete passkey login
    * POST /v1/passkeys/login/finish
    */
-  async passkeyLoginFinish(): Promise<LoginFinishResponse> {
+  async passkeyLoginFinish(body: PasskeyLoginFinishRequest): Promise<LoginFinishResponse> {
     const path = "/v1/passkeys/login/finish";
     return this.request<LoginFinishResponse>(
       'POST',
       path,
-      undefined,
+      body,
     );
   }
 
@@ -2539,12 +2594,12 @@ export class AuthClient {
    * Complete passkey registration
    * POST /v1/passkeys/register/finish
    */
-  async passkeyRegisterFinish(): Promise<RegisterFinishResponse> {
+  async passkeyRegisterFinish(body: PasskeyRegisterFinishRequest): Promise<RegisterFinishResponse> {
     const path = "/v1/passkeys/register/finish";
     return this.request<RegisterFinishResponse>(
       'POST',
       path,
-      undefined,
+      body,
     );
   }
 
@@ -2581,6 +2636,32 @@ export class AuthClient {
   async phoneAuthVerify(body: PhoneAuthVerifyRequest): Promise<PhoneVerifyResponse> {
     const path = "/v1/phone/verify";
     return this.request<PhoneVerifyResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * List what may act on your behalf
+   * GET /v1/principals/me/delegations
+   */
+  async listMyDelegations(): Promise<DelegationListResponse> {
+    const path = "/v1/principals/me/delegations";
+    return this.request<DelegationListResponse>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Mint an ephemeral child principal
+   * POST /v1/principals/{id}/children
+   */
+  async mintChildPrincipal(id: string, body: MintChildPrincipalRequest): Promise<MintChildResponse> {
+    const path = `/v1/principals/${id}/children`;
+    return this.request<MintChildResponse>(
       'POST',
       path,
       body,
@@ -2946,6 +3027,19 @@ export class AuthClient {
   }
 
   /**
+   * Exchange a credential for a delegated session
+   * POST /v1/token/exchange
+   */
+  async exchangeToken(body: ExchangeTokenRequest): Promise<TokenExchangeResponse> {
+    const path = "/v1/token/exchange";
+    return this.request<TokenExchangeResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
    * List user roles
    * GET /v1/users/{userId}/roles
    */
@@ -3064,24 +3158,69 @@ export class AuthClient {
     method: string,
     path: string,
     body?: unknown,
+    form?: boolean,
+    options?: { isRetry?: boolean },
   ): Promise<T> {
+    const url = `${this.baseURL}${path}`;
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      'Content-Type': form ? 'application/x-www-form-urlencoded' : 'application/json',
       'Accept': 'application/json',
     };
 
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
+    // The DPoP proof and the Authorization header are two separate
+    // concerns. Sign-in, sign-up and OAuth2 token exchange have no session
+    // token yet, but the server still needs a proof on those calls to bind
+    // the token it is about to issue -- so the proof goes out whenever DPoP
+    // is enabled, with or without a token. The token, in turn, decides only
+    // which Authorization scheme to send, if any.
+    const token = this.token;
+    if (this.dpop) {
+      headers['DPoP'] = await this.dpop.proof(method, url, {
+        accessToken: token,
+        nonce: this.dpopNonce,
+      });
+    }
+    if (token) {
+      headers['Authorization'] = this.dpop ? `DPoP ${token}` : `Bearer ${token}`;
     }
     if (this.publishableKey) {
       headers['X-Publishable-Key'] = this.publishableKey;
     }
 
-    const response = await this.fetchFn(`${this.baseURL}${path}`, {
+    const response = await this.fetchFn(url, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : undefined,
+      body: body ? (form ? encodeForm(body) : JSON.stringify(body)) : undefined,
     });
+
+    const nonce = response.headers.get('DPoP-Nonce');
+    if (nonce) this.dpopNonce = nonce;
+
+    // RFC 9449 section 8: a nonce challenge can arrive as a 401 (resource
+    // server, WWW-Authenticate carries use_dpop_nonce) or a 400 (token
+    // endpoint / sign-in and similar binding calls, JSON body carries
+    // { error: "use_dpop_nonce" }). Only treat it as a challenge -- and
+    // retry -- when a fresh nonce actually came back with it.
+    //
+    // Retry exactly once. A server stuck re-challenging must surface as an
+    // error, not as a loop hammering your own auth server.
+    let isNonceChallenge = false;
+    if (this.dpop && nonce && !options?.isRetry) {
+      if (response.status === 401) {
+        isNonceChallenge = (response.headers.get('WWW-Authenticate') ?? '').includes('use_dpop_nonce');
+      } else if (response.status === 400) {
+        // Clone before reading: the body still has to be readable below,
+        // either by the caller's JSON parse or the error branch that follows.
+        isNonceChallenge = await response
+          .clone()
+          .json()
+          .then((b: { error?: string }) => b?.error === 'use_dpop_nonce')
+          .catch(() => false);
+      }
+    }
+    if (isNonceChallenge) {
+      return this.request<T>(method, path, body, form, { isRetry: true });
+    }
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({ error: response.statusText }));

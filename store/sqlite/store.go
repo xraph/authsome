@@ -232,40 +232,46 @@ func (s *Store) GetUser(ctx context.Context, userID id.UserID) (*user.User, erro
 	return toUser(m)
 }
 
-func (s *Store) GetUserByEmail(ctx context.Context, appID id.AppID, email string) (*user.User, error) {
+func (s *Store) GetUserByEmail(ctx context.Context, appID id.AppID, envID id.EnvironmentID, email string) (*user.User, error) {
 	m := new(UserModel)
-	err := s.sdb.NewSelect(m).
+	q := s.sdb.NewSelect(m).
 		Where("app_id = ?", appID.String()).
 		Where("email = ?", email).
-		Where("deleted_at IS NULL").
-		Scan(ctx)
-	if err != nil {
+		Where("deleted_at IS NULL")
+	if !envID.IsNil() {
+		q = q.Where("env_id = ?", envID.String())
+	}
+	if err := q.Scan(ctx); err != nil {
 		return nil, sqliteError(err)
 	}
 	return toUser(m)
 }
 
-func (s *Store) GetUserByPhone(ctx context.Context, appID id.AppID, phone string) (*user.User, error) {
+func (s *Store) GetUserByPhone(ctx context.Context, appID id.AppID, envID id.EnvironmentID, phone string) (*user.User, error) {
 	m := new(UserModel)
-	err := s.sdb.NewSelect(m).
+	q := s.sdb.NewSelect(m).
 		Where("app_id = ?", appID.String()).
 		Where("phone = ?", phone).
-		Where("deleted_at IS NULL").
-		Scan(ctx)
-	if err != nil {
+		Where("deleted_at IS NULL")
+	if !envID.IsNil() {
+		q = q.Where("env_id = ?", envID.String())
+	}
+	if err := q.Scan(ctx); err != nil {
 		return nil, sqliteError(err)
 	}
 	return toUser(m)
 }
 
-func (s *Store) GetUserByUsername(ctx context.Context, appID id.AppID, username string) (*user.User, error) {
+func (s *Store) GetUserByUsername(ctx context.Context, appID id.AppID, envID id.EnvironmentID, username string) (*user.User, error) {
 	m := new(UserModel)
-	err := s.sdb.NewSelect(m).
+	q := s.sdb.NewSelect(m).
 		Where("app_id = ?", appID.String()).
 		Where("username = ?", username).
-		Where("deleted_at IS NULL").
-		Scan(ctx)
-	if err != nil {
+		Where("deleted_at IS NULL")
+	if !envID.IsNil() {
+		q = q.Where("env_id = ?", envID.String())
+	}
+	if err := q.Scan(ctx); err != nil {
 		return nil, sqliteError(err)
 	}
 	return toUser(m)
@@ -416,6 +422,21 @@ func (s *Store) DeleteSession(ctx context.Context, sessionID id.SessionID) error
 
 func (s *Store) DeleteUserSessions(ctx context.Context, userID id.UserID) error {
 	_, err := s.sdb.NewDelete((*SessionModel)(nil)).Where("user_id = ?", userID.String()).Exec(ctx)
+	return sqliteError(err)
+}
+
+// DeleteSessionsByGrant deletes every session issued under grantID, backed by
+// idx_authsome_sessions_grant_id.
+func (s *Store) DeleteSessionsByGrant(ctx context.Context, grantID id.AgentGrantID) error {
+	if grantID.IsNil() {
+		// grant_id is TEXT NOT NULL DEFAULT '' here, and a nil grantID also
+		// stringifies to "" — so without this guard, a caller that failed to
+		// resolve a real grant id would delete every human session in the
+		// table (every non-agent row carries grant_id = '' too) instead of
+		// doing nothing.
+		return nil
+	}
+	_, err := s.sdb.NewDelete((*SessionModel)(nil)).Where("grant_id = ?", grantID.String()).Exec(ctx)
 	return sqliteError(err)
 }
 

@@ -110,7 +110,7 @@ export function SessionList({
     setRevokeTarget(null);
 
     try {
-      await client.revokeSession(s.id, { SessionID: s.id }, token);
+      await client.revokeSession(s.id, token);
       await fetchSessions();
       onRevoke?.(s.id);
     } catch (err) {
@@ -132,7 +132,7 @@ export function SessionList({
       const otherSessions = sessions.filter((s) => !isCurrentSession(s));
 
       for (const s of otherSessions) {
-        await client.revokeSession(s.id, { SessionID: s.id }, token);
+        await client.revokeSession(s.id, token);
       }
 
       await fetchSessions();

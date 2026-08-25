@@ -16,6 +16,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/geoip"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
@@ -23,10 +24,11 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ plugin.Plugin           = (*Plugin)(nil)
-	_ plugin.OnInit           = (*Plugin)(nil)
-	_ plugin.AfterSignIn      = (*Plugin)(nil)
-	_ plugin.SettingsProvider = (*Plugin)(nil)
+	_ plugin.Plugin             = (*Plugin)(nil)
+	_ plugin.OnInit             = (*Plugin)(nil)
+	_ plugin.AfterSignIn        = (*Plugin)(nil)
+	_ plugin.AfterPrincipalAuth = (*Plugin)(nil)
+	_ plugin.SettingsProvider   = (*Plugin)(nil)
 )
 
 // ──────────────────────────────────────────────────
@@ -109,9 +111,11 @@ func (c *Config) defaults() {
 	}
 }
 
-// LoginPattern tracks a user's typical login behavior.
+// LoginPattern tracks a principal's typical login behavior.
 type LoginPattern struct {
-	UserID           id.UserID
+	// Principal is the caller this pattern belongs to: a user for sign-in,
+	// an agent or workload for machine traffic.
+	Principal        principal.Ref
 	LoginCount       int
 	HourHistogram    [24]int        // login count by hour of day
 	DayHistogram     [7]int         // login count by day of week
@@ -121,7 +125,7 @@ type LoginPattern struct {
 
 // Alert is emitted when an anomalous login is detected.
 type Alert struct {
-	UserID    id.UserID
+	Principal principal.Ref
 	SessionID id.SessionID
 	Type      string // "unusual_time", "unusual_country", "frequency_spike"
 	RiskScore int
@@ -137,8 +141,11 @@ type Plugin struct {
 	logger      log.Logger
 	settingsMgr *settings.Manager
 
+	// patterns is keyed by principal.Ref.String() rather than by user ID,
+	// so a machine caller gets its own pattern history instead of sharing
+	// (or colliding with) another principal's.
 	mu       sync.RWMutex
-	patterns map[string]*LoginPattern // keyed by user ID
+	patterns map[string]*LoginPattern
 }
 
 // New creates a new anomaly detection plugin.
@@ -197,19 +204,43 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	return nil
 }
 
-// OnAfterSignIn records the login and checks for anomalies.
+// OnAfterSignIn records a person's login and checks for anomalies.
 func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, s *session.Session) error {
+	return p.recordLogin(ctx, principal.UserRef(u.ID), u.AppID.String(), s.ID, s.IPAddress)
+}
+
+// OnAfterPrincipalAuth records a machine caller's login and checks for
+// anomalies.
+//
+// Keyed by principal rather than user. An agent has no user, and two agents
+// sharing one login-pattern history would score each other's normal traffic
+// as anomalous, or mask a real anomaly in one behind the other's volume.
+func (p *Plugin) OnAfterPrincipalAuth(ctx context.Context, a *principal.AuthAttempt, s *session.Session) error {
+	ip := a.IPAddress
+	var sessionID id.SessionID
+	if s != nil {
+		if ip == "" {
+			ip = s.IPAddress
+		}
+		sessionID = s.ID
+	}
+	return p.recordLogin(ctx, a.Subject, a.AppID.String(), sessionID, ip)
+}
+
+// recordLogin is the body shared by OnAfterSignIn and OnAfterPrincipalAuth:
+// it records ref's login and checks ref's own pattern history for anomalies.
+func (p *Plugin) recordLogin(ctx context.Context, ref principal.Ref, appID string, sessionID id.SessionID, ipAddress string) error {
 	now := time.Now()
-	userKey := u.ID.String()
+	refKey := ref.String()
 
 	p.mu.Lock()
-	pattern, exists := p.patterns[userKey]
+	pattern, exists := p.patterns[refKey]
 	if !exists {
 		pattern = &LoginPattern{
-			UserID:           u.ID,
+			Principal:        ref,
 			CountryHistogram: make(map[string]int),
 		}
-		p.patterns[userKey] = pattern
+		p.patterns[refKey] = pattern
 	}
 
 	// Record this login.
@@ -220,8 +251,8 @@ func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, s *session.Ses
 
 	// Resolve country.
 	var country string
-	if p.geoIP != nil && s.IPAddress != "" {
-		if loc := p.geoIP.Resolve(s.IPAddress); loc != nil {
+	if p.geoIP != nil && ipAddress != "" {
+		if loc := p.geoIP.Resolve(ipAddress); loc != nil {
 			country = loc.Country
 			pattern.CountryHistogram[country]++
 		}
@@ -244,27 +275,27 @@ func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, s *session.Ses
 	var alerts []*Alert
 
 	if p.config.EnableTimeAnomaly {
-		if alert := p.checkTimeAnomaly(u.ID, s.ID, now, &snapshot); alert != nil {
+		if alert := p.checkTimeAnomaly(ref, sessionID, now, &snapshot); alert != nil {
 			alerts = append(alerts, alert)
 		}
 	}
 
 	if p.config.EnableGeoAnomaly && country != "" {
-		if alert := p.checkGeoAnomaly(u.ID, s.ID, country, &snapshot); alert != nil {
+		if alert := p.checkGeoAnomaly(ref, sessionID, country, &snapshot); alert != nil {
 			alerts = append(alerts, alert)
 		}
 	}
 
 	for _, alert := range alerts {
 		if alert.RiskScore >= p.config.RiskThreshold {
-			p.handleAlert(ctx, u.AppID, alert)
+			p.handleAlert(ctx, appID, alert)
 		}
 	}
 
 	return nil
 }
 
-func (p *Plugin) checkTimeAnomaly(userID id.UserID, sessID id.SessionID, now time.Time, pattern *LoginPattern) *Alert {
+func (p *Plugin) checkTimeAnomaly(ref principal.Ref, sessID id.SessionID, now time.Time, pattern *LoginPattern) *Alert {
 	hour := now.Hour()
 	hourCount := pattern.HourHistogram[hour]
 	totalLogins := pattern.LoginCount
@@ -279,7 +310,7 @@ func (p *Plugin) checkTimeAnomaly(userID id.UserID, sessID id.SessionID, now tim
 			score = 100
 		}
 		return &Alert{
-			UserID:    userID,
+			Principal: ref,
 			SessionID: sessID,
 			Type:      "unusual_time",
 			RiskScore: score,
@@ -293,13 +324,13 @@ func (p *Plugin) checkTimeAnomaly(userID id.UserID, sessID id.SessionID, now tim
 	return nil
 }
 
-func (p *Plugin) checkGeoAnomaly(userID id.UserID, sessID id.SessionID, country string, pattern *LoginPattern) *Alert {
+func (p *Plugin) checkGeoAnomaly(ref principal.Ref, sessID id.SessionID, country string, pattern *LoginPattern) *Alert {
 	countryCount := pattern.CountryHistogram[country]
 
-	// First time from this country (and user has history).
+	// First time from this country (and the principal has history).
 	if countryCount <= 1 {
 		return &Alert{
-			UserID:    userID,
+			Principal: ref,
 			SessionID: sessID,
 			Type:      "unusual_country",
 			RiskScore: 85,
@@ -312,9 +343,9 @@ func (p *Plugin) checkGeoAnomaly(userID id.UserID, sessID id.SessionID, country 
 	return nil
 }
 
-func (p *Plugin) handleAlert(ctx context.Context, appID id.AppID, alert *Alert) {
+func (p *Plugin) handleAlert(ctx context.Context, appID string, alert *Alert) {
 	p.logger.Warn("anomaly: login anomaly detected",
-		log.String("user_id", alert.UserID.String()),
+		log.String("principal", alert.Principal.String()),
 		log.String("type", alert.Type),
 	)
 
@@ -330,8 +361,8 @@ func (p *Plugin) handleAlert(ctx context.Context, appID id.AppID, alert *Alert) 
 			Action:     "login_anomaly",
 			Resource:   "session",
 			ResourceID: alert.SessionID.String(),
-			ActorID:    alert.UserID.String(),
-			Tenant:     appID.String(),
+			ActorID:    alert.Principal.String(),
+			Tenant:     appID,
 			Outcome:    bridge.OutcomeSuccess,
 			Severity:   bridge.SeverityWarning,
 			Metadata:   metadata,
@@ -340,7 +371,7 @@ func (p *Plugin) handleAlert(ctx context.Context, appID id.AppID, alert *Alert) 
 
 	if p.relay != nil {
 		data := map[string]string{
-			"user_id":      alert.UserID.String(),
+			"principal":    alert.Principal.String(),
 			"session_id":   alert.SessionID.String(),
 			"anomaly_type": alert.Type,
 			"risk_score":   fmt.Sprintf("%d", alert.RiskScore),
@@ -350,7 +381,7 @@ func (p *Plugin) handleAlert(ctx context.Context, appID id.AppID, alert *Alert) 
 		}
 		_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 			Type:     "security.login_anomaly",
-			TenantID: appID.String(),
+			TenantID: appID,
 			Data:     data,
 		})
 	}

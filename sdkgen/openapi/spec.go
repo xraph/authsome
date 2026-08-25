@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 )
 
 // LoadSpecFromFile reads a JSON-encoded OpenAPI spec from disk. This is used
@@ -131,4 +132,50 @@ type SecurityRequirement map[string][]string
 type Tag struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
+}
+
+// SecuritySchemes returns the declared security schemes, or nil when the spec
+// carries no components block. Callers pass the result straight to
+// OperationTakesToken, so it has to survive a spec with nothing declared.
+func (s *Spec) SecuritySchemes() map[string]*SecurityScheme {
+	if s == nil || s.Components == nil {
+		return nil
+	}
+	return s.Components.SecuritySchemes
+}
+
+// OperationTakesToken reports whether generated client methods for op should
+// carry an explicit bearer-token parameter.
+//
+// The three language generators (golang, typescript, dart) each used to answer
+// this by matching the literal scheme name "bearerAuth". That silently dropped
+// the token parameter from every operation secured with forge's
+// WithGroupAuth("session", "session-cookie") — 87 of the 200 operations in the
+// current spec — leaving them impossible to authenticate through any SDK.
+// "session" is a bearer scheme: extractToken reads Authorization: Bearer first
+// and only then falls back to the auth_token cookie.
+//
+// The rule is deliberately a property of the scheme rather than its name: a
+// scheme carries a token when it is declared as HTTP bearer. Adding a new name
+// to a route is then enough, so long as specgen declares it, and a name nobody
+// declared contributes nothing rather than quietly deciding the answer.
+//
+// schemes is spec.Components.SecuritySchemes, which may be nil or may not
+// declare every name an operation references.
+func OperationTakesToken(op *Operation, schemes map[string]*SecurityScheme) bool {
+	if op == nil || len(op.Security) == 0 {
+		return false
+	}
+	for _, req := range op.Security {
+		for name := range req {
+			s := schemes[name]
+			if s == nil {
+				continue
+			}
+			if s.Type == "http" && strings.EqualFold(s.Scheme, "bearer") {
+				return true
+			}
+		}
+	}
+	return false
 }

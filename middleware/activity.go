@@ -9,6 +9,7 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/session"
 )
 
 // SessionActivityConfig controls sliding session extension behavior.
@@ -71,6 +72,24 @@ func SessionActivityMiddleware(
 			// Only extend for authenticated sessions.
 			sess, ok := SessionFrom(ctx.Context())
 			if !ok || sess == nil {
+				return nil
+			}
+
+			// An agent session never gets a sliding window. Its lifetime is
+			// a function of the grant that authorized it, not of how much
+			// traffic the agent happens to send — a grant-clamped 15-minute
+			// session extended to now + InactivityTimeout (seven days by
+			// default, session_settings.go) on its very first request would
+			// silently outlive a revoked or expired grant, the same failure
+			// class as an unclamped refresh. This is the third of three
+			// guards that together enforce that one invariant: the other
+			// two are Engine.Refresh's outright refusal to rotate an
+			// agent-principal session (service.go) and roleStampingStore's
+			// shouldStamp/shouldRestamp agent exclusion
+			// (engine_session_roles.go). Agent sessions are deliberately
+			// short-lived and re-issued from the grant on demand, so they
+			// have no need of a sliding window in the first place.
+			if sess.PrincipalKind == session.PrincipalKindAgent {
 				return nil
 			}
 

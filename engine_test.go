@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -46,10 +48,13 @@ func newTestEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *me
 
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
+	cfg := testEngineConfig()
+
 	allOpts := append([]authsome.Option{
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
+		authsome.WithConfig(cfg),
 		authsome.WithAppID("aapp_01jf0000000000000000000000"),
 	}, opts...)
 	eng, err := authsome.NewEngine(allOpts...)
@@ -273,4 +278,20 @@ func TestEngine_HasUsers_BeforeStart(t *testing.T) {
 
 	// HasUsers should return false before Start (engine not started guard)
 	assert.False(t, eng.HasUsers(context.Background()))
+}
+
+// testEngineConfig is DefaultConfig with password hashing dropped to the
+// cheapest bcrypt cost.
+//
+// Production runs cost 12. Under -race that is seconds per hash, and this
+// package signs in often enough that the hashing alone ran the package past
+// the ten minute per-package timeout in CI. Nothing here asserts on the cost;
+// the tests check that the right password verifies and the wrong one does not,
+// which MinCost answers the same way. Anything that does care sets its own
+// policy explicitly, as account/service_test.go does.
+func testEngineConfig() authsome.Config {
+	cfg := authsome.DefaultConfig()
+	cfg.Password.BcryptCost = bcrypt.MinCost
+
+	return cfg
 }

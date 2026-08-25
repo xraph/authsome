@@ -260,6 +260,15 @@ func (p *Plugin) handlePatchUser(ctx forge.Context, req *scimUserPathParam) (*Us
 		return nil, forge.InternalError(err)
 	}
 
+	// PATCH {"path":"active","value":false} (and the pathless bulk-replace
+	// shape) is the deactivation Okta and Entra ID send by default, and it
+	// bans the user (see applyUserPatchReplace) without going through
+	// AdminBanUser or DeactivateUser. Plugins watching AfterUserUpdate need
+	// to see every path that can flip Banned, not just the two named ones.
+	if p.plugins != nil {
+		p.plugins.EmitAfterUserUpdate(ctx.Context(), u)
+	}
+
 	// Check if user was deactivated.
 	if u.Banned {
 		p.service.RecordLog(ctx.Context(), cfg.ID, ActionSuspendUser, "User", "", u.ID.String(), LogStatusSuccess, "")

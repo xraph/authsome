@@ -178,6 +178,12 @@ func fromUserModel(m *userModel) (*user.User, error) {
 // Session model
 // ──────────────────────────────────────────────────
 
+// actorModel is one hop of a session's actor chain.
+type actorModel struct {
+	Kind string `bson:"kind"`
+	ID   string `bson:"id"`
+}
+
 type sessionModel struct {
 	grove.BaseModel `grove:"table:authsome_sessions"`
 
@@ -204,15 +210,35 @@ type sessionModel struct {
 	UserAgent        string `grove:"user_agent"                bson:"user_agent"`
 	DeviceID         string `grove:"device_id"                 bson:"device_id,omitempty"`
 	ImpersonatedBy   string `grove:"impersonated_by"           bson:"impersonated_by,omitempty"`
+	// Actors is the chain of principals acting on the subject's behalf, and
+	// ActorGrant says what put them there. Session.ImpersonatedBy is derived
+	// from both, so impersonated_by above is now a projection of this chain
+	// kept for readers outside this repository, not the source of truth. A
+	// delegation chain has no impersonator at all, which is why storing only
+	// impersonated_by dropped delegated sessions entirely.
+	//
+	// Held as a subdocument array rather than an encoded string so a chain
+	// element can be queried on directly, which is what an operator asking
+	// "what did this agent touch" needs.
+	Actors       []actorModel `grove:"actors"        bson:"actors,omitempty"`
+	ActorGrant   string       `grove:"actor_grant"   bson:"actor_grant,omitempty"`
+	DelegationID string       `grove:"delegation_id" bson:"delegation_id,omitempty"`
+	// AgentID and GrantID carry the agent principal and the grant that
+	// authorized it, mapped the same way as ServiceAccountID above.
+	AgentID string `grove:"agent_id"                  bson:"agent_id,omitempty"`
+	GrantID string `grove:"grant_id"                  bson:"grant_id,omitempty"`
 	// Mongo stores the slugs as a native array, the way WebhookModel.Events
 	// does. The SQL stores encode JSON into a text column because they have
 	// no array type worth using here; there is no reason to flatten it twice.
 	Roles                 []string  `grove:"roles"                     bson:"roles,omitempty"`
+	Audience              []string  `grove:"audience"                  bson:"audience,omitempty"`
+	Scopes                []string  `grove:"scopes"                    bson:"scopes,omitempty"`
 	LastActivityAt        time.Time `grove:"last_activity_at"          bson:"last_activity_at,omitempty"`
 	ExpiresAt             time.Time `grove:"expires_at"                bson:"expires_at"`
 	RefreshTokenExpiresAt time.Time `grove:"refresh_token_expires_at"  bson:"refresh_token_expires_at"`
 	CreatedAt             time.Time `grove:"created_at"                bson:"created_at"`
 	UpdatedAt             time.Time `grove:"updated_at"                bson:"updated_at"`
+	DPoPJKT               string    `grove:"dpop_jkt"                  bson:"dpop_jkt,omitempty"`
 }
 
 func toSessionModel(s *session.Session) *sessionModel {
@@ -231,9 +257,16 @@ func toSessionModel(s *session.Session) *sessionModel {
 		RefreshTokenExpiresAt: s.RefreshTokenExpiresAt,
 		CreatedAt:             s.CreatedAt,
 		UpdatedAt:             s.UpdatedAt,
+		DPoPJKT:               s.DPoPJKT,
 	}
 	if !s.ServiceAccountID.IsNil() {
 		m.ServiceAccountID = s.ServiceAccountID.String()
+	}
+	if !s.AgentID.IsNil() {
+		m.AgentID = s.AgentID.String()
+	}
+	if !s.GrantID.IsNil() {
+		m.GrantID = s.GrantID.String()
 	}
 	if s.OrgID.Prefix() != "" {
 		m.OrgID = s.OrgID.String()
@@ -254,6 +287,26 @@ func toSessionModel(s *session.Session) *sessionModel {
 	// principal that holds no roles. An empty slice marshals to [], which
 	// validates and decodes back to no roles.
 	m.Roles = append([]string{}, s.Roles...)
+	// Always a non-nil slice, for the same reason as Roles above: grove writes
+	// every mapped field regardless of the bson omitempty tag, so nil reaches
+	// mongo as `audience: null` and the generated $jsonSchema rejects the
+	// whole insert.
+	m.Audience = append([]string{}, s.Audience...)
+	// Non-nil for the same reason, and doubly load-bearing here: an empty
+	// chain is the common case, so a nil would fail the great majority of
+	// session writes rather than an unlucky few.
+	m.Actors = make([]actorModel, 0, len(s.Actors))
+	for _, a := range s.Actors {
+		m.Actors = append(m.Actors, actorModel{Kind: string(a.Kind), ID: a.ID})
+	}
+	m.ActorGrant = string(s.ActorGrant)
+	if !s.DelegationID.IsNil() {
+		m.DelegationID = s.DelegationID.String()
+	}
+	// Non-nil for the same reason Roles is: grove writes every mapped field
+	// whatever the bson omitempty tag says, so a nil slice reaches mongo as
+	// null and fails to decode on the way back. See commit 9116564.
+	m.Scopes = append([]string{}, s.Scopes...)
 	return m
 }
 
@@ -281,6 +334,7 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 		RefreshTokenExpiresAt: m.RefreshTokenExpiresAt,
 		CreatedAt:             m.CreatedAt,
 		UpdatedAt:             m.UpdatedAt,
+		DPoPJKT:               m.DPoPJKT,
 	}
 	// Guarded like every other optional id below rather than parsed up front:
 	// a service-account session stores no user_id, and an unguarded parse
@@ -299,6 +353,20 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 			return nil, err
 		}
 		s.ServiceAccountID = svcID
+	}
+	if m.AgentID != "" {
+		agentID, err := id.ParseAgentID(m.AgentID)
+		if err != nil {
+			return nil, err
+		}
+		s.AgentID = agentID
+	}
+	if m.GrantID != "" {
+		grantID, err := id.ParseAgentGrantID(m.GrantID)
+		if err != nil {
+			return nil, err
+		}
+		s.GrantID = grantID
 	}
 	if m.OrgID != "" {
 		orgID, err := id.ParseOrgID(m.OrgID)
@@ -328,8 +396,61 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 		}
 		s.FamilyID = famID
 	}
+	// After the impersonated_by fallback above on purpose: a document that
+	// carries both is one written since the chain landed, and there the chain
+	// is authoritative. A document carrying only impersonated_by predates it
+	// and keeps the rebuilt impersonation chain. Same precedence as
+	// Session.UnmarshalJSON and store/postgres.
+	if len(m.Actors) > 0 {
+		chain := make(principal.Chain, 0, len(m.Actors))
+		for _, a := range m.Actors {
+			chain = append(chain, principal.Ref{Kind: principal.Kind(a.Kind), ID: a.ID})
+		}
+		s.Actors = chain
+	}
+	if m.ActorGrant != "" {
+		s.ActorGrant = principal.GrantKind(m.ActorGrant)
+	}
+	if m.DelegationID != "" {
+		delID, err := id.ParseDelegationID(m.DelegationID)
+		if err != nil {
+			return nil, err
+		}
+		s.DelegationID = delID
+	}
 	if len(m.Roles) > 0 {
 		s.Roles = append([]string(nil), m.Roles...)
+	}
+	if len(m.Audience) > 0 {
+		s.Audience = append([]string(nil), m.Audience...)
+	}
+	// After the impersonated_by fallback above on purpose: a document that
+	// carries both is one written since the chain landed, and there the chain
+	// is authoritative. A document carrying only impersonated_by predates it
+	// and keeps the rebuilt impersonation chain. Same precedence as
+	// Session.UnmarshalJSON and store/postgres.
+	if len(m.Actors) > 0 {
+		chain := make(principal.Chain, 0, len(m.Actors))
+		for _, a := range m.Actors {
+			chain = append(chain, principal.Ref{Kind: principal.Kind(a.Kind), ID: a.ID})
+		}
+		s.Actors = chain
+	}
+	if m.ActorGrant != "" {
+		s.ActorGrant = principal.GrantKind(m.ActorGrant)
+	}
+	if m.DelegationID != "" {
+		delID, err := id.ParseDelegationID(m.DelegationID)
+		if err != nil {
+			return nil, err
+		}
+		s.DelegationID = delID
+	}
+	if len(m.Roles) > 0 {
+		s.Roles = append([]string(nil), m.Roles...)
+	}
+	if len(m.Scopes) > 0 {
+		s.Scopes = append([]string(nil), m.Scopes...)
 	}
 	return s, nil
 }
@@ -978,25 +1099,55 @@ func fromAPIKeyModel(m *apiKeyModel) (*apikey.APIKey, error) {
 type serviceAccountModel struct {
 	grove.BaseModel `grove:"table:authsome_service_accounts"`
 
-	ID          string    `grove:"id,pk"       bson:"_id"`
-	AppID       string    `grove:"app_id"      bson:"app_id"`
-	Name        string    `grove:"name"        bson:"name"`
-	Description string    `grove:"description" bson:"description,omitempty"`
-	Scopes      string    `grove:"scopes"      bson:"scopes,omitempty"`
-	Active      bool      `grove:"active"      bson:"active"`
-	CreatedAt   time.Time `grove:"created_at"  bson:"created_at"`
-	UpdatedAt   time.Time `grove:"updated_at"  bson:"updated_at"`
+	ID          string `grove:"id,pk"       bson:"_id"`
+	AppID       string `grove:"app_id"      bson:"app_id"`
+	EnvID       string `grove:"env_id"        bson:"env_id,omitempty"`
+	OrgID       string `grove:"org_id"        bson:"org_id,omitempty"`
+	Kind        string `grove:"kind"          bson:"kind,omitempty"`
+	Name        string `grove:"name"        bson:"name"`
+	Description string `grove:"description" bson:"description,omitempty"`
+	// Scopes stays a comma-joined string rather than the native array the
+	// session models use. Converting it needs a data migration over existing
+	// rows, which belongs with the change that needs it, not here.
+	Scopes      string     `grove:"scopes"      bson:"scopes,omitempty"`
+	OwnerUserID string     `grove:"owner_user_id" bson:"owner_user_id,omitempty"`
+	ParentID    string     `grove:"parent_id"     bson:"parent_id,omitempty"`
+	ExpiresAt   *time.Time `grove:"expires_at"    bson:"expires_at,omitempty"`
+	Active      bool       `grove:"active"      bson:"active"`
+	CreatedAt   time.Time  `grove:"created_at"  bson:"created_at"`
+	UpdatedAt   time.Time  `grove:"updated_at"  bson:"updated_at"`
 }
 
 func toServiceAccountModel(svc *serviceaccount.ServiceAccount) *serviceAccountModel {
+	// Never blank on write, matching store/postgres: a row this store creates
+	// gets a concrete kind, and the empty-kind fallback in ToPrincipal stays a
+	// read-time concern for rows written by some other tool.
+	kind := svc.Kind
+	if kind == "" {
+		kind = principal.KindService
+	}
 	m := &serviceAccountModel{
 		ID:          svc.ID.String(),
 		AppID:       svc.AppID.String(),
+		Kind:        string(kind),
 		Name:        svc.Name,
 		Description: svc.Description,
+		ExpiresAt:   svc.ExpiresAt,
 		Active:      svc.Active,
 		CreatedAt:   svc.CreatedAt,
 		UpdatedAt:   svc.UpdatedAt,
+	}
+	if svc.EnvID.Prefix() != "" {
+		m.EnvID = svc.EnvID.String()
+	}
+	if svc.OrgID.Prefix() != "" {
+		m.OrgID = svc.OrgID.String()
+	}
+	if !svc.OwnerUserID.IsNil() {
+		m.OwnerUserID = svc.OwnerUserID.String()
+	}
+	if !svc.ParentID.IsNil() {
+		m.ParentID = svc.ParentID.String()
 	}
 	if len(svc.Scopes) > 0 {
 		m.Scopes = strings.Join(svc.Scopes, ",")
@@ -1016,16 +1167,131 @@ func fromServiceAccountModel(m *serviceAccountModel) (*serviceaccount.ServiceAcc
 	svc := &serviceaccount.ServiceAccount{
 		ID:          svcID,
 		AppID:       appID,
+		Kind:        principal.Kind(m.Kind),
 		Name:        m.Name,
 		Description: m.Description,
+		ExpiresAt:   m.ExpiresAt,
 		Active:      m.Active,
 		CreatedAt:   m.CreatedAt,
 		UpdatedAt:   m.UpdatedAt,
+	}
+	if m.EnvID != "" {
+		envID, err := id.ParseEnvironmentID(m.EnvID)
+		if err != nil {
+			return nil, err
+		}
+		svc.EnvID = envID
+	}
+	if m.OrgID != "" {
+		orgID, err := id.ParseOrgID(m.OrgID)
+		if err != nil {
+			return nil, err
+		}
+		svc.OrgID = orgID
+	}
+	if m.OwnerUserID != "" {
+		ownerID, err := id.ParseUserID(m.OwnerUserID)
+		if err != nil {
+			return nil, err
+		}
+		svc.OwnerUserID = ownerID
+	}
+	if m.ParentID != "" {
+		parentID, err := id.ParseServiceAccountID(m.ParentID)
+		if err != nil {
+			return nil, err
+		}
+		svc.ParentID = parentID
 	}
 	if m.Scopes != "" {
 		svc.Scopes = strings.Split(m.Scopes, ",")
 	}
 	return svc, nil
+}
+
+// ──────────────────────────────────────────────────
+// Delegation model
+// ──────────────────────────────────────────────────
+
+type delegationModel struct {
+	grove.BaseModel `grove:"table:authsome_delegations"`
+
+	ID            string     `grove:"id,pk"            bson:"_id"`
+	AppID         string     `grove:"app_id"           bson:"app_id"`
+	OrgID         string     `grove:"org_id"           bson:"org_id,omitempty"`
+	ActorKind     string     `grove:"actor_kind"       bson:"actor_kind"`
+	ActorID       string     `grove:"actor_id"         bson:"actor_id"`
+	SubjectKind   string     `grove:"subject_kind"     bson:"subject_kind"`
+	SubjectID     string     `grove:"subject_id"       bson:"subject_id"`
+	GrantKind     string     `grove:"grant_kind"       bson:"grant_kind"`
+	Scopes        []string   `grove:"scopes"           bson:"scopes,omitempty"`
+	GrantedByKind string     `grove:"granted_by_kind"  bson:"granted_by_kind,omitempty"`
+	GrantedByID   string     `grove:"granted_by_id"    bson:"granted_by_id,omitempty"`
+	ExpiresAt     *time.Time `grove:"expires_at"       bson:"expires_at,omitempty"`
+	RevokedAt     *time.Time `grove:"revoked_at"       bson:"revoked_at,omitempty"`
+	CreatedAt     time.Time  `grove:"created_at"       bson:"created_at"`
+	UpdatedAt     time.Time  `grove:"updated_at"       bson:"updated_at"`
+}
+
+func toDelegationModel(d *principal.Delegation) *delegationModel {
+	m := &delegationModel{
+		ID:            d.ID.String(),
+		AppID:         d.AppID.String(),
+		ActorKind:     string(d.Actor.Kind),
+		ActorID:       d.Actor.ID,
+		SubjectKind:   string(d.Subject.Kind),
+		SubjectID:     d.Subject.ID,
+		GrantKind:     string(d.GrantKind),
+		GrantedByKind: string(d.GrantedBy.Kind),
+		GrantedByID:   d.GrantedBy.ID,
+		ExpiresAt:     d.ExpiresAt,
+		RevokedAt:     d.RevokedAt,
+		CreatedAt:     d.CreatedAt,
+		UpdatedAt:     d.UpdatedAt,
+	}
+	if d.OrgID.Prefix() != "" {
+		m.OrgID = d.OrgID.String()
+	}
+	// Non-nil, like every other slice this store writes: grove writes each
+	// mapped field whatever the bson omitempty tag says, so a nil arrives as
+	// null and the generated $jsonSchema, which declares bsonType array,
+	// rejects the insert. An unscoped grant is the common case here.
+	m.Scopes = append([]string{}, d.Scopes...)
+	return m
+}
+
+func fromDelegationModel(m *delegationModel) (*principal.Delegation, error) {
+	delID, err := id.ParseDelegationID(m.ID)
+	if err != nil {
+		return nil, err
+	}
+	appID, err := id.ParseAppID(m.AppID)
+	if err != nil {
+		return nil, err
+	}
+	d := &principal.Delegation{
+		ID:        delID,
+		AppID:     appID,
+		Actor:     principal.Ref{Kind: principal.Kind(m.ActorKind), ID: m.ActorID},
+		Subject:   principal.Ref{Kind: principal.Kind(m.SubjectKind), ID: m.SubjectID},
+		GrantKind: principal.GrantKind(m.GrantKind),
+		GrantedBy: principal.Ref{Kind: principal.Kind(m.GrantedByKind), ID: m.GrantedByID},
+		ExpiresAt: m.ExpiresAt,
+		RevokedAt: m.RevokedAt,
+		CreatedAt: m.CreatedAt,
+		UpdatedAt: m.UpdatedAt,
+	}
+	if m.OrgID != "" {
+		orgID, err := id.ParseOrgID(m.OrgID)
+		if err != nil {
+			return nil, err
+		}
+		d.OrgID = orgID
+	}
+	if len(m.Scopes) > 0 {
+		d.Scopes = append([]string(nil), m.Scopes...)
+	}
+	return d, nil
 }
 
 // ──────────────────────────────────────────────────

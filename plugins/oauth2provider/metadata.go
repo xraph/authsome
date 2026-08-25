@@ -2,6 +2,8 @@ package oauth2provider
 
 import (
 	"github.com/xraph/forge"
+
+	"github.com/xraph/authsome/dpop"
 )
 
 // AuthServerMetadata is the RFC 8414 authorization server metadata document.
@@ -27,6 +29,21 @@ type AuthServerMetadata struct {
 	ScopesSupported                   []string `json:"scopes_supported"`
 	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
 	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
+
+	// ResourceIndicatorsSupported advertises RFC 8707.
+	//
+	// This name is not registered. RFC 8707 registers the `resource`
+	// parameter and the `invalid_target` error and defines no discovery
+	// metadata at all, and the RFC 8414 IANA registry has no entry for it.
+	// It is the convention that came out of the MCP ecosystem and it is what
+	// clients look for, so do not read it as standardised.
+	ResourceIndicatorsSupported bool `json:"resource_indicators_supported"`
+
+	// DPoPSigningAlgValuesSupported lists the JWS algorithms accepted in DPoP
+	// proofs (RFC 9449 section 5.1). Advertised unconditionally: this document
+	// is not app scoped, and a server that can validate ES256 proofs can do so
+	// whoever is asking. Per-client mode is discovered at registration.
+	DPoPSigningAlgValuesSupported []string `json:"dpop_signing_alg_values_supported,omitempty"`
 }
 
 // ProtectedResourceMetadata is the RFC 9728 protected resource metadata
@@ -76,6 +93,8 @@ func (p *Plugin) buildAuthServerMetadata() *AuthServerMetadata {
 			"client_secret_post", "client_secret_basic", "none",
 		},
 		CodeChallengeMethodsSupported: []string{"S256", "plain"},
+		ResourceIndicatorsSupported:   true,
+		DPoPSigningAlgValuesSupported: dpop.SupportedAlgs(),
 	}
 
 	// Only advertise registration when it will actually answer. Pointing a

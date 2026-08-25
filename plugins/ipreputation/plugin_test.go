@@ -10,7 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 	log "github.com/xraph/go-utils/log"
 
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/principal"
 )
 
 type mockProvider struct {
@@ -57,6 +59,42 @@ func TestPlugin_ImplementsInterfaces(t *testing.T) {
 	assert.True(t, ok)
 	_, ok = p.(plugin.BeforeSignUp)
 	assert.True(t, ok)
+	_, ok = p.(plugin.BeforePrincipalAuth)
+	assert.True(t, ok)
+}
+
+// A machine caller from a bad IP must be denied, exactly as a person is.
+// This is the gap: API-key traffic never reached OnBeforeSignIn.
+func TestOnBeforePrincipalAuth_Blocks(t *testing.T) {
+	mp := &mockProvider{results: map[string]*IPReputation{
+		"5.5.5.5": {IP: "5.5.5.5", Score: 90},
+	}}
+	p := newTestPlugin(mp, 80, 50)
+
+	err := p.OnBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject:        principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+		AppID:          id.NewAppID(),
+		IPAddress:      "5.5.5.5",
+		CredentialKind: "api_key",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ipreputation:")
+}
+
+// An attempt with no IP must pass rather than fail closed, matching what
+// check already does for sign-in. A blank IP is a deployment detail, not a
+// signal.
+func TestOnBeforePrincipalAuth_AllowsAttemptWithNoIP(t *testing.T) {
+	mp := &mockProvider{results: map[string]*IPReputation{
+		"5.5.5.5": {IP: "5.5.5.5", Score: 90},
+	}}
+	p := newTestPlugin(mp, 80, 50)
+
+	err := p.OnBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject: principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+		AppID:   id.NewAppID(),
+	})
+	assert.NoError(t, err)
 }
 
 func TestHighScore_Blocks(t *testing.T) {

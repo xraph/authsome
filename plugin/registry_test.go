@@ -14,7 +14,9 @@ import (
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/user"
 
@@ -42,6 +44,7 @@ type fullPlugin struct {
 	afterUserCreateCalled     bool
 	beforeSessionCreateCalled bool
 	afterSessionCreateCalled  bool
+	beforeMemberRemoveCalled  bool
 	err                       error // if set, hooks return this error
 }
 
@@ -92,6 +95,11 @@ func (p *fullPlugin) OnBeforeSessionCreate(_ context.Context, _ *session.Session
 
 func (p *fullPlugin) OnAfterSessionCreate(_ context.Context, _ *session.Session) error {
 	p.afterSessionCreateCalled = true
+	return p.err
+}
+
+func (p *fullPlugin) OnBeforeMemberRemove(_ context.Context, _ *organization.Member) error {
+	p.beforeMemberRemoveCalled = true
 	return p.err
 }
 
@@ -178,6 +186,49 @@ func TestRegistry_BeforeSignUp_AbortsOnError(t *testing.T) {
 
 	// Second plugin's BeforeSignUp should NOT have been called
 	assert.False(t, p2.beforeSignUpCalled)
+}
+
+// TestRegistry_TypeCaching_BeforeMemberRemove pins the type-cache
+// registration added at Register-time for BeforeMemberRemove. Deleting that
+// registration (the `if h, ok := p.(BeforeMemberRemove); ok { ... }` block in
+// Register) would break the hook silently: EmitBeforeMemberRemove would
+// iterate an empty slice and always report success, and nothing else in the
+// suite would notice.
+func TestRegistry_TypeCaching_BeforeMemberRemove(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+	ctx := context.Background()
+
+	// Register a plugin that implements BeforeMemberRemove
+	p := &fullPlugin{basePlugin: basePlugin{name: "member-remove-check"}}
+	r.Register(p)
+
+	// Also register one that doesn't implement BeforeMemberRemove
+	r.Register(&basePlugin{name: "base-only"})
+
+	m := &organization.Member{ID: id.NewMemberID(), OrgID: id.NewOrgID(), UserID: id.NewUserID()}
+	err := r.EmitBeforeMemberRemove(ctx, m)
+
+	require.NoError(t, err)
+	assert.True(t, p.beforeMemberRemoveCalled)
+}
+
+func TestRegistry_BeforeMemberRemove_AbortsOnError(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+	ctx := context.Background()
+
+	errBlocked := errors.New("member remove blocked")
+	p1 := &fullPlugin{basePlugin: basePlugin{name: "blocker"}, err: errBlocked}
+	p2 := &fullPlugin{basePlugin: basePlugin{name: "after"}}
+
+	r.Register(p1)
+	r.Register(p2)
+
+	m := &organization.Member{ID: id.NewMemberID(), OrgID: id.NewOrgID(), UserID: id.NewUserID()}
+	err := r.EmitBeforeMemberRemove(ctx, m)
+	assert.ErrorIs(t, err, errBlocked)
+
+	// Second plugin's BeforeMemberRemove should NOT have been called
+	assert.False(t, p2.beforeMemberRemoveCalled)
 }
 
 func TestRegistry_AfterSignUp_LogsErrorButContinues(t *testing.T) {
@@ -336,6 +387,113 @@ func TestRegistry_EmptyRegistry(t *testing.T) {
 
 	assert.Empty(t, r.Plugins())
 	assert.Empty(t, r.RouteProviders())
+}
+
+// recordingPrincipalHook records whether its before/after principal-auth
+// hooks were called, without denying anything.
+type recordingPrincipalHook struct {
+	name        string
+	called      bool
+	afterCalled bool
+}
+
+func (h *recordingPrincipalHook) Name() string { return h.name }
+
+func (h *recordingPrincipalHook) OnBeforePrincipalAuth(_ context.Context, _ *principal.AuthAttempt) error {
+	h.called = true
+	return nil
+}
+
+func (h *recordingPrincipalHook) OnAfterPrincipalAuth(_ context.Context, _ *principal.AuthAttempt, _ *session.Session) error {
+	h.afterCalled = true
+	return nil
+}
+
+// denyingPrincipalHook always denies the authentication attempt.
+type denyingPrincipalHook struct {
+	name   string
+	called bool
+}
+
+func (h *denyingPrincipalHook) Name() string { return h.name }
+
+func (h *denyingPrincipalHook) OnBeforePrincipalAuth(_ context.Context, _ *principal.AuthAttempt) error {
+	h.called = true
+	return errors.New("denied")
+}
+
+// erroringAfterPrincipalHook fails its after-hook, but must not stop the
+// hooks registered behind it: EmitAfterPrincipalAuth logs and continues.
+type erroringAfterPrincipalHook struct {
+	name        string
+	afterCalled bool
+}
+
+func (h *erroringAfterPrincipalHook) Name() string { return h.name }
+
+func (h *erroringAfterPrincipalHook) OnAfterPrincipalAuth(_ context.Context, _ *principal.AuthAttempt, _ *session.Session) error {
+	h.afterCalled = true
+	return errors.New("observer failed")
+}
+
+// A denying plugin must stop the authentication, the same way EmitBeforeSignIn
+// does. This is the whole reason these are typed hooks and not hook.Bus
+// events: Bus.Emit logs handler errors and returns nothing, so it cannot deny.
+func TestEmitBeforePrincipalAuthStopsOnFirstError(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+
+	first := &recordingPrincipalHook{name: "first"}
+	denier := &denyingPrincipalHook{name: "denier"}
+	last := &recordingPrincipalHook{name: "last"}
+	r.Register(first)
+	r.Register(denier)
+	r.Register(last)
+
+	err := r.EmitBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject:        principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+		CredentialKind: "api_key",
+	})
+	require.Error(t, err)
+	assert.True(t, first.called, "hooks before the denier must have run")
+	assert.False(t, last.called, "hooks after the denier must not run")
+}
+
+func TestEmitAfterPrincipalAuthRunsEveryHook(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+	a := &recordingPrincipalHook{name: "a"}
+	b := &recordingPrincipalHook{name: "b"}
+	r.Register(a)
+	r.Register(b)
+
+	r.EmitAfterPrincipalAuth(context.Background(),
+		&principal.AuthAttempt{Subject: principal.Ref{Kind: principal.KindWorkload, ID: "svc_2"}},
+		&session.Session{})
+
+	assert.True(t, a.afterCalled)
+	assert.True(t, b.afterCalled)
+}
+
+// An After hook's error is logged and swallowed on purpose: EmitAfterPrincipalAuth
+// has no error return, and one plugin failing to record what it saw must not
+// make the plugins registered behind it silently stop observing. A risk plugin
+// blowing up on a malformed AuthAttempt should not blind every other plugin
+// watching the same auth event.
+func TestEmitAfterPrincipalAuthContinuesPastErroringHook(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+	first := &recordingPrincipalHook{name: "first"}
+	middle := &erroringAfterPrincipalHook{name: "middle"}
+	third := &recordingPrincipalHook{name: "third"}
+	r.Register(first)
+	r.Register(middle)
+	r.Register(third)
+
+	r.EmitAfterPrincipalAuth(context.Background(),
+		&principal.AuthAttempt{Subject: principal.Ref{Kind: principal.KindWorkload, ID: "svc_3"}},
+		&session.Session{})
+
+	assert.True(t, first.afterCalled, "hooks before the erroring one must have run")
+	assert.True(t, middle.afterCalled, "the erroring hook itself must have run")
+	assert.True(t, third.afterCalled, "hooks after the erroring one must still run")
 }
 
 func TestRegistry_OnInitShutdown(_ *testing.T) {

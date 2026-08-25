@@ -11,6 +11,7 @@ import (
 	log "github.com/xraph/go-utils/log"
 
 	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apitypes"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/sdkgen/openapi"
@@ -40,6 +41,15 @@ type API struct {
 	engine     *authsome.Engine
 	router     forge.Router
 	rootRouter forge.Router
+
+	// hashBudgetObserver, when non-nil, is called with the policy each time
+	// the duplicate-signup path spends its password-hash time budget. It is
+	// a test-only seam (installed through export_test.go) so a test can
+	// assert the dummy hash really runs, with the real cost parameters,
+	// rather than inferring it from wall-clock timing. Always nil in
+	// production; set once at construction time in tests, before any
+	// request is served.
+	hashBudgetObserver func(account.PasswordPolicy)
 }
 
 // New creates an API from an Engine and an optional Forge router.
@@ -150,6 +160,7 @@ func (a *API) RegisterRoutes(router forge.Router) error {
 		a.registerHealthRoutes,
 		a.registerSettingsRoutes,
 		a.registerIntrospectRoutes,
+		a.registerPrincipalRoutes,
 	}
 	for _, fn := range registerers {
 		if err := fn(router); err != nil {

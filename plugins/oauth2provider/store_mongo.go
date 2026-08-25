@@ -44,6 +44,7 @@ type oauth2ClientDoc struct {
 	ClientSecret string   `bson:"client_secret"`
 	RedirectURIs []string `bson:"redirect_uris"`
 	Scopes       []string `bson:"scopes"`
+	Resources    []string `bson:"resources"`
 	GrantTypes   []string `bson:"grant_types"`
 	Public       bool     `bson:"public"`
 
@@ -52,6 +53,7 @@ type oauth2ClientDoc struct {
 	DynamicallyRegistered   bool           `bson:"dynamically_registered"`
 	ClientSecretExpiresAt   *time.Time     `bson:"client_secret_expires_at,omitempty"`
 	Metadata                map[string]any `bson:"metadata"`
+	DPoPMode                string         `bson:"dpop_mode"`
 
 	CreatedAt time.Time `bson:"created_at"`
 	UpdatedAt time.Time `bson:"updated_at"`
@@ -65,6 +67,7 @@ type authCodeDoc struct {
 	AppID               string    `bson:"app_id"`
 	RedirectURI         string    `bson:"redirect_uri"`
 	Scopes              []string  `bson:"scopes"`
+	Resources           []string  `bson:"resources"`
 	CodeChallenge       string    `bson:"code_challenge"`
 	CodeChallengeMethod string    `bson:"code_challenge_method"`
 	ExpiresAt           time.Time `bson:"expires_at"`
@@ -98,6 +101,10 @@ func oauth2ClientDocToModel(d *oauth2ClientDoc) (*OAuth2Client, error) {
 	if grantTypes == nil {
 		grantTypes = []string{}
 	}
+	resources := d.Resources
+	if resources == nil {
+		resources = []string{}
+	}
 
 	metadata := d.Metadata
 	if metadata == nil {
@@ -112,6 +119,7 @@ func oauth2ClientDocToModel(d *oauth2ClientDoc) (*OAuth2Client, error) {
 		ClientSecret:            d.ClientSecret,
 		RedirectURIs:            redirectURIs,
 		Scopes:                  scopes,
+		Resources:               resources,
 		GrantTypes:              grantTypes,
 		Public:                  d.Public,
 		TokenEndpointAuthMethod: d.TokenEndpointAuthMethod,
@@ -119,6 +127,7 @@ func oauth2ClientDocToModel(d *oauth2ClientDoc) (*OAuth2Client, error) {
 		DynamicallyRegistered:   d.DynamicallyRegistered,
 		ClientSecretExpiresAt:   d.ClientSecretExpiresAt,
 		Metadata:                metadata,
+		DPoPMode:                d.DPoPMode,
 		CreatedAt:               d.CreatedAt,
 		UpdatedAt:               d.UpdatedAt,
 	}, nil
@@ -137,6 +146,10 @@ func oauth2ClientToDoc(c *OAuth2Client) *oauth2ClientDoc {
 	if grantTypes == nil {
 		grantTypes = []string{}
 	}
+	resources := c.Resources
+	if resources == nil {
+		resources = []string{}
+	}
 
 	metadata := c.Metadata
 	if metadata == nil {
@@ -151,6 +164,7 @@ func oauth2ClientToDoc(c *OAuth2Client) *oauth2ClientDoc {
 		ClientSecret:            c.ClientSecret,
 		RedirectURIs:            redirectURIs,
 		Scopes:                  scopes,
+		Resources:               resources,
 		GrantTypes:              grantTypes,
 		Public:                  c.Public,
 		TokenEndpointAuthMethod: c.TokenEndpointAuthMethod,
@@ -158,6 +172,7 @@ func oauth2ClientToDoc(c *OAuth2Client) *oauth2ClientDoc {
 		DynamicallyRegistered:   c.DynamicallyRegistered,
 		ClientSecretExpiresAt:   c.ClientSecretExpiresAt,
 		Metadata:                metadata,
+		DPoPMode:                c.DPoPMode,
 		CreatedAt:               c.CreatedAt,
 		UpdatedAt:               c.UpdatedAt,
 	}
@@ -181,6 +196,10 @@ func authCodeDocToModel(d *authCodeDoc) (*AuthorizationCode, error) {
 	if scopes == nil {
 		scopes = []string{}
 	}
+	resources := d.Resources
+	if resources == nil {
+		resources = []string{}
+	}
 
 	return &AuthorizationCode{
 		ID:                  codeID,
@@ -190,6 +209,7 @@ func authCodeDocToModel(d *authCodeDoc) (*AuthorizationCode, error) {
 		AppID:               appID,
 		RedirectURI:         d.RedirectURI,
 		Scopes:              scopes,
+		Resources:           resources,
 		CodeChallenge:       d.CodeChallenge,
 		CodeChallengeMethod: d.CodeChallengeMethod,
 		ExpiresAt:           d.ExpiresAt,
@@ -203,6 +223,10 @@ func authCodeToDoc(c *AuthorizationCode) *authCodeDoc {
 	if scopes == nil {
 		scopes = []string{}
 	}
+	resources := c.Resources
+	if resources == nil {
+		resources = []string{}
+	}
 
 	return &authCodeDoc{
 		ID:                  c.ID.String(),
@@ -212,6 +236,7 @@ func authCodeToDoc(c *AuthorizationCode) *authCodeDoc {
 		AppID:               c.AppID.String(),
 		RedirectURI:         c.RedirectURI,
 		Scopes:              scopes,
+		Resources:           resources,
 		CodeChallenge:       c.CodeChallenge,
 		CodeChallengeMethod: c.CodeChallengeMethod,
 		ExpiresAt:           c.ExpiresAt,
@@ -227,6 +252,7 @@ type deviceCodeDoc struct {
 	ClientID        string    `bson:"client_id"`
 	AppID           string    `bson:"app_id"`
 	Scopes          []string  `bson:"scopes"`
+	Resources       []string  `bson:"resources"`
 	VerificationURI string    `bson:"verification_uri"`
 	ExpiresAt       time.Time `bson:"expires_at"`
 	Interval        int       `bson:"interval"`
@@ -262,6 +288,10 @@ func deviceCodeDocToModel(d *deviceCodeDoc) (*DeviceCode, error) {
 	if scopes == nil {
 		scopes = []string{}
 	}
+	resources := d.Resources
+	if resources == nil {
+		resources = []string{}
+	}
 
 	return &DeviceCode{
 		ID:              dcID,
@@ -270,6 +300,7 @@ func deviceCodeDocToModel(d *deviceCodeDoc) (*DeviceCode, error) {
 		ClientID:        d.ClientID,
 		AppID:           appID,
 		Scopes:          scopes,
+		Resources:       resources,
 		VerificationURI: d.VerificationURI,
 		ExpiresAt:       d.ExpiresAt,
 		Interval:        d.Interval,
@@ -285,6 +316,10 @@ func deviceCodeToDoc(dc *DeviceCode) *deviceCodeDoc {
 	if scopes == nil {
 		scopes = []string{}
 	}
+	resources := dc.Resources
+	if resources == nil {
+		resources = []string{}
+	}
 
 	return &deviceCodeDoc{
 		ID:              dc.ID.String(),
@@ -293,6 +328,7 @@ func deviceCodeToDoc(dc *DeviceCode) *deviceCodeDoc {
 		ClientID:        dc.ClientID,
 		AppID:           dc.AppID.String(),
 		Scopes:          scopes,
+		Resources:       resources,
 		VerificationURI: dc.VerificationURI,
 		ExpiresAt:       dc.ExpiresAt,
 		Interval:        dc.Interval,

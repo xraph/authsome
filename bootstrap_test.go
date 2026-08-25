@@ -36,6 +36,7 @@ func newBootstrapEngine(t *testing.T, bootstrapOpts ...authsome.BootstrapOption)
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
+		authsome.WithConfig(testEngineConfig()),
 		authsome.WithBootstrap(bootstrapOpts...),
 	)
 	require.NoError(t, err)

@@ -129,10 +129,10 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
     try {
       final auth = context.auth;
       await auth.client.changePassword(
-        body: {
-          'current_password': current,
-          'new_password': newPw,
-        },
+        body: ChangePasswordRequest(
+          currentPassword: current,
+          newPassword: newPw,
+        ),
         token: auth.session?.sessionToken ?? '',
       );
       if (mounted) {

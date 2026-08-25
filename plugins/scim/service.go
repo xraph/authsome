@@ -12,6 +12,7 @@ import (
 
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/settings"
 	authStore "github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
@@ -29,6 +30,7 @@ type Service struct {
 	settings    *settings.Manager
 	logger      log.Logger
 	roleEnsurer roleEnsurer
+	plugins     *plugin.Registry
 }
 
 // ──────────────────────────────────────────────────
@@ -168,33 +170,24 @@ func (s *Service) RotateToken(ctx context.Context, oldTokenID id.SCIMTokenID, ne
 // ValidateToken checks a bearer token against stored hashes.
 // Returns the matching token and its associated config, or an error.
 func (s *Service) ValidateToken(ctx context.Context, plaintext string) (*Token, *SCIMConfig, error) {
-	// We need to iterate and bcrypt-compare since we can't reverse the hash.
-	// For the in-memory store, FindTokenByHash does a linear scan with bcrypt.Compare.
-	// For production, consider a token prefix lookup table.
-	configs, err := s.store.ListConfigs(ctx, "")
+	// We can't reverse a salted bcrypt digest, so resolution is delegated to the
+	// store, which scans candidates and bcrypt-compares. For production, consider
+	// a token prefix lookup table to narrow that scan.
+	t, cfg, err := s.store.FindTokenByPlaintext(ctx, plaintext)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("scim: invalid token")
 	}
 
-	for _, cfg := range configs {
-		tokens, err := s.store.ListTokens(ctx, cfg.ID)
-		if err != nil {
-			continue
-		}
-		for _, t := range tokens {
-			if err := bcrypt.CompareHashAndPassword([]byte(t.TokenHash), []byte(plaintext)); err == nil {
-				if t.IsExpired() {
-					return nil, nil, fmt.Errorf("scim: token expired")
-				}
-				// Update last used.
-				now := time.Now()
-				t.LastUsedAt = &now
-				return t, cfg, nil
-			}
-		}
+	if t.IsExpired() {
+		return nil, nil, fmt.Errorf("scim: token expired")
 	}
 
-	return nil, nil, fmt.Errorf("scim: invalid token")
+	// Record last use. Best-effort: a failed write must not fail the request.
+	now := time.Now()
+	t.LastUsedAt = &now
+	_ = s.store.UpdateToken(ctx, t) //nolint:errcheck // best-effort usage tracking
+
+	return t, cfg, nil
 }
 
 // ──────────────────────────────────────────────────
@@ -223,6 +216,14 @@ func (s *Service) ProvisionUser(ctx context.Context, cfg *SCIMConfig, scimUser *
 		existing.Banned = !scimUser.Active
 		if err := s.authStore.UpdateUser(ctx, existing); err != nil {
 			return nil, ActionUpdateUser, err
+		}
+		// ProvisionUser backs both PUT /Users/:id (handleReplaceUser) and a
+		// POST that resolves to an existing user, and either can flip Banned.
+		// handleCreateUser forces Active = true before calling in, so the
+		// POST case never actually bans here, but PUT can and must still be
+		// seen by plugins watching AfterUserUpdate.
+		if s.plugins != nil {
+			s.plugins.EmitAfterUserUpdate(ctx, existing)
 		}
 		return existing, ActionUpdateUser, nil
 	}
@@ -298,7 +299,17 @@ func (s *Service) DeactivateUser(ctx context.Context, cfg *SCIMConfig, userID id
 
 	u.Banned = true
 	u.UpdatedAt = time.Now()
-	return s.authStore.UpdateUser(ctx, u)
+	if err := s.authStore.UpdateUser(ctx, u); err != nil {
+		return err
+	}
+
+	// Same reasoning as AdminBanUser in service.go: a SCIM deactivation is a
+	// ban by another name, and plugins watching AfterUserUpdate (agentauth's
+	// grant revocation among them) need to see it fire.
+	if s.plugins != nil {
+		s.plugins.EmitAfterUserUpdate(ctx, u)
+	}
+	return nil
 }
 
 // ProvisionGroup creates or updates a team from SCIM Group data.

@@ -6,6 +6,7 @@ import { useAuth } from "@authsome/ui-react";
 import {
   prepareCreationOptions,
   serializeCredential,
+  type PasskeyRegisterFinishRequest,
 } from "@authsome/ui-core";
 import { Key, Plus } from "lucide-react";
 import { cn } from "../lib/utils";
@@ -71,8 +72,10 @@ export function PasskeyRegisterButton({
         throw new Error("No credential returned from authenticator");
       }
 
+      // See the note in passkey-login-button: navigator.credentials.create
+      // always yields an attestation, which is what this endpoint requires.
       const result = await client.passkeyRegisterFinish(
-        serializeCredential(credential),
+        serializeCredential(credential) as PasskeyRegisterFinishRequest,
         token,
       );
       onSuccess?.({ id: result.id, display_name: result.display_name });

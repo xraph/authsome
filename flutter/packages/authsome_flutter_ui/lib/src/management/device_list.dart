@@ -122,11 +122,7 @@ class _DeviceListState extends State<DeviceList> {
       final auth = context.auth;
       final token = auth.session?.sessionToken ?? '';
 
-      await auth.client.trustDevice(
-        deviceId: id,
-        body: TrustDeviceRequest(deviceID: id),
-        token: token,
-      );
+      await auth.client.trustDevice(deviceId: id, token: token);
 
       if (mounted) {
         setState(() => _actionIds.remove(id));
@@ -184,11 +180,7 @@ class _DeviceListState extends State<DeviceList> {
     try {
       final auth = context.auth;
       final token = auth.session?.sessionToken ?? '';
-      await auth.client.deleteDevice(
-        deviceId: id,
-        body: DeleteDeviceRequest(deviceID: id),
-        token: token,
-      );
+      await auth.client.deleteDevice(deviceId: id, token: token);
 
       if (mounted) {
         setState(() {

@@ -136,6 +136,11 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 		return nil, err
 	}
 
+	dpopJKT, err := a.engine.DPoPBindingForRequest(ctx, appID)
+	if err != nil {
+		return nil, err
+	}
+
 	httpReq := ctx.Request()
 	u, sess, err := a.engine.SignUp(ctx.Context(), &account.SignUpRequest{
 		AppID:     appID,
@@ -147,6 +152,7 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 		Metadata:  req.Metadata,
 		IPAddress: clientIPFromRequest(httpReq),
 		UserAgent: httpReq.UserAgent(),
+		DPoPJKT:   dpopJKT,
 	})
 	if err != nil {
 		// Enumeration resistance: a duplicate email must NOT be a probe-able
@@ -206,6 +212,13 @@ func (a *API) consumeDummyHashBudget(password string) {
 		},
 	}
 	_, _ = account.HashPasswordWithPolicy(password, policy) //nolint:errcheck // dummy hash for timing budget
+
+	// Test-only observation point (nil in production). Reports the policy
+	// actually used so a test can assert the duplicate path hashes with the
+	// same cost parameters a real signup pays, without timing the request.
+	if a.hashBudgetObserver != nil {
+		a.hashBudgetObserver(policy)
+	}
 }
 
 // syntheticSignupResponse returns a response shaped exactly like a real
@@ -275,6 +288,11 @@ func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse
 		return nil, err
 	}
 
+	dpopJKT, err := a.engine.DPoPBindingForRequest(ctx, appID)
+	if err != nil {
+		return nil, err
+	}
+
 	httpReq := ctx.Request()
 	u, sess, err := a.engine.SignIn(ctx.Context(), &account.SignInRequest{
 		AppID:     appID,
@@ -283,6 +301,7 @@ func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse
 		Password:  req.Password,
 		IPAddress: clientIPFromRequest(httpReq),
 		UserAgent: httpReq.UserAgent(),
+		DPoPJKT:   dpopJKT,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -310,8 +329,11 @@ func (a *API) handleSignOut(ctx forge.Context, _ *SignOutRequest) (*StatusRespon
 func (a *API) handleRefresh(ctx forge.Context, req *RefreshRequest) (*TokenResponse, error) {
 	httpReq := ctx.Request()
 	opts := authsome.RefreshOpts{
-		IPAddress: clientIPFromRequest(httpReq),
-		UserAgent: httpReq.UserAgent(),
+		IPAddress:  clientIPFromRequest(httpReq),
+		UserAgent:  httpReq.UserAgent(),
+		DPoPProof:  httpReq.Header.Get("DPoP"),
+		Method:     httpReq.Method,
+		RequestURL: middleware.RequestURL(httpReq),
 	}
 
 	// Cookie-first: when the request carries a valid session cookie, rotate via
@@ -528,11 +550,21 @@ func (a *API) issueSessionForUser(ctx forge.Context, userID id.UserID, authMetho
 	if err != nil {
 		return nil, err
 	}
+	// Auto-login is a sign-in, so it resolves a binding like any other. The
+	// caller treats a failure here as "verified but not signed in" and falls
+	// back to a bare status, which is the right answer for an app on
+	// mode=required whose client presented no proof: the address is verified,
+	// and no session exists that the mandate would never apply to.
+	dpopJKT, err := a.engine.DPoPBindingForRequest(ctx, u.AppID)
+	if err != nil {
+		return nil, err
+	}
 	httpReq := ctx.Request()
 	res, err := a.engine.IssueSession(ctx.Context(), &authsome.IssueSessionRequest{
 		User:       u,
 		AppID:      u.AppID,
 		AuthMethod: authMethod,
+		DPoPJKT:    dpopJKT,
 		IPAddress:  clientIPFromRequest(httpReq),
 		UserAgent:  httpReq.UserAgent(),
 	})

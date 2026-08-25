@@ -1210,6 +1210,7 @@ class AppsessionconfigConfig {
   final int? maxActiveSessions;
   final int? refreshTokenTtlSeconds;
   final bool? rotateRefreshToken;
+  final int? tokenExchangeTtlSeconds;
   final String? tokenFormat;
   final int? tokenTtlSeconds;
   final String updatedAt;
@@ -1223,6 +1224,7 @@ class AppsessionconfigConfig {
     this.maxActiveSessions,
     this.refreshTokenTtlSeconds,
     this.rotateRefreshToken,
+    this.tokenExchangeTtlSeconds,
     this.tokenFormat,
     this.tokenTtlSeconds,
     required this.updatedAt,
@@ -1238,6 +1240,7 @@ class AppsessionconfigConfig {
       maxActiveSessions: json['max_active_sessions'] == null ? null : (json['max_active_sessions'] as num).toInt(),
       refreshTokenTtlSeconds: json['refresh_token_ttl_seconds'] == null ? null : (json['refresh_token_ttl_seconds'] as num).toInt(),
       rotateRefreshToken: json['rotate_refresh_token'] as bool?,
+      tokenExchangeTtlSeconds: json['token_exchange_ttl_seconds'] == null ? null : (json['token_exchange_ttl_seconds'] as num).toInt(),
       tokenFormat: json['token_format'] as String?,
       tokenTtlSeconds: json['token_ttl_seconds'] == null ? null : (json['token_ttl_seconds'] as num).toInt(),
       updatedAt: json['updated_at'] as String,
@@ -1254,6 +1257,7 @@ class AppsessionconfigConfig {
       if (maxActiveSessions != null) 'max_active_sessions': maxActiveSessions,
       if (refreshTokenTtlSeconds != null) 'refresh_token_ttl_seconds': refreshTokenTtlSeconds,
       if (rotateRefreshToken != null) 'rotate_refresh_token': rotateRefreshToken,
+      if (tokenExchangeTtlSeconds != null) 'token_exchange_ttl_seconds': tokenExchangeTtlSeconds,
       if (tokenFormat != null) 'token_format': tokenFormat,
       if (tokenTtlSeconds != null) 'token_ttl_seconds': tokenTtlSeconds,
       'updated_at': updatedAt,
@@ -1262,6 +1266,41 @@ class AppsessionconfigConfig {
 
   @override
   String toString() => 'AppsessionconfigConfig(${toJson()})';
+}
+
+class AssertionResponse {
+  final String authenticatorData;
+  final String clientDataJSON;
+  final String signature;
+  final String? userHandle;
+
+  const AssertionResponse({
+    required this.authenticatorData,
+    required this.clientDataJSON,
+    required this.signature,
+    this.userHandle,
+  });
+
+  factory AssertionResponse.fromJson(Map<String, dynamic> json) {
+    return AssertionResponse(
+      authenticatorData: json['authenticatorData'] as String,
+      clientDataJSON: json['clientDataJSON'] as String,
+      signature: json['signature'] as String,
+      userHandle: json['userHandle'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'authenticatorData': authenticatorData,
+      'clientDataJSON': clientDataJSON,
+      'signature': signature,
+      if (userHandle != null) 'userHandle': userHandle,
+    };
+  }
+
+  @override
+  String toString() => 'AssertionResponse(${toJson()})';
 }
 
 class AssignRoleRequest {
@@ -1289,6 +1328,33 @@ class AssignRoleRequest {
 
   @override
   String toString() => 'AssignRoleRequest(${toJson()})';
+}
+
+class AttestationResponse {
+  final String attestationObject;
+  final String clientDataJSON;
+
+  const AttestationResponse({
+    required this.attestationObject,
+    required this.clientDataJSON,
+  });
+
+  factory AttestationResponse.fromJson(Map<String, dynamic> json) {
+    return AttestationResponse(
+      attestationObject: json['attestationObject'] as String,
+      clientDataJSON: json['clientDataJSON'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'attestationObject': attestationObject,
+      'clientDataJSON': clientDataJSON,
+    };
+  }
+
+  @override
+  String toString() => 'AttestationResponse(${toJson()})';
 }
 
 class AuthMethod {
@@ -2434,28 +2500,34 @@ class CouponResponse {
 
 class CreateClientRequest {
   final String appId;
+  final String? dpopMode;
   final List<String>? grantTypes;
   final String name;
   final bool? public;
   final List<String> redirectUris;
+  final List<String>? resources;
   final List<String>? scopes;
 
   const CreateClientRequest({
     required this.appId,
+    this.dpopMode,
     this.grantTypes,
     required this.name,
     this.public,
     required this.redirectUris,
+    this.resources,
     this.scopes,
   });
 
   factory CreateClientRequest.fromJson(Map<String, dynamic> json) {
     return CreateClientRequest(
       appId: json['app_id'] as String,
+      dpopMode: json['dpop_mode'] as String?,
       grantTypes: json['grant_types'] == null ? null : (json['grant_types'] as List).map((e) => e as String).toList(),
       name: json['name'] as String,
       public: json['public'] as bool?,
       redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
+      resources: json['resources'] == null ? null : (json['resources'] as List).map((e) => e as String).toList(),
       scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
     );
   }
@@ -2463,10 +2535,12 @@ class CreateClientRequest {
   Map<String, dynamic> toJson() {
     return {
       'app_id': appId,
+      if (dpopMode != null) 'dpop_mode': dpopMode,
       if (grantTypes != null) 'grant_types': grantTypes,
       'name': name,
       if (public != null) 'public': public,
       'redirect_uris': redirectUris,
+      if (resources != null) 'resources': resources,
       if (scopes != null) 'scopes': scopes,
     };
   }
@@ -2483,6 +2557,7 @@ class CreateClientResponse {
   final String name;
   final bool public;
   final List<String> redirectUris;
+  final List<String> resources;
   final List<String> scopes;
 
   const CreateClientResponse({
@@ -2493,6 +2568,7 @@ class CreateClientResponse {
     required this.name,
     required this.public,
     required this.redirectUris,
+    required this.resources,
     required this.scopes,
   });
 
@@ -2505,6 +2581,7 @@ class CreateClientResponse {
       name: json['name'] as String,
       public: json['public'] as bool,
       redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
+      resources: (json['resources'] as List).map((e) => e as String).toList(),
       scopes: (json['scopes'] as List).map((e) => e as String).toList(),
     );
   }
@@ -2518,6 +2595,7 @@ class CreateClientResponse {
       'name': name,
       'public': public,
       'redirect_uris': redirectUris,
+      'resources': resources,
       'scopes': scopes,
     };
   }
@@ -3127,27 +3205,78 @@ class DefinitionGroup {
   String toString() => 'DefinitionGroup(${toJson()})';
 }
 
-class DeleteClientRequest {
-  final String clientID;
+class DelegationListResponse {
+  final List<DelegationResponse> delegations;
 
-  const DeleteClientRequest({
-    required this.clientID,
+  const DelegationListResponse({
+    required this.delegations,
   });
 
-  factory DeleteClientRequest.fromJson(Map<String, dynamic> json) {
-    return DeleteClientRequest(
-      clientID: json['ClientID'] as String,
+  factory DelegationListResponse.fromJson(Map<String, dynamic> json) {
+    return DelegationListResponse(
+      delegations: (json['delegations'] as List).map((e) => DelegationResponse.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'ClientID': clientID,
+      'delegations': delegations.map((e) => e.toJson()).toList(),
     };
   }
 
   @override
-  String toString() => 'DeleteClientRequest(${toJson()})';
+  String toString() => 'DelegationListResponse(${toJson()})';
+}
+
+class DelegationResponse {
+  final String actor;
+  final String createdAt;
+  final String? expiresAt;
+  final String grantKind;
+  final String grantedBy;
+  final String id;
+  final List<String>? scopes;
+  final String subject;
+
+  const DelegationResponse({
+    required this.actor,
+    required this.createdAt,
+    this.expiresAt,
+    required this.grantKind,
+    required this.grantedBy,
+    required this.id,
+    this.scopes,
+    required this.subject,
+  });
+
+  factory DelegationResponse.fromJson(Map<String, dynamic> json) {
+    return DelegationResponse(
+      actor: json['actor'] as String,
+      createdAt: json['created_at'] as String,
+      expiresAt: json['expires_at'] as String?,
+      grantKind: json['grant_kind'] as String,
+      grantedBy: json['granted_by'] as String,
+      id: json['id'] as String,
+      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+      subject: json['subject'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'actor': actor,
+      'created_at': createdAt,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      'grant_kind': grantKind,
+      'granted_by': grantedBy,
+      'id': id,
+      if (scopes != null) 'scopes': scopes,
+      'subject': subject,
+    };
+  }
+
+  @override
+  String toString() => 'DelegationResponse(${toJson()})';
 }
 
 class DeleteResponse {
@@ -3391,11 +3520,13 @@ class DiscoveryResponse {
   final String authorizationEndpoint;
   final List<String> codeChallengeMethodsSupported;
   final String deviceAuthorizationEndpoint;
+  final List<String>? dpopSigningAlgValuesSupported;
   final List<String> grantTypesSupported;
   final List<String> idTokenSigningAlgValuesSupported;
   final String issuer;
   final String jwksUri;
   final String? registrationEndpoint;
+  final bool resourceIndicatorsSupported;
   final List<String> responseTypesSupported;
   final String revocationEndpoint;
   final List<String> scopesSupported;
@@ -3408,11 +3539,13 @@ class DiscoveryResponse {
     required this.authorizationEndpoint,
     required this.codeChallengeMethodsSupported,
     required this.deviceAuthorizationEndpoint,
+    this.dpopSigningAlgValuesSupported,
     required this.grantTypesSupported,
     required this.idTokenSigningAlgValuesSupported,
     required this.issuer,
     required this.jwksUri,
     this.registrationEndpoint,
+    required this.resourceIndicatorsSupported,
     required this.responseTypesSupported,
     required this.revocationEndpoint,
     required this.scopesSupported,
@@ -3427,11 +3560,13 @@ class DiscoveryResponse {
       authorizationEndpoint: json['authorization_endpoint'] as String,
       codeChallengeMethodsSupported: (json['code_challenge_methods_supported'] as List).map((e) => e as String).toList(),
       deviceAuthorizationEndpoint: json['device_authorization_endpoint'] as String,
+      dpopSigningAlgValuesSupported: json['dpop_signing_alg_values_supported'] == null ? null : (json['dpop_signing_alg_values_supported'] as List).map((e) => e as String).toList(),
       grantTypesSupported: (json['grant_types_supported'] as List).map((e) => e as String).toList(),
       idTokenSigningAlgValuesSupported: (json['id_token_signing_alg_values_supported'] as List).map((e) => e as String).toList(),
       issuer: json['issuer'] as String,
       jwksUri: json['jwks_uri'] as String,
       registrationEndpoint: json['registration_endpoint'] as String?,
+      resourceIndicatorsSupported: json['resource_indicators_supported'] as bool,
       responseTypesSupported: (json['response_types_supported'] as List).map((e) => e as String).toList(),
       revocationEndpoint: json['revocation_endpoint'] as String,
       scopesSupported: (json['scopes_supported'] as List).map((e) => e as String).toList(),
@@ -3447,11 +3582,13 @@ class DiscoveryResponse {
       'authorization_endpoint': authorizationEndpoint,
       'code_challenge_methods_supported': codeChallengeMethodsSupported,
       'device_authorization_endpoint': deviceAuthorizationEndpoint,
+      if (dpopSigningAlgValuesSupported != null) 'dpop_signing_alg_values_supported': dpopSigningAlgValuesSupported,
       'grant_types_supported': grantTypesSupported,
       'id_token_signing_alg_values_supported': idTokenSigningAlgValuesSupported,
       'issuer': issuer,
       'jwks_uri': jwksUri,
       if (registrationEndpoint != null) 'registration_endpoint': registrationEndpoint,
+      'resource_indicators_supported': resourceIndicatorsSupported,
       'response_types_supported': responseTypesSupported,
       'revocation_endpoint': revocationEndpoint,
       'scopes_supported': scopesSupported,
@@ -4036,6 +4173,29 @@ class HealthResponse {
   String toString() => 'HealthResponse(${toJson()})';
 }
 
+class IntrospectConfirmation {
+  final String jkt;
+
+  const IntrospectConfirmation({
+    required this.jkt,
+  });
+
+  factory IntrospectConfirmation.fromJson(Map<String, dynamic> json) {
+    return IntrospectConfirmation(
+      jkt: json['jkt'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'jkt': jkt,
+    };
+  }
+
+  @override
+  String toString() => 'IntrospectConfirmation(${toJson()})';
+}
+
 class IntrospectRequest {
   final String token;
 
@@ -4062,6 +4222,8 @@ class IntrospectRequest {
 class IntrospectResponse {
   final bool active;
   final String? appId;
+  final List<String>? aud;
+  final IntrospectConfirmation? cnf;
   final String? envId;
   final String? expiresAt;
   final String? orgId;
@@ -4072,6 +4234,8 @@ class IntrospectResponse {
   const IntrospectResponse({
     required this.active,
     this.appId,
+    this.aud,
+    this.cnf,
     this.envId,
     this.expiresAt,
     this.orgId,
@@ -4084,6 +4248,8 @@ class IntrospectResponse {
     return IntrospectResponse(
       active: json['active'] as bool,
       appId: json['app_id'] as String?,
+      aud: json['aud'] == null ? null : (json['aud'] as List).map((e) => e as String).toList(),
+      cnf: json['cnf'] == null ? null : IntrospectConfirmation.fromJson(Map<String, dynamic>.from(json['cnf'] as Map)),
       envId: json['env_id'] as String?,
       expiresAt: json['expires_at'] as String?,
       orgId: json['org_id'] as String?,
@@ -4097,6 +4263,8 @@ class IntrospectResponse {
     return {
       'active': active,
       if (appId != null) 'app_id': appId,
+      if (aud != null) 'aud': aud,
+      if (cnf != null) 'cnf': cnf?.toJson(),
       if (envId != null) 'env_id': envId,
       if (expiresAt != null) 'expires_at': expiresAt,
       if (orgId != null) 'org_id': orgId,
@@ -4973,6 +5141,88 @@ class Meta {
   String toString() => 'Meta(${toJson()})';
 }
 
+class MintChildRequest {
+  final String name;
+  final List<String>? scopes;
+  final int ttlSeconds;
+
+  const MintChildRequest({
+    required this.name,
+    this.scopes,
+    required this.ttlSeconds,
+  });
+
+  factory MintChildRequest.fromJson(Map<String, dynamic> json) {
+    return MintChildRequest(
+      name: json['name'] as String,
+      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+      ttlSeconds: (json['ttl_seconds'] as num).toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      if (scopes != null) 'scopes': scopes,
+      'ttl_seconds': ttlSeconds,
+    };
+  }
+
+  @override
+  String toString() => 'MintChildRequest(${toJson()})';
+}
+
+class MintChildResponse {
+  final String createdAt;
+  final String? expiresAt;
+  final String id;
+  final String key;
+  final String keyPrefix;
+  final String name;
+  final String parentId;
+  final List<String>? scopes;
+
+  const MintChildResponse({
+    required this.createdAt,
+    this.expiresAt,
+    required this.id,
+    required this.key,
+    required this.keyPrefix,
+    required this.name,
+    required this.parentId,
+    this.scopes,
+  });
+
+  factory MintChildResponse.fromJson(Map<String, dynamic> json) {
+    return MintChildResponse(
+      createdAt: json['created_at'] as String,
+      expiresAt: json['expires_at'] as String?,
+      id: json['id'] as String,
+      key: json['key'] as String,
+      keyPrefix: json['key_prefix'] as String,
+      name: json['name'] as String,
+      parentId: json['parent_id'] as String,
+      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'created_at': createdAt,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      'id': id,
+      'key': key,
+      'key_prefix': keyPrefix,
+      'name': name,
+      'parent_id': parentId,
+      if (scopes != null) 'scopes': scopes,
+    };
+  }
+
+  @override
+  String toString() => 'MintChildResponse(${toJson()})';
+}
+
 class Name {
   final String familyName;
   final String? formatted;
@@ -5009,6 +5259,7 @@ class OAuth2Client {
   final String clientId;
   final String? clientSecretExpiresAt;
   final String createdAt;
+  final String? dpopMode;
   final bool dynamicallyRegistered;
   final List<String> grantTypes;
   final String id;
@@ -5016,6 +5267,7 @@ class OAuth2Client {
   final String name;
   final bool public;
   final List<String> redirectUris;
+  final List<String> resources;
   final List<String> scopes;
   final String? tokenEndpointAuthMethod;
   final String updatedAt;
@@ -5025,6 +5277,7 @@ class OAuth2Client {
     required this.clientId,
     this.clientSecretExpiresAt,
     required this.createdAt,
+    this.dpopMode,
     required this.dynamicallyRegistered,
     required this.grantTypes,
     required this.id,
@@ -5032,6 +5285,7 @@ class OAuth2Client {
     required this.name,
     required this.public,
     required this.redirectUris,
+    required this.resources,
     required this.scopes,
     this.tokenEndpointAuthMethod,
     required this.updatedAt,
@@ -5043,6 +5297,7 @@ class OAuth2Client {
       clientId: json['client_id'] as String,
       clientSecretExpiresAt: json['client_secret_expires_at'] as String?,
       createdAt: json['created_at'] as String,
+      dpopMode: json['dpop_mode'] as String?,
       dynamicallyRegistered: json['dynamically_registered'] as bool,
       grantTypes: (json['grant_types'] as List).map((e) => e as String).toList(),
       id: json['id'] as String,
@@ -5050,6 +5305,7 @@ class OAuth2Client {
       name: json['name'] as String,
       public: json['public'] as bool,
       redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
+      resources: (json['resources'] as List).map((e) => e as String).toList(),
       scopes: (json['scopes'] as List).map((e) => e as String).toList(),
       tokenEndpointAuthMethod: json['token_endpoint_auth_method'] as String?,
       updatedAt: json['updated_at'] as String,
@@ -5062,6 +5318,7 @@ class OAuth2Client {
       'client_id': clientId,
       if (clientSecretExpiresAt != null) 'client_secret_expires_at': clientSecretExpiresAt,
       'created_at': createdAt,
+      if (dpopMode != null) 'dpop_mode': dpopMode,
       'dynamically_registered': dynamicallyRegistered,
       'grant_types': grantTypes,
       'id': id,
@@ -5069,6 +5326,7 @@ class OAuth2Client {
       'name': name,
       'public': public,
       'redirect_uris': redirectUris,
+      'resources': resources,
       'scopes': scopes,
       if (tokenEndpointAuthMethod != null) 'token_endpoint_auth_method': tokenEndpointAuthMethod,
       'updated_at': updatedAt,
@@ -6590,6 +6848,7 @@ class SetAppSessionConfigRequest {
   final int? maxActiveSessions;
   final int? refreshTokenTtlSeconds;
   final bool? rotateRefreshToken;
+  final int? tokenExchangeTtlSeconds;
   final String? tokenFormat;
   final int? tokenTtlSeconds;
 
@@ -6599,6 +6858,7 @@ class SetAppSessionConfigRequest {
     this.maxActiveSessions,
     this.refreshTokenTtlSeconds,
     this.rotateRefreshToken,
+    this.tokenExchangeTtlSeconds,
     this.tokenFormat,
     this.tokenTtlSeconds,
   });
@@ -6610,6 +6870,7 @@ class SetAppSessionConfigRequest {
       maxActiveSessions: json['max_active_sessions'] == null ? null : (json['max_active_sessions'] as num).toInt(),
       refreshTokenTtlSeconds: json['refresh_token_ttl_seconds'] == null ? null : (json['refresh_token_ttl_seconds'] as num).toInt(),
       rotateRefreshToken: json['rotate_refresh_token'] as bool?,
+      tokenExchangeTtlSeconds: json['token_exchange_ttl_seconds'] == null ? null : (json['token_exchange_ttl_seconds'] as num).toInt(),
       tokenFormat: json['token_format'] as String?,
       tokenTtlSeconds: json['token_ttl_seconds'] == null ? null : (json['token_ttl_seconds'] as num).toInt(),
     );
@@ -6622,6 +6883,7 @@ class SetAppSessionConfigRequest {
       if (maxActiveSessions != null) 'max_active_sessions': maxActiveSessions,
       if (refreshTokenTtlSeconds != null) 'refresh_token_ttl_seconds': refreshTokenTtlSeconds,
       if (rotateRefreshToken != null) 'rotate_refresh_token': rotateRefreshToken,
+      if (tokenExchangeTtlSeconds != null) 'token_exchange_ttl_seconds': tokenExchangeTtlSeconds,
       if (tokenFormat != null) 'token_format': tokenFormat,
       if (tokenTtlSeconds != null) 'token_ttl_seconds': tokenTtlSeconds,
     };
@@ -6722,6 +6984,7 @@ class Settings {
   final int? signinRateLimit;
   final int? signupRateLimit;
   final bool? skipEmailVerification;
+  final int? tokenExchangeTtlSeconds;
   final int? tokenTtlSeconds;
   final String? webhookUrlOverride;
 
@@ -6738,6 +7001,7 @@ class Settings {
     this.signinRateLimit,
     this.signupRateLimit,
     this.skipEmailVerification,
+    this.tokenExchangeTtlSeconds,
     this.tokenTtlSeconds,
     this.webhookUrlOverride,
   });
@@ -6756,6 +7020,7 @@ class Settings {
       signinRateLimit: json['signin_rate_limit'] == null ? null : (json['signin_rate_limit'] as num).toInt(),
       signupRateLimit: json['signup_rate_limit'] == null ? null : (json['signup_rate_limit'] as num).toInt(),
       skipEmailVerification: json['skip_email_verification'] as bool?,
+      tokenExchangeTtlSeconds: json['token_exchange_ttl_seconds'] == null ? null : (json['token_exchange_ttl_seconds'] as num).toInt(),
       tokenTtlSeconds: json['token_ttl_seconds'] == null ? null : (json['token_ttl_seconds'] as num).toInt(),
       webhookUrlOverride: json['webhook_url_override'] as String?,
     );
@@ -6775,6 +7040,7 @@ class Settings {
       if (signinRateLimit != null) 'signin_rate_limit': signinRateLimit,
       if (signupRateLimit != null) 'signup_rate_limit': signupRateLimit,
       if (skipEmailVerification != null) 'skip_email_verification': skipEmailVerification,
+      if (tokenExchangeTtlSeconds != null) 'token_exchange_ttl_seconds': tokenExchangeTtlSeconds,
       if (tokenTtlSeconds != null) 'token_ttl_seconds': tokenTtlSeconds,
       if (webhookUrlOverride != null) 'webhook_url_override': webhookUrlOverride,
     };
@@ -7157,6 +7423,80 @@ class TeamListResponse {
   String toString() => 'TeamListResponse(${toJson()})';
 }
 
+class TokenExchangeRequest {
+  final List<String>? scopes;
+  final String subject;
+
+  const TokenExchangeRequest({
+    this.scopes,
+    required this.subject,
+  });
+
+  factory TokenExchangeRequest.fromJson(Map<String, dynamic> json) {
+    return TokenExchangeRequest(
+      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+      subject: json['subject'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (scopes != null) 'scopes': scopes,
+      'subject': subject,
+    };
+  }
+
+  @override
+  String toString() => 'TokenExchangeRequest(${toJson()})';
+}
+
+class TokenExchangeResponse {
+  final String accessToken;
+  final String actor;
+  final int expiresIn;
+  final String issuedTokenType;
+  final List<String>? scopes;
+  final String subject;
+  final String tokenType;
+
+  const TokenExchangeResponse({
+    required this.accessToken,
+    required this.actor,
+    required this.expiresIn,
+    required this.issuedTokenType,
+    this.scopes,
+    required this.subject,
+    required this.tokenType,
+  });
+
+  factory TokenExchangeResponse.fromJson(Map<String, dynamic> json) {
+    return TokenExchangeResponse(
+      accessToken: json['access_token'] as String,
+      actor: json['actor'] as String,
+      expiresIn: (json['expires_in'] as num).toInt(),
+      issuedTokenType: json['issued_token_type'] as String,
+      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+      subject: json['subject'] as String,
+      tokenType: json['token_type'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'access_token': accessToken,
+      'actor': actor,
+      'expires_in': expiresIn,
+      'issued_token_type': issuedTokenType,
+      if (scopes != null) 'scopes': scopes,
+      'subject': subject,
+      'token_type': tokenType,
+    };
+  }
+
+  @override
+  String toString() => 'TokenExchangeResponse(${toJson()})';
+}
+
 class UIMetadata {
   final VisibilityCondition? condition;
   final String? helpText;
@@ -7239,29 +7579,6 @@ class UnassignRoleRequest {
   String toString() => 'UnassignRoleRequest(${toJson()})';
 }
 
-class UnlinkAuthMethodRequest {
-  final String provider;
-
-  const UnlinkAuthMethodRequest({
-    required this.provider,
-  });
-
-  factory UnlinkAuthMethodRequest.fromJson(Map<String, dynamic> json) {
-    return UnlinkAuthMethodRequest(
-      provider: json['Provider'] as String,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'Provider': provider,
-    };
-  }
-
-  @override
-  String toString() => 'UnlinkAuthMethodRequest(${toJson()})';
-}
-
 class UnlinkAuthMethodResponse {
   final String status;
 
@@ -7329,6 +7646,7 @@ class UpdateEnvironmentSettingsRequest {
   final int? signinRateLimit;
   final int? signupRateLimit;
   final bool? skipEmailVerification;
+  final int? tokenExchangeTtlSeconds;
   final int? tokenTtlSeconds;
   final String? webhookUrlOverride;
 
@@ -7345,6 +7663,7 @@ class UpdateEnvironmentSettingsRequest {
     this.signinRateLimit,
     this.signupRateLimit,
     this.skipEmailVerification,
+    this.tokenExchangeTtlSeconds,
     this.tokenTtlSeconds,
     this.webhookUrlOverride,
   });
@@ -7363,6 +7682,7 @@ class UpdateEnvironmentSettingsRequest {
       signinRateLimit: json['signin_rate_limit'] == null ? null : (json['signin_rate_limit'] as num).toInt(),
       signupRateLimit: json['signup_rate_limit'] == null ? null : (json['signup_rate_limit'] as num).toInt(),
       skipEmailVerification: json['skip_email_verification'] as bool?,
+      tokenExchangeTtlSeconds: json['token_exchange_ttl_seconds'] == null ? null : (json['token_exchange_ttl_seconds'] as num).toInt(),
       tokenTtlSeconds: json['token_ttl_seconds'] == null ? null : (json['token_ttl_seconds'] as num).toInt(),
       webhookUrlOverride: json['webhook_url_override'] as String?,
     );
@@ -7382,6 +7702,7 @@ class UpdateEnvironmentSettingsRequest {
       if (signinRateLimit != null) 'signin_rate_limit': signinRateLimit,
       if (signupRateLimit != null) 'signup_rate_limit': signupRateLimit,
       if (skipEmailVerification != null) 'skip_email_verification': skipEmailVerification,
+      if (tokenExchangeTtlSeconds != null) 'token_exchange_ttl_seconds': tokenExchangeTtlSeconds,
       if (tokenTtlSeconds != null) 'token_ttl_seconds': tokenTtlSeconds,
       if (webhookUrlOverride != null) 'webhook_url_override': webhookUrlOverride,
     };
@@ -8241,16 +8562,22 @@ class Oauth2DeviceCompleteRequest {
 }
 
 class Oauth2RevokeRequest {
+  final String? clientId;
+  final String? clientSecret;
   final String token;
   final String? tokenTypeHint;
 
   const Oauth2RevokeRequest({
+    this.clientId,
+    this.clientSecret,
     required this.token,
     this.tokenTypeHint,
   });
 
   factory Oauth2RevokeRequest.fromJson(Map<String, dynamic> json) {
     return Oauth2RevokeRequest(
+      clientId: json['client_id'] as String?,
+      clientSecret: json['client_secret'] as String?,
       token: json['token'] as String,
       tokenTypeHint: json['token_type_hint'] as String?,
     );
@@ -8258,6 +8585,8 @@ class Oauth2RevokeRequest {
 
   Map<String, dynamic> toJson() {
     return {
+      if (clientId != null) 'client_id': clientId,
+      if (clientSecret != null) 'client_secret': clientSecret,
       'token': token,
       if (tokenTypeHint != null) 'token_type_hint': tokenTypeHint,
     };
@@ -8275,6 +8604,7 @@ class Oauth2TokenRequest {
   final String? deviceCode;
   final String grantType;
   final String? redirectUri;
+  final List<String>? resource;
 
   const Oauth2TokenRequest({
     this.clientId,
@@ -8284,6 +8614,7 @@ class Oauth2TokenRequest {
     this.deviceCode,
     required this.grantType,
     this.redirectUri,
+    this.resource,
   });
 
   factory Oauth2TokenRequest.fromJson(Map<String, dynamic> json) {
@@ -8295,6 +8626,7 @@ class Oauth2TokenRequest {
       deviceCode: json['device_code'] as String?,
       grantType: json['grant_type'] as String,
       redirectUri: json['redirect_uri'] as String?,
+      resource: json['resource'] == null ? null : (json['resource'] as List).map((e) => e as String).toList(),
     );
   }
 
@@ -8307,9 +8639,80 @@ class Oauth2TokenRequest {
       if (deviceCode != null) 'device_code': deviceCode,
       'grant_type': grantType,
       if (redirectUri != null) 'redirect_uri': redirectUri,
+      if (resource != null) 'resource': resource,
     };
   }
 
   @override
   String toString() => 'Oauth2TokenRequest(${toJson()})';
+}
+
+class PasskeyLoginFinishRequest {
+  final String id;
+  final String rawId;
+  final AssertionResponse response;
+  final String type;
+
+  const PasskeyLoginFinishRequest({
+    required this.id,
+    required this.rawId,
+    required this.response,
+    required this.type,
+  });
+
+  factory PasskeyLoginFinishRequest.fromJson(Map<String, dynamic> json) {
+    return PasskeyLoginFinishRequest(
+      id: json['id'] as String,
+      rawId: json['rawId'] as String,
+      response: AssertionResponse.fromJson(Map<String, dynamic>.from(json['response'] as Map)),
+      type: json['type'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'rawId': rawId,
+      'response': response.toJson(),
+      'type': type,
+    };
+  }
+
+  @override
+  String toString() => 'PasskeyLoginFinishRequest(${toJson()})';
+}
+
+class PasskeyRegisterFinishRequest {
+  final String id;
+  final String rawId;
+  final AttestationResponse response;
+  final String type;
+
+  const PasskeyRegisterFinishRequest({
+    required this.id,
+    required this.rawId,
+    required this.response,
+    required this.type,
+  });
+
+  factory PasskeyRegisterFinishRequest.fromJson(Map<String, dynamic> json) {
+    return PasskeyRegisterFinishRequest(
+      id: json['id'] as String,
+      rawId: json['rawId'] as String,
+      response: AttestationResponse.fromJson(Map<String, dynamic>.from(json['response'] as Map)),
+      type: json['type'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'rawId': rawId,
+      'response': response.toJson(),
+      'type': type,
+    };
+  }
+
+  @override
+  String toString() => 'PasskeyRegisterFinishRequest(${toJson()})';
 }

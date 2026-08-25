@@ -15,6 +15,7 @@ import (
 
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/user"
 )
@@ -726,4 +727,62 @@ func TestRequireAuth_DebugReasonOptIn(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
 	assert.Contains(t, rec.Body.String(), "debug_reason",
 		"debug_reason must be present when AUTHSOME_DEBUG_AUTH=1")
+}
+
+// ──────────────────────────────────────────────────
+// RequireAuth: non-human principals
+// ──────────────────────────────────────────────────
+
+func runRequireAuth(t *testing.T, mw ...forge.Middleware) int {
+	t.Helper()
+	router := forge.NewRouter()
+	for _, m := range mw {
+		router.Use(m)
+	}
+	router.Use(middleware.RequireAuth())
+	router.GET("/test", func(ctx forge.Context) error {
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	require.NoError(t, err)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	return rec.Code
+}
+
+// A machine caller carries no *user.User, so gating on one turned away every
+// service account, agent and workload credential.
+func TestRequireAuth_MachinePrincipalAccepted(t *testing.T) {
+	for _, kind := range []principal.Kind{
+		principal.KindService,
+		principal.KindWorkload,
+		principal.KindAgent,
+	} {
+		t.Run(string(kind), func(t *testing.T) {
+			sess := &session.Session{
+				ID:               id.NewSessionID(),
+				AppID:            id.NewAppID(),
+				PrincipalKind:    kind,
+				ServiceAccountID: id.NewServiceAccountID(),
+			}
+			assert.Equal(t, http.StatusOK, runRequireAuth(t, injectSession(sess)))
+		})
+	}
+}
+
+// An empty PrincipalKind means user, so a session with no resolved user behind
+// it is not an authenticated caller. This is the guard that stops the fix
+// widening into "any session at all will do".
+func TestRequireAuth_UserSessionWithoutUserRejected(t *testing.T) {
+	sess := &session.Session{
+		ID:     id.NewSessionID(),
+		AppID:  id.NewAppID(),
+		UserID: id.NewUserID(),
+	}
+	assert.Equal(t, http.StatusUnauthorized, runRequireAuth(t, injectSession(sess)))
+}
+
+func TestRequireAuth_NoCredentialsRejected(t *testing.T) {
+	assert.Equal(t, http.StatusUnauthorized, runRequireAuth(t))
 }

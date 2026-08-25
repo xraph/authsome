@@ -14,6 +14,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	log "github.com/xraph/go-utils/log"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/bridge/ledgeradapter"
 	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
@@ -37,6 +39,7 @@ import (
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/securityevent"
@@ -71,6 +74,17 @@ type Engine struct {
 	pendingStrategies  []pendingStrategy
 	pendingAppSessCfgs []*appsessionconfig.Config
 
+	// principalAuthGate scores machine callers (API keys, and any other
+	// credential that authenticates without a human sign-in) through the
+	// principal-auth hooks before a session is minted. Built once during
+	// NewEngine and exposed to plugins via PrincipalAuthGate, which
+	// implements plugin.PrincipalAuthGateProvider.
+	principalAuthGate *principalAuthGate
+	// principalAuthTTL controls how long an allow verdict is cached, keyed
+	// on credential and source IP together. Set via WithPrincipalAuthTTL;
+	// defaults to five minutes.
+	principalAuthTTL time.Duration
+
 	// First-class authorization engine (optional, replaces bridge for RBAC)
 	wardenEng *warden.Engine
 
@@ -100,6 +114,12 @@ type Engine struct {
 
 	// Ceremony state store for multi-instance auth ceremonies
 	ceremonyStore ceremony.Store
+
+	// RFC 9449 DPoP: proof validator (always constructed), nonce signer
+	// (nil when no signing secret is derivable) and replay cache.
+	dpopValidator   *dpop.Validator
+	dpopNonceSigner *dpop.NonceSigner
+	dpopReplayCache dpop.ReplayCache
 
 	// Token format (default: opaque; per-app overrides via AppSessionConfig.TokenFormat)
 	defaultTokenFormat tokenformat.Format
@@ -169,6 +189,35 @@ func NewEngine(opts ...Option) (*Engine, error) {
 	e.hooks = hook.NewBus(e.logger)
 	e.strategies = strategy.NewRegistry(e.logger)
 
+	// Wire the principal-auth gate. Static API-key traffic (and any other
+	// machine credential) reaches strategy.Authenticate directly, bypassing
+	// every sign-in hook, so this is what fires OnBeforePrincipalAuth /
+	// OnAfterPrincipalAuth for it instead. See plugin_principalauth.go.
+	if e.principalAuthTTL <= 0 {
+		e.principalAuthTTL = 5 * time.Minute
+	}
+	e.principalAuthGate = newPrincipalAuthGate(
+		e.plugins.EmitBeforePrincipalAuth,
+		func(ctx context.Context, a *principal.AuthAttempt, s *session.Session) {
+			e.plugins.EmitAfterPrincipalAuth(ctx, a, s)
+			e.hooks.Emit(ctx, &hook.Event{
+				Action:     hook.ActionPrincipalAuth,
+				Resource:   hook.ResourceSession,
+				ResourceID: s.ID.String(),
+				ActorID:    a.Subject.ID,
+				Tenant:     a.AppID.String(),
+				Metadata: map[string]string{
+					"principal_kind":  string(a.Subject.Kind),
+					"credential_kind": a.CredentialKind,
+					"credential_id":   a.CredentialID,
+					"ip":              a.IPAddress,
+				},
+			})
+		},
+		e.principalAuthTTL,
+		e.logger,
+	)
+
 	// Initialize the dynamic settings manager.
 	e.settingsMgr = settings.NewManager(e.store, e.logger)
 
@@ -181,6 +230,11 @@ func NewEngine(opts ...Option) (*Engine, error) {
 	if err := registerCaptchaSettings(e.settingsMgr); err != nil {
 		return nil, fmt.Errorf("authsome: failed to register captcha settings: %w", err)
 	}
+
+	// Construct the RFC 9449 DPoP validator and, when a secret is
+	// derivable, the nonce signer. Settings and JWT formats (both consulted
+	// indirectly, the latter via NonceSecret) are established by this point.
+	e.initDPoP()
 
 	// Resolve token encryptor: WithTokenEncryptor wins, otherwise read env.
 	if e.tokenEncryptor == nil {
@@ -224,6 +278,37 @@ func (e *Engine) requireStarted() error {
 	return nil
 }
 
+// DPoPBindingConfig returns the RFC 9449 enforcement wiring, for every auth
+// path that resolves a token and therefore has to honour a binding. The auth
+// middleware is one such path and the registered session auth provider is
+// another; anyone assembling their own chain gets the same config from here
+// rather than reassembling one that drifts.
+//
+// The validator is always non-nil (initDPoP builds it unconditionally); the
+// nonce signer is nil until a secret is derivable, which DPoPNonceRequiredForApp
+// already accounts for by refusing to demand nonces it cannot mint.
+func (e *Engine) DPoPBindingConfig() middleware.SessionBindingConfig {
+	return middleware.SessionBindingConfig{
+		DPoPValidator:   e.DPoPValidator(),
+		DPoPNonceSigner: e.DPoPNonceSigner(),
+		DPoPNonceRequired: func(ctx context.Context, appID string) bool {
+			parsed, err := id.Parse(appID)
+			if err != nil {
+				return false
+			}
+			return e.DPoPNonceRequiredForApp(ctx, parsed)
+		},
+		DPoPAudit: func(ctx context.Context, action string, md map[string]string) {
+			severity := bridge.SeverityInfo
+			if action == hook.ActionDPoPProofReplayed {
+				severity = bridge.SeverityWarning
+			}
+			e.audit(ctx, severity, bridge.OutcomeFailure, action, "session",
+				md["session_id"], "", md["app_id"], "auth", md)
+		},
+	}
+}
+
 // buildAuthMiddleware constructs the fully-configured auth middleware with
 // capability detection (JWT, strategies) and the cookie-to-header bridge.
 // Called once during InitPlugins so both the extension and plugins share
@@ -244,10 +329,11 @@ func (e *Engine) requireStarted() error {
 func (e *Engine) buildAuthMiddleware() {
 	var inner forge.Middleware
 
-	bindCfg := middleware.SessionBindingConfig{
-		CookieNameResolver: e.resolveSessionCookieName,
-		JWTSessionChecker:  e.jwtSessionChecker,
-	}
+	bindCfg := e.DPoPBindingConfig()
+	bindCfg.CookieNameResolver = e.resolveSessionCookieName
+	bindCfg.JWTSessionChecker = e.jwtSessionChecker
+	bindCfg.ExpectedAudienceResolver = e.resolveExpectedAudience
+	bindCfg.PrincipalResolver = e.ResolvePrincipalByRef
 
 	if e.HasJWT() {
 		inner = middleware.AuthMiddlewareWithJWT(
@@ -275,18 +361,30 @@ func (e *Engine) buildAuthMiddleware() {
 	// Wrap with cookie-to-header bridge: when no Authorization header is
 	// present, read the auth_token cookie (set during browser login) or
 	// the dynamic session cookie and inject it as a Bearer token.
+	//
+	// The bridge also records the value it wrote. Everything downstream still
+	// reads one credential shape, but RFC 9449 section 7.1 is a rule about the
+	// Authorization header, and a bound session presented by cookie needs a
+	// proof rather than a scheme it has no way to set. Losing that fact in here
+	// made every bound cookie session a permanent 401, which since sign-in
+	// started binding is every first-party sign-in under mode required.
 	e.authMiddleware = func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
 			r := ctx.Request()
 			if r.Header.Get("Authorization") == "" {
+				bridged := ""
 				if cookie, err := r.Cookie("auth_token"); err == nil && cookie.Value != "" {
-					r.Header.Set("Authorization", "Bearer "+cookie.Value)
+					bridged = cookie.Value
 				} else {
 					// Fall back to the dynamic session cookie name from settings.
 					cookieName := e.resolveSessionCookieName(ctx.Context())
 					if cookie, err := r.Cookie(cookieName); err == nil && cookie.Value != "" {
-						r.Header.Set("Authorization", "Bearer "+cookie.Value)
+						bridged = cookie.Value
 					}
+				}
+				if bridged != "" {
+					r.Header.Set("Authorization", "Bearer "+bridged)
+					ctx.WithContext(middleware.WithCookieBridgedToken(ctx.Context(), bridged))
 				}
 			}
 			return inner(next)(ctx)
@@ -316,7 +414,9 @@ func (e *Engine) registerSessionAuthProvider() {
 		e.logger.Debug("authsome: no auth registry available, skipping session provider registration")
 		return
 	}
-	provider := authprovider.NewSessionProvider(e.ResolveSessionByToken, e.ResolveUser, e.logger, e.resolveSessionCookieName)
+	provider := authprovider.
+		NewSessionProvider(e.ResolveSessionByToken, e.ResolveUser, e.logger, e.resolveSessionCookieName).
+		WithDPoP(e.DPoPBindingConfig())
 	if err := e.authRegistry.Register(provider); err != nil {
 		e.logger.Warn("authsome: failed to register session auth provider",
 			log.String("error", err.Error()),
@@ -357,6 +457,36 @@ func (e *Engine) resolveSessionCookieName(ctx context.Context) string {
 		return "authsome_session_token"
 	}
 	return name
+}
+
+// resolveExpectedAudience returns the resource identifiers this deployment
+// answers to for the app that minted the presented token, or nil to disable
+// the check.
+//
+// appID comes from the token itself (sess.AppID or claims.AppID), not from the
+// request context. resolveSessionCookieName reads the request's app id because
+// picking a cookie name is a property of the inbound call, but the audience
+// check is a property of the credential. The request only carries an app id
+// when PublishableKeyMiddleware ran and the caller sent X-Publishable-Key,
+// both optional, so reading it here would let a caller disable the check by
+// dropping a header.
+//
+// The fail-open on a settings error is deliberate. Failing closed would turn a
+// settings outage into a total authentication outage across every app, and the
+// audience check is a second line of defence sitting behind the token's own
+// signature, which has already been verified by the time this runs. Do not
+// "harden" this into a fail-closed check without understanding that trade.
+func (e *Engine) resolveExpectedAudience(ctx context.Context, appID string) []string {
+	mgr := e.Settings()
+	if mgr == nil {
+		return nil
+	}
+	opts := settings.ResolveOpts{AppID: appID}
+	identifier, err := settings.Get(ctx, mgr, SettingResourceIdentifier, opts)
+	if err != nil || identifier == "" {
+		return nil
+	}
+	return []string{identifier}
 }
 
 // jwtSessionChecker checks whether a JWT's session ID still exists in the
@@ -1289,6 +1419,16 @@ func (e *Engine) APIKeyStore() apikey.Store {
 	return e.store.(apikey.Store) //nolint:errcheck // type assertion
 }
 
+// PrincipalAuthGate implements plugin.PrincipalAuthGateProvider. It returns
+// any rather than a named type so this package does not have to import a
+// plugin package to spell the return type, which would create an import
+// cycle with plugins (such as apikey) that need the concrete *Engine type
+// for other reasons. Consumers type-assert the result against their own
+// narrow gate interface.
+func (e *Engine) PrincipalAuthGate() any {
+	return e.principalAuthGate
+}
+
 // ResolveAppByPublicKey resolves a publishable key (pk_live_...) to an app.
 // It first checks the apps table publishable_key column (fast, indexed), then
 // falls back to searching Keysmith API key metadata for keys generated via
@@ -1473,6 +1613,16 @@ func (e *Engine) NonceSecret() []byte {
 	}
 
 	return nil
+}
+
+// hkdfLike derives a domain-separated key from base material. Same
+// construction NonceSecret already uses for the dashboard, pulled out so
+// other subsystems (DPoP) can derive their own key from the same base
+// secret under a different info string.
+func hkdfLike(base []byte, info string) []byte {
+	h := hmac.New(sha256.New, base)
+	h.Write([]byte(info))
+	return h.Sum(nil)
 }
 
 // Metrics returns the current engine metrics.
