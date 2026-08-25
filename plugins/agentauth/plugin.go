@@ -53,9 +53,20 @@ func WithScope(scope string, p Permission) Option {
 }
 
 // WithStore injects a persistent store. Without it the plugin uses an
-// in-memory store.
+// in-memory store. A nil s is a no-op rather than installing a nil store:
+// Store is an interface, so pl.store = nil would leave every store call in
+// the plugin (Authorize's grant read included, at the very first thing an
+// agent request does) calling a method on a nil interface value, which
+// panics rather than erroring. New() already sets a working default before
+// any Option runs, so there is nothing useful a nil argument here could mean
+// other than "leave it alone".
 func WithStore(s Store) Option {
-	return func(pl *Plugin) { pl.store = s }
+	return func(pl *Plugin) {
+		if s == nil {
+			return
+		}
+		pl.store = s
+	}
 }
 
 // WithDefaultGrantTTL sets the fallback cap on grant lifetime. An org policy

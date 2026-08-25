@@ -409,7 +409,20 @@ func (s *Store) DeleteSessionsByGrant(ctx context.Context, grantID id.AgentGrant
 		// doing nothing.
 		return nil
 	}
-	_, err := s.pg.NewDelete((*SessionModel)(nil)).Where("grant_id = ?", grantID.String()).Exec(ctx)
+	// idx_authsome_sessions_grant_id is a PARTIAL index, WHERE grant_id <>
+	// ''. A bare "grant_id = ?" predicate binds grantID.String() as a query
+	// parameter, and Postgres's generic plan can't prove a bound parameter
+	// is non-empty at plan time the way it can prove a literal is — so
+	// nothing in the predicate itself lets the planner match the partial
+	// index's own WHERE clause. Adding "AND grant_id <> ''" is redundant
+	// with the guard above at the Go level (grantID.String() can't be empty
+	// past this point) but is not redundant to the planner, which reasons
+	// about the SQL text on its own; this is what actually lets it choose
+	// the partial index instead of a sequential scan.
+	_, err := s.pg.NewDelete((*SessionModel)(nil)).
+		Where("grant_id = ?", grantID.String()).
+		Where("grant_id <> ''").
+		Exec(ctx)
 	return pgError(err)
 }
 
