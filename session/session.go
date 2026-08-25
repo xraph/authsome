@@ -48,12 +48,25 @@ type Session struct {
 	// check against warden, not here.
 	Roles []string `json:"roles,omitempty"`
 
-	// PrincipalKind identifies the type of principal that owns this session.
-	// Valid values are "user" and "service_account". Empty string means "user"
-	// for backwards compatibility with existing sessions.
+	// Scopes holds the OAuth scopes this session was issued with, stamped at
+	// issuance. Same trade as Roles: authoritative for what this token may
+	// do, stale with respect to anything granted afterwards.
+	//
+	// Empty does not mean "may do anything". A session minted by password
+	// sign-in carries no scopes, and the RFC 8693 token exchange grant treats
+	// that as "no subject-side ceiling" while still bounding the result by the
+	// delegation grant and the client's own registered scopes.
+	Scopes []string `json:"scopes,omitempty"`
+
+	// PrincipalKind identifies the type of principal that owns this session:
+	// principal.KindUser, principal.KindAgent, principal.KindWorkload, or
+	// principal.KindService. Empty string means KindUser, for backwards
+	// compatibility with sessions written before this field existed.
 	PrincipalKind principal.Kind `json:"principal_kind,omitempty"`
-	// ServiceAccountID is set when PrincipalKind is "service_account".
-	// UserID is left as the zero value in that case.
+	// ServiceAccountID is set when PrincipalKind is anything other than
+	// KindUser, i.e. for the three non-human kinds, which all share the
+	// service-account identity space. UserID is left as the zero value in
+	// that case.
 	ServiceAccountID id.ServiceAccountID `json:"service_account_id,omitempty"`
 
 	// Actors is the chain of principals acting on the subject's behalf,
@@ -92,6 +105,20 @@ func (s *Session) Subject() principal.Ref {
 // IsHumanPrincipal reports whether a person owns this session.
 func (s *Session) IsHumanPrincipal() bool {
 	return s.PrincipalKind == "" || s.PrincipalKind == principal.KindUser
+}
+
+// AuthzActors returns the actors Warden must independently authorize.
+//
+// Empty for an impersonation, and that is the point. Impersonating somebody is
+// precisely the request to evaluate as them, so the admin's own permissions
+// are not intersected in. The gate for impersonation sits on Engine.Impersonate,
+// which is where an admin is checked once, rather than on every subsequent
+// permission check made while impersonating.
+func (s *Session) AuthzActors() principal.Chain {
+	if s.ActorGrant == principal.GrantImpersonation {
+		return nil
+	}
+	return s.Actors
 }
 
 // ImpersonatedBy returns the admin acting as this session's user, or the zero
@@ -134,7 +161,13 @@ func (s Session) MarshalJSON() ([]byte, error) {
 	type alias Session
 	out := struct {
 		alias
-		ImpersonatedBy string `json:"impersonated_by,omitempty"`
+		// No ,omitempty here on purpose. Before this change ImpersonatedBy
+		// was an id.UserID, a struct, and encoding/json never omits a struct
+		// for omitempty, so the key was always present, holding "" when
+		// nobody was impersonating. Dropping the key on an unimpersonated
+		// session would move the wire format, which the store models and
+		// external consumers both depend on staying put.
+		ImpersonatedBy string `json:"impersonated_by"`
 	}{alias: alias(s)}
 	if imp := s.ImpersonatedBy(); !imp.IsNil() {
 		out.ImpersonatedBy = imp.String()

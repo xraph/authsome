@@ -329,3 +329,96 @@ func TestGenerate_FormEncodedBodyKeepsItsFields(t *testing.T) {
 	assert.Regexp(t, `GrantType\s+string\s+`+"`"+`json:"grant_type"`+"`", typesContent)
 	assert.Regexp(t, `Code\s+string\s+`+"`"+`json:"code,omitempty"`+"`", typesContent)
 }
+
+// RFC 6749 section 4.1.3 requires the token endpoint to take
+// application/x-www-form-urlencoded. Posting JSON to it is what a conformant
+// server is entitled to reject.
+func TestGenerate_FormEncodedBodyIsPostedAsForm(t *testing.T) {
+	gen := golang.NewGenerator(golang.GeneratorConfig{})
+	files, err := gen.Generate(formBodySpec())
+	require.NoError(t, err)
+
+	var clientContent string
+	for _, f := range files {
+		if f.Path == "client.go" {
+			clientContent = f.Content
+			break
+		}
+	}
+	require.NotEmpty(t, clientContent)
+
+	assert.Contains(t, clientContent, `form.Set("grant_type", req.GrantType)`)
+	assert.Contains(t, clientContent, `form.Set("code", req.Code)`)
+	assert.Contains(t, clientContent, `"application/x-www-form-urlencoded"`)
+	assert.NotContains(t, clientContent, "json.Marshal(req)")
+}
+
+// The JSON routes are the overwhelming majority and must keep posting JSON.
+func TestGenerate_JSONBodyStillPostedAsJSON(t *testing.T) {
+	gen := golang.NewGenerator(golang.GeneratorConfig{})
+	files, err := gen.Generate(testSpec())
+	require.NoError(t, err)
+
+	var clientContent string
+	for _, f := range files {
+		if f.Path == "client.go" {
+			clientContent = f.Content
+			break
+		}
+	}
+	require.NotEmpty(t, clientContent)
+
+	assert.Contains(t, clientContent, "json.Marshal(req)")
+}
+
+// danglingRefSpec points a request body at a component that is not in the
+// document. The schema resolves to nothing, and a body with no fields on it
+// generates an empty struct that marshals "{}" over a body the server wants,
+// which is the failure this whole area keeps producing quietly.
+func danglingRefSpec() *openapi.Spec {
+	return &openapi.Spec{
+		OpenAPI: "3.0.3",
+		Info:    openapi.Info{Title: "Test API", Version: "1"},
+		Paths: map[string]*openapi.PathItem{
+			"/v1/thing": {
+				Post: &openapi.Operation{
+					OperationID: "createThing",
+					RequestBody: &openapi.RequestBody{
+						Required: true,
+						Content: map[string]openapi.MediaType{
+							"application/json": {
+								Schema: &openapi.Schema{Ref: "#/components/schemas/NoSuchThing"},
+							},
+						},
+					},
+					Responses: map[string]*openapi.Response{},
+				},
+			},
+		},
+		Components: &openapi.Components{Schemas: map[string]*openapi.Schema{}},
+	}
+}
+
+func TestGenerate_DanglingRefIsAnError(t *testing.T) {
+	gen := golang.NewGenerator(golang.GeneratorConfig{})
+
+	_, err := gen.Generate(danglingRefSpec())
+
+	require.Error(t, err, "a ref with no component behind it must not generate quietly")
+	assert.Contains(t, err.Error(), "NoSuchThing")
+}
+
+// A ref that is not pointing into components/schemas is somebody else's to
+// resolve, and passing it through is not the same mistake as swallowing a
+// broken one.
+func TestGenerate_NonComponentRefIsNotAnError(t *testing.T) {
+	spec := danglingRefSpec()
+	spec.Paths["/v1/thing"].Post.RequestBody.Content["application/json"] =
+		openapi.MediaType{Schema: &openapi.Schema{Ref: "https://example.com/schema.json#/Thing"}}
+
+	gen := golang.NewGenerator(golang.GeneratorConfig{})
+
+	_, err := gen.Generate(spec)
+
+	require.NoError(t, err)
+}

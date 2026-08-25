@@ -260,6 +260,21 @@ import type {
   ResendEmailVerificationRequest,
 } from './types';
 
+/**
+ * Encodes a body as application/x-www-form-urlencoded, which RFC 6749 section
+ * 4.1.3 requires at the OAuth2 token endpoint. Absent values stay off the wire
+ * entirely, the same as the JSON path omits them.
+ */
+function encodeForm(body: unknown): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
+    if (value !== undefined && value !== null) {
+      params.set(key, String(value));
+    }
+  }
+  return params.toString();
+}
+
 export interface AuthClientConfig {
   /** Base URL of the AuthSome API (e.g., "https://api.example.com") */
   baseURL: string;
@@ -2120,6 +2135,7 @@ export class AuthClient {
       'POST',
       path,
       body,
+      true,
     );
   }
 
@@ -2133,6 +2149,7 @@ export class AuthClient {
       'POST',
       path,
       body,
+      true,
     );
   }
 
@@ -2146,6 +2163,7 @@ export class AuthClient {
       'POST',
       path,
       body,
+      true,
     );
   }
 
@@ -2159,6 +2177,7 @@ export class AuthClient {
       'POST',
       path,
       body,
+      true,
     );
   }
 
@@ -3007,9 +3026,10 @@ export class AuthClient {
     method: string,
     path: string,
     body?: unknown,
+    form?: boolean,
   ): Promise<T> {
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      'Content-Type': form ? 'application/x-www-form-urlencoded' : 'application/json',
       'Accept': 'application/json',
     };
 
@@ -3023,7 +3043,7 @@ export class AuthClient {
     const response = await this.fetchFn(`${this.baseURL}${path}`, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : undefined,
+      body: body ? (form ? encodeForm(body) : JSON.stringify(body)) : undefined,
     });
 
     if (!response.ok) {

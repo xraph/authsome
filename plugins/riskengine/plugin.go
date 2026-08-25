@@ -105,7 +105,17 @@ type RiskRequest struct {
 	IPAddress string
 	UserAgent string
 	AppID     string
-	UserID    string
+	EnvID     string
+
+	// UserID is set once the principal is known. It is empty on the
+	// pre-authentication path, where Email or Username identify the attempt
+	// instead.
+	UserID string
+
+	// Email and Username carry the sign-in identifier so a contributor that
+	// scores a user rather than an address has something to resolve.
+	Email    string
+	Username string
 }
 
 // RiskContributor is a sub-plugin interface for plugins that contribute
@@ -233,6 +243,9 @@ func (p *Plugin) OnBeforeSignIn(ctx context.Context, req *account.SignInRequest)
 		IPAddress: req.IPAddress,
 		UserAgent: req.UserAgent,
 		AppID:     req.AppID.String(),
+		EnvID:     req.EnvID.String(),
+		Email:     req.Email,
+		Username:  req.Username,
 	}
 
 	assessment := p.evaluate(ctx, riskReq)

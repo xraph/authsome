@@ -992,6 +992,24 @@ ALTER TABLE authsome_sessions DROP COLUMN roles;
 				return err
 			},
 		},
+		&migrate.Migration{
+			Name:    "add_session_scopes",
+			Version: "20260824000060",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions ADD COLUMN scopes TEXT NOT NULL DEFAULT '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				// SQLite gained DROP COLUMN in 3.35.0; older engines fail here,
+				// matching how add_session_roles rolls back.
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions DROP COLUMN scopes;
+`)
+				return err
+			},
+		},
 
 		// Migration: session principal identity. A session may be owned by a
 		// user or by a service account (session.Session), and until these
@@ -1037,6 +1055,143 @@ CREATE INDEX IF NOT EXISTS idx_authsome_sessions_service_account_id
 DROP INDEX IF EXISTS idx_authsome_sessions_service_account_id;
 ALTER TABLE authsome_sessions DROP COLUMN service_account_id;
 ALTER TABLE authsome_sessions DROP COLUMN principal_kind;
+`)
+				return err
+			},
+		},
+
+		// Migration: service accounts, the sqlite twin of the postgres
+		// authsome_service_accounts table. Timestamp columns are declared
+		// TIMESTAMP rather than TEXT: modernc.org/sqlite only converts a
+		// column back into time.Time on Scan when its declared type
+		// (lowercased) is one of date/datetime/time/timestamp, exactly the
+		// quirk documented at the top of migrations_timestamps.go. This is a
+		// brand-new table, so it is declared correctly from the start rather
+		// than needing that file's rebuild treatment later.
+		//
+		// scopes is TEXT holding a JSON array, matching how every other
+		// scopes/roles column on this backend stores JSON in a TEXT column;
+		// sqlite has no native JSONB type to lean on the way postgres does.
+		&migrate.Migration{
+			Name:    "create_authsome_service_accounts",
+			Version: "20260824000050",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS authsome_service_accounts (
+    id            TEXT PRIMARY KEY,
+    app_id        TEXT NOT NULL,
+    env_id        TEXT NOT NULL DEFAULT '',
+    org_id        TEXT NOT NULL DEFAULT '',
+    kind          TEXT NOT NULL DEFAULT 'service_account',
+    name          TEXT NOT NULL,
+    description   TEXT NOT NULL DEFAULT '',
+    scopes        TEXT NOT NULL DEFAULT '',
+    owner_user_id TEXT NOT NULL DEFAULT '',
+    parent_id     TEXT NOT NULL DEFAULT '',
+    expires_at    TIMESTAMP,
+    active        INTEGER NOT NULL DEFAULT 1,
+    created_at    TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    updated_at    TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    CHECK (kind IN ('agent', 'workload', 'service_account'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_service_accounts_app_name
+    ON authsome_service_accounts (app_id, name);
+CREATE INDEX IF NOT EXISTS idx_authsome_service_accounts_owner
+    ON authsome_service_accounts (owner_user_id) WHERE owner_user_id <> '';
+CREATE INDEX IF NOT EXISTS idx_authsome_service_accounts_parent
+    ON authsome_service_accounts (parent_id) WHERE parent_id <> '';
+CREATE INDEX IF NOT EXISTS idx_authsome_service_accounts_expires
+    ON authsome_service_accounts (expires_at) WHERE expires_at IS NOT NULL;
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_service_accounts;`)
+				return err
+			},
+		},
+
+		// Migration: delegation grants, the sqlite twin of authsome_delegations
+		// in postgres. The partial unique index on live rows is what lets a
+		// revoked grant free its (app, actor, subject, kind) slot for a fresh
+		// one while keeping the revoked row around for audit.
+		&migrate.Migration{
+			Name:    "create_authsome_delegations",
+			Version: "20260824000051",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS authsome_delegations (
+    id              TEXT PRIMARY KEY,
+    app_id          TEXT NOT NULL,
+    org_id          TEXT NOT NULL DEFAULT '',
+    actor_kind      TEXT NOT NULL,
+    actor_id        TEXT NOT NULL,
+    subject_kind    TEXT NOT NULL,
+    subject_id      TEXT NOT NULL,
+    grant_kind      TEXT NOT NULL,
+    scopes          TEXT NOT NULL DEFAULT '',
+    granted_by_kind TEXT NOT NULL DEFAULT '',
+    granted_by_id   TEXT NOT NULL DEFAULT '',
+    expires_at      TIMESTAMP,
+    revoked_at      TIMESTAMP,
+    created_at      TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    updated_at      TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    CHECK (grant_kind IN ('delegation', 'impersonation'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_delegations_live
+    ON authsome_delegations (app_id, actor_kind, actor_id, subject_kind, subject_id, grant_kind)
+    WHERE revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_authsome_delegations_subject
+    ON authsome_delegations (app_id, subject_kind, subject_id);
+CREATE INDEX IF NOT EXISTS idx_authsome_delegations_actor
+    ON authsome_delegations (app_id, actor_kind, actor_id);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_delegations;`)
+				return err
+			},
+		},
+
+		// Migration: the actor chain on sessions, sqlite's counterpart to
+		// postgres's add_session_actor_chain. authsome_sessions carries no
+		// principal CHECK constraint on this backend (confirmed against the
+		// bare ADD COLUMN in add_session_principal_identity above), so unlike
+		// postgres this migration needs no table rebuild: three columns, the
+		// backfill, and one index.
+		//
+		// impersonated_by stays. It is backfilled into actors here, matching
+		// how postgres does it, except sqlite has no jsonb_build_array so the
+		// single-element chain is written by string concatenation instead.
+		&migrate.Migration{
+			Name:    "add_session_actor_chain",
+			Version: "20260824000052",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions ADD COLUMN actors TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_sessions ADD COLUMN actor_grant TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_sessions ADD COLUMN delegation_id TEXT NOT NULL DEFAULT '';
+
+UPDATE authsome_sessions
+   SET actors = '[{"kind":"user","id":"' || impersonated_by || '"}]',
+       actor_grant = 'impersonation'
+ WHERE impersonated_by <> '' AND actors = '';
+
+CREATE INDEX IF NOT EXISTS idx_authsome_sessions_delegation_id
+    ON authsome_sessions (delegation_id) WHERE delegation_id <> '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				// SQLite gained DROP COLUMN in 3.35.0; older engines fail
+				// here, matching how the other session ALTERs in this file
+				// roll back.
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_sessions_delegation_id;
+ALTER TABLE authsome_sessions DROP COLUMN delegation_id;
+ALTER TABLE authsome_sessions DROP COLUMN actor_grant;
+ALTER TABLE authsome_sessions DROP COLUMN actors;
 `)
 				return err
 			},

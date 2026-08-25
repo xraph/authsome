@@ -26,6 +26,10 @@ type Config struct {
 	MaxActiveSessions      *int  `json:"max_active_sessions,omitempty"`
 	RotateRefreshToken     *bool `json:"rotate_refresh_token,omitempty"`
 
+	// TokenExchangeTTLSeconds caps tokens minted by the RFC 8693 token
+	// exchange grant for this app.
+	TokenExchangeTTLSeconds *int `json:"token_exchange_ttl_seconds,omitempty"`
+
 	// Session binding overrides (nil = inherit from global).
 	BindToIP     *bool `json:"bind_to_ip,omitempty"`
 	BindToDevice *bool `json:"bind_to_device,omitempty"`
@@ -54,6 +58,9 @@ func (c *Config) ApplyTo(base *account.SessionConfig) {
 	}
 	if c.RotateRefreshToken != nil {
 		base.RotateRefreshToken = *c.RotateRefreshToken
+	}
+	if c.TokenExchangeTTLSeconds != nil {
+		base.TokenExchangeTTL = time.Duration(*c.TokenExchangeTTLSeconds) * time.Second
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/strategy"
 	"github.com/xraph/authsome/tokenformat"
@@ -113,6 +114,10 @@ type SessionResolver func(token string) (*session.Session, error)
 // UserResolver loads a user by ID string.
 type UserResolver func(userID string) (*user.User, error)
 
+// PrincipalResolver resolves a caller by ref. Middleware takes this as a
+// function rather than an engine so it does not import the engine package.
+type PrincipalResolver func(principal.Ref) (*principal.Principal, error)
+
 // JWTValidator validates JWT access tokens and returns claims.
 // The engine implements this via its TokenFormatForApp method.
 type JWTValidator interface {
@@ -146,6 +151,13 @@ type SessionBindingConfig struct {
 	// store. This enables JWT revocation — revoked sessions are rejected even
 	// if the JWT signature is valid. Also enables IP/device binding for JWTs.
 	JWTSessionChecker SessionExistsChecker
+
+	// PrincipalResolver, when set, resolves the session's subject onto the
+	// context as a *principal.Principal after every auth path that produces a
+	// session. Threaded through this config (rather than as a standalone
+	// parameter on each middleware constructor) so it defaults to nil and
+	// every existing caller keeps working unchanged.
+	PrincipalResolver PrincipalResolver
 }
 
 // AuthMiddleware extracts the session token from the Authorization header,
@@ -222,6 +234,7 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 			if imp := sess.ImpersonatedBy(); imp.Prefix() != "" {
 				goCtx = WithImpersonator(goCtx, imp)
 			}
+			goCtx = setPrincipalContext(goCtx, sess, bindCfg.PrincipalResolver, logger)
 
 			if sess.OrgID.Prefix() != "" {
 				goCtx = WithOrgID(goCtx, sess.OrgID)
@@ -288,7 +301,7 @@ func AuthMiddlewareWithStrategies(
 
 			// Fall back to strategy registry.
 			if strategies != nil {
-				if resolved := tryStrategyAuth(ctx, strategies, resolveUser, logger); resolved {
+				if resolved := tryStrategyAuth(ctx, strategies, resolveUser, bindCfg.PrincipalResolver, logger); resolved {
 					return next(ctx)
 				}
 			}
@@ -338,7 +351,7 @@ func AuthMiddlewareWithJWT(
 
 			// Fall back to strategy registry.
 			if strategies != nil {
-				if resolved := tryStrategyAuth(ctx, strategies, resolveUser, logger); resolved {
+				if resolved := tryStrategyAuth(ctx, strategies, resolveUser, bindCfg.PrincipalResolver, logger); resolved {
 					return next(ctx)
 				}
 			}
@@ -421,29 +434,83 @@ func tryJWTAuth(
 	goCtx := ctx.Context()
 
 	// Build a virtual session from JWT claims (no DB record needed).
-	appID := id.MustParse(claims.AppID)
-	userID := id.MustParse(claims.UserID)
+	//
+	// Every id below arrives inside the token, so it is attacker-influenced
+	// even though a valid signature is required to reach this code. These
+	// parses used to be id.MustParse, which panics on anything malformed and
+	// panicked outright on a machine token, whose sub is a service account id
+	// and was empty before the principal claims existed. Refuse the token
+	// instead: a panic in auth middleware is a bad failure mode to leave in
+	// place for a case the signature check is the only thing preventing.
+	parse := func(field, raw string) (id.ID, bool) {
+		parsed, parseErr := id.Parse(raw)
+		if parseErr != nil {
+			logger.Warn("auth middleware: JWT carries a malformed id claim",
+				log.String("claim", field),
+				log.String("error", parseErr.Error()),
+			)
+			return id.Nil, false
+		}
+		return parsed, true
+	}
+
+	appID, ok := parse("app_id", claims.AppID)
+	if !ok {
+		return false
+	}
+	subjectID, ok := parse("sub", claims.UserID)
+	if !ok {
+		return false
+	}
 
 	goCtx = WithAppID(goCtx, appID)
-	goCtx = WithUserID(goCtx, userID)
 	goCtx = WithAuthMethod(goCtx, "jwt")
 
+	// An empty PrincipalKind means user, which is what every token minted
+	// before that claim existed carries.
+	kind := principal.Kind(claims.PrincipalKind)
+	isUser := kind == "" || kind == principal.KindUser
+	if isUser {
+		goCtx = WithUserID(goCtx, subjectID)
+	}
+
 	if claims.SessionID != "" {
-		sessionID := id.MustParse(claims.SessionID)
+		sessionID, sidOK := parse("sid", claims.SessionID)
+		if !sidOK {
+			return false
+		}
 		goCtx = WithSessionID(goCtx, sessionID)
 	}
 
 	if claims.EnvID != "" {
-		envID := id.MustParse(claims.EnvID)
+		envID, envOK := parse("env_id", claims.EnvID)
+		if !envOK {
+			return false
+		}
 		goCtx = WithEnvID(goCtx, envID)
 	}
 
 	if claims.OrgID != "" {
-		orgID := id.MustParse(claims.OrgID)
+		orgID, orgOK := parse("org_id", claims.OrgID)
+		if !orgOK {
+			return false
+		}
 		goCtx = WithOrgID(goCtx, orgID)
 		goCtx = forge.WithScope(goCtx, forge.NewOrgScope(claims.AppID, claims.OrgID))
 	} else {
 		goCtx = forge.WithScope(goCtx, forge.NewAppScope(claims.AppID))
+	}
+
+	// A machine caller has no user row to resolve. Put the principal on the
+	// context so PrincipalRefFrom finds it, and stop.
+	if !isUser {
+		goCtx = principal.NewContext(goCtx, &principal.Principal{
+			Ref:    principal.Ref{Kind: kind, ID: subjectID.String()},
+			AppID:  appID,
+			Scopes: claims.Scopes,
+		})
+		ctx.WithContext(goCtx)
+		return true
 	}
 
 	// Resolve user from claims.
@@ -513,7 +580,7 @@ func trySessionAuth(
 		}
 	}
 
-	setSessionContext(ctx, sess, resolveUser, logger)
+	setSessionContext(ctx, sess, resolveUser, bindCfg.PrincipalResolver, logger)
 	return true
 }
 
@@ -523,6 +590,7 @@ func tryStrategyAuth(
 	ctx forge.Context,
 	strategies StrategyAuthenticator,
 	_ UserResolver,
+	resolvePrincipal PrincipalResolver,
 	logger log.Logger,
 ) bool {
 	result, err := strategies.Authenticate(ctx.Context(), ctx.Request())
@@ -605,6 +673,7 @@ func tryStrategyAuth(
 		} else {
 			goCtx = forge.WithScope(goCtx, forge.NewAppScope(result.Session.AppID.String()))
 		}
+		goCtx = setPrincipalContext(goCtx, result.Session, resolvePrincipal, logger)
 	}
 
 	if result.User != nil {
@@ -616,8 +685,41 @@ func tryStrategyAuth(
 	return true
 }
 
+// setPrincipalContext resolves the session's subject and puts it, and the
+// actor chain, on the context.
+//
+// A resolution failure is logged and passed over rather than failing the
+// request. The session already authenticated the caller; this is enrichment,
+// and refusing the request over it would turn a principal-store blip into an
+// outage on traffic that is otherwise fine.
+func setPrincipalContext(
+	goCtx context.Context, sess *session.Session, resolve PrincipalResolver, logger log.Logger,
+) context.Context {
+	if len(sess.Actors) > 0 {
+		goCtx = WithActors(goCtx, sess.Actors)
+	}
+	if resolve == nil {
+		return goCtx
+	}
+	ref := sess.Subject()
+	if ref.IsZero() {
+		return goCtx
+	}
+	p, err := resolve(ref)
+	if err != nil {
+		logger.Warn("auth middleware: failed to resolve principal",
+			log.String("principal", ref.String()),
+			log.String("error", err.Error()),
+		)
+		return goCtx
+	}
+	return WithPrincipal(goCtx, p)
+}
+
 // setSessionContext populates the forge context with session and user data.
-func setSessionContext(ctx forge.Context, sess *session.Session, resolveUser UserResolver, logger log.Logger) {
+func setSessionContext(
+	ctx forge.Context, sess *session.Session, resolveUser UserResolver, resolvePrincipal PrincipalResolver, logger log.Logger,
+) {
 	goCtx := ctx.Context()
 	goCtx = WithSession(goCtx, sess)
 	goCtx = WithSessionID(goCtx, sess.ID)
@@ -630,6 +732,7 @@ func setSessionContext(ctx forge.Context, sess *session.Session, resolveUser Use
 	if imp := sess.ImpersonatedBy(); imp.Prefix() != "" {
 		goCtx = WithImpersonator(goCtx, imp)
 	}
+	goCtx = setPrincipalContext(goCtx, sess, resolvePrincipal, logger)
 
 	if sess.OrgID.Prefix() != "" {
 		goCtx = WithOrgID(goCtx, sess.OrgID)
@@ -655,10 +758,15 @@ func setSessionContext(ctx forge.Context, sess *session.Session, resolveUser Use
 }
 
 // RequireAuth returns a forge middleware that rejects unauthenticated requests.
+//
+// Authenticated means a resolved principal of any kind, not a user
+// specifically. A machine caller carries no *user.User, so gating on one
+// turned away every service account, agent and workload credential before it
+// reached a handler.
 func RequireAuth() forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
-			if _, ok := UserFrom(ctx.Context()); !ok {
+			if _, ok := PrincipalRefFrom(ctx.Context()); !ok {
 				body := map[string]any{
 					"error": "authentication required",
 					"code":  http.StatusUnauthorized,

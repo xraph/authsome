@@ -263,7 +263,15 @@ func (p *Plugin) handleSend(ctx forge.Context, req *SendRequest) (*SendResponse,
 	// Resolve the real user by email. The verification token must be bound to
 	// their actual user id so /verify can resolve them — binding it to a random
 	// id (the previous behavior) made every real magic-link login fail.
-	u, lookupErr := p.store.GetUserByEmail(ctx.Context(), appID, req.Email)
+	// Scope the lookup to the app's default environment, the way SSO and
+	// password sign-in do. A magic link grants a session, so resolving an
+	// address app-wide would let one environment mint a session for an
+	// account that lives in another.
+	var envID id.EnvironmentID
+	if env, _ := p.store.GetDefaultEnvironment(ctx.Context(), appID); env != nil { //nolint:errcheck // best-effort env lookup
+		envID = env.ID
+	}
+	u, lookupErr := p.store.GetUserByEmail(ctx.Context(), appID, envID, req.Email)
 	if lookupErr != nil {
 		// Anti-enumeration: return the same success response whether or not the
 		// email is registered, and never mint a token or send a link for an

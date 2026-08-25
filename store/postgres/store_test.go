@@ -271,12 +271,12 @@ func TestUser_CRUD(t *testing.T) {
 	assert.Equal(t, "premium", got.Metadata["tier"])
 
 	// Get by email
-	got, err = s.GetUserByEmail(ctx, a.ID, "alice@test.com")
+	got, err = s.GetUserByEmail(ctx, a.ID, id.Nil, "alice@test.com")
 	require.NoError(t, err)
 	assert.Equal(t, u.ID, got.ID)
 
 	// Get by username
-	got, err = s.GetUserByUsername(ctx, a.ID, "alice")
+	got, err = s.GetUserByUsername(ctx, a.ID, id.Nil, "alice")
 	require.NoError(t, err)
 	assert.Equal(t, u.ID, got.ID)
 
@@ -307,7 +307,7 @@ func TestUser_CRUD(t *testing.T) {
 	assert.ErrorIs(t, err, store.ErrNotFound, "soft-deleted user should not be found")
 
 	// Soft-deleted user should not appear in email lookups
-	_, err = s.GetUserByEmail(ctx, a.ID, "alice@test.com")
+	_, err = s.GetUserByEmail(ctx, a.ID, id.Nil, "alice@test.com")
 	assert.ErrorIs(t, err, store.ErrNotFound)
 }
 
@@ -560,8 +560,11 @@ func TestVerification_CRUD(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, got.Consumed)
 
-	// Consuming again should be a no-op (already consumed)
-	require.NoError(t, s.ConsumeVerification(ctx, v.Token))
+	// Consuming again must be refused. A verification token is single use, and
+	// every backend reports an already-consumed one as not-found so a replayed
+	// redemption cannot succeed behind the first. Treating it as a no-op is
+	// what let two concurrent redemptions of one token both go through.
+	assert.ErrorIs(t, s.ConsumeVerification(ctx, v.Token), store.ErrNotFound)
 }
 
 func TestVerification_GetNotFound(t *testing.T) {

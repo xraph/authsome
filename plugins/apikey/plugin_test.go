@@ -17,6 +17,7 @@ import (
 	"github.com/xraph/forge"
 	"github.com/xraph/forge/extensions/auth"
 
+	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/bridge"
@@ -26,6 +27,8 @@ import (
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	apikeyPlugin "github.com/xraph/authsome/plugins/apikey"
+	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -35,12 +38,37 @@ import (
 	"github.com/xraph/authsome/user"
 
 	"github.com/xraph/grove"
+	"github.com/xraph/warden"
+	wardenmem "github.com/xraph/warden/store/memory"
 )
 
 // mockEngine provides a minimal mock of plugin.Engine for testing the apikey plugin.
 type mockEngine struct {
 	logger log.Logger
 	store  apikey.Store
+	// gate, when set, is returned from PrincipalAuthGate so OnInit picks it
+	// up via plugin.PrincipalAuthGateProvider, exactly as *authsome.Engine
+	// does in production.
+	gate apikeyPlugin.PrincipalAuthGate
+}
+
+// PrincipalAuthGate implements plugin.PrincipalAuthGateProvider.
+func (m *mockEngine) PrincipalAuthGate() any { return m.gate }
+
+// fakeGate is a test double for apikeyPlugin.PrincipalAuthGate.
+type fakeGate struct {
+	authorizeErr error
+	authorizeN   int
+	observeN     int
+}
+
+func (g *fakeGate) Authorize(_ context.Context, _ *principal.AuthAttempt) error {
+	g.authorizeN++
+	return g.authorizeErr
+}
+
+func (g *fakeGate) Observe(_ context.Context, _ *principal.AuthAttempt, _ *session.Session) {
+	g.observeN++
 }
 
 // Compile-time check.
@@ -66,6 +94,7 @@ func (m *mockEngine) SessionConfigForApp(_ context.Context, _ id.AppID, _ ...id.
 func (m *mockEngine) TokenFormatForApp(_ string) tokenformat.Format { return nil }
 func (m *mockEngine) CeremonyStore() ceremony.Store                 { return nil }
 func (m *mockEngine) APIKeyStore() apikey.Store                     { return m.store }
+func (m *mockEngine) SecurityEvents() securityevent.Store           { return nil }
 func (m *mockEngine) ResolveSessionByToken(_ string) (*session.Session, error) {
 	return nil, errors.New("not implemented")
 }
@@ -73,11 +102,18 @@ func (m *mockEngine) GetUser(_ context.Context, _ id.UserID) (*user.User, error)
 	return nil, errors.New("not implemented")
 }
 func (m *mockEngine) EnsureDefaultRole(_ context.Context, _ id.AppID, _ id.UserID) {}
-func (m *mockEngine) AuthMiddleware() forge.Middleware                             { return nil }
-func (m *mockEngine) AuthRegistry() auth.Registry                                  { return nil }
-func (m *mockEngine) PlatformAppID() id.AppID                                      { return id.AppID{} }
-func (m *mockEngine) DefaultAppID() string                                         { return "" }
-func (m *mockEngine) BasePath() string                                             { return "" }
+func (m *mockEngine) ResolvePrincipal(_ context.Context, _ principal.Ref) (*principal.Principal, error) {
+	return nil, principal.ErrNotFound
+}
+func (m *mockEngine) PrincipalStore() principal.Store { return nil }
+func (m *mockEngine) Can(_ context.Context, _ principal.Ref, _ principal.Chain, _, _ string) (bool, error) {
+	return false, nil
+}
+func (m *mockEngine) AuthMiddleware() forge.Middleware { return nil }
+func (m *mockEngine) AuthRegistry() auth.Registry      { return nil }
+func (m *mockEngine) PlatformAppID() id.AppID          { return id.AppID{} }
+func (m *mockEngine) DefaultAppID() string             { return "" }
+func (m *mockEngine) BasePath() string                 { return "" }
 func (m *mockEngine) ResolveUser(userID string) (*user.User, error) {
 	uid, err := id.ParseUserID(userID)
 	if err != nil {
@@ -641,6 +677,153 @@ func TestPlugin_Strategy_Authenticate_RejectsPublicKey(t *testing.T) {
 	_, err = s.Authenticate(context.Background(), req)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "public key")
+}
+
+// TestPlugin_Strategy_Authenticate_GateDenies proves the deny path end to
+// end: a valid, unexpired, unrevoked key must still be rejected when the
+// principal-auth gate denies it. Without this, a risk plugin wired up behind
+// the gate could return an error and Authenticate would ignore it, which
+// would be worse than not scoring machine traffic at all: it would look
+// enforced when it is not.
+func TestPlugin_Strategy_Authenticate_GateDenies(t *testing.T) {
+	p, store := newTestPlugin()
+	denyErr := errors.New("blocked by risk")
+	gate := &fakeGate{authorizeErr: denyErr}
+	require.NoError(t, p.OnInit(context.Background(), &mockEngine{logger: log.NewNoopLogger(), store: store, gate: gate}))
+	s := p.Strategy()
+
+	appID := id.NewAppID()
+	userID := id.NewUserID()
+
+	raw, hash, prefix, err := apikey.GenerateKey()
+	require.NoError(t, err)
+
+	now := time.Now()
+	err = store.CreateAPIKey(context.Background(), &apikey.APIKey{
+		ID: id.NewAPIKeyID(), AppID: appID, UserID: userID,
+		Name: "Gated Key", KeyHash: hash, KeyPrefix: prefix,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/data", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	req.Header.Set("X-App-ID", appID.String())
+
+	result, err := s.Authenticate(context.Background(), req)
+	require.Error(t, err, "a gate denial must fail authentication, not just get logged")
+	assert.Nil(t, result, "a denied request must not return a session")
+	assert.ErrorIs(t, err, denyErr)
+	assert.Equal(t, 1, gate.authorizeN, "the gate must have been consulted")
+	assert.Equal(t, 0, gate.observeN, "Observe must not run when Authorize denies")
+}
+
+// TestPlugin_Strategy_Authenticate_GateObservesAllow proves the allow path
+// reaches Observe with the same session that was returned, for a user-bound
+// key. A user-bound API key is machine traffic too and must not skip the
+// gate. See TestPlugin_Strategy_Authenticate_GateObservesAllow_ServiceAccount
+// for the other branch, which has its own gate call and its own test.
+func TestPlugin_Strategy_Authenticate_GateObservesAllow(t *testing.T) {
+	p, store := newTestPlugin()
+	gate := &fakeGate{}
+	require.NoError(t, p.OnInit(context.Background(), &mockEngine{logger: log.NewNoopLogger(), store: store, gate: gate}))
+	s := p.Strategy()
+
+	appID := id.NewAppID()
+	userID := id.NewUserID()
+
+	raw, hash, prefix, err := apikey.GenerateKey()
+	require.NoError(t, err)
+
+	now := time.Now()
+	err = store.CreateAPIKey(context.Background(), &apikey.APIKey{
+		ID: id.NewAPIKeyID(), AppID: appID, UserID: userID,
+		Name: "Allowed Key", KeyHash: hash, KeyPrefix: prefix,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/data", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	req.Header.Set("X-App-ID", appID.String())
+
+	result, err := s.Authenticate(context.Background(), req)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 1, gate.authorizeN)
+	assert.Equal(t, 1, gate.observeN)
+}
+
+// TestPlugin_Strategy_Authenticate_GateObservesAllow_ServiceAccount covers
+// the service-account branch of Authenticate, which has its own Authorize
+// and Observe calls separate from the user-bound branch above. Nothing else
+// in this package ever sets ServiceAccountID, so without this test that
+// branch's gate call had no coverage at all.
+func TestPlugin_Strategy_Authenticate_GateObservesAllow_ServiceAccount(t *testing.T) {
+	p, store := newTestPlugin()
+	gate := &fakeGate{}
+	require.NoError(t, p.OnInit(context.Background(), &mockEngine{logger: log.NewNoopLogger(), store: store, gate: gate}))
+	s := p.Strategy()
+
+	appID := id.NewAppID()
+	svcID := id.NewServiceAccountID()
+
+	raw, hash, prefix, err := apikey.GenerateKey()
+	require.NoError(t, err)
+
+	now := time.Now()
+	err = store.CreateAPIKey(context.Background(), &apikey.APIKey{
+		ID: id.NewAPIKeyID(), AppID: appID, ServiceAccountID: svcID,
+		Name: "Service Account Key", KeyHash: hash, KeyPrefix: prefix,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/data", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	req.Header.Set("X-App-ID", appID.String())
+
+	result, err := s.Authenticate(context.Background(), req)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Session)
+	assert.Equal(t, svcID, result.Session.ServiceAccountID)
+	assert.Equal(t, 1, gate.authorizeN, "the service-account branch must consult the gate")
+	assert.Equal(t, 1, gate.observeN, "the service-account branch must call Observe with its synthetic session")
+}
+
+// TestPlugin_OnInit_PrincipalAuthGateSignatureMatchesRealEngine catches
+// signature drift between authsome.Engine.PrincipalAuthGate() and this
+// package's PrincipalAuthGate interface. Every other test in this file wires
+// the gate through fakeGate, which by construction always satisfies the
+// interface it was written against, so none of them would notice if the real
+// engine's gate ever stopped matching. That drift would compile cleanly:
+// OnInit's type assertion would just start missing, p.gate would stay nil,
+// and Authenticate would silently stop scoring every machine caller, all
+// while every existing test kept passing and the system reported healthy.
+// This is the load-bearing check for that: a real *authsome.Engine, taken
+// through the same OnInit path production uses, then the same assertion
+// OnInit performs, checked directly so a mismatch fails loudly here instead
+// of nowhere.
+func TestPlugin_OnInit_PrincipalAuthGateSignatureMatchesRealEngine(t *testing.T) {
+	s := memoryStore.New()
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+	eng, err := authsome.NewEngine(
+		authsome.WithStore(s),
+		authsome.WithWarden(w),
+		authsome.WithDisableMigrate(),
+	)
+	require.NoError(t, err)
+
+	p := apikeyPlugin.New()
+	p.SetStore(s)
+	require.NoError(t, p.OnInit(context.Background(), eng))
+
+	gate, ok := eng.PrincipalAuthGate().(apikeyPlugin.PrincipalAuthGate)
+	require.True(t, ok, "authsome.Engine.PrincipalAuthGate() must satisfy apikey.PrincipalAuthGate; "+
+		"a drift here silently turns off machine-caller scoring")
+	require.NotNil(t, gate)
 }
 
 func TestAPIKey_GenerateKeyPair(t *testing.T) {

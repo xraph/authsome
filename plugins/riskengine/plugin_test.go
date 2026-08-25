@@ -146,3 +146,54 @@ func TestAuditAssessment(t *testing.T) { //nolint:revive // test function signat
 	assessment := p.evaluate(context.Background(), req)
 	p.auditAssessment(context.Background(), req, assessment)
 }
+
+// capturingContributor records the request it was handed so we can assert on
+// what the engine actually populates.
+type capturingContributor struct {
+	got *RiskRequest
+}
+
+func (c *capturingContributor) Name() string { return "capturing" }
+
+func (c *capturingContributor) EvaluateRisk(_ context.Context, req *RiskRequest) (*RiskSignal, error) {
+	c.got = req
+	return &RiskSignal{Source: "capturing", Score: 0, Weight: 1}, nil
+}
+
+// A user-scoped contributor needs something to identify the user by. Before
+// this fix the engine passed neither, so the whole class of contributor was
+// dead on arrival.
+func TestOnBeforeSignIn_PassesIdentifierToContributors(t *testing.T) {
+	c := &capturingContributor{}
+	p := New(c)
+	p.logger = log.NewNoopLogger()
+
+	appID := id.NewAppID()
+	err := p.OnBeforeSignIn(context.Background(), &account.SignInRequest{
+		AppID:     appID,
+		Email:     "target@corp.com",
+		IPAddress: "203.0.113.10",
+		UserAgent: "test-agent",
+	})
+	require.NoError(t, err)
+
+	require.NotNil(t, c.got)
+	assert.Equal(t, "203.0.113.10", c.got.IPAddress)
+	assert.Equal(t, appID.String(), c.got.AppID)
+	assert.Equal(t, "target@corp.com", c.got.Email,
+		"contributors that score a user need the sign-in identifier")
+}
+
+func TestOnBeforeSignIn_PassesUsernameWhenEmailAbsent(t *testing.T) {
+	c := &capturingContributor{}
+	p := New(c)
+	p.logger = log.NewNoopLogger()
+
+	err := p.OnBeforeSignIn(context.Background(), &account.SignInRequest{
+		AppID:    id.NewAppID(),
+		Username: "targetuser",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, c.got)
+	assert.Equal(t, "targetuser", c.got.Username)
+}

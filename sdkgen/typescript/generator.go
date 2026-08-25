@@ -167,6 +167,7 @@ type OperationDef struct {
 	Path              string
 	Summary           string
 	HasBody           bool
+	FormBody          bool
 	BodyType          string
 	ResponseType      string
 	AuthRequired      bool
@@ -288,8 +289,10 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 			// Determine body type
 			if pair.op.RequestBody != nil {
 				opDef.HasBody = true
-				if schema := requestBodySchema(pair.op.RequestBody); schema != nil {
+				schema, mediaType := requestBodyContent(pair.op.RequestBody)
+				if schema != nil {
 					opDef.BodyType = g.schemaToTSInlineType(schema)
+					opDef.FormBody = mediaType == mediaTypeForm
 				} else {
 					opDef.BodyType = "Record<string, unknown>"
 				}
@@ -395,9 +398,15 @@ func (g *Generator) schemaToTSType(s *openapi.Schema) string {
 //
 // Remaining content types are considered in sorted order, so a route offering
 // several does not generate a different type from one run to the next.
-func requestBodySchema(rb *openapi.RequestBody) *openapi.Schema {
-	if ct, ok := rb.Content["application/json"]; ok && ct.Schema != nil {
-		return ct.Schema
+const (
+	mediaTypeJSON = "application/json"
+	// RFC 6749 section 4.1.3.
+	mediaTypeForm = "application/x-www-form-urlencoded"
+)
+
+func requestBodyContent(rb *openapi.RequestBody) (schema *openapi.Schema, mediaType string) {
+	if ct, ok := rb.Content[mediaTypeJSON]; ok && ct.Schema != nil {
+		return ct.Schema, mediaTypeJSON
 	}
 
 	mediaTypes := make([]string, 0, len(rb.Content))
@@ -408,11 +417,11 @@ func requestBodySchema(rb *openapi.RequestBody) *openapi.Schema {
 
 	for _, mt := range mediaTypes {
 		if ct := rb.Content[mt]; ct.Schema != nil {
-			return ct.Schema
+			return ct.Schema, mt
 		}
 	}
 
-	return nil
+	return nil, ""
 }
 
 func (g *Generator) schemaToTSInlineType(s *openapi.Schema) string {

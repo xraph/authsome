@@ -28,6 +28,7 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
@@ -111,7 +112,10 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 
 	// Check username uniqueness (if provided)
 	if req.Username != "" {
-		_, lookupErr := e.store.GetUserByUsername(ctx, req.AppID, req.Username)
+		// id.Nil on purpose: a handle is claimed across the whole app, the
+		// same way the email check above is app-wide, even though storage
+		// only enforces uniqueness per environment.
+		_, lookupErr := e.store.GetUserByUsername(ctx, req.AppID, id.Nil, req.Username)
 		if lookupErr == nil {
 			return nil, nil, account.ErrUsernameTaken
 		}
@@ -243,14 +247,24 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 		req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	}
 
+	// Resolve the environment before the lookup, not after. Sign-in must
+	// resolve the credential inside the environment the session will belong
+	// to, or a staging request could authenticate a production account that
+	// happens to share an address or handle.
+	if req.EnvID.IsNil() {
+		if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil { //nolint:errcheck // best-effort env lookup
+			req.EnvID = env.ID
+		}
+	}
+
 	// Lookup user
 	var u *user.User
 	var err error
 	switch {
 	case req.Email != "":
-		u, err = e.store.GetUserByEmail(ctx, req.AppID, req.Email)
+		u, err = e.store.GetUserByEmail(ctx, req.AppID, req.EnvID, req.Email)
 	case req.Username != "":
-		u, err = e.store.GetUserByUsername(ctx, req.AppID, req.Username)
+		u, err = e.store.GetUserByUsername(ctx, req.AppID, req.EnvID, req.Username)
 	default:
 		return nil, nil, account.ErrInvalidCredentials
 	}
@@ -258,13 +272,6 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	if err != nil {
 		e.recordFailedSignin(ctx, req, lockoutKey)
 		return nil, nil, account.ErrInvalidCredentials
-	}
-
-	// Resolve default environment when not explicitly provided.
-	if req.EnvID.IsNil() {
-		if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil { //nolint:errcheck // best-effort env lookup
-			req.EnvID = env.ID
-		}
 	}
 
 	// Check banned
@@ -742,6 +749,17 @@ func (e *Engine) ResolveUser(userIDStr string) (*user.User, error) {
 	return e.store.GetUser(ctx, userID)
 }
 
+// ResolvePrincipalByRef adapts Engine.ResolvePrincipal to
+// middleware.PrincipalResolver's no-context shape (for middleware).
+//
+// Same trade as ResolveUser above: the resolver signature this mirrors
+// (middleware.UserResolver) carries no request context, so neither does
+// this one, and a request's cancellation or deadline does not propagate
+// into the store lookup it triggers.
+func (e *Engine) ResolvePrincipalByRef(ref principal.Ref) (*principal.Principal, error) {
+	return e.ResolvePrincipal(context.Background(), ref)
+}
+
 // ──────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────
@@ -772,6 +790,9 @@ func (e *Engine) sessionConfig() account.SessionConfig {
 		RefreshTokenTTL:    e.config.Session.RefreshTokenTTL,
 		MaxActiveSessions:  e.config.Session.MaxActiveSessions,
 		RotateRefreshToken: e.config.Session.ShouldRotateRefreshToken(),
+		// Short by default. An exchanged token is meant to be re-minted rather
+		// than held, and nothing in the global config surfaces this yet.
+		TokenExchangeTTL: 5 * time.Minute,
 	}
 }
 
@@ -1911,15 +1932,15 @@ func (e *Engine) GetRoleChildren(ctx context.Context, roleID id.RoleID) ([]*rbac
 }
 
 // HasPermission checks whether a user has a specific permission.
-// The check walks the role hierarchy so permissions from parent roles are inherited.
+//
+// Preserved as-is for plugin.PermissionChecker and for every caller that has a
+// user ID and no chain: it is Can with an empty chain, so the walk of the role
+// hierarchy and the inheritance behaviour are exactly what they were before
+// Can existed. The decision and reason Can logs on denial come from checkOne,
+// which now carries the full *warden.CheckResult for every hop rather than
+// only the subject's, so nothing here is worse off for having moved.
 func (e *Engine) HasPermission(ctx context.Context, userID id.UserID, action, resource string) (bool, error) {
-	ctx = e.ensureWardenScope(ctx)
-
-	result, err := e.wardenEng.Check(ctx, &warden.CheckRequest{
-		Subject:  warden.Subject{Kind: warden.SubjectUser, ID: userID.String()},
-		Action:   warden.Action{Name: action},
-		Resource: warden.Resource{Type: resource},
-	})
+	allowed, err := e.Can(ctx, principal.UserRef(userID), nil, action, resource)
 	if err != nil {
 		e.logger.Warn("authsome: HasPermission error",
 			log.String("user_id", userID.String()),
@@ -1930,8 +1951,11 @@ func (e *Engine) HasPermission(ctx context.Context, userID id.UserID, action, re
 		return false, err
 	}
 
-	if !result.Allowed {
-		// Log tenant and decision for diagnostics.
+	if !allowed {
+		// Keep the existing tenant diagnostics verbatim: they are what
+		// operators use to work out which app a denial came from. The
+		// decision and reason fields are logged by Can itself, where they
+		// are available for whichever hop actually denied.
 		forgeAppID := ""
 		forgeOrgID := ""
 		if s, ok := forge.ScopeFrom(ctx); ok {
@@ -1943,15 +1967,13 @@ func (e *Engine) HasPermission(ctx context.Context, userID id.UserID, action, re
 			log.String("user_id", userID.String()),
 			log.String("action", action),
 			log.String("resource", resource),
-			log.String("decision", string(result.Decision)),
-			log.String("reason", result.Reason),
 			log.String("forge_app_id", forgeAppID),
 			log.String("forge_org_id", forgeOrgID),
 			log.String("platform_app_id", e.PlatformAppID().String()),
 		)
 	}
 
-	return result.Allowed, nil
+	return allowed, nil
 }
 
 // EnsureDefaultRole assigns the default Warden role to a user if they don't
@@ -2254,7 +2276,8 @@ func (e *Engine) AdminUpdateUser(ctx context.Context, adminID, userID id.UserID,
 	if updates.Username != nil {
 		newUsername := *updates.Username
 		if newUsername != u.Username && newUsername != "" {
-			if _, lookupErr := e.store.GetUserByUsername(ctx, u.AppID, newUsername); lookupErr == nil {
+			// App-wide by design, matching the signup guard.
+			if _, lookupErr := e.store.GetUserByUsername(ctx, u.AppID, id.Nil, newUsername); lookupErr == nil {
 				return account.ErrUsernameTaken
 			}
 		}
@@ -2304,7 +2327,8 @@ func (e *Engine) AdminCreateUser(ctx context.Context, adminID id.UserID, appID i
 
 	// Check username uniqueness
 	if username != "" {
-		if _, err := e.store.GetUserByUsername(ctx, appID, username); err == nil {
+		// App-wide by design, matching the signup guard.
+		if _, err := e.store.GetUserByUsername(ctx, appID, id.Nil, username); err == nil {
 			return nil, account.ErrUsernameTaken
 		}
 	}
@@ -2485,7 +2509,8 @@ func (e *Engine) AdminBulkImportUsers(ctx context.Context, adminID id.UserID, us
 
 		// Check username uniqueness
 		if u.Username != "" {
-			if _, err := e.store.GetUserByUsername(ctx, u.AppID, u.Username); err == nil {
+			// App-wide by design, matching the signup guard.
+			if _, err := e.store.GetUserByUsername(ctx, u.AppID, id.Nil, u.Username); err == nil {
 				result.Errors = append(result.Errors, BulkError{Index: i, Email: u.Email, Error: "username already taken"})
 				result.Skipped++
 				continue

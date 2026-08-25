@@ -62,6 +62,10 @@ const (
 	PrefixServiceAccount  Prefix = "svc"
 	PrefixUserEmail       Prefix = "auem"
 	PrefixDelegation      Prefix = "adel"
+	PrefixSSFStream       Prefix = "assf"
+	PrefixSSFLink         Prefix = "assl"
+	PrefixSSFEvent        Prefix = "asse"
+	PrefixSSFSignal       Prefix = "assg"
 )
 
 // ID is the primary identifier type for all AuthSome entities.
@@ -201,6 +205,18 @@ type DelegationID = ID
 
 // AnyID is a TypeID that accepts any valid prefix.
 type AnyID = ID
+
+// SSFStreamID identifies a Shared Signals inbound stream.
+type SSFStreamID = ID
+
+// SSFLinkID identifies a Shared Signals subject link.
+type SSFLinkID = ID
+
+// SSFEventID identifies a received Security Event Token.
+type SSFEventID = ID
+
+// SSFSignalID identifies a stored Shared Signals risk signal.
+type SSFSignalID = ID
 
 // ──────────────────────────────────────────────────
 // Core functions
@@ -385,6 +401,18 @@ func NewServiceAccountID() ID { return New(PrefixServiceAccount) }
 
 // NewDelegationID generates a new unique delegation ID.
 func NewDelegationID() ID { return New(PrefixDelegation) }
+
+// NewSSFStreamID generates a new Shared Signals stream ID.
+func NewSSFStreamID() ID { return New(PrefixSSFStream) }
+
+// NewSSFLinkID generates a new Shared Signals subject link ID.
+func NewSSFLinkID() ID { return New(PrefixSSFLink) }
+
+// NewSSFEventID generates a new received-event ID.
+func NewSSFEventID() ID { return New(PrefixSSFEvent) }
+
+// NewSSFSignalID generates a new Shared Signals risk signal ID.
+func NewSSFSignalID() ID { return New(PrefixSSFSignal) }
 
 // ──────────────────────────────────────────────────
 // Convenience parsers

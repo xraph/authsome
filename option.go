@@ -1,6 +1,8 @@
 package authsome
 
 import (
+	"time"
+
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/account"
@@ -256,6 +258,16 @@ func WithLockoutConfig(cfg LockoutConfig) Option {
 func WithMetrics(m bridge.MetricsCollector) Option {
 	return func(e *Engine) {
 		e.metrics = m
+	}
+}
+
+// WithPrincipalAuthTTL sets how long a machine caller's allow verdict is
+// cached, keyed on credential and source IP together. Defaults to five
+// minutes. Denials are never cached regardless of this setting: see
+// principalAuthGate.Authorize.
+func WithPrincipalAuthTTL(d time.Duration) Option {
+	return func(e *Engine) {
+		e.principalAuthTTL = d
 	}
 }
 

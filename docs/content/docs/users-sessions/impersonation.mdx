@@ -7,17 +7,22 @@ Impersonation allows administrators to create a session as another user without 
 
 ## How impersonation works
 
-When an admin impersonates a user, the engine creates a new session for the target user with the `ImpersonatedBy` field set to the admin's user ID. The resulting session token behaves exactly like a normal session for the target user, except:
+When an admin impersonates a user, the engine creates a new session for the target user and records the admin as an actor on that session's actor chain. The resulting session token behaves exactly like a normal session for the target user, except:
 
-1. The `ImpersonatedBy` field is populated on the session record
+1. The session's actor chain carries the admin, and `Session.ImpersonatedBy()` returns the admin's user ID
 2. An audit event is emitted with the admin's identity and the target user
 3. The session can be identified as impersonated in logs and audit trails
 
 ```go
 type Session struct {
     // ... other fields ...
-    ImpersonatedBy id.UserID `json:"impersonated_by,omitempty"`
+    Actors     principal.Chain     `json:"actors,omitempty"`
+    ActorGrant principal.GrantKind `json:"actor_grant,omitempty"`
 }
+
+// ImpersonatedBy returns the admin acting as this session's user, or the
+// zero ID when nobody is. Derived from Actors rather than stored.
+func (s *Session) ImpersonatedBy() id.UserID
 ```
 
 ## Starting an impersonation session
@@ -30,8 +35,8 @@ sess, err := engine.Impersonate(ctx, adminUserID, targetUserID, appID)
 if err != nil {
     // Not authorized, user not found, etc.
 }
-// sess.Token           → session token acting as the target user
-// sess.ImpersonatedBy  → adminUserID
+// sess.Token             → session token acting as the target user
+// sess.ImpersonatedBy()  → adminUserID
 ```
 
 ### Via HTTP API
@@ -136,14 +141,14 @@ If a [Chronicle bridge](/docs/bridges/chronicle) is configured, impersonation ev
 
 ### Querying impersonation sessions
 
-You can identify impersonation sessions by checking the `ImpersonatedBy` field:
+You can identify impersonation sessions by calling the `ImpersonatedBy()` method:
 
 ```go
 sessions, err := engine.ListSessions(ctx, targetUserID)
 for _, s := range sessions {
-    if s.ImpersonatedBy.String() != "" {
+    if imp := s.ImpersonatedBy(); !imp.IsNil() {
         // This session was created via impersonation
-        fmt.Printf("Impersonated by: %s\n", s.ImpersonatedBy)
+        fmt.Printf("Impersonated by: %s\n", imp)
     }
 }
 ```

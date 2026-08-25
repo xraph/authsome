@@ -22,6 +22,8 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -101,6 +103,14 @@ type Engine interface {
 	CeremonyStore() ceremony.Store
 	// APIKeyStore returns the API key store.
 	APIKeyStore() apikey.Store
+	// SecurityEvents returns the queryable security event store, or nil when
+	// the engine was built without one.
+	//
+	// Plugins write here directly rather than emitting a hook. The hook-bus
+	// bridge builds its Event from Action, Outcome, Metadata and CreatedAt
+	// only, never setting AppID, and securityevent.Query filters on AppID, so
+	// anything recorded that way is written but cannot be read back.
+	SecurityEvents() securityevent.Store
 
 	// ── User / session resolution ──
 
@@ -115,6 +125,21 @@ type Engine interface {
 
 	// EnsureDefaultRole assigns the default role to a user if none is set.
 	EnsureDefaultRole(ctx context.Context, appID id.AppID, userID id.UserID)
+
+	// ── Principals ──
+
+	// ResolvePrincipal resolves any caller, human or otherwise, by ref.
+	// Use this rather than ResolveUser when a plugin must work for agents and
+	// workloads as well as people.
+	ResolvePrincipal(ctx context.Context, ref principal.Ref) (*principal.Principal, error)
+
+	// PrincipalStore returns the principal and delegation store.
+	PrincipalStore() principal.Store
+
+	// Can is the chain-aware authorization check. Pass an empty chain for an
+	// ordinary single-subject check.
+	Can(ctx context.Context, subject principal.Ref, actors principal.Chain,
+		action, resource string) (bool, error)
 
 	// ── Auth ──
 
@@ -169,6 +194,34 @@ type LedgerStoreProvider interface {
 	LedgerStore() any
 }
 
+// SessionRevoker is optionally implemented by engines that can revoke a
+// single session by ID. Revoking through this rather than deleting rows
+// directly keeps the AfterSessionRevoke hooks, the hook bus and the outbound
+// relay firing. *authsome.Engine already satisfies it.
+type SessionRevoker interface {
+	RevokeSession(ctx context.Context, sessionID id.SessionID) error
+}
+
+// DispatcherProvider is optionally implemented by engines that expose a
+// background job queue. A plugin that needs deferred work should fall back to
+// its own goroutine when the host returns nil. *authsome.Engine already
+// satisfies it.
+type DispatcherProvider interface {
+	Dispatcher() bridge.Dispatcher
+}
+
+// PrincipalAuthGateProvider is optionally implemented by engines that score
+// machine callers (API keys, and anything else authenticating without a
+// human sign-in) through the principal-auth hooks before minting a session.
+// Returns any, not a named gate type, so this package does not have to
+// import a specific plugin's interface (which would create an import cycle
+// with a plugin that itself needs the concrete authsome.Engine type, as the
+// apikey plugin does). The consuming plugin type-asserts the result against
+// its own narrow gate interface. *authsome.Engine satisfies it.
+type PrincipalAuthGateProvider interface {
+	PrincipalAuthGate() any
+}
+
 // ──────────────────────────────────────────────────
 // Lifecycle hooks
 // ──────────────────────────────────────────────────
@@ -216,6 +269,28 @@ type BeforeSignOut interface {
 // AfterSignOut is called after session termination.
 type AfterSignOut interface {
 	OnAfterSignOut(ctx context.Context, sessionID id.SessionID) error
+}
+
+// ──────────────────────────────────────────────────
+// Principal auth hooks (non-human callers)
+// ──────────────────────────────────────────────────
+
+// BeforePrincipalAuth is called before a credential becomes a session for a
+// caller that did not go through sign-in: an API key, a token exchange, a
+// workload JWT.
+//
+// Returning an error denies the authentication. This is the machine-side
+// counterpart to BeforeSignIn, and it exists because static API key traffic
+// reaches strategy.Authenticate and never fires the sign-in hooks, so every
+// risk plugin was blind to it.
+type BeforePrincipalAuth interface {
+	OnBeforePrincipalAuth(ctx context.Context, a *principal.AuthAttempt) error
+}
+
+// AfterPrincipalAuth is called once a non-human caller has a session. Errors
+// are logged and do not fail the request, matching the other After hooks.
+type AfterPrincipalAuth interface {
+	OnAfterPrincipalAuth(ctx context.Context, a *principal.AuthAttempt, s *session.Session) error
 }
 
 // ──────────────────────────────────────────────────

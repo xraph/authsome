@@ -51,7 +51,10 @@ type GeneratedFile struct {
 
 // Generate produces all Go SDK files from the given spec.
 func (g *Generator) Generate(spec *openapi.Spec) ([]GeneratedFile, error) {
-	data := g.buildTemplateData(spec)
+	data, err := g.buildTemplateData(spec)
+	if err != nil {
+		return nil, err
+	}
 
 	var files []GeneratedFile
 
@@ -120,6 +123,7 @@ type OperationDef struct {
 	Path         string
 	Summary      string
 	HasBody      bool
+	FormBody     bool
 	BodyFields   []FieldDef
 	ResponseType string
 	AuthRequired bool
@@ -134,7 +138,7 @@ func (o OperationDef) HasPathParams() bool { return len(o.PathParams) > 0 }
 // HasQueryParams returns true when the operation has query parameters.
 func (o OperationDef) HasQueryParams() bool { return len(o.QueryParams) > 0 }
 
-func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
+func (g *Generator) buildTemplateData(spec *openapi.Spec) (*TemplateData, error) {
 	data := &TemplateData{
 		PackageName: g.config.PackageName,
 		ModulePath:  g.config.ModulePath,
@@ -242,8 +246,15 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 			// Body fields
 			if pair.op.RequestBody != nil {
 				opDef.HasBody = true
-				if schema := requestBodySchema(pair.op.RequestBody); schema != nil {
-					opDef.BodyFields = g.schemaToGoFields(resolveSchemaRef(spec, schema))
+				schema, mediaType := requestBodyContent(pair.op.RequestBody)
+				if schema != nil {
+					resolved, resolveErr := resolveSchemaRef(spec, schema)
+					if resolveErr != nil {
+						return nil, fmt.Errorf("%s %s: %w", pair.method, path, resolveErr)
+					}
+
+					opDef.BodyFields = g.schemaToGoFields(resolved)
+					opDef.FormBody = mediaType == mediaTypeForm && allStringFields(opDef.BodyFields)
 				}
 			}
 
@@ -274,7 +285,7 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 		}
 	}
 
-	return data
+	return data, nil
 }
 
 func (g *Generator) operationRequiresAuth(op *openapi.Operation) bool {
@@ -327,34 +338,53 @@ func (g *Generator) schemaToGoType(s *openapi.Schema) string {
 // the fields through the reference is what lets the generated struct keep its
 // own name and still have the fields in it.
 //
-// Anything that is not a component reference comes back untouched, including a
-// dangling ref, which is left for the caller to notice rather than papered over
-// with an empty struct.
-func resolveSchemaRef(spec *openapi.Spec, s *openapi.Schema) *openapi.Schema {
+// A ref that does not point into components/schemas belongs to whoever wrote
+// it and comes back untouched. A ref that does point there and resolves to
+// nothing is an error, because the alternative is a request struct with no
+// fields in it, and that generates a client posting "{}" at a body the server
+// requires. A cycle is the same failure by a different route and reads the
+// same way.
+func resolveSchemaRef(spec *openapi.Spec, s *openapi.Schema) (*openapi.Schema, error) {
 	const prefix = "#/components/schemas/"
 
 	seen := make(map[string]bool)
 
 	for s != nil && s.Ref != "" {
 		name, ok := strings.CutPrefix(s.Ref, prefix)
-		if !ok || seen[name] || spec.Components == nil {
-			return s
+		if !ok {
+			return s, nil
 		}
 
+		if spec.Components == nil {
+			return nil, fmt.Errorf("schema %q is referenced but the document has no components section", name)
+		}
+
+		if seen[name] {
+			return nil, fmt.Errorf("schema %q sits in a $ref cycle, so it never resolves to any fields", name)
+		}
 		seen[name] = true
 
 		target, found := spec.Components.Schemas[name]
 		if !found || target == nil {
-			return s
+			return nil, fmt.Errorf("schema %q is referenced but not defined in the document", name)
 		}
 
 		s = target
 	}
 
-	return s
+	return s, nil
 }
 
-// requestBodySchema picks the schema describing a request body.
+const (
+	mediaTypeJSON = "application/json"
+	// RFC 6749 section 4.1.3. The OAuth2 endpoints are the only routes that
+	// take it, and forge describes them that way because their Go structs are
+	// form-tagged.
+	mediaTypeForm = "application/x-www-form-urlencoded"
+)
+
+// requestBodyContent picks the schema describing a request body, and reports
+// the media type it was found under so the caller knows how to encode it.
 //
 // JSON wins when it is offered, which is all but a handful of routes. The rest
 // are form-encoded: the OAuth2 endpoints take application/x-www-form-urlencoded
@@ -365,9 +395,9 @@ func resolveSchemaRef(spec *openapi.Spec, s *openapi.Schema) *openapi.Schema {
 //
 // Remaining content types are considered in sorted order, so a route offering
 // several does not generate a different struct from one run to the next.
-func requestBodySchema(rb *openapi.RequestBody) *openapi.Schema {
-	if ct, ok := rb.Content["application/json"]; ok && ct.Schema != nil {
-		return ct.Schema
+func requestBodyContent(rb *openapi.RequestBody) (schema *openapi.Schema, mediaType string) {
+	if ct, ok := rb.Content[mediaTypeJSON]; ok && ct.Schema != nil {
+		return ct.Schema, mediaTypeJSON
 	}
 
 	mediaTypes := make([]string, 0, len(rb.Content))
@@ -378,11 +408,37 @@ func requestBodySchema(rb *openapi.RequestBody) *openapi.Schema {
 
 	for _, mt := range mediaTypes {
 		if ct := rb.Content[mt]; ct.Schema != nil {
-			return ct.Schema
+			return ct.Schema, mt
 		}
 	}
 
-	return nil
+	return nil, ""
+}
+
+// allStringFields reports whether every field is a plain string, which is what
+// the form encoder writes. A body with anything else in it keeps posting JSON,
+// because url.Values has no answer for a nested object and guessing at one
+// would put a shape on the wire that nobody specified.
+func allStringFields(fields []FieldDef) bool {
+	if len(fields) == 0 {
+		return false
+	}
+
+	for _, f := range fields {
+		if f.Type != "string" {
+			return false
+		}
+	}
+
+	return true
+}
+
+// jsonKey strips the options off a struct tag, leaving the wire name.
+func jsonKey(tag string) string {
+	if i := strings.Index(tag, ","); i >= 0 {
+		return tag[:i]
+	}
+	return tag
 }
 
 func (g *Generator) schemaToGoFields(s *openapi.Schema) []FieldDef {
@@ -443,6 +499,7 @@ func (g *Generator) renderTemplate(name string, data *TemplateData) (string, err
 		"upper":     strings.ToUpper,
 		"unexport":  unexportedName,
 		"snakecase": toSnakeCase,
+		"jsonKey":   jsonKey,
 	}
 
 	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, name)
@@ -463,9 +520,9 @@ func (g *Generator) renderTemplate(name string, data *TemplateData) (string, err
 	// readable and makes the output match what `gofmt -l` expects, so the
 	// committed SDK stays clean without anyone remembering to run gofmt.
 	src := buf.Bytes()
-	formatted, err := format.Source(src)
-	if err != nil {
-		return "", fmt.Errorf("format %s: %w%s", tmplName, err, offendingLine(src, err))
+	formatted, formatErr := format.Source(src)
+	if formatErr != nil {
+		return "", fmt.Errorf("format %s: %w%s", tmplName, formatErr, offendingLine(src, formatErr))
 	}
 
 	return string(formatted), nil

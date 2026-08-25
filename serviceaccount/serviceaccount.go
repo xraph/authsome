@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/principal"
 )
 
 // ErrNotFound is returned when a service account cannot be found.
@@ -24,14 +25,62 @@ type ServiceAccount struct {
 	Active      bool                `json:"active"`
 	CreatedAt   time.Time           `json:"created_at"`
 	UpdatedAt   time.Time           `json:"updated_at"`
+
+	// Kind is which sort of non-human principal this is. Rows written before
+	// the column existed carry the empty string, which reads as
+	// principal.KindService.
+	Kind principal.Kind `json:"kind,omitempty"`
+	// OwnerUserID is the human answerable for this principal. Zero for a
+	// workload that nobody owns personally, such as a CI runner.
+	OwnerUserID id.UserID `json:"owner_user_id,omitempty"`
+	// ParentID is the registered principal that minted this one. Set only on
+	// ephemeral children.
+	ParentID id.ServiceAccountID `json:"parent_id,omitempty"`
+	// ExpiresAt is a hard cutoff. Nil means durable.
+	ExpiresAt *time.Time       `json:"expires_at,omitempty"`
+	OrgID     id.OrgID         `json:"org_id,omitempty"`
+	EnvID     id.EnvironmentID `json:"env_id,omitempty"`
+}
+
+// ToPrincipal renders svc as a resolved principal.
+//
+// An empty Kind reads as service_account, matching rows written before the
+// column existed. That fallback lives here so the four store backends cannot
+// each pick a different one.
+func (svc *ServiceAccount) ToPrincipal() *principal.Principal {
+	kind := svc.Kind
+	if kind == "" {
+		kind = principal.KindService
+	}
+	p := &principal.Principal{
+		Ref:       principal.Ref{Kind: kind, ID: svc.ID.String()},
+		AppID:     svc.AppID,
+		OrgID:     svc.OrgID,
+		EnvID:     svc.EnvID,
+		Name:      svc.Name,
+		Scopes:    svc.Scopes,
+		ExpiresAt: svc.ExpiresAt,
+		Disabled:  !svc.Active,
+	}
+	if !svc.OwnerUserID.IsNil() {
+		owner := principal.UserRef(svc.OwnerUserID)
+		p.Owner = &owner
+	}
+	if !svc.ParentID.IsNil() {
+		parent := principal.Ref{Kind: kind, ID: svc.ParentID.String()}
+		p.Parent = &parent
+	}
+	return p
 }
 
 // Query contains filters for listing service accounts.
 type Query struct {
-	AppID  id.AppID
-	Active *bool
-	Limit  int
-	Cursor string
+	AppID      id.AppID
+	Active     *bool
+	Kind       principal.Kind
+	ActiveOnly bool
+	Limit      int
+	Cursor     string
 }
 
 // List is the result of a service account listing query.
