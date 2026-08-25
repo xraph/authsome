@@ -96,7 +96,7 @@ func (p *SessionProvider) Authenticate(ctx context.Context, r *http.Request) (*a
 	if p.resolveCookieName != nil {
 		cookieName = p.resolveCookieName(ctx)
 	}
-	scheme, token := authmw.ExtractCredential(r, cookieName)
+	scheme, token := authmw.ExtractCredentialFromContext(ctx, r, cookieName)
 
 	if token == "" {
 		return nil, auth.ErrMissingCredentials

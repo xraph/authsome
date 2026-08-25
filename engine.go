@@ -311,18 +311,30 @@ func (e *Engine) buildAuthMiddleware() {
 	// Wrap with cookie-to-header bridge: when no Authorization header is
 	// present, read the auth_token cookie (set during browser login) or
 	// the dynamic session cookie and inject it as a Bearer token.
+	//
+	// The bridge also records the value it wrote. Everything downstream still
+	// reads one credential shape, but RFC 9449 section 7.1 is a rule about the
+	// Authorization header, and a bound session presented by cookie needs a
+	// proof rather than a scheme it has no way to set. Losing that fact in here
+	// made every bound cookie session a permanent 401, which since sign-in
+	// started binding is every first-party sign-in under mode required.
 	e.authMiddleware = func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
 			r := ctx.Request()
 			if r.Header.Get("Authorization") == "" {
+				bridged := ""
 				if cookie, err := r.Cookie("auth_token"); err == nil && cookie.Value != "" {
-					r.Header.Set("Authorization", "Bearer "+cookie.Value)
+					bridged = cookie.Value
 				} else {
 					// Fall back to the dynamic session cookie name from settings.
 					cookieName := e.resolveSessionCookieName(ctx.Context())
 					if cookie, err := r.Cookie(cookieName); err == nil && cookie.Value != "" {
-						r.Header.Set("Authorization", "Bearer "+cookie.Value)
+						bridged = cookie.Value
 					}
+				}
+				if bridged != "" {
+					r.Header.Set("Authorization", "Bearer "+bridged)
+					ctx.WithContext(middleware.WithCookieBridgedToken(ctx.Context(), bridged))
 				}
 			}
 			return inner(next)(ctx)

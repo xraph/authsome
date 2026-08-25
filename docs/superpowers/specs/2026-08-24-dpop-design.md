@@ -266,18 +266,36 @@ through the middleware it takes today, with the same session lookup, the same
 context population and the same downstream behaviour, which is what lets you
 roll this out across a live fleet without a flag day.
 
-Scheme matching is strict. A bound token presented as `Authorization: Bearer`
-is rejected even with a valid `DPoP` header alongside it. RFC 9449 section 7.1
-specifies the `DPoP` scheme, and since bound tokens only exist after somebody
-opts in, strictness costs no compatibility.
+Scheme matching is strict for credentials that arrive in the `Authorization`
+header. A bound token presented as `Authorization: Bearer` is rejected even
+with a valid `DPoP` header alongside it. RFC 9449 section 7.1 specifies the
+`DPoP` scheme, and since bound tokens only exist after somebody opts in,
+strictness costs no compatibility.
 
 Three edges worth naming:
 
 - Cookie transport. Enforcement follows the token, not the transport, so a
-  bound session in a cookie still needs a proof. In practice this never fires,
-  because browser sign-in without a proof never binds. The rule stays
-  unconditional anyway instead of carving out an exception somebody widens
-  later.
+  bound session in a cookie still needs a proof. What it does not need is the
+  `DPoP` authorization scheme: section 7.1 is a rule about the `Authorization`
+  header, a cookie is not one, and a browser cannot set a scheme on a cookie.
+  So a bound session presented by cookie is honoured when a valid proof
+  accompanies it and refused when one does not, with `ath` over the session
+  token exactly as on the header path.
+
+  This used to say the case never fired, on the grounds that browser sign-in
+  never binds. That stopped being true when `handleSignIn` and `handleSignUp`
+  started resolving a binding through `dpopBindingForRequest`: under
+  `mode=required` every first-party sign-in now mints a bound session and sets
+  a cookie for it. The engine's cookie-to-header bridge rewrites that cookie
+  into `Authorization: Bearer <token>` before the inner middleware runs, so
+  strict scheme matching turned every such session into a permanent 401. The
+  bridge records the value it wrote, and the enforcement path treats a bridged
+  cookie as the cookie it is.
+
+  A client that only holds an `HttpOnly` cookie and never sees its own token
+  cannot compute `ath` and so cannot use a bound session. That is not a gap:
+  under `mode=required` the client already had to mint a proof to sign in, and
+  the sign-in response hands it the session token.
 - API keys with the `ask_` prefix go through `tryStrategyAuth` and are
   untouched. They are not issued by a token endpoint and carry no `cnf`.
 - `ath` is mandatory at a protected resource. A proof valid in every other

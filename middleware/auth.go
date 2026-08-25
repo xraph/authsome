@@ -180,7 +180,7 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 		return func(ctx forge.Context) error {
 			installDPoPRequestScope(ctx)
 			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
-			scheme, token := extractCredential(ctx.Request(), cookieName)
+			scheme, token := extractCredentialCtx(ctx.Context(), ctx.Request(), cookieName)
 			if token == "" {
 				return next(ctx)
 			}
@@ -301,7 +301,7 @@ func AuthMiddlewareWithStrategies(
 		return func(ctx forge.Context) error {
 			installDPoPRequestScope(ctx)
 			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
-			scheme, token := extractCredential(ctx.Request(), cookieName)
+			scheme, token := extractCredentialCtx(ctx.Context(), ctx.Request(), cookieName)
 
 			// Try bearer session resolution first (skip if token looks like an API key).
 			if token != "" && !isAPIKeyToken(token) {
@@ -347,7 +347,7 @@ func AuthMiddlewareWithJWT(
 		return func(ctx forge.Context) error {
 			installDPoPRequestScope(ctx)
 			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
-			scheme, token := extractCredential(ctx.Request(), cookieName)
+			scheme, token := extractCredentialCtx(ctx.Context(), ctx.Request(), cookieName)
 
 			if token != "" {
 				// JWT detection: tokens with two dots are JWTs.
@@ -772,6 +772,54 @@ const (
 	schemeCookie = "cookie"
 )
 
+// cookieBridgeKey carries the token that a cookie-to-header bridge wrote into
+// the Authorization header for this request.
+type cookieBridgeKey struct{}
+
+// WithCookieBridgedToken records that the Authorization header on this request
+// was synthesized from a session cookie rather than sent by the client.
+//
+// The engine bridges the cookie into "Authorization: Bearer <token>" so every
+// downstream reader sees one credential shape. That is convenient and it also
+// erased the one fact RFC 9449 section 7.1 turns on, namely whether the
+// credential arrived in an Authorization header at all. Recording the bridged
+// value here puts the fact back without changing what downstream readers see.
+func WithCookieBridgedToken(ctx context.Context, token string) context.Context {
+	return context.WithValue(ctx, cookieBridgeKey{}, token)
+}
+
+// cookieBridgedTokenFrom returns the token the bridge wrote, or "".
+func cookieBridgedTokenFrom(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	v, _ := ctx.Value(cookieBridgeKey{}).(string) //nolint:errcheck // type-safe via key
+	return v
+}
+
+// ExtractCredentialFromContext pulls the token out of a request and reports
+// which scheme carried it, accounting for a cookie the engine bridged into the
+// Authorization header earlier in this request. Auth paths outside this
+// package that hold a request context should prefer it over ExtractCredential,
+// which cannot tell a bridged cookie from a real Bearer header.
+func ExtractCredentialFromContext(ctx context.Context, r *http.Request, cookieName string) (scheme, token string) {
+	return extractCredentialCtx(ctx, r, cookieName)
+}
+
+// extractCredentialCtx is extractCredential plus the knowledge of whether the
+// Authorization header holds a value the cookie bridge put there.
+//
+// The comparison is against the exact token the bridge recorded, so a request
+// that also carries a real Authorization header keeps the bearer scheme and
+// the strict rule that goes with it.
+func extractCredentialCtx(ctx context.Context, r *http.Request, cookieName string) (scheme, token string) {
+	scheme, token = extractCredential(r, cookieName)
+	if scheme == schemeBearer && token != "" && token == cookieBridgedTokenFrom(ctx) {
+		return schemeCookie, token
+	}
+	return scheme, token
+}
+
 // extractCredential pulls the token out of the request and reports which
 // scheme carried it.
 //
@@ -877,7 +925,17 @@ func checkDPoP(
 		return dpopCheck{}
 	}
 
-	if scheme != schemeDPoP {
+	// RFC 9449 section 7.1 governs the Authorization header, so strict scheme
+	// matching applies to credentials that actually arrived in one. A cookie is
+	// not an Authorization header and has no scheme to match, so a bound
+	// session presented by cookie is honoured when a valid proof accompanies it
+	// and refused when one does not. The binding still holds either way: what
+	// changes is only which of the two ways of failing applies.
+	//
+	// Bearer stays strict. A bound token sent as "Authorization: Bearer" with a
+	// proof alongside is exactly the case section 7.1 speaks to, and it is
+	// still refused.
+	if scheme != schemeDPoP && scheme != schemeCookie {
 		logger.Warn("auth middleware: DPoP-bound token presented under the wrong scheme",
 			log.String("scheme", scheme),
 		)
