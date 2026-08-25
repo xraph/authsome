@@ -7,36 +7,28 @@ import (
 	"github.com/xraph/authsome/internal/resourceuri"
 )
 
-// resourceParams extracts the repeatable RFC 8707 resource parameter.
+// resourceParams reads the repeatable RFC 8707 resource parameter off a query
+// string.
 //
-// This cannot go through the struct binder. go-utils' bindQueryParam reads a
-// single value via url.Values.Get, and setFieldValue has no reflect.Slice
-// case, so a []string field tagged query:"resource" does not merely lose the
-// second value, it fails the whole request with "unsupported field type".
-// Reading the raw request is the only way to honour a parameter the RFC
-// defines as repeatable.
+// Form bodies no longer need this: go-utils v1.1.7 taught bindFormParam to
+// fill a []string from every occurrence of a parameter, so the token and
+// device endpoints bind theirs through the struct. bindQueryParam did not get
+// the same treatment. It still reads a single value through c.Query, and
+// setFieldValue's new slice case then splits that one value on commas, so a
+// []string query field keeps the first resource and silently discards the
+// rest. Reading the query directly is the only way the authorization endpoint
+// sees every value it was sent.
 //
-// Query values come first so a GET works without touching the body. For a POST
-// the form is parsed too, because RFC 6749 sends token-endpoint parameters as
-// application/x-www-form-urlencoded. ParseForm merges the query string into
-// r.Form, so only r.PostForm is read here to avoid returning each query value
-// twice.
+// The cost is that the parameter stays out of the OpenAPI document, since
+// forge describes query parameters by reflecting over the request struct and
+// nothing else. No generated client can send a resource indicator to
+// /authorize until bindQueryParam handles repeated values.
 func resourceParams(r *http.Request) []string {
 	if r == nil {
 		return nil
 	}
 
-	var out []string
-	out = append(out, r.URL.Query()["resource"]...)
-
-	if r.Method == http.MethodPost {
-		// A parse failure means an unreadable body, which the handler will
-		// reject on its own terms. There is nothing to add here.
-		_ = r.ParseForm() //nolint:errcheck // handler rejects a malformed body
-		out = append(out, r.PostForm["resource"]...)
-	}
-
-	return out
+	return r.URL.Query()["resource"]
 }
 
 // resourceURISyntaxError checks a single RFC 8707 resource indicator against
@@ -99,20 +91,6 @@ func resolveResources(client *OAuth2Client, requested []string) ([]string, error
 	}
 
 	return out, nil
-}
-
-// tokenRequestResources collects the resource indicators from a token
-// request.
-//
-// A form-encoded request populates resourceParams and leaves the JSON field
-// empty; a JSON request does the reverse, so in practice only one of the two
-// ever carries values. If both do, the raw request wins and the two sets are
-// never concatenated.
-func tokenRequestResources(r *http.Request, req *TokenRequest) []string {
-	if raw := resourceParams(r); len(raw) > 0 {
-		return raw
-	}
-	return req.Resource
 }
 
 // narrowResources restricts an already-granted audience to the subset the

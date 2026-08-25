@@ -2104,8 +2104,9 @@ type VerifySMSCodeRequest struct {
 
 // Oauth2DeviceAuthorizeRequest is the request body for Oauth2DeviceAuthorize.
 type Oauth2DeviceAuthorizeRequest struct {
-	ClientID string `json:"client_id"`
-	Scope    string `json:"scope,omitempty"`
+	ClientID string   `json:"client_id"`
+	Resource []string `json:"resource,omitempty"`
+	Scope    string   `json:"scope,omitempty"`
 }
 
 // Oauth2DeviceCompleteRequest is the request body for Oauth2DeviceComplete.

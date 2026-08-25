@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -89,15 +90,18 @@ func postTokenJSON(t *testing.T, mux forge.Router, body map[string]any) *httptes
 // more than one resource.
 func postDeviceAuthorize(t *testing.T, mux forge.Router, clientID string, resources ...string) *httptest.ResponseRecorder {
 	t.Helper()
-	b, err := json.Marshal(map[string]string{"client_id": clientID})
-	require.NoError(t, err)
-	q := url.Values{}
+	// Form-encoded, the way RFC 8628 section 3.1 defines the request and the
+	// way every generated client sends it. A repeated resource field is the
+	// wire form RFC 8707 specifies, so this exercises the struct binder rather
+	// than a side channel.
+	form := url.Values{}
+	form.Set("client_id", clientID)
 	for _, r := range resources {
-		q.Add("resource", r)
+		form.Add("resource", r)
 	}
 	req := httptest.NewRequestWithContext(context.Background(), "POST",
-		"/v1/oauth/device/authorize?"+q.Encode(), bytes.NewReader(b))
-	req.Header.Set("Content-Type", "application/json")
+		"/v1/oauth/device/authorize", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	return rec
