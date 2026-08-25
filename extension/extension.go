@@ -712,8 +712,14 @@ func (e *Extension) AuthMiddleware() forge.Middleware {
 // autoRefreshMiddleware returns a middleware that transparently refreshes
 // near-expiry access tokens based on the auto-refresh settings.
 func (e *Extension) autoRefreshMiddleware() forge.Middleware {
-	refresher := func(ctx context.Context, refreshToken string) (*session.Session, error) {
-		return e.engine.Refresh(ctx, refreshToken)
+	refresher := func(ctx context.Context, req middleware.RefreshRequest) (*session.Session, error) {
+		return e.engine.Refresh(ctx, req.RefreshToken, authsome.RefreshOpts{
+			IPAddress:  req.IPAddress,
+			UserAgent:  req.UserAgent,
+			DPoPProof:  req.DPoPProof,
+			Method:     req.Method,
+			RequestURL: req.RequestURL,
+		})
 	}
 	return middleware.AutoRefreshMiddleware(
 		refresher,
