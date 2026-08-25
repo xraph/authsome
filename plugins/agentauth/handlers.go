@@ -453,11 +453,24 @@ func (p *Plugin) handleSetAgentStatus(ctx forge.Context, req *SetAgentStatusRequ
 // requiredCallerOrgID. Without that check, any admin caller holding
 // "write agent" in any org could flip a different org's delegation policy
 // wide open, since HasPermission carries no org dimension of its own.
+//
+// MaxGrantTTLSecond and AllowedScopes are pointers, not bare values: this is
+// a partial-update endpoint (see handleGetOrgPolicy, which exists so an
+// admin can read the current policy before changing one field of it), and a
+// bare int64/[]string cannot distinguish "the caller omitted this field,
+// leave it alone" from "the caller explicitly sent its zero value" — both
+// decode to the same zero value with ordinary JSON unmarshaling. That
+// distinction matters here specifically because both fields fail OPEN at
+// their zero value: clampTTL (grant.go) treats a non-positive MaxGrantTTL as
+// "no ceiling", and scopeAllowed treats an empty AllowedScopes as
+// unrestricted. Before this, every PUT was a full overwrite, so a mode-only
+// request — the natural way to flip just ModeBlocked on or off — silently
+// reset both to unlimited/unrestricted.
 type PutOrgPolicyRequest struct {
-	OrgID             string   `json:"org_id" description:"Organization identifier; must match the caller's own org"`
-	Mode              string   `json:"mode" description:"open, allowlist or blocked"`
-	MaxGrantTTLSecond int64    `json:"max_grant_ttl_seconds,omitempty" description:"Must not be negative"`
-	AllowedScopes     []string `json:"allowed_scopes,omitempty"`
+	OrgID             string    `json:"org_id" description:"Organization identifier; must match the caller's own org"`
+	Mode              string    `json:"mode" description:"open, allowlist or blocked"`
+	MaxGrantTTLSecond *int64    `json:"max_grant_ttl_seconds,omitempty" description:"Must not be negative. Omit to leave the existing ceiling unchanged."`
+	AllowedScopes     *[]string `json:"allowed_scopes,omitempty" description:"Omit to leave the existing allowlist unchanged. Pass an empty array to explicitly clear it."`
 }
 
 func (p *Plugin) handlePutOrgPolicy(ctx forge.Context, req *PutOrgPolicyRequest) (*OrgAgentPolicy, error) {
@@ -474,21 +487,67 @@ func (p *Plugin) handlePutOrgPolicy(ctx forge.Context, req *PutOrgPolicyRequest)
 	default:
 		return nil, forge.BadRequest(fmt.Sprintf("invalid policy mode %q", req.Mode))
 	}
-	if req.MaxGrantTTLSecond < 0 {
+	if req.MaxGrantTTLSecond != nil && *req.MaxGrantTTLSecond < 0 {
 		// clampTTL (grant.go) treats a non-positive MaxGrantTTL as "no
 		// ceiling" rather than "no time at all", so a negative value here
 		// would silently loosen the org's cap instead of tightening it —
 		// exactly backwards from what an operator setting it would expect.
 		return nil, forge.BadRequest("max_grant_ttl_seconds must not be negative")
 	}
-	policy := &OrgAgentPolicy{
-		OrgID:         orgID,
-		Mode:          mode,
-		MaxGrantTTL:   time.Duration(req.MaxGrantTTLSecond) * time.Second,
-		AllowedScopes: req.AllowedScopes,
+
+	// Read-modify-write: load whatever policy already exists so an omitted
+	// field carries its old value forward instead of resetting to the
+	// field's fail-open zero value. No existing row (ErrNotFound) means
+	// there is nothing to preserve — the zero values below are already the
+	// same defaults policyFor synthesizes for an org with no policy row.
+	existing, err := p.store.GetOrgPolicy(ctx.Context(), orgID)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return nil, forge.InternalError(fmt.Errorf("agentauth: load org policy: %w", err))
 	}
+
+	policy := &OrgAgentPolicy{OrgID: orgID, Mode: mode}
+	switch {
+	case req.MaxGrantTTLSecond != nil:
+		policy.MaxGrantTTL = time.Duration(*req.MaxGrantTTLSecond) * time.Second
+	case existing != nil:
+		policy.MaxGrantTTL = existing.MaxGrantTTL
+	}
+	switch {
+	case req.AllowedScopes != nil:
+		policy.AllowedScopes = *req.AllowedScopes
+	case existing != nil:
+		policy.AllowedScopes = existing.AllowedScopes
+	}
+
 	if err := p.store.PutOrgPolicy(ctx.Context(), policy); err != nil {
 		return nil, forge.InternalError(fmt.Errorf("agentauth: put org policy: %w", err))
+	}
+	return nil, ctx.JSON(http.StatusOK, policy)
+}
+
+// handleGetOrgPolicy reads the caller's own org's delegation policy — the
+// read half of the read-modify-write handlePutOrgPolicy's partial-update
+// semantics require, and the thing that was simply missing before: an admin
+// had no way to see the current TTL ceiling or scope allowlist before
+// changing one field of the policy.
+//
+// A missing policy row reports the same open/no-ceiling/no-allowlist
+// default policyFor (grant.go) synthesizes for an org that has never set
+// one, rather than 404ing on what is, from every other code path in this
+// plugin, a perfectly legitimate and common state.
+func (p *Plugin) handleGetOrgPolicy(ctx forge.Context, _ *apitypes.Empty) (*OrgAgentPolicy, error) {
+	if _, ok := middleware.UserIDFrom(ctx.Context()); !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+	orgID, hasOrg := middleware.OrgIDFrom(ctx.Context())
+	if !hasOrg || orgID.IsNil() {
+		return nil, forge.Forbidden("an organization context is required to read delegation policy")
+	}
+	policy, err := p.store.GetOrgPolicy(ctx.Context(), orgID)
+	if errors.Is(err, ErrNotFound) {
+		policy = &OrgAgentPolicy{OrgID: orgID, Mode: ModeOpen}
+	} else if err != nil {
+		return nil, forge.InternalError(fmt.Errorf("agentauth: load org policy: %w", err))
 	}
 	return nil, ctx.JSON(http.StatusOK, policy)
 }

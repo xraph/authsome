@@ -232,6 +232,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	); err != nil {
 		return err
 	}
+	if err := admin.GET("/policy", p.handleGetOrgPolicy,
+		forge.WithSummary("Read the org's agent delegation policy"),
+		forge.WithResponseSchema(http.StatusOK, "Current policy", OrgAgentPolicy{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
 	return admin.PUT("/policy", p.handlePutOrgPolicy,
 		append([]forge.RouteOption{
 			forge.WithSummary("Set the org's agent delegation policy"),

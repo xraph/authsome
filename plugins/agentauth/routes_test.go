@@ -764,3 +764,113 @@ func TestHandlePutOrgPolicy_RejectsNegativeMaxGrantTTL(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
+
+// ──────────────────────────────────────────────────
+// Final review item 8 — GET /v1/admin/agents/policy, and a partial PUT must
+// not silently widen an org's policy. max_grant_ttl_seconds and
+// allowed_scopes were both omitempty on the request and both fail OPEN when
+// absent (clampTTL treats a non-positive ceiling as "no ceiling",
+// scopeAllowed treats an empty list as unrestricted), and with no GET
+// endpoint an admin had no way to read-modify-write — every PUT was
+// effectively a full overwrite of fields it had no way to know the current
+// value of.
+// ──────────────────────────────────────────────────
+
+type orgPolicyResponse struct {
+	OrgID         string   `json:"org_id"`
+	Mode          string   `json:"mode"`
+	MaxGrantTTL   int64    `json:"max_grant_ttl"`
+	AllowedScopes []string `json:"allowed_scopes"`
+}
+
+func TestHandleGetOrgPolicy_ReturnsCurrentPolicy(t *testing.T) {
+	_, mux := newRoutesTestPlugin(t)
+	orgID := id.NewOrgID()
+	ctx := adminCtx(id.NewUserID(), id.NewAppID(), orgID)
+
+	w := doRequest(ctx, t, mux, http.MethodPut, "/v1/admin/agents/policy", map[string]any{
+		"org_id": orgID.String(), "mode": "allowlist",
+		"max_grant_ttl_seconds": 3600, "allowed_scopes": []string{"invoices:read"},
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	w = doRequest(ctx, t, mux, http.MethodGet, "/v1/admin/agents/policy", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var resp orgPolicyResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp), "response body must be valid JSON")
+	assert.Equal(t, orgID.String(), resp.OrgID)
+	assert.Equal(t, "allowlist", resp.Mode)
+	assert.Equal(t, int64(time.Hour), resp.MaxGrantTTL)
+	assert.ElementsMatch(t, []string{"invoices:read"}, resp.AllowedScopes)
+}
+
+// A GET on an org that has never had a policy written must report the
+// default the rest of the plugin applies (policyFor: open, no ceiling, no
+// allowlist), not 404 — an unconfigured org's policy IS "open" as far as
+// every other code path in this plugin is concerned.
+func TestHandleGetOrgPolicy_DefaultsToOpenWhenUnset(t *testing.T) {
+	_, mux := newRoutesTestPlugin(t)
+	orgID := id.NewOrgID()
+	ctx := adminCtx(id.NewUserID(), id.NewAppID(), orgID)
+
+	w := doRequest(ctx, t, mux, http.MethodGet, "/v1/admin/agents/policy", nil)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var resp orgPolicyResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "open", resp.Mode)
+}
+
+// The property the whole item exists for: a PUT that only names "mode" must
+// leave an existing TTL ceiling and scope allowlist intact, not reset them
+// to unlimited/unrestricted.
+func TestHandlePutOrgPolicy_ModeOnlyPreservesExistingTTLAndScopes(t *testing.T) {
+	_, mux := newRoutesTestPlugin(t)
+	orgID := id.NewOrgID()
+	ctx := adminCtx(id.NewUserID(), id.NewAppID(), orgID)
+
+	w := doRequest(ctx, t, mux, http.MethodPut, "/v1/admin/agents/policy", map[string]any{
+		"org_id": orgID.String(), "mode": "open",
+		"max_grant_ttl_seconds": 3600, "allowed_scopes": []string{"invoices:read"},
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	// Mode-only PUT: no max_grant_ttl_seconds, no allowed_scopes in the body
+	// at all — not even zero-valued, genuinely absent keys.
+	w = doRequest(ctx, t, mux, http.MethodPut, "/v1/admin/agents/policy", map[string]any{
+		"org_id": orgID.String(), "mode": "allowlist",
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var resp orgPolicyResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "allowlist", resp.Mode, "the field actually sent must still apply")
+	assert.Equal(t, int64(time.Hour), resp.MaxGrantTTL,
+		"an omitted TTL ceiling must be preserved, not silently reset to unlimited")
+	assert.ElementsMatch(t, []string{"invoices:read"}, resp.AllowedScopes,
+		"an omitted scope allowlist must be preserved, not silently reset to unrestricted")
+}
+
+// An explicit, empty allowed_scopes must still be honored as "clear the
+// allowlist" — omission and explicit-empty are different requests and only
+// the former should preserve the old value.
+func TestHandlePutOrgPolicy_ExplicitEmptyScopesClearsAllowlist(t *testing.T) {
+	_, mux := newRoutesTestPlugin(t)
+	orgID := id.NewOrgID()
+	ctx := adminCtx(id.NewUserID(), id.NewAppID(), orgID)
+
+	w := doRequest(ctx, t, mux, http.MethodPut, "/v1/admin/agents/policy", map[string]any{
+		"org_id": orgID.String(), "mode": "open", "allowed_scopes": []string{"invoices:read"},
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	w = doRequest(ctx, t, mux, http.MethodPut, "/v1/admin/agents/policy", map[string]any{
+		"org_id": orgID.String(), "mode": "open", "allowed_scopes": []string{},
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var resp orgPolicyResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Empty(t, resp.AllowedScopes)
+}
