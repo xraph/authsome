@@ -28,12 +28,14 @@ type recordingChecker struct {
 
 	canCalls  int
 	hasCalls  int
+	gotUserID id.UserID
 	gotSubj   principal.Ref
 	gotActors principal.Chain
 }
 
-func (c *recordingChecker) HasPermission(_ context.Context, _ id.UserID, _, _ string) (bool, error) {
+func (c *recordingChecker) HasPermission(_ context.Context, userID id.UserID, _, _ string) (bool, error) {
 	c.hasCalls++
+	c.gotUserID = userID
 	return c.allow, c.err
 }
 
@@ -179,18 +181,79 @@ func TestGuardWithholdsTheAdminDuringImpersonation(t *testing.T) {
 		middleware.RequirePermission(checker, "read", "document"))
 
 	require.Equal(t, http.StatusOK, code)
-	assert.Equal(t, principal.UserRef(sess.UserID), checker.gotSubj,
-		"an impersonated request evaluates as the target")
-	assert.Empty(t, ctxActors,
-		"setPrincipalContext must write AuthzActors, not Actors: the admin on the context is what a chain-aware guard would intersect in, inverting impersonation")
+
+	// The chain path must not run at all. AuthzActors is empty for an
+	// impersonation, and RequirePermission routes on whether a chain is
+	// present, so an impersonated request takes the same user-only path it
+	// took before chains existed. That is the carve-out working rather than
+	// the carve-out being skipped: reaching Can here would mean the admin was
+	// about to be intersected in.
+	assert.Zero(t, checker.canCalls,
+		"an impersonated request carries no authorization chain, so Can must not be reached")
+	assert.Equal(t, 1, checker.hasCalls)
+	assert.Equal(t, sess.UserID, checker.gotUserID,
+		"an impersonated request evaluates as the target, never as the admin")
+	assert.NotEqual(t, admin, checker.gotUserID,
+		"the impersonating admin must not be the subject of the check")
 	assert.Empty(t, checker.gotActors,
 		"the impersonating admin must not be intersected into the check")
 
-	// The same property, read straight off the context the middleware built.
-	// This is what setPrincipalContext writes, and writing sess.Actors there
-	// is what would break the assertion above.
+	assert.Empty(t, ctxActors,
+		"setPrincipalContext must write AuthzActors, not Actors: the admin on the context is what a chain-aware guard would intersect in, inverting impersonation")
+
+	// The same property, read straight off the session the middleware loaded.
 	assert.Empty(t, middleware.AuthzActorsFrom(middleware.WithSession(context.Background(), sess)),
 		"AuthzActorsFrom must apply the impersonation exception")
+}
+
+// A chainless request must not be routed through Can just because the checker
+// happens to have one.
+//
+// This is the regression that shipped with the first cut of the chain fix. The
+// route was chosen at construction on whether the checker satisfied
+// ChainPermissionChecker, so any implementation with a weak or unimplemented
+// Can started denying requests it used to allow. A plugin test double that
+// answered HasPermission with real logic and Can with a bare `return false,
+// nil` turned every mutating route it guarded into a 403, with no compile error
+// anywhere.
+//
+// Nothing is given up by routing this way. HasPermission is Can with a nil
+// chain, so the two agree on every chainless request by construction.
+func TestGuardDoesNotUseTheChainPathWithoutAChain(t *testing.T) {
+	checker := &recordingChecker{allow: true}
+	sess := &session.Session{
+		ID:            id.NewSessionID(),
+		AppID:         id.NewAppID(),
+		UserID:        id.NewUserID(),
+		Token:         "chainless-token",
+		PrincipalKind: principal.KindUser,
+	}
+
+	code := serveGuarded(t, sess, middleware.RequirePermission(checker, "read", "document"))
+
+	require.Equal(t, http.StatusOK, code)
+	assert.Zero(t, checker.canCalls,
+		"a caller with no chain must take the user-only path, whatever methods the checker happens to expose")
+	assert.Equal(t, 1, checker.hasCalls)
+	assert.Equal(t, sess.UserID, checker.gotUserID)
+}
+
+// A caller that DOES carry a chain, against a checker that cannot evaluate one,
+// must be refused rather than quietly evaluated as the human alone.
+//
+// Falling back to the user path here would be the original Critical: the agent
+// would arrive holding the subject's entire authority with nothing intersecting
+// its own. Refusing is correct-but-restrictive; granting is the hole.
+func TestGuardRefusesAChainItCannotEvaluate(t *testing.T) {
+	checker := &userOnlyChecker{}
+	agent := principal.Ref{Kind: principal.KindAgent, ID: "svc_agent"}
+
+	code := serveGuarded(t, delegatedSession(agent),
+		middleware.RequirePermission(checker, "read", "document"))
+
+	assert.Equal(t, http.StatusForbidden, code)
+	assert.Zero(t, checker.calls,
+		"the human must not be evaluated alone on behalf of an agent the checker cannot see")
 }
 
 // An unauthenticated request must still be a 401, not a check against a zero
@@ -203,6 +266,7 @@ func TestGuardStillRefusesAnUnauthenticatedRequest(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, code)
 	assert.Zero(t, checker.canCalls, "nothing should be checked for a caller that does not exist")
+	assert.Zero(t, checker.hasCalls, "neither path should run for a caller that does not exist")
 }
 
 // A checker that only knows HasPermission keeps the behavior it always had.

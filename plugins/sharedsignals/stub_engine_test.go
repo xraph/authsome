@@ -66,6 +66,18 @@ func (stubEngine) ResolvePrincipal(context.Context, principal.Ref) (*principal.P
 	return nil, principal.ErrNotFound
 }
 func (stubEngine) PrincipalStore() principal.Store { return nil }
+
+// Can denies unconditionally, which is correct only because bare stubEngine
+// has no HasPermission to disagree with: it does not satisfy
+// plugin.PermissionChecker at all, so nothing can reach it through both
+// questions at once and get two different answers.
+//
+// A double that DOES answer both must keep them consistent. fakeAuthEngine
+// (admin_test.go) embeds this type and adds a scripted HasPermission, so it
+// overrides this method rather than inheriting it. Leaving it inherited was a
+// real bug: middleware.RequirePermission reaches for Can when a caller carries
+// an actor chain, and a stub Can under a scripted HasPermission denies exactly
+// the requests the script was written to allow.
 func (stubEngine) Can(context.Context, principal.Ref, principal.Chain, string, string) (bool, error) {
 	return false, nil
 }

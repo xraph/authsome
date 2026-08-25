@@ -17,6 +17,7 @@ import (
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/sharedsignals/caep"
+	"github.com/xraph/authsome/principal"
 )
 
 // mustParseStreamID recovers the typed id.SSFStreamID from a StreamView's
@@ -294,7 +295,37 @@ func (e *fakeAuthEngine) HasPermission(_ context.Context, userID id.UserID, acti
 	return e.permissions[userID.String()+"|"+action+"|"+resource], nil
 }
 
+// Can answers the chain-aware question from the same scripted table
+// HasPermission reads, so the double cannot allow through one method and deny
+// through the other. It mirrors the real engine: the subject must be allowed,
+// and so must every actor acting on the subject's behalf.
+//
+// This override matters because it shadows stubEngine.Can, which denies
+// unconditionally. Inheriting that under a scripted HasPermission is what
+// turned every mutating route in these tests into a 403.
+func (e *fakeAuthEngine) Can(
+	_ context.Context, subject principal.Ref, actors principal.Chain, action, resource string,
+) (bool, error) {
+	if !e.allowsRef(subject, action, resource) {
+		return false, nil
+	}
+	for _, actor := range actors {
+		if !e.allowsRef(actor, action, resource) {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// allowsRef looks a ref up in the same table HasPermission uses. A ref whose
+// ID is not a user id is simply absent from the table and therefore denied,
+// which is what a real checker with no grant on file does too.
+func (e *fakeAuthEngine) allowsRef(ref principal.Ref, action, resource string) bool {
+	return e.permissions[ref.ID+"|"+action+"|"+resource]
+}
+
 var _ plugin.PermissionChecker = (*fakeAuthEngine)(nil)
+var _ middleware.ChainPermissionChecker = (*fakeAuthEngine)(nil)
 
 // alwaysSessionProvider authenticates every request unconditionally. It
 // exists so a test can get past SessionGuard's real registry-driven check
