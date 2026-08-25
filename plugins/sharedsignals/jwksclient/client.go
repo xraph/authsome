@@ -319,11 +319,30 @@ func (k jwk) publicKey() (crypto.PublicKey, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &ecdsa.PublicKey{
-			Curve: curve,
-			X:     new(big.Int).SetBytes(x),
-			Y:     new(big.Int).SetBytes(y),
-		}, nil
+		// Assembling the point and parsing it, rather than assigning X and Y,
+		// is what Go 1.26 deprecated those fields in favour of. It is also
+		// stricter in a way that matters here: ParseUncompressedPublicKey
+		// rejects a point that is not on the curve or is the point at
+		// infinity, and a struct literal accepts both. These coordinates come
+		// off the wire from someone else's JWKS endpoint.
+		byteLen := (curve.Params().BitSize + 7) / 8
+		if len(x) > byteLen || len(y) > byteLen {
+			return nil, fmt.Errorf("jwksclient: coordinate longer than curve %s", k.CRV)
+		}
+
+		// RFC 7518 section 6.2.1.2 fixes the octet length per curve, but a
+		// leading zero byte is easy to drop, so left-pad rather than trust it.
+		point := make([]byte, 1+2*byteLen)
+		point[0] = 4
+		copy(point[1+byteLen-len(x):1+byteLen], x)
+		copy(point[1+2*byteLen-len(y):], y)
+
+		pub, parseErr := ecdsa.ParseUncompressedPublicKey(curve, point)
+		if parseErr != nil {
+			return nil, fmt.Errorf("jwksclient: invalid %s public key: %w", k.CRV, parseErr)
+		}
+
+		return pub, nil
 	default:
 		return nil, fmt.Errorf("jwksclient: unsupported key type %q", k.KTY)
 	}
