@@ -3839,6 +3839,9 @@
           "name": {
             "type": "string"
           },
+          "principal_id": {
+            "type": "string"
+          },
           "public": {
             "type": "boolean"
           },
@@ -3891,6 +3894,9 @@
           },
           "expires_in": {
             "type": "integer"
+          },
+          "issued_token_type": {
+            "type": "string"
           },
           "refresh_token": {
             "type": "string"
@@ -28529,6 +28535,15 @@
             "application/x-www-form-urlencoded": {
               "schema": {
                 "properties": {
+                  "actor_token": {
+                    "type": "string"
+                  },
+                  "actor_token_type": {
+                    "type": "string"
+                  },
+                  "audience": {
+                    "type": "string"
+                  },
                   "client_id": {
                     "type": "string"
                   },
@@ -28550,11 +28565,23 @@
                   "redirect_uri": {
                     "type": "string"
                   },
+                  "requested_token_type": {
+                    "type": "string"
+                  },
                   "resource": {
                     "items": {
                       "type": "string"
                     },
                     "type": "array"
+                  },
+                  "scope": {
+                    "type": "string"
+                  },
+                  "subject_token": {
+                    "type": "string"
+                  },
+                  "subject_token_type": {
+                    "type": "string"
                   }
                 },
                 "required": [

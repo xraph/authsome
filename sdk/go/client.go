@@ -2192,6 +2192,15 @@ func (c *Client) Oauth2Revoke(ctx context.Context, req *Oauth2RevokeRequest) err
 func (c *Client) Oauth2Token(ctx context.Context, req *Oauth2TokenRequest) (*Oauth2providerTokenResponse, error) {
 	form := url.Values{}
 	if req != nil {
+		if req.ActorToken != "" {
+			form.Set("actor_token", req.ActorToken)
+		}
+		if req.ActorTokenType != "" {
+			form.Set("actor_token_type", req.ActorTokenType)
+		}
+		if req.Audience != "" {
+			form.Set("audience", req.Audience)
+		}
 		if req.ClientID != "" {
 			form.Set("client_id", req.ClientID)
 		}
@@ -2211,8 +2220,20 @@ func (c *Client) Oauth2Token(ctx context.Context, req *Oauth2TokenRequest) (*Oau
 		if req.RedirectURI != "" {
 			form.Set("redirect_uri", req.RedirectURI)
 		}
+		if req.RequestedTokenType != "" {
+			form.Set("requested_token_type", req.RequestedTokenType)
+		}
 		for _, v := range req.Resource {
 			form.Add("resource", v)
+		}
+		if req.Scope != "" {
+			form.Set("scope", req.Scope)
+		}
+		if req.SubjectToken != "" {
+			form.Set("subject_token", req.SubjectToken)
+		}
+		if req.SubjectTokenType != "" {
+			form.Set("subject_token_type", req.SubjectTokenType)
 		}
 	}
 	body := []byte(form.Encode())

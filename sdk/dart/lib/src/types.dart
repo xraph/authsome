@@ -5265,6 +5265,7 @@ class OAuth2Client {
   final String id;
   final Map<String, dynamic>? metadata;
   final String name;
+  final String? principalId;
   final bool public;
   final List<String> redirectUris;
   final List<String> resources;
@@ -5283,6 +5284,7 @@ class OAuth2Client {
     required this.id,
     this.metadata,
     required this.name,
+    this.principalId,
     required this.public,
     required this.redirectUris,
     required this.resources,
@@ -5303,6 +5305,7 @@ class OAuth2Client {
       id: json['id'] as String,
       metadata: json['metadata'] == null ? null : Map<String, dynamic>.from(json['metadata'] as Map),
       name: json['name'] as String,
+      principalId: json['principal_id'] as String?,
       public: json['public'] as bool,
       redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
       resources: (json['resources'] as List).map((e) => e as String).toList(),
@@ -5324,6 +5327,7 @@ class OAuth2Client {
       'id': id,
       if (metadata != null) 'metadata': metadata,
       'name': name,
+      if (principalId != null) 'principal_id': principalId,
       'public': public,
       'redirect_uris': redirectUris,
       'resources': resources,
@@ -5340,6 +5344,7 @@ class OAuth2Client {
 class Oauth2providerTokenResponse {
   final String accessToken;
   final int expiresIn;
+  final String? issuedTokenType;
   final String? refreshToken;
   final String? scope;
   final String tokenType;
@@ -5347,6 +5352,7 @@ class Oauth2providerTokenResponse {
   const Oauth2providerTokenResponse({
     required this.accessToken,
     required this.expiresIn,
+    this.issuedTokenType,
     this.refreshToken,
     this.scope,
     required this.tokenType,
@@ -5356,6 +5362,7 @@ class Oauth2providerTokenResponse {
     return Oauth2providerTokenResponse(
       accessToken: json['access_token'] as String,
       expiresIn: (json['expires_in'] as num).toInt(),
+      issuedTokenType: json['issued_token_type'] as String?,
       refreshToken: json['refresh_token'] as String?,
       scope: json['scope'] as String?,
       tokenType: json['token_type'] as String,
@@ -5366,6 +5373,7 @@ class Oauth2providerTokenResponse {
     return {
       'access_token': accessToken,
       'expires_in': expiresIn,
+      if (issuedTokenType != null) 'issued_token_type': issuedTokenType,
       if (refreshToken != null) 'refresh_token': refreshToken,
       if (scope != null) 'scope': scope,
       'token_type': tokenType,
@@ -8601,6 +8609,9 @@ class Oauth2RevokeRequest {
 }
 
 class Oauth2TokenRequest {
+  final String? actorToken;
+  final String? actorTokenType;
+  final String? audience;
   final String? clientId;
   final String? clientSecret;
   final String? code;
@@ -8608,9 +8619,16 @@ class Oauth2TokenRequest {
   final String? deviceCode;
   final String grantType;
   final String? redirectUri;
+  final String? requestedTokenType;
   final List<String>? resource;
+  final String? scope;
+  final String? subjectToken;
+  final String? subjectTokenType;
 
   const Oauth2TokenRequest({
+    this.actorToken,
+    this.actorTokenType,
+    this.audience,
     this.clientId,
     this.clientSecret,
     this.code,
@@ -8618,11 +8636,18 @@ class Oauth2TokenRequest {
     this.deviceCode,
     required this.grantType,
     this.redirectUri,
+    this.requestedTokenType,
     this.resource,
+    this.scope,
+    this.subjectToken,
+    this.subjectTokenType,
   });
 
   factory Oauth2TokenRequest.fromJson(Map<String, dynamic> json) {
     return Oauth2TokenRequest(
+      actorToken: json['actor_token'] as String?,
+      actorTokenType: json['actor_token_type'] as String?,
+      audience: json['audience'] as String?,
       clientId: json['client_id'] as String?,
       clientSecret: json['client_secret'] as String?,
       code: json['code'] as String?,
@@ -8630,12 +8655,19 @@ class Oauth2TokenRequest {
       deviceCode: json['device_code'] as String?,
       grantType: json['grant_type'] as String,
       redirectUri: json['redirect_uri'] as String?,
+      requestedTokenType: json['requested_token_type'] as String?,
       resource: json['resource'] == null ? null : (json['resource'] as List).map((e) => e as String).toList(),
+      scope: json['scope'] as String?,
+      subjectToken: json['subject_token'] as String?,
+      subjectTokenType: json['subject_token_type'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      if (actorToken != null) 'actor_token': actorToken,
+      if (actorTokenType != null) 'actor_token_type': actorTokenType,
+      if (audience != null) 'audience': audience,
       if (clientId != null) 'client_id': clientId,
       if (clientSecret != null) 'client_secret': clientSecret,
       if (code != null) 'code': code,
@@ -8643,7 +8675,11 @@ class Oauth2TokenRequest {
       if (deviceCode != null) 'device_code': deviceCode,
       'grant_type': grantType,
       if (redirectUri != null) 'redirect_uri': redirectUri,
+      if (requestedTokenType != null) 'requested_token_type': requestedTokenType,
       if (resource != null) 'resource': resource,
+      if (scope != null) 'scope': scope,
+      if (subjectToken != null) 'subject_token': subjectToken,
+      if (subjectTokenType != null) 'subject_token_type': subjectTokenType,
     };
   }
 

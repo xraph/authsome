@@ -1074,6 +1074,7 @@ export interface OAuth2Client {
   id: string;
   metadata?: Record<string, unknown>;
   name: string;
+  principal_id?: string;
   public: boolean;
   redirect_uris: string[];
   resources: string[];
@@ -1085,6 +1086,7 @@ export interface OAuth2Client {
 export interface Oauth2providerTokenResponse {
   access_token: string;
   expires_in: number;
+  issued_token_type?: string;
   refresh_token?: string;
   scope?: string;
   token_type: string;
@@ -1769,7 +1771,7 @@ export type Oauth2UpdateRegistrationRequest = UpdateRegistrationRequest;
 
 export type Oauth2RevokeRequest = { client_id?: string; client_secret?: string; token: string; token_type_hint?: string };
 
-export type Oauth2TokenRequest = { client_id?: string; client_secret?: string; code?: string; code_verifier?: string; device_code?: string; grant_type: string; redirect_uri?: string; resource?: string[] };
+export type Oauth2TokenRequest = { actor_token?: string; actor_token_type?: string; audience?: string; client_id?: string; client_secret?: string; code?: string; code_verifier?: string; device_code?: string; grant_type: string; redirect_uri?: string; requested_token_type?: string; resource?: string[]; scope?: string; subject_token?: string; subject_token_type?: string };
 
 export type CreateOrganizationRequest = CreateOrgRequest;
 
