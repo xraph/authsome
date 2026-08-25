@@ -12,6 +12,8 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/plugin"
+
+	"github.com/xraph/grove/migrate"
 )
 
 // defaultGrantTTL caps how long a delegation lives before the user has to
@@ -20,9 +22,10 @@ const defaultGrantTTL = 90 * 24 * time.Hour
 
 // Compile-time interface checks.
 var (
-	_ plugin.Plugin        = (*Plugin)(nil)
-	_ plugin.OnInit        = (*Plugin)(nil)
-	_ plugin.RouteProvider = (*Plugin)(nil)
+	_ plugin.Plugin            = (*Plugin)(nil)
+	_ plugin.OnInit            = (*Plugin)(nil)
+	_ plugin.RouteProvider     = (*Plugin)(nil)
+	_ plugin.MigrationProvider = (*Plugin)(nil)
 )
 
 // Plugin is the delegated agent identity plugin.
@@ -76,6 +79,20 @@ func New(opts ...Option) *Plugin {
 
 // Name returns the plugin name.
 func (p *Plugin) Name() string { return "agentauth" }
+
+// MigrationGroups returns the agentauth migration groups for the given driver.
+func (p *Plugin) MigrationGroups(driverName string) []*migrate.Group {
+	switch driverName {
+	case "pg", "postgres":
+		return []*migrate.Group{PostgresMigrations}
+	case "sqlite", "sqlite3":
+		return []*migrate.Group{SqliteMigrations}
+	case "mongo", "mongodb":
+		return []*migrate.Group{MongoMigrations}
+	default:
+		return nil
+	}
+}
 
 // Scopes returns the delegation scope registry.
 func (p *Plugin) Scopes() *ScopeRegistry { return p.scopes }
