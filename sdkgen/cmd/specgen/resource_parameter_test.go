@@ -58,20 +58,10 @@ func queryParameter(t *testing.T, spec map[string]any, path, method, name string
 // if the spec describes it, and the spec only describes parameters that exist
 // as fields on the handler's request struct.
 //
-// The field cannot exist yet. go-utils v1.1.7 taught bindFormParam to fill a
-// []string from a repeated parameter, which is why the device endpoint below
-// carries one, but bindQueryParam still reads a single value through c.Query.
-// A []string query field would therefore bind the first resource and silently
-// drop the rest, which is worse than the error the old binder raised, so
-// handleAuthorize reads the raw query instead and the parameter stays
-// undescribed.
-//
-// Unskip this once bindQueryParam handles repeated values: add
-// `Resource []string` with a query tag to AuthorizeRequest, drop
-// resourceParams, and regenerate.
+// Reading the raw request instead left the endpoint working over curl and
+// unreachable from every SDK, which is the state it was in until go-utils
+// taught bindQueryParam to keep every occurrence of a repeated parameter.
 func TestSpec_AuthorizeExposesRepeatableResource(t *testing.T) {
-	t.Skip("blocked on go-utils bindQueryParam, which collapses a repeated query parameter to its first value")
-
 	param := queryParameter(t, committedSpec(t), "/v1/oauth/authorize", "get", "resource")
 
 	require.NotNil(t, param, "the authorize endpoint should describe a resource query parameter")

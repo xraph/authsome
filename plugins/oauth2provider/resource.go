@@ -7,30 +7,6 @@ import (
 	"github.com/xraph/authsome/internal/resourceuri"
 )
 
-// resourceParams reads the repeatable RFC 8707 resource parameter off a query
-// string.
-//
-// Form bodies no longer need this: go-utils v1.1.7 taught bindFormParam to
-// fill a []string from every occurrence of a parameter, so the token and
-// device endpoints bind theirs through the struct. bindQueryParam did not get
-// the same treatment. It still reads a single value through c.Query, and
-// setFieldValue's new slice case then splits that one value on commas, so a
-// []string query field keeps the first resource and silently discards the
-// rest. Reading the query directly is the only way the authorization endpoint
-// sees every value it was sent.
-//
-// The cost is that the parameter stays out of the OpenAPI document, since
-// forge describes query parameters by reflecting over the request struct and
-// nothing else. No generated client can send a resource indicator to
-// /authorize until bindQueryParam handles repeated values.
-func resourceParams(r *http.Request) []string {
-	if r == nil {
-		return nil
-	}
-
-	return r.URL.Query()["resource"]
-}
-
 // resourceURISyntaxError checks a single RFC 8707 resource indicator against
 // the syntax rule shared by request-time resolution and admin registration:
 // the value must be an absolute URI and must not carry a fragment. It returns

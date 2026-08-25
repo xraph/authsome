@@ -488,6 +488,12 @@ func (g *Generator) renderTemplate(name string, data *TemplateData) (string, err
 		"hasQueryParams": func(params []QueryParamDef) bool {
 			return len(params) > 0
 		},
+		// An array-typed parameter is written once per element rather than
+		// stringified, since String(["a","b"]) joins on commas and puts one
+		// value on the wire where the caller meant two.
+		"isArrayType": func(t string) bool {
+			return strings.HasSuffix(t, "[]")
+		},
 		"buildPath": func(path string, params []PathParamDef) string {
 			if len(params) == 0 {
 				return `"` + path + `"`

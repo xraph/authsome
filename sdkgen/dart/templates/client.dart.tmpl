@@ -74,16 +74,31 @@ class AuthClient {
   Future<{{ if isVoid $op.ResponseType }}void{{ else }}{{ $op.ResponseType }}{{ end }}> {{ $op.Name }}({{ buildDartParams $op }}) async {
     final path = {{ buildDartPath $op.Path $op.PathParams }};
 {{- if hasQueryParams $op.QueryParams }}
-    final queryParams = <String, String>{};
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
 {{- range $op.QueryParams }}
+{{- if isArrayType .Type }}
 {{- if .Required }}
-    queryParams['{{ .Name }}'] = {{ .DartName }}.toString();
+    for (final element in {{ .DartName }}) {
+      queryPairs.add(MapEntry('{{ .Name }}', element.toString()));
+    }
 {{- else }}
-    if ({{ .DartName }} != null) queryParams['{{ .Name }}'] = {{ .DartName }}.toString();
+    for (final element in {{ .DartName }} ?? const []) {
+      queryPairs.add(MapEntry('{{ .Name }}', element.toString()));
+    }
+{{- end }}
+{{- else }}
+{{- if .Required }}
+    queryPairs.add(MapEntry('{{ .Name }}', {{ .DartName }}.toString()));
+{{- else }}
+    if ({{ .DartName }} != null) queryPairs.add(MapEntry('{{ .Name }}', {{ .DartName }}.toString()));
 {{- end }}
 {{- end }}
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+{{- end }}
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
 {{- end }}
 {{ if isVoid $op.ResponseType }}    await _request(

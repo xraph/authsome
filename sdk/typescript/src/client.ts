@@ -2162,7 +2162,7 @@ export class AuthClient {
    * OAuth2 Authorization
    * GET /v1/oauth/authorize
    */
-  async oauth2Authorize(response_type: string, client_id: string, redirect_uri?: string, scope?: string, state?: string, code_challenge?: string, code_challenge_method?: string): Promise<void> {
+  async oauth2Authorize(response_type: string, client_id: string, redirect_uri?: string, scope?: string, state?: string, code_challenge?: string, code_challenge_method?: string, resource?: string[]): Promise<void> {
     const params = new URLSearchParams();
     if (response_type !== undefined) params.set('response_type', String(response_type));
     if (client_id !== undefined) params.set('client_id', String(client_id));
@@ -2171,6 +2171,10 @@ export class AuthClient {
     if (state !== undefined) params.set('state', String(state));
     if (code_challenge !== undefined) params.set('code_challenge', String(code_challenge));
     if (code_challenge_method !== undefined) params.set('code_challenge_method', String(code_challenge_method));
+    // Repeated once per element: a query string carries repeated keys, not
+    // lists, which is how RFC 8707 sends `resource`. String() on an array
+    // would join it on commas and reach the server as one value.
+    if (resource !== undefined) for (const element of resource) params.append('resource', String(element));
     const qs = params.toString();
     const path = "/v1/oauth/authorize" + (qs ? `?${qs}` : '');
     return this.request<void>(
