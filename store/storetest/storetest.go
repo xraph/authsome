@@ -46,6 +46,7 @@ func RunConformance(t *testing.T, newStore Factory) {
 		{"SessionCRUD", testSessionCRUD},
 		{"SessionLookupByTokenIsScoped", testSessionLookupByTokenIsScoped},
 		{"SessionRolesRoundTrip", testSessionRolesRoundTrip},
+		{"SessionAudienceRoundTrip", testSessionAudienceRoundTrip},
 		{"SessionPrincipalKindRoundTrip", testSessionPrincipalKindRoundTrip},
 		{"ServiceAccountSessionRoundTrip", testServiceAccountSessionRoundTrip},
 		{"RotateSessionCAS", testRotateSessionCAS},
@@ -383,6 +384,62 @@ func testSessionRolesRoundTrip(t *testing.T, s store.Store) {
 	got, err := s.GetSession(ctx, bare.ID)
 	require.NoError(t, err)
 	assert.Empty(t, got.Roles, "a roleless session came back carrying roles")
+}
+
+// testSessionAudienceRoundTrip proves a session's granted audience survives
+// persistence on every backend.
+//
+// The audience is what stops a token issued for one resource server from
+// authenticating at another, so a backend that drops the field does not fail
+// loudly. It silently returns an unrestricted token, which is the exact
+// confused-deputy hole RFC 8707 exists to close. The empty case matters just
+// as much: a backend that encodes []string as a delimited list hands back a
+// single empty-string member, and "" is an audience nobody can match.
+func testSessionAudienceRoundTrip(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "aud-"+suffix(tn.AppID.String())+"@example.com")
+
+	sess := &session.Session{
+		ID:                    id.NewSessionID(),
+		AppID:                 tn.AppID,
+		EnvID:                 tn.EnvID,
+		UserID:                u.ID,
+		Token:                 "tok-aud-" + suffix(tn.AppID.String()),
+		RefreshToken:          "ref-aud-" + suffix(tn.AppID.String()),
+		FamilyID:              id.NewSessionFamilyID(),
+		Audience:              []string{"https://api.example.com", "https://files.example.com"},
+		ExpiresAt:             now().Add(time.Hour),
+		RefreshTokenExpiresAt: now().Add(24 * time.Hour),
+		CreatedAt:             now(),
+		UpdatedAt:             now(),
+	}
+	require.NoError(t, s.CreateSession(ctx, sess))
+
+	for _, tc := range []struct {
+		name string
+		get  func() (*session.Session, error)
+	}{
+		{"GetSession", func() (*session.Session, error) { return s.GetSession(ctx, sess.ID) }},
+		{"GetSessionByToken", func() (*session.Session, error) { return s.GetSessionByToken(ctx, sess.Token) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.get()
+			require.NoError(t, err)
+			assert.Equal(t,
+				[]string{"https://api.example.com", "https://files.example.com"},
+				got.Audience,
+				"granted audience did not survive the round trip")
+		})
+	}
+
+	bare := seedSession(t, s, tn, u.ID,
+		"tok-noaud-"+suffix(tn.AppID.String()),
+		"ref-noaud-"+suffix(tn.AppID.String()))
+
+	got, err := s.GetSession(ctx, bare.ID)
+	require.NoError(t, err)
+	assert.Empty(t, got.Audience, "an unaudienced session came back carrying an audience")
 }
 
 // testSessionPrincipalKindRoundTrip pins the ordinary-user half of the

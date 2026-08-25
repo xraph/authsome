@@ -583,6 +583,9 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 			UserID:    sess.UserID.String(),
 			AppID:     sess.AppID.String(),
 			SessionID: sess.ID.String(),
+			// Without this the first refresh turns a token bound to one
+			// resource server into an unrestricted one, silently.
+			Audience:  sess.Audience,
 			IssuedAt:  sess.UpdatedAt,
 			ExpiresAt: sess.ExpiresAt,
 		})
@@ -820,6 +823,22 @@ func (e *Engine) newSession(appID id.AppID, userID id.UserID, cfg account.Sessio
 			return nil, genErr
 		}
 		sess.Token = jwtToken
+
+		// Record on the row whatever audience the token just went out with.
+		//
+		// The claims above carry none, so GenerateAccessToken falls back to
+		// JWTConfig.Audience, and leaving sess.Audience nil made the row and
+		// the claim disagree by construction. Both are read by the same
+		// audience guard, on the JWT path and the opaque path respectively,
+		// and a guard that gets two answers for one credential is not a guard.
+		//
+		// Nothing changes for a deployment that leaves JWTConfig.Audience
+		// unset, which is every deployment that has not opted into an audience.
+		if jwtFmt, ok := tokFmt.(*tokenformat.JWT); ok {
+			if aud := jwtFmt.ConfiguredAudience(); aud != "" {
+				sess.Audience = []string{aud}
+			}
+		}
 	}
 
 	return sess, nil

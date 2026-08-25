@@ -900,5 +900,21 @@ func init() {
 			// dropping the index only costs a scan.
 			Down: func(_ context.Context, _ migrate.Executor) error { return nil },
 		},
+
+		&migrate.Migration{
+			Name:    "add_session_audience",
+			Version: "20260824000060",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				// The collection's $jsonSchema is generated from sessionModel,
+				// so an existing deployment's validator does not know the
+				// audience field and rejects every document carrying it.
+				return mexec.RefreshValidator(ctx, (*sessionModel)(nil))
+			},
+			Down: func(_ context.Context, _ migrate.Executor) error { return nil },
+		},
 	)
 }

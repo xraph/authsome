@@ -63,6 +63,7 @@ func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*Intr
 			EnvID:     claims.EnvID,
 			SessionID: claims.SessionID,
 			ExpiresAt: claims.ExpiresAt.Format(time.RFC3339),
+			Audience:  claims.Audience,
 		}
 
 		// Optionally resolve user details
@@ -93,6 +94,7 @@ func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*Intr
 		AppID:     sess.AppID.String(),
 		SessionID: sess.ID.String(),
 		ExpiresAt: sess.ExpiresAt.Format(time.RFC3339),
+		Audience:  sess.Audience,
 	}
 
 	if sess.OrgID.String() != "" {

@@ -671,6 +671,7 @@ type IntrospectResponse struct {
 	EnvID     string          `json:"env_id,omitempty" description:"Environment ID"`
 	SessionID string          `json:"session_id,omitempty" description:"Session ID"`
 	ExpiresAt string          `json:"expires_at,omitempty" description:"Token expiration time (RFC 3339)"`
+	Audience  []string        `json:"aud,omitempty" description:"Resource identifiers this token is valid for (RFC 8707)"`
 	User      *IntrospectUser `json:"user,omitempty" description:"Resolved user details"`
 }
 

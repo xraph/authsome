@@ -254,6 +254,9 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("OAuth2 Authorization"),
 		forge.WithDescription("Authorization endpoint for the OAuth2 authorization code flow."),
 		forge.WithOperationID("oauth2Authorize"),
+		forge.WithParameter("resource", "query",
+			"RFC 8707 resource indicator. Repeatable. Absolute URI, no fragment.",
+			false, "https://api.example.com"),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -263,6 +266,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("OAuth2 Token"),
 		forge.WithDescription("Token endpoint for exchanging authorization codes or client credentials for access tokens."),
 		forge.WithOperationID("oauth2Token"),
+		forge.WithParameter("resource", "query",
+			"RFC 8707 resource indicator. Repeatable. Absolute URI, no fragment. "+
+				"May also be sent in the form body.",
+			false, "https://api.example.com"),
 		forge.WithResponseSchema(http.StatusOK, "Token response", TokenResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
@@ -293,6 +300,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Device Authorization"),
 		forge.WithDescription("Device authorization endpoint (RFC 8628). Returns a device_code and user_code for device/CLI authentication."),
 		forge.WithOperationID("oauth2DeviceAuthorize"),
+		forge.WithParameter("resource", "query",
+			"RFC 8707 resource indicator. Repeatable. Absolute URI, no fragment. "+
+				"May also be sent in the form body.",
+			false, "https://api.example.com"),
 		forge.WithResponseSchema(http.StatusOK, "Device authorization response", DeviceAuthResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
@@ -538,6 +549,10 @@ type TokenRequest struct {
 	ClientSecret string `json:"client_secret,omitempty" form:"client_secret"`
 	CodeVerifier string `json:"code_verifier,omitempty" form:"code_verifier"`
 	DeviceCode   string `json:"device_code,omitempty" form:"device_code"`
+	// No form tag and no query tag. The binder cannot decode a slice from
+	// either, so the form-encoded case is handled by resourceParams; this
+	// field only carries the JSON body case, which BindJSON decodes natively.
+	Resource []string `json:"resource,omitempty"`
 }
 
 // RevokeRequest is the OAuth2 revocation request.
@@ -569,6 +584,14 @@ type DiscoveryResponse struct {
 	ScopesSupported                   []string `json:"scopes_supported"`
 	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
 	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
+	// ResourceIndicatorsSupported advertises RFC 8707.
+	//
+	// This name is not registered. RFC 8707 registers the `resource`
+	// parameter and the `invalid_target` error and defines no discovery
+	// metadata at all, and the RFC 8414 IANA registry has no entry for it.
+	// It is the convention that came out of the MCP ecosystem and it is what
+	// clients look for, so do not read it as standardised.
+	ResourceIndicatorsSupported bool `json:"resource_indicators_supported"`
 }
 
 // CreateClientRequest is the admin request to create an OAuth2 client.
@@ -577,6 +600,7 @@ type CreateClientRequest struct {
 	Name         string   `json:"name"`
 	RedirectURIs []string `json:"redirect_uris"`
 	Scopes       []string `json:"scopes,omitempty"`
+	Resources    []string `json:"resources,omitempty"`
 	GrantTypes   []string `json:"grant_types,omitempty"`
 	Public       bool     `json:"public,omitempty"`
 }
@@ -589,6 +613,7 @@ type CreateClientResponse struct {
 	Name         string   `json:"name"`
 	RedirectURIs []string `json:"redirect_uris"`
 	Scopes       []string `json:"scopes"`
+	Resources    []string `json:"resources"`
 	GrantTypes   []string `json:"grant_types"`
 	Public       bool     `json:"public"`
 }
@@ -713,6 +738,13 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		return nil, err
 	}
 
+	// RFC 8707. Read off the raw request because the struct binder rejects a
+	// []string query field outright; see resourceParams.
+	resources, err := resolveResources(client, resourceParams(ctx.Request()))
+	if err != nil {
+		return nil, err
+	}
+
 	// PKCE is mandatory for public clients (RFC 8252 §8.1): they hold no
 	// secret, so an attacker who intercepts the code on the redirect — a
 	// custom-scheme hijack, a shared browser — can redeem it without one.
@@ -756,6 +788,7 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		AppID:               client.AppID,
 		RedirectURI:         redirectURI,
 		Scopes:              scopes,
+		Resources:           resources,
 		CodeChallenge:       req.CodeChallenge,
 		CodeChallengeMethod: req.CodeChallengeMethod,
 		ExpiresAt:           time.Now().Add(p.config.AuthCodeTTL),
@@ -939,8 +972,15 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 		return nil, forge.BadRequest("authorization code already used")
 	}
 
+	// The code carries what the user authorized; the token request may
+	// narrow it further but never widen it.
+	resources, err := narrowResources(authCode.Resources, tokenRequestResources(ctx.Request(), req))
+	if err != nil {
+		return nil, err
+	}
+
 	// Generate tokens.
-	return p.issueTokens(ctx.Context(), client, authCode.UserID, authCode.AppID, authCode.Scopes)
+	return p.issueTokens(ctx.Context(), client, authCode.UserID, authCode.AppID, authCode.Scopes, resources)
 }
 
 func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
@@ -963,8 +1003,15 @@ func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenReque
 		return nil, forge.Unauthorized("invalid client_secret")
 	}
 
+	// There is no prior authorization to narrow against here, so the
+	// client's own allowlist is the only bound.
+	resources, err := resolveResources(client, tokenRequestResources(ctx.Request(), req))
+	if err != nil {
+		return nil, err
+	}
+
 	// Client credentials: no user, just issue an app-level token.
-	return p.issueClientToken(ctx.Context(), client)
+	return p.issueClientToken(ctx.Context(), client, resources)
 }
 
 func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeRequest) (*apitypes.Empty, error) {
@@ -1044,6 +1091,7 @@ func (p *Plugin) handleDiscovery(_ forge.Context, _ *DiscoveryRequest) (*Discove
 		ScopesSupported:                   m.ScopesSupported,
 		TokenEndpointAuthMethodsSupported: m.TokenEndpointAuthMethodsSupported,
 		CodeChallengeMethodsSupported:     m.CodeChallengeMethodsSupported,
+		ResourceIndicatorsSupported:       m.ResourceIndicatorsSupported,
 	}, nil
 }
 
@@ -1096,6 +1144,16 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 		scopes = []string{"openid", "profile", "email"}
 	}
 
+	// Validate the allowlist at registration so a malformed entry is caught
+	// here rather than turning every later authorize request into an opaque
+	// invalid_target. This shares the exact rule resolveResources applies at
+	// request time, so the two can never disagree about what counts as valid.
+	for _, raw := range req.Resources {
+		if msg := resourceURISyntaxError(raw); msg != "" {
+			return nil, forge.BadRequest(msg)
+		}
+	}
+
 	client := &OAuth2Client{
 		ID:                      id.NewOAuth2ClientID(),
 		AppID:                   appID,
@@ -1104,6 +1162,7 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 		ClientSecret:            hashedSecret,
 		RedirectURIs:            req.RedirectURIs,
 		Scopes:                  scopes,
+		Resources:               req.Resources,
 		GrantTypes:              grantTypes,
 		Public:                  req.Public,
 		TokenEndpointAuthMethod: authMethodForPublic(req.Public),
@@ -1121,6 +1180,7 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 		Name:         client.Name,
 		RedirectURIs: client.RedirectURIs,
 		Scopes:       client.Scopes,
+		Resources:    client.Resources,
 		GrantTypes:   client.GrantTypes,
 		Public:       client.Public,
 	}
@@ -1174,7 +1234,7 @@ func (p *Plugin) handleDeleteClient(ctx forge.Context, req *DeleteClientRequest)
 // Token Issuance
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) issueTokens(ctx context.Context, _ *OAuth2Client, userID id.UserID, appID id.AppID, scopes []string) (*TokenResponse, error) {
+func (p *Plugin) issueTokens(ctx context.Context, _ *OAuth2Client, userID id.UserID, appID id.AppID, scopes []string, resources []string) (*TokenResponse, error) {
 	// Resolve session config for the app.
 	sessCfg := account.SessionConfig{
 		TokenTTL:        p.config.AccessTokenTTL,
@@ -1195,6 +1255,11 @@ func (p *Plugin) issueTokens(ctx context.Context, _ *OAuth2Client, userID id.Use
 		sess.EnvID = env.ID
 	}
 
+	// The opaque half of the audience. An opaque access token carries no
+	// claims, so this is the only place introspection and the middleware
+	// audience check can read it from.
+	sess.Audience = resources
+
 	// If token format is JWT, generate a JWT access token.
 	if p.engine != nil {
 		tokFmt := p.engine.TokenFormatForApp(appID.String())
@@ -1204,6 +1269,7 @@ func (p *Plugin) issueTokens(ctx context.Context, _ *OAuth2Client, userID id.Use
 				AppID:     appID.String(),
 				SessionID: sess.ID.String(),
 				Scopes:    scopes,
+				Audience:  resources,
 				IssuedAt:  sess.CreatedAt,
 				ExpiresAt: sess.ExpiresAt,
 			})
@@ -1227,7 +1293,7 @@ func (p *Plugin) issueTokens(ctx context.Context, _ *OAuth2Client, userID id.Use
 	}, nil
 }
 
-func (p *Plugin) issueClientToken(ctx context.Context, client *OAuth2Client) (*TokenResponse, error) {
+func (p *Plugin) issueClientToken(ctx context.Context, client *OAuth2Client, resources []string) (*TokenResponse, error) {
 	// Client credentials: create a session with no user.
 	sessCfg := account.SessionConfig{
 		TokenTTL:        p.config.AccessTokenTTL,
@@ -1245,6 +1311,8 @@ func (p *Plugin) issueClientToken(ctx context.Context, client *OAuth2Client) (*T
 	if env, envErr := p.store.GetDefaultEnvironment(ctx, client.AppID); envErr == nil && env != nil {
 		sess.EnvID = env.ID
 	}
+
+	sess.Audience = resources
 
 	if err := p.store.CreateSession(ctx, sess); err != nil {
 		return nil, forge.InternalError(fmt.Errorf("oauth2: save client session: %w", err))
@@ -1301,6 +1369,14 @@ func (p *Plugin) handleDeviceAuthorize(ctx forge.Context, req *DeviceAuthRequest
 
 	scopes := strings.Fields(req.Scope)
 
+	// There is no prior authorization to narrow against at this endpoint
+	// either, so the client's own allowlist bounds what may be requested,
+	// same as client credentials.
+	resources, err := resolveResources(client, resourceParams(ctx.Request()))
+	if err != nil {
+		return nil, err
+	}
+
 	dc := &DeviceCode{
 		ID:              id.NewDeviceCodeID(),
 		DeviceCode:      deviceCodeStr,
@@ -1308,6 +1384,7 @@ func (p *Plugin) handleDeviceAuthorize(ctx forge.Context, req *DeviceAuthRequest
 		ClientID:        req.ClientID,
 		AppID:           client.AppID,
 		Scopes:          scopes,
+		Resources:       resources,
 		VerificationURI: verificationURI,
 		ExpiresAt:       time.Now().Add(p.config.DeviceCodeTTL),
 		Interval:        p.config.DeviceCodeInterval,
@@ -1395,7 +1472,12 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 			return nil, forge.InternalError(fmt.Errorf("oauth2: consume device code: %w", err))
 		}
 
-		return p.issueTokens(ctx.Context(), client, dc.UserID, dc.AppID, dc.Scopes)
+		resources, resErr := narrowResources(dc.Resources, tokenRequestResources(ctx.Request(), req))
+		if resErr != nil {
+			return nil, resErr
+		}
+
+		return p.issueTokens(ctx.Context(), client, dc.UserID, dc.AppID, dc.Scopes, resources)
 
 	default:
 		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "unexpected device code status")

@@ -23,6 +23,7 @@ type oauth2ClientModel struct {
 	ClientSecret string          `grove:"client_secret,notnull"`
 	RedirectURIs json.RawMessage `grove:"redirect_uris,type:jsonb"`
 	Scopes       json.RawMessage `grove:"scopes,type:jsonb"`
+	Resources    json.RawMessage `grove:"resources,type:jsonb"`
 	GrantTypes   json.RawMessage `grove:"grant_types,type:jsonb"`
 	Public       bool            `grove:"public,notnull"`
 
@@ -50,6 +51,7 @@ type authCodeModel struct {
 	AppID               string          `grove:"app_id,notnull"`
 	RedirectURI         string          `grove:"redirect_uri,notnull"`
 	Scopes              json.RawMessage `grove:"scopes,type:jsonb"`
+	Resources           json.RawMessage `grove:"resources,type:jsonb"`
 	CodeChallenge       string          `grove:"code_challenge,notnull"`
 	CodeChallengeMethod string          `grove:"code_challenge_method,notnull"`
 	ExpiresAt           time.Time       `grove:"expires_at,notnull"`
@@ -70,6 +72,7 @@ type deviceCodeModel struct {
 	ClientID        string          `grove:"client_id,notnull"`
 	AppID           string          `grove:"app_id,notnull"`
 	Scopes          json.RawMessage `grove:"scopes,type:jsonb"`
+	Resources       json.RawMessage `grove:"resources,type:jsonb"`
 	VerificationURI string          `grove:"verification_uri,notnull"`
 	ExpiresAt       time.Time       `grove:"expires_at,notnull"`
 	Interval        int             `grove:"interval,notnull"`
@@ -105,6 +108,10 @@ func toOAuth2Client(m *oauth2ClientModel) (*OAuth2Client, error) {
 	if len(m.GrantTypes) > 0 {
 		_ = json.Unmarshal(m.GrantTypes, &grantTypes) //nolint:errcheck // best-effort decode
 	}
+	var resources []string
+	if len(m.Resources) > 0 {
+		_ = json.Unmarshal(m.Resources, &resources) //nolint:errcheck // best-effort decode
+	}
 
 	var metadata map[string]any
 	if len(m.Metadata) > 0 {
@@ -119,6 +126,7 @@ func toOAuth2Client(m *oauth2ClientModel) (*OAuth2Client, error) {
 		ClientSecret:            m.ClientSecret,
 		RedirectURIs:            redirectURIs,
 		Scopes:                  scopes,
+		Resources:               resources,
 		GrantTypes:              grantTypes,
 		Public:                  m.Public,
 		TokenEndpointAuthMethod: m.TokenEndpointAuthMethod,
@@ -144,6 +152,10 @@ func fromOAuth2Client(c *OAuth2Client) *oauth2ClientModel {
 	if len(grantTypes) == 0 {
 		grantTypes = []byte("[]")
 	}
+	resources, _ := json.Marshal(c.Resources) //nolint:errcheck // marshaling known types
+	if len(resources) == 0 {
+		resources = []byte("[]")
+	}
 
 	metadata, _ := json.Marshal(c.Metadata) //nolint:errcheck // marshaling known types
 	if len(metadata) == 0 || string(metadata) == "null" {
@@ -158,6 +170,7 @@ func fromOAuth2Client(c *OAuth2Client) *oauth2ClientModel {
 		ClientSecret:            c.ClientSecret,
 		RedirectURIs:            redirectURIs,
 		Scopes:                  scopes,
+		Resources:               resources,
 		GrantTypes:              grantTypes,
 		Public:                  c.Public,
 		TokenEndpointAuthMethod: c.TokenEndpointAuthMethod,
@@ -192,6 +205,10 @@ func toAuthCode(m *authCodeModel) (*AuthorizationCode, error) {
 	if len(m.Scopes) > 0 {
 		_ = json.Unmarshal(m.Scopes, &scopes) //nolint:errcheck // best-effort decode
 	}
+	var resources []string
+	if len(m.Resources) > 0 {
+		_ = json.Unmarshal(m.Resources, &resources) //nolint:errcheck // best-effort decode
+	}
 
 	return &AuthorizationCode{
 		ID:                  codeID,
@@ -201,6 +218,7 @@ func toAuthCode(m *authCodeModel) (*AuthorizationCode, error) {
 		AppID:               appID,
 		RedirectURI:         m.RedirectURI,
 		Scopes:              scopes,
+		Resources:           resources,
 		CodeChallenge:       m.CodeChallenge,
 		CodeChallengeMethod: m.CodeChallengeMethod,
 		ExpiresAt:           m.ExpiresAt,
@@ -214,6 +232,10 @@ func fromAuthCode(c *AuthorizationCode) *authCodeModel {
 	if len(scopes) == 0 {
 		scopes = []byte("[]")
 	}
+	resources, _ := json.Marshal(c.Resources) //nolint:errcheck // marshaling known types
+	if len(resources) == 0 {
+		resources = []byte("[]")
+	}
 
 	return &authCodeModel{
 		ID:                  c.ID.String(),
@@ -223,6 +245,7 @@ func fromAuthCode(c *AuthorizationCode) *authCodeModel {
 		AppID:               c.AppID.String(),
 		RedirectURI:         c.RedirectURI,
 		Scopes:              scopes,
+		Resources:           resources,
 		CodeChallenge:       c.CodeChallenge,
 		CodeChallengeMethod: c.CodeChallengeMethod,
 		ExpiresAt:           c.ExpiresAt,
@@ -257,6 +280,10 @@ func toDeviceCode(m *deviceCodeModel) (*DeviceCode, error) {
 	if len(m.Scopes) > 0 {
 		_ = json.Unmarshal(m.Scopes, &scopes) //nolint:errcheck // best-effort decode
 	}
+	var resources []string
+	if len(m.Resources) > 0 {
+		_ = json.Unmarshal(m.Resources, &resources) //nolint:errcheck // best-effort decode
+	}
 
 	return &DeviceCode{
 		ID:              dcID,
@@ -265,6 +292,7 @@ func toDeviceCode(m *deviceCodeModel) (*DeviceCode, error) {
 		ClientID:        m.ClientID,
 		AppID:           appID,
 		Scopes:          scopes,
+		Resources:       resources,
 		VerificationURI: m.VerificationURI,
 		ExpiresAt:       m.ExpiresAt,
 		Interval:        m.Interval,
@@ -280,6 +308,10 @@ func fromDeviceCode(dc *DeviceCode) *deviceCodeModel {
 	if len(scopes) == 0 {
 		scopes = []byte("[]")
 	}
+	resources, _ := json.Marshal(dc.Resources) //nolint:errcheck // marshaling known types
+	if len(resources) == 0 {
+		resources = []byte("[]")
+	}
 
 	return &deviceCodeModel{
 		ID:              dc.ID.String(),
@@ -288,6 +320,7 @@ func fromDeviceCode(dc *DeviceCode) *deviceCodeModel {
 		ClientID:        dc.ClientID,
 		AppID:           dc.AppID.String(),
 		Scopes:          scopes,
+		Resources:       resources,
 		VerificationURI: dc.VerificationURI,
 		ExpiresAt:       dc.ExpiresAt,
 		Interval:        dc.Interval,

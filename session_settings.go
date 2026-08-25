@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xraph/authsome/formconfig"
+	"github.com/xraph/authsome/internal/resourceuri"
 	"github.com/xraph/authsome/settings"
 )
 
@@ -200,6 +201,25 @@ var (
 		settings.WithHelpText("When enabled, JWT tokens are validated against the session store on each request. This adds a DB lookup but enables instant revocation and IP/device binding for JWT tokens."),
 		settings.WithOrder(55),
 	)
+
+	// SettingResourceIdentifier is the resource identifier this app answers to
+	// as an OAuth2 resource server (RFC 8707). Empty disables the audience
+	// check, which is the default and preserves existing behaviour.
+	//
+	// Per app rather than per deployment: two apps in one deployment are two
+	// different resources, and a token minted for one must not authenticate at
+	// the other.
+	SettingResourceIdentifier = settings.Define("session.resource_identifier", "",
+		settings.WithDisplayName("Resource Identifier"),
+		settings.WithDescription("Absolute URI this app answers to as an OAuth2 resource server. Empty disables audience checking."),
+		settings.WithCategory("JWT Security"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithInputType(formconfig.FieldText),
+		settings.WithHelpText("When set, a token whose aud names a different resource is refused. Example: https://api.example.com"),
+		settings.WithValidation(validateResourceIdentifier),
+		settings.WithOrder(56),
+	)
 )
 
 // Category: Session Extension
@@ -374,6 +394,9 @@ func registerCoreSessionSettings(m *settings.Manager) error {
 	if err := settings.RegisterTyped(m, "session", SettingJWTRequireActiveSession); err != nil {
 		return err
 	}
+	if err := settings.RegisterTyped(m, "session", SettingResourceIdentifier); err != nil {
+		return err
+	}
 	if err := settings.RegisterTyped(m, "session", SettingExtendOnActivity); err != nil {
 		return err
 	}
@@ -412,6 +435,30 @@ func validateTokenTTL(val json.RawMessage) error {
 	}
 	if v < 60 || v > 86400 {
 		return fmt.Errorf("token TTL must be between 60 and 86400 seconds")
+	}
+	return nil
+}
+
+// validateResourceIdentifier rejects a value that could never match anything.
+//
+// The setting is compared against a token's aud, which the OAuth2 provider
+// already forces through the same RFC 8707 syntax rule. Typing "api.example.com"
+// here without a scheme leaves the deployment looking configured while
+// matching no token at all, and the symptom is every audienced token being
+// refused, which reads like a bug in the check rather than a typo in a text
+// box.
+//
+// Empty stays valid: it is the default and it means the check is off.
+func validateResourceIdentifier(val json.RawMessage) error {
+	var v string
+	if err := json.Unmarshal(val, &v); err != nil {
+		return fmt.Errorf("invalid value: %w", err)
+	}
+	if v == "" {
+		return nil
+	}
+	if msg := resourceuri.SyntaxError(v); msg != "" {
+		return fmt.Errorf("invalid resource identifier: %s", msg)
 	}
 	return nil
 }

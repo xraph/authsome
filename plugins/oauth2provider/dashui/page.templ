@@ -26,6 +26,7 @@ type OAuth2ClientView struct {
 	ClientID     string
 	RedirectURIs []string
 	Scopes       []string
+	Resources    []string
 	GrantTypes   []string
 	Public       bool
 	CreatedAt    time.Time
@@ -183,6 +184,17 @@ templ ClientsPage(data ClientsPageData) {
 							/>
 							<p class="text-[10px] text-muted-foreground">Defaults to: openid profile email</p>
 						</div>
+					</div>
+					<div class="space-y-1.5">
+						<label for="client-resources" class="text-sm font-medium">Resources</label>
+						<input
+							id="client-resources"
+							name="resources"
+							type="text"
+							placeholder="https://api.example.com (space-separated)"
+							class="flex h-9 w-full rounded-sm border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+						/>
+						<p class="text-[10px] text-muted-foreground">Leave empty and the client may not request any resource.</p>
 					</div>
 					<div class="space-y-1.5">
 						<label for="redirect-uris" class="text-sm font-medium">Redirect URIs</label>
