@@ -535,8 +535,9 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 	// specific plugin's package, which is the dependency direction the
 	// plugin architecture exists to avoid: the engine does not know about
 	// individual plugins by type. Refusing outright is the safe default
-	// until a proper seam for agent-aware refresh exists (see agentauth's
-	// package docs); a refused refresh costs the caller a re-authentication,
+	// until a proper seam for agent-aware refresh exists (see
+	// plugins/agentauth/doc.go, point 5, for the current re-issue-don't-refresh
+	// contract this enforces); a refused refresh costs the caller a re-authentication,
 	// an unclamped one costs the grant model its only enforcement point on
 	// this path.
 	if sess.PrincipalKind == session.PrincipalKindAgent {

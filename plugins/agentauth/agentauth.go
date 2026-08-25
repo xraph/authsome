@@ -1,6 +1,7 @@
-// Package agentauth adds delegated agent identity to authsome. An agent is a
-// non-human principal that always acts on behalf of a human, which is what
-// separates it from a serviceaccount.ServiceAccount.
+// Package agentauth: see doc.go for the package doc comment and the host
+// integration contract. Agent is a non-human principal that always acts on
+// behalf of a human, which is what separates it from a
+// serviceaccount.ServiceAccount.
 package agentauth
 
 import (
