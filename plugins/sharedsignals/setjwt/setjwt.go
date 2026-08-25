@@ -93,11 +93,18 @@ func Header(raw []byte) (kid, alg, typ string, err error) {
 	parser := jwt.NewParser()
 	tok, _, err := parser.ParseUnverified(string(raw), jwt.MapClaims{})
 	if err != nil {
-		return "", "", "", fmt.Errorf("%w: parse header: %v", ErrInvalidRequest, err)
+		// ErrInvalidRequest is wrapped with %w; err is secondary context on %v by design.
+		return "", "", "", fmt.Errorf("%w: parse header: %v", ErrInvalidRequest, err) //nolint:errorlint // sentinel already wrapped with %w; err is secondary context on %v
 	}
-	kid, _ = tok.Header["kid"].(string)
-	alg, _ = tok.Header["alg"].(string)
-	typ, _ = tok.Header["typ"].(string)
+	if v, ok := tok.Header["kid"].(string); ok {
+		kid = v
+	}
+	if v, ok := tok.Header["alg"].(string); ok {
+		alg = v
+	}
+	if v, ok := tok.Header["typ"].(string); ok {
+		typ = v
+	}
 	return kid, alg, typ, nil
 }
 
@@ -144,15 +151,15 @@ func Validate(ctx context.Context, raw []byte, opts Options) (*Token, error) {
 		jwt.WithValidMethods(algList()),
 		jwt.WithoutClaimsValidation(),
 	)
-	if _, err := parser.ParseWithClaims(string(raw), &claims,
-		func(*jwt.Token) (any, error) { return key, nil }); err != nil {
+	if _, perr := parser.ParseWithClaims(string(raw), &claims,
+		func(*jwt.Token) (any, error) { return key, nil }); perr != nil {
 		// jwt/v5 decodes the claims JSON before it verifies the signature, so
 		// a claim with the wrong JSON shape (events as an array, iat as a
 		// string, ...) surfaces here as ErrTokenMalformed rather than a
 		// signature failure. That is a caller mistake, not a key problem, so
 		// it must map to invalid_request rather than invalid_key.
-		if errors.Is(err, jwt.ErrTokenMalformed) {
-			return nil, fmt.Errorf("%w: malformed claims: %v", ErrInvalidRequest, err)
+		if errors.Is(perr, jwt.ErrTokenMalformed) {
+			return nil, fmt.Errorf("%w: malformed claims: %v", ErrInvalidRequest, perr) //nolint:errorlint // sentinel already wrapped with %w; perr is secondary context on %v
 		}
 		return nil, fmt.Errorf("%w: signature verification failed", ErrInvalidKey)
 	}
@@ -163,7 +170,7 @@ func Validate(ctx context.Context, raw []byte, opts Options) (*Token, error) {
 
 	audience, err := normalizeAudience(claims.Audience)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidAudience, err)
+		return nil, fmt.Errorf("%w: %v", ErrInvalidAudience, err) //nolint:errorlint // sentinel already wrapped with %w; err is secondary context on %v
 	}
 	if !contains(audience, opts.Audience) {
 		return nil, fmt.Errorf("%w: audience mismatch", ErrInvalidAudience)

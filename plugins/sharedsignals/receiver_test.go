@@ -54,8 +54,8 @@ func newReceiverFixture(t *testing.T) *receiverFixture {
 	// A fake transmitter serving its own JWKS, which is the only way to test
 	// the verification path the way it actually runs.
 	jwksSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		n := base64.RawURLEncoding.EncodeToString(key.PublicKey.N.Bytes())
-		e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.PublicKey.E)).Bytes())
+		n := base64.RawURLEncoding.EncodeToString(key.N.Bytes())
+		e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.E)).Bytes())
 		fmt.Fprintf(w, `{"keys":[{"kty":"RSA","use":"sig","alg":"RS256","kid":%q,"n":%q,"e":%q}]}`,
 			fixtureKID, n, e)
 	}))

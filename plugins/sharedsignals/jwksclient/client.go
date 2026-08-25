@@ -351,7 +351,7 @@ func (c *Client) fetch(ctx context.Context, jwksURI string) (map[string]crypto.P
 	if err := c.opts.ValidateURI(jwksURI); err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jwksURI, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jwksURI, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("jwksclient: build request: %w", err)
 	}
@@ -361,7 +361,7 @@ func (c *Client) fetch(ctx context.Context, jwksURI string) (map[string]crypto.P
 	if err != nil {
 		return nil, fmt.Errorf("jwksclient: fetch: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck // response body close
+	defer resp.Body.Close() // response body close
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("jwksclient: fetch returned %d", resp.StatusCode)

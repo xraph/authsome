@@ -85,7 +85,7 @@ func (p *Plugin) EvaluateRisk(ctx context.Context, req *riskengine.RiskRequest) 
 // must be queried with the environment the resolved user actually belongs
 // to, not the one the request guessed at.
 func (p *Plugin) resolveRiskUser(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
-	req *riskengine.RiskRequest) (id.UserID, id.EnvironmentID, bool) {
+	req *riskengine.RiskRequest) (resolvedUserID id.UserID, resolvedEnvID id.EnvironmentID, resolved bool) {
 	if req.UserID != "" {
 		if userID, err := id.ParseUserID(req.UserID); err == nil {
 			return userID, envID, true

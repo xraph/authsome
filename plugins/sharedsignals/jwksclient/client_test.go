@@ -69,7 +69,7 @@ func TestKey_FetchesAndReturnsKey(t *testing.T) {
 
 	pub, ok := got.(*rsa.PublicKey)
 	require.True(t, ok)
-	assert.Equal(t, key.PublicKey.N, pub.N)
+	assert.Equal(t, key.N, pub.N)
 }
 
 func TestKey_CachesBetweenCalls(t *testing.T) {
@@ -135,7 +135,7 @@ func TestKey_RejectsOversizedDocument(t *testing.T) {
 
 func TestKey_RejectsTooManyKeys(t *testing.T) {
 	key := newKey(t)
-	n := base64.RawURLEncoding.EncodeToString(key.PublicKey.N.Bytes())
+	n := base64.RawURLEncoding.EncodeToString(key.N.Bytes())
 	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.PublicKey.E)).Bytes())
 	var entries []string
 	for i := 0; i < 50; i++ {
@@ -442,7 +442,7 @@ func TestKey_WarmKeySurvivesAFailedRefresh(t *testing.T) {
 	require.NoError(t, err, "a failed refresh must never destroy keys we already hold")
 	pub, ok := got.(*rsa.PublicKey)
 	require.True(t, ok)
-	assert.Equal(t, key.PublicKey.N, pub.N)
+	assert.Equal(t, key.N, pub.N)
 }
 
 // The two failures a caller has to tell apart: the key set loaded fine and
@@ -547,5 +547,5 @@ func TestKey_AgedEntryRefetchesAndDropsARetiredKey(t *testing.T) {
 	require.NoError(t, err)
 	pub, ok := got.(*rsa.PublicKey)
 	require.True(t, ok)
-	assert.Equal(t, replacement.PublicKey.N, pub.N)
+	assert.Equal(t, replacement.N, pub.N)
 }

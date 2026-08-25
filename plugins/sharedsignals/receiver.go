@@ -48,14 +48,17 @@ func NewPushSecret() (raw, hash string, err error) {
 func (p *Plugin) registerReceiverRoutes(router forge.Router) error {
 	g := router.Group("/v1/ssf", forge.WithGroupTags("Shared Signals"))
 
-	opts := []forge.RouteOption{
-		forge.WithSummary("Receive Security Event Tokens"),
-		forge.WithOperationID("receiveSecurityEventTokens"),
-	}
 	// Nil when the host is not the concrete engine or rate limiting is off,
 	// which is why this is defence in depth and not the control.
-	opts = append(opts, authsome.PluginRateLimit(p.engine,
-		func(c authsome.RateLimitConfig) int { return c.SSFPushLimit })...)
+	rateLimitOpts := authsome.PluginRateLimit(p.engine,
+		func(c authsome.RateLimitConfig) int { return c.SSFPushLimit })
+
+	opts := make([]forge.RouteOption, 0, 2+len(rateLimitOpts))
+	opts = append(opts,
+		forge.WithSummary("Receive Security Event Tokens"),
+		forge.WithOperationID("receiveSecurityEventTokens"),
+	)
+	opts = append(opts, rateLimitOpts...)
 
 	// A raw handler: the body is a compact JWS rather than JSON, success is a
 	// bodiless 202, and failure is the RFC 8935 error object.
@@ -390,10 +393,10 @@ func (p *Plugin) processOneEvent(ctx context.Context, stream *InboundStream,
 	// impossible to complete: an event with no subject can never resolve,
 	// and an unresolved event stops before applyEvent is ever reached.
 	if caep.IsStreamLevel(eventType) {
-		if err := p.completeVerification(ctx, stream, ev); err != nil {
+		if verr := p.completeVerification(ctx, stream, ev); verr != nil {
 			// The only failure in there is UpdateInboundStream breaking,
 			// which is our store, not the transmitter's problem.
-			return infraResult(err)
+			return infraResult(verr)
 		}
 		return eventResult{Outcome: OutcomeApplied, SubjectJSON: subjectJSON}
 	}

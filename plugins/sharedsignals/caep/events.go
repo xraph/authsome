@@ -8,8 +8,8 @@ import (
 // CAEP and SSF event type URIs.
 const (
 	EventSessionRevoked         = "https://schemas.openid.net/secevent/caep/event-type/session-revoked"
-	EventTokenClaimsChange      = "https://schemas.openid.net/secevent/caep/event-type/token-claims-change"
-	EventCredentialChange       = "https://schemas.openid.net/secevent/caep/event-type/credential-change"
+	EventTokenClaimsChange      = "https://schemas.openid.net/secevent/caep/event-type/token-claims-change" //nolint:gosec // G101: this is a public CAEP event type URI, not a credential
+	EventCredentialChange       = "https://schemas.openid.net/secevent/caep/event-type/credential-change"   //nolint:gosec // G101: this is a public CAEP event type URI, not a credential
 	EventAssuranceLevelChange   = "https://schemas.openid.net/secevent/caep/event-type/assurance-level-change"
 	EventDeviceComplianceChange = "https://schemas.openid.net/secevent/caep/event-type/device-compliance-change"
 	EventRiskLevelChange        = "https://schemas.openid.net/secevent/caep/event-type/risk-level-change"
@@ -48,8 +48,8 @@ type Event struct {
 	// values out of its error responses on the grounds that they belong in
 	// the audit record instead, which only works if the audit record
 	// actually gets them. Empty for a stream-level event.
-	RawSubject     json.RawMessage
-	EventTimestamp int64
+	RawSubject       json.RawMessage
+	EventTimestamp   int64
 	InitiatingEntity string
 	ReasonAdmin      map[string]string
 	ReasonUser       map[string]string

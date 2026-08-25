@@ -275,7 +275,7 @@ func (s *MongoStore) ListInboundStreams(ctx context.Context, appID id.AppID) ([]
 	if err != nil {
 		return nil, mongoErr(err)
 	}
-	defer cur.Close(ctx) //nolint:errcheck // cursor close
+	defer cur.Close(ctx) // cursor close
 
 	out := make([]*InboundStream, 0)
 	for cur.Next(ctx) {
@@ -410,7 +410,7 @@ func (s *MongoStore) ListActiveSignals(ctx context.Context, appID id.AppID,
 	if err != nil {
 		return nil, mongoErr(err)
 	}
-	defer cur.Close(ctx) //nolint:errcheck // cursor close
+	defer cur.Close(ctx) // cursor close
 
 	out := make([]*Signal, 0)
 	for cur.Next(ctx) {

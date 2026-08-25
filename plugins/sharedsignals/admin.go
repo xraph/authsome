@@ -212,7 +212,7 @@ func (p *Plugin) CreateStream(ctx context.Context, appID id.AppID,
 	stream := &InboundStream{
 		ID: id.NewSSFStreamID(), AppID: appID, EnvID: envID,
 		Name: req.Name, Issuer: req.Issuer, Audience: audience,
-		JWKSURI: req.JWKSURI,
+		JWKSURI:      req.JWKSURI,
 		PushPathHash: pushPathHash, PushTokenHash: pushTokenHash,
 		AllowedEventTypes:     req.AllowedEventTypes,
 		AllowedSubjectFormats: formats,
@@ -367,7 +367,7 @@ func (p *Plugin) handleCreateStream(ctx forge.Context) error {
 	if err != nil {
 		return forge.BadRequest("could not read the request body")
 	}
-	if err := json.Unmarshal(body, &req); err != nil {
+	if uerr := json.Unmarshal(body, &req); uerr != nil {
 		return forge.BadRequest("the request body is not valid JSON")
 	}
 
@@ -406,15 +406,15 @@ func (p *Plugin) handleListStreams(ctx forge.Context) error {
 // Forbidden would itself confirm to the caller that the ID is valid for some
 // OTHER tenant, which is exactly the fact an IDOR probe is trying to learn.
 func (p *Plugin) streamInCallerApp(ctx context.Context, appID id.AppID,
-	streamID id.SSFStreamID) (*InboundStream, error) {
+	streamID id.SSFStreamID) error {
 	stream, err := p.store.GetInboundStream(ctx, streamID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if stream.AppID.String() != appID.String() {
-		return nil, ErrNotFound
+		return ErrNotFound
 	}
-	return stream, nil
+	return nil
 }
 
 func (p *Plugin) handleUpdateStream(ctx forge.Context) error {
@@ -427,7 +427,7 @@ func (p *Plugin) handleUpdateStream(ctx forge.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, serr := p.streamInCallerApp(ctx.Context(), appID, streamID); serr != nil {
+	if serr := p.streamInCallerApp(ctx.Context(), appID, streamID); serr != nil {
 		return forge.NotFound("stream not found")
 	}
 
@@ -460,7 +460,7 @@ func (p *Plugin) handleDeleteStream(ctx forge.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, serr := p.streamInCallerApp(ctx.Context(), appID, streamID); serr != nil {
+	if serr := p.streamInCallerApp(ctx.Context(), appID, streamID); serr != nil {
 		return forge.NotFound("stream not found")
 	}
 
@@ -478,7 +478,7 @@ func (p *Plugin) handleDeleteStream(ctx forge.Context) error {
 // The publishable-key middleware puts both on the context; the configured
 // default app is the fallback, matching how plugins/sso resolves it in
 // requestAppID.
-func (p *Plugin) requestScope(ctx forge.Context) (id.AppID, id.EnvironmentID, error) {
+func (p *Plugin) requestScope(ctx forge.Context) (scopeAppID id.AppID, scopeEnvID id.EnvironmentID, scopeErr error) {
 	envID, _ := middleware.EnvIDFrom(ctx.Context())
 
 	if appID, ok := middleware.AppIDFrom(ctx.Context()); ok {
