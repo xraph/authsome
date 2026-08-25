@@ -2805,7 +2805,12 @@ func (e *Engine) ExportUserData(ctx context.Context, userID id.UserID) (*UserExp
 // Impersonate creates a new session for the target user, marked as impersonated
 // by the admin. The resulting session behaves as if the target user is signed in,
 // but carries the impersonator's identity for audit purposes.
-func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID) (*user.User, *session.Session, error) {
+func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID, opts ...ImpersonateOption) (*user.User, *session.Session, error) {
+	var o impersonateOpts
+	for _, apply := range opts {
+		apply(&o)
+	}
+
 	// Prevent self-impersonation
 	if adminID == targetID {
 		return nil, nil, fmt.Errorf("authsome: cannot impersonate yourself")
@@ -2817,12 +2822,20 @@ func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID) (
 		return nil, nil, fmt.Errorf("authsome: impersonate: get target user: %w", err)
 	}
 
+	// Apply the app's DPoP mandate. This mint does not go through
+	// IssueSession, so the central gate never sees it, and an unbound
+	// impersonation session would be exempt from proof-of-possession for its
+	// whole life on an app that requires it, while acting as another user.
+	if o.dpopJKT == "" && e.DPoPModeForApp(ctx, u.AppID) == dpop.ModeRequired {
+		return nil, nil, &DPoPRequiredError{}
+	}
+
 	// Create an impersonation session (short-lived: 1 hour, non-refreshable)
 	cfg := e.sessionConfigForApp(ctx, u.AppID)
 	cfg.TokenTTL = 1 * time.Hour
 	cfg.RefreshTokenTTL = 1 * time.Hour // same as token — not meant to be refreshed
 
-	sess, err := e.newSession(u.AppID, u.ID, cfg, "")
+	sess, err := e.newSession(u.AppID, u.ID, cfg, o.dpopJKT)
 	if err != nil {
 		return nil, nil, fmt.Errorf("authsome: impersonate: create session: %w", err)
 	}

@@ -360,10 +360,20 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 	// to a direct mint if the engine isn't the concrete *authsome.Engine.
 	var sess *session.Session
 	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
+		// /verify is a POST from the SDK, not the browser following the link,
+		// so the client holding the DPoP key is the caller here and can prove
+		// possession. Resolve the binding before minting: under mode=required
+		// IssueSession refuses an unbound session, and without this the whole
+		// magic-link route would be refused rather than bound.
+		dpopJKT, bindErr := eng.DPoPBindingForRequest(ctx, v.AppID)
+		if bindErr != nil {
+			return nil, bindErr
+		}
 		result, issueErr := eng.IssueSession(ctx.Context(), &authsome.IssueSessionRequest{
 			User:       u,
 			AppID:      v.AppID,
 			AuthMethod: "magiclink",
+			DPoPJKT:    dpopJKT,
 			IPAddress:  ctx.Request().RemoteAddr,
 			UserAgent:  ctx.Request().UserAgent(),
 			SessionTTL: p.resolveTTL(ctx.Context(), v.AppID, SettingSessionTokenTTLSeconds, p.config.SessionTokenTTL),

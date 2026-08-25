@@ -886,6 +886,21 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		return nil, forge.InternalError(fmt.Errorf("invalid app_id in OAuth state: %w", err))
 	}
 
+	// This request is the provider redirecting the user agent, so the client
+	// holding the DPoP key is not the caller and cannot present a proof. An
+	// app on mode=required therefore cannot complete a social sign-in at all,
+	// and says so here rather than issuing a session its own mandate would
+	// never apply to.
+	//
+	// Before the code exchange deliberately: IssueSession refuses this anyway,
+	// but by then the single-use authorization code has been redeemed and
+	// burned for nothing.
+	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
+		if bindErr := eng.DPoPBindingUnavailable(ctx.Context(), appID); bindErr != nil {
+			return nil, bindErr
+		}
+	}
+
 	// Check for error from provider
 	if req.Error != "" {
 		return p.callbackError(ctx, stateInfo, fmt.Sprintf("provider error: %s", req.Error))

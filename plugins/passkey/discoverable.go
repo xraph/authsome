@@ -171,10 +171,19 @@ func (p *Plugin) issueSession(ctx forge.Context, u *user.User) (*session.Session
 	if !ok || eng == nil {
 		return nil, forge.InternalError(fmt.Errorf("passkey: session issuance unavailable"))
 	}
+	// /login/finish is a POST from the SDK, so the key-holding client is the
+	// caller and can prove possession. Under mode=required IssueSession
+	// refuses an unbound session, so this is what keeps passwordless login
+	// working on a mandating app rather than what tightens it.
+	dpopJKT, err := eng.DPoPBindingForRequest(ctx, u.AppID)
+	if err != nil {
+		return nil, err
+	}
 	result, err := eng.IssueSession(ctx.Context(), &authsome.IssueSessionRequest{
 		User:       u,
 		AppID:      u.AppID,
 		AuthMethod: "passkey",
+		DPoPJKT:    dpopJKT,
 		IPAddress:  ctx.Request().RemoteAddr,
 		UserAgent:  ctx.Request().UserAgent(),
 	})
