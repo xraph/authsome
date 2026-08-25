@@ -57,37 +57,45 @@ var privateMembers = []string{"d", "p", "q", "dp", "dq", "qi", "k", "oth"}
 // whitespace. Optional members such as kid must not affect the result, or a
 // key that later gains a kid would stop matching tokens bound to it.
 func Thumbprint(j *JWK) (string, error) {
-	var canonical string
+	// Assembled as a map and marshalled, not formatted into a string.
+	// encoding/json sorts map keys lexicographically, which is exactly the
+	// ordering RFC 7638 requires, and it escapes the values itself. Building
+	// the object by hand meant the escaping lived in a helper, where a reader
+	// has to go and check it, and where a member carrying a double quote would
+	// close the string early if the helper were ever wrong. The thumbprint is
+	// a DPoP key binding: two keys hashing to one jkt is the whole attack.
+	var members map[string]string
+
 	switch j.KTY {
 	case "EC":
 		if j.CRV == "" || j.X == "" || j.Y == "" {
 			return "", fmt.Errorf("%w: EC key missing crv, x or y", ErrUnsupportedKey)
 		}
-		canonical = fmt.Sprintf(`{"crv":%s,"kty":"EC","x":%s,"y":%s}`,
-			quote(j.CRV), quote(j.X), quote(j.Y))
+
+		members = map[string]string{"crv": j.CRV, "kty": "EC", "x": j.X, "y": j.Y}
 	case "RSA":
 		if j.N == "" || j.E == "" {
 			return "", fmt.Errorf("%w: RSA key missing n or e", ErrUnsupportedKey)
 		}
-		canonical = fmt.Sprintf(`{"e":%s,"kty":"RSA","n":%s}`, quote(j.E), quote(j.N))
+
+		members = map[string]string{"e": j.E, "kty": "RSA", "n": j.N}
 	case "OKP":
 		if j.CRV == "" || j.X == "" {
 			return "", fmt.Errorf("%w: OKP key missing crv or x", ErrUnsupportedKey)
 		}
-		canonical = fmt.Sprintf(`{"crv":%s,"kty":"OKP","x":%s}`, quote(j.CRV), quote(j.X))
+
+		members = map[string]string{"crv": j.CRV, "kty": "OKP", "x": j.X}
 	default:
 		return "", fmt.Errorf("%w: %q", ErrUnsupportedKey, j.KTY)
 	}
 
-	sum := sha256.Sum256([]byte(canonical))
-	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
-}
+	canonical, err := json.Marshal(members)
+	if err != nil {
+		return "", fmt.Errorf("jwkutil: canonicalize JWK: %w", err)
+	}
 
-// quote JSON-encodes a string member. Using encoding/json rather than adding
-// quotes by hand keeps any character needing an escape correct.
-func quote(s string) string {
-	b, _ := json.Marshal(s) //nolint:errcheck // marshalling a string cannot fail
-	return string(b)
+	sum := sha256.Sum256(canonical)
+	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
 }
 
 // ParseJSON converts a raw JWK into a public key, rejecting anything that

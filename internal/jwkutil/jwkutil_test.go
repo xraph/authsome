@@ -178,3 +178,26 @@ func TestEncode_PadsShortCoordinate(t *testing.T) {
 	assert.Len(t, xBytes, 32, "encoded x must be exactly the P-256 field size")
 	assert.Len(t, yBytes, 32, "encoded y must be exactly the P-256 field size, even with a leading zero byte")
 }
+
+// TestThumbprint_QuoteInMemberCannotCollide is the attack the canonicalization
+// has to survive. A JWK member is base64url in any honest key, so a double
+// quote never appears by accident, but nothing stops a caller sending one.
+//
+// If the canonical JSON were assembled by concatenation, a crafted x could
+// close its own string and open the next member, so two different keys could
+// hash to one thumbprint. A thumbprint is a DPoP key binding, so a collision
+// there means a token bound to one key is accepted for another.
+func TestThumbprint_QuoteInMemberCannotCollide(t *testing.T) {
+	crafted, err := jwkutil.Thumbprint(&jwkutil.JWK{
+		KTY: "EC", CRV: "P-256", X: `a","y":"b`, Y: "c",
+	})
+	require.NoError(t, err)
+
+	honest, err := jwkutil.Thumbprint(&jwkutil.JWK{
+		KTY: "EC", CRV: "P-256", X: "a", Y: "b",
+	})
+	require.NoError(t, err)
+
+	assert.NotEqual(t, honest, crafted,
+		"a member containing a quote must not be able to forge another key's thumbprint")
+}

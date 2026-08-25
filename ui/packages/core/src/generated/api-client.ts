@@ -274,6 +274,23 @@ import type {
   ResendEmailVerificationRequest,
 } from './api-types';
 /**
+ * Strips trailing slashes from a base URL.
+ *
+ * This was `replace(/\/+$/, '')`, which backtracks: a caller passing a URL
+ * ending in many slashes makes the engine retry from every one of them, so the
+ * work grows with the square of that run. The base URL comes from whoever
+ * constructs the client, which is not always a literal. Walking backwards is
+ * linear and needs no engine at all.
+ */
+function stripTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === 47) {
+    end--;
+  }
+  return url.slice(0, end);
+}
+
+/**
  * Encodes a body as application/x-www-form-urlencoded, which RFC 6749 section
  * 4.1.3 requires at the OAuth2 token endpoint. Absent values stay off the wire
  * entirely, the same as the JSON path omits them.
@@ -310,7 +327,7 @@ export class AuthClient {
   private fetchFn: typeof globalThis.fetch;
 
   constructor(config: AuthClientConfig | Pick<{ baseURL: string; publishableKey?: string; fetch?: typeof globalThis.fetch }, 'baseURL' | 'publishableKey' | 'fetch'>) {
-    this.baseURL = config.baseURL.replace(/\/+$/, '');
+    this.baseURL = stripTrailingSlashes(config.baseURL);
     this.publishableKey = (config as { publishableKey?: string }).publishableKey;
     this.fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis);
   }
