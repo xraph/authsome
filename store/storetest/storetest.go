@@ -362,25 +362,32 @@ func testUserPhoneLookupIsEnvScoped(t *testing.T, s store.Store) {
 }
 
 // testUserEmailLookupIsEnvScoped proves an email lookup cannot reach across
-// environments of the same app. Only one user is seeded on purpose: the
-// backends disagree today on whether (app_id, env_id, email) or
-// (app_id, email) is unique, so seeding the same address twice is not
-// portable. Resolving a user the caller's environment does not own is the
-// actual hole, and one row is enough to prove it is closed.
+// environments of the same app. Seeding the same address in two environments
+// is itself part of the contract: the users table is unique on
+// (app_id, env_id, email), so both rows must be accepted and each environment
+// must get its own back.
 func testUserEmailLookupIsEnvScoped(t *testing.T, s store.Store) {
 	ctx := context.Background()
 	prod := seedTenant(t, s)
 	staging := seedSiblingEnv(t, s, prod)
 
-	const email = "lives-in-prod@test.com"
+	const email = "lives-in-both@test.com"
 	prodUser := seedUser(t, s, prod, email)
+	stagingUser := seedUser(t, s, staging, email)
+	require.NotEqual(t, prodUser.ID.String(), stagingUser.ID.String())
 
 	gotProd, err := s.GetUserByEmail(ctx, prod.AppID, prod.EnvID, email)
 	require.NoError(t, err)
 	assert.Equal(t, prodUser.ID.String(), gotProd.ID.String(),
 		"the owning environment must resolve its own user")
 
-	_, err = s.GetUserByEmail(ctx, staging.AppID, staging.EnvID, email)
+	gotStaging, err := s.GetUserByEmail(ctx, staging.AppID, staging.EnvID, email)
+	require.NoError(t, err)
+	assert.Equal(t, stagingUser.ID.String(), gotStaging.ID.String(),
+		"lookup must be scoped per environment, not merely per app")
+
+	bare := seedSiblingEnv(t, s, prod)
+	_, err = s.GetUserByEmail(ctx, bare.AppID, bare.EnvID, email)
 	assert.ErrorIs(t, err, store.ErrNotFound,
 		"email lookup must not cross environments within an app")
 
@@ -388,36 +395,45 @@ func testUserEmailLookupIsEnvScoped(t *testing.T, s store.Store) {
 	// signup and rename uniqueness guards depend on.
 	anyEnv, err := s.GetUserByEmail(ctx, prod.AppID, id.Nil, email)
 	require.NoError(t, err)
-	assert.Equal(t, prodUser.ID.String(), anyEnv.ID.String(),
-		"a nil env must still match app-wide")
+	assert.Contains(t, []string{prodUser.ID.String(), stagingUser.ID.String()},
+		anyEnv.ID.String(), "a nil env must still match app-wide")
 
 	other := seedTenant(t, s)
 	_, err = s.GetUserByEmail(ctx, other.AppID, other.EnvID, email)
 	assert.ErrorIs(t, err, store.ErrNotFound, "email lookup must not cross apps")
 }
 
-// testUserUsernameLookupIsEnvScoped is the username half of the same contract.
+// testUserUsernameLookupIsEnvScoped is the username half of the same
+// contract, against a (app_id, env_id, username) unique index.
 func testUserUsernameLookupIsEnvScoped(t *testing.T, s store.Store) {
 	ctx := context.Background()
 	prod := seedTenant(t, s)
 	staging := seedSiblingEnv(t, s, prod)
 
-	const handle = "prodhandle"
+	const handle = "sharedhandle"
 	prodUser := seedUserWithUsername(t, s, prod, "handle-prod@test.com", handle)
+	stagingUser := seedUserWithUsername(t, s, staging, "handle-staging@test.com", handle)
+	require.NotEqual(t, prodUser.ID.String(), stagingUser.ID.String())
 
 	gotProd, err := s.GetUserByUsername(ctx, prod.AppID, prod.EnvID, handle)
 	require.NoError(t, err)
 	assert.Equal(t, prodUser.ID.String(), gotProd.ID.String(),
 		"the owning environment must resolve its own user")
 
-	_, err = s.GetUserByUsername(ctx, staging.AppID, staging.EnvID, handle)
+	gotStaging, err := s.GetUserByUsername(ctx, staging.AppID, staging.EnvID, handle)
+	require.NoError(t, err)
+	assert.Equal(t, stagingUser.ID.String(), gotStaging.ID.String(),
+		"lookup must be scoped per environment, not merely per app")
+
+	bare := seedSiblingEnv(t, s, prod)
+	_, err = s.GetUserByUsername(ctx, bare.AppID, bare.EnvID, handle)
 	assert.ErrorIs(t, err, store.ErrNotFound,
 		"username lookup must not cross environments within an app")
 
 	anyEnv, err := s.GetUserByUsername(ctx, prod.AppID, id.Nil, handle)
 	require.NoError(t, err)
-	assert.Equal(t, prodUser.ID.String(), anyEnv.ID.String(),
-		"a nil env must still match app-wide")
+	assert.Contains(t, []string{prodUser.ID.String(), stagingUser.ID.String()},
+		anyEnv.ID.String(), "a nil env must still match app-wide")
 
 	other := seedTenant(t, s)
 	_, err = s.GetUserByUsername(ctx, other.AppID, other.EnvID, handle)

@@ -1196,5 +1196,128 @@ ALTER TABLE authsome_sessions DROP COLUMN actors;
 				return err
 			},
 		},
+		// Migration 23: Finish what migration 7 started. That migration
+		// created the environments table and added env_id columns defaulted
+		// to '', but it never ported the rest of the postgres version: no
+		// default environment was created per app, no env_id was backfilled,
+		// and the users unique indexes stayed on (app_id, email) and
+		// (app_id, username). The result was a backend that disagreed with
+		// postgres about whether two environments of one app may hold the
+		// same address, and rows that belonged to no environment at all.
+		&migrate.Migration{
+			Name:    "env_scope_user_unique_indexes",
+			Version: "20260824000090",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				if err := backfillDefaultEnvironments(ctx, exec); err != nil {
+					return err
+				}
+				// Rebuild the users unique indexes with env_id, matching the
+				// postgres definitions including their deleted_at clause so a
+				// soft-deleted user frees its address on every backend.
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_users_email;
+CREATE UNIQUE INDEX idx_authsome_users_email
+    ON authsome_users (app_id, env_id, email) WHERE deleted_at IS NULL;
+
+DROP INDEX IF EXISTS idx_authsome_users_username;
+CREATE UNIQUE INDEX idx_authsome_users_username
+    ON authsome_users (app_id, env_id, username) WHERE deleted_at IS NULL AND username != '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				// Only the indexes roll back. The backfilled env_id values and
+				// the default environments are left in place: dropping them
+				// would strand rows that later migrations and the running code
+				// both now depend on.
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_users_email;
+CREATE UNIQUE INDEX idx_authsome_users_email
+    ON authsome_users (app_id, email);
+
+DROP INDEX IF EXISTS idx_authsome_users_username;
+CREATE UNIQUE INDEX idx_authsome_users_username
+    ON authsome_users (app_id, username) WHERE username != '';
+`)
+				return err
+			},
+		},
 	)
+}
+
+// envScopedTables are the tables migration 7 gave an env_id column. They are
+// listed here rather than reused from that migration so a later change to one
+// list cannot silently alter the other.
+var envScopedTables = []string{
+	"authsome_users",
+	"authsome_sessions",
+	"authsome_organizations",
+	"authsome_webhooks",
+	"authsome_api_keys",
+	"authsome_notifications",
+	"authsome_devices",
+	"authsome_verifications",
+	"authsome_password_resets",
+	"authsome_sso_connections",
+}
+
+// backfillDefaultEnvironments gives every app a default environment if it has
+// none, then stamps every scoped row still carrying the empty env_id that
+// migration 7 defaulted them to.
+//
+// Both halves are idempotent: an app that already has a default environment
+// keeps it, and a row whose env_id is already set is left alone. Apps with no
+// default environment (which cannot happen after the first half, but is
+// guarded anyway) leave their rows untouched rather than writing a NULL into
+// a NOT NULL column.
+func backfillDefaultEnvironments(ctx context.Context, exec migrate.Executor) error {
+	rows, err := exec.Query(ctx, `
+SELECT a.id FROM authsome_apps a
+WHERE NOT EXISTS (
+    SELECT 1 FROM authsome_environments e
+    WHERE e.app_id = a.id AND e.is_default = TRUE
+)`)
+	if err != nil {
+		return fmt.Errorf("list apps without a default environment: %w", err)
+	}
+	var appIDs []string
+	for rows.Next() {
+		var aID string
+		if scanErr := rows.Scan(&aID); scanErr != nil {
+			rows.Close()
+			return fmt.Errorf("scan app row: %w", scanErr)
+		}
+		appIDs = append(appIDs, aID)
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		rows.Close()
+		return fmt.Errorf("iterate apps: %w", rowsErr)
+	}
+	rows.Close()
+
+	for _, aID := range appIDs {
+		if _, err := exec.Exec(ctx,
+			`INSERT INTO authsome_environments (id, app_id, name, slug, type, is_default, color)
+			 VALUES (?, ?, 'Production', 'production', 'production', TRUE, '#ef4444')`,
+			id.NewEnvironmentID().String(), aID,
+		); err != nil {
+			return fmt.Errorf("create default env for app %s: %w", aID, err)
+		}
+	}
+
+	for _, t := range envScopedTables {
+		if _, err := exec.Exec(ctx, fmt.Sprintf(`
+UPDATE %s SET env_id = (
+    SELECT e.id FROM authsome_environments e
+    WHERE e.app_id = %s.app_id AND e.is_default = TRUE
+)
+WHERE (env_id IS NULL OR env_id = '')
+  AND EXISTS (
+    SELECT 1 FROM authsome_environments e
+    WHERE e.app_id = %s.app_id AND e.is_default = TRUE
+)`, t, t, t)); err != nil {
+			return fmt.Errorf("backfill env_id for %s: %w", t, err)
+		}
+	}
+	return nil
 }
