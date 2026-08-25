@@ -55,6 +55,14 @@ func NewCache(ttl time.Duration) *Cache {
 }
 
 // Get returns a cached GeoLocation or nil if not found/expired.
+//
+// The returned value is a copy. Handing out the stored pointer would make
+// this type thread-safe only for callers that never write: one caller
+// mutating what it got back would corrupt the entry every other caller sees
+// for the rest of the ttl, and that write races every concurrent Get, since
+// it happens outside the lock. Plugin.Resolve returns this value straight
+// through to anomaly, geofence, impossibletravel and vpndetect, so the
+// pointer would be shared across plugins as well as goroutines.
 func (c *Cache) Get(ip string) *GeoLocation {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -62,17 +70,34 @@ func (c *Cache) Get(ip string) *GeoLocation {
 	if !ok || time.Now().After(entry.expiresAt) {
 		return nil
 	}
-	return entry.loc
+	return cloneLocation(entry.loc)
 }
 
-// Set stores a GeoLocation in the cache.
+// Set stores a GeoLocation in the cache. The value is copied on the way in
+// for the mirror-image reason Get copies on the way out: otherwise a caller
+// that mutates loc after Set returns rewrites the cached entry behind the
+// lock's back.
 func (c *Cache) Set(ip string, loc *GeoLocation) {
+	if loc == nil {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.entries[ip] = cachedEntry{
-		loc:       loc,
+		loc:       cloneLocation(loc),
 		expiresAt: time.Now().Add(c.ttl),
 	}
+}
+
+// cloneLocation copies loc. Every GeoLocation field is a value type today, so
+// a shallow struct copy is a deep copy. Add a slice or map field and this
+// must copy it explicitly, the way agentauth's cloneGrant copies Scopes.
+func cloneLocation(loc *GeoLocation) *GeoLocation {
+	if loc == nil {
+		return nil
+	}
+	cp := *loc
+	return &cp
 }
 
 // Haversine calculates the distance in kilometers between two geographic
