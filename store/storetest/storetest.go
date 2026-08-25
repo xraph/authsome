@@ -867,7 +867,8 @@ func testDeleteSessionsByGrantNilIDIsNoop(t *testing.T, s store.Store) {
 	u := seedUser(t, s, tn, "nil-grant-guard@example.com")
 
 	humanSess := seedSession(t, s, tn, u.ID, "tok-human-nilguard", "rtok-human-nilguard")
-	agentSess := &session.Session{ //nolint:gosec // test fixture token literals, not credentials
+	// #nosec G101 -- fixture token literals, not credentials
+	agentSess := &session.Session{
 		ID: id.NewSessionID(), AppID: tn.AppID, EnvID: tn.EnvID, UserID: u.ID,
 		Token: "tok-agent-nilguard", RefreshToken: "rtok-agent-nilguard", FamilyID: id.NewSessionFamilyID(),
 		PrincipalKind: session.PrincipalKindAgent, AgentID: id.NewAgentID(), GrantID: id.NewAgentGrantID(),

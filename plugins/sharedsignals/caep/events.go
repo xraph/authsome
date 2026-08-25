@@ -8,8 +8,8 @@ import (
 // CAEP and SSF event type URIs.
 const (
 	EventSessionRevoked         = "https://schemas.openid.net/secevent/caep/event-type/session-revoked"
-	EventTokenClaimsChange      = "https://schemas.openid.net/secevent/caep/event-type/token-claims-change" //nolint:gosec // G101: this is a public CAEP event type URI, not a credential
-	EventCredentialChange       = "https://schemas.openid.net/secevent/caep/event-type/credential-change"   //nolint:gosec // G101: this is a public CAEP event type URI, not a credential
+	EventTokenClaimsChange      = "https://schemas.openid.net/secevent/caep/event-type/token-claims-change" // #nosec G101 -- public CAEP event type URI, not a credential
+	EventCredentialChange       = "https://schemas.openid.net/secevent/caep/event-type/credential-change"   // #nosec G101 -- public CAEP event type URI, not a credential
 	EventAssuranceLevelChange   = "https://schemas.openid.net/secevent/caep/event-type/assurance-level-change"
 	EventDeviceComplianceChange = "https://schemas.openid.net/secevent/caep/event-type/device-compliance-change"
 	EventRiskLevelChange        = "https://schemas.openid.net/secevent/caep/event-type/risk-level-change"
