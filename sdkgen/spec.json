@@ -886,6 +886,28 @@
         ],
         "type": "object"
       },
+      "AssertionResponse": {
+        "properties": {
+          "authenticatorData": {
+            "type": "string"
+          },
+          "clientDataJSON": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string"
+          },
+          "userHandle": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientDataJSON",
+          "authenticatorData",
+          "signature"
+        ],
+        "type": "object"
+      },
       "AssignRoleRequest": {
         "properties": {
           "org_id": {
@@ -899,6 +921,21 @@
         },
         "required": [
           "user_id"
+        ],
+        "type": "object"
+      },
+      "AttestationResponse": {
+        "properties": {
+          "attestationObject": {
+            "type": "string"
+          },
+          "clientDataJSON": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientDataJSON",
+          "attestationObject"
         ],
         "type": "object"
       },
@@ -3980,43 +4017,6 @@
         },
         "required": [
           "status"
-        ],
-        "type": "object"
-      },
-      "PasskeyAssertionResponse": {
-        "properties": {
-          "authenticatorData": {
-            "type": "string"
-          },
-          "clientDataJSON": {
-            "type": "string"
-          },
-          "signature": {
-            "type": "string"
-          },
-          "userHandle": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "clientDataJSON",
-          "authenticatorData",
-          "signature"
-        ],
-        "type": "object"
-      },
-      "PasskeyAttestationResponse": {
-        "properties": {
-          "attestationObject": {
-            "type": "string"
-          },
-          "clientDataJSON": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "clientDataJSON",
-          "attestationObject"
         ],
         "type": "object"
       },
@@ -32712,7 +32712,7 @@
                     "type": "string"
                   },
                   "response": {
-                    "$ref": "#/components/schemas/PasskeyAssertionResponse"
+                    "$ref": "#/components/schemas/AssertionResponse"
                   },
                   "type": {
                     "type": "string"
@@ -33081,7 +33081,7 @@
                     "type": "string"
                   },
                   "response": {
-                    "$ref": "#/components/schemas/PasskeyAttestationResponse"
+                    "$ref": "#/components/schemas/AttestationResponse"
                   },
                   "type": {
                     "type": "string"

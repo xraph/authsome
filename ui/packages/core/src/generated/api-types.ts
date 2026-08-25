@@ -257,9 +257,21 @@ export interface AppsessionconfigConfig {
   updated_at: string;
 }
 
+export interface AssertionResponse {
+  authenticatorData: string;
+  clientDataJSON: string;
+  signature: string;
+  userHandle?: string;
+}
+
 export interface AssignRoleRequest {
   org_id?: string;
   user_id: string;
+}
+
+export interface AttestationResponse {
+  attestationObject: string;
+  clientDataJSON: string;
 }
 
 export interface AuthMethod {
@@ -1110,18 +1122,6 @@ export interface OrganizationStatusResponse {
   status: string;
 }
 
-export interface PasskeyAssertionResponse {
-  authenticatorData: string;
-  clientDataJSON: string;
-  signature: string;
-  userHandle?: string;
-}
-
-export interface PasskeyAttestationResponse {
-  attestationObject: string;
-  clientDataJSON: string;
-}
-
 export interface PasskeyListResponse {
   credentials: CredentialInfo[];
 }
@@ -1775,11 +1775,11 @@ export type CreateOrganizationRequest = CreateOrgRequest;
 
 export type UpdateOrganizationRequest = UpdateOrgRequest;
 
-export type PasskeyLoginFinishRequest = { id: string; rawId: string; response: PasskeyAssertionResponse; type: string };
+export type PasskeyLoginFinishRequest = { id: string; rawId: string; response: AssertionResponse; type: string };
 
 export type PasskeyRegisterBeginRequest = RegisterBeginRequest;
 
-export type PasskeyRegisterFinishRequest = { id: string; rawId: string; response: PasskeyAttestationResponse; type: string };
+export type PasskeyRegisterFinishRequest = { id: string; rawId: string; response: AttestationResponse; type: string };
 
 export type PhoneAuthStartRequest = StartRequest;
 
