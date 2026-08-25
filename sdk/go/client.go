@@ -644,11 +644,37 @@ func (c *Client) CreateOAuth2Client(ctx context.Context, req *CreateOAuth2Client
 	return &result, nil
 }
 
+// UpdateOAuth2Client — Update OAuth2 client
+func (c *Client) UpdateOAuth2Client(ctx context.Context, clientId string, req *UpdateOAuth2ClientRequest) (*UpdateClientResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/oauth/clients/{clientId}"
+	path = strings.Replace(path, "{clientId}", clientId, 1)
+	var result UpdateClientResponse
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // DeleteOAuth2Client — Delete OAuth2 client
 func (c *Client) DeleteOAuth2Client(ctx context.Context, clientId string) error {
 	path := "/v1/admin/oauth/clients/{clientId}"
 	path = strings.Replace(path, "{clientId}", clientId, 1)
 	return c.do(ctx, "DELETE", path, nil, nil)
+}
+
+// RotateOAuth2ClientSecret — Rotate OAuth2 client secret
+func (c *Client) RotateOAuth2ClientSecret(ctx context.Context, clientId string) (*RotateClientSecretResponse, error) {
+	path := "/v1/admin/oauth/clients/{clientId}/secret"
+	path = strings.Replace(path, "{clientId}", clientId, 1)
+	var result RotateClientSecretResponse
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // AdminListOrgs — List organizations (admin)

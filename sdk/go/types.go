@@ -1481,6 +1481,13 @@ type RoleListResponse struct {
 	Roles []*Role `json:"roles"`
 }
 
+// RotateClientSecretResponse represents the RotateClientSecretResponse schema.
+type RotateClientSecretResponse struct {
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	ID           string `json:"id"`
+}
+
 // SMSSendRequest represents the SMSSendRequest schema.
 type SMSSendRequest struct {
 	Phone string `json:"phone,omitempty"`
@@ -1747,6 +1754,31 @@ type UnlinkAuthMethodResponse struct {
 	Status string `json:"status"`
 }
 
+// UpdateClientRequest represents the UpdateClientRequest schema.
+type UpdateClientRequest struct {
+	AppID                   string   `json:"app_id,omitempty"`
+	ClientID                string   `json:"client_id,omitempty"`
+	GrantTypes              []string `json:"grant_types,omitempty"`
+	Name                    string   `json:"name,omitempty"`
+	Public                  bool     `json:"public,omitempty"`
+	RedirectUris            []string `json:"redirect_uris,omitempty"`
+	Resources               []string `json:"resources,omitempty"`
+	Scopes                  []string `json:"scopes,omitempty"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method,omitempty"`
+}
+
+// UpdateClientResponse represents the UpdateClientResponse schema.
+type UpdateClientResponse struct {
+	ClientID     string   `json:"client_id"`
+	GrantTypes   []string `json:"grant_types"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Public       bool     `json:"public"`
+	RedirectUris []string `json:"redirect_uris"`
+	Resources    []string `json:"resources"`
+	Scopes       []string `json:"scopes"`
+}
+
 // UpdateEnvironmentRequest represents the UpdateEnvironmentRequest schema.
 type UpdateEnvironmentRequest struct {
 	Color       string `json:"color,omitempty"`
@@ -1976,6 +2008,19 @@ type CreateOAuth2ClientRequest struct {
 	RedirectUris []string `json:"redirect_uris"`
 	Resources    []string `json:"resources,omitempty"`
 	Scopes       []string `json:"scopes,omitempty"`
+}
+
+// UpdateOAuth2ClientRequest is the request body for UpdateOAuth2Client.
+type UpdateOAuth2ClientRequest struct {
+	AppID                   string   `json:"app_id,omitempty"`
+	ClientID                string   `json:"client_id,omitempty"`
+	GrantTypes              []string `json:"grant_types,omitempty"`
+	Name                    string   `json:"name,omitempty"`
+	Public                  bool     `json:"public,omitempty"`
+	RedirectUris            []string `json:"redirect_uris,omitempty"`
+	Resources               []string `json:"resources,omitempty"`
+	Scopes                  []string `json:"scopes,omitempty"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method,omitempty"`
 }
 
 // SocialAdminUpsertProviderRequest is the request body for SocialAdminUpsertProvider.

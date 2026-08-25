@@ -1304,6 +1304,12 @@ export interface RoleListResponse {
   roles: Role[];
 }
 
+export interface RotateClientSecretResponse {
+  client_id: string;
+  client_secret: string;
+  id: string;
+}
+
 export interface SMSSendRequest {
   phone?: string;
 }
@@ -1537,6 +1543,29 @@ export interface UnlinkAuthMethodResponse {
   status: string;
 }
 
+export interface UpdateClientRequest {
+  app_id?: string;
+  client_id?: string;
+  grant_types?: string[];
+  name?: string;
+  public?: boolean;
+  redirect_uris?: string[];
+  resources?: string[];
+  scopes?: string[];
+  token_endpoint_auth_method?: string;
+}
+
+export interface UpdateClientResponse {
+  client_id: string;
+  grant_types: string[];
+  id: string;
+  name: string;
+  public: boolean;
+  redirect_uris: string[];
+  resources: string[];
+  scopes: string[];
+}
+
 export interface UpdateEnvironmentRequest {
   color?: string;
   description?: string;
@@ -1728,6 +1757,8 @@ export interface WebhookListResponse {
 export type AdminBulkImportUsersRequest = BulkImportUsersRequest;
 
 export type CreateOAuth2ClientRequest = CreateClientRequest;
+
+export type UpdateOAuth2ClientRequest = UpdateClientRequest;
 
 export type SocialAdminUpsertProviderRequest = AdminUpsertProviderRequest;
 

@@ -470,6 +470,19 @@ class AuthClient {
     return CreateClientResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Update OAuth2 client
+  /// PATCH /v1/admin/oauth/clients/{clientId}
+  Future<UpdateClientResponse> updateOAuth2Client({required String clientId, required UpdateClientRequest body, required String token}) async {
+    final path = '/v1/admin/oauth/clients/$clientId';
+    final res = await _request(
+'PATCH',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return UpdateClientResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Delete OAuth2 client
   /// DELETE /v1/admin/oauth/clients/{clientId}
   Future<void> deleteOAuth2Client({required String clientId, required String token}) async {
@@ -479,6 +492,18 @@ class AuthClient {
       path,
       token: token,
     );
+  }
+
+  /// Rotate OAuth2 client secret
+  /// POST /v1/admin/oauth/clients/{clientId}/secret
+  Future<RotateClientSecretResponse> rotateOAuth2ClientSecret({required String clientId, required String token}) async {
+    final path = '/v1/admin/oauth/clients/$clientId/secret';
+    final res = await _request(
+'POST',
+      path,
+      token: token,
+    );
+    return RotateClientSecretResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List organizations (admin)

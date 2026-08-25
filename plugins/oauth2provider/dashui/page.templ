@@ -15,6 +15,7 @@ import (
 type ClientsPageData struct {
 	Clients       []OAuth2ClientView
 	CreatedClient *CreatedClientView // non-nil only after creation (secret shown once)
+	EditClient    *OAuth2ClientView  // non-nil when the edit form should render, pre-filled
 	Error         string             // validation/creation error message
 	Success       string             // success message (e.g. after delete)
 }
@@ -139,6 +140,10 @@ templ ClientsPage(data ClientsPageData) {
 				</button>
 			</div>
 			@o2AutoDismiss("o2-success-toast", 5000)
+		}
+		<!-- Edit Client Card (only when an edit is in progress) -->
+		if data.EditClient != nil {
+			@editClientCard(*data.EditClient)
 		}
 		<!-- Create Client Card -->
 		@card.Card() {
@@ -315,6 +320,8 @@ templ ClientsPage(data ClientsPageData) {
 									@table.Head() { Client ID }
 									@table.Head() { Type }
 									@table.Head() { Grant Types }
+									@table.Head() { Scopes }
+									@table.Head() { Resources }
 									@table.Head() { Created }
 									@table.Head() {
 										<span class="sr-only">Actions</span>
@@ -345,10 +352,34 @@ templ ClientsPage(data ClientsPageData) {
 											<span class="text-xs text-muted-foreground">{ strings.Join(c.GrantTypes, ", ") }</span>
 										}
 										@table.Cell() {
+											<span class="text-xs text-muted-foreground">{ strings.Join(c.Scopes, ", ") }</span>
+										}
+										@table.Cell() {
+											// An empty resource allowlist is not cosmetic: RFC 8707
+											// denies by default, so such a client may not request any
+											// resource at all. Say so rather than rendering a blank.
+											if len(c.Resources) == 0 {
+												<span class="text-xs text-muted-foreground italic">none</span>
+											} else {
+												<span class="text-xs text-muted-foreground">{ strings.Join(c.Resources, ", ") }</span>
+											}
+										}
+										@table.Cell() {
 											{{ created := c.CreatedAt.Format("Jan 02, 2006") }}
 											<span class="text-muted-foreground text-xs">{ created }</span>
 										}
 										@table.Cell() {
+											<form method="POST" class="inline">
+												<input type="hidden" name="action" value="edit"/>
+												<input type="hidden" name="client_id" value={ c.ID }/>
+												<button
+													type="submit"
+													class="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm border border-input px-3 text-xs font-medium hover:bg-muted transition-colors"
+												>
+													@icons.Pencil(icons.WithSize(12))
+													Edit
+												</button>
+											</form>
 											<form method="POST" class="inline">
 												<input type="hidden" name="action" value="delete"/>
 												<input type="hidden" name="client_id" value={ c.ID }/>
@@ -379,6 +410,139 @@ func truncateClientID(clientID string) string {
 		return clientID
 	}
 	return clientID[:8] + "..." + clientID[len(clientID)-4:]
+}
+
+// editClientCard renders the edit form for one client, pre-filled from what is
+// currently stored.
+//
+// It mirrors the create form field for field, with three deliberate omissions:
+// there is no client type toggle, no secret field and no client_id field.
+// Those are the values the update path refuses to change, so offering an input
+// for them would invite an edit that silently does nothing. The secret is
+// rotated from its own control instead.
+templ editClientCard(c OAuth2ClientView) {
+	@card.Card() {
+		@card.Header() {
+			<div class="flex items-center gap-3">
+				<div class="flex h-10 w-10 items-center justify-center rounded-sm bg-primary/10 text-primary">
+					@icons.Pencil(icons.WithSize(20))
+				</div>
+				<div>
+					@card.Title() {
+						Edit OAuth2 Client
+					}
+					@card.Description() {
+						Changing these values does not rotate the client ID or secret.
+					}
+				</div>
+			</div>
+		}
+		@card.Content() {
+			@separator.Separator()
+			<form method="POST" class="mt-4 space-y-4">
+				<input type="hidden" name="action" value="update"/>
+				<input type="hidden" name="client_id" value={ c.ID }/>
+				<div class="grid gap-4 md:grid-cols-2">
+					<div class="space-y-1.5">
+						<label for="edit-client-name" class="text-sm font-medium">Client Name</label>
+						<input
+							id="edit-client-name"
+							name="name"
+							type="text"
+							required
+							value={ c.Name }
+							class="flex h-9 w-full rounded-sm border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+						/>
+					</div>
+					<div class="space-y-1.5">
+						<label for="edit-client-scopes" class="text-sm font-medium">Scopes</label>
+						<input
+							id="edit-client-scopes"
+							name="scopes"
+							type="text"
+							value={ strings.Join(c.Scopes, " ") }
+							placeholder="openid profile email (space-separated)"
+							class="flex h-9 w-full rounded-sm border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+						/>
+					</div>
+				</div>
+				<div class="space-y-1.5">
+					<label for="edit-client-resources" class="text-sm font-medium">Resources</label>
+					<input
+						id="edit-client-resources"
+						name="resources"
+						type="text"
+						value={ strings.Join(c.Resources, " ") }
+						placeholder="https://api.example.com (space-separated)"
+						class="flex h-9 w-full rounded-sm border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+					/>
+					<p class="text-[10px] text-muted-foreground">Leave empty and the client may not request any resource.</p>
+				</div>
+				<div class="space-y-1.5">
+					<label for="edit-redirect-uris" class="text-sm font-medium">Redirect URIs</label>
+					<textarea
+						id="edit-redirect-uris"
+						name="redirect_uris"
+						rows="3"
+						class="flex w-full rounded-sm border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+					>{ strings.Join(c.RedirectURIs, "\n") }</textarea>
+					<p class="text-[10px] text-muted-foreground">One URI per line</p>
+				</div>
+				<div class="space-y-1.5">
+					<span class="text-sm font-medium">Grant Types</span>
+					<div class="grid gap-3 sm:grid-cols-2 rounded-sm border border-input p-3">
+						@editGrantCheckbox("grant_authorization_code", "Authorization Code", "Web apps with server-side backend", c.GrantTypes, "authorization_code")
+						@editGrantCheckbox("grant_client_credentials", "Client Credentials", "Machine-to-machine / service accounts", c.GrantTypes, "client_credentials")
+						@editGrantCheckbox("grant_device_code", "Device Code", "TVs, CLIs and input-constrained devices", c.GrantTypes, "urn:ietf:params:oauth:grant-type:device_code")
+						@editGrantCheckbox("grant_refresh_token", "Refresh Token", "Long-lived access without re-consent", c.GrantTypes, "refresh_token")
+					</div>
+				</div>
+				<div class="flex items-center gap-2">
+					<button
+						type="submit"
+						class="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+					>
+						@icons.Check(icons.WithSize(14))
+						Save Changes
+					</button>
+					<a
+						href="?"
+						class="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm border border-input px-4 text-sm font-medium hover:bg-muted transition-colors"
+					>
+						Cancel
+					</a>
+				</div>
+			</form>
+		}
+	}
+}
+
+// editGrantCheckbox renders one grant-type checkbox, checked when the client
+// already holds that grant.
+templ editGrantCheckbox(field, label, hint string, held []string, grant string) {
+	<label class="flex items-start gap-2 text-sm cursor-pointer">
+		<input
+			type="checkbox"
+			name={ field }
+			value="on"
+			checked?={ o2Contains(held, grant) }
+			class="h-4 w-4 rounded border-input mt-0.5"
+		/>
+		<div>
+			<span class="font-medium">{ label }</span>
+			<p class="text-[10px] text-muted-foreground leading-tight">{ hint }</p>
+		</div>
+	</label>
+}
+
+// o2Contains reports whether haystack holds needle.
+func o2Contains(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
 }
 
 script o2CopyToClipboard(text string) {

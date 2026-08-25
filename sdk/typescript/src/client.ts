@@ -176,6 +176,7 @@ import type {
   RevokeConsentRequest,
   Role,
   RoleListResponse,
+  RotateClientSecretResponse,
   SMSSendRequest,
   SMSSendResponse,
   SMSVerifyRequest,
@@ -209,6 +210,8 @@ import type {
   UIMetadata,
   UnassignRoleRequest,
   UnlinkAuthMethodResponse,
+  UpdateClientRequest,
+  UpdateClientResponse,
   UpdateEnvironmentRequest,
   UpdateEnvironmentSettingsRequest,
   UpdateMeRequest,
@@ -234,6 +237,7 @@ import type {
   WebhookListResponse,
   AdminBulkImportUsersRequest,
   CreateOAuth2ClientRequest,
+  UpdateOAuth2ClientRequest,
   SocialAdminUpsertProviderRequest,
   SsoAdminCreateConnectionRequest,
   SsoAdminUpdateConnectionRequest,
@@ -808,6 +812,19 @@ export class AuthClient {
   }
 
   /**
+   * Update OAuth2 client
+   * PATCH /v1/admin/oauth/clients/{clientId}
+   */
+  async updateOAuth2Client(clientId: string, body: UpdateOAuth2ClientRequest): Promise<UpdateClientResponse> {
+    const path = `/v1/admin/oauth/clients/${clientId}`;
+    return this.request<UpdateClientResponse>(
+      'PATCH',
+      path,
+      body,
+    );
+  }
+
+  /**
    * Delete OAuth2 client
    * DELETE /v1/admin/oauth/clients/{clientId}
    */
@@ -815,6 +832,19 @@ export class AuthClient {
     const path = `/v1/admin/oauth/clients/${clientId}`;
     return this.request<void>(
       'DELETE',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Rotate OAuth2 client secret
+   * POST /v1/admin/oauth/clients/{clientId}/secret
+   */
+  async rotateOAuth2ClientSecret(clientId: string): Promise<RotateClientSecretResponse> {
+    const path = `/v1/admin/oauth/clients/${clientId}/secret`;
+    return this.request<RotateClientSecretResponse>(
+      'POST',
       path,
       undefined,
     );
