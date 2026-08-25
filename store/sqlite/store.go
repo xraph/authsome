@@ -419,6 +419,13 @@ func (s *Store) DeleteUserSessions(ctx context.Context, userID id.UserID) error 
 	return sqliteError(err)
 }
 
+// DeleteSessionsByGrant deletes every session issued under grantID, backed by
+// idx_authsome_sessions_grant_id.
+func (s *Store) DeleteSessionsByGrant(ctx context.Context, grantID id.AgentGrantID) error {
+	_, err := s.sdb.NewDelete((*SessionModel)(nil)).Where("grant_id = ?", grantID.String()).Exec(ctx)
+	return sqliteError(err)
+}
+
 func (s *Store) ListUserSessions(ctx context.Context, userID id.UserID) ([]*session.Session, error) {
 	var models []SessionModel
 	err := s.sdb.NewSelect(&models).

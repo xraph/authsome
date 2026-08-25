@@ -135,8 +135,17 @@ func (p *Plugin) CreateGrant(ctx context.Context, in CreateGrantInput) (*AgentGr
 	return g, nil
 }
 
-// RevokeGrant revokes a delegation and drops it from the cache, so the next
-// request sees the revocation without waiting out the cache ttl.
+// RevokeGrant revokes a delegation, drops it from the cache so the next
+// request sees the revocation without waiting out the cache ttl, and deletes
+// the sessions it issued.
+//
+// The last part closes a gap the design promised and nothing implemented: an
+// agent session carries the delegating human's UserID (session.GrantID names
+// the grant that authorized it), and the engine's role and permission
+// middleware are not principal-kind aware. Without this, a live
+// post-revocation session would keep authenticating as that human on any
+// route not guarded by agentauth.Authorize, until the session separately
+// expired.
 func (p *Plugin) RevokeGrant(ctx context.Context, grantID id.AgentGrantID) error {
 	err := p.store.RevokeAgentGrant(ctx, grantID)
 	// Invalidate unconditionally, even when the store call errors, and
@@ -150,6 +159,14 @@ func (p *Plugin) RevokeGrant(ctx context.Context, grantID id.AgentGrantID) error
 	}
 	if err != nil {
 		return forge.InternalError(fmt.Errorf("agentauth: revoke grant: %w", err))
+	}
+	// p.engine is nil in tests that construct the plugin without OnInit
+	// (this package's own store-level tests among them); skip session
+	// cleanup rather than panic on a store that was never wired.
+	if p.engine != nil {
+		if sessErr := p.engine.Store().DeleteSessionsByGrant(ctx, grantID); sessErr != nil {
+			return forge.InternalError(fmt.Errorf("agentauth: delete grant sessions: %w", sessErr))
+		}
 	}
 	return nil
 }

@@ -161,6 +161,21 @@ func (s *Store) DeleteUserSessions(ctx context.Context, userID id.UserID) error 
 	return nil
 }
 
+// DeleteSessionsByGrant removes every session issued under grantID. Revoking
+// an agent's delegation must also kill the session it minted, or the session
+// keeps authenticating as the delegating human until it separately expires.
+func (s *Store) DeleteSessionsByGrant(ctx context.Context, grantID id.AgentGrantID) error {
+	_, err := s.mdb.NewDelete((*sessionModel)(nil)).
+		Many().
+		Filter(bson.M{"grant_id": grantID.String()}).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("authsome/mongo: delete sessions by grant: %w", err)
+	}
+
+	return nil
+}
+
 // ListUserSessions returns all sessions for a user, ordered by creation date descending.
 func (s *Store) ListUserSessions(ctx context.Context, userID id.UserID) ([]*session.Session, error) {
 	var models []sessionModel

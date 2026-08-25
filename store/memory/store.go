@@ -465,6 +465,17 @@ func (s *Store) DeleteUserSessions(_ context.Context, userID id.UserID) error {
 	return nil
 }
 
+func (s *Store) DeleteSessionsByGrant(_ context.Context, grantID id.AgentGrantID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, sess := range s.sessions {
+		if sess.GrantID.String() == grantID.String() {
+			delete(s.sessions, k)
+		}
+	}
+	return nil
+}
+
 func (s *Store) ListUserSessions(_ context.Context, userID id.UserID) ([]*session.Session, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

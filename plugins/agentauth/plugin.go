@@ -2,9 +2,12 @@ package agentauth
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
+
+	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
@@ -17,8 +20,9 @@ const defaultGrantTTL = 90 * 24 * time.Hour
 
 // Compile-time interface checks.
 var (
-	_ plugin.Plugin = (*Plugin)(nil)
-	_ plugin.OnInit = (*Plugin)(nil)
+	_ plugin.Plugin        = (*Plugin)(nil)
+	_ plugin.OnInit        = (*Plugin)(nil)
+	_ plugin.RouteProvider = (*Plugin)(nil)
 )
 
 // Plugin is the delegated agent identity plugin.
@@ -96,4 +100,70 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		p.permChecker = pc
 	}
 	return nil
+}
+
+// RegisterRoutes registers the user and admin surfaces: a place for a user
+// to see and revoke which agents are acting for them, and an admin surface
+// for registering and blocking agents org-wide.
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
+	me := router.Group(p.basePath+"/me/agents",
+		forge.WithGroupTags("agentauth"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
+	)
+	if err := me.GET("", p.handleListMyGrants,
+		forge.WithSummary("List agents acting on my behalf"),
+		forge.WithResponseSchema(http.StatusOK, "Active delegations", ListGrantsResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+	if err := me.DELETE("/:id", p.handleRevokeMyGrant,
+		forge.WithSummary("Revoke an agent's delegation"),
+		forge.WithResponseSchema(http.StatusOK, "Grant revoked", StatusResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	admin := router.Group(p.basePath+"/admin/agents",
+		forge.WithGroupTags("agentauth-admin"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.AdminGuard(p.engine, "read", "agent")...),
+	)
+	if err := admin.GET("", p.handleListAgents,
+		forge.WithSummary("List registered agents"),
+		forge.WithResponseSchema(http.StatusOK, "Registered agents", ListAgentsResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+	if err := admin.POST("", p.handleRegisterAgent,
+		append([]forge.RouteOption{
+			forge.WithSummary("Register an agent"),
+			forge.WithRequestSchema(RegisterAgentRequest{}),
+			forge.WithResponseSchema(http.StatusCreated, "Agent registered", Agent{}),
+			forge.WithErrorResponses(),
+		}, plugin.PermissionRouteOptions(p.engine, "write", "agent")...)...,
+	); err != nil {
+		return err
+	}
+	if err := admin.PATCH("/:id/status", p.handleSetAgentStatus,
+		append([]forge.RouteOption{
+			forge.WithSummary("Approve or block an agent"),
+			forge.WithRequestSchema(SetAgentStatusRequest{}),
+			forge.WithResponseSchema(http.StatusOK, "Status updated", StatusResponse{}),
+			forge.WithErrorResponses(),
+		}, plugin.PermissionRouteOptions(p.engine, "write", "agent")...)...,
+	); err != nil {
+		return err
+	}
+	return admin.PUT("/policy", p.handlePutOrgPolicy,
+		append([]forge.RouteOption{
+			forge.WithSummary("Set the org's agent delegation policy"),
+			forge.WithRequestSchema(PutOrgPolicyRequest{}),
+			forge.WithResponseSchema(http.StatusOK, "Policy set", OrgAgentPolicy{}),
+			forge.WithErrorResponses(),
+		}, plugin.PermissionRouteOptions(p.engine, "write", "agent")...)...,
+	)
 }
