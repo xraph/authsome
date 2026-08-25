@@ -456,7 +456,10 @@ func allStringFields(fields []FieldDef) bool {
 	}
 
 	for _, f := range fields {
-		if f.Type != "string" {
+		// []string is fine: url.Values holds multiple values per key, which is
+		// how RFC 8707 sends a repeated `resource`. Anything else has no
+		// form encoding worth guessing at.
+		if f.Type != "string" && f.Type != "[]string" {
 			return false
 		}
 	}

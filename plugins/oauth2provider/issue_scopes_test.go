@@ -14,7 +14,7 @@ import (
 )
 
 // decodeTokenResponse reads the token endpoint's JSON body.
-func decodeTokenResponse(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
+func decodeTokenResponseMap(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 	var out map[string]any
@@ -35,7 +35,7 @@ func TestAuthCodeGrantStampsScopesOnSession(t *testing.T) {
 	q.Set("scope", "openid profile")
 	code := codeFrom(t, authorize(t, mux, q))
 
-	body := decodeTokenResponse(t, postToken(t, mux, map[string]string{
+	body := decodeTokenResponseMap(t, postToken(t, mux, map[string]string{
 		"grant_type":    "authorization_code",
 		"code":          code,
 		"redirect_uri":  registeredURI,

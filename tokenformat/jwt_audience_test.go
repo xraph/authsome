@@ -11,7 +11,7 @@ import (
 	"github.com/xraph/authsome/tokenformat"
 )
 
-func newTestJWT(t *testing.T, configuredAudience string) *tokenformat.JWT {
+func newTestJWTWithAudience(t *testing.T, configuredAudience string) *tokenformat.JWT {
 	t.Helper()
 	j, err := tokenformat.NewJWT(tokenformat.JWTConfig{
 		SigningMethod: jwt.SigningMethodHS256,
@@ -66,7 +66,7 @@ func TestJWT_Audience(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			j := newTestJWT(t, tt.configured)
+			j := newTestJWTWithAudience(t, tt.configured)
 
 			claims := base
 			claims.Audience = tt.perToken

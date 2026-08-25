@@ -40,10 +40,13 @@ var timestampRebuilds = []sqliteschema.TableRebuild{
     registration_token_hash    TEXT NOT NULL DEFAULT '',
     dynamically_registered     BOOLEAN NOT NULL DEFAULT 0,
     client_secret_expires_at   TIMESTAMP,
-    metadata                   TEXT NOT NULL DEFAULT '{}'
+    metadata                   TEXT NOT NULL DEFAULT '{}',
+    -- Added by 20260824000001 (RFC 8707 resource indicators), which runs
+    -- before this rebuild, so the live table already has it.
+    resources                  TEXT NOT NULL DEFAULT '[]'
 );`,
 		Columns: "id, app_id, name, client_id, client_secret, redirect_uris, scopes, grant_types, public, created_at, updated_at, " +
-			"token_endpoint_auth_method, registration_token_hash, dynamically_registered, client_secret_expires_at, metadata",
+			"token_endpoint_auth_method, registration_token_hash, dynamically_registered, client_secret_expires_at, metadata, resources",
 		Indexes: `CREATE INDEX IF NOT EXISTS idx_authsome_oauth2_clients_app
     ON authsome_oauth2_clients (app_id);`,
 	},
@@ -61,9 +64,11 @@ var timestampRebuilds = []sqliteschema.TableRebuild{
     code_challenge_method TEXT NOT NULL DEFAULT '',
     expires_at            TIMESTAMP NOT NULL,
     consumed              INTEGER NOT NULL DEFAULT 0,
-    created_at            TIMESTAMP NOT NULL DEFAULT (datetime('now'))
+    created_at            TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    -- Added by 20260824000001 (RFC 8707), which runs before this rebuild.
+    resources             TEXT NOT NULL DEFAULT '[]'
 );`,
-		Columns: "id, code, client_id, user_id, app_id, redirect_uri, scopes, code_challenge, code_challenge_method, expires_at, consumed, created_at",
+		Columns: "id, code, client_id, user_id, app_id, redirect_uri, scopes, code_challenge, code_challenge_method, expires_at, consumed, created_at, resources",
 		Indexes: `CREATE INDEX IF NOT EXISTS idx_authsome_oauth2_auth_codes_code
     ON authsome_oauth2_auth_codes (code);`,
 	},
@@ -82,9 +87,11 @@ var timestampRebuilds = []sqliteschema.TableRebuild{
     status           TEXT NOT NULL DEFAULT 'pending',
     user_id          TEXT DEFAULT '',
     last_polled_at   TIMESTAMP DEFAULT '',
-    created_at       TIMESTAMP NOT NULL DEFAULT (datetime('now'))
+    created_at       TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    -- Added by 20260824000001 (RFC 8707), which runs before this rebuild.
+    resources        TEXT NOT NULL DEFAULT '[]'
 );`,
-		Columns: "id, device_code, user_code, client_id, app_id, scopes, verification_uri, expires_at, interval, status, user_id, last_polled_at, created_at",
+		Columns: "id, device_code, user_code, client_id, app_id, scopes, verification_uri, expires_at, interval, status, user_id, last_polled_at, created_at, resources",
 		Indexes: `CREATE INDEX IF NOT EXISTS idx_authsome_oauth2_device_codes_device_code
     ON authsome_oauth2_device_codes (device_code);
 

@@ -123,8 +123,6 @@ func TestImpersonatedByStaysOnTheWire(t *testing.T) {
 	require.NoError(t, err)
 	var plainDecoded map[string]any
 	require.NoError(t, json.Unmarshal(plain, &plainDecoded))
-	_, present := plainDecoded["impersonated_by"]
-	assert.False(t, present, "an unimpersonated session must omit the key, as it does today")
 	gotImp, present := plainDecoded["impersonated_by"]
 	assert.True(t, present, "an unimpersonated session must still carry the key, as it always has")
 	assert.Equal(t, "", gotImp, "an unimpersonated session's impersonated_by must be empty, not absent")

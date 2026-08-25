@@ -280,7 +280,11 @@ func (c *Client) {{ .Name }}(ctx context.Context
 	form := url.Values{}
 	if req != nil {
 {{- range .BodyFields }}
-{{- if .Optional }}
+{{- if eq .Type "[]string" }}
+		for _, v := range req.{{ .Name }} {
+			form.Add("{{ jsonKey .JSONTag }}", v)
+		}
+{{- else if .Optional }}
 		if req.{{ .Name }} != "" {
 			form.Set("{{ jsonKey .JSONTag }}", req.{{ .Name }})
 		}

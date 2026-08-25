@@ -2,6 +2,7 @@ package sharedsignals
 
 import (
 	"context"
+	"github.com/xraph/authsome/ratelimit"
 
 	log "github.com/xraph/go-utils/log"
 	"github.com/xraph/grove"
@@ -61,3 +62,5 @@ func (stubEngine) ResolveSessionByToken(string) (*session.Session, error) { retu
 func (stubEngine) ResolveUser(string) (*user.User, error)                 { return nil, nil }
 func (stubEngine) GetUser(context.Context, id.UserID) (*user.User, error) { return nil, nil }
 func (stubEngine) EnsureDefaultRole(context.Context, id.AppID, id.UserID) {}
+
+func (stubEngine) RateLimiter() ratelimit.Limiter { return nil }

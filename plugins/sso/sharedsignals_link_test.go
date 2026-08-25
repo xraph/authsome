@@ -2,6 +2,7 @@ package sso
 
 import (
 	"context"
+	"github.com/xraph/authsome/ratelimit"
 	"testing"
 
 	log "github.com/xraph/go-utils/log"
@@ -135,3 +136,5 @@ func TestLinkSharedSignalsSubject_RecordsLink(t *testing.T) {
 	assert.Equal(t, "okta-user-1", r.subject)
 	assert.Equal(t, u.ID, r.userID)
 }
+
+func (s stubEngineWithPlugin) RateLimiter() ratelimit.Limiter { return nil }

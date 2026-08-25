@@ -2186,13 +2186,35 @@ func (c *Client) Oauth2Revoke(ctx context.Context, req *Oauth2RevokeRequest) err
 
 // Oauth2Token — OAuth2 Token
 func (c *Client) Oauth2Token(ctx context.Context, req *Oauth2TokenRequest) (*Oauth2providerTokenResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
+	form := url.Values{}
+	if req != nil {
+		if req.ClientID != "" {
+			form.Set("client_id", req.ClientID)
+		}
+		if req.ClientSecret != "" {
+			form.Set("client_secret", req.ClientSecret)
+		}
+		if req.Code != "" {
+			form.Set("code", req.Code)
+		}
+		if req.CodeVerifier != "" {
+			form.Set("code_verifier", req.CodeVerifier)
+		}
+		if req.DeviceCode != "" {
+			form.Set("device_code", req.DeviceCode)
+		}
+		form.Set("grant_type", req.GrantType)
+		if req.RedirectURI != "" {
+			form.Set("redirect_uri", req.RedirectURI)
+		}
+		for _, v := range req.Resource {
+			form.Add("resource", v)
+		}
 	}
+	body := []byte(form.Encode())
 	path := "/v1/oauth/token"
 	var result Oauth2providerTokenResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+	if err := c.doForm(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
