@@ -123,8 +123,8 @@ func (e *Engine) ExchangeToken(ctx context.Context, req *ExchangeRequest) (*sess
 		Ephemeral:      actorPrincipal.IsEphemeral(),
 		At:             now,
 	}
-	if err := e.plugins.EmitBeforePrincipalAuth(ctx, att); err != nil {
-		return nil, fmt.Errorf("authsome: exchange: %w: %w", ErrExchangeRefused, err)
+	if hookErr := e.plugins.EmitBeforePrincipalAuth(ctx, att); hookErr != nil {
+		return nil, fmt.Errorf("authsome: exchange: %w: %w", ErrExchangeRefused, hookErr)
 	}
 
 	userID, err := id.ParseUserID(req.RequestedSubject.ID)

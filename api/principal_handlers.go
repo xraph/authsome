@@ -16,6 +16,9 @@ import (
 
 // issuedTokenTypeAccessToken is the RFC 8693 §3 URN for an OAuth 2.0 access
 // token, the only token type this engine issues from an exchange.
+// a public identifier from the spec, not a credential.
+//
+//nolint:gosec // G101 false positive: this is the RFC 8693 token-type URI,
 const issuedTokenTypeAccessToken = "urn:ietf:params:oauth:token-type:access_token"
 
 // ──────────────────────────────────────────────────
@@ -135,7 +138,7 @@ func (a *API) handleTokenExchange(ctx forge.Context, req *TokenExchangeRequest) 
 		ExpiresIn:       expiresIn,
 		Scopes:          sess.Scopes,
 		Subject:         req.Subject,
-		Actor:           caller.Ref.String(),
+		Actor:           caller.String(),
 	}, nil
 }
 

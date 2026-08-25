@@ -344,8 +344,8 @@ func (e *Engine) MintChildPrincipal(
 		scopes = append([]string(nil), parent.Scopes...)
 	}
 
-	if err := requireScopeSubset(scopes, parent.Scopes); err != nil {
-		return nil, nil, "", fmt.Errorf("authsome: mint child: %w: %w", ErrChildScopeExceedsParent, err)
+	if scopeErr := requireScopeSubset(scopes, parent.Scopes); scopeErr != nil {
+		return nil, nil, "", fmt.Errorf("authsome: mint child: %w: %w", ErrChildScopeExceedsParent, scopeErr)
 	}
 
 	now := time.Now()
@@ -373,8 +373,8 @@ func (e *Engine) MintChildPrincipal(
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	if err := e.store.CreateServiceAccount(ctx, child); err != nil {
-		return nil, nil, "", fmt.Errorf("authsome: mint child: %w", err)
+	if createErr := e.store.CreateServiceAccount(ctx, child); createErr != nil {
+		return nil, nil, "", fmt.Errorf("authsome: mint child: %w", createErr)
 	}
 
 	key, secret, err := e.CreateServiceAccountAPIKey(ctx, child.ID, name, scopes, &expires)
@@ -434,7 +434,7 @@ func (e *Engine) ReapExpiredPrincipals(ctx context.Context, appID id.AppID) (int
 		}
 		if delErr := e.store.DeleteServiceAccount(ctx, svcID); delErr != nil {
 			e.logger.Warn("authsome: reap: delete failed",
-				log.String("principal", p.Ref.String()),
+				log.String("principal", p.String()),
 				log.String("error", delErr.Error()),
 			)
 			continue
