@@ -989,8 +989,17 @@ func (e *Engine) newSession(appID id.AppID, userID id.UserID, cfg account.Sessio
 // considerably more work, and it would have to round-trip through every
 // token format. It is the right follow-up; this is the small, total and
 // reversible version of it.
-func (e *Engine) newOpaqueSession(appID id.AppID, userID id.UserID, cfg account.SessionConfig) (*session.Session, error) {
-	return account.NewSession(appID, userID, cfg)
+func (e *Engine) newOpaqueSession(
+	appID id.AppID, userID id.UserID, cfg account.SessionConfig, dpopJKT string,
+) (*session.Session, error) {
+	sess, err := account.NewSession(appID, userID, cfg)
+	if err != nil {
+		return nil, err
+	}
+	// Same stamping newSession does. Opaque tokens carry the binding on the
+	// row, which is the only place a bound opaque token can carry it.
+	sess.DPoPJKT = dpopJKT
+	return sess, nil
 }
 
 // bindSessionToDevice populates connection info on a session and registers
@@ -2849,7 +2858,12 @@ func (e *Engine) ExportUserData(ctx context.Context, userID id.UserID) (*UserExp
 // Impersonate creates a new session for the target user, marked as impersonated
 // by the admin. The resulting session behaves as if the target user is signed in,
 // but carries the impersonator's identity for audit purposes.
-func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID) (*user.User, *session.Session, error) {
+func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID, opts ...ImpersonateOption) (*user.User, *session.Session, error) {
+	var o impersonateOpts
+	for _, apply := range opts {
+		apply(&o)
+	}
+
 	// Prevent self-impersonation
 	if adminID == targetID {
 		return nil, nil, fmt.Errorf("authsome: cannot impersonate yourself")
@@ -2859,6 +2873,14 @@ func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID) (
 	u, err := e.store.GetUser(ctx, targetID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("authsome: impersonate: get target user: %w", err)
+	}
+
+	// Apply the app's DPoP mandate. This mint does not go through
+	// IssueSession, so the central gate never sees it, and an unbound
+	// impersonation session would be exempt from proof-of-possession for its
+	// whole life on an app that requires it, while acting as another user.
+	if o.dpopJKT == "" && e.DPoPModeForApp(ctx, u.AppID) == dpop.ModeRequired {
+		return nil, nil, &DPoPRequiredError{}
 	}
 
 	// Create an impersonation session (short-lived: 1 hour, non-refreshable)
@@ -2873,7 +2895,11 @@ func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID) (
 	// chained-exchange refusal, which can only see a chain the middleware
 	// actually loaded, so an admin could spend an impersonation JWT
 	// exchanging for a third party the impersonated user holds a grant over.
-	sess, err := e.newOpaqueSession(u.AppID, u.ID, cfg)
+	//
+	// The thumbprint still has to reach the row: this mint bypasses
+	// IssueSession, so an unbound impersonation session on a required-mode
+	// app would be exempt from proof-of-possession for its whole life.
+	sess, err := e.newOpaqueSession(u.AppID, u.ID, cfg, o.dpopJKT)
 	if err != nil {
 		return nil, nil, fmt.Errorf("authsome: impersonate: create session: %w", err)
 	}

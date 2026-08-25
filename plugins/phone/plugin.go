@@ -396,10 +396,19 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 	// MFARequired gate fires for phone-OTP sign-ins too.
 	var sess *session.Session
 	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
+		// /verify is a POST from the SDK, so the key-holding client is the
+		// caller and can prove possession. Under mode=required IssueSession
+		// refuses an unbound session, so resolving this is what keeps the
+		// phone route working rather than what makes it stricter.
+		dpopJKT, bindErr := eng.DPoPBindingForRequest(ctx, appID)
+		if bindErr != nil {
+			return nil, bindErr
+		}
 		result, issueErr := eng.IssueSession(ctx.Context(), &authsome.IssueSessionRequest{
 			User:       u,
 			AppID:      appID,
 			AuthMethod: "phone",
+			DPoPJKT:    dpopJKT,
 			IPAddress:  ctx.Request().RemoteAddr,
 			UserAgent:  ctx.Request().UserAgent(),
 		})

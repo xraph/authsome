@@ -145,7 +145,12 @@ func (e *Engine) ExchangeToken(ctx context.Context, req *ExchangeRequest) (*sess
 	// chain, and a JWT-format token would strand that chain in the database
 	// where no request ever reads it. See newOpaqueSession's own comment for
 	// why that is a security hole and not just a missing feature.
-	sess, err := e.newOpaqueSession(req.AppID, userID, cfg)
+	// No thumbprint on this path: token exchange does not collect a DPoP
+	// proof today, so the exchanged session is unbound. That leaves the
+	// exchange endpoint outside the "every issuance path under required"
+	// rule the impersonation path now follows. Binding it is feature work,
+	// not a merge resolution, so it stays as it was and is flagged.
+	sess, err := e.newOpaqueSession(req.AppID, userID, cfg, "")
 	if err != nil {
 		return nil, fmt.Errorf("authsome: exchange: create session: %w", err)
 	}

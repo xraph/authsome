@@ -967,6 +967,22 @@ func (p *Plugin) linkableExistingUser(ctx context.Context, appID id.AppID, envID
 }
 
 func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Provider, conn *Connection, params map[string]string) (*CallbackResponse, error) {
+	// Every SSO entry point funnels through here: the JSON callback, the OIDC
+	// browser landing and the SAML ACS. All three are the identity
+	// provider delivering the user agent. The client holding the DPoP key is
+	// never the caller, so an app on mode=required cannot complete an SSO
+	// sign-in and says so rather than minting a session exempt from its own
+	// mandate.
+	//
+	// Ahead of HandleCallback because that is where the authorization code is
+	// redeemed or the SAML assertion consumed. IssueSession would refuse this
+	// regardless, but only after the single-use artifact had been spent.
+	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
+		if bindErr := eng.DPoPBindingUnavailable(ctx.Context(), appID); bindErr != nil {
+			return nil, bindErr
+		}
+	}
+
 	ssoUser, err := provider.HandleCallback(ctx.Context(), params)
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("sso: callback failed: %w", err))
