@@ -20,6 +20,26 @@ import (
 	"github.com/xraph/authsome/user"
 )
 
+// dpopNonceChallengeError is the first-party equivalent of the OAuth2
+// plugin's use_dpop_nonce response (RFC 9449 §8): 400, with the error code a
+// DPoP client looks for to know it should retry carrying the DPoP-Nonce
+// header value the caller already set on the response before constructing
+// this. Unlike bindDPoP's caller, sign-in and sign-up have no single-use
+// artifact to protect, so nothing needs reordering here, just the same
+// response shape.
+type dpopNonceChallengeError struct{}
+
+func (dpopNonceChallengeError) Error() string { return "use_dpop_nonce" }
+
+func (dpopNonceChallengeError) StatusCode() int { return http.StatusBadRequest }
+
+func (dpopNonceChallengeError) ResponseBody() any {
+	return map[string]any{
+		"error":             "use_dpop_nonce",
+		"error_description": "a server-provided nonce is required",
+	}
+}
+
 // dpopBindingForRequest validates any DPoP proof on a first-party auth request
 // and returns the thumbprint to bind the new session to.
 //
@@ -43,11 +63,27 @@ func (a *API) dpopBindingForRequest(ctx forge.Context, appID id.AppID) (string, 
 	if err != nil {
 		return "", forge.BadRequest("invalid DPoP proof")
 	}
+
+	nonceRequired := a.engine.DPoPNonceRequiredForApp(ctx.Context(), appID)
+
 	if err := a.engine.DPoPValidator().Validate(ctx.Context(), proof, dpop.Expectation{
 		Method:        ctx.Request().Method,
 		URL:           middleware.RequestURL(ctx.Request()),
-		NonceRequired: a.engine.DPoPNonceRequiredForApp(ctx.Context(), appID),
+		NonceRequired: nonceRequired,
 	}); err != nil {
+		if errors.Is(err, dpop.ErrNonceRequired) || errors.Is(err, dpop.ErrNonceMismatch) {
+			// A pre-authentication client has no other endpoint to obtain a
+			// nonce from, so unlike a resource-server 401 this must be a
+			// retryable challenge: 400 with the code the client watches for,
+			// plus a fresh nonce it can carry on the very next attempt.
+			// Without this, a nonce-required app rejects every DPoP-presenting
+			// client permanently, and under mode required that's a total
+			// lockout on /signin and /signup.
+			if signer := a.engine.DPoPNonceSigner(); signer != nil {
+				ctx.Response().Header().Set("DPoP-Nonce", signer.Issue(proof.JKT))
+			}
+			return "", dpopNonceChallengeError{}
+		}
 		return "", forge.BadRequest("invalid DPoP proof")
 	}
 	return proof.JKT, nil

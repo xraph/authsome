@@ -654,6 +654,18 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 		}
 	}
 
+	// Resolve DPoP binding while the code is still redeemable. This must
+	// happen before ConsumeAuthCode: a nonce challenge answers 400
+	// use_dpop_nonce and expects the client to retry the same token request
+	// carrying the nonce (RFC 9449 §8.2), but the code is single-use. If it
+	// were already consumed by the time bindDPoP ran, that mandatory retry
+	// would hit "authorization code already used" instead, and a
+	// nonce-required app could never issue a bound token from this grant.
+	jkt, err := p.bindDPoP(ctx, client, authCode.AppID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Consume the code as a compare-and-set. Checking Consumed above and
 	// writing here are two statements: without the store enforcing
 	// consumed=false, two concurrent requests both pass the check and both get
@@ -667,7 +679,7 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 	}
 
 	// Generate tokens.
-	return p.issueTokens(ctx, client, authCode.UserID, authCode.AppID, authCode.Scopes)
+	return p.issueTokens(ctx, client, authCode.UserID, authCode.AppID, authCode.Scopes, jkt)
 }
 
 func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
@@ -687,8 +699,15 @@ func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenReque
 		return nil, forge.Unauthorized("invalid client_secret")
 	}
 
-	// Client credentials: no user, just issue an app-level token.
-	return p.issueClientToken(ctx, client)
+	// Client credentials: no user, just issue an app-level token. No
+	// single-use artifact is consumed on this grant, so resolving the
+	// binding immediately before issuing is safe (a nonce challenge can be
+	// retried with the exact same client_id/client_secret).
+	jkt, err := p.bindDPoP(ctx, client, client.AppID)
+	if err != nil {
+		return nil, err
+	}
+	return p.issueClientToken(ctx, client, jkt)
 }
 
 func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeRequest) (*struct{}, error) {
@@ -945,12 +964,15 @@ func (p *Plugin) bindDPoP(ctx forge.Context, client *OAuth2Client, appID id.AppI
 	return proof.JKT, nil
 }
 
-func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.UserID, appID id.AppID, scopes []string) (*TokenResponse, error) {
-	jkt, err := p.bindDPoP(ctx, client, appID)
-	if err != nil {
-		return nil, err
-	}
-
+// issueTokens mints a session and its token response. jkt is the DPoP
+// thumbprint to bind to, resolved by the caller via bindDPoP before any
+// single-use grant artifact (an authorization code, a device code) is
+// consumed. Discovering it in here instead would run bindDPoP after the
+// code is already burned, so a use_dpop_nonce challenge could never be
+// retried: the retry the RFC requires would arrive against a code the
+// store already rejects as used. See handleAuthorizationCodeGrant and
+// handleDeviceCodeGrant for where jkt is actually resolved.
+func (p *Plugin) issueTokens(ctx forge.Context, _ *OAuth2Client, userID id.UserID, appID id.AppID, scopes []string, jkt string) (*TokenResponse, error) {
 	// Resolve session config for the app.
 	sessCfg := account.SessionConfig{
 		TokenTTL:        p.config.AccessTokenTTL,
@@ -1010,12 +1032,12 @@ func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.
 	}, nil
 }
 
-func (p *Plugin) issueClientToken(ctx forge.Context, client *OAuth2Client) (*TokenResponse, error) {
-	jkt, err := p.bindDPoP(ctx, client, client.AppID)
-	if err != nil {
-		return nil, err
-	}
-
+// issueClientToken mints a client-credentials session. jkt is the DPoP
+// thumbprint to bind to, resolved by the caller. Client credentials has no
+// single-use artifact to burn, so the caller resolves it immediately before
+// calling rather than needing the reordering issueTokens' callers require;
+// the shape is kept consistent with issueTokens regardless.
+func (p *Plugin) issueClientToken(ctx forge.Context, client *OAuth2Client, jkt string) (*TokenResponse, error) {
 	// Client credentials: create a session with no user.
 	sessCfg := account.SessionConfig{
 		TokenTTL:        p.config.AccessTokenTTL,
@@ -1186,6 +1208,15 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 			return nil, forge.InternalError(fmt.Errorf("oauth2: get client for device code: %w", err))
 		}
 
+		// Resolve DPoP binding while the device code is still redeemable, for
+		// the same reason as the authorization_code grant: a use_dpop_nonce
+		// challenge must be retryable, and marking the code consumed first
+		// would make the retry fail with "invalid_grant" instead.
+		jkt, err := p.bindDPoP(ctx, client, dc.AppID)
+		if err != nil {
+			return nil, err
+		}
+
 		// Mark as consumed before issuing tokens (one-time use).
 		// If this update fails, do NOT issue tokens to prevent double-use.
 		dc.Status = DeviceCodeStatusConsumed
@@ -1193,7 +1224,7 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 			return nil, forge.InternalError(fmt.Errorf("oauth2: consume device code: %w", err))
 		}
 
-		return p.issueTokens(ctx, client, dc.UserID, dc.AppID, dc.Scopes)
+		return p.issueTokens(ctx, client, dc.UserID, dc.AppID, dc.Scopes, jkt)
 
 	default:
 		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "unexpected device code status")
