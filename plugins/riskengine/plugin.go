@@ -13,6 +13,7 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
@@ -24,6 +25,7 @@ var (
 	_ plugin.OnInit              = (*Plugin)(nil)
 	_ plugin.BeforeSignIn        = (*Plugin)(nil)
 	_ plugin.BeforeSessionCreate = (*Plugin)(nil)
+	_ plugin.BeforePrincipalAuth = (*Plugin)(nil)
 	_ plugin.SettingsProvider    = (*Plugin)(nil)
 )
 
@@ -116,6 +118,13 @@ type RiskRequest struct {
 	// scores a user rather than an address has something to resolve.
 	Email    string
 	Username string
+
+	// Principal is the caller rendered as "kind:id" by principal.Ref.String().
+	// Set on the machine path, where the caller is already known. Left empty
+	// on sign-in: account.SignInRequest carries no user id at
+	// OnBeforeSignIn time, only Email and Username, and putting an email in
+	// an id position would let a contributor mistake it for one.
+	Principal string
 }
 
 // RiskContributor is a sub-plugin interface for plugins that contribute
@@ -257,6 +266,31 @@ func (p *Plugin) OnBeforeSignIn(ctx context.Context, req *account.SignInRequest)
 		return fmt.Errorf("riskengine: %s", p.config.BlockMessage)
 	}
 
+	return nil
+}
+
+// OnBeforePrincipalAuth scores a machine caller and blocks above the high
+// threshold, exactly as OnBeforeSignIn does for a person.
+func (p *Plugin) OnBeforePrincipalAuth(ctx context.Context, a *principal.AuthAttempt) error {
+	if len(p.contributors) == 0 {
+		return nil
+	}
+
+	riskReq := &RiskRequest{
+		IPAddress: a.IPAddress,
+		UserAgent: a.UserAgent,
+		AppID:     a.AppID.String(),
+		EnvID:     a.EnvID.String(),
+		Principal: a.Subject.String(),
+	}
+
+	assessment := p.evaluate(ctx, riskReq)
+	p.lastAssessment = assessment
+	p.auditAssessment(ctx, riskReq, assessment)
+
+	if assessment.Decision == "block" {
+		return fmt.Errorf("riskengine: %s", p.config.BlockMessage)
+	}
 	return nil
 }
 

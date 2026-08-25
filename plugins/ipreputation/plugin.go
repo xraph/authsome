@@ -14,16 +14,18 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/settings"
 )
 
 // Compile-time interface checks.
 var (
-	_ plugin.Plugin           = (*Plugin)(nil)
-	_ plugin.OnInit           = (*Plugin)(nil)
-	_ plugin.BeforeSignIn     = (*Plugin)(nil)
-	_ plugin.BeforeSignUp     = (*Plugin)(nil)
-	_ plugin.SettingsProvider = (*Plugin)(nil)
+	_ plugin.Plugin              = (*Plugin)(nil)
+	_ plugin.OnInit              = (*Plugin)(nil)
+	_ plugin.BeforeSignIn        = (*Plugin)(nil)
+	_ plugin.BeforeSignUp        = (*Plugin)(nil)
+	_ plugin.BeforePrincipalAuth = (*Plugin)(nil)
+	_ plugin.SettingsProvider    = (*Plugin)(nil)
 )
 
 // ──────────────────────────────────────────────────
@@ -197,6 +199,15 @@ func (p *Plugin) OnBeforeSignIn(ctx context.Context, req *account.SignInRequest)
 // OnBeforeSignUp checks the IP reputation.
 func (p *Plugin) OnBeforeSignUp(ctx context.Context, req *account.SignUpRequest) error {
 	return p.check(ctx, req.IPAddress, req.AppID.String())
+}
+
+// OnBeforePrincipalAuth checks the IP reputation of a machine caller.
+//
+// The same check sign-in gets. API-key traffic reaches strategy.Authenticate
+// and fires none of the sign-in hooks, so without this a leaked key works
+// from any address in the world.
+func (p *Plugin) OnBeforePrincipalAuth(ctx context.Context, a *principal.AuthAttempt) error {
+	return p.check(ctx, a.IPAddress, a.AppID.String())
 }
 
 func (p *Plugin) check(ctx context.Context, ipAddress, appID string) error {

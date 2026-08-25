@@ -12,6 +12,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/principal"
 )
 
 type mockContributor struct {
@@ -54,6 +55,9 @@ func TestPlugin_ImplementsInterfaces(t *testing.T) {
 	assert.True(t, ok)
 
 	_, ok = p.(plugin.BeforeSessionCreate)
+	assert.True(t, ok)
+
+	_, ok = p.(plugin.BeforePrincipalAuth)
 	assert.True(t, ok)
 }
 
@@ -182,6 +186,69 @@ func TestOnBeforeSignIn_PassesIdentifierToContributors(t *testing.T) {
 	assert.Equal(t, appID.String(), c.got.AppID)
 	assert.Equal(t, "target@corp.com", c.got.Email,
 		"contributors that score a user need the sign-in identifier")
+}
+
+// A high-risk machine caller must be denied, exactly as a high-risk sign-in
+// is. This is the gap: API-key traffic never reached OnBeforeSignIn.
+func TestOnBeforePrincipalAuth_Blocks(t *testing.T) {
+	contrib := &mockContributor{name: "test", score: 90, weight: 1.0}
+	p := newTestPlugin(Config{}, contrib)
+
+	err := p.OnBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject:        principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+		AppID:          id.NewAppID(),
+		IPAddress:      "1.2.3.4",
+		CredentialKind: "api_key",
+	})
+	require.Error(t, err, "a high-risk machine caller must be denied")
+	assert.Contains(t, err.Error(), "riskengine:")
+}
+
+// With no contributors the hook is a no-op, matching OnBeforeSignIn.
+// Otherwise installing riskengine alone would deny every machine caller.
+func TestOnBeforePrincipalAuth_AllowsWithNoContributors(t *testing.T) {
+	p := newTestPlugin(Config{})
+
+	err := p.OnBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject: principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+	})
+	assert.NoError(t, err)
+}
+
+// The contributor must be able to tell a machine caller from a person.
+// UserID stays empty for machines rather than being filled with a
+// service-account id, which an existing contributor would misread.
+func TestOnBeforePrincipalAuth_SetsPrincipalNotUserID(t *testing.T) {
+	spy := &capturingContributor{}
+	p := New(spy)
+	p.logger = log.NewNoopLogger()
+
+	require.NoError(t, p.OnBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject:   principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+		AppID:     id.NewAppID(),
+		IPAddress: "1.2.3.4",
+	}))
+
+	require.NotNil(t, spy.got)
+	assert.Equal(t, "agent:svc_1", spy.got.Principal)
+	assert.Empty(t, spy.got.UserID, "a machine caller has no user id")
+}
+
+// OnBeforeSignIn must leave Principal empty: account.SignInRequest carries
+// no user id at this point, only Email and Username, and putting an email in
+// an id position would be wrong.
+func TestOnBeforeSignIn_LeavesPrincipalEmpty(t *testing.T) {
+	spy := &capturingContributor{}
+	p := New(spy)
+	p.logger = log.NewNoopLogger()
+
+	require.NoError(t, p.OnBeforeSignIn(context.Background(), &account.SignInRequest{
+		AppID: id.NewAppID(),
+		Email: "target@corp.com",
+	}))
+
+	require.NotNil(t, spy.got)
+	assert.Empty(t, spy.got.Principal)
 }
 
 func TestOnBeforeSignIn_PassesUsernameWhenEmailAbsent(t *testing.T) {
