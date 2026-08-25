@@ -278,6 +278,106 @@ When a third-party client requests authorization, the user is shown a consent sc
 GET /v1/auth/oauth2/authorize?...&prompt=consent
 ```
 
+## Resource indicators (RFC 8707)
+
+By default a token names no resource server. Any service that trusts your issuer will accept any token you issue, which means a token minted for one service is accepted by another, and the second service can't tell that the user only ever consented to the first. That is the confused deputy problem. Resource indicators close it: the client says which resource it wants a token for, and the server binds that name into the token as `aud`.
+
+None of this is on by default. A client that sends no `resource` keeps getting exactly the token it gets today.
+
+### Register what a client may target
+
+A client may only request resources it was registered for. Add them at creation:
+
+```json
+{
+  "name": "My Mobile App",
+  "redirect_uris": ["myapp://callback"],
+  "scopes": ["openid", "profile", "email"],
+  "resources": ["https://api.example.com", "https://files.example.com"]
+}
+```
+
+An empty list means the client may target nothing, so any request naming a resource is refused. That's deliberate, and it's the state every client registered before this existed is in. Those clients keep working, because they send no `resource` at all. Give a client an allowlist before you expect it to use one.
+
+Each entry must be an absolute URI without a fragment, per RFC 8707 section 2. The same rule is enforced at registration and at request time, so a value you can store is a value that will match.
+
+### Request a resource
+
+Pass `resource` at the authorization endpoint. It repeats:
+
+```
+GET /v1/oauth/authorize
+  ?response_type=code
+  &client_id=aoc2_01jb...
+  &redirect_uri=https://myapp.com/callback
+  &resource=https://api.example.com
+```
+
+The token you get back carries that value:
+
+```json
+{
+  "sub": "ausr_01j9...",
+  "aud": ["https://api.example.com"],
+  "scope": "openid profile email",
+  "exp": 1730455200
+}
+```
+
+You can also pass `resource` at the token endpoint to narrow further. Authorize for two resources, redeem for one, and the token carries only the one you asked for. You can't widen. Naming a resource the authorization didn't grant is refused with `invalid_target`. Omitting it at the token endpoint inherits everything the code carried.
+
+Both work the same way on the client credentials and device authorization grants.
+
+### Refuse a token meant for somebody else
+
+Issuing an audienced token does nothing on its own. Something has to check it.
+
+Set `session.resource_identifier` on the app to the URI this deployment answers to, and the auth middleware starts refusing tokens audienced elsewhere:
+
+| Token `aud` | Setting | Result |
+|-------------|---------|--------|
+| absent | anything | authenticates, an unaudienced token is unrestricted |
+| `https://api.example.com` | `https://api.example.com` | authenticates |
+| `https://api.example.com` | `https://files.example.com` | refused |
+| `https://api.example.com`, `https://files.example.com` | `https://api.example.com` | authenticates, one match is enough |
+
+Leave the setting empty and no check runs at all, which is why turning this on is something you choose rather than something that happens to you on upgrade.
+
+The check covers opaque tokens and JWTs alike. A JWT carries its audience in the token, and an opaque token carries it on the session row, so both are compared the same way.
+
+### Errors
+
+A rejected resource comes back as `invalid_target`, the code RFC 8707 registers, with a description naming which rule tripped:
+
+```json
+{
+  "error": "invalid_target",
+  "error_description": "resource \"https://evil.example.com\" is not registered for this client"
+}
+```
+
+You will see it for an unregistered resource, a relative URI, a URI carrying a fragment, and an attempt to widen at the token endpoint.
+
+### Discovery
+
+The discovery document advertises support:
+
+```json
+{
+  "resource_indicators_supported": true
+}
+```
+
+Worth knowing: that field name isn't registered anywhere. RFC 8707 defines the `resource` parameter and the `invalid_target` error and no discovery metadata at all, and the RFC 8414 IANA registry has no entry for it. It's the convention the MCP ecosystem settled on, and it's what clients look for in practice, so read it as a de facto signal and not a standard one.
+
+### A behaviour change worth reading before you upgrade
+
+A JWT that fails any of the middleware's identity guards now stops there. Previously it fell through to opaque session resolution and then to the strategy registry, so a request could still authenticate by another route. It can't any more.
+
+This bites in one specific shape: a request carrying both a JWT bearer token that gets refused and a separate credential a strategy would have accepted used to authenticate on the second credential. It now returns 401.
+
+The guards this covers are the audience check above, the publishable-key app match, the revoked-session lookup, and IP and device binding. The reason for the change is that JWT access tokens are also stored as session tokens, so the old fallthrough looked a just-refused JWT up as an opaque session and checked the wrong field, quietly undoing the refusal.
+
 ## JWKS endpoint
 
 The JSON Web Key Set (JWKS) endpoint publishes the public keys used to verify JWT access tokens and ID tokens:
