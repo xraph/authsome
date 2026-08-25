@@ -204,7 +204,6 @@ export type {
   TeamListResponse,
   UIMetadata,
   UnassignRoleRequest,
-  UnlinkAuthMethodRequest,
   UnlinkAuthMethodResponse,
   UpdateEnvironmentRequest,
   UpdateEnvironmentSettingsRequest,

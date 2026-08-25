@@ -1675,11 +1675,6 @@ type UnassignRoleRequest struct {
 	UserID string `json:"user_id"`
 }
 
-// UnlinkAuthMethodRequest represents the UnlinkAuthMethodRequest schema.
-type UnlinkAuthMethodRequest struct {
-	Provider string `json:"provider"`
-}
-
 // UnlinkAuthMethodResponse represents the UnlinkAuthMethodResponse schema.
 type UnlinkAuthMethodResponse struct {
 	Status string `json:"status"`

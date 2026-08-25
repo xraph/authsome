@@ -7287,29 +7287,6 @@ class UnassignRoleRequest {
   String toString() => 'UnassignRoleRequest(${toJson()})';
 }
 
-class UnlinkAuthMethodRequest {
-  final String provider;
-
-  const UnlinkAuthMethodRequest({
-    required this.provider,
-  });
-
-  factory UnlinkAuthMethodRequest.fromJson(Map<String, dynamic> json) {
-    return UnlinkAuthMethodRequest(
-      provider: json['Provider'] as String,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'Provider': provider,
-    };
-  }
-
-  @override
-  String toString() => 'UnlinkAuthMethodRequest(${toJson()})';
-}
-
 class UnlinkAuthMethodResponse {
   final String status;
 

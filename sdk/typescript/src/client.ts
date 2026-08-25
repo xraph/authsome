@@ -200,7 +200,6 @@ import type {
   TeamListResponse,
   UIMetadata,
   UnassignRoleRequest,
-  UnlinkAuthMethodRequest,
   UnlinkAuthMethodResponse,
   UpdateEnvironmentRequest,
   UpdateEnvironmentSettingsRequest,
@@ -1977,12 +1976,12 @@ export class AuthClient {
    * Unlink an auth method
    * DELETE /v1/me/auth-methods/{provider}
    */
-  async unlinkAuthMethod(provider: string, body: UnlinkAuthMethodRequest): Promise<UnlinkAuthMethodResponse> {
+  async unlinkAuthMethod(provider: string): Promise<UnlinkAuthMethodResponse> {
     const path = `/v1/me/auth-methods/${provider}`;
     return this.request<UnlinkAuthMethodResponse>(
       'DELETE',
       path,
-      body,
+      undefined,
     );
   }
 
