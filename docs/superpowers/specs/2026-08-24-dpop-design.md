@@ -361,9 +361,21 @@ one client is useless to another.
 `Engine.NonceSecret()` returns nil when there is no HMAC JWT key and no
 `AUTHSOME_DASHBOARD_NONCE_SECRET`, which the dashboard handles by logging a
 warning and leaving its signer uninitialised. DPoP must not copy that. If an
-app has nonces switched on and no secret can be derived, fail at startup with a
-clear error. The alternative is a per-process random secret, which mints nonces
-no other instance can verify and turns a security feature into an intermittent
+app has nonces switched on and no secret can be derived, that is a
+misconfiguration and it has to fail closed with a clear error.
+
+Where it fails is the setting, not startup. `initDPoP` runs before any app has
+resolved `dpop.nonce_required`, so refusing to start there would refuse every
+deployment that has no HMAC JWT key, and almost none of those asked for nonces.
+So `initDPoP` logs a warning naming what would break and carries on, and
+`Engine.DPoPNonceRequiredForApp` answers true when it finds the setting on with
+no signer behind it, logging an error that names the app. Every DPoP request
+for that app is then refused, which is loud and takes one config change to fix.
+Answering false instead would leave the control switched on in the dashboard,
+switched off in reality, and nothing anywhere saying so.
+
+The alternative to both is a per-process random secret, which mints nonces no
+other instance can verify and turns a security feature into an intermittent
 outage that only shows up once you scale past one replica.
 
 One thing diverges sharply from the file we are copying, and it wants a comment

@@ -37,10 +37,16 @@ func (e *Engine) initDPoP() {
 
 	secret := e.dpopNonceSecret()
 	if len(secret) == 0 {
-		// Leave the signer nil. Any app that turns nonces on is rejected at
-		// resolution time (DPoPNonceRequiredForApp) with a clear signal
-		// rather than being served nonces that only this process can verify.
-		e.logger.Warn("authsome: no DPoP nonce secret available; DPoP nonce support is disabled")
+		// Leave the signer nil and carry on. Startup cannot know which apps
+		// will turn nonces on later, so returning an error here would refuse
+		// to start every deployment that has no HMAC JWT key, which is most of
+		// them and none of which asked for nonces.
+		//
+		// The setting is where this becomes a decision, and
+		// DPoPNonceRequiredForApp fails closed when it finds nonces switched on
+		// with nothing to mint them from. This line is a heads-up, not the
+		// control.
+		e.logger.Warn("authsome: no DPoP nonce secret available; an app that turns dpop.nonce_required on will refuse its bound requests until an HMAC JWT key or AUTHSOME_DASHBOARD_NONCE_SECRET is configured")
 		return
 	}
 
@@ -96,12 +102,21 @@ func (e *Engine) DPoPModeForApp(ctx context.Context, appID id.AppID) dpop.Mode {
 
 // DPoPNonceRequiredForApp reports whether an app demands a nonce.
 //
-// Returns false when no signer exists, whatever the setting says. Demanding a
-// nonce we cannot mint would lock every client out of that app.
+// It used to answer false whenever the signer was nil, on the reasoning that
+// demanding a nonce we cannot mint locks every client out of the app. True,
+// and it is also what an operator asked for. Answering false turned an
+// explicit security control off and told nobody, which is the one outcome a
+// security control must never have: one Warn line at startup, no enforcement,
+// and a dashboard switch that reads as on.
+//
+// So the misconfiguration fails closed. Nonces stay required, the requests
+// that would have gone unprotected are refused instead, and the reason goes in
+// the log at error level with the app named. Locking clients out is loud and
+// fixable in one config change. Silently not enforcing is neither.
+//
+// Nothing here fires unless somebody set dpop.nonce_required, which defaults
+// to false.
 func (e *Engine) DPoPNonceRequiredForApp(ctx context.Context, appID id.AppID) bool {
-	if e.dpopNonceSigner == nil {
-		return false
-	}
 	mgr := e.Settings()
 	if mgr == nil {
 		return false
@@ -111,5 +126,14 @@ func (e *Engine) DPoPNonceRequiredForApp(ctx context.Context, appID id.AppID) bo
 		opts.AppID = appID.String()
 	}
 	required, _ := settings.Get(ctx, mgr, SettingDPoPNonceRequired, opts) //nolint:errcheck // best effort
-	return required
+	if !required {
+		return false
+	}
+
+	if e.dpopNonceSigner == nil {
+		e.logger.Error("authsome: dpop.nonce_required is on for this app but no nonce secret is derivable, so every DPoP request for it will be refused; configure an HMAC JWT key or set AUTHSOME_DASHBOARD_NONCE_SECRET",
+			log.String("app_id", appID.String()),
+		)
+	}
+	return true
 }
