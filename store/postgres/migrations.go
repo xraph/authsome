@@ -1280,7 +1280,7 @@ ALTER TABLE authsome_sessions
 
 		&migrate.Migration{
 			Name:    "add_session_audience",
-			Version: "20260824000060",
+			Version: "20260824000090",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `
 ALTER TABLE authsome_sessions
