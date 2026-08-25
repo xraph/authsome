@@ -231,7 +231,7 @@ func bearerRequest(t *testing.T, mux forge.Router, method, path, token string, b
 		require.NoError(t, err)
 		reqBody = bytes.NewReader(b)
 	}
-	req := httptest.NewRequest(method, path, reqBody)
+	req := httptest.NewRequestWithContext(t.Context(), method, path, reqBody)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()

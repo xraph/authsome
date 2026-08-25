@@ -93,7 +93,7 @@ func TestHandlePatchUser_ActiveFalse_RevokesAgentGrants(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPatch, p.config.BasePath+"/Users/"+u.ID.String(), bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPatch, p.config.BasePath+"/Users/"+u.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/scim+json")
 	rec := httptest.NewRecorder()
@@ -167,7 +167,7 @@ func TestHandleReplaceUser_ActiveFalse_RevokesAgentGrants(t *testing.T) {
 	body, err := json.Marshal(payload)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPut, p.config.BasePath+"/Users/"+u.ID.String(), bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPut, p.config.BasePath+"/Users/"+u.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/scim+json")
 	rec := httptest.NewRecorder()
