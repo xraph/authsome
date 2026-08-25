@@ -149,7 +149,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Generate SDKs
-        run: make -C sdkgen generate SDK_OUT=../sdk SDK_PLUGINS=social,mfa,apikey,magiclink,sso
+        run: make -C sdkgen generate SDK_OUT=../sdk
 
       # The same generator also emits embedded-mode clients into the ui and
       # flutter packages. Those were left out of the check below when it was
