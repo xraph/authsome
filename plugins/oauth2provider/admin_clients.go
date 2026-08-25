@@ -132,8 +132,8 @@ func (p *Plugin) handleRotateClientSecret(ctx forge.Context, _ *RotateClientSecr
 	// Scope before doing anything else. Rotating another app's secret would
 	// lock that app's client out, so this is a denial-of-service reachable by
 	// guessing a primary key, not just an information leak.
-	if err := plugin.AssertAppScope(ctx, client.AppID); err != nil {
-		return nil, err
+	if scopeErr := plugin.AssertAppScope(ctx, client.AppID); scopeErr != nil {
+		return nil, scopeErr
 	}
 
 	// A public client authenticates with PKCE, not a secret. Minting one here
@@ -209,8 +209,8 @@ func (p *Plugin) handleUpdateClient(ctx forge.Context, req *UpdateClientRequest)
 	// Refuse a malformed request before touching the store. Nothing about
 	// this check depends on the stored client, so there is no reason to spend
 	// a read discovering that the body was never acceptable.
-	if err := rejectImmutableClientFields(req); err != nil {
-		return nil, err
+	if fieldsErr := rejectImmutableClientFields(req); fieldsErr != nil {
+		return nil, fieldsErr
 	}
 
 	client, err := p.oauth2Store.GetClientByID(ctx.Context(), clientID)
