@@ -116,6 +116,25 @@ func (p *Plugin) CreateGrant(ctx context.Context, in CreateGrantInput) (*AgentGr
 		grantOrg = agent.OrgID
 	}
 
+	// One active grant per (AgentID, UserID, OrgID): the spec's invariant,
+	// and re-consenting is supposed to update the existing row rather than
+	// leave it lying around active alongside a new one. CreateGrant used to
+	// mint a fresh id on every call with nothing enforcing that, so anything
+	// still holding the OLDER grant's id — a cached authorization, a stale
+	// reference — kept whatever wider scope set that older grant carried
+	// even after the user re-consented to a narrower one. Revoking the
+	// existing active grant (if any) before inserting the new one closes
+	// that: only the newest grant for the triple is ever active.
+	// GetActiveGrant returning ErrNotFound is the ordinary "first consent"
+	// case, not a failure.
+	if existing, err := p.store.GetActiveGrant(ctx, in.AgentID, in.UserID, grantOrg); err == nil {
+		if err := p.RevokeGrant(ctx, existing.ID); err != nil {
+			return nil, err
+		}
+	} else if !errors.Is(err, ErrNotFound) {
+		return nil, forge.InternalError(fmt.Errorf("agentauth: load active grant: %w", err))
+	}
+
 	now := time.Now()
 	g := &AgentGrant{
 		ID:        id.NewAgentGrantID(),

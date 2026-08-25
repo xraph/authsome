@@ -452,6 +452,61 @@ func TestCreateGrant_StoresAgentOrgWhenCallerOrgIsZero(t *testing.T) {
 // An unmapped scope must never reach a stored grant. This must hold as a
 // property of CreateGrant itself, not only when a caller happens to run
 // Evaluate first — CreateGrant is exported with no enforced caller.
+// Final review item 5: the spec says one active grant per (AgentID, UserID,
+// OrgID) and that re-consenting updates the existing row. CreateGrant used
+// to mint a fresh id on every call with no idempotency at all, so the
+// invariant was enforced nowhere and a re-consent left the OLDER, wider
+// grant sitting there active alongside the new, narrower one — anything
+// still holding the old GrantID kept the wider access. This pins the fix:
+// re-consenting with a narrower scope set must leave exactly one active
+// grant, carrying the narrower set.
+func TestCreateGrant_ReConsentLeavesExactlyOneActiveGrantWithNarrowerScopes(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(
+		agentauth.WithStore(store),
+		agentauth.WithScope("invoices:read", agentauth.Grants("read", "invoice")),
+		agentauth.WithScope("invoices:write", agentauth.Grants("write", "invoice")),
+	)
+	org := id.NewOrgID()
+	agent := approvedAgent(t, store, org, "client_reconsent")
+	require.NoError(t, store.PutOrgPolicy(context.Background(), &agentauth.OrgAgentPolicy{
+		OrgID: org, Mode: agentauth.ModeOpen,
+	}))
+	userID := id.NewUserID()
+
+	first, err := p.CreateGrant(context.Background(), agentauth.CreateGrantInput{
+		AppID: agent.AppID, AgentID: agent.ID, UserID: userID,
+		OrgID: org, Scopes: []string{"invoices:read", "invoices:write"},
+	})
+	require.NoError(t, err)
+	require.True(t, first.IsActive(time.Now()))
+
+	second, err := p.CreateGrant(context.Background(), agentauth.CreateGrantInput{
+		AppID: agent.AppID, AgentID: agent.ID, UserID: userID,
+		OrgID: org, Scopes: []string{"invoices:read"},
+	})
+	require.NoError(t, err)
+	assert.NotEqual(t, first.ID.String(), second.ID.String(), "re-consent still mints a fresh grant id")
+
+	grants, err := store.ListGrantsByUser(context.Background(), userID)
+	require.NoError(t, err)
+	now := time.Now()
+	var active []*agentauth.AgentGrant
+	for _, g := range grants {
+		if g.IsActive(now) {
+			active = append(active, g)
+		}
+	}
+	require.Len(t, active, 1, "re-consenting must leave exactly one active grant for the (agent, user, org) triple")
+	assert.Equal(t, second.ID.String(), active[0].ID.String())
+	assert.ElementsMatch(t, []string{"invoices:read"}, active[0].Scopes,
+		"the surviving active grant must carry the narrower, re-consented scope set")
+
+	firstNow, err := store.GetAgentGrant(context.Background(), first.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, firstNow.RevokedAt, "the superseded grant must be revoked, not merely orphaned")
+}
+
 func TestCreateGrant_RejectsUnmappedScope(t *testing.T) {
 	store := agentauth.NewMemoryStore()
 	p := agentauth.New(
