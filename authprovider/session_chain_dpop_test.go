@@ -101,13 +101,13 @@ func chainRouter(t *testing.T, sess *session.Session, bind authmw.SessionBinding
 	return router.Handler()
 }
 
-// chainRequest builds a GET carrying the token under scheme, with an optional
-// proof header.
-func chainRequest(t *testing.T, scheme, proof string) *http.Request {
+// chainRequest builds a GET carrying the token under the DPoP auth scheme,
+// with an optional proof header.
+func chainRequest(t *testing.T, proof string) *http.Request {
 	t.Helper()
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, chainURL, nil)
-	req.Header.Set("Authorization", scheme+" "+chainToken)
+	req.Header.Set("Authorization", "DPoP "+chainToken)
 	if proof != "" {
 		req.Header.Set("DPoP", proof)
 	}
@@ -139,7 +139,7 @@ func TestChain_BoundSessionPassesBothEnforcementPoints(t *testing.T) {
 	bind := authmw.SessionBindingConfig{DPoPValidator: dpop.NewValidator(dpop.Config{})}
 
 	rec := httptest.NewRecorder()
-	chainRouter(t, sess, bind).ServeHTTP(rec, chainRequest(t, "DPoP", chainProof(t, key, "chain-proof-1")))
+	chainRouter(t, sess, bind).ServeHTTP(rec, chainRequest(t, chainProof(t, key, "chain-proof-1")))
 
 	assert.Equal(t, http.StatusOK, rec.Code,
 		"one proof must satisfy both enforcement points on one request; body: %s", rec.Body.String())
@@ -156,7 +156,7 @@ func TestChain_BoundSessionWithoutProofIsStillRefused(t *testing.T) {
 	bind := authmw.SessionBindingConfig{DPoPValidator: dpop.NewValidator(dpop.Config{})}
 
 	rec := httptest.NewRecorder()
-	chainRouter(t, sess, bind).ServeHTTP(rec, chainRequest(t, "DPoP", ""))
+	chainRouter(t, sess, bind).ServeHTTP(rec, chainRequest(t, ""))
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
@@ -174,7 +174,7 @@ func TestChain_ProofFromAnotherKeyIsRefused(t *testing.T) {
 	bind := authmw.SessionBindingConfig{DPoPValidator: dpop.NewValidator(dpop.Config{})}
 
 	rec := httptest.NewRecorder()
-	chainRouter(t, sess, bind).ServeHTTP(rec, chainRequest(t, "DPoP", chainProof(t, attacker, "chain-proof-wrong-key")))
+	chainRouter(t, sess, bind).ServeHTTP(rec, chainRequest(t, chainProof(t, attacker, "chain-proof-wrong-key")))
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
@@ -194,11 +194,11 @@ func TestChain_ReplayedProofOnASecondRequestIsRefused(t *testing.T) {
 	proof := chainProof(t, key, "chain-proof-replayed")
 
 	first := httptest.NewRecorder()
-	handler.ServeHTTP(first, chainRequest(t, "DPoP", proof))
+	handler.ServeHTTP(first, chainRequest(t, proof))
 	require.Equal(t, http.StatusOK, first.Code, "body: %s", first.Body.String())
 
 	second := httptest.NewRecorder()
-	handler.ServeHTTP(second, chainRequest(t, "DPoP", proof))
+	handler.ServeHTTP(second, chainRequest(t, proof))
 
 	assert.Equal(t, http.StatusUnauthorized, second.Code,
 		"the same proof on a second request is a replay and must be refused")

@@ -18,10 +18,13 @@ import (
 	"github.com/xraph/authsome/internal/jwkutil"
 )
 
-// mintProof builds a signed DPoP proof. Fields left empty are omitted, so a
-// test can produce a proof missing exactly one claim.
-func mintProof(t *testing.T, key *ecdsa.PrivateKey, typ, alg string, claims map[string]any) string {
+// mintProof builds a signed DPoP proof, always under ES256, the only alg
+// these tests need to exercise the parse path. Fields left empty are omitted,
+// so a test can produce a proof missing exactly one claim.
+func mintProof(t *testing.T, key *ecdsa.PrivateKey, typ string, claims map[string]any) string {
 	t.Helper()
+
+	const alg = "ES256"
 
 	j, err := jwkutil.Encode(&key.PublicKey, "", "")
 	require.NoError(t, err)
@@ -64,7 +67,7 @@ func validClaims() map[string]any {
 
 func TestParse_Valid(t *testing.T) {
 	key := testKey(t)
-	p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", validClaims()))
+	p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", validClaims()))
 	require.NoError(t, err)
 
 	assert.Equal(t, "ES256", p.Alg)
@@ -77,7 +80,7 @@ func TestParse_Valid(t *testing.T) {
 // presented as a proof must not be accepted merely because it verifies.
 func TestParse_RejectsWrongTyp(t *testing.T) {
 	key := testKey(t)
-	_, err := dpop.Parse(mintProof(t, key, "JWT", "ES256", validClaims()))
+	_, err := dpop.Parse(mintProof(t, key, "JWT", validClaims()))
 	assert.ErrorIs(t, err, dpop.ErrMalformedProof)
 }
 
@@ -88,7 +91,7 @@ func TestParse_RejectsSymmetricAndNone(t *testing.T) {
 	for _, alg := range []string{"HS256", "HS384", "HS512", "none", "NONE", ""} {
 		t.Run(alg, func(t *testing.T) {
 			key := testKey(t)
-			raw := mintProof(t, key, "dpop+jwt", "ES256", validClaims())
+			raw := mintProof(t, key, "dpop+jwt", validClaims())
 			parts := strings.Split(raw, ".")
 			hb, err := json.Marshal(map[string]any{"typ": "dpop+jwt", "alg": alg, "jwk": map[string]string{"kty": "oct", "k": "AAAA"}})
 			require.NoError(t, err)
@@ -102,7 +105,7 @@ func TestParse_RejectsSymmetricAndNone(t *testing.T) {
 
 func TestParse_RejectsTamperedSignature(t *testing.T) {
 	key := testKey(t)
-	raw := mintProof(t, key, "dpop+jwt", "ES256", validClaims())
+	raw := mintProof(t, key, "dpop+jwt", validClaims())
 	parts := strings.Split(raw, ".")
 	claims := validClaims()
 	claims["jti"] = "swapped"
@@ -125,7 +128,7 @@ func TestParse_RequiresMandatoryClaims(t *testing.T) {
 			key := testKey(t)
 			claims := validClaims()
 			delete(claims, missing)
-			_, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", claims))
+			_, err := dpop.Parse(mintProof(t, key, "dpop+jwt", claims))
 			assert.ErrorIs(t, err, dpop.ErrMalformedProof)
 		})
 	}
@@ -135,7 +138,7 @@ func TestParse_RequiresMandatoryClaims(t *testing.T) {
 // in its jwk header.
 func TestParse_RejectsPrivateKeyInJWK(t *testing.T) {
 	key := testKey(t)
-	raw := mintProof(t, key, "dpop+jwt", "ES256", validClaims())
+	raw := mintProof(t, key, "dpop+jwt", validClaims())
 	parts := strings.Split(raw, ".")
 
 	j, err := jwkutil.Encode(&key.PublicKey, "", "")
