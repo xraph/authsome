@@ -47,6 +47,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if err := g.POST("/register/finish", p.handleRegisterFinish,
 		forge.WithSummary("Complete passkey registration"),
 		forge.WithOperationID("passkeyRegisterFinish"),
+		forge.WithRequestBodySchema(PasskeyAttestation{}),
 		forge.WithResponseSchema(http.StatusOK, "Registered", RegisterFinishResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
@@ -65,6 +66,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if err := g.POST("/login/finish", p.handleLoginFinish,
 		forge.WithSummary("Complete passkey login"),
 		forge.WithOperationID("passkeyLoginFinish"),
+		forge.WithRequestBodySchema(PasskeyAssertion{}),
 		forge.WithResponseSchema(http.StatusOK, "Authenticated", LoginFinishResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
@@ -130,6 +132,49 @@ type LoginBeginResponse struct {
 
 // LoginFinishRequest is the raw assertion response from the browser.
 type LoginFinishRequest struct{}
+
+// The two "finish" endpoints receive the browser's PublicKeyCredential JSON,
+// which go-webauthn parses straight off the request body. Their bound request
+// structs are therefore empty, and an empty struct tells the OpenAPI generator
+// there is no body — so the generated SDK methods took no body argument and
+// had no way to send the credential at all. The types below exist purely to
+// describe that payload to the spec, via WithRequestBodySchema, which feeds
+// OpenAPI generation without touching how the handler binds. Field names match
+// serializeCredential in ui/packages/core/src/webauthn.ts; the buffers are
+// base64url strings on the wire.
+
+// PasskeyAttestationResponse is the attestation half of a registration credential.
+type PasskeyAttestationResponse struct {
+	ClientDataJSON    string `json:"clientDataJSON"`
+	AttestationObject string `json:"attestationObject"`
+}
+
+// PasskeyAttestation is the credential navigator.credentials.create() returns,
+// posted to /v1/passkeys/register/finish.
+type PasskeyAttestation struct {
+	ID       string                     `json:"id"`
+	RawID    string                     `json:"rawId"`
+	Type     string                     `json:"type"`
+	Response PasskeyAttestationResponse `json:"response"`
+}
+
+// PasskeyAssertionResponse is the assertion half of a login credential.
+// UserHandle is present only for discoverable (passwordless) login.
+type PasskeyAssertionResponse struct {
+	ClientDataJSON    string `json:"clientDataJSON"`
+	AuthenticatorData string `json:"authenticatorData"`
+	Signature         string `json:"signature"`
+	UserHandle        string `json:"userHandle,omitempty"`
+}
+
+// PasskeyAssertion is the credential navigator.credentials.get() returns,
+// posted to /v1/passkeys/login/finish.
+type PasskeyAssertion struct {
+	ID       string                   `json:"id"`
+	RawID    string                   `json:"rawId"`
+	Type     string                   `json:"type"`
+	Response PasskeyAssertionResponse `json:"response"`
+}
 
 // LoginFinishResponse confirms successful authentication. For passwordless
 // (discoverable) login it also carries the freshly-issued session tokens.
