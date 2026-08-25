@@ -50,7 +50,7 @@ type ListAuthMethodsResponse struct {
 
 // UnlinkAuthMethodRequest carries the provider name to unlink.
 type UnlinkAuthMethodRequest struct {
-	Provider string `param:"provider"`
+	Provider string `path:"provider"`
 }
 
 // UnlinkAuthMethodResponse confirms the unlink operation.
