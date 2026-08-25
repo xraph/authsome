@@ -2074,9 +2074,6 @@ func (c *Client) Oauth2Authorize(ctx context.Context, params *Oauth2AuthorizePar
 		if params.CodeChallengeMethod != "" {
 			q.Set("code_challenge_method", params.CodeChallengeMethod)
 		}
-		// Repeated once per element. A query string carries repeated keys, not
-		// lists, which is how RFC 8707 sends `resource`. A slice is also not
-		// comparable, so the zero-value check below would not compile for one.
 		for _, v := range params.Resource {
 			q.Add("resource", v)
 		}

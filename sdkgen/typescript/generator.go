@@ -162,8 +162,13 @@ type PathParamDef struct {
 type QueryParamDef struct {
 	Name     string // Original name from the spec (e.g., "limit")
 	TSName   string // TypeScript parameter name (e.g., "limit")
-	Type     string // TypeScript type (e.g., "number")
+	Type     string // TypeScript type (e.g., "number", "string[]")
 	Required bool
+
+	// Repeated marks an array-typed query parameter, which is sent once per
+	// value rather than once in total. Query parameters default to style form
+	// with explode true, so an array in the document means exactly that.
+	Repeated bool
 }
 
 // OperationDef represents a generated client method.
@@ -288,6 +293,7 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 						TSName:   param.Name,
 						Type:     tsType,
 						Required: param.Required,
+						Repeated: param.Schema != nil && param.Schema.Type == "array",
 					})
 				}
 			}

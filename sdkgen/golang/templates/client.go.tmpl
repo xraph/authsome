@@ -309,7 +309,11 @@ func (c *Client) {{ .Name }}(ctx context.Context
 	if params != nil {
 		q := url.Values{}
 {{- range .QueryParams }}
-{{- if eq .Type "string" }}
+{{- if .Repeated }}
+		for _, v := range params.{{ .GoName }} {
+			q.Add("{{ .Name }}", {{ if eq .ItemType "string" }}v{{ else }}fmt.Sprint(v){{ end }})
+		}
+{{- else if eq .Type "string" }}
 		if params.{{ .GoName }} != "" {
 			q.Set("{{ .Name }}", params.{{ .GoName }})
 		}

@@ -136,8 +136,13 @@ type PathParamDef struct {
 type QueryParamDef struct {
 	Name     string // Original name from the spec
 	DartName string // Dart parameter name
-	Type     string // Dart type
+	Type     string // Dart type ("String", "List<String>")
 	Required bool
+
+	// Repeated marks an array-typed query parameter, which is sent once per
+	// value rather than once in total. Query parameters default to style form
+	// with explode true, so an array in the document means exactly that.
+	Repeated bool
 }
 
 // OperationDef represents a generated client method.
@@ -256,6 +261,7 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 						DartName: toCamelCase(param.Name),
 						Type:     dartType,
 						Required: param.Required,
+						Repeated: param.Schema != nil && param.Schema.Type == "array",
 					})
 				}
 			}
