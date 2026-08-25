@@ -2912,17 +2912,21 @@ export class AuthClient {
       'Accept': 'application/json',
     };
 
+    // The DPoP proof and the Authorization header are two separate
+    // concerns. Sign-in, sign-up and OAuth2 token exchange have no session
+    // token yet, but the server still needs a proof on those calls to bind
+    // the token it is about to issue -- so the proof goes out whenever DPoP
+    // is enabled, with or without a token. The token, in turn, decides only
+    // which Authorization scheme to send, if any.
     const token = this.token;
+    if (this.dpop) {
+      headers['DPoP'] = await this.dpop.proof(method, url, {
+        accessToken: token,
+        nonce: this.dpopNonce,
+      });
+    }
     if (token) {
-      if (this.dpop) {
-        headers['Authorization'] = `DPoP ${token}`;
-        headers['DPoP'] = await this.dpop.proof(method, url, {
-          accessToken: token,
-          nonce: this.dpopNonce,
-        });
-      } else {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      headers['Authorization'] = this.dpop ? `DPoP ${token}` : `Bearer ${token}`;
     }
     if (this.publishableKey) {
       headers['X-Publishable-Key'] = this.publishableKey;
@@ -2937,9 +2941,29 @@ export class AuthClient {
     const nonce = response.headers.get('DPoP-Nonce');
     if (nonce) this.dpopNonce = nonce;
 
+    // RFC 9449 section 8: a nonce challenge can arrive as a 401 (resource
+    // server, WWW-Authenticate carries use_dpop_nonce) or a 400 (token
+    // endpoint / sign-in and similar binding calls, JSON body carries
+    // { error: "use_dpop_nonce" }). Only treat it as a challenge -- and
+    // retry -- when a fresh nonce actually came back with it.
+    //
     // Retry exactly once. A server stuck re-challenging must surface as an
     // error, not as a loop hammering your own auth server.
-    if (response.status === 401 && this.dpop && nonce && !options?.isRetry) {
+    let isNonceChallenge = false;
+    if (this.dpop && nonce && !options?.isRetry) {
+      if (response.status === 401) {
+        isNonceChallenge = (response.headers.get('WWW-Authenticate') ?? '').includes('use_dpop_nonce');
+      } else if (response.status === 400) {
+        // Clone before reading: the body still has to be readable below,
+        // either by the caller's JSON parse or the error branch that follows.
+        isNonceChallenge = await response
+          .clone()
+          .json()
+          .then((b: { error?: string }) => b?.error === 'use_dpop_nonce')
+          .catch(() => false);
+      }
+    }
+    if (isNonceChallenge) {
       return this.request<T>(method, path, body, { isRetry: true });
     }
 

@@ -302,6 +302,26 @@ func TestGenerate_ClientWiresDPoP(t *testing.T) {
 	// Threaded retry flag so the one-shot retry cannot recurse into a loop.
 	assert.Contains(t, clientContent, "isRetry")
 
+	// The proof must be minted whenever DPoP is enabled, not only when a
+	// token exists -- sign-in/sign-up/token-exchange have no token yet but
+	// still need a proof to bind the token about to be issued. Pin the
+	// structural marker: `if (this.dpop)` guarding the proof mint, separate
+	// from and preceding the `if (token)` guarding the Authorization header.
+	dpopGuardIdx := strings.Index(clientContent, "if (this.dpop) {")
+	tokenGuardIdx := strings.Index(clientContent, "if (token) {")
+	require.NotEqual(t, -1, dpopGuardIdx, "proof-minting guard should exist")
+	require.NotEqual(t, -1, tokenGuardIdx, "Authorization guard should exist")
+	assert.Less(t, dpopGuardIdx, tokenGuardIdx, "the DPoP proof must be minted independently of, and before, the token-gated Authorization header")
+
+	// RFC 9449 section 8: the nonce challenge can be a 401 (resource server)
+	// or a 400 (token endpoint / sign-in and similar binding calls). Both
+	// shapes must be checked, and the body must be cloned so the later
+	// error-handling read still works.
+	assert.Contains(t, clientContent, "WWW-Authenticate")
+	assert.Contains(t, clientContent, "use_dpop_nonce")
+	assert.Contains(t, clientContent, "response.status === 400")
+	assert.Contains(t, clientContent, ".clone()")
+
 	assert.Contains(t, indexContent, "export { DPoPSession, IndexedDBKeyStore } from './dpop'")
 }
 
