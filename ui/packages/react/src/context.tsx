@@ -6,7 +6,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -96,14 +95,18 @@ export interface AuthProviderProps extends AuthConfig {
  * ```
  */
 export function AuthProvider({ children, ...config }: AuthProviderProps) {
-  const managerRef = useRef<AuthManager | null>(null);
-  if (managerRef.current === null) {
-    managerRef.current = new AuthManager(config);
-  }
-  const manager = managerRef.current;
+  // One AuthManager per provider, built on first render and kept for the life
+  // of the component. useState's initializer is what React documents for a
+  // lazily constructed instance; a ref written during render is not safe under
+  // concurrent rendering, which is what react-hooks/refs objects to. The
+  // initializer closes over the first render's config, exactly as the previous
+  // ref-guarded construction did.
+  const [manager] = useState(() => new AuthManager(config));
 
-  const [state, setState] = useState<AuthState>(manager.getState());
-  const [clientConfig, setClientConfig] = useState<ClientConfig | null>(
+  // Lazy initializers here too, so these only run on the first render instead
+  // of on every one and having their result thrown away.
+  const [state, setState] = useState<AuthState>(() => manager.getState());
+  const [clientConfig, setClientConfig] = useState<ClientConfig | null>(() =>
     manager.getClientConfig(),
   );
 
