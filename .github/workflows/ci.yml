@@ -219,6 +219,9 @@ jobs:
           npm install
           npm run build
 
+      - name: Test SDK TypeScript
+        run: cd sdk/typescript && npm test
+
   # ─── Flutter ────────────────────────────────────────────────────────
   flutter:
     name: Flutter
@@ -238,3 +241,6 @@ jobs:
 
       - name: Analyze (workspace)
         run: cd flutter && flutter analyze --no-fatal-infos
+
+      - name: Test SDK Dart
+        run: cd sdk/dart && dart pub get && dart test
