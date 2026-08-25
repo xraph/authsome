@@ -166,6 +166,23 @@ const (
 	ActionWaitlistJoin    = "waitlist.join"
 	ActionWaitlistApprove = "waitlist.approve"
 	ActionWaitlistReject  = "waitlist.reject"
+
+	// ActionDPoPKeyMismatch fires when a structurally valid DPoP proof is
+	// presented for the wrong key, on the refresh-token path. A proof that
+	// verifies but does not match the bound thumbprint has no innocent
+	// explanation the way a changed IP does.
+	ActionDPoPKeyMismatch = "dpop_key_mismatch"
+
+	// ActionDPoPProofInvalid fires when a bound token arrives without a usable
+	// proof. Expect volume: it is nearly always a client that has not been
+	// updated, so it is recorded at info severity and is not on its own a
+	// signal of attack.
+	ActionDPoPProofInvalid = "dpop_proof_invalid"
+
+	// ActionDPoPProofReplayed fires when a proof's jti is seen twice inside
+	// its window. Rare, and interesting when it happens: it means somebody
+	// captured a proof and the token it was minted for.
+	ActionDPoPProofReplayed = "dpop_proof_replayed"
 )
 
 // ──────────────────────────────────────────────────

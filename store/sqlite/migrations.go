@@ -1212,5 +1212,33 @@ ALTER TABLE authsome_sessions DROP COLUMN audience;
 				return err
 			},
 		},
+
+		// Migration: DPoP confirmation key (RFC 9449).
+		//
+		// TEXT NOT NULL DEFAULT '' so every existing row backfills to the
+		// unbound state. An unbound session authorises exactly what it
+		// authorised before this column existed, which is what keeps the
+		// rollout free of a flag day.
+		//
+		// No index. Sessions are still looked up by token; nothing queries
+		// by thumbprint.
+		&migrate.Migration{
+			Name:    "add_session_dpop_jkt",
+			Version: "20260824000040",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions ADD COLUMN dpop_jkt TEXT NOT NULL DEFAULT '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				// SQLite does not support DROP COLUMN prior to 3.35.0;
+				// this is a best-effort rollback.
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions DROP COLUMN dpop_jkt;
+`)
+				return err
+			},
+		},
 	)
 }

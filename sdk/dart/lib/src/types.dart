@@ -2438,6 +2438,7 @@ class CouponResponse {
 
 class CreateClientRequest {
   final String appId;
+  final String? dpopMode;
   final List<String>? grantTypes;
   final String name;
   final bool? public;
@@ -2447,6 +2448,7 @@ class CreateClientRequest {
 
   const CreateClientRequest({
     required this.appId,
+    this.dpopMode,
     this.grantTypes,
     required this.name,
     this.public,
@@ -2458,6 +2460,7 @@ class CreateClientRequest {
   factory CreateClientRequest.fromJson(Map<String, dynamic> json) {
     return CreateClientRequest(
       appId: json['app_id'] as String,
+      dpopMode: json['dpop_mode'] as String?,
       grantTypes: json['grant_types'] == null ? null : (json['grant_types'] as List).map((e) => e as String).toList(),
       name: json['name'] as String,
       public: json['public'] as bool?,
@@ -2470,6 +2473,7 @@ class CreateClientRequest {
   Map<String, dynamic> toJson() {
     return {
       'app_id': appId,
+      if (dpopMode != null) 'dpop_mode': dpopMode,
       if (grantTypes != null) 'grant_types': grantTypes,
       'name': name,
       if (public != null) 'public': public,
@@ -3403,6 +3407,7 @@ class DiscoveryResponse {
   final String authorizationEndpoint;
   final List<String> codeChallengeMethodsSupported;
   final String deviceAuthorizationEndpoint;
+  final List<String>? dpopSigningAlgValuesSupported;
   final List<String> grantTypesSupported;
   final List<String> idTokenSigningAlgValuesSupported;
   final String issuer;
@@ -3421,6 +3426,7 @@ class DiscoveryResponse {
     required this.authorizationEndpoint,
     required this.codeChallengeMethodsSupported,
     required this.deviceAuthorizationEndpoint,
+    this.dpopSigningAlgValuesSupported,
     required this.grantTypesSupported,
     required this.idTokenSigningAlgValuesSupported,
     required this.issuer,
@@ -3441,6 +3447,7 @@ class DiscoveryResponse {
       authorizationEndpoint: json['authorization_endpoint'] as String,
       codeChallengeMethodsSupported: (json['code_challenge_methods_supported'] as List).map((e) => e as String).toList(),
       deviceAuthorizationEndpoint: json['device_authorization_endpoint'] as String,
+      dpopSigningAlgValuesSupported: json['dpop_signing_alg_values_supported'] == null ? null : (json['dpop_signing_alg_values_supported'] as List).map((e) => e as String).toList(),
       grantTypesSupported: (json['grant_types_supported'] as List).map((e) => e as String).toList(),
       idTokenSigningAlgValuesSupported: (json['id_token_signing_alg_values_supported'] as List).map((e) => e as String).toList(),
       issuer: json['issuer'] as String,
@@ -3462,6 +3469,7 @@ class DiscoveryResponse {
       'authorization_endpoint': authorizationEndpoint,
       'code_challenge_methods_supported': codeChallengeMethodsSupported,
       'device_authorization_endpoint': deviceAuthorizationEndpoint,
+      if (dpopSigningAlgValuesSupported != null) 'dpop_signing_alg_values_supported': dpopSigningAlgValuesSupported,
       'grant_types_supported': grantTypesSupported,
       'id_token_signing_alg_values_supported': idTokenSigningAlgValuesSupported,
       'issuer': issuer,
@@ -4052,6 +4060,29 @@ class HealthResponse {
   String toString() => 'HealthResponse(${toJson()})';
 }
 
+class IntrospectConfirmation {
+  final String jkt;
+
+  const IntrospectConfirmation({
+    required this.jkt,
+  });
+
+  factory IntrospectConfirmation.fromJson(Map<String, dynamic> json) {
+    return IntrospectConfirmation(
+      jkt: json['jkt'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'jkt': jkt,
+    };
+  }
+
+  @override
+  String toString() => 'IntrospectConfirmation(${toJson()})';
+}
+
 class IntrospectRequest {
   final String token;
 
@@ -4079,6 +4110,7 @@ class IntrospectResponse {
   final bool active;
   final String? appId;
   final List<String>? aud;
+  final IntrospectConfirmation? cnf;
   final String? envId;
   final String? expiresAt;
   final String? orgId;
@@ -4090,6 +4122,7 @@ class IntrospectResponse {
     required this.active,
     this.appId,
     this.aud,
+    this.cnf,
     this.envId,
     this.expiresAt,
     this.orgId,
@@ -4103,6 +4136,7 @@ class IntrospectResponse {
       active: json['active'] as bool,
       appId: json['app_id'] as String?,
       aud: json['aud'] == null ? null : (json['aud'] as List).map((e) => e as String).toList(),
+      cnf: json['cnf'] == null ? null : IntrospectConfirmation.fromJson(Map<String, dynamic>.from(json['cnf'] as Map)),
       envId: json['env_id'] as String?,
       expiresAt: json['expires_at'] as String?,
       orgId: json['org_id'] as String?,
@@ -4117,6 +4151,7 @@ class IntrospectResponse {
       'active': active,
       if (appId != null) 'app_id': appId,
       if (aud != null) 'aud': aud,
+      if (cnf != null) 'cnf': cnf?.toJson(),
       if (envId != null) 'env_id': envId,
       if (expiresAt != null) 'expires_at': expiresAt,
       if (orgId != null) 'org_id': orgId,
@@ -5029,6 +5064,7 @@ class OAuth2Client {
   final String clientId;
   final String? clientSecretExpiresAt;
   final String createdAt;
+  final String? dpopMode;
   final bool dynamicallyRegistered;
   final List<String> grantTypes;
   final String id;
@@ -5046,6 +5082,7 @@ class OAuth2Client {
     required this.clientId,
     this.clientSecretExpiresAt,
     required this.createdAt,
+    this.dpopMode,
     required this.dynamicallyRegistered,
     required this.grantTypes,
     required this.id,
@@ -5065,6 +5102,7 @@ class OAuth2Client {
       clientId: json['client_id'] as String,
       clientSecretExpiresAt: json['client_secret_expires_at'] as String?,
       createdAt: json['created_at'] as String,
+      dpopMode: json['dpop_mode'] as String?,
       dynamicallyRegistered: json['dynamically_registered'] as bool,
       grantTypes: (json['grant_types'] as List).map((e) => e as String).toList(),
       id: json['id'] as String,
@@ -5085,6 +5123,7 @@ class OAuth2Client {
       'client_id': clientId,
       if (clientSecretExpiresAt != null) 'client_secret_expires_at': clientSecretExpiresAt,
       'created_at': createdAt,
+      if (dpopMode != null) 'dpop_mode': dpopMode,
       'dynamically_registered': dynamicallyRegistered,
       'grant_types': grantTypes,
       'id': id,

@@ -495,6 +495,7 @@ export interface CouponResponse {
 
 export interface CreateClientRequest {
   app_id: string;
+  dpop_mode?: string;
   grant_types?: string[];
   name: string;
   public?: boolean;
@@ -694,6 +695,7 @@ export interface DiscoveryResponse {
   authorization_endpoint: string;
   code_challenge_methods_supported: string[];
   device_authorization_endpoint: string;
+  dpop_signing_alg_values_supported?: string[];
   grant_types_supported: string[];
   id_token_signing_alg_values_supported: string[];
   issuer: string;
@@ -822,6 +824,10 @@ export interface HealthResponse {
   status: string;
 }
 
+export interface IntrospectConfirmation {
+  jkt: string;
+}
+
 export interface IntrospectRequest {
   token: string;
 }
@@ -830,6 +836,7 @@ export interface IntrospectResponse {
   active: boolean;
   app_id?: string;
   aud?: string[];
+  cnf?: IntrospectConfirmation;
   env_id?: string;
   expires_at?: string;
   org_id?: string;
@@ -1021,6 +1028,7 @@ export interface OAuth2Client {
   client_id: string;
   client_secret_expires_at?: string;
   created_at: string;
+  dpop_mode?: string;
   dynamically_registered: boolean;
   grant_types: string[];
   id: string;

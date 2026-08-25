@@ -221,6 +221,29 @@ ALTER TABLE authsome_oauth2_device_codes DROP COLUMN IF EXISTS resources;
 		},
 	)
 
+	// dpop_mode is this client's RFC 9449 mode override: "off", "optional",
+	// "required", or empty to inherit the app's setting. Empty is the default
+	// so every existing client keeps inheriting, unchanged by this migration.
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_oauth2_client_dpop_mode",
+			Version: "20260824000041",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_oauth2_clients
+    ADD COLUMN IF NOT EXISTS dpop_mode TEXT NOT NULL DEFAULT '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_oauth2_clients DROP COLUMN IF EXISTS dpop_mode;
+`)
+				return err
+			},
+		},
+	)
+
 	// ──────────────────────────────────────────────────
 	// SQLite migrations
 	// ──────────────────────────────────────────────────
@@ -361,6 +384,22 @@ UPDATE authsome_oauth2_clients
 			},
 			// Older SQLite cannot drop columns, so Down is a no-op, matching
 			// the migration above.
+			Down: func(_ context.Context, _ migrate.Executor) error {
+				return nil
+			},
+		},
+	)
+
+	// The SQLite counterpart of add_oauth2_client_dpop_mode.
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_oauth2_client_dpop_mode",
+			Version: "20260824000041",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_oauth2_clients ADD COLUMN dpop_mode TEXT NOT NULL DEFAULT '';`)
+				return err
+			},
+			// SQLite does not support DROP COLUMN in older versions; best-effort.
 			Down: func(_ context.Context, _ migrate.Executor) error {
 				return nil
 			},

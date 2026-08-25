@@ -12,12 +12,82 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
 )
+
+// dpopNonceChallengeError is the first-party equivalent of the OAuth2
+// plugin's use_dpop_nonce response (RFC 9449 §8): 400, with the error code a
+// DPoP client looks for to know it should retry carrying the DPoP-Nonce
+// header value the caller already set on the response before constructing
+// this. Unlike bindDPoP's caller, sign-in and sign-up have no single-use
+// artifact to protect, so nothing needs reordering here, just the same
+// response shape.
+type dpopNonceChallengeError struct{}
+
+func (dpopNonceChallengeError) Error() string { return "use_dpop_nonce" }
+
+func (dpopNonceChallengeError) StatusCode() int { return http.StatusBadRequest }
+
+func (dpopNonceChallengeError) ResponseBody() any {
+	return map[string]any{
+		"error":             "use_dpop_nonce",
+		"error_description": "a server-provided nonce is required",
+	}
+}
+
+// dpopBindingForRequest validates any DPoP proof on a first-party auth request
+// and returns the thumbprint to bind the new session to.
+//
+// Mirrors the OAuth2 plugin's bindDPoP. There is no OAuth client here, so only
+// the app's mode applies.
+func (a *API) dpopBindingForRequest(ctx forge.Context, appID id.AppID) (string, error) {
+	mode := a.engine.DPoPModeForApp(ctx.Context(), appID)
+	if mode == dpop.ModeOff {
+		return "", nil
+	}
+
+	raw := ctx.Request().Header.Get("DPoP")
+	if raw == "" {
+		if mode == dpop.ModeRequired {
+			return "", forge.BadRequest("a DPoP proof is required for this app")
+		}
+		return "", nil
+	}
+
+	proof, err := dpop.Parse(raw)
+	if err != nil {
+		return "", forge.BadRequest("invalid DPoP proof")
+	}
+
+	nonceRequired := a.engine.DPoPNonceRequiredForApp(ctx.Context(), appID)
+
+	if err := a.engine.DPoPValidator().Validate(ctx.Context(), proof, dpop.Expectation{
+		Method:        ctx.Request().Method,
+		URL:           middleware.RequestURL(ctx.Request()),
+		NonceRequired: nonceRequired,
+	}); err != nil {
+		if errors.Is(err, dpop.ErrNonceRequired) || errors.Is(err, dpop.ErrNonceMismatch) {
+			// A pre-authentication client has no other endpoint to obtain a
+			// nonce from, so unlike a resource-server 401 this must be a
+			// retryable challenge: 400 with the code the client watches for,
+			// plus a fresh nonce it can carry on the very next attempt.
+			// Without this, a nonce-required app rejects every DPoP-presenting
+			// client permanently, and under mode required that's a total
+			// lockout on /signin and /signup.
+			if signer := a.engine.DPoPNonceSigner(); signer != nil {
+				ctx.Response().Header().Set("DPoP-Nonce", signer.Issue(proof.JKT))
+			}
+			return "", dpopNonceChallengeError{}
+		}
+		return "", forge.BadRequest("invalid DPoP proof")
+	}
+	return proof.JKT, nil
+}
 
 // rateLimitOpt returns a forge.WithMiddleware option for rate limiting the given endpoint,
 // or nil if rate limiting is not enabled.
@@ -136,6 +206,11 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 		return nil, err
 	}
 
+	dpopJKT, err := a.dpopBindingForRequest(ctx, appID)
+	if err != nil {
+		return nil, err
+	}
+
 	httpReq := ctx.Request()
 	u, sess, err := a.engine.SignUp(ctx.Context(), &account.SignUpRequest{
 		AppID:     appID,
@@ -147,6 +222,7 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 		Metadata:  req.Metadata,
 		IPAddress: clientIPFromRequest(httpReq),
 		UserAgent: httpReq.UserAgent(),
+		DPoPJKT:   dpopJKT,
 	})
 	if err != nil {
 		// Enumeration resistance: a duplicate email must NOT be a probe-able
@@ -275,6 +351,11 @@ func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse
 		return nil, err
 	}
 
+	dpopJKT, err := a.dpopBindingForRequest(ctx, appID)
+	if err != nil {
+		return nil, err
+	}
+
 	httpReq := ctx.Request()
 	u, sess, err := a.engine.SignIn(ctx.Context(), &account.SignInRequest{
 		AppID:     appID,
@@ -283,6 +364,7 @@ func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse
 		Password:  req.Password,
 		IPAddress: clientIPFromRequest(httpReq),
 		UserAgent: httpReq.UserAgent(),
+		DPoPJKT:   dpopJKT,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -310,8 +392,11 @@ func (a *API) handleSignOut(ctx forge.Context, _ *SignOutRequest) (*StatusRespon
 func (a *API) handleRefresh(ctx forge.Context, req *RefreshRequest) (*TokenResponse, error) {
 	httpReq := ctx.Request()
 	opts := authsome.RefreshOpts{
-		IPAddress: clientIPFromRequest(httpReq),
-		UserAgent: httpReq.UserAgent(),
+		IPAddress:  clientIPFromRequest(httpReq),
+		UserAgent:  httpReq.UserAgent(),
+		DPoPProof:  httpReq.Header.Get("DPoP"),
+		Method:     httpReq.Method,
+		RequestURL: middleware.RequestURL(httpReq),
 	}
 
 	// Cookie-first: when the request carries a valid session cookie, rotate via

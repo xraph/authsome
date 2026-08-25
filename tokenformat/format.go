@@ -37,7 +37,10 @@ type TokenClaims struct {
 	// This overrides JWTConfig.Audience when set. The config value is a single
 	// static audience for a whole app, which predates resource indicators and
 	// stays as the fallback so existing deployments are unaffected.
-	Audience  []string `json:"aud,omitempty"`
+	Audience []string `json:"aud,omitempty"`
+	// DPoPJKT is the RFC 7638 thumbprint this token is bound to (RFC 9449).
+	// Empty means an unbound bearer token. Serialised as the cnf.jkt claim.
+	DPoPJKT   string `json:"-"`
 	IssuedAt  time.Time
 	ExpiresAt time.Time
 

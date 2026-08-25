@@ -96,6 +96,15 @@ type Session struct {
 	// DelegationID is the grant this session was minted against. Zero for an
 	// ordinary session.
 	DelegationID id.DelegationID `json:"delegation_id,omitempty"`
+
+	// DPoPJKT is the RFC 7638 thumbprint of the public key this session is
+	// bound to (RFC 9449). Empty means an ordinary unbound bearer session,
+	// which is what every session created before this field existed will be.
+	//
+	// Enforcement follows this value and not any configuration: once it is
+	// set, the session cannot be used without a matching proof, whatever the
+	// app or client mode says at the time of the request.
+	DPoPJKT string `json:"dpop_jkt,omitempty"`
 }
 
 // Subject returns the principal this session is for.

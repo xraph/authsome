@@ -23,6 +23,7 @@ import (
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/device"
+	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
@@ -171,7 +172,7 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 	e.promoteFirstUserToOwner(ctx, req.AppID, u.ID)
 
 	// Create session (using per-app + per-env config; JWT if configured)
-	sess, err := e.newSession(req.AppID, u.ID, e.sessionConfigForApp(ctx, req.AppID, req.EnvID))
+	sess, err := e.newSession(req.AppID, u.ID, e.sessionConfigForApp(ctx, req.AppID, req.EnvID), req.DPoPJKT)
 	if err != nil {
 		return nil, nil, fmt.Errorf("authsome: create session token: %w", err)
 	}
@@ -376,6 +377,7 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 		AuthMethod: "password",
 		IPAddress:  req.IPAddress,
 		UserAgent:  req.UserAgent,
+		DPoPJKT:    req.DPoPJKT,
 	})
 	if err != nil {
 		return u, nil, err
@@ -453,6 +455,13 @@ type RefreshOpts struct {
 	IPAddress string
 	// UserAgent is the client User-Agent to validate against the session's stored UA.
 	UserAgent string
+
+	// DPoPProof is the raw DPoP header from the refresh request. Required when
+	// the session being refreshed is bound; ignored when it is not.
+	DPoPProof string
+	// Method and RequestURL describe the refresh request, for htm and htu.
+	Method     string
+	RequestURL string
 }
 
 // hashRefreshToken returns the canonical hex-encoded SHA-256 of a refresh
@@ -564,6 +573,23 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 		}
 	}
 
+	// DPoP: a bound session may only be refreshed by the key it is bound to,
+	// and the rotated session keeps that binding.
+	//
+	// Both halves matter. Skipping the check lets a stolen refresh token be
+	// redeemed by anyone; skipping the inheritance lets it be redeemed once
+	// and traded for an unbound access token, which is the same outcome one
+	// rotation later.
+	if sess.DPoPJKT != "" {
+		o := RefreshOpts{}
+		if len(opts) > 0 {
+			o = opts[0]
+		}
+		if err := e.verifyRefreshDPoP(ctx, sess, o); err != nil {
+			return nil, account.ErrInvalidCredentials
+		}
+	}
+
 	// Lazily backfill FamilyID for legacy sessions that pre-date Phase 3E.2.
 	// Without a family, replay-cascade can't link siblings — but a single
 	// session is still safer than refusing every legacy refresh.
@@ -593,6 +619,7 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 			// Without this the first refresh turns a token bound to one
 			// resource server into an unrestricted one, silently.
 			Audience:  sess.Audience,
+			DPoPJKT:   sess.DPoPJKT,
 			IssuedAt:  sess.UpdatedAt,
 			ExpiresAt: sess.ExpiresAt,
 		})
@@ -647,6 +674,53 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 	})
 
 	return sess, nil
+}
+
+// verifyRefreshDPoP checks that a refresh of a bound session carries a proof
+// for the key it is bound to.
+//
+// A wrong-key proof gets its own audit action. A changed IP has innocent
+// explanations, a mobile network hand-off among them; a structurally valid
+// proof signed by a different key does not, so it should not sit in the same
+// bucket as ordinary client breakage.
+func (e *Engine) verifyRefreshDPoP(ctx context.Context, sess *session.Session, o RefreshOpts) error {
+	if o.DPoPProof == "" {
+		return dpop.ErrMalformedProof
+	}
+
+	proof, err := dpop.Parse(o.DPoPProof)
+	if err != nil {
+		return err
+	}
+
+	err = e.DPoPValidator().Validate(ctx, proof, dpop.Expectation{
+		Method:      o.Method,
+		URL:         o.RequestURL,
+		ExpectedJKT: sess.DPoPJKT,
+	})
+	if err == nil {
+		return nil
+	}
+
+	if errors.Is(err, dpop.ErrKeyMismatch) {
+		md := map[string]string{
+			"session_id": sess.ID.String(),
+			"bound_jkt":  sess.DPoPJKT,
+			"proof_jkt":  proof.JKT,
+			"ip":         o.IPAddress,
+		}
+		e.hooks.Emit(ctx, &hook.Event{
+			Action:     hook.ActionDPoPKeyMismatch,
+			Resource:   hook.ResourceSession,
+			ResourceID: sess.ID.String(),
+			ActorID:    sess.UserID.String(),
+			Tenant:     sess.AppID.String(),
+			Metadata:   md,
+		})
+		e.audit(ctx, bridge.SeverityWarning, bridge.OutcomeFailure,
+			"dpop_key_mismatch", "session", sess.ID.String(), sess.UserID.String(), sess.AppID.String(), "auth", md)
+	}
+	return err
 }
 
 // GetMe returns the current user by ID.
@@ -824,11 +898,20 @@ func (e *Engine) sessionConfigForApp(ctx context.Context, appID id.AppID, envIDs
 
 // newSession creates a new session, optionally generating a JWT access token
 // when the app is configured for JWT token format. Falls back to opaque tokens.
-func (e *Engine) newSession(appID id.AppID, userID id.UserID, cfg account.SessionConfig) (*session.Session, error) {
+//
+// dpopJKT is the RFC 9449 thumbprint to bind the session to; empty issues an
+// ordinary unbound session. It is threaded into the JWT's cnf claim here
+// rather than assigned to sess.DPoPJKT after the token is minted, because a
+// JWT-format token validates statelessly from its own claims: setting the
+// field on sess afterward would leave the DB row bound while the token
+// itself carries no proof-of-possession requirement, silently defeating the
+// binding for every JWT-format app.
+func (e *Engine) newSession(appID id.AppID, userID id.UserID, cfg account.SessionConfig, dpopJKT string) (*session.Session, error) {
 	sess, err := account.NewSession(appID, userID, cfg)
 	if err != nil {
 		return nil, err
 	}
+	sess.DPoPJKT = dpopJKT
 
 	// Check if app uses JWT for access tokens.
 	tokFmt := e.TokenFormatForApp(appID.String())
@@ -837,6 +920,7 @@ func (e *Engine) newSession(appID id.AppID, userID id.UserID, cfg account.Sessio
 			UserID:    userID.String(),
 			AppID:     appID.String(),
 			SessionID: sess.ID.String(),
+			DPoPJKT:   dpopJKT,
 			IssuedAt:  sess.CreatedAt,
 			ExpiresAt: sess.ExpiresAt,
 		})
@@ -2738,7 +2822,7 @@ func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID) (
 	cfg.TokenTTL = 1 * time.Hour
 	cfg.RefreshTokenTTL = 1 * time.Hour // same as token — not meant to be refreshed
 
-	sess, err := e.newSession(u.AppID, u.ID, cfg)
+	sess, err := e.newSession(u.AppID, u.ID, cfg, "")
 	if err != nil {
 		return nil, nil, fmt.Errorf("authsome: impersonate: create session: %w", err)
 	}

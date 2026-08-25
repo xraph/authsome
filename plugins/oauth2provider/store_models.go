@@ -32,6 +32,7 @@ type oauth2ClientModel struct {
 	DynamicallyRegistered   bool            `grove:"dynamically_registered,notnull"`
 	ClientSecretExpiresAt   *time.Time      `grove:"client_secret_expires_at"`
 	Metadata                json.RawMessage `grove:"metadata,type:jsonb"`
+	DPoPMode                string          `grove:"dpop_mode,notnull"`
 
 	CreatedAt time.Time `grove:"created_at,notnull,default:now()"`
 	UpdatedAt time.Time `grove:"updated_at,notnull,default:now()"`
@@ -134,6 +135,7 @@ func toOAuth2Client(m *oauth2ClientModel) (*OAuth2Client, error) {
 		DynamicallyRegistered:   m.DynamicallyRegistered,
 		ClientSecretExpiresAt:   m.ClientSecretExpiresAt,
 		Metadata:                metadata,
+		DPoPMode:                m.DPoPMode,
 		CreatedAt:               m.CreatedAt,
 		UpdatedAt:               m.UpdatedAt,
 	}, nil
@@ -178,6 +180,7 @@ func fromOAuth2Client(c *OAuth2Client) *oauth2ClientModel {
 		DynamicallyRegistered:   c.DynamicallyRegistered,
 		ClientSecretExpiresAt:   c.ClientSecretExpiresAt,
 		Metadata:                metadata,
+		DPoPMode:                c.DPoPMode,
 		CreatedAt:               c.CreatedAt,
 		UpdatedAt:               c.UpdatedAt,
 	}
