@@ -28,6 +28,19 @@ func NewMemoryStore() *MemoryStore {
 func (s *MemoryStore) CreateClient(_ context.Context, c *OAuth2Client) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// The persistent backends normalise nil slices to empty ones on the way
+	// through, so a client read back from them never carries a nil list. Do
+	// the same here or the in-memory store serialises null where the others
+	// serialise [].
+	if c.RedirectURIs == nil {
+		c.RedirectURIs = []string{}
+	}
+	if c.Scopes == nil {
+		c.Scopes = []string{}
+	}
+	if c.GrantTypes == nil {
+		c.GrantTypes = []string{}
+	}
 	s.clients[c.ClientID] = c
 	return nil
 }

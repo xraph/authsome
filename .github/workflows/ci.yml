@@ -41,6 +41,10 @@ jobs:
   # BLOCKING: all four backends (memory + sqlite from the `go` job, and
   # postgres + mongo here) must pass the same store contract, so behavioral
   # drift between implementations fails CI rather than shipping.
+  #
+  # The path covers ./plugins/... as well as ./store/..., because plugins ship
+  # their own four-backend stores and drift between those is the same class of
+  # bug. Packages with no TestConformance simply match nothing.
   integration:
     name: Store Conformance (pg + mongo)
     runs-on: ubuntu-latest
@@ -78,7 +82,7 @@ jobs:
       - name: Run store conformance suite
         env:
           AUTHSOME_MONGO_URI: mongodb://localhost:27017/authsome_test?replicaSet=rs0&directConnection=true
-        run: go test -tags integration -run 'TestConformance$' -count=1 -timeout 12m ./store/...
+        run: go test -tags integration -run 'TestConformance$' -count=1 -timeout 12m ./store/... ./plugins/...
 
   # ─── Lint ───────────────────────────────────────────────────────────
   lint:
