@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
+	log "github.com/xraph/go-utils/log"
+
 	"github.com/xraph/authsome/session"
 )
 
@@ -76,6 +78,16 @@ func HeaderOf(err error, name string) string {
 // checker, and any other error Authorize did not name as a sentinel. All
 // three share this single constructor call so their status, body, and
 // headers are structurally identical, not just similar by convention.
+//
+// Its rendered body is also, deliberately, byte-identical on the wire to
+// forge.Forbidden("insufficient permissions") as go-utils/errs renders it
+// (both produce {"error":"insufficient permissions","code":403}) — not
+// because opaqueDenial reuses that constructor (it can't; forge's type
+// carries no headers, see httpError's doc comment above), but because
+// matching its shape by hand means an agent cannot tell an agentauth denial
+// apart from a plain middleware.RequirePermission denial on a route that
+// stacks both. A host app composing the two gates does not thereby hand an
+// agent a way to identify which gate refused it.
 func opaqueDenial() *httpError {
 	return newHTTPError(http.StatusForbidden, "insufficient permissions")
 }
@@ -89,6 +101,13 @@ func opaqueDenial() *httpError {
 // opaque on purpose: reporting a user-gate refusal in the same shape as an
 // RBAC outage or any other denial would let an agent enumerate its owner's
 // permissions one request at a time.
+//
+// The returned error's headers (the WWW-Authenticate on the 401 and 403
+// cases) only reach the client through Guard, or through a caller that reads
+// HeaderOf itself and sets them by hand — forge has no header support on any
+// error type it recognizes (see httpError's doc comment), so a caller that
+// returns this error directly from a route handler gets the right status and
+// body but a silently dropped header.
 func (p *Plugin) AuthorizeHTTP(ctx context.Context, sess *session.Session, action, resource string) error {
 	err := p.Authorize(ctx, sess, action, resource)
 	switch {
@@ -121,9 +140,17 @@ func (p *Plugin) AuthorizeHTTP(ctx context.Context, sess *session.Session, actio
 		// Anything Authorize returns that is not one of the named sentinels
 		// above (a wrapped store or RBAC transport error, for instance) gets
 		// the same opaque treatment rather than leaking its text to the
-		// client. The internal error is not logged here; callers that want
-		// it logged should wrap this plugin's logger around Authorize
-		// directly.
+		// client. Unlike the named sentinels, this branch's "why" is not
+		// already implied by which case matched — a Mongo outage on the
+		// grant load and a Warden transport failure both land here — so it
+		// is logged server-side (matching middleware/rbac.go:36-43's
+		// "log the check error, still deny the request" shape) rather than
+		// discarded. httpError carries no Unwrap on purpose: logging here,
+		// once, is how this text is surfaced, not letting it resurface later
+		// through some caller's err.Error() on the returned httpError.
+		if p.logger != nil {
+			p.logger.Warn("agentauth: authorization check failed", log.Error(err))
+		}
 		return opaqueDenial()
 	}
 }
@@ -132,13 +159,26 @@ func (p *Plugin) AuthorizeHTTP(ctx context.Context, sess *session.Session, actio
 // insufficient_scope response can name it. Falls back to "action:resource"
 // when the host app registered no scope for it — that string is still safe
 // to report, since it only echoes the route's own requirement.
+//
+// If two scopes happen to confer the same Permission, the lexicographically
+// smallest scope name wins, deterministically. Ranging over p.scopes.scopes
+// (a Go map) and returning the first hit visited would instead vary randomly
+// request to request — the same route naming a different scope on every
+// retry is its own kind of confusing response, even though it leaks nothing.
 func (p *Plugin) scopeFor(action, resource string) string {
 	p.scopes.mu.RLock()
 	defer p.scopes.mu.RUnlock()
+	best := ""
 	for scope, perm := range p.scopes.scopes {
-		if perm.Action == action && perm.Resource == resource {
-			return scope
+		if perm.Action != action || perm.Resource != resource {
+			continue
+		}
+		if best == "" || scope < best {
+			best = scope
 		}
 	}
-	return action + ":" + resource
+	if best == "" {
+		return action + ":" + resource
+	}
+	return best
 }

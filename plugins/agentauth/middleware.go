@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	log "github.com/xraph/go-utils/log"
+
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/middleware"
@@ -36,6 +38,12 @@ var (
 // SetPermissionChecker injects the RBAC checker. OnInit does this from the
 // engine; tests use it directly.
 func (p *Plugin) SetPermissionChecker(pc plugin.PermissionChecker) { p.permChecker = pc }
+
+// SetLogger injects the logger AuthorizeHTTP's default branch uses to record
+// an authorization check failure that isn't one of Authorize's named
+// sentinels (a store or RBAC transport error). OnInit does this from the
+// engine; tests use it directly, mirroring SetPermissionChecker above.
+func (p *Plugin) SetLogger(l log.Logger) { p.logger = l }
 
 // Authorize enforces the intersection: an agent may do something only if its
 // grant confers it AND the delegating user can do it. A non-agent session
@@ -133,8 +141,11 @@ func (p *Plugin) Authorize(ctx context.Context, sess *session.Session, action, r
 }
 
 // Guard returns middleware enforcing the agent intersection for a route that
-// requires action on resource. It resolves the session the same way
-// middleware/rbac.go does, then delegates the decision entirely to
+// requires action on resource. It resolves the session with
+// middleware.SessionFrom — the whole *session.Session, not just a user id,
+// since Authorize needs PrincipalKind, AgentID and GrantID off it, which is
+// why this is not middleware/rbac.go's UserIDFrom (rbac.go's two middlewares
+// only ever need the id). It then delegates the decision entirely to
 // AuthorizeHTTP: a human session (or a request AuthorizeHTTP otherwise has no
 // opinion on) passes through untouched, and every denial gets the response
 // AuthorizeHTTP built for it, headers included, since forge's own error
@@ -142,7 +153,22 @@ func (p *Plugin) Authorize(ctx context.Context, sess *session.Session, action, r
 func (p *Plugin) Guard(action, resource string) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
-			sess, _ := middleware.SessionFrom(ctx.Context())
+			sess, ok := middleware.SessionFrom(ctx.Context())
+			if !ok {
+				// No session in context at all is a different condition
+				// from a grant that existed and is now revoked or expired.
+				// Authorize's own nil-session branch maps both to
+				// ErrGrantInactive — correct for Authorize's other callers,
+				// who already know whether they resolved a session — but
+				// routing an anonymous request through AuthorizeHTTP here
+				// would render error_description="agent grant revoked or
+				// expired" for a caller that never named a grant, sending
+				// an agent developer hunting a revocation that never
+				// happened. middleware/rbac.go:30-32 says "authentication
+				// required" for the same missing-identity condition;
+				// matching that here instead.
+				return forge.Unauthorized("authentication required")
+			}
 
 			err := p.AuthorizeHTTP(ctx.Context(), sess, action, resource)
 			if err == nil {
