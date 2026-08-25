@@ -151,6 +151,21 @@ jobs:
       - name: Generate SDKs
         run: make -C sdkgen generate SDK_OUT=../sdk SDK_PLUGINS=social,mfa,apikey,magiclink,sso
 
+      # The step above regenerates into the working tree. Until this check
+      # existed nothing compared the result against what is committed, so a
+      # change to a route or a request struct could ship without spec.json or
+      # the SDKs ever catching up, and the job still went green. That is how
+      # the SSO connection_id field reached main described nowhere in the spec.
+      - name: Check the committed SDKs match the generated ones
+        run: |
+          if ! git diff --quiet -- sdk/ sdkgen/spec.json; then
+            echo "::error::Generated SDKs differ from what is committed. Run: make -C sdkgen generate SDK_OUT=../sdk SDK_PLUGINS=social,mfa,apikey,magiclink,sso"
+            git diff --stat -- sdk/ sdkgen/spec.json
+            git diff -- sdkgen/spec.json | head -200
+            exit 1
+          fi
+          echo "Committed SDKs are up to date."
+
       - name: Upload SDK artifacts
         uses: actions/upload-artifact@v6
         with:
