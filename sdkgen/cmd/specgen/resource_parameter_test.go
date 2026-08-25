@@ -55,8 +55,7 @@ func queryParameter(t *testing.T, spec map[string]any, path, method, name string
 
 // The RFC 8707 resource indicator is repeatable, and the authorization
 // endpoint honours every value it is given. It only reaches a generated client
-// if the spec describes it, and the spec only describes parameters that exist
-// as fields on the handler's request struct.
+// if the spec describes it.
 //
 // Reading the raw request instead left the endpoint working over curl and
 // unreachable from every SDK, which is the state it was in until go-utils
