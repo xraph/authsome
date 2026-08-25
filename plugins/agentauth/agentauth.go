@@ -109,6 +109,7 @@ type Store interface {
 	RevokeAgentGrant(ctx context.Context, grantID id.AgentGrantID) error
 	RevokeGrantsByUser(ctx context.Context, userID id.UserID) error
 	RevokeGrantsByUserOrg(ctx context.Context, userID id.UserID, orgID id.OrgID) error
+	RevokeGrantsByOrg(ctx context.Context, orgID id.OrgID) error
 	RevokeGrantsByAgent(ctx context.Context, agentID id.AgentID, orgID id.OrgID) error
 
 	GetOrgPolicy(ctx context.Context, orgID id.OrgID) (*OrgAgentPolicy, error)

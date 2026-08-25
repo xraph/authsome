@@ -15,6 +15,7 @@ var (
 	_ plugin.AfterUserUpdate    = (*Plugin)(nil)
 	_ plugin.AfterUserDelete    = (*Plugin)(nil)
 	_ plugin.BeforeMemberRemove = (*Plugin)(nil)
+	_ plugin.AfterOrgDelete     = (*Plugin)(nil)
 )
 
 // OnAfterUserUpdate revokes every grant a user issued once they are banned.
@@ -49,6 +50,22 @@ func (p *Plugin) OnBeforeMemberRemove(ctx context.Context, m *organization.Membe
 	// coarser than necessary here (it also drops unrelated grants' cache
 	// entries), but correctness matters more than cache hit rate on an
 	// offboarding path that runs rarely.
+	p.cache.clear()
+	return nil
+}
+
+// OnAfterOrgDelete revokes every grant scoped to the deleted organization,
+// regardless of which user issued it. organization.Plugin.DeleteOrganization
+// cascades member deletion without emitting BeforeMemberRemove (it deletes
+// members as part of its own atomic cascade, not one at a time through
+// RemoveMember), so OnBeforeMemberRemove never sees an org's members leave
+// when the org itself is deleted. Without this hook, deleting an org would
+// leave every grant scoped to it live until each one separately expired —
+// the same offboarding hole member removal closes, just at the org level.
+func (p *Plugin) OnAfterOrgDelete(ctx context.Context, orgID id.OrgID) error {
+	if err := p.store.RevokeGrantsByOrg(ctx, orgID); err != nil {
+		return fmt.Errorf("agentauth: revoke org grants: %w", err)
+	}
 	p.cache.clear()
 	return nil
 }

@@ -141,3 +141,30 @@ func TestOnBeforeMemberRemove_RevokesOnlyThatOrg(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, survivor.RevokedAt, "grants in the user's other orgs must survive")
 }
+
+// TestOnAfterOrgDelete_RevokesOnlyThatOrgsGrants closes the last offboarding
+// hole: DeleteOrganization cascades member deletion without going through
+// RemoveMember, so OnBeforeMemberRemove never fires when an org itself is
+// deleted. Without OnAfterOrgDelete, deleting an org would leave every grant
+// scoped to it live. Grants belonging to two different users under the
+// deleted org must both go, and a grant scoped to an unrelated org (even for
+// one of the same users) must survive — a sweep this broad is exactly as
+// much a bug as one that's too narrow.
+func TestOnAfterOrgDelete_RevokesOnlyThatOrgsGrants(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(agentauth.WithStore(store))
+	deleted, other := id.NewOrgID(), id.NewOrgID()
+	userA, userB := id.NewUserID(), id.NewUserID()
+
+	goneA := grantFor(t, store, userA, deleted)
+	goneB := grantFor(t, store, userB, deleted)
+	kept := grantFor(t, store, userA, other)
+
+	require.NoError(t, p.OnAfterOrgDelete(context.Background(), deleted))
+
+	assertRevoked(t, store, goneA.ID)
+	assertRevoked(t, store, goneB.ID)
+	survivor, err := store.GetAgentGrant(context.Background(), kept.ID)
+	require.NoError(t, err)
+	assert.Nil(t, survivor.RevokedAt, "a grant scoped to a different org must survive, even for a user who also had a grant in the deleted org")
+}

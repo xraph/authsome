@@ -183,6 +183,21 @@ func (s *MemoryStore) RevokeGrantsByUserOrg(_ context.Context, userID id.UserID,
 	return nil
 }
 
+// RevokeGrantsByOrg revokes every grant scoped to orgID, regardless of which
+// user issued it. Deleting an organization has to disarm every agent acting
+// under it, not just one member's — that is the whole org's authorization
+// surface, not a single user-org pair the way RevokeGrantsByUserOrg is.
+func (s *MemoryStore) RevokeGrantsByOrg(_ context.Context, orgID id.OrgID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, g := range s.grants {
+		if g.OrgID.String() == orgID.String() {
+			s.revokeLocked(g)
+		}
+	}
+	return nil
+}
+
 func (s *MemoryStore) RevokeGrantsByAgent(_ context.Context, agentID id.AgentID, orgID id.OrgID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

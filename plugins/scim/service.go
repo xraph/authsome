@@ -226,6 +226,14 @@ func (s *Service) ProvisionUser(ctx context.Context, cfg *SCIMConfig, scimUser *
 		if err := s.authStore.UpdateUser(ctx, existing); err != nil {
 			return nil, ActionUpdateUser, err
 		}
+		// ProvisionUser backs both PUT /Users/:id (handleReplaceUser) and a
+		// POST that resolves to an existing user, and either can flip Banned.
+		// handleCreateUser forces Active = true before calling in, so the
+		// POST case never actually bans here, but PUT can and must still be
+		// seen by plugins watching AfterUserUpdate.
+		if s.plugins != nil {
+			s.plugins.EmitAfterUserUpdate(ctx, existing)
+		}
 		return existing, ActionUpdateUser, nil
 	}
 
