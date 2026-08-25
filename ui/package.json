@@ -17,12 +17,12 @@
     "build-storybook": "turbo run build-storybook"
   },
   "devDependencies": {
-    "@eslint/js": "^9",
-    "eslint": "^9",
-    "eslint-plugin-react-hooks": "^5",
-    "turbo": "^2.4.0",
-    "typescript": "^5.8.0",
-    "typescript-eslint": "^8"
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.9.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "turbo": "2.10.12",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.68.0"
   },
   "engines": {
     "node": ">=20"
@@ -33,13 +33,14 @@
       "next@<15.5.16": "15.5.16",
       "vite@<=6.4.2": "6.4.3",
       "ws@>=8.0.0 <8.21.0": "8.21.0",
-      "brace-expansion@>=3.0.0 <5.0.7": "5.0.7",
       "minimatch@>=9.0.0 <9.0.7": "9.0.7",
       "picomatch@>=4.0.0 <4.0.4": "4.0.4",
-      "postcss@<8.5.10": "8.5.10",
       "@babel/core@<7.29.6": "7.29.6",
       "turbo@<2.9.14": "2.9.14",
-      "uuid@<11.1.1": "11.1.1"
+      "uuid@<11.1.1": "11.1.1",
+      "postcss@<8.5.26": "8.5.26",
+      "brace-expansion@<5.0.9": "5.0.9",
+      "esbuild@<0.28.1": "0.28.2"
     }
   }
 }
