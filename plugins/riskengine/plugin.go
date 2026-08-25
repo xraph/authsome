@@ -372,11 +372,20 @@ func (p *Plugin) auditAssessment(ctx context.Context, req *RiskRequest, assessme
 		"signals_count": fmt.Sprintf("%d", len(assessment.Signals)),
 	}
 
+	// A machine caller has no user id, so req.UserID is empty by design on
+	// that path. Fall back to Principal so a blocked or challenged agent
+	// still leaves an audit row with an actor on it: an audit row with no
+	// actor is not an audit row.
+	actorID := req.UserID
+	if actorID == "" {
+		actorID = req.Principal
+	}
+
 	if p.chronicle != nil {
 		_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 			Action:   "risk_assessment",
 			Resource: "auth",
-			ActorID:  req.UserID,
+			ActorID:  actorID,
 			Tenant:   req.AppID,
 			Outcome:  bridge.OutcomeSuccess,
 			Severity: severity,

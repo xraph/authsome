@@ -10,6 +10,7 @@ import (
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/principal"
@@ -232,6 +233,34 @@ func TestOnBeforePrincipalAuth_SetsPrincipalNotUserID(t *testing.T) {
 	require.NotNil(t, spy.got)
 	assert.Equal(t, "agent:svc_1", spy.got.Principal)
 	assert.Empty(t, spy.got.UserID, "a machine caller has no user id")
+}
+
+// A blocked machine caller must still leave an audit row with an actor
+// attached. Before the Principal fallback in auditAssessment, ActorID stayed
+// empty for every agent or workload riskengine blocked or challenged, since
+// UserID is empty by design on that path: an audit row with no actor is not
+// an audit row.
+func TestOnBeforePrincipalAuth_AuditsBlockedCallerWithPrincipalActor(t *testing.T) {
+	contrib := &mockContributor{name: "test", score: 90, weight: 1.0}
+	p := newTestPlugin(Config{}, contrib)
+
+	var captured *bridge.AuditEvent
+	p.chronicle = bridge.ChronicleFunc(func(_ context.Context, event *bridge.AuditEvent) error {
+		captured = event
+		return nil
+	})
+
+	err := p.OnBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject:        principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+		AppID:          id.NewAppID(),
+		IPAddress:      "1.2.3.4",
+		CredentialKind: "api_key",
+	})
+	require.Error(t, err, "a high-risk machine caller must still be denied")
+
+	require.NotNil(t, captured, "a blocked machine caller must still write an audit row")
+	assert.Equal(t, "agent:svc_1", captured.ActorID,
+		"the audit actor must be the principal ref, not empty")
 }
 
 // OnBeforeSignIn must leave Principal empty: account.SignInRequest carries
