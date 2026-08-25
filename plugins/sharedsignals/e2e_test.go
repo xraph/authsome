@@ -201,7 +201,7 @@ func TestEndToEnd_UpstreamRevocationKillsLiveSessions(t *testing.T) {
 
 	// The IdP decides the account is compromised and pushes the event.
 	body := idp.sessionRevokedSET(t, "https://authsome.test/ssf", "idp-user-1")
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+	req := httptest.NewRequest(http.MethodPost,
 		"/v1/ssf/streams/"+created.PushURLPath+"/events", stringReader(body))
 	req.Header.Set("Content-Type", "application/secevent+jwt")
 	req.Header.Set("Authorization", "Bearer "+created.PushToken)
@@ -218,14 +218,18 @@ func TestEndToEnd_UpstreamRevocationKillsLiveSessions(t *testing.T) {
 	// And a durable signal is left behind for the next sign-in to score.
 	signal, err := ssf.EvaluateRisk(ctx, e2eRiskRequest(appID, u.Email))
 	require.NoError(t, err)
-	assert.Greater(t, signal.Score, 90,
-		"the revocation must also leave a high-confidence risk signal")
+	// The signal is deliberately capped into riskengine's challenge band:
+	// a confirmed compromise steps the next sign-in up, it does not bar it.
+	assert.GreaterOrEqual(t, signal.Score, 60,
+		"the revocation must leave a signal strong enough to challenge")
+	assert.Less(t, signal.Score, 85,
+		"but not strong enough to block the sign-in outright")
 
 	// A valid SET replayed a second time must not revoke anything a second
 	// time -- there is nothing left to revoke, and the dedupe row must
 	// answer 202 rather than reprocessing the event.
 	rec2 := httptest.NewRecorder()
-	req2 := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+	req2 := httptest.NewRequest(http.MethodPost,
 		"/v1/ssf/streams/"+created.PushURLPath+"/events", stringReader(body))
 	req2.Header.Set("Content-Type", "application/secevent+jwt")
 	req2.Header.Set("Authorization", "Bearer "+created.PushToken)
@@ -261,7 +265,7 @@ func TestEndToEnd_ForgedSETLeavesSessionsAlone(t *testing.T) {
 	// Signed by the attacker's key, but the stream only trusts the real IdP's
 	// JWKS, so the signature check fails.
 	body := attacker.sessionRevokedSET(t, "https://authsome.test/ssf", "idp-user-1")
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+	req := httptest.NewRequest(http.MethodPost,
 		"/v1/ssf/streams/"+created.PushURLPath+"/events", stringReader(body))
 	req.Header.Set("Content-Type", "application/secevent+jwt")
 	req.Header.Set("Authorization", "Bearer "+created.PushToken)
@@ -286,7 +290,10 @@ func TestEndToEnd_StoredSignalReachesTheRiskEngine(t *testing.T) {
 	idp := newE2ETransmitter(t)
 
 	ssf := New(Config{Audience: "https://authsome.test/ssf"})
-	risk := riskengine.New()
+	// A deliberately low block threshold, so "was the contributor reached?"
+	// stays observable through OnBeforeSignIn. The default policy is asserted
+	// separately below.
+	risk := riskengine.NewWithConfig(riskengine.Config{HighThreshold: 70})
 	eng := secutil.NewTestEngine(t,
 		authsome.WithPlugin(ssf), authsome.WithPlugin(risk))
 
@@ -317,7 +324,7 @@ func TestEndToEnd_StoredSignalReachesTheRiskEngine(t *testing.T) {
 
 	// The IdP reports the compromise.
 	body := idp.sessionRevokedSET(t, "https://authsome.test/ssf", "idp-user-1")
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+	req := httptest.NewRequest(http.MethodPost,
 		"/v1/ssf/streams/"+created.PushURLPath+"/events", stringReader(body))
 	req.Header.Set("Content-Type", "application/secevent+jwt")
 	req.Header.Set("Authorization", "Bearer "+created.PushToken)
@@ -331,6 +338,13 @@ func TestEndToEnd_StoredSignalReachesTheRiskEngine(t *testing.T) {
 		AppID: appID, Email: u.Email, IPAddress: "203.0.113.10",
 	})
 	require.Error(t, err,
-		"a session-revoked signal must reach the risk engine and score high enough to stop the sign-in")
+		"a session-revoked signal must reach the risk engine through a contributor nobody wired by hand")
 	assert.Contains(t, err.Error(), "riskengine")
+
+	// And with the shipped defaults the same signal challenges rather than
+	// blocking, so the user can still authenticate and be stepped up.
+	defaults := riskengine.New(ssf)
+	require.NoError(t, defaults.OnBeforeSignIn(ctx, &account.SignInRequest{
+		AppID: appID, Email: u.Email, IPAddress: "203.0.113.10",
+	}), "on default thresholds a confirmed compromise must challenge, not block")
 }
