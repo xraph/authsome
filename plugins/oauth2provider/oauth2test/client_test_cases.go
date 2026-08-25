@@ -91,6 +91,7 @@ func testClientEmptySlicesRoundTrip(t *testing.T, f Fixture) {
 	c.RedirectURIs = nil
 	c.Scopes = nil
 	c.GrantTypes = nil
+	c.Resources = nil
 	require.NoError(t, f.Store.CreateClient(ctx, c))
 
 	got, err := f.Store.GetClient(ctx, c.ClientID)
@@ -101,6 +102,8 @@ func testClientEmptySlicesRoundTrip(t *testing.T, f Fixture) {
 	assert.NotNil(t, got.RedirectURIs, "nil redirect URIs must read back as [], not null")
 	assert.NotNil(t, got.Scopes, "nil scopes must read back as [], not null")
 	assert.NotNil(t, got.GrantTypes, "nil grant types must read back as [], not null")
+	assert.Empty(t, got.Resources)
+	assert.NotNil(t, got.Resources, "nil resources must read back as [], not null")
 }
 
 func testClientSlicesRoundTrip(t *testing.T, f Fixture) {
@@ -109,6 +112,7 @@ func testClientSlicesRoundTrip(t *testing.T, f Fixture) {
 	c.RedirectURIs = []string{"https://a.test/cb", "https://b.test/cb"}
 	c.Scopes = []string{"openid", "profile", "email"}
 	c.GrantTypes = []string{"authorization_code", "refresh_token"}
+	c.Resources = []string{"https://api.example.test", "https://admin.example.test"}
 	c.Public = true
 	require.NoError(t, f.Store.CreateClient(ctx, c))
 
@@ -117,5 +121,55 @@ func testClientSlicesRoundTrip(t *testing.T, f Fixture) {
 	assert.Equal(t, c.RedirectURIs, got.RedirectURIs, "redirect URI order and contents must survive")
 	assert.Equal(t, c.Scopes, got.Scopes)
 	assert.Equal(t, c.GrantTypes, got.GrantTypes)
+	assert.Equal(t, c.Resources, got.Resources,
+		"the resource allow-list decides which audiences a token may be issued for")
 	assert.True(t, got.Public)
+}
+
+// testUpdateClientPersistsEveryField covers the full-record replace that the
+// admin update and secret-rotation handlers both write through. It builds a
+// separate struct rather than mutating the one it created, so a backend that
+// hands back the pointer it already holds cannot pass without writing.
+func testUpdateClientPersistsEveryField(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	original := newClient(f.AppID)
+	require.NoError(t, f.Store.CreateClient(ctx, original))
+
+	updated := &oauth2provider.OAuth2Client{
+		ID:           original.ID,
+		AppID:        original.AppID,
+		Name:         "Renamed Client",
+		ClientID:     original.ClientID,
+		ClientSecret: "rotated-secret",
+		RedirectURIs: []string{"https://new.example.test/cb"},
+		Scopes:       []string{"openid", "offline_access"},
+		GrantTypes:   []string{"client_credentials"},
+		Resources:    []string{"https://other.example.test"},
+		Public:       !original.Public,
+		CreatedAt:    original.CreatedAt,
+		UpdatedAt:    now(),
+	}
+	require.NoError(t, f.Store.UpdateClient(ctx, updated))
+
+	got, err := f.Store.GetClient(ctx, original.ClientID)
+	require.NoError(t, err)
+	assert.Equal(t, "Renamed Client", got.Name)
+	assert.Equal(t, "rotated-secret", got.ClientSecret,
+		"secret rotation writes through this path; a dropped write leaves the old secret live")
+	assert.Equal(t, updated.RedirectURIs, got.RedirectURIs)
+	assert.Equal(t, updated.Scopes, got.Scopes)
+	assert.Equal(t, updated.GrantTypes, got.GrantTypes)
+	assert.Equal(t, updated.Resources, got.Resources,
+		"the resource allow-list must survive a full-record update")
+	assert.Equal(t, updated.Public, got.Public)
+}
+
+// testUpdateClientOnMissingClient pins the failure mode. Updating a client
+// that is not there must say so, not report success against nothing.
+func testUpdateClientOnMissingClient(t *testing.T, f Fixture) {
+	ghost := newClient(f.AppID)
+	err := f.Store.UpdateClient(context.Background(), ghost)
+	require.Error(t, err, "updating a client that was never created must not succeed")
+	assert.True(t, errors.Is(err, oauth2provider.ErrClientNotFound),
+		"a missing client must report ErrClientNotFound, got %v", err)
 }

@@ -41,6 +41,9 @@ func (s *MemoryStore) CreateClient(_ context.Context, c *OAuth2Client) error {
 	if c.GrantTypes == nil {
 		c.GrantTypes = []string{}
 	}
+	if c.Resources == nil {
+		c.Resources = []string{}
+	}
 	s.clients[c.ClientID] = c
 	return nil
 }

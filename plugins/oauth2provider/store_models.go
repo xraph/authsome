@@ -123,6 +123,9 @@ func toOAuth2Client(m *oauth2ClientModel) (*OAuth2Client, error) {
 	// Rows written before the empty-slice guard was fixed still hold JSON
 	// null, which decodes to a nil slice and serialises straight back out as
 	// null. The mongo decoder has always normalised here; match it.
+	if resources == nil {
+		resources = []string{}
+	}
 	if redirectURIs == nil {
 		redirectURIs = []string{}
 	}
@@ -170,7 +173,7 @@ func fromOAuth2Client(c *OAuth2Client) *oauth2ClientModel {
 		grantTypes = []byte("[]")
 	}
 	resources, _ := json.Marshal(c.Resources) //nolint:errcheck // marshaling known types
-	if len(resources) == 0 {
+	if len(c.Resources) == 0 {
 		resources = []byte("[]")
 	}
 

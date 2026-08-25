@@ -50,6 +50,8 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"ClientListIsAppScoped", testClientListIsAppScoped},
 		{"ClientEmptySlicesRoundTrip", testClientEmptySlicesRoundTrip},
 		{"ClientSlicesRoundTrip", testClientSlicesRoundTrip},
+		{"UpdateClientPersistsEveryField", testUpdateClientPersistsEveryField},
+		{"UpdateClientOnMissingClient", testUpdateClientOnMissingClient},
 		{"AuthCodeRoundTrip", testAuthCodeRoundTrip},
 		{"ConsumeAuthCodeOnce", testConsumeAuthCodeOnce},
 		{"ConsumeAuthCodeReplay", testConsumeAuthCodeReplay},
@@ -89,6 +91,7 @@ func newClient(appID id.AppID) *oauth2provider.OAuth2Client {
 		RedirectURIs: []string{"https://example.test/cb"},
 		Scopes:       []string{"openid", "profile"},
 		GrantTypes:   []string{"authorization_code"},
+		Resources:    []string{"https://api.example.test"},
 		CreatedAt:    now(),
 		UpdatedAt:    now(),
 	}
