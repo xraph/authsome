@@ -57,18 +57,9 @@ func queryParameter(t *testing.T, spec map[string]any, path, method, name string
 // endpoint honours every value it is given. It only reaches a generated client
 // if the spec describes it.
 //
-// This was skipped on the premise that the spec can only describe parameters
-// carried as fields on the handler's request struct, which would have meant
-// waiting for bindQueryParam to handle repeated values. That premise was
-// wrong. forge.WithQuerySchema takes a schema the request struct does not have
-// to carry, so resourceQuery declares the parameter for the document while
-// handleAuthorize goes on reading the raw query. The two are independent, and
-// the description does not have to wait for the binder.
-//
-// The binder still matters for the shape of the code rather than for this
-// test. go-utils v1.1.8 fixes bindQueryParam, and once that lands
-// AuthorizeRequest can carry a real query-tagged field, at which point
-// resourceQuery and resourceParams both go and this test keeps passing.
+// Reading the raw request instead left the endpoint working over curl and
+// unreachable from every SDK, which is the state it was in until go-utils
+// taught bindQueryParam to keep every occurrence of a repeated parameter.
 func TestSpec_AuthorizeExposesRepeatableResource(t *testing.T) {
 	param := queryParameter(t, committedSpec(t), "/v1/oauth/authorize", "get", "resource")
 

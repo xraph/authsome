@@ -66,9 +66,9 @@ func tokenFixture(t *testing.T) (oauth2provider.Store, authstore.Store, forge.Ro
 
 // postTokenJSON posts an arbitrary JSON body to /v1/oauth/token. Unlike
 // postToken (map[string]string), this accepts the "resource" field as a
-// []string. The body is JSON, not form-encoded, so resourceParams finds
-// nothing in the query or the form, so any resource value here can only
-// have reached the grant through TokenRequest.Resource's encoding/json tag.
+// []string. The body is JSON, not form-encoded, so the form tag on
+// TokenRequest.Resource has nothing to bind from, and any resource value here
+// can only have reached the grant through that field's encoding/json tag.
 func postTokenJSON(t *testing.T, mux forge.Router, body map[string]any) *httptest.ResponseRecorder {
 	t.Helper()
 	b, err := json.Marshal(body)
@@ -81,13 +81,11 @@ func postTokenJSON(t *testing.T, mux forge.Router, body map[string]any) *httptes
 	return rec
 }
 
-// postDeviceAuthorize posts a JSON body carrying client_id to
-// /v1/oauth/device/authorize, with the resource indicators on the query
-// string. DeviceAuthRequest has no field for "resource": it is read
-// straight off the request by resourceParams, which checks the query string
-// on every method, so putting it there exercises that path without touching
-// the JSON-bound client_id. Repeating the parameter is how RFC 8707 asks for
-// more than one resource.
+// postDeviceAuthorize posts a form-encoded body to
+// /v1/oauth/device/authorize carrying client_id and the resource indicators.
+// DeviceAuthRequest.Resource is a []string with a form tag, which bindFormParam
+// fills from every occurrence, so repeating the field is both what RFC 8707
+// asks for and what the binder reads.
 func postDeviceAuthorize(t *testing.T, mux forge.Router, clientID string, resources ...string) *httptest.ResponseRecorder {
 	t.Helper()
 	// Form-encoded, the way RFC 8628 section 3.1 defines the request and the
@@ -354,11 +352,11 @@ func TestTokenResource(t *testing.T) {
 	})
 
 	// Case 6: a JSON token request carrying "resource": [...] must work. The
-	// form-encoded case is served by resourceParams reading the raw request;
-	// this body is JSON with no query string, so resourceParams finds
-	// nothing and the only way narrowResources ever sees the value is through
+	// form-encoded case is served by the form tag, which bindFormParam fills
+	// from every occurrence; this body is JSON, so that tag binds nothing and
+	// the only way narrowResources ever sees the value is through
 	// TokenRequest.Resource's json tag decoding it.
-	t.Run("a JSON resource array binds through encoding/json, not resourceParams", func(t *testing.T) {
+	t.Run("a JSON resource array binds through encoding/json, not the form tag", func(t *testing.T) {
 		st, acct, mux := tokenFixture(t)
 		grantResources(t, st, resAPI, resFiles)
 

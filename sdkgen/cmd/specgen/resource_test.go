@@ -95,8 +95,8 @@ func formBodyProperty(t *testing.T, op map[string]any, name string) map[string]a
 //
 // An array is the whole of it. Query parameters and form fields both default to
 // style form with explode true, so an array means the name is sent once per
-// value, which is what RFC 8707 asks for and what resourceParams honours on the
-// way back in.
+// value, which is what RFC 8707 asks for and what the struct binder reads back
+// on the way in.
 func assertRepeatableString(t *testing.T, schema map[string]any) {
 	t.Helper()
 

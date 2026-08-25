@@ -81,3 +81,57 @@ describe('form-encoded request bodies', () => {
     expect(new URLSearchParams(body()).has('resource')).toBe(false);
   });
 });
+
+/**
+ * Builds a client whose transport records the URL it was called with.
+ */
+function clientRecordingURL(): { client: AuthClient; url: () => string } {
+  let sent = '';
+
+  const client = new AuthClient({
+    baseURL: 'https://auth.example.com',
+    fetch: async (url) => {
+      sent = String(url);
+      return new Response(null, { status: 204 });
+    },
+  });
+
+  return { client, url: () => sent };
+}
+
+describe('query-string parameters', () => {
+  // A query string carries repeated keys, the same as a form body does. The
+  // authorization endpoint reads every `resource` it is given, so an array has
+  // to be written one element at a time rather than stringified.
+  it('sends a one-element array as a single parameter', async () => {
+    const { client, url } = clientRecordingURL();
+
+    await client.oauth2Authorize('code', 'the-client', undefined, undefined, undefined, undefined, undefined, [
+      'https://api.example.com',
+    ]);
+
+    expect(new URL(url()).searchParams.getAll('resource')).toEqual(['https://api.example.com']);
+  });
+
+  it('repeats the parameter once per element for a two-element array', async () => {
+    const { client, url } = clientRecordingURL();
+
+    await client.oauth2Authorize('code', 'the-client', undefined, undefined, undefined, undefined, undefined, [
+      'https://a.example.com',
+      'https://b.example.com',
+    ]);
+
+    expect(new URL(url()).searchParams.getAll('resource')).toEqual([
+      'https://a.example.com',
+      'https://b.example.com',
+    ]);
+  });
+
+  it('keeps an absent array off the query string', async () => {
+    const { client, url } = clientRecordingURL();
+
+    await client.oauth2Authorize('code', 'the-client');
+
+    expect(new URL(url()).searchParams.has('resource')).toBe(false);
+  });
+});

@@ -321,6 +321,13 @@ func (c *Client) {{ .Name }}(ctx context.Context
 		if params.{{ .GoName }} {
 			q.Set("{{ .Name }}", "true")
 		}
+{{- else if eq .Type "[]string" }}
+		// Repeated once per element. A query string carries repeated keys, not
+		// lists, which is how RFC 8707 sends `resource`. A slice is also not
+		// comparable, so the zero-value check below would not compile for one.
+		for _, v := range params.{{ .GoName }} {
+			q.Add("{{ .Name }}", v)
+		}
 {{- else }}
 		var zero{{ .GoName }} {{ .Type }}
 		if params.{{ .GoName }} != zero{{ .GoName }} {

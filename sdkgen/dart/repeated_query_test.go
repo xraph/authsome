@@ -72,7 +72,7 @@ func repeatedDartClient(t *testing.T) string {
 func TestGenerate_QueryParamsAreBuiltFromPairs(t *testing.T) {
 	content := repeatedDartClient(t)
 
-	assert.Contains(t, content, "final queryParams = <MapEntry<String, String>>[];")
+	assert.Contains(t, content, "final queryPairs = <MapEntry<String, String>>[];")
 	assert.NotContains(t, content, "final queryParams = <String, String>{};")
 }
 
@@ -85,10 +85,8 @@ func TestGenerate_RepeatedQueryParamAddsOnePairPerValue(t *testing.T) {
 	content := repeatedDartClient(t)
 
 	assert.Contains(t, content, strings.Join([]string{
-		"    if (resource != null) {",
-		"      for (final v in resource) {",
-		"        queryParams.add(MapEntry('resource', v.toString()));",
-		"      }",
+		"    for (final element in resource ?? const []) {",
+		"      queryPairs.add(MapEntry('resource', element.toString()));",
 		"    }",
 	}, "\n"))
 }
@@ -99,16 +97,16 @@ func TestGenerate_ScalarQueryParamsStillContributeOnePair(t *testing.T) {
 	content := repeatedDartClient(t)
 
 	assert.Contains(t, content,
-		"queryParams.add(MapEntry('client_id', clientId.toString()));")
+		"queryPairs.add(MapEntry('client_id', clientId.toString()));")
 }
 
 // The query string is assembled off the pairs, so repeats survive to the wire.
 func TestGenerate_QueryStringIsAssembledFromPairs(t *testing.T) {
 	content := repeatedDartClient(t)
 
-	assert.Contains(t, content, "queryParams.isNotEmpty")
+	assert.Contains(t, content, "queryPairs.isNotEmpty")
 	assert.Contains(t, content,
-		"queryParams.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')")
+		"queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')")
 	// The old form read .entries off a map; a list has no such member.
-	assert.NotContains(t, content, "queryParams.entries.map")
+	assert.NotContains(t, content, "queryPairs.entries.map")
 }

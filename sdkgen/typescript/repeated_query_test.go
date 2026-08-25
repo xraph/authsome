@@ -71,7 +71,7 @@ func repeatedClientSource(t *testing.T) string {
 func TestGenerate_RepeatedQueryParamIsAppendedPerValue(t *testing.T) {
 	content := repeatedClientSource(t)
 
-	assert.Contains(t, content, `for (const v of resource) params.append('resource', String(v));`)
+	assert.Contains(t, content, `for (const element of resource) params.append('resource', String(element));`)
 	assert.NotContains(t, content, `params.set('resource'`)
 }
 

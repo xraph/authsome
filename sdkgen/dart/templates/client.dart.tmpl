@@ -74,26 +74,31 @@ class AuthClient {
   Future<{{ if isVoid $op.ResponseType }}void{{ else }}{{ $op.ResponseType }}{{ end }}> {{ $op.Name }}({{ buildDartParams $op }}) async {
     final path = {{ buildDartPath $op.Path $op.PathParams }};
 {{- if hasQueryParams $op.QueryParams }}
-    // A list of pairs rather than a map, because a repeatable parameter sends
-    // the same name more than once and a Map<String, String> cannot hold that.
-    // Every parameter goes through it, so there is one way a query string gets
-    // built instead of two that have to agree.
-    final queryParams = <MapEntry<String, String>>[];
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
 {{- range $op.QueryParams }}
-{{- if .Repeated }}
-    if ({{ .DartName }} != null) {
-      for (final v in {{ .DartName }}) {
-        queryParams.add(MapEntry('{{ .Name }}', v.toString()));
-      }
+{{- if isArrayType .Type }}
+{{- if .Required }}
+    for (final element in {{ .DartName }}) {
+      queryPairs.add(MapEntry('{{ .Name }}', element.toString()));
     }
-{{- else if .Required }}
-    queryParams.add(MapEntry('{{ .Name }}', {{ .DartName }}.toString()));
 {{- else }}
-    if ({{ .DartName }} != null) queryParams.add(MapEntry('{{ .Name }}', {{ .DartName }}.toString()));
+    for (final element in {{ .DartName }} ?? const []) {
+      queryPairs.add(MapEntry('{{ .Name }}', element.toString()));
+    }
+{{- end }}
+{{- else }}
+{{- if .Required }}
+    queryPairs.add(MapEntry('{{ .Name }}', {{ .DartName }}.toString()));
+{{- else }}
+    if ({{ .DartName }} != null) queryPairs.add(MapEntry('{{ .Name }}', {{ .DartName }}.toString()));
 {{- end }}
 {{- end }}
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+{{- end }}
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
 {{- end }}
 {{ if isVoid $op.ResponseType }}    await _request(
