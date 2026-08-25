@@ -206,6 +206,13 @@ func (a *API) consumeDummyHashBudget(password string) {
 		},
 	}
 	_, _ = account.HashPasswordWithPolicy(password, policy) //nolint:errcheck // dummy hash for timing budget
+
+	// Test-only observation point (nil in production). Reports the policy
+	// actually used so a test can assert the duplicate path hashes with the
+	// same cost parameters a real signup pays, without timing the request.
+	if a.hashBudgetObserver != nil {
+		a.hashBudgetObserver(policy)
+	}
 }
 
 // syntheticSignupResponse returns a response shaped exactly like a real
