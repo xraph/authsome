@@ -55,23 +55,21 @@ func queryParameter(t *testing.T, spec map[string]any, path, method, name string
 
 // The RFC 8707 resource indicator is repeatable, and the authorization
 // endpoint honours every value it is given. It only reaches a generated client
-// if the spec describes it, and the spec only describes parameters that exist
-// as fields on the handler's request struct.
+// if the spec describes it.
 //
-// The field cannot exist yet. go-utils v1.1.7 taught bindFormParam to fill a
-// []string from a repeated parameter, which is why the device endpoint below
-// carries one, but bindQueryParam still reads a single value through c.Query.
-// A []string query field would therefore bind the first resource and silently
-// drop the rest, which is worse than the error the old binder raised, so
-// handleAuthorize reads the raw query instead and the parameter stays
-// undescribed.
+// This was skipped on the premise that the spec can only describe parameters
+// carried as fields on the handler's request struct, which would have meant
+// waiting for bindQueryParam to handle repeated values. That premise was
+// wrong. forge.WithQuerySchema takes a schema the request struct does not have
+// to carry, so resourceQuery declares the parameter for the document while
+// handleAuthorize goes on reading the raw query. The two are independent, and
+// the description does not have to wait for the binder.
 //
-// Unskip this once bindQueryParam handles repeated values: add
-// `Resource []string` with a query tag to AuthorizeRequest, drop
-// resourceParams, and regenerate.
+// The binder still matters for the shape of the code rather than for this
+// test. go-utils v1.1.8 fixes bindQueryParam, and once that lands
+// AuthorizeRequest can carry a real query-tagged field, at which point
+// resourceQuery and resourceParams both go and this test keeps passing.
 func TestSpec_AuthorizeExposesRepeatableResource(t *testing.T) {
-	t.Skip("blocked on go-utils bindQueryParam, which collapses a repeated query parameter to its first value")
-
 	param := queryParameter(t, committedSpec(t), "/v1/oauth/authorize", "get", "resource")
 
 	require.NotNil(t, param, "the authorize endpoint should describe a resource query parameter")

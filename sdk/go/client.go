@@ -2074,6 +2074,9 @@ func (c *Client) Oauth2Authorize(ctx context.Context, params *Oauth2AuthorizePar
 		if params.CodeChallengeMethod != "" {
 			q.Set("code_challenge_method", params.CodeChallengeMethod)
 		}
+		for _, v := range params.Resource {
+			q.Add("resource", v)
+		}
 		if encoded := q.Encode(); encoded != "" {
 			path += "?" + encoded
 		}
@@ -3267,13 +3270,14 @@ type ListAPIKeysParams struct {
 
 // Oauth2AuthorizeParams holds optional query parameters for Oauth2Authorize.
 type Oauth2AuthorizeParams struct {
-	ResponseType        string `json:"response_type,omitempty"`
-	ClientID            string `json:"client_id,omitempty"`
-	RedirectURI         string `json:"redirect_uri,omitempty"`
-	Scope               string `json:"scope,omitempty"`
-	State               string `json:"state,omitempty"`
-	CodeChallenge       string `json:"code_challenge,omitempty"`
-	CodeChallengeMethod string `json:"code_challenge_method,omitempty"`
+	ResponseType        string   `json:"response_type,omitempty"`
+	ClientID            string   `json:"client_id,omitempty"`
+	RedirectURI         string   `json:"redirect_uri,omitempty"`
+	Scope               string   `json:"scope,omitempty"`
+	State               string   `json:"state,omitempty"`
+	CodeChallenge       string   `json:"code_challenge,omitempty"`
+	CodeChallengeMethod string   `json:"code_challenge_method,omitempty"`
+	Resource            []string `json:"resource,omitempty"`
 }
 
 // CheckOrgSlugParams holds optional query parameters for CheckOrgSlug.

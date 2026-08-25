@@ -7,6 +7,35 @@ import (
 	"github.com/xraph/authsome/internal/resourceuri"
 )
 
+// resourceQuery documents the RFC 8707 resource indicator on the authorization
+// endpoint. It is never bound to and never populated.
+//
+// Nothing reads this struct at request time; resourceParams below does that off
+// the raw query. It exists because a parameter the handler reads by hand is a
+// parameter the generated document knows nothing about, and an undocumented
+// parameter is one no SDK can send. forge.WithQuerySchema reflects over the tags
+// for the document only -- its metadata key is read by the OpenAPI generator and
+// by nothing else -- so declaring the shape here cannot put a []string in front
+// of a binder that could not cope with one.
+//
+// The type is what carries the meaning. A query parameter defaults to style form
+// with explode true, so an array says "send it again per value", which is what
+// RFC 8707 asks for and what resourceParams already honours.
+//
+// Only /authorize needs this, and only because it is the one endpoint still
+// reading its values by hand. The two POST endpoints bind theirs through the
+// request struct, so forge describes those from the field itself.
+//
+// This replaced forge.WithParameter, which up to v1.9.11 wrote route metadata
+// that the OpenAPI generator never read: it compiled, ran, returned no error,
+// and put nothing in the document. Forge v1.9.12 fixed that, and the struct
+// still stays. WithParameter takes no type argument and infers one from its
+// example, so a field that says []string beats an example a later edit could
+// quietly trim to a bare string.
+type resourceQuery struct {
+	Resource []string `query:"resource" description:"RFC 8707 resource indicator. Repeatable. Absolute URI, no fragment." optional:"true"`
+}
+
 // resourceParams reads the repeatable RFC 8707 resource parameter off a query
 // string.
 //
@@ -19,10 +48,11 @@ import (
 // rest. Reading the query directly is the only way the authorization endpoint
 // sees every value it was sent.
 //
-// The cost is that the parameter stays out of the OpenAPI document, since
-// forge describes query parameters by reflecting over the request struct and
-// nothing else. No generated client can send a resource indicator to
-// /authorize until bindQueryParam handles repeated values.
+// The parameter is still described in the document. forge.WithQuerySchema
+// takes a schema the request struct does not have to carry, so resourceQuery
+// above declares the shape and generated clients can send it. go-utils v1.1.8
+// fixes bindQueryParam, and once that lands AuthorizeRequest can carry a real
+// query-tagged field and both this function and resourceQuery can go.
 func resourceParams(r *http.Request) []string {
 	if r == nil {
 		return nil

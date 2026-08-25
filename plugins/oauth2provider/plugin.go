@@ -261,6 +261,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("OAuth2 Authorization"),
 		forge.WithDescription("Authorization endpoint for the OAuth2 authorization code flow."),
 		forge.WithOperationID("oauth2Authorize"),
+		forge.WithQuerySchema(resourceQuery{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -656,7 +657,10 @@ type DeviceAuthRequest struct {
 	ClientID string `json:"client_id" form:"client_id"`
 	Scope    string `json:"scope,omitempty" form:"scope,omitempty"`
 	// RFC 8707, repeatable. RFC 8628 section 3.1 makes this endpoint
-	// form-encoded, the same as the token endpoint.
+	// form-encoded, the same as the token endpoint, and bindFormParam fills a
+	// []string from every occurrence. The document describes the field from
+	// these tags, so this endpoint needs no separate declaration the way
+	// /authorize does.
 	Resource []string `json:"resource,omitempty" form:"resource,omitempty"`
 }
 

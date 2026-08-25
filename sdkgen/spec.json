@@ -27089,6 +27089,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "RFC 8707 resource indicator. Repeatable. Absolute URI, no fragment.",
+            "in": "query",
+            "name": "resource",
+            "schema": {
+              "description": "RFC 8707 resource indicator. Repeatable. Absolute URI, no fragment.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
           }
         ],
         "responses": {
