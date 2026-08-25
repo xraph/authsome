@@ -305,3 +305,29 @@ func TestGenerate_FormEncodedBodyKeepsItsFields(t *testing.T) {
 	assert.Contains(t, typesContent, "code?: string")
 	assert.NotContains(t, typesContent, "Oauth2TokenRequest = Record<string, unknown>")
 }
+
+// RFC 6749 section 4.1.3 requires application/x-www-form-urlencoded at the
+// token endpoint, so the generated client has to encode those bodies as a form
+// rather than posting JSON at them.
+func TestGenerate_FormEncodedBodyIsPostedAsForm(t *testing.T) {
+	gen := typescript.NewGenerator(typescript.GeneratorConfig{})
+	files, err := gen.Generate(formBodySpec())
+	require.NoError(t, err)
+
+	var clientContent string
+	for _, f := range files {
+		if strings.HasSuffix(f.Path, "client.ts") {
+			clientContent = f.Content
+			break
+		}
+	}
+	require.NotEmpty(t, clientContent)
+
+	// The helper and the header live in the request plumbing and are emitted
+	// whether or not anything uses them, so asserting on those alone would pass
+	// with the encoder switched off. What proves the wiring is the call site
+	// electing to use it.
+	assert.Contains(t, clientContent, "      body,\n      true,\n    );")
+	assert.Contains(t, clientContent, "application/x-www-form-urlencoded")
+	assert.Contains(t, clientContent, "encodeForm")
+}

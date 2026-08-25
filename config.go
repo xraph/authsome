@@ -158,6 +158,13 @@ type RateLimitConfig struct {
 	// window (default: 3). Caps how fast fresh codes can be minted.
 	ResendVerificationLimit int `json:"resend_verification_limit"`
 
+	// SSFPushLimit is the max Shared Signals push deliveries accepted per
+	// window per client (default: 60). Defence in depth only: rate limiting
+	// is off unless Enabled is set, so the real controls on this endpoint are
+	// the secret path, the bearer token, the signature, and the per-stream
+	// circuit breaker.
+	SSFPushLimit int `json:"ssf_push_limit"`
+
 	// WindowSeconds is the sliding window duration in seconds (default: 60).
 	WindowSeconds int `json:"window_seconds"`
 
@@ -228,6 +235,7 @@ func DefaultConfig() Config {
 			MFAChallengeLimit:       5,
 			VerifyEmailLimit:        10,
 			ResendVerificationLimit: 3,
+			SSFPushLimit:            60,
 			WindowSeconds:           60,
 		},
 		Lockout: LockoutConfig{

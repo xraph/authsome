@@ -99,7 +99,31 @@ func (p *SessionProvider) Authenticate(ctx context.Context, r *http.Request) (*a
 		return nil, auth.ErrInvalidCredentials
 	}
 
-	// 4. Resolve user from session
+	// 4. A caller that is not a person has no user row to resolve. Answer with
+	//    the principal itself.
+	//
+	//    Without this branch resolveUser("") fails below and every route behind
+	//    forge.WithGroupAuth("session") or plugin.SessionGuard answers 401 to a
+	//    credential that is otherwise entirely valid, which is what made
+	//    service accounts unusable on any guarded route.
+	if !sess.IsHumanPrincipal() {
+		ref := sess.Subject()
+		return &auth.AuthContext{
+			Subject:      ref.ID,
+			ProviderName: "session",
+			// Same reasoning as the user branch below: forge's authorizer does
+			// set membership over this field, so a route declaring
+			// forge.WithAnyRole denies a machine caller until it is populated.
+			Roles: sess.Roles,
+			Data:  &SessionData{Session: sess},
+			Claims: map[string]any{
+				"principal_kind": string(ref.Kind),
+				"principal_id":   ref.ID,
+			},
+		}, nil
+	}
+
+	// 5. Resolve user from session
 	u, err := p.resolveUser(sess.UserID.String())
 	if err != nil {
 		p.logger.Debug("session auth: failed to resolve user",
@@ -199,8 +223,11 @@ func BridgeToContext(ctx forge.Context, data *SessionData) {
 
 	if data.User != nil {
 		goCtx = authmw.WithUser(goCtx, data.User)
-		goCtx = authmw.WithAuthMethod(goCtx, "session")
 	}
+	// Outside the guard above on purpose. A machine caller has no user, and
+	// leaving the auth method unset for it meant a request reached the handler
+	// with nothing recording how it got there.
+	goCtx = authmw.WithAuthMethod(goCtx, "session")
 
 	ctx.WithContext(goCtx)
 }

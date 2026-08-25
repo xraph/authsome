@@ -137,3 +137,16 @@ func TestGenerate_InlineBodyMethodTakesTheRequestClass(t *testing.T) {
 	assert.Contains(t, client, "required Oauth2TokenRequest body")
 	assert.Contains(t, client, "body: body.toJson()")
 }
+
+// RFC 6749 section 4.1.3 requires application/x-www-form-urlencoded at the
+// token endpoint, so the generated client has to encode those bodies as a form
+// rather than posting JSON at them.
+func TestGenerate_FormEncodedBodyIsPostedAsForm(t *testing.T) {
+	gen := dart.NewGenerator(dart.GeneratorConfig{})
+	files, err := gen.Generate(inlineFormBodySpec())
+	require.NoError(t, err)
+
+	client := dartFile(t, files, "client.dart")
+	assert.Contains(t, client, "application/x-www-form-urlencoded")
+	assert.Contains(t, client, "form: true")
+}

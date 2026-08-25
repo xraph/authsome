@@ -23,6 +23,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/ratelimit"
+	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -102,6 +103,14 @@ type Engine interface {
 	CeremonyStore() ceremony.Store
 	// APIKeyStore returns the API key store.
 	APIKeyStore() apikey.Store
+	// SecurityEvents returns the queryable security event store, or nil when
+	// the engine was built without one.
+	//
+	// Plugins write here directly rather than emitting a hook. The hook-bus
+	// bridge builds its Event from Action, Outcome, Metadata and CreatedAt
+	// only, never setting AppID, and securityevent.Query filters on AppID, so
+	// anything recorded that way is written but cannot be read back.
+	SecurityEvents() securityevent.Store
 
 	// ── User / session resolution ──
 
@@ -173,6 +182,22 @@ type LedgerEngineProvider interface {
 // ledger store for direct query access.
 type LedgerStoreProvider interface {
 	LedgerStore() any
+}
+
+// SessionRevoker is optionally implemented by engines that can revoke a
+// single session by ID. Revoking through this rather than deleting rows
+// directly keeps the AfterSessionRevoke hooks, the hook bus and the outbound
+// relay firing. *authsome.Engine already satisfies it.
+type SessionRevoker interface {
+	RevokeSession(ctx context.Context, sessionID id.SessionID) error
+}
+
+// DispatcherProvider is optionally implemented by engines that expose a
+// background job queue. A plugin that needs deferred work should fall back to
+// its own goroutine when the host returns nil. *authsome.Engine already
+// satisfies it.
+type DispatcherProvider interface {
+	Dispatcher() bridge.Dispatcher
 }
 
 // ──────────────────────────────────────────────────

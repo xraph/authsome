@@ -594,14 +594,15 @@ type GetAppSessionConfigRequest struct {
 
 // SetAppSessionConfigRequest binds the path and body for PUT /admin/apps/:appId/session-config.
 type SetAppSessionConfigRequest struct {
-	AppID                  string `path:"appId" description:"Application identifier"`
-	TokenTTLSeconds        *int   `json:"token_ttl_seconds,omitempty" description:"Token TTL in seconds (nil = inherit)"`
-	RefreshTokenTTLSeconds *int   `json:"refresh_token_ttl_seconds,omitempty" description:"Refresh token TTL in seconds (nil = inherit)"`
-	MaxActiveSessions      *int   `json:"max_active_sessions,omitempty" description:"Maximum active sessions per user (nil = inherit)"`
-	RotateRefreshToken     *bool  `json:"rotate_refresh_token,omitempty" description:"Rotate refresh token on use (nil = inherit)"`
-	BindToIP               *bool  `json:"bind_to_ip,omitempty" description:"Bind sessions to IP address (nil = inherit)"`
-	BindToDevice           *bool  `json:"bind_to_device,omitempty" description:"Bind sessions to device (nil = inherit)"`
-	TokenFormat            string `json:"token_format,omitempty" description:"Token format: opaque or jwt (empty = inherit)"`
+	AppID                   string `path:"appId" description:"Application identifier"`
+	TokenTTLSeconds         *int   `json:"token_ttl_seconds,omitempty" description:"Token TTL in seconds (nil = inherit)"`
+	RefreshTokenTTLSeconds  *int   `json:"refresh_token_ttl_seconds,omitempty" description:"Refresh token TTL in seconds (nil = inherit)"`
+	TokenExchangeTTLSeconds *int   `json:"token_exchange_ttl_seconds,omitempty" description:"RFC 8693 token exchange TTL in seconds (nil = inherit)"`
+	MaxActiveSessions       *int   `json:"max_active_sessions,omitempty" description:"Maximum active sessions per user (nil = inherit)"`
+	RotateRefreshToken      *bool  `json:"rotate_refresh_token,omitempty" description:"Rotate refresh token on use (nil = inherit)"`
+	BindToIP                *bool  `json:"bind_to_ip,omitempty" description:"Bind sessions to IP address (nil = inherit)"`
+	BindToDevice            *bool  `json:"bind_to_device,omitempty" description:"Bind sessions to device (nil = inherit)"`
+	TokenFormat             string `json:"token_format,omitempty" description:"Token format: opaque or jwt (empty = inherit)"`
 }
 
 // DeleteAppSessionConfigRequest binds the path for DELETE /admin/apps/:appId/session-config.

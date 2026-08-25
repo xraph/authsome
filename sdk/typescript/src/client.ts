@@ -157,8 +157,6 @@ import type {
   RefreshRequest,
   RegisterBeginRequest,
   RegisterBeginResponse,
-  RegisterClientRequest,
-  RegisterClientResponse,
   RegisterFinishResponse,
   ResendVerificationRequest,
   ResetPasswordRequest,
@@ -207,7 +205,6 @@ import type {
   UpdateMeRequest,
   UpdateMemberRequest,
   UpdateOrgRequest,
-  UpdateRegistrationRequest,
   UpdateRoleRequest,
   UpdateTeamRequest,
   UpdateWebhookRequest,
@@ -245,8 +242,6 @@ import type {
   VerifySMSCodeRequest,
   Oauth2DeviceAuthorizeRequest,
   Oauth2DeviceCompleteRequest,
-  Oauth2RegisterClientRequest,
-  Oauth2UpdateRegistrationRequest,
   Oauth2RevokeRequest,
   Oauth2TokenRequest,
   CreateOrganizationRequest,
@@ -264,6 +259,21 @@ import type {
   StartSSOLoginByDomainRequest,
   ResendEmailVerificationRequest,
 } from './types';
+
+/**
+ * Encodes a body as application/x-www-form-urlencoded, which RFC 6749 section
+ * 4.1.3 requires at the OAuth2 token endpoint. Absent values stay off the wire
+ * entirely, the same as the JSON path omits them.
+ */
+function encodeForm(body: unknown): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
+    if (value !== undefined && value !== null) {
+      params.set(key, String(value));
+    }
+  }
+  return params.toString();
+}
 
 export interface AuthClientConfig {
   /** Base URL of the AuthSome API (e.g., "https://api.example.com") */
@@ -350,7 +360,7 @@ export class AuthClient {
    * OpenID Connect Discovery
    * GET /.well-known/openid-configuration
    */
-  async oidcDiscoveryPrefixed(): Promise<DiscoveryResponse> {
+  async oidcDiscovery(): Promise<DiscoveryResponse> {
     const path = "/.well-known/openid-configuration";
     return this.request<DiscoveryResponse>(
       'GET',
@@ -2125,6 +2135,7 @@ export class AuthClient {
       'POST',
       path,
       body,
+      true,
     );
   }
 
@@ -2138,58 +2149,7 @@ export class AuthClient {
       'POST',
       path,
       body,
-    );
-  }
-
-  /**
-   * Register OAuth2 client
-   * POST /v1/oauth/register
-   */
-  async oauth2RegisterClient(body: Oauth2RegisterClientRequest): Promise<RegisterClientResponse> {
-    const path = "/v1/oauth/register";
-    return this.request<RegisterClientResponse>(
-      'POST',
-      path,
-      body,
-    );
-  }
-
-  /**
-   * Read OAuth2 client registration
-   * GET /v1/oauth/register/{clientId}
-   */
-  async oauth2ReadRegistration(clientId: string): Promise<RegisterClientResponse> {
-    const path = `/v1/oauth/register/${clientId}`;
-    return this.request<RegisterClientResponse>(
-      'GET',
-      path,
-      undefined,
-    );
-  }
-
-  /**
-   * Update OAuth2 client registration
-   * PUT /v1/oauth/register/{clientId}
-   */
-  async oauth2UpdateRegistration(clientId: string, body: Oauth2UpdateRegistrationRequest): Promise<RegisterClientResponse> {
-    const path = `/v1/oauth/register/${clientId}`;
-    return this.request<RegisterClientResponse>(
-      'PUT',
-      path,
-      body,
-    );
-  }
-
-  /**
-   * Delete OAuth2 client registration
-   * DELETE /v1/oauth/register/{clientId}
-   */
-  async oauth2DeleteRegistration(clientId: string): Promise<void> {
-    const path = `/v1/oauth/register/${clientId}`;
-    return this.request<void>(
-      'DELETE',
-      path,
-      undefined,
+      true,
     );
   }
 
@@ -2203,6 +2163,7 @@ export class AuthClient {
       'POST',
       path,
       body,
+      true,
     );
   }
 
@@ -2216,6 +2177,7 @@ export class AuthClient {
       'POST',
       path,
       body,
+      true,
     );
   }
 
@@ -3064,9 +3026,10 @@ export class AuthClient {
     method: string,
     path: string,
     body?: unknown,
+    form?: boolean,
   ): Promise<T> {
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      'Content-Type': form ? 'application/x-www-form-urlencoded' : 'application/json',
       'Accept': 'application/json',
     };
 
@@ -3080,7 +3043,7 @@ export class AuthClient {
     const response = await this.fetchFn(`${this.baseURL}${path}`, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : undefined,
+      body: body ? (form ? encodeForm(body) : JSON.stringify(body)) : undefined,
     });
 
     if (!response.ok) {

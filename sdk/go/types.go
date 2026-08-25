@@ -789,7 +789,6 @@ type DiscoveryResponse struct {
 	IDTokenSigningAlgValuesSupported  []string `json:"id_token_signing_alg_values_supported"`
 	Issuer                            string   `json:"issuer"`
 	JwksURI                           string   `json:"jwks_uri"`
-	RegistrationEndpoint              string   `json:"registration_endpoint,omitempty"`
 	ResponseTypesSupported            []string `json:"response_types_supported"`
 	RevocationEndpoint                string   `json:"revocation_endpoint"`
 	ScopesSupported                   []string `json:"scopes_supported"`
@@ -1050,9 +1049,8 @@ type LoginBeginResponse struct {
 
 // LoginByDomainRequest represents the LoginByDomainRequest schema.
 type LoginByDomainRequest struct {
-	ConnectionID string `json:"connection_id,omitempty"`
-	Email        string `json:"email"`
-	ReturnURL    string `json:"return_url,omitempty"`
+	Email     string `json:"email"`
+	ReturnURL string `json:"return_url,omitempty"`
 }
 
 // LoginFinishResponse represents the LoginFinishResponse schema.
@@ -1152,20 +1150,16 @@ type Name struct {
 
 // OAuth2Client represents the OAuth2Client schema.
 type OAuth2Client struct {
-	AppID                   string         `json:"app_id"`
-	ClientID                string         `json:"client_id"`
-	ClientSecretExpiresAt   string         `json:"client_secret_expires_at,omitempty"`
-	CreatedAt               string         `json:"created_at"`
-	DynamicallyRegistered   bool           `json:"dynamically_registered"`
-	GrantTypes              []string       `json:"grant_types"`
-	ID                      string         `json:"id"`
-	Metadata                map[string]any `json:"metadata,omitempty"`
-	Name                    string         `json:"name"`
-	Public                  bool           `json:"public"`
-	RedirectUris            []string       `json:"redirect_uris"`
-	Scopes                  []string       `json:"scopes"`
-	TokenEndpointAuthMethod string         `json:"token_endpoint_auth_method,omitempty"`
-	UpdatedAt               string         `json:"updated_at"`
+	AppID        string   `json:"app_id"`
+	ClientID     string   `json:"client_id"`
+	CreatedAt    string   `json:"created_at"`
+	GrantTypes   []string `json:"grant_types"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Public       bool     `json:"public"`
+	RedirectUris []string `json:"redirect_uris"`
+	Scopes       []string `json:"scopes"`
+	UpdatedAt    string   `json:"updated_at"`
 }
 
 // Oauth2providerTokenResponse represents the Oauth2providerTokenResponse schema.
@@ -1299,46 +1293,6 @@ type RegisterBeginRequest struct {
 // RegisterBeginResponse represents the RegisterBeginResponse schema.
 type RegisterBeginResponse struct {
 	Options map[string]any `json:"options"`
-}
-
-// RegisterClientRequest represents the RegisterClientRequest schema.
-type RegisterClientRequest struct {
-	ClientName              string   `json:"client_name,omitempty"`
-	ClientURI               string   `json:"client_uri,omitempty"`
-	Contacts                []string `json:"contacts,omitempty"`
-	GrantTypes              []string `json:"grant_types,omitempty"`
-	LogoURI                 string   `json:"logo_uri,omitempty"`
-	PolicyURI               string   `json:"policy_uri,omitempty"`
-	RedirectUris            []string `json:"redirect_uris"`
-	ResponseTypes           []string `json:"response_types,omitempty"`
-	Scope                   string   `json:"scope,omitempty"`
-	SoftwareID              string   `json:"software_id,omitempty"`
-	SoftwareVersion         string   `json:"software_version,omitempty"`
-	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method,omitempty"`
-	TosURI                  string   `json:"tos_uri,omitempty"`
-}
-
-// RegisterClientResponse represents the RegisterClientResponse schema.
-type RegisterClientResponse struct {
-	ClientID                string   `json:"client_id"`
-	ClientIDIssuedAt        int64    `json:"client_id_issued_at"`
-	ClientName              string   `json:"client_name,omitempty"`
-	ClientSecret            string   `json:"client_secret,omitempty"`
-	ClientSecretExpiresAt   int64    `json:"client_secret_expires_at"`
-	ClientURI               string   `json:"client_uri,omitempty"`
-	Contacts                []string `json:"contacts,omitempty"`
-	GrantTypes              []string `json:"grant_types"`
-	LogoURI                 string   `json:"logo_uri,omitempty"`
-	PolicyURI               string   `json:"policy_uri,omitempty"`
-	RedirectUris            []string `json:"redirect_uris"`
-	RegistrationAccessToken string   `json:"registration_access_token,omitempty"`
-	RegistrationClientURI   string   `json:"registration_client_uri,omitempty"`
-	ResponseTypes           []string `json:"response_types"`
-	Scope                   string   `json:"scope"`
-	SoftwareID              string   `json:"software_id,omitempty"`
-	SoftwareVersion         string   `json:"software_version,omitempty"`
-	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
-	TosURI                  string   `json:"tos_uri,omitempty"`
 }
 
 // RegisterFinishResponse represents the RegisterFinishResponse schema.
@@ -1717,24 +1671,6 @@ type UpdateOrgRequest struct {
 	Name string `json:"name,omitempty"`
 }
 
-// UpdateRegistrationRequest represents the UpdateRegistrationRequest schema.
-type UpdateRegistrationRequest struct {
-	ClientID                string   `json:"client_id,omitempty"`
-	ClientName              string   `json:"client_name,omitempty"`
-	ClientSecret            string   `json:"client_secret,omitempty"`
-	ClientURI               string   `json:"client_uri,omitempty"`
-	Contacts                []string `json:"contacts,omitempty"`
-	GrantTypes              []string `json:"grant_types,omitempty"`
-	LogoURI                 string   `json:"logo_uri,omitempty"`
-	PolicyURI               string   `json:"policy_uri,omitempty"`
-	RedirectUris            []string `json:"redirect_uris"`
-	Scope                   string   `json:"scope,omitempty"`
-	SoftwareID              string   `json:"software_id,omitempty"`
-	SoftwareVersion         string   `json:"software_version,omitempty"`
-	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method,omitempty"`
-	TosURI                  string   `json:"tos_uri,omitempty"`
-}
-
 // UpdateRoleRequest represents the UpdateRoleRequest schema.
 type UpdateRoleRequest struct {
 	Description string `json:"description,omitempty"`
@@ -2042,41 +1978,6 @@ type Oauth2DeviceCompleteRequest struct {
 	UserCode string `json:"user_code"`
 }
 
-// Oauth2RegisterClientRequest is the request body for Oauth2RegisterClient.
-type Oauth2RegisterClientRequest struct {
-	ClientName              string   `json:"client_name,omitempty"`
-	ClientURI               string   `json:"client_uri,omitempty"`
-	Contacts                []string `json:"contacts,omitempty"`
-	GrantTypes              []string `json:"grant_types,omitempty"`
-	LogoURI                 string   `json:"logo_uri,omitempty"`
-	PolicyURI               string   `json:"policy_uri,omitempty"`
-	RedirectUris            []string `json:"redirect_uris"`
-	ResponseTypes           []string `json:"response_types,omitempty"`
-	Scope                   string   `json:"scope,omitempty"`
-	SoftwareID              string   `json:"software_id,omitempty"`
-	SoftwareVersion         string   `json:"software_version,omitempty"`
-	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method,omitempty"`
-	TosURI                  string   `json:"tos_uri,omitempty"`
-}
-
-// Oauth2UpdateRegistrationRequest is the request body for Oauth2UpdateRegistration.
-type Oauth2UpdateRegistrationRequest struct {
-	ClientID                string   `json:"client_id,omitempty"`
-	ClientName              string   `json:"client_name,omitempty"`
-	ClientSecret            string   `json:"client_secret,omitempty"`
-	ClientURI               string   `json:"client_uri,omitempty"`
-	Contacts                []string `json:"contacts,omitempty"`
-	GrantTypes              []string `json:"grant_types,omitempty"`
-	LogoURI                 string   `json:"logo_uri,omitempty"`
-	PolicyURI               string   `json:"policy_uri,omitempty"`
-	RedirectUris            []string `json:"redirect_uris"`
-	Scope                   string   `json:"scope,omitempty"`
-	SoftwareID              string   `json:"software_id,omitempty"`
-	SoftwareVersion         string   `json:"software_version,omitempty"`
-	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method,omitempty"`
-	TosURI                  string   `json:"tos_uri,omitempty"`
-}
-
 // Oauth2RevokeRequest is the request body for Oauth2Revoke.
 type Oauth2RevokeRequest struct {
 	Token         string `json:"token"`
@@ -2171,9 +2072,8 @@ type SsoExchangeRequest struct {
 
 // StartSSOLoginByDomainRequest is the request body for StartSSOLoginByDomain.
 type StartSSOLoginByDomainRequest struct {
-	ConnectionID string `json:"connection_id,omitempty"`
-	Email        string `json:"email"`
-	ReturnURL    string `json:"return_url,omitempty"`
+	Email     string `json:"email"`
+	ReturnURL string `json:"return_url,omitempty"`
 }
 
 // ResendEmailVerificationRequest is the request body for ResendEmailVerification.

@@ -11,7 +11,9 @@ type Store interface {
 	CreateUser(ctx context.Context, u *User) error
 	GetUser(ctx context.Context, userID id.UserID) (*User, error)
 	GetUserByEmail(ctx context.Context, appID id.AppID, email string) (*User, error)
-	GetUserByPhone(ctx context.Context, appID id.AppID, phone string) (*User, error)
+	// GetUserByPhone resolves the user owning phone within (appID, envID).
+	// A nil envID matches app-wide, mirroring GetUserByAnyEmail.
+	GetUserByPhone(ctx context.Context, appID id.AppID, envID id.EnvironmentID, phone string) (*User, error)
 	GetUserByUsername(ctx context.Context, appID id.AppID, username string) (*User, error)
 	UpdateUser(ctx context.Context, u *User) error
 	DeleteUser(ctx context.Context, userID id.UserID) error

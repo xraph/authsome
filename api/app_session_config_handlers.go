@@ -97,15 +97,16 @@ func (a *API) handleSetAppSessionConfig(ctx forge.Context, req *SetAppSessionCon
 	}
 
 	cfg := &appsessionconfig.Config{
-		AppID:                  appID,
-		TokenTTLSeconds:        req.TokenTTLSeconds,
-		RefreshTokenTTLSeconds: req.RefreshTokenTTLSeconds,
-		MaxActiveSessions:      req.MaxActiveSessions,
-		RotateRefreshToken:     req.RotateRefreshToken,
-		BindToIP:               req.BindToIP,
-		BindToDevice:           req.BindToDevice,
-		TokenFormat:            req.TokenFormat,
-		UpdatedAt:              now,
+		AppID:                   appID,
+		TokenTTLSeconds:         req.TokenTTLSeconds,
+		RefreshTokenTTLSeconds:  req.RefreshTokenTTLSeconds,
+		TokenExchangeTTLSeconds: req.TokenExchangeTTLSeconds,
+		MaxActiveSessions:       req.MaxActiveSessions,
+		RotateRefreshToken:      req.RotateRefreshToken,
+		BindToIP:                req.BindToIP,
+		BindToDevice:            req.BindToDevice,
+		TokenFormat:             req.TokenFormat,
+		UpdatedAt:               now,
 	}
 
 	if existing != nil {

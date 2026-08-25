@@ -560,8 +560,11 @@ func TestVerification_CRUD(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, got.Consumed)
 
-	// Consuming again should be a no-op (already consumed)
-	require.NoError(t, s.ConsumeVerification(ctx, v.Token))
+	// Consuming again must be refused. A verification token is single use, and
+	// every backend reports an already-consumed one as not-found so a replayed
+	// redemption cannot succeed behind the first. Treating it as a no-op is
+	// what let two concurrent redemptions of one token both go through.
+	assert.ErrorIs(t, s.ConsumeVerification(ctx, v.Token), store.ErrNotFound)
 }
 
 func TestVerification_GetNotFound(t *testing.T) {

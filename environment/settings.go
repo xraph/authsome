@@ -17,6 +17,8 @@ type Settings struct {
 	// Session overrides.
 	TokenTTLSeconds        *int `json:"token_ttl_seconds,omitempty"`
 	RefreshTokenTTLSeconds *int `json:"refresh_token_ttl_seconds,omitempty"`
+	// TokenExchangeTTLSeconds caps RFC 8693 token exchange for this env.
+	TokenExchangeTTLSeconds *int `json:"token_exchange_ttl_seconds,omitempty"`
 
 	// Password policy overrides.
 	PasswordMinLength *int  `json:"password_min_length,omitempty"`
@@ -108,6 +110,9 @@ func MergeSettings(base, override *Settings) *Settings {
 	}
 	if override.TokenTTLSeconds != nil {
 		result.TokenTTLSeconds = override.TokenTTLSeconds
+	}
+	if override.TokenExchangeTTLSeconds != nil {
+		result.TokenExchangeTTLSeconds = override.TokenExchangeTTLSeconds
 	}
 	if override.RefreshTokenTTLSeconds != nil {
 		result.RefreshTokenTTLSeconds = override.RefreshTokenTTLSeconds
@@ -202,6 +207,9 @@ func (s *Settings) ApplySessionOverrides(cfg *account.SessionConfig) {
 	}
 	if s.RefreshTokenTTLSeconds != nil {
 		cfg.RefreshTokenTTL = time.Duration(*s.RefreshTokenTTLSeconds) * time.Second
+	}
+	if s.TokenExchangeTTLSeconds != nil {
+		cfg.TokenExchangeTTL = time.Duration(*s.TokenExchangeTTLSeconds) * time.Second
 	}
 }
 

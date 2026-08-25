@@ -27,6 +27,7 @@ import (
 	"github.com/xraph/authsome/plugin"
 	apikeyPlugin "github.com/xraph/authsome/plugins/apikey"
 	"github.com/xraph/authsome/ratelimit"
+	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -67,6 +68,7 @@ func (m *mockEngine) SessionConfigForApp(_ context.Context, _ id.AppID, _ ...id.
 func (m *mockEngine) TokenFormatForApp(_ string) tokenformat.Format { return nil }
 func (m *mockEngine) CeremonyStore() ceremony.Store                 { return nil }
 func (m *mockEngine) APIKeyStore() apikey.Store                     { return m.store }
+func (m *mockEngine) SecurityEvents() securityevent.Store           { return nil }
 func (m *mockEngine) ResolveSessionByToken(_ string) (*session.Session, error) {
 	return nil, errors.New("not implemented")
 }

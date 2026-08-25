@@ -1249,6 +1249,11 @@ func (p *Plugin) issueTokens(ctx context.Context, _ *OAuth2Client, userID id.Use
 		return nil, forge.InternalError(fmt.Errorf("oauth2: create session: %w", err))
 	}
 
+	// Stamp the granted scopes. Without this they exist only in the JWT claims
+	// and the response body, so an opaque token loses them and token exchange
+	// has no subject-side ceiling to narrow against.
+	sess.Scopes = scopes
+
 	// Bind session to the app's default environment so the FK constraint
 	// on authsome_sessions.env_id is satisfied.
 	if env, envErr := p.store.GetDefaultEnvironment(ctx, appID); envErr == nil && env != nil {
@@ -1305,6 +1310,9 @@ func (p *Plugin) issueClientToken(ctx context.Context, client *OAuth2Client, res
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("oauth2: create client session: %w", err))
 	}
+
+	// A client-credentials token carries the client's registered scopes.
+	sess.Scopes = client.Scopes
 
 	// Bind session to the app's default environment so the FK constraint
 	// on authsome_sessions.env_id is satisfied.

@@ -224,14 +224,16 @@ func (s *Store) GetUserByEmail(ctx context.Context, appID id.AppID, email string
 	return toUser(m)
 }
 
-func (s *Store) GetUserByPhone(ctx context.Context, appID id.AppID, phone string) (*user.User, error) {
+func (s *Store) GetUserByPhone(ctx context.Context, appID id.AppID, envID id.EnvironmentID, phone string) (*user.User, error) {
 	m := new(UserModel)
-	err := s.pg.NewSelect(m).
+	q := s.pg.NewSelect(m).
 		Where("app_id = ?", appID.String()).
 		Where("phone = ?", phone).
-		Where("deleted_at IS NULL").
-		Scan(ctx)
-	if err != nil {
+		Where("deleted_at IS NULL")
+	if !envID.IsNil() {
+		q = q.Where("env_id = ?", envID.String())
+	}
+	if err := q.Scan(ctx); err != nil {
 		return nil, pgError(err)
 	}
 	return toUser(m)

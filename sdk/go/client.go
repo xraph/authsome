@@ -290,8 +290,8 @@ func (c *Client) GetOpenAPI(ctx context.Context) (*map[string]any, error) {
 	return &result, nil
 }
 
-// OidcDiscoveryPrefixed — OpenID Connect Discovery
-func (c *Client) OidcDiscoveryPrefixed(ctx context.Context) (*DiscoveryResponse, error) {
+// OidcDiscovery — OpenID Connect Discovery
+func (c *Client) OidcDiscovery(ctx context.Context) (*DiscoveryResponse, error) {
 	path := "/.well-known/openid-configuration"
 	var result DiscoveryResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
@@ -2091,13 +2091,17 @@ func (c *Client) Oauth2Authorize(ctx context.Context, params *Oauth2AuthorizePar
 
 // Oauth2DeviceAuthorize — Device Authorization
 func (c *Client) Oauth2DeviceAuthorize(ctx context.Context, req *Oauth2DeviceAuthorizeRequest) (*DeviceAuthResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
+	form := url.Values{}
+	if req != nil {
+		form.Set("client_id", req.ClientID)
+		if req.Scope != "" {
+			form.Set("scope", req.Scope)
+		}
 	}
+	body := []byte(form.Encode())
 	path := "/v1/oauth/device/authorize"
 	var result DeviceAuthResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+	if err := c.doForm(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -2105,84 +2109,62 @@ func (c *Client) Oauth2DeviceAuthorize(ctx context.Context, req *Oauth2DeviceAut
 
 // Oauth2DeviceComplete — Complete device authorization
 func (c *Client) Oauth2DeviceComplete(ctx context.Context, req *Oauth2DeviceCompleteRequest) (*DeviceCompleteResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
+	form := url.Values{}
+	if req != nil {
+		form.Set("action", req.Action)
+		form.Set("user_code", req.UserCode)
 	}
+	body := []byte(form.Encode())
 	path := "/v1/oauth/device/complete"
 	var result DeviceCompleteResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+	if err := c.doForm(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
-}
-
-// Oauth2RegisterClient — Register OAuth2 client
-func (c *Client) Oauth2RegisterClient(ctx context.Context, req *Oauth2RegisterClientRequest) (*RegisterClientResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/oauth/register"
-	var result RegisterClientResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// Oauth2ReadRegistration — Read OAuth2 client registration
-func (c *Client) Oauth2ReadRegistration(ctx context.Context, clientId string) (*RegisterClientResponse, error) {
-	path := "/v1/oauth/register/{clientId}"
-	path = strings.Replace(path, "{clientId}", clientId, 1)
-	var result RegisterClientResponse
-	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// Oauth2UpdateRegistration — Update OAuth2 client registration
-func (c *Client) Oauth2UpdateRegistration(ctx context.Context, clientId string, req *Oauth2UpdateRegistrationRequest) (*RegisterClientResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/oauth/register/{clientId}"
-	path = strings.Replace(path, "{clientId}", clientId, 1)
-	var result RegisterClientResponse
-	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// Oauth2DeleteRegistration — Delete OAuth2 client registration
-func (c *Client) Oauth2DeleteRegistration(ctx context.Context, clientId string) error {
-	path := "/v1/oauth/register/{clientId}"
-	path = strings.Replace(path, "{clientId}", clientId, 1)
-	return c.do(ctx, "DELETE", path, nil, nil)
 }
 
 // Oauth2Revoke — Revoke token
 func (c *Client) Oauth2Revoke(ctx context.Context, req *Oauth2RevokeRequest) error {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
+	form := url.Values{}
+	if req != nil {
+		form.Set("token", req.Token)
+		if req.TokenTypeHint != "" {
+			form.Set("token_type_hint", req.TokenTypeHint)
+		}
 	}
+	body := []byte(form.Encode())
 	path := "/v1/oauth/revoke"
-	return c.do(ctx, "POST", path, body, nil)
+	return c.doForm(ctx, "POST", path, body, nil)
 }
 
 // Oauth2Token — OAuth2 Token
 func (c *Client) Oauth2Token(ctx context.Context, req *Oauth2TokenRequest) (*Oauth2providerTokenResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
+	form := url.Values{}
+	if req != nil {
+		if req.ClientID != "" {
+			form.Set("client_id", req.ClientID)
+		}
+		if req.ClientSecret != "" {
+			form.Set("client_secret", req.ClientSecret)
+		}
+		if req.Code != "" {
+			form.Set("code", req.Code)
+		}
+		if req.CodeVerifier != "" {
+			form.Set("code_verifier", req.CodeVerifier)
+		}
+		if req.DeviceCode != "" {
+			form.Set("device_code", req.DeviceCode)
+		}
+		form.Set("grant_type", req.GrantType)
+		if req.RedirectURI != "" {
+			form.Set("redirect_uri", req.RedirectURI)
+		}
 	}
+	body := []byte(form.Encode())
 	path := "/v1/oauth/token"
 	var result Oauth2providerTokenResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+	if err := c.doForm(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -3285,7 +3267,20 @@ func firstNonEmptyClientErrorMessage(s ...string) string {
 	return ""
 }
 
+// do issues a request with a JSON body, which is every route but the OAuth2
+// ones.
 func (c *Client) do(ctx context.Context, method, path string, body []byte, result any) error {
+	return c.doTyped(ctx, method, path, body, "application/json", result)
+}
+
+// doForm issues a request with a form-encoded body. RFC 6749 section 4.1.3
+// requires it at the token endpoint, and a conformant server is entitled to
+// reject JSON there.
+func (c *Client) doForm(ctx context.Context, method, path string, body []byte, result any) error {
+	return c.doTyped(ctx, method, path, body, "application/x-www-form-urlencoded", result)
+}
+
+func (c *Client) doTyped(ctx context.Context, method, path string, body []byte, contentType string, result any) error {
 	// Surface configure-time validation errors before touching the
 	// network (e.g. WithAPIKey was called with a publishable key).
 	if c.apiKeyConfigErr != nil {
@@ -3309,7 +3304,7 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, resul
 		c.tryDiscoverAppID(ctx)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", "application/json")
 	// Send both Authorization (session token) and X-API-Key (API
 	// key) when both are configured — supports the

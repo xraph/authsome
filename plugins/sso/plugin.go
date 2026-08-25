@@ -1045,6 +1045,14 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 		return nil, forge.BadRequest("SSO provider did not return an email address")
 	}
 
+	// Record the upstream (issuer, sub) pair so a later CAEP event naming it
+	// can find this user. iss_sub is the OIDC id_token's sub claim; SAML's
+	// NameID is not the same kind of stable subject, so this only fires for
+	// the OIDC protocol.
+	if provider.Protocol() == "oidc" && conn != nil {
+		p.linkSharedSignalsSubject(goCtx, u, conn.Issuer, ssoUser.ProviderUserID)
+	}
+
 	// Org-level SSO: enroll the user into the connection's org so signing in via
 	// the IdP adds them to the org (the login-based alternative to an invite).
 	// Idempotent and best-effort — a membership hiccup must not fail the login.
@@ -1135,6 +1143,39 @@ func (p *Plugin) ensureOrgMembership(ctx context.Context, orgID id.OrgID, userID
 			log.String("org_id", orgID.String()),
 			log.String("user_id", userID.String()),
 			log.String("error", err.Error()))
+	}
+}
+
+// subjectLinker is the slice of the sharedsignals plugin sso needs. Declared
+// here rather than imported so sso does not depend on that plugin being
+// compiled in.
+type subjectLinker interface {
+	LinkSubject(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
+		issuer, subject string, userID id.UserID, source string) error
+}
+
+// linkSharedSignalsSubject records the IdP subject we just authenticated so a
+// later CAEP event naming (issuer, sub) can find this user. A no-op when the
+// sharedsignals plugin is not registered, and never fatal to a sign-in: a
+// failure here costs a future signal, not this login.
+func (p *Plugin) linkSharedSignalsSubject(ctx context.Context, u *user.User,
+	issuer, subject string) {
+	if p.engine == nil || issuer == "" || subject == "" {
+		return
+	}
+	target := p.engine.Plugin("sharedsignals")
+	if target == nil {
+		return
+	}
+	linker, ok := target.(subjectLinker)
+	if !ok {
+		return
+	}
+	if err := linker.LinkSubject(ctx, u.AppID, u.EnvID, issuer, subject, u.ID, "sso"); err != nil && p.logger != nil {
+		p.logger.Warn("sso: record shared signals subject link",
+			log.String("issuer", issuer),
+			log.String("error", err.Error()),
+		)
 	}
 }
 

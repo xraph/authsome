@@ -23,6 +23,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/notification"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/serviceaccount"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
@@ -64,6 +65,7 @@ type Store struct {
 	settingsMap       map[string]*settings.Setting
 
 	serviceAccounts map[string]*serviceaccount.ServiceAccount
+	delegations     map[string]*principal.Delegation
 
 	// userEmails maps UserEmail.ID -> record. A user may own several emails;
 	// uniqueness is enforced per (app_id, env_id, email) among non-deleted rows.
@@ -106,6 +108,7 @@ func New() *Store {
 		appClientConfigs:     make(map[string]*appclientconfig.Config),
 		settingsMap:          make(map[string]*settings.Setting),
 		serviceAccounts:      make(map[string]*serviceaccount.ServiceAccount),
+		delegations:          make(map[string]*principal.Delegation),
 		userEmails:           make(map[string]*user.UserEmail),
 		revokedRefreshTokens: make(map[string]*session.RevokedRefreshToken),
 		faults:               make(map[string]error),
@@ -292,13 +295,17 @@ func (s *Store) GetUserByEmail(_ context.Context, appID id.AppID, email string) 
 	return nil, store.ErrNotFound
 }
 
-func (s *Store) GetUserByPhone(_ context.Context, appID id.AppID, phone string) (*user.User, error) {
+func (s *Store) GetUserByPhone(_ context.Context, appID id.AppID, envID id.EnvironmentID, phone string) (*user.User, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, u := range s.users {
-		if u.AppID.String() == appID.String() && u.Phone == phone {
-			return u, nil
+		if u.AppID.String() != appID.String() || u.Phone != phone {
+			continue
 		}
+		if !envID.IsNil() && u.EnvID.String() != envID.String() {
+			continue
+		}
+		return u, nil
 	}
 	return nil, store.ErrNotFound
 }
@@ -1743,6 +1750,16 @@ func (s *Store) CreateServiceAccount(_ context.Context, svc *serviceaccount.Serv
 		svc.CreatedAt = time.Now()
 	}
 	svc.UpdatedAt = svc.CreatedAt
+	// Every row this store writes gets a concrete Kind, matching postgres's
+	// fromServiceAccount: postgres's CHECK constraint on the kind column
+	// cannot admit an empty string, and leaving the backends to disagree here
+	// means a handler serializing a legacy row (Kind carries
+	// `json:"kind,omitempty"`) would emit the key on one backend and omit it
+	// on the other. The empty-Kind fallback stays available for a row some
+	// other tool wrote directly: ToPrincipal() still tolerates it on read.
+	if svc.Kind == "" {
+		svc.Kind = principal.KindService
+	}
 	// Enforce unique (app_id, name).
 	for _, existing := range s.serviceAccounts {
 		if existing.AppID.String() == svc.AppID.String() && existing.Name == svc.Name {
@@ -1800,5 +1817,163 @@ func (s *Store) DeleteServiceAccount(_ context.Context, svcID id.ServiceAccountI
 		return store.ErrNotFound
 	}
 	delete(s.serviceAccounts, svcID.String())
+	return nil
+}
+
+// ──────────────────────────────────────────────────
+// Principal Store
+// ──────────────────────────────────────────────────
+
+func (s *Store) GetPrincipal(ctx context.Context, ref principal.Ref) (*principal.Principal, error) {
+	if ref.Kind == principal.KindUser {
+		uid, err := id.ParseUserID(ref.ID)
+		if err != nil {
+			return nil, principal.ErrNotFound
+		}
+		u, err := s.GetUser(ctx, uid)
+		if err != nil {
+			return nil, principal.ErrNotFound
+		}
+		return &principal.Principal{
+			Ref:      ref,
+			AppID:    u.AppID,
+			EnvID:    u.EnvID,
+			Name:     u.Name(),
+			Disabled: false,
+		}, nil
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	svc, ok := s.serviceAccounts[ref.ID]
+	if !ok {
+		return nil, principal.ErrNotFound
+	}
+	return svc.ToPrincipal(), nil
+}
+
+func (s *Store) ListPrincipals(_ context.Context, q *principal.Query) ([]*principal.Principal, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	out := make([]*principal.Principal, 0, len(s.serviceAccounts))
+	for _, svc := range s.serviceAccounts {
+		if !q.AppID.IsNil() && svc.AppID.String() != q.AppID.String() {
+			continue
+		}
+		p := svc.ToPrincipal()
+		if q.Kind != "" && p.Kind != q.Kind {
+			continue
+		}
+		if q.OwnerUser != nil && (p.Owner == nil || p.Owner.ID != q.OwnerUser.String()) {
+			continue
+		}
+		if q.Parent != nil && (p.Parent == nil || *p.Parent != *q.Parent) {
+			continue
+		}
+		if q.ActiveOnly && !p.IsActive(q.ActiveAsOf) {
+			continue
+		}
+		out = append(out, p)
+	}
+	if q.Limit > 0 && len(out) > q.Limit {
+		out = out[:q.Limit]
+	}
+	return out, nil
+}
+
+func (s *Store) CreateDelegation(_ context.Context, d *principal.Delegation) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if d.CreatedAt.IsZero() {
+		d.CreatedAt = time.Now()
+	}
+	d.UpdatedAt = d.CreatedAt
+	// One live grant per (app, actor, subject, kind), matching the partial
+	// unique index the SQL backends carry.
+	for _, existing := range s.delegations {
+		if existing.AppID.String() == d.AppID.String() &&
+			existing.Actor == d.Actor &&
+			existing.Subject == d.Subject &&
+			existing.GrantKind == d.GrantKind &&
+			existing.RevokedAt == nil {
+			return store.ErrConflict
+		}
+	}
+	s.delegations[d.ID.String()] = d
+	return nil
+}
+
+func (s *Store) GetDelegation(_ context.Context, delID id.DelegationID) (*principal.Delegation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	d, ok := s.delegations[delID.String()]
+	if !ok {
+		return nil, principal.ErrNotFound
+	}
+	return d, nil
+}
+
+func (s *Store) FindActiveDelegation(
+	_ context.Context, appID id.AppID, actor, subject principal.Ref, grantKind principal.GrantKind,
+) (*principal.Delegation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	at := time.Now()
+	for _, d := range s.delegations {
+		if d.AppID.String() != appID.String() ||
+			d.Actor != actor || d.Subject != subject || d.GrantKind != grantKind {
+			continue
+		}
+		if !d.IsActive(at) {
+			continue
+		}
+		return d, nil
+	}
+	return nil, principal.ErrNotFound
+}
+
+func (s *Store) ListDelegations(_ context.Context, q *principal.DelegationQuery) ([]*principal.Delegation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*principal.Delegation, 0, len(s.delegations))
+	for _, d := range s.delegations {
+		if !q.AppID.IsNil() && d.AppID.String() != q.AppID.String() {
+			continue
+		}
+		if q.Actor != nil && d.Actor != *q.Actor {
+			continue
+		}
+		if q.Subject != nil && d.Subject != *q.Subject {
+			continue
+		}
+		if q.GrantKind != "" && d.GrantKind != q.GrantKind {
+			continue
+		}
+		if q.ActiveOnly && !d.IsActive(q.ActiveAsOf) {
+			continue
+		}
+		out = append(out, d)
+	}
+	if q.Limit > 0 && len(out) > q.Limit {
+		out = out[:q.Limit]
+	}
+	return out, nil
+}
+
+func (s *Store) RevokeDelegation(_ context.Context, delID id.DelegationID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, ok := s.delegations[delID.String()]
+	if !ok {
+		return principal.ErrNotFound
+	}
+	// Revoking twice is not an error, and it must not move the timestamp.
+	// Revocation is the operation you most want to succeed on a retry.
+	if d.RevokedAt == nil {
+		revoked := at
+		d.RevokedAt = &revoked
+		d.UpdatedAt = at
+	}
 	return nil
 }

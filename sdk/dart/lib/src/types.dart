@@ -3395,7 +3395,6 @@ class DiscoveryResponse {
   final List<String> idTokenSigningAlgValuesSupported;
   final String issuer;
   final String jwksUri;
-  final String? registrationEndpoint;
   final List<String> responseTypesSupported;
   final String revocationEndpoint;
   final List<String> scopesSupported;
@@ -3412,7 +3411,6 @@ class DiscoveryResponse {
     required this.idTokenSigningAlgValuesSupported,
     required this.issuer,
     required this.jwksUri,
-    this.registrationEndpoint,
     required this.responseTypesSupported,
     required this.revocationEndpoint,
     required this.scopesSupported,
@@ -3431,7 +3429,6 @@ class DiscoveryResponse {
       idTokenSigningAlgValuesSupported: (json['id_token_signing_alg_values_supported'] as List).map((e) => e as String).toList(),
       issuer: json['issuer'] as String,
       jwksUri: json['jwks_uri'] as String,
-      registrationEndpoint: json['registration_endpoint'] as String?,
       responseTypesSupported: (json['response_types_supported'] as List).map((e) => e as String).toList(),
       revocationEndpoint: json['revocation_endpoint'] as String,
       scopesSupported: (json['scopes_supported'] as List).map((e) => e as String).toList(),
@@ -3451,7 +3448,6 @@ class DiscoveryResponse {
       'id_token_signing_alg_values_supported': idTokenSigningAlgValuesSupported,
       'issuer': issuer,
       'jwks_uri': jwksUri,
-      if (registrationEndpoint != null) 'registration_endpoint': registrationEndpoint,
       'response_types_supported': responseTypesSupported,
       'revocation_endpoint': revocationEndpoint,
       'scopes_supported': scopesSupported,
@@ -4561,19 +4557,16 @@ class LoginBeginResponse {
 }
 
 class LoginByDomainRequest {
-  final String? connectionId;
   final String email;
   final String? returnUrl;
 
   const LoginByDomainRequest({
-    this.connectionId,
     required this.email,
     this.returnUrl,
   });
 
   factory LoginByDomainRequest.fromJson(Map<String, dynamic> json) {
     return LoginByDomainRequest(
-      connectionId: json['connection_id'] as String?,
       email: json['email'] as String,
       returnUrl: json['return_url'] as String?,
     );
@@ -4581,7 +4574,6 @@ class LoginByDomainRequest {
 
   Map<String, dynamic> toJson() {
     return {
-      if (connectionId != null) 'connection_id': connectionId,
       'email': email,
       if (returnUrl != null) 'return_url': returnUrl,
     };
@@ -5007,33 +4999,25 @@ class Name {
 class OAuth2Client {
   final String appId;
   final String clientId;
-  final String? clientSecretExpiresAt;
   final String createdAt;
-  final bool dynamicallyRegistered;
   final List<String> grantTypes;
   final String id;
-  final Map<String, dynamic>? metadata;
   final String name;
   final bool public;
   final List<String> redirectUris;
   final List<String> scopes;
-  final String? tokenEndpointAuthMethod;
   final String updatedAt;
 
   const OAuth2Client({
     required this.appId,
     required this.clientId,
-    this.clientSecretExpiresAt,
     required this.createdAt,
-    required this.dynamicallyRegistered,
     required this.grantTypes,
     required this.id,
-    this.metadata,
     required this.name,
     required this.public,
     required this.redirectUris,
     required this.scopes,
-    this.tokenEndpointAuthMethod,
     required this.updatedAt,
   });
 
@@ -5041,17 +5025,13 @@ class OAuth2Client {
     return OAuth2Client(
       appId: json['app_id'] as String,
       clientId: json['client_id'] as String,
-      clientSecretExpiresAt: json['client_secret_expires_at'] as String?,
       createdAt: json['created_at'] as String,
-      dynamicallyRegistered: json['dynamically_registered'] as bool,
       grantTypes: (json['grant_types'] as List).map((e) => e as String).toList(),
       id: json['id'] as String,
-      metadata: json['metadata'] == null ? null : Map<String, dynamic>.from(json['metadata'] as Map),
       name: json['name'] as String,
       public: json['public'] as bool,
       redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
       scopes: (json['scopes'] as List).map((e) => e as String).toList(),
-      tokenEndpointAuthMethod: json['token_endpoint_auth_method'] as String?,
       updatedAt: json['updated_at'] as String,
     );
   }
@@ -5060,17 +5040,13 @@ class OAuth2Client {
     return {
       'app_id': appId,
       'client_id': clientId,
-      if (clientSecretExpiresAt != null) 'client_secret_expires_at': clientSecretExpiresAt,
       'created_at': createdAt,
-      'dynamically_registered': dynamicallyRegistered,
       'grant_types': grantTypes,
       'id': id,
-      if (metadata != null) 'metadata': metadata,
       'name': name,
       'public': public,
       'redirect_uris': redirectUris,
       'scopes': scopes,
-      if (tokenEndpointAuthMethod != null) 'token_endpoint_auth_method': tokenEndpointAuthMethod,
       'updated_at': updatedAt,
     };
   }
@@ -5663,172 +5639,6 @@ class RegisterBeginResponse {
 
   @override
   String toString() => 'RegisterBeginResponse(${toJson()})';
-}
-
-class RegisterClientRequest {
-  final String? clientName;
-  final String? clientUri;
-  final List<String>? contacts;
-  final List<String>? grantTypes;
-  final String? logoUri;
-  final String? policyUri;
-  final List<String> redirectUris;
-  final List<String>? responseTypes;
-  final String? scope;
-  final String? softwareId;
-  final String? softwareVersion;
-  final String? tokenEndpointAuthMethod;
-  final String? tosUri;
-
-  const RegisterClientRequest({
-    this.clientName,
-    this.clientUri,
-    this.contacts,
-    this.grantTypes,
-    this.logoUri,
-    this.policyUri,
-    required this.redirectUris,
-    this.responseTypes,
-    this.scope,
-    this.softwareId,
-    this.softwareVersion,
-    this.tokenEndpointAuthMethod,
-    this.tosUri,
-  });
-
-  factory RegisterClientRequest.fromJson(Map<String, dynamic> json) {
-    return RegisterClientRequest(
-      clientName: json['client_name'] as String?,
-      clientUri: json['client_uri'] as String?,
-      contacts: json['contacts'] == null ? null : (json['contacts'] as List).map((e) => e as String).toList(),
-      grantTypes: json['grant_types'] == null ? null : (json['grant_types'] as List).map((e) => e as String).toList(),
-      logoUri: json['logo_uri'] as String?,
-      policyUri: json['policy_uri'] as String?,
-      redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
-      responseTypes: json['response_types'] == null ? null : (json['response_types'] as List).map((e) => e as String).toList(),
-      scope: json['scope'] as String?,
-      softwareId: json['software_id'] as String?,
-      softwareVersion: json['software_version'] as String?,
-      tokenEndpointAuthMethod: json['token_endpoint_auth_method'] as String?,
-      tosUri: json['tos_uri'] as String?,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      if (clientName != null) 'client_name': clientName,
-      if (clientUri != null) 'client_uri': clientUri,
-      if (contacts != null) 'contacts': contacts,
-      if (grantTypes != null) 'grant_types': grantTypes,
-      if (logoUri != null) 'logo_uri': logoUri,
-      if (policyUri != null) 'policy_uri': policyUri,
-      'redirect_uris': redirectUris,
-      if (responseTypes != null) 'response_types': responseTypes,
-      if (scope != null) 'scope': scope,
-      if (softwareId != null) 'software_id': softwareId,
-      if (softwareVersion != null) 'software_version': softwareVersion,
-      if (tokenEndpointAuthMethod != null) 'token_endpoint_auth_method': tokenEndpointAuthMethod,
-      if (tosUri != null) 'tos_uri': tosUri,
-    };
-  }
-
-  @override
-  String toString() => 'RegisterClientRequest(${toJson()})';
-}
-
-class RegisterClientResponse {
-  final String clientId;
-  final int clientIdIssuedAt;
-  final String? clientName;
-  final String? clientSecret;
-  final int clientSecretExpiresAt;
-  final String? clientUri;
-  final List<String>? contacts;
-  final List<String> grantTypes;
-  final String? logoUri;
-  final String? policyUri;
-  final List<String> redirectUris;
-  final String? registrationAccessToken;
-  final String? registrationClientUri;
-  final List<String> responseTypes;
-  final String scope;
-  final String? softwareId;
-  final String? softwareVersion;
-  final String tokenEndpointAuthMethod;
-  final String? tosUri;
-
-  const RegisterClientResponse({
-    required this.clientId,
-    required this.clientIdIssuedAt,
-    this.clientName,
-    this.clientSecret,
-    required this.clientSecretExpiresAt,
-    this.clientUri,
-    this.contacts,
-    required this.grantTypes,
-    this.logoUri,
-    this.policyUri,
-    required this.redirectUris,
-    this.registrationAccessToken,
-    this.registrationClientUri,
-    required this.responseTypes,
-    required this.scope,
-    this.softwareId,
-    this.softwareVersion,
-    required this.tokenEndpointAuthMethod,
-    this.tosUri,
-  });
-
-  factory RegisterClientResponse.fromJson(Map<String, dynamic> json) {
-    return RegisterClientResponse(
-      clientId: json['client_id'] as String,
-      clientIdIssuedAt: (json['client_id_issued_at'] as num).toInt(),
-      clientName: json['client_name'] as String?,
-      clientSecret: json['client_secret'] as String?,
-      clientSecretExpiresAt: (json['client_secret_expires_at'] as num).toInt(),
-      clientUri: json['client_uri'] as String?,
-      contacts: json['contacts'] == null ? null : (json['contacts'] as List).map((e) => e as String).toList(),
-      grantTypes: (json['grant_types'] as List).map((e) => e as String).toList(),
-      logoUri: json['logo_uri'] as String?,
-      policyUri: json['policy_uri'] as String?,
-      redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
-      registrationAccessToken: json['registration_access_token'] as String?,
-      registrationClientUri: json['registration_client_uri'] as String?,
-      responseTypes: (json['response_types'] as List).map((e) => e as String).toList(),
-      scope: json['scope'] as String,
-      softwareId: json['software_id'] as String?,
-      softwareVersion: json['software_version'] as String?,
-      tokenEndpointAuthMethod: json['token_endpoint_auth_method'] as String,
-      tosUri: json['tos_uri'] as String?,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'client_id': clientId,
-      'client_id_issued_at': clientIdIssuedAt,
-      if (clientName != null) 'client_name': clientName,
-      if (clientSecret != null) 'client_secret': clientSecret,
-      'client_secret_expires_at': clientSecretExpiresAt,
-      if (clientUri != null) 'client_uri': clientUri,
-      if (contacts != null) 'contacts': contacts,
-      'grant_types': grantTypes,
-      if (logoUri != null) 'logo_uri': logoUri,
-      if (policyUri != null) 'policy_uri': policyUri,
-      'redirect_uris': redirectUris,
-      if (registrationAccessToken != null) 'registration_access_token': registrationAccessToken,
-      if (registrationClientUri != null) 'registration_client_uri': registrationClientUri,
-      'response_types': responseTypes,
-      'scope': scope,
-      if (softwareId != null) 'software_id': softwareId,
-      if (softwareVersion != null) 'software_version': softwareVersion,
-      'token_endpoint_auth_method': tokenEndpointAuthMethod,
-      if (tosUri != null) 'tos_uri': tosUri,
-    };
-  }
-
-  @override
-  String toString() => 'RegisterClientResponse(${toJson()})';
 }
 
 class RegisterFinishResponse {
@@ -7474,81 +7284,6 @@ class UpdateOrgRequest {
 
   @override
   String toString() => 'UpdateOrgRequest(${toJson()})';
-}
-
-class UpdateRegistrationRequest {
-  final String? clientId;
-  final String? clientName;
-  final String? clientSecret;
-  final String? clientUri;
-  final List<String>? contacts;
-  final List<String>? grantTypes;
-  final String? logoUri;
-  final String? policyUri;
-  final List<String> redirectUris;
-  final String? scope;
-  final String? softwareId;
-  final String? softwareVersion;
-  final String? tokenEndpointAuthMethod;
-  final String? tosUri;
-
-  const UpdateRegistrationRequest({
-    this.clientId,
-    this.clientName,
-    this.clientSecret,
-    this.clientUri,
-    this.contacts,
-    this.grantTypes,
-    this.logoUri,
-    this.policyUri,
-    required this.redirectUris,
-    this.scope,
-    this.softwareId,
-    this.softwareVersion,
-    this.tokenEndpointAuthMethod,
-    this.tosUri,
-  });
-
-  factory UpdateRegistrationRequest.fromJson(Map<String, dynamic> json) {
-    return UpdateRegistrationRequest(
-      clientId: json['client_id'] as String?,
-      clientName: json['client_name'] as String?,
-      clientSecret: json['client_secret'] as String?,
-      clientUri: json['client_uri'] as String?,
-      contacts: json['contacts'] == null ? null : (json['contacts'] as List).map((e) => e as String).toList(),
-      grantTypes: json['grant_types'] == null ? null : (json['grant_types'] as List).map((e) => e as String).toList(),
-      logoUri: json['logo_uri'] as String?,
-      policyUri: json['policy_uri'] as String?,
-      redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
-      scope: json['scope'] as String?,
-      softwareId: json['software_id'] as String?,
-      softwareVersion: json['software_version'] as String?,
-      tokenEndpointAuthMethod: json['token_endpoint_auth_method'] as String?,
-      tosUri: json['tos_uri'] as String?,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      if (clientId != null) 'client_id': clientId,
-      if (clientName != null) 'client_name': clientName,
-      if (clientSecret != null) 'client_secret': clientSecret,
-      if (clientUri != null) 'client_uri': clientUri,
-      if (contacts != null) 'contacts': contacts,
-      if (grantTypes != null) 'grant_types': grantTypes,
-      if (logoUri != null) 'logo_uri': logoUri,
-      if (policyUri != null) 'policy_uri': policyUri,
-      'redirect_uris': redirectUris,
-      if (scope != null) 'scope': scope,
-      if (softwareId != null) 'software_id': softwareId,
-      if (softwareVersion != null) 'software_version': softwareVersion,
-      if (tokenEndpointAuthMethod != null) 'token_endpoint_auth_method': tokenEndpointAuthMethod,
-      if (tosUri != null) 'tos_uri': tosUri,
-    };
-  }
-
-  @override
-  String toString() => 'UpdateRegistrationRequest(${toJson()})';
 }
 
 class UpdateRoleRequest {
