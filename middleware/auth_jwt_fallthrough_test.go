@@ -266,6 +266,14 @@ func (tc jwtFallthroughCase) run(t *testing.T, validator middleware.JWTValidator
 // TestJWTRefusal_DoesNotFallThroughToSessionLookup is the regression. A JWT
 // refused for any reason below the signature must leave the request
 // unauthenticated, not merely without a JWT identity.
+// A related gap this file does NOT cover, recorded here because this is where
+// somebody will look. tryJWTAuth populates AppID, UserID and SessionID but
+// never calls WithSession, so no *session.Session reaches the context on the
+// JWT path. Guards that read the session rather than the ids depend entirely
+// on the global AuthMiddleware having populated it first. agentauth's
+// denyAgentPrincipal is one such guard: it is correct today only because
+// nothing issues an agent a JWT credential. The day something does, that deny
+// fails open, and no test here will say so.
 func TestJWTRefusal_DoesNotFallThroughToSessionLookup(t *testing.T) {
 	t.Parallel()
 	for _, tc := range jwtFallthroughCases() {
