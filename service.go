@@ -2143,6 +2143,13 @@ func (e *Engine) AdminBanUser(ctx context.Context, adminID, userID id.UserID, re
 		return fmt.Errorf("authsome: admin ban user: %w", err)
 	}
 
+	// A ban is a user update as far as plugins are concerned: agentauth (and
+	// anything else watching AfterUserUpdate) needs to see it to revoke
+	// standing grants. UpdateMe fires the same event for a self-service edit;
+	// this path bypassed it entirely until now, which meant banning a user
+	// never actually disarmed the agents acting for them.
+	e.plugins.EmitAfterUserUpdate(ctx, u)
+
 	// Revoke all active sessions for the banned user
 	_ = e.store.DeleteUserSessions(ctx, userID) //nolint:errcheck // best-effort cleanup
 
@@ -2187,6 +2194,8 @@ func (e *Engine) AdminUnbanUser(ctx context.Context, adminID, userID id.UserID) 
 	if err := e.store.UpdateUser(ctx, u); err != nil {
 		return fmt.Errorf("authsome: admin unban user: %w", err)
 	}
+
+	e.plugins.EmitAfterUserUpdate(ctx, u)
 
 	e.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionAdminUnbanUser,

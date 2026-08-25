@@ -77,6 +77,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		settings:    p.settings,
 		logger:      p.logger,
 		roleEnsurer: engine,
+		plugins:     p.plugins,
 	}
 
 	return nil
