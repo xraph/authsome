@@ -311,6 +311,40 @@ which is a positive signal that something is wrong, and degrading that to
 anonymous would hand an attacker a way to strip the proof off a bound token and
 fall through to any endpoint in your API that tolerates anonymous access.
 
+### Auto-refresh
+
+`AutoRefreshMiddleware` rotates a session that is close to expiry and hands the
+new access token back in `X-Auth-Token`. It runs on an ordinary request, not on
+a call to `/v1/refresh`, so the bindings are re-checked against that request:
+the proof the client already sent, the method and URL it was minted for, and
+that request's IP and User-Agent.
+
+Reusing the proof is safe, for a reason worth spelling out. Two enforcement
+points look at it on one request: the auth middleware checks it first and
+records its `jti`, then `Engine.Refresh` checks it again underneath
+auto-refresh, and without help that second check would read the request's own
+proof as a replay of itself and refuse a rotation that was never in doubt.
+`WithRequestScope` is the help. It remembers, for the life of one request,
+which proofs already cleared the replay cache. A proof genuinely replayed on a
+second request arrives with a fresh context, finds nothing recorded, and is
+caught exactly as before.
+
+The other option was to skip auto-refresh for bound sessions and point those
+clients at `/v1/refresh`. That punishes the clients who adopted the stronger
+control, which is backwards.
+
+A bound session that fails to refresh anyway logs at Warn. The auth middleware
+already accepted a valid proof for this request, so a refusal here means clock
+skew, a nonce rotating mid-request, or a validator configured differently from
+the issuer, and none of those should sit at Debug where nobody will see them.
+A quiet Debug line is how bound sessions lost auto-refresh without anyone
+noticing.
+
+The IP and User-Agent travel for a reason that has nothing to do with DPoP.
+`Refresh` skips the IP and device checks when the values it is handed are
+empty, so a caller that passes no options at all silently gets no session
+binding either. Auto-refresh is a caller like any other and passes both.
+
 ## The other two paths to an identity
 
 `middleware/auth.go` is not the only place a token turns into an authenticated
