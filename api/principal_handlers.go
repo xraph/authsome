@@ -187,6 +187,12 @@ func (a *API) handleMintChild(ctx forge.Context, req *MintChildRequest) (*MintCh
 	if !ok {
 		return nil, forge.Unauthorized("authentication required")
 	}
+	// Comparing IDs alone, with no kind check, is safe here: req.ID is
+	// parsed below with id.ParseServiceAccountID, which rejects any string
+	// that doesn't carry the "svc" typeid prefix. A user id or an id of any
+	// other kind fails that parse and never reaches this comparison, so the
+	// cross-kind collision that bit ListPrincipals's Parent filter (an
+	// earlier task) cannot happen on this path.
 	if req.ID != caller.ID {
 		return nil, forge.Forbidden("can only mint children under your own principal")
 	}
@@ -205,10 +211,23 @@ func (a *API) handleMintChild(ctx forge.Context, req *MintChildRequest) (*MintCh
 	child, key, secret, err := a.engine.MintChildPrincipal(ctx.Context(), parentID,
 		req.Name, req.Scopes, time.Duration(req.TTLSeconds)*time.Second)
 	if err != nil {
+		// Both of these are refusals MintChildPrincipal makes on purpose,
+		// not internal failures: the caller asked for something malformed
+		// or over-broad (400), or is not permitted to mint at all (403).
+		// Checked here, before the generic mapError fallback, the same way
+		// handleTokenExchange checks ErrExchangeRefused, so the response
+		// carries a stable message rather than the wrapped internal error
+		// text.
+		if errors.Is(err, authsome.ErrChildScopeExceedsParent) {
+			return nil, forge.BadRequest("requested scope exceeds the parent principal's own scopes")
+		}
+		if errors.Is(err, authsome.ErrChildMintNotPermitted) {
+			return nil, forge.Forbidden("parent principal is not permitted to mint children")
+		}
 		return nil, mapError(err)
 	}
 
-	return &MintChildResponse{
+	return nil, ctx.JSON(http.StatusCreated, &MintChildResponse{
 		ID:        child.ID.String(),
 		ParentID:  child.ParentID.String(),
 		Name:      child.Name,
@@ -217,5 +236,5 @@ func (a *API) handleMintChild(ctx forge.Context, req *MintChildRequest) (*MintCh
 		Key:       secret,
 		KeyPrefix: key.KeyPrefix,
 		CreatedAt: child.CreatedAt,
-	}, nil
+	})
 }

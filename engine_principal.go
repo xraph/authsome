@@ -2,6 +2,7 @@ package authsome
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -284,6 +285,17 @@ func (e *Engine) ListDelegationsForSubject(
 	})
 }
 
+// ErrChildScopeExceedsParent is returned when a requested child scope falls
+// outside the parent's own scopes. This is something the caller can fix by
+// asking for less, so the API layer maps it to 400 rather than 403.
+var ErrChildScopeExceedsParent = errors.New("authsome: mint child: requested scope exceeds the parent's own scopes")
+
+// ErrChildMintNotPermitted is returned when the parent itself is not
+// eligible to mint a child at all: it is inactive, or it is itself an
+// ephemeral child (one level only). No amount of narrowing the request
+// fixes either case, so the API layer maps it to 403 rather than 400.
+var ErrChildMintNotPermitted = errors.New("authsome: mint child: parent is not permitted to mint children")
+
 // MintChildPrincipal creates a short-lived principal under a registered
 // parent, with its own API key.
 //
@@ -313,16 +325,17 @@ func (e *Engine) MintChildPrincipal(
 		return nil, nil, "", fmt.Errorf("authsome: mint child: get parent: %w", err)
 	}
 	if !parent.Active {
-		return nil, nil, "", fmt.Errorf("authsome: mint child: parent is inactive")
+		return nil, nil, "", fmt.Errorf("authsome: mint child: parent %s is inactive: %w", parentID, ErrChildMintNotPermitted)
 	}
 	if !parent.ParentID.IsNil() {
 		// One level only. A tree of ephemeral principals is a revocation
 		// problem nobody can reason about, and nothing needs it.
-		return nil, nil, "", fmt.Errorf("authsome: mint child: an ephemeral principal cannot mint children")
+		return nil, nil, "", fmt.Errorf("authsome: mint child: %s is itself an ephemeral child and cannot mint children: %w",
+			parentID, ErrChildMintNotPermitted)
 	}
 
 	if err := requireScopeSubset(scopes, parent.Scopes); err != nil {
-		return nil, nil, "", fmt.Errorf("authsome: mint child: %w", err)
+		return nil, nil, "", fmt.Errorf("authsome: mint child: %w: %w", ErrChildScopeExceedsParent, err)
 	}
 
 	now := time.Now()
