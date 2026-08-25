@@ -165,8 +165,10 @@ func (e *Engine) PrincipalStore() principal.Store { return e.store }
 //
 // grantedBy is who consented and is recorded for audit. The caller is
 // responsible for having checked that grantedBy is entitled to consent: for an
-// ordinary delegation that means grantedBy is the subject or an admin over it,
-// and the API layer enforces it before calling here.
+// ordinary delegation that means grantedBy is the subject or an admin over it.
+// There is no HTTP route for this yet, so today "the caller" means whatever
+// engine-embedding code invokes this method directly; the entitlement check
+// belongs there until a route exists to enforce it.
 func (e *Engine) GrantDelegation(
 	ctx context.Context, appID id.AppID, actor, subject principal.Ref,
 	scopes []string, grantedBy principal.Ref, expiresAt *time.Time,
@@ -218,34 +220,52 @@ func (e *Engine) GrantDelegation(
 }
 
 // RevokeDelegation ends a grant.
-func (e *Engine) RevokeDelegation(ctx context.Context, delID id.DelegationID) error {
+//
+// appID scopes the lookup to the caller's own tenant: a delegation id from
+// one app must not be revocable by a caller authenticated into another, so a
+// mismatch reads as not-found rather than forbidden, the same way
+// api/tenant_scope.go's assertAppScope treats a cross-tenant resource id.
+//
+// revokedBy must be the grant's own subject or actor. There is no support
+// yet for an admin revoking a grant on someone else's behalf: that would
+// need a Warden permission decision, and this codebase has no established
+// action/resource convention for delegation management to check against
+// yet. Inventing one here would be a guess independent routes could later
+// disagree with. Add that check at this call site, once one exists, rather
+// than routing an admin path around this method.
+func (e *Engine) RevokeDelegation(
+	ctx context.Context, appID id.AppID, revokedBy principal.Ref, delID id.DelegationID,
+) error {
 	if err := e.requireStarted(); err != nil {
 		return err
 	}
-	// Read first so the hook event can carry the actor/subject the grant
-	// named. RevokeDelegation itself only takes the ID: the caller may be
-	// revoking a grant by ID alone (e.g. from a listing) without having
-	// either ref in hand. A grant already gone is not fatal here — the
-	// revoke below still runs and its own not-found is what the caller sees.
-	d, getErr := e.store.GetDelegation(ctx, delID)
+
+	d, err := e.store.GetDelegation(ctx, delID)
+	if err != nil {
+		return fmt.Errorf("authsome: revoke delegation: %w", err)
+	}
+	if d.AppID.String() != appID.String() {
+		return principal.ErrNotFound
+	}
+	if revokedBy != d.Subject && revokedBy != d.Actor {
+		return fmt.Errorf("authsome: revoke delegation: %s is not party to this grant", revokedBy)
+	}
 
 	if err := e.store.RevokeDelegation(ctx, delID, time.Now()); err != nil {
 		return fmt.Errorf("authsome: revoke delegation: %w", err)
 	}
 
-	evt := &hook.Event{
+	e.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionDelegationRevoke,
 		Resource:   hook.ResourceSession,
 		ResourceID: delID.String(),
-	}
-	if getErr == nil && d != nil {
-		evt.Tenant = d.AppID.String()
-		evt.Metadata = map[string]string{
+		ActorID:    revokedBy.ID,
+		Tenant:     d.AppID.String(),
+		Metadata: map[string]string{
 			"actor":   d.Actor.String(),
 			"subject": d.Subject.String(),
-		}
-	}
-	e.hooks.Emit(ctx, evt)
+		},
+	})
 	return nil
 }
 

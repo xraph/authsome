@@ -44,7 +44,7 @@ func (a *API) registerPrincipalRoutes(router forge.Router) error {
 
 	return g.GET("/principals/me/delegations", a.handleListMyDelegations,
 		forge.WithSummary("List what may act on your behalf"),
-		forge.WithDescription("Lists the live delegation grants naming the calling principal as subject, so it can see and revoke the agents holding authority over it."),
+		forge.WithDescription("Lists the live delegation grants naming the calling principal as subject, so it can see the agents holding authority over it. There is no revoke route yet; Engine.RevokeDelegation is reachable only from engine-embedding code today."),
 		forge.WithOperationID("listMyDelegations"),
 		forge.WithResponseSchema(http.StatusOK, "Delegations", DelegationListResponse{}),
 		forge.WithErrorResponses(),
@@ -74,22 +74,38 @@ func (a *API) handleTokenExchange(ctx forge.Context, req *TokenExchangeRequest) 
 		return nil, forge.BadRequest("invalid subject: must be a user id")
 	}
 
+	// A caller presenting an already-delegated or already-impersonated
+	// session must not be allowed to exchange again: that would let it
+	// launder the authority of whoever it is currently acting for into a
+	// grant it holds against some third party, escalating past what either
+	// grant alone would permit. ExchangeToken refuses this outright, but it
+	// can only see it if the calling session's own actor chain reaches it.
+	var callerActors principal.Chain
+	var callerDelegationID id.DelegationID
+	if callerSession, ok := middleware.SessionFrom(ctx.Context()); ok && callerSession != nil {
+		callerActors = callerSession.Actors
+		callerDelegationID = callerSession.DelegationID
+	}
+
 	httpReq := ctx.Request()
 	sess, err := a.engine.ExchangeToken(ctx.Context(), &authsome.ExchangeRequest{
-		AppID:            appID,
-		Actor:            caller.Ref,
-		RequestedSubject: principal.UserRef(subjectUserID),
-		Scopes:           req.Scopes,
-		IPAddress:        clientIPFromRequest(httpReq),
-		UserAgent:        httpReq.UserAgent(),
+		AppID:              appID,
+		Actor:              caller.Ref,
+		RequestedSubject:   principal.UserRef(subjectUserID),
+		Scopes:             req.Scopes,
+		IPAddress:          clientIPFromRequest(httpReq),
+		UserAgent:          httpReq.UserAgent(),
+		CallerActors:       callerActors,
+		CallerDelegationID: callerDelegationID,
 	})
 	if err != nil {
 		// This endpoint never creates authority: every reason ExchangeToken
 		// declines (no live grant, wrong actor, disabled actor, an
-		// out-of-grant scope) is the same refusal from the caller's point of
-		// view, and reads as 403 here rather than 404 or 400 — the grant
-		// might exist for a different actor or subject, so "not found" would
-		// overclaim, and the request itself was well-formed.
+		// out-of-grant scope, a chained exchange) is the same refusal from
+		// the caller's point of view, and reads as 403 here rather than 404
+		// or 400: the grant might exist for a different actor or subject,
+		// so "not found" would overclaim, and the request itself was
+		// well-formed.
 		if errors.Is(err, authsome.ErrExchangeRefused) {
 			return nil, forge.Forbidden(err.Error())
 		}

@@ -33,6 +33,18 @@ type ExchangeRequest struct {
 	// CredentialID identifies the credential the actor authenticated with, so
 	// the risk verdict caches against it.
 	CredentialID string
+
+	// CallerActors is the actor chain already stamped on the session or
+	// credential presenting this request, if any. Non-empty means Actor is
+	// not presenting its own root credential: it already holds a session
+	// minted by a prior exchange or by impersonation. See the refusal this
+	// guards in ExchangeToken.
+	CallerActors principal.Chain
+	// CallerDelegationID is the grant the caller's own session was minted
+	// against, if any. Checked alongside CallerActors so a session that
+	// somehow carries a delegation id without a populated chain is still
+	// caught.
+	CallerDelegationID id.DelegationID
 }
 
 // ExchangeToken mints a session in which the actor acts on the subject's
@@ -55,6 +67,26 @@ func (e *Engine) ExchangeToken(ctx context.Context, req *ExchangeRequest) (*sess
 	}
 	if req.Actor.IsZero() || req.RequestedSubject.IsZero() {
 		return nil, fmt.Errorf("authsome: exchange: actor and subject are required")
+	}
+
+	// Refuse a chained exchange outright. Left unchecked: agent A holds a
+	// repo:read grant from Alice, exchanges it for an Alice session, then
+	// presents that Alice session back to this same endpoint. A second
+	// exchange would land a session acting for whoever Alice herself holds
+	// a grant over (Bob, say) even though Bob never named the agent, with
+	// Alice's own scope filter gone entirely, and (because Actors below is
+	// assigned rather than appended) the agent erased from the resulting
+	// session's chain: the audit trail would read as a user acting for a
+	// user, no agent anywhere in it. That is exactly the escalation
+	// "delegation can only narrow" exists to prevent, so it is refused
+	// rather than fixed by appending-and-re-verifying every hop: multi-hop
+	// is served instead by task 15's ephemeral children, which mint under a
+	// registered parent with scopes capped to a subset and expiry capped by
+	// the parent's.
+	if len(req.CallerActors) > 0 || !req.CallerDelegationID.IsNil() {
+		return nil, fmt.Errorf(
+			"authsome: exchange: caller already holds a delegated or impersonated session; chained exchange refused: %w",
+			ErrExchangeRefused)
 	}
 
 	grant, err := e.store.FindActiveDelegation(
@@ -120,7 +152,7 @@ func (e *Engine) ExchangeToken(ctx context.Context, req *ExchangeRequest) (*sess
 	// pre-shrinking cfg.TokenTTL to a "remaining" duration computed before
 	// newSession's own time.Now(): two independent now() calls leave a few
 	// microseconds of drift between them, and any positive drift here would
-	// let the session's expiry land after the grant's — precisely the
+	// let the session's expiry land after the grant's, precisely the
 	// outcome this exists to rule out.
 	clamped := false
 	if grant.ExpiresAt != nil {
@@ -198,6 +230,19 @@ func (e *Engine) ExchangeToken(ctx context.Context, req *ExchangeRequest) (*sess
 // quiet removal: an agent that asked for repo:write and got a session
 // without it fails later, far from the cause, and reads as a bug in the
 // agent rather than as the refusal it actually is.
+//
+// An actor with no recorded scopes ([]string(nil) or empty) is read the same
+// way principal.Delegation.Scopes reads empty: no restriction of its own,
+// rather than "may hold nothing." That is a deliberate choice, not an
+// oversight, made to match the grant side's existing convention
+// (principal/delegation.go's AllowsScope) rather than introduce a second,
+// asymmetric default. Most service accounts in this codebase are created
+// without ever setting Scopes, and nothing outside plugins/oauth2provider
+// enforces session.Scopes today, so treating an unset actor scope list as
+// "may hold nothing" would silently refuse exchanges for callers that were
+// never restricted in the first place. If a caller wants an actor capped to
+// an empty scope set, it should record that explicitly rather than rely on
+// the zero value meaning it.
 func intersectScopes(requested []string, grant *principal.Delegation, actorScopes []string) ([]string, error) {
 	if len(requested) == 0 {
 		return nil, nil

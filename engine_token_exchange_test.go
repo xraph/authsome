@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/serviceaccount"
+	"github.com/xraph/authsome/tokenformat"
 	"github.com/xraph/authsome/user"
 )
 
@@ -75,7 +77,7 @@ func TestExchangeRefusesRevokedGrant(t *testing.T) {
 
 	d, err := e.GrantDelegation(ctx, appID, agent, userRef, nil, userRef, nil)
 	require.NoError(t, err)
-	require.NoError(t, e.RevokeDelegation(ctx, d.ID))
+	require.NoError(t, e.RevokeDelegation(ctx, appID, userRef, d.ID))
 
 	_, err = e.ExchangeToken(ctx, &authsome.ExchangeRequest{
 		AppID: appID, Actor: agent, RequestedSubject: userRef,
@@ -117,6 +119,136 @@ func TestExchangeRefusesForWrongActor(t *testing.T) {
 	assert.Error(t, err, "a grant naming a different actor must not authorize this one")
 }
 
+// A chained exchange must not be able to launder authority from one grant
+// into another. The agent holds a repo:read grant from Alice; Alice
+// separately holds a grant over Bob. Exchanging the agent's credential for
+// an Alice session, then presenting THAT session back to this same
+// endpoint, must not land a session acting for Bob: Bob never named the
+// agent, Alice's own scope filter would be gone, and because ExchangeToken
+// assigns rather than appends to sess.Actors, the agent would vanish from
+// the resulting session's chain entirely, leaving an audit trail that reads
+// as a user acting for a user with no agent in it anywhere.
+func TestExchangeRefusesChainedExchange(t *testing.T) {
+	e, appID, agent, alice := setupExchangeFixture(t)
+	ctx := context.Background()
+	bob := newExchangeUserRef(t, e, appID)
+
+	_, err := e.GrantDelegation(ctx, appID, agent, alice, []string{"repo:read"}, alice, nil)
+	require.NoError(t, err)
+	_, err = e.GrantDelegation(ctx, appID, alice, bob, nil, bob, nil)
+	require.NoError(t, err)
+
+	aliceSess, err := e.ExchangeToken(ctx, &authsome.ExchangeRequest{
+		AppID: appID, Actor: agent, RequestedSubject: alice,
+		Scopes: []string{"repo:read"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, principal.Chain{agent}, aliceSess.Actors,
+		"sanity: the exchanged session must actually carry the agent, or this test proves nothing")
+
+	_, err = e.ExchangeToken(ctx, &authsome.ExchangeRequest{
+		AppID: appID, Actor: alice, RequestedSubject: bob,
+		CallerActors:       aliceSess.Actors,
+		CallerDelegationID: aliceSess.DelegationID,
+	})
+	assert.Error(t, err, "a session minted by a prior exchange must not itself be exchangeable")
+}
+
+// An impersonation session carries a populated actor chain the same way an
+// exchanged one does (Session.Actors, see SetImpersonatedBy), so it must be
+// refused here too: an admin impersonating a user must not be able to spend
+// that session exchanging for some third party the impersonated user holds
+// a grant over.
+func TestExchangeRefusesImpersonationSession(t *testing.T) {
+	e, appID, agent, alice := setupExchangeFixture(t)
+	ctx := context.Background()
+
+	_, err := e.GrantDelegation(ctx, appID, agent, alice, nil, alice, nil)
+	require.NoError(t, err)
+
+	admin := newExchangeUserRef(t, e, appID)
+	_, err = e.ExchangeToken(ctx, &authsome.ExchangeRequest{
+		AppID: appID, Actor: agent, RequestedSubject: alice,
+		// Shape SetImpersonatedBy leaves on a caller's own session: a
+		// single-user actor chain, no delegation id.
+		CallerActors: principal.Chain{admin},
+	})
+	assert.Error(t, err, "a session that is itself the result of impersonation must not be exchangeable")
+}
+
+// The grant's expiry must bound the JWT's own exp claim, not just the
+// session row. A stateless verifier reads the token, not the database, so a
+// JWT whose exp outlives the grant defeats the clamp entirely regardless of
+// what ExpiresAt says in storage.
+func TestExchangeClampsJWTExpiryToGrant(t *testing.T) {
+	jwtFmt, err := tokenformat.NewJWT(tokenformat.JWTConfig{
+		SigningMethod: jwt.SigningMethodHS256,
+		SigningKey:    []byte("test-signing-key-0123456789abcdef"),
+	})
+	require.NoError(t, err)
+
+	e, appID, agent, userRef := setupExchangeFixture(t,
+		authsome.WithJWTFormat("aapp_01jf0000000000000000000000", jwtFmt))
+	ctx := context.Background()
+
+	soon := time.Now().Add(45 * time.Second)
+	_, err = e.GrantDelegation(ctx, appID, agent, userRef, nil, userRef, &soon)
+	require.NoError(t, err)
+
+	sess, err := e.ExchangeToken(ctx, &authsome.ExchangeRequest{
+		AppID: appID, Actor: agent, RequestedSubject: userRef,
+	})
+	require.NoError(t, err)
+	require.True(t, tokenformat.IsJWT(sess.Token), "the app is JWT-configured; the exchanged token must be too")
+
+	claims, err := jwtFmt.ValidateAccessToken(sess.Token)
+	require.NoError(t, err)
+	assert.False(t, claims.ExpiresAt.After(soon),
+		"the JWT's own exp claim must not outlive the grant, or a stateless verifier honors a lifetime the grant no longer backs")
+}
+
+// RevokeDelegation must refuse a delegation id from a different app: without
+// this, an id disclosed in one tenant could revoke a grant in another this
+// caller was never a party to.
+func TestRevokeDelegationRefusesWrongApp(t *testing.T) {
+	e, appID, agent, userRef := setupExchangeFixture(t)
+	ctx := context.Background()
+
+	d, err := e.GrantDelegation(ctx, appID, agent, userRef, nil, userRef, nil)
+	require.NoError(t, err)
+
+	err = e.RevokeDelegation(ctx, id.NewAppID(), userRef, d.ID)
+	assert.Error(t, err, "a delegation id from a different app must not be revocable")
+}
+
+// RevokeDelegation must refuse a caller that is neither the grant's subject
+// nor its actor. Any id revoking any grant, regardless of who asks, is
+// exactly the gap this closes.
+func TestRevokeDelegationRefusesNonParty(t *testing.T) {
+	e, appID, agent, userRef := setupExchangeFixture(t)
+	ctx := context.Background()
+
+	d, err := e.GrantDelegation(ctx, appID, agent, userRef, nil, userRef, nil)
+	require.NoError(t, err)
+
+	stranger := newExchangeUserRef(t, e, appID)
+	err = e.RevokeDelegation(ctx, appID, stranger, d.ID)
+	assert.Error(t, err, "a caller that is not the grant's subject or actor must not be able to revoke it")
+}
+
+// The actor side, not just the subject, must also be able to revoke: an
+// agent giving up authority it holds is as legitimate as the human taking
+// it back.
+func TestRevokeDelegationAllowsActor(t *testing.T) {
+	e, appID, agent, userRef := setupExchangeFixture(t)
+	ctx := context.Background()
+
+	d, err := e.GrantDelegation(ctx, appID, agent, userRef, nil, userRef, nil)
+	require.NoError(t, err)
+
+	assert.NoError(t, e.RevokeDelegation(ctx, appID, agent, d.ID))
+}
+
 // ──────────────────────────────────────────────────
 // fixtures
 // ──────────────────────────────────────────────────
@@ -129,9 +261,9 @@ func TestExchangeRefusesForWrongActor(t *testing.T) {
 // testTenantID (engine_principal_test.go) reads the tenant back off
 // eng.Config().AppID rather than trusting Engine.PlatformAppID, which stays
 // the zero value here.
-func setupExchangeFixture(t *testing.T) (eng *authsome.Engine, appID id.AppID, agentRef, userRef principal.Ref) {
+func setupExchangeFixture(t *testing.T, opts ...authsome.Option) (eng *authsome.Engine, appID id.AppID, agentRef, userRef principal.Ref) {
 	t.Helper()
-	eng, s := newTestEngine(t)
+	eng, s := newTestEngine(t, opts...)
 	appID = testTenantID(t, eng)
 	ctx := context.Background()
 
@@ -178,4 +310,25 @@ func newExchangeAgentRef(t *testing.T, eng *authsome.Engine, appID id.AppID) pri
 	}
 	require.NoError(t, store.CreateServiceAccount(context.Background(), svc))
 	return principal.Ref{Kind: principal.KindAgent, ID: svc.ID.String()}
+}
+
+// newExchangeUserRef seeds a fresh, unrelated human user under appID and
+// returns its ref. Used where a test needs a second or third party beyond
+// setupExchangeFixture's own subject (Bob in the chained-exchange proof, the
+// admin in the impersonation one, a stranger to a grant neither side names).
+func newExchangeUserRef(t *testing.T, eng *authsome.Engine, appID id.AppID) principal.Ref {
+	t.Helper()
+	store, ok := eng.PrincipalStore().(interface {
+		CreateUser(ctx context.Context, u *user.User) error
+	})
+	require.True(t, ok, "engine store must support CreateUser")
+
+	userID := id.NewUserID()
+	require.NoError(t, store.CreateUser(context.Background(), &user.User{
+		ID:           userID,
+		AppID:        appID,
+		Email:        "exchange-user-" + userID.String() + "@example.com",
+		PasswordHash: "$2a$10$fakehash",
+	}))
+	return principal.UserRef(userID)
 }
