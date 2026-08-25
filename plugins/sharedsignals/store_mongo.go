@@ -112,9 +112,9 @@ func inboundStreamToDoc(s *InboundStream) *inboundStreamDoc {
 		ID: s.ID.String(), AppID: s.AppID.String(), EnvID: s.EnvID.String(),
 		Name: s.Name, Issuer: s.Issuer, Audience: s.Audience, JWKSURI: s.JWKSURI,
 		PushPathHash: s.PushPathHash, PushTokenHash: s.PushTokenHash,
-		AllowedEventTypes:     s.AllowedEventTypes,
-		AllowedSubjectFormats: s.AllowedSubjectFormats,
-		VerifiedDomains:       s.VerifiedDomains,
+		AllowedEventTypes:     nonNilStrings(s.AllowedEventTypes),
+		AllowedSubjectFormats: nonNilStrings(s.AllowedSubjectFormats),
+		VerifiedDomains:       nonNilStrings(s.VerifiedDomains),
 		ActionOverrides:       encodeJSON(s.ActionOverrides, "{}"),
 		EnforcementMode:       s.EnforcementMode, Status: s.Status,
 		MaxActionsPerHour:  s.MaxActionsPerHour,
@@ -327,8 +327,30 @@ func (s *MongoStore) UpsertSubjectLink(ctx context.Context, l *SubjectLink) erro
 		"app_id": l.AppID.String(), "env_id": l.EnvID.String(),
 		"issuer": l.Issuer, "subject": l.Subject,
 	}
-	_, err := s.mdb.Collection(colSubjectLinks).ReplaceOne(ctx, filter,
-		subjectLinkToDoc(l), options.Replace().SetUpsert(true))
+	// $set the mutable fields and $setOnInsert the identity, rather than
+	// replacing the whole document. The natural key is (app_id, env_id,
+	// issuer, subject) but callers mint a fresh SSFLinkID on every call, so a
+	// ReplaceOne tried to rewrite _id on the second link for the same subject
+	// and mongo rejected it: "the (immutable) field '_id' was found to have
+	// been altered". Re-linking a subject then failed outright on mongo while
+	// working on every other backend.
+	_, err := s.mdb.Collection(colSubjectLinks).UpdateOne(ctx, filter,
+		bson.M{
+			"$set": bson.M{
+				"user_id":      l.UserID.String(),
+				"source":       l.Source,
+				"last_seen_at": l.LastSeenAt,
+			},
+			"$setOnInsert": bson.M{
+				"_id":        l.ID.String(),
+				"app_id":     l.AppID.String(),
+				"env_id":     l.EnvID.String(),
+				"issuer":     l.Issuer,
+				"subject":    l.Subject,
+				"created_at": l.CreatedAt,
+			},
+		},
+		options.UpdateOne().SetUpsert(true))
 	return mongoErr(err)
 }
 
@@ -497,4 +519,18 @@ func (s *MongoStore) ListActiveSignals(ctx context.Context, appID id.AppID,
 		out = append(out, converted)
 	}
 	return out, cur.Err()
+}
+
+// nonNilStrings returns an empty slice where the input is nil, so the field
+// is written as a BSON array rather than null.
+//
+// The collection validator declares these as bsonType array, and a nil slice
+// marshals to null, so a stream created with no verified domains was rejected
+// outright: "Document failed validation ... consideredType: null". Same shape
+// as the session roles fix in the core store.
+func nonNilStrings(in []string) []string {
+	if in == nil {
+		return []string{}
+	}
+	return in
 }
