@@ -22,7 +22,11 @@ type Store interface {
 	UpdateToken(ctx context.Context, t *Token) error
 	ListTokens(ctx context.Context, configID id.SCIMConfigID) ([]*Token, error)
 	DeleteToken(ctx context.Context, tokenID id.SCIMTokenID) error
-	FindTokenByHash(ctx context.Context, tokenHash string) (*Token, *SCIMConfig, error)
+	// FindTokenByPlaintext resolves a presented bearer token to its stored
+	// record and owning config. Token hashes are salted bcrypt digests, so the
+	// plaintext cannot be hashed and looked up directly; implementations must
+	// scan candidates and bcrypt-compare. Expiry is not checked here.
+	FindTokenByPlaintext(ctx context.Context, plaintext string) (*Token, *SCIMConfig, error)
 
 	// Provision logs
 	CreateLog(ctx context.Context, l *ProvisionLog) error

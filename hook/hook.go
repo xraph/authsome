@@ -78,6 +78,12 @@ const (
 	// subscriber implementing a plugin interface.
 	ActionPrincipalAuth = "auth.principal"
 
+	// ActionDelegationGrant fires when a delegation grant is recorded,
+	// letting an actor act on a subject's behalf.
+	ActionDelegationGrant = "principal.delegation.grant"
+	// ActionDelegationRevoke fires when a delegation grant is revoked.
+	ActionDelegationRevoke = "principal.delegation.revoke"
+
 	ActionUserCreate = "user.create"
 	ActionUserUpdate = "user.update"
 	ActionUserDelete = "user.delete"

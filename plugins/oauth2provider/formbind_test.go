@@ -83,7 +83,13 @@ func TestRevoke_AcceptsFormEncodedBody(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &token))
 
-	form := url.Values{"token": {token.AccessToken}}
+	// Revocation authenticates the caller now, so the form carries the client
+	// credentials too. That keeps this a test about form binding.
+	form := url.Values{
+		"token":         {token.AccessToken},
+		"client_id":     {confidentialID},
+		"client_secret": {confidentialSecret},
+	}
 	req := httptest.NewRequestWithContext(context.Background(), "POST",
 		"/v1/oauth/revoke", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")

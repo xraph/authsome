@@ -267,9 +267,10 @@ func TestTokenResource(t *testing.T) {
 		require.NoError(t, st.UpdateDeviceCode(context.Background(), dc))
 
 		rec := postToken(t, mux, map[string]string{
-			"grant_type":  "urn:ietf:params:oauth:grant-type:device_code",
-			"device_code": authResp.DeviceCode,
-			"client_id":   confidentialID,
+			"grant_type":    "urn:ietf:params:oauth:grant-type:device_code",
+			"device_code":   authResp.DeviceCode,
+			"client_id":     confidentialID,
+			"client_secret": confidentialSecret,
 		})
 
 		resp := decodeTokenResponse(t, rec)
@@ -300,10 +301,11 @@ func TestTokenResource(t *testing.T) {
 		require.NoError(t, st.UpdateDeviceCode(context.Background(), dc))
 
 		rec := postTokenJSON(t, mux, map[string]any{
-			"grant_type":  "urn:ietf:params:oauth:grant-type:device_code",
-			"device_code": authResp.DeviceCode,
-			"client_id":   confidentialID,
-			"resource":    []string{resFiles},
+			"grant_type":    "urn:ietf:params:oauth:grant-type:device_code",
+			"device_code":   authResp.DeviceCode,
+			"client_id":     confidentialID,
+			"client_secret": confidentialSecret,
+			"resource":      []string{resFiles},
 		})
 
 		resp := decodeTokenResponse(t, rec)
@@ -333,10 +335,11 @@ func TestTokenResource(t *testing.T) {
 		require.NoError(t, st.UpdateDeviceCode(context.Background(), dc))
 
 		rec := postTokenJSON(t, mux, map[string]any{
-			"grant_type":  "urn:ietf:params:oauth:grant-type:device_code",
-			"device_code": authResp.DeviceCode,
-			"client_id":   confidentialID,
-			"resource":    []string{resFiles},
+			"grant_type":    "urn:ietf:params:oauth:grant-type:device_code",
+			"device_code":   authResp.DeviceCode,
+			"client_id":     confidentialID,
+			"client_secret": confidentialSecret,
+			"resource":      []string{resFiles},
 		})
 
 		assert.Equal(t, http.StatusBadRequest, rec.Code, "body: %s", rec.Body.String())

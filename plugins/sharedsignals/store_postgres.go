@@ -193,11 +193,69 @@ func (s *PostgresStore) DeleteReceivedEvent(ctx context.Context, eventID id.SSFE
 	return nil
 }
 
-func (s *PostgresStore) CountActionsSince(ctx context.Context,
+// GetReceivedEvent loads one audit row by ID and confirms it belongs to
+// appID. The row itself carries no app_id, so the scope comes from the
+// stream it arrived on.
+func (s *PostgresStore) GetReceivedEvent(ctx context.Context, appID id.AppID,
+	eventID id.SSFEventID) (*ReceivedEvent, error) {
+	m := new(receivedEventModel)
+	if err := s.pg.NewSelect(m).Where("id = ?", eventID.String()).Scan(ctx); err != nil {
+		return nil, sqlErr(err)
+	}
+	e, err := toReceivedEvent(m)
+	if err != nil {
+		return nil, err
+	}
+	if oerr := streamOwnedBy(ctx, s, appID, e.StreamID); oerr != nil {
+		return nil, oerr
+	}
+	return e, nil
+}
+
+// ListReceivedEvents returns one stream's audit rows newest first. The
+// (stream_id, received_at DESC) index from the create migration is exactly
+// this query's access path.
+func (s *PostgresStore) ListReceivedEvents(ctx context.Context, appID id.AppID,
+	f ReceivedEventFilter) ([]*ReceivedEvent, error) {
+	// Ownership before rows: a stream belonging to another tenant answers
+	// ErrNotFound, so a probe cannot tell "not yours" from "yours but quiet".
+	if err := streamOwnedBy(ctx, s, appID, f.StreamID); err != nil {
+		return nil, err
+	}
+	f = f.normalized()
+
+	var models []*receivedEventModel
+	q := s.pg.NewSelect(&models).Where("stream_id = ?", f.StreamID.String())
+	if !f.Since.IsZero() {
+		q = q.Where("received_at >= ?", f.Since)
+	}
+	if !f.Until.IsZero() {
+		q = q.Where("received_at < ?", f.Until)
+	}
+	// The id tie-break makes the page deterministic when several rows share
+	// a received_at, which one multi-event SET produces by construction.
+	if err := q.OrderExpr("received_at DESC").OrderExpr("id DESC").
+		Limit(f.Limit).Scan(ctx); err != nil {
+		return nil, sqlErr(err)
+	}
+
+	out := make([]*ReceivedEvent, 0, len(models))
+	for _, m := range models {
+		converted, cerr := toReceivedEvent(m)
+		if cerr != nil {
+			return nil, cerr
+		}
+		out = append(out, converted)
+	}
+	return out, nil
+}
+
+func (s *PostgresStore) CountEventsSince(ctx context.Context,
 	streamID id.SSFStreamID, since time.Time) (int, error) {
+	// Every recorded event counts, not just the ones that acted -- see
+	// Store.CountEventsSince.
 	count, err := s.pg.NewSelect((*receivedEventModel)(nil)).
 		Where("stream_id = ?", streamID.String()).
-		Where("action_taken <> ?", "").
 		Where("received_at > ?", since).
 		Count(ctx)
 	if err != nil {

@@ -27,6 +27,7 @@ import (
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/ratelimit"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/tokenformat"
 
@@ -561,6 +562,8 @@ type TokenRequest struct {
 type RevokeRequest struct {
 	Token         string `json:"token" form:"token"`
 	TokenTypeHint string `json:"token_type_hint,omitempty" form:"token_type_hint"`
+	ClientID      string `json:"client_id,omitempty" form:"client_id"`
+	ClientSecret  string `json:"client_secret,omitempty" form:"client_secret"`
 }
 
 // UserInfoRequest is empty (user is determined from bearer token).
@@ -697,7 +700,7 @@ func (e *OAuth2HTTPError) ResponseBody() any {
 }
 
 // newOAuth2Error creates an OAuth2HTTPError for device flow error responses.
-func newOAuth2Error(status int, errorCode, description string) *OAuth2HTTPError { //nolint:unparam // status kept for API flexibility
+func newOAuth2Error(status int, errorCode, description string) *OAuth2HTTPError {
 	return &OAuth2HTTPError{
 		httpStatus:  status,
 		oauthError:  errorCode,
@@ -878,6 +881,139 @@ func resolveScopes(client *OAuth2Client, requested string) ([]string, error) {
 	return out, nil
 }
 
+// basicAuthScheme is the RFC 7617 scheme name, matched case-insensitively.
+const basicAuthScheme = "basic"
+
+// parseBasicClientAuth pulls client credentials out of an HTTP Basic
+// Authorization header (RFC 6749 §2.3.1).
+//
+// present tells the caller whether the header carried Basic credentials at all,
+// which is not the same question as whether they parsed. A header in some other
+// scheme belongs to somebody else, most likely a bearer token the auth
+// middleware ignores on this public endpoint, so it reports absent and the body
+// credentials stand. A header that says Basic and then does not decode is a
+// failed authentication attempt and has to be answered as one.
+func parseBasicClientAuth(r *http.Request) (clientID, clientSecret string, present bool, err error) {
+	header := r.Header.Get("Authorization")
+	if header == "" {
+		return "", "", false, nil
+	}
+	scheme, encoded, found := strings.Cut(header, " ")
+	if !found || !strings.EqualFold(scheme, basicAuthScheme) {
+		return "", "", false, nil
+	}
+
+	raw, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(encoded))
+	if decodeErr != nil {
+		return "", "", true, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "malformed Basic authorization header")
+	}
+	rawID, rawSecret, found := strings.Cut(string(raw), ":")
+	if !found {
+		return "", "", true, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "malformed Basic authorization header")
+	}
+
+	return unescapeCredential(rawID), unescapeCredential(rawSecret), true, nil
+}
+
+// unescapeCredential undoes the encoding RFC 6749 §2.3.1 asks a client to apply
+// to each half of the pair before base64. Without it a client_id containing a
+// colon can never authenticate, because the colon it had to escape stays
+// escaped and no longer matches what is registered.
+//
+// This stops at percent escapes and leaves a plus sign alone, which is a
+// deliberate narrowing of what the RFC describes. The RFC names
+// application/x-www-form-urlencoded, where a plus decodes to a space. Secrets
+// with a plus in them are everywhere (any base64 secret is a candidate) and
+// plenty of client libraries base64 the pair without encoding it first, so full
+// form decoding would quietly turn those into spaces and fail the compare with
+// nothing in the logs to explain it. A space inside a credential is rare enough
+// that the trade lands the right way round. Anything this server issues is hex,
+// so neither case arises for credentials it minted itself.
+//
+// A value that is not valid percent encoding is passed through untouched rather
+// than rejected, which is what lets the naive clients above work.
+func unescapeCredential(v string) string {
+	decoded, err := url.PathUnescape(v)
+	if err != nil {
+		return v
+	}
+	return decoded
+}
+
+// applyBasicClientAuth folds Basic credentials into the token request so every
+// grant below sees them the same way it sees client_secret_post. Discovery has
+// advertised both methods since the endpoint existed; only the body one was
+// ever read, so a client that followed the discovery document could not
+// authenticate at all.
+func applyBasicClientAuth(r *http.Request, reqClientID, reqClientSecret *string) error {
+	clientID, clientSecret, present, err := parseBasicClientAuth(r)
+	if err != nil {
+		return err
+	}
+	if !present {
+		return nil
+	}
+
+	// RFC 6749 §2.3: a client must not use more than one authentication method
+	// in a request. Picking a winner is the dangerous reading. Whichever side
+	// loses, an attacker who can write only that side gets to decide which
+	// credential the server checks, so the request is refused instead.
+	if *reqClientSecret != "" {
+		return newOAuth2Error(http.StatusBadRequest, "invalid_request",
+			"use either the Authorization header or client_secret in the body, not both")
+	}
+	// A body client_id that agrees with the header is ordinary and plenty of
+	// libraries send it. One that disagrees leaves the request unable to say
+	// who it claims to be.
+	if *reqClientID != "" && *reqClientID != clientID {
+		return newOAuth2Error(http.StatusBadRequest, "invalid_request",
+			"client_id does not match the Authorization header")
+	}
+
+	*reqClientID = clientID
+	*reqClientSecret = clientSecret
+	return nil
+}
+
+// authenticateClient resolves a client and verifies whatever credential it is
+// expected to hold. A confidential client must prove its secret. A public
+// client has none by definition, so being registered is all there is to check,
+// and callers must not treat that as proof of identity.
+func (p *Plugin) authenticateClient(ctx context.Context, clientID, clientSecret string) (*OAuth2Client, error) {
+	client, err := p.oauth2Store.GetClient(ctx, clientID)
+	if err != nil {
+		return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "invalid client")
+	}
+	if !client.Public {
+		if clientSecret == "" {
+			return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "client_secret required for confidential clients")
+		}
+		if cmpErr := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(clientSecret)); cmpErr != nil {
+			return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "invalid client_secret")
+		}
+	}
+	return client, nil
+}
+
+// callerOwnsSession reports whether the principal behind caller is entitled to
+// revoke target: either it is literally the same session, or both belong to the
+// same principal.
+func callerOwnsSession(caller, target *session.Session) bool {
+	if caller == nil || target == nil {
+		return false
+	}
+	if caller.ID == target.ID {
+		return true
+	}
+	subject := caller.Subject()
+	// A caller with no resolvable subject matches nothing. Without this guard
+	// two zero-valued sessions would compare equal to each other.
+	if subject.ID == "" {
+		return false
+	}
+	return subject == target.Subject()
+}
+
 // handleToken and the grant handlers it dispatches to (below) return several
 // 401s on client-authentication failure (invalid client_secret, unknown
 // client_id). Those are not given a resource_metadata hint, deliberately: a
@@ -892,6 +1028,12 @@ func resolveScopes(client *OAuth2Client, requested string) ([]string, error) {
 // next() call sees it, the same reason handleUserInfo below sets its own
 // header instead of relying on that middleware.
 func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
+	// Runs before the grant switch so all three grants authenticate the same
+	// way, and so a malformed header is answered once rather than three times.
+	if err := applyBasicClientAuth(ctx.Request(), &req.ClientID, &req.ClientSecret); err != nil {
+		return nil, err
+	}
+
 	switch req.GrantType {
 	case "authorization_code":
 		return p.handleAuthorizationCodeGrant(ctx, req)
@@ -1045,17 +1187,67 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeRequest) (*apitypes.
 		return nil, forge.BadRequest("token required")
 	}
 
-	// Try to revoke as a session token by looking it up first.
-	sess, err := p.store.GetSessionByToken(ctx.Context(), req.Token)
-	if err == nil {
-		if delErr := p.store.DeleteSession(ctx.Context(), sess.ID); delErr != nil {
-			p.logger.Debug("oauth2: failed to delete session",
-				log.String("error", delErr.Error()),
-			)
-		}
+	if err := applyBasicClientAuth(ctx.Request(), &req.ClientID, &req.ClientSecret); err != nil {
+		return nil, err
 	}
 
-	// RFC 7009: always return 200 regardless of whether the token was found.
+	// RFC 7009 §2.1 wants the caller authenticated, and this endpoint used to
+	// ask for nothing at all: it revoked whatever token it was handed, for
+	// whoever sent one. Two kinds of caller legitimately arrive here and they
+	// prove themselves differently, so both are accepted and one of them is
+	// required.
+	//
+	// An OAuth2 client authenticates with its credentials, by header or by
+	// body, the same way it does at /token.
+	//
+	// A signed-in principal authenticates with the bearer token the auth
+	// middleware already resolved. That is the path every generated SDK takes:
+	// they send a session and no client credentials, so demanding credentials
+	// from everyone would break revocation across all of them.
+	var authenticatedClient bool
+	if req.ClientID != "" || req.ClientSecret != "" {
+		if _, err := p.authenticateClient(ctx.Context(), req.ClientID, req.ClientSecret); err != nil {
+			return nil, err
+		}
+		authenticatedClient = true
+	}
+	caller, hasCaller := middleware.SessionFrom(ctx.Context())
+	if !authenticatedClient && !hasCaller {
+		return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "client authentication required")
+	}
+
+	// RFC 7009 §2.2: an unknown token is a successful revocation. Answering
+	// otherwise turns this endpoint into a token validity oracle.
+	sess, err := p.store.GetSessionByToken(ctx.Context(), req.Token)
+	if err != nil {
+		return nil, ctx.JSON(http.StatusOK, map[string]string{"status": "revoked"})
+	}
+
+	// A principal may only revoke its own sessions. Refusing out loud would
+	// leak that the token exists and belongs to somebody else, so a token the
+	// caller does not own draws the same answer an unknown one draws: 200,
+	// and nothing revoked.
+	//
+	// A client that authenticated is not held to this, and that is the half of
+	// RFC 7009 §2.1 still missing. Checking that a token was issued to the
+	// requesting client needs the session to record which client minted it,
+	// and session.Session has no such field. Until it does, an authenticated
+	// client can revoke any token it holds a copy of. Narrower than the
+	// anonymous hole it replaces, and left tracked rather than fixed here
+	// because that column reaches all four store backends.
+	if !authenticatedClient && !callerOwnsSession(caller, sess) {
+		p.logger.Debug("oauth2: revoke ignored for a token the caller does not own",
+			log.String("session_id", sess.ID.String()),
+		)
+		return nil, ctx.JSON(http.StatusOK, map[string]string{"status": "revoked"})
+	}
+
+	if delErr := p.store.DeleteSession(ctx.Context(), sess.ID); delErr != nil {
+		p.logger.Debug("oauth2: failed to delete session",
+			log.String("error", delErr.Error()),
+		)
+	}
+
 	return nil, ctx.JSON(http.StatusOK, map[string]string{"status": "revoked"})
 }
 
@@ -1542,6 +1734,30 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 		return nil, forge.BadRequest("client_id required")
 	}
 
+	// Authenticate the client before touching the device code at all.
+	//
+	// RFC 8628 §3.4 routes the token request through RFC 6749 §3.2.1, so a
+	// confidential client must present its secret here exactly as it does for
+	// authorization_code and client_credentials. Skip that and the device code
+	// becomes the only secret in the exchange, which is not a job it can do: it
+	// rides in every poll, so it settles into access logs and proxies, and the
+	// client_id sitting beside it is public by definition.
+	//
+	// This runs ahead of the expiry and slow_down checks rather than after
+	// them, for two reasons. An unauthenticated caller should not get an oracle
+	// that separates a live code (authorization_pending, slow_down) from an
+	// expired or invented one (expired_token, invalid_grant). And the slow_down
+	// branch writes: it pushes the code's polling interval up by five seconds
+	// and stamps LastPolledAt, so leaving it reachable without credentials
+	// hands anyone who picked up a leaked device code a way to ratchet the real
+	// device's interval until the code times out. The price is a bcrypt compare
+	// on every poll, including the too-fast ones, and that is the same price
+	// the sibling grants already pay.
+	client, err := p.authenticateClient(ctx.Context(), req.ClientID, req.ClientSecret)
+	if err != nil {
+		return nil, err
+	}
+
 	// Look up the device code.
 	dc, err := p.oauth2Store.GetDeviceCodeByDeviceCode(ctx.Context(), req.DeviceCode)
 	if err != nil {
@@ -1585,11 +1801,8 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 		return nil, newOAuth2Error(http.StatusBadRequest, "access_denied", "the user denied the authorization request")
 
 	case DeviceCodeStatusAuthorized:
-		// Success! Issue tokens.
-		client, err := p.oauth2Store.GetClient(ctx.Context(), dc.ClientID)
-		if err != nil {
-			return nil, forge.InternalError(fmt.Errorf("oauth2: get client for device code: %w", err))
-		}
+		// Success! Issue tokens. The client was loaded and authenticated at the
+		// top of this handler, and dc.ClientID was checked against it.
 
 		// Resolve DPoP binding while the device code is still redeemable, for
 		// the same reason as the authorization_code grant: a use_dpop_nonce

@@ -9,6 +9,7 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugins/sharedsignals/caep"
+	"github.com/xraph/authsome/settings"
 )
 
 // Sanity bounds for an event's forensic timestamp. A SET's event_timestamp is
@@ -120,12 +121,11 @@ func (p *Plugin) severityFor(ev caep.Event) int {
 // many actions the stream has already taken this hour, so it cannot bound
 // its own blast radius -- that is entirely the breaker's job. Skipping the
 // breaker check defeats it.
+// A stream-level event (SSF verification) never reaches here: the receiver
+// dispatches it before subject resolution, because it has no subject to
+// resolve. See processOneEvent.
 func (p *Plugin) applyEvent(ctx context.Context, s *InboundStream,
 	ev caep.Event, res Resolution) (string, error) {
-	if ev.Type == caep.EventVerification {
-		return "", p.completeVerification(ctx, s, ev)
-	}
-
 	action := p.actionFor(s, ev)
 
 	if err := p.recordSignal(ctx, s, ev, res); err != nil {
@@ -251,7 +251,7 @@ func (p *Plugin) recordSignal(ctx context.Context, s *InboundStream,
 		Severity:  p.severityFor(ev),
 		Reason:    reason,
 		EventAt:   eventAt,
-		ExpiresAt: now.Add(p.config.SignalTTL),
+		ExpiresAt: now.Add(p.signalTTL(ctx, s.AppID)),
 		CreatedAt: now,
 	})
 }
@@ -274,13 +274,18 @@ func (p *Plugin) completeVerification(ctx context.Context, s *InboundStream,
 // limit pauses the stream and raises an alert, because a transmitter asking
 // for thousands of revocations is either compromised or misconfigured and
 // both want the same answer.
+//
+// What it counts is every event the stream got us to RECORD in the window,
+// not just the ones that ended in an action. Counting actions alone left the
+// whole signal-only half of the matrix unbounded: an authentic but hostile
+// transmitter could push risk-level-change at HIGH all day, driving every
+// user's score up, with the breaker's counter sitting at zero the entire
+// time. Correctness gates handle forged events; this is the bound on
+// authentic ones, so it has to count all of them.
 func (p *Plugin) checkCircuitBreaker(ctx context.Context, s *InboundStream) (bool, error) {
-	limit := s.MaxActionsPerHour
-	if limit <= 0 {
-		limit = p.config.MaxActionsPerHour
-	}
+	limit := p.maxActionsPerHour(ctx, s)
 
-	count, err := p.store.CountActionsSince(ctx, s.ID, time.Now().Add(-time.Hour))
+	count, err := p.store.CountEventsSince(ctx, s.ID, time.Now().Add(-time.Hour))
 	if err != nil {
 		return false, err
 	}
@@ -328,6 +333,59 @@ func (p *Plugin) checkCircuitBreaker(ctx context.Context, s *InboundStream) (boo
 	return false, nil
 }
 
+// ──────────────────────────────────────────────────
+// Dynamic settings, read at the point of use
+// ──────────────────────────────────────────────────
+//
+// Each of these prefers the most specific source it has: a per-stream column
+// where one exists, then the operator's dynamic setting for the app, then the
+// value the host compiled in through Config. A settings manager that is
+// missing or erroring never changes an answer, because settings.Get already
+// falls back to the registered default.
+
+// signalTTL is how long a recorded signal keeps influencing the risk score.
+func (p *Plugin) signalTTL(ctx context.Context, appID id.AppID) time.Duration {
+	if p.settingsMgr == nil {
+		return p.config.SignalTTL
+	}
+	hours, err := settings.Get(ctx, p.settingsMgr, SettingSignalTTLHours,
+		settings.ResolveOpts{AppID: appID.String()})
+	if err != nil || hours <= 0 {
+		return p.config.SignalTTL
+	}
+	return time.Duration(hours) * time.Hour
+}
+
+// maxActionsPerHour is the circuit breaker's limit for one stream. The
+// stream's own column wins when it is set, because an operator who tuned one
+// noisy transmitter did not mean to tune every stream in the app.
+func (p *Plugin) maxActionsPerHour(ctx context.Context, s *InboundStream) int {
+	if s.MaxActionsPerHour > 0 {
+		return s.MaxActionsPerHour
+	}
+	if p.settingsMgr != nil {
+		limit, err := settings.Get(ctx, p.settingsMgr, SettingMaxActionsPerHour,
+			settings.ResolveOpts{AppID: s.AppID.String()})
+		if err == nil && limit > 0 {
+			return limit
+		}
+	}
+	return p.config.MaxActionsPerHour
+}
+
+// riskWeight is how much more a CAEP signal counts than an IP heuristic.
+func (p *Plugin) riskWeight(ctx context.Context, appID id.AppID) float64 {
+	if p.settingsMgr == nil {
+		return caepSignalWeight
+	}
+	weight, err := settings.Get(ctx, p.settingsMgr, SettingCAEPSignalWeight,
+		settings.ResolveOpts{AppID: appID.String()})
+	if err != nil || weight <= 0 {
+		return caepSignalWeight
+	}
+	return float64(weight)
+}
+
 // audit records what applyEvent did. severity is one of the bridge.Severity*
 // string constants; bridge does not export a dedicated type for it. extra is
 // merged into the metadata map (e.g. partial-revocation counts) and may be
@@ -352,6 +410,56 @@ func (p *Plugin) audit(ctx context.Context, s *InboundStream, ev caep.Event,
 		ActorID:  res.UserID.String(),
 		Tenant:   s.AppID.String(),
 		Outcome:  bridge.OutcomeSuccess,
+		Severity: severity,
+		Metadata: metadata,
+	})
+}
+
+// auditOutcome records an event that took no action: ignored, unresolved,
+// rejected, or a signal-only outcome that changed nothing but the risk score.
+// The spec asks for every accepted and rejected event to reach Chronicle, and
+// these are exactly the ones applyEvent's audit never covered because it only
+// fires on a revocation path. Rejections carry the reason, because a stream
+// quietly refusing everything an IdP sends is the failure mode an operator
+// most needs to be able to see.
+func (p *Plugin) auditOutcome(ctx context.Context, s *InboundStream,
+	eventType string, result eventResult) {
+	if p.chronicle == nil {
+		return
+	}
+
+	severity := bridge.SeverityInfo
+	outcome := bridge.OutcomeSuccess
+	if result.Outcome == OutcomeRejected {
+		severity = bridge.SeverityWarning
+		outcome = bridge.OutcomeFailure
+	}
+
+	metadata := map[string]string{
+		"stream_id":  s.ID.String(),
+		"issuer":     s.Issuer,
+		"event_type": eventType,
+		"outcome":    result.Outcome,
+	}
+	if !result.UserID.IsNil() {
+		metadata["user_id"] = result.UserID.String()
+	}
+	// The subject the transmitter named. This is the record the receiver's
+	// error responses point at when they refuse to echo anything the caller
+	// sent, so it has to actually be here.
+	if result.SubjectJSON != "" {
+		metadata["subject"] = result.SubjectJSON
+	}
+	if result.Failure != nil {
+		metadata["reason"] = result.Failure.Error()
+	}
+
+	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
+		Action:   "ssf_event_recorded",
+		Resource: "sharedsignals_stream",
+		ActorID:  result.UserID.String(),
+		Tenant:   s.AppID.String(),
+		Outcome:  outcome,
 		Severity: severity,
 		Metadata: metadata,
 	})

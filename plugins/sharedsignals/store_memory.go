@@ -2,6 +2,7 @@ package sharedsignals
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -194,13 +195,88 @@ func (m *MemoryStore) DeleteReceivedEvent(_ context.Context, eventID id.SSFEvent
 	return ErrNotFound
 }
 
-func (m *MemoryStore) CountActionsSince(_ context.Context, streamID id.SSFStreamID,
+// GetReceivedEvent loads one audit row by ID and confirms it belongs to
+// appID. Events are keyed in storage by (stream_id, jti, event_type), not by
+// ID, so this scans -- MemoryStore backs tests and standalone mode, never a
+// production hot path.
+func (m *MemoryStore) GetReceivedEvent(ctx context.Context, appID id.AppID,
+	eventID id.SSFEventID) (*ReceivedEvent, error) {
+	m.mu.RLock()
+	var found *ReceivedEvent
+	for _, e := range m.events {
+		if e.ID == eventID {
+			c := *e
+			found = &c
+			break
+		}
+	}
+	m.mu.RUnlock()
+
+	if found == nil {
+		return nil, ErrNotFound
+	}
+	// Resolve the tenant outside the read lock: GetInboundStream takes the
+	// same RWMutex, and Go's RLock is not safe to re-enter while a writer
+	// is queued behind it.
+	if err := streamOwnedBy(ctx, m, appID, found.StreamID); err != nil {
+		return nil, err
+	}
+	return found, nil
+}
+
+// ListReceivedEvents returns one stream's audit rows newest first.
+func (m *MemoryStore) ListReceivedEvents(ctx context.Context, appID id.AppID,
+	f ReceivedEventFilter) ([]*ReceivedEvent, error) {
+	// Ownership first, and before any row is read: a stream that is not
+	// this caller's must answer ErrNotFound, not an empty list.
+	if err := streamOwnedBy(ctx, m, appID, f.StreamID); err != nil {
+		return nil, err
+	}
+	f = f.normalized()
+
+	m.mu.RLock()
+	out := make([]*ReceivedEvent, 0, len(m.events))
+	for _, e := range m.events {
+		if e.StreamID != f.StreamID {
+			continue
+		}
+		if !f.Since.IsZero() && e.ReceivedAt.Before(f.Since) {
+			continue
+		}
+		if !f.Until.IsZero() && !e.ReceivedAt.Before(f.Until) {
+			continue
+		}
+		c := *e
+		out = append(out, &c)
+	}
+	m.mu.RUnlock()
+
+	// Map iteration is random, so the ordering the SQL backends get from
+	// the index has to be applied explicitly here or the conformance suite
+	// would pass on a backend nobody could actually page through. The ID
+	// tie-break keeps rows written in the same instant stable, which the
+	// second-granularity timestamps in tests routinely are.
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].ReceivedAt.Equal(out[j].ReceivedAt) {
+			return out[i].ReceivedAt.After(out[j].ReceivedAt)
+		}
+		return out[i].ID.String() > out[j].ID.String()
+	})
+	if len(out) > f.Limit {
+		out = out[:f.Limit]
+	}
+	return out, nil
+}
+
+func (m *MemoryStore) CountEventsSince(_ context.Context, streamID id.SSFStreamID,
 	since time.Time) (int, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	// Every recorded event counts, not just the ones that acted -- see
+	// Store.CountEventsSince.
 	count := 0
 	for _, e := range m.events {
-		if e.StreamID == streamID && e.ActionTaken != "" && e.ReceivedAt.After(since) {
+		if e.StreamID == streamID && e.ReceivedAt.After(since) {
 			count++
 		}
 	}

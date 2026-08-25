@@ -11,9 +11,10 @@ import (
 )
 
 // The mongo store needs a live server, so the conformance suite does not run
-// it by default. What we can check without one is that the doc converters
-// preserve every field, which is where mongo backends usually drift from the
-// SQL ones.
+// it by default -- see store_mongo_conformance_test.go, which runs the full
+// contract behind the integration build tag and AUTHSOME_MONGO_URI. What we
+// can check without a server is that the doc converters preserve every field,
+// which is where mongo backends usually drift from the SQL ones.
 
 func TestMongoDocs_InboundStreamRoundTrip(t *testing.T) {
 	verified := time.Now().UTC().Truncate(time.Millisecond)

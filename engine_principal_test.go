@@ -18,6 +18,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/rbac"
+	"github.com/xraph/authsome/serviceaccount"
 )
 
 // Delegation narrows and never widens. Each row is one of the four
@@ -83,9 +84,170 @@ func TestCanChecksEveryHop(t *testing.T) {
 	assert.False(t, got, "a denied parent must deny the child acting through it")
 }
 
+// A child may not out-scope its parent. Otherwise minting a child is a
+// privilege escalation with an extra step.
+func TestMintChildRefusesScopesTheParentLacks(t *testing.T) {
+	e, _, parent := setupParentFixture(t, []string{"repo:read"})
+
+	_, _, _, err := e.MintChildPrincipal(context.Background(), parent.ID,
+		"child", []string{"repo:write"}, time.Hour)
+	assert.Error(t, err)
+}
+
+// A child minted with no scopes inherits its parent's, it does not come out
+// unrestricted.
+//
+// Empty scopes read as "no restriction" everywhere they are consumed, so a
+// child left empty under a repo:read parent would be BROADER than the parent
+// it hangs off, which is the exact inversion the subset cap exists to prevent.
+func TestMintChildWithNoScopesInheritsTheParents(t *testing.T) {
+	e, _, parent := setupParentFixture(t, []string{"repo:read"})
+
+	child, key, _, err := e.MintChildPrincipal(context.Background(), parent.ID,
+		"child", nil, time.Hour)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"repo:read"}, child.Scopes,
+		"an unscoped child must inherit the parent's cap, not escape it")
+	assert.Equal(t, []string{"repo:read"}, key.Scopes,
+		"the child's own credential must carry the same cap as the child")
+}
+
+// A child may not outlive its parent, or revoking the parent leaves its
+// children running.
+func TestMintChildCapsTTLByParentExpiry(t *testing.T) {
+	e, _, parent := setupParentFixtureExpiring(t, 5*time.Minute)
+
+	child, _, _, err := e.MintChildPrincipal(context.Background(), parent.ID,
+		"child", nil, 24*time.Hour)
+	require.NoError(t, err)
+	require.NotNil(t, child.ExpiresAt)
+	assert.False(t, child.ExpiresAt.After(*parent.ExpiresAt))
+}
+
+func TestMintChildRecordsTheParent(t *testing.T) {
+	e, appID, parent := setupParentFixture(t, nil)
+
+	child, key, secret, err := e.MintChildPrincipal(context.Background(), parent.ID,
+		"child", nil, time.Hour)
+	require.NoError(t, err)
+	assert.Equal(t, parent.ID.String(), child.ParentID.String())
+	assert.Equal(t, appID.String(), child.AppID.String())
+	assert.NotEmpty(t, secret, "the secret is returned once and never stored")
+	assert.Equal(t, child.ID.String(), key.ServiceAccountID.String())
+}
+
+func TestReapRemovesExpiredChildrenOnly(t *testing.T) {
+	e, appID, parent := setupParentFixture(t, nil)
+	ctx := context.Background()
+
+	lapsed, _, _, err := e.MintChildPrincipal(ctx, parent.ID, "lapsed", nil, -time.Hour)
+	require.NoError(t, err)
+
+	n, err := e.ReapExpiredPrincipals(ctx, appID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+
+	_, err = e.GetServiceAccount(ctx, lapsed.ID)
+	assert.Error(t, err, "the lapsed child must be gone")
+	_, err = e.GetServiceAccount(ctx, parent.ID)
+	assert.NoError(t, err, "the durable parent must survive the reaper")
+}
+
+// A durable principal that happens to carry its own expiry must not be
+// swept: an operator who time-limited a registration they can see in the
+// dashboard did not consent to it being deleted out from under them. Only
+// rows with ParentID set (minted children) are the reaper's business.
+func TestReapLeavesExpiredNonChildrenAlone(t *testing.T) {
+	e, s := newTestEngine(t)
+	appID := testTenantID(t, e)
+	ctx := context.Background()
+
+	past := time.Now().Add(-time.Hour)
+	durable := &serviceaccount.ServiceAccount{
+		ID:        id.NewServiceAccountID(),
+		AppID:     appID,
+		Name:      "durable-but-expired",
+		Kind:      principal.KindWorkload,
+		Active:    true,
+		ExpiresAt: &past,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, s.CreateServiceAccount(ctx, durable))
+
+	n, err := e.ReapExpiredPrincipals(ctx, appID)
+	require.NoError(t, err)
+	assert.Equal(t, 0, n, "a durable principal with its own expiry is not a child and must not be reaped")
+
+	_, err = e.GetServiceAccount(ctx, durable.ID)
+	assert.NoError(t, err, "the durable expired principal must survive the reaper")
+}
+
+// One level only. An ephemeral child must not itself be able to mint a
+// grandchild: a tree of ephemeral principals is a revocation problem nobody
+// can reason about.
+func TestMintChildRefusesFromAnEphemeralParent(t *testing.T) {
+	e, _, parent := setupParentFixture(t, nil)
+	ctx := context.Background()
+
+	child, _, _, err := e.MintChildPrincipal(ctx, parent.ID, "child", nil, time.Hour)
+	require.NoError(t, err)
+
+	_, _, _, err = e.MintChildPrincipal(ctx, child.ID, "grandchild", nil, time.Hour)
+	assert.Error(t, err, "an ephemeral principal must not be able to mint children of its own")
+}
+
 // ──────────────────────────────────────────────────
 // fixtures
 // ──────────────────────────────────────────────────
+
+// setupParentFixture builds an engine with a durable, non-expiring parent
+// service account carrying the given scopes.
+func setupParentFixture(t *testing.T, scopes []string) (*authsome.Engine, id.AppID, *serviceaccount.ServiceAccount) {
+	t.Helper()
+	eng, s := newTestEngine(t)
+	appID := testTenantID(t, eng)
+
+	svcID := id.NewServiceAccountID()
+	now := time.Now()
+	parent := &serviceaccount.ServiceAccount{
+		ID:        svcID,
+		AppID:     appID,
+		Name:      "parent-" + svcID.String(),
+		Kind:      principal.KindAgent,
+		Scopes:    scopes,
+		Active:    true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	require.NoError(t, s.CreateServiceAccount(context.Background(), parent))
+	return eng, appID, parent
+}
+
+// setupParentFixtureExpiring is setupParentFixture but the parent itself
+// carries an expiry, ttl out from now, so a minted child can be proven
+// capped by the PARENT's expiry rather than by its own requested TTL.
+func setupParentFixtureExpiring(t *testing.T, ttl time.Duration) (*authsome.Engine, id.AppID, *serviceaccount.ServiceAccount) {
+	t.Helper()
+	eng, s := newTestEngine(t)
+	appID := testTenantID(t, eng)
+
+	svcID := id.NewServiceAccountID()
+	now := time.Now()
+	expires := now.Add(ttl)
+	parent := &serviceaccount.ServiceAccount{
+		ID:        svcID,
+		AppID:     appID,
+		Name:      "parent-" + svcID.String(),
+		Kind:      principal.KindAgent,
+		Active:    true,
+		ExpiresAt: &expires,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	require.NoError(t, s.CreateServiceAccount(context.Background(), parent))
+	return eng, appID, parent
+}
 
 // canFixtureSeq keeps every role slug created across these fixtures unique,
 // since Warden enforces (tenant, namespace, slug) uniqueness and t.Name()

@@ -1052,6 +1052,135 @@ func init() {
 			// now depends on, and the read path treats a chain as the truth.
 			Down: func(_ context.Context, _ migrate.Executor) error { return nil },
 		},
+
+		// Migration: stop a lapsed grant from blocking a fresh one. Mongo's
+		// counterpart to postgres's delegation_live_index_excludes_expired.
+		//
+		// Mongo has the same limitation as the SQL backends here, for its own
+		// reason: a partialFilterExpression admits only equality, $exists,
+		// $type, the range operators against a CONSTANT, $and, $or and $in.
+		// There is no way to name "now" inside one, so expiry cannot live in
+		// the filter any more than it can live in a postgres index predicate.
+		//
+		// The filter therefore adds expires_at being null alongside revoked_at
+		// being null: never-revoked AND never-expiring, the rows whose
+		// liveness mongo can decide by itself. Grants that carry an expiry are
+		// checked in CreateDelegation instead, against
+		// principal.Delegation.IsActive, the same method every other backend
+		// now agrees with. See the postgres migration for the concurrency
+		// trade that leaves.
+		//
+		// $type: "null" rather than $exists, for the reason spelled out on
+		// create_authsome_delegations above: grove writes every mapped field
+		// whatever omitempty says, so an unset expiry reaches mongo as an
+		// explicit null and never as an absent key.
+		//
+		// The reshape goes through createIndexesReshapeConflicting because the
+		// keys are unchanged and only the options move. Mongo refuses that as
+		// an index conflict, and the helper's whole job is to drop the
+		// conflicting index by name and retry.
+		&migrate.Migration{
+			Name:    "delegation_live_index_excludes_expired",
+			Version: "20260824000100",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				return createIndexesReshapeConflicting(ctx, mexec.DB().Collection(colDelegations),
+					[]mongo.IndexModel{delegationLiveIndex(true)})
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				return createIndexesReshapeConflicting(ctx, mexec.DB().Collection(colDelegations),
+					[]mongo.IndexModel{delegationLiveIndex(false)})
+			},
+		},
+
+		// Bring the users collection in line with postgres. Its unique
+		// indexes were still (app_id, email) and (app_id, username), so mongo
+		// forbade what postgres allows: the same address or handle in two
+		// environments of one app. Existing docs also never had env_id
+		// backfilled, so they belonged to no environment at all.
+		&migrate.Migration{
+			Name:    "env_scope_user_unique_indexes",
+			Version: "20260824000090",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				if err := backfillDefaultEnvironments(ctx, mexec); err != nil {
+					return err
+				}
+
+				coll := mexec.DB().Collection(colUsers)
+				for _, name := range []string{"app_id_1_email_1", "app_id_1_username_1"} {
+					if err := coll.Indexes().DropOne(ctx, name); err != nil {
+						if !mongoIsIndexNotFound(err) {
+							return fmt.Errorf("drop %s: %w", name, err)
+						}
+					}
+				}
+				// The email index stays non-partial for the reason given on
+				// the user_emails collection: mongo rejects $exists:false in a
+				// partial filter, so "deleted_at IS NULL" cannot be expressed
+				// here the way the SQL backends express it.
+				return mexec.CreateIndexes(ctx, colUsers, []mongo.IndexModel{
+					{
+						Keys: bson.D{
+							{Key: "app_id", Value: 1},
+							{Key: "env_id", Value: 1},
+							{Key: "email", Value: 1},
+						},
+						Options: options.Index().SetUnique(true),
+					},
+					{
+						Keys: bson.D{
+							{Key: "app_id", Value: 1},
+							{Key: "env_id", Value: 1},
+							{Key: "username", Value: 1},
+						},
+						Options: options.Index().
+							SetUnique(true).
+							SetPartialFilterExpression(bson.M{"username": bson.M{"$gt": ""}}),
+					},
+				})
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				// Indexes only. The backfilled env_id values stay: stripping
+				// them would strand docs the running code now depends on.
+				coll := mexec.DB().Collection(colUsers)
+				for _, name := range []string{
+					"app_id_1_env_id_1_email_1", "app_id_1_env_id_1_username_1",
+				} {
+					if err := coll.Indexes().DropOne(ctx, name); err != nil {
+						if !mongoIsIndexNotFound(err) {
+							return err
+						}
+					}
+				}
+				return mexec.CreateIndexes(ctx, colUsers, []mongo.IndexModel{
+					{
+						Keys:    bson.D{{Key: "app_id", Value: 1}, {Key: "email", Value: 1}},
+						Options: options.Index().SetUnique(true),
+					},
+					{
+						Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "username", Value: 1}},
+						Options: options.Index().
+							SetUnique(true).
+							SetPartialFilterExpression(bson.M{"username": bson.M{"$gt": ""}}),
+					},
+				})
+			},
+		},
 		&migrate.Migration{
 			Name:    "add_session_audience",
 			Version: "20260824000080",
@@ -1068,4 +1197,114 @@ func init() {
 			Down: func(_ context.Context, _ migrate.Executor) error { return nil },
 		},
 	)
+}
+
+// backfillDefaultEnvironments gives every app a default environment if it has
+// none, then stamps every scoped doc whose env_id is missing or empty.
+//
+// Both halves are idempotent, so the migration is safe to re-run: an app that
+// already has a default environment keeps it, and a doc whose env_id is
+// already set is not touched.
+func backfillDefaultEnvironments(ctx context.Context, mexec *mongomigrate.Executor) error {
+	db := mexec.DB()
+
+	appCur, err := db.Collection(colApps).Find(ctx, bson.M{})
+	if err != nil {
+		return fmt.Errorf("list apps for env backfill: %w", err)
+	}
+	var appIDs []string
+	for appCur.Next(ctx) {
+		var a struct {
+			ID string `bson:"_id"`
+		}
+		if decErr := appCur.Decode(&a); decErr != nil {
+			appCur.Close(ctx)
+			return fmt.Errorf("decode app: %w", decErr)
+		}
+		appIDs = append(appIDs, a.ID)
+	}
+	if curErr := appCur.Err(); curErr != nil {
+		appCur.Close(ctx)
+		return fmt.Errorf("iterate apps: %w", curErr)
+	}
+	appCur.Close(ctx)
+
+	envs := db.Collection(colEnvironments)
+	for _, appID := range appIDs {
+		var existing struct {
+			ID string `bson:"_id"`
+		}
+		findErr := envs.FindOne(ctx, bson.M{"app_id": appID, "is_default": true}).Decode(&existing)
+		envID := existing.ID
+		switch {
+		case findErr == nil:
+			// Already has one; reuse it below.
+		case isNoDocuments(findErr):
+			envID = id.NewEnvironmentID().String()
+			t := now()
+			if _, insErr := envs.InsertOne(ctx, bson.M{
+				"_id": envID, "app_id": appID,
+				"name": "Production", "slug": "production", "type": "production",
+				"is_default": true, "color": "#ef4444",
+				"created_at": t, "updated_at": t,
+			}); insErr != nil {
+				return fmt.Errorf("create default env for app %s: %w", appID, insErr)
+			}
+		default:
+			return fmt.Errorf("look up default env for app %s: %w", appID, findErr)
+		}
+
+		for _, col := range envScopedCollections {
+			if _, updErr := db.Collection(col).UpdateMany(ctx,
+				bson.M{"app_id": appID, "$or": []bson.M{
+					{"env_id": bson.M{"$exists": false}},
+					{"env_id": ""},
+				}},
+				bson.M{"$set": bson.M{"env_id": envID}},
+			); updErr != nil {
+				return fmt.Errorf("backfill env_id for %s: %w", col, updErr)
+			}
+		}
+	}
+	return nil
+}
+
+// delegationLiveIndex builds the unique index that holds one live grant per
+// (app, actor, subject, kind).
+//
+// excludeExpired chooses the partial filter. True is the current shape, which
+// covers only grants that neither expire nor have been revoked. False is the
+// original revoked-only shape, kept so the migration that introduced the
+// change has a Down that actually restores what was there.
+func delegationLiveIndex(excludeExpired bool) mongo.IndexModel {
+	filter := bson.D{
+		{Key: "revoked_at", Value: bson.D{{Key: "$type", Value: "null"}}},
+	}
+	if excludeExpired {
+		filter = append(filter, bson.E{
+			Key: "expires_at", Value: bson.D{{Key: "$type", Value: "null"}},
+		})
+	}
+	return mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "app_id", Value: 1},
+			{Key: "actor_kind", Value: 1}, {Key: "actor_id", Value: 1},
+			{Key: "subject_kind", Value: 1}, {Key: "subject_id", Value: 1},
+			{Key: "grant_kind", Value: 1},
+		},
+		Options: options.Index().SetUnique(true).SetPartialFilterExpression(filter),
+	}
+}
+
+// envScopedCollections are the collections whose models carry env_id.
+var envScopedCollections = []string{
+	colUsers,
+	colSessions,
+	colVerifications,
+	colPasswordResets,
+	colOrganizations,
+	colDevices,
+	colWebhooks,
+	colNotifications,
+	colAPIKeys,
 }

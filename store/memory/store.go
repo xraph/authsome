@@ -1897,14 +1897,23 @@ func (s *Store) CreateDelegation(_ context.Context, d *principal.Delegation) err
 		d.CreatedAt = time.Now()
 	}
 	d.UpdatedAt = d.CreatedAt
-	// One live grant per (app, actor, subject, kind), matching the partial
-	// unique index the SQL backends carry.
+	// One LIVE grant per (app, actor, subject, kind). Live means
+	// principal.Delegation.IsActive: not revoked AND not past its expiry,
+	// with the boundary instant still counting as active, exactly as the SQL
+	// backends' `expires_at >= clock` comparison does.
+	//
+	// Checking revoked_at alone was the bug: an impersonation grant that
+	// simply lapsed was never revoked by anything (StopImpersonation is the
+	// only revoker), so its row sat there unrevoked forever and blocked every
+	// later Impersonate for that admin and target. An admin could impersonate
+	// a given user exactly once, ever.
+	now := time.Now()
 	for _, existing := range s.delegations {
 		if existing.AppID.String() == d.AppID.String() &&
 			existing.Actor == d.Actor &&
 			existing.Subject == d.Subject &&
 			existing.GrantKind == d.GrantKind &&
-			existing.RevokedAt == nil {
+			existing.IsActive(now) {
 			return store.ErrConflict
 		}
 	}

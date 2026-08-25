@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -22,6 +23,7 @@ import (
 	"github.com/xraph/authsome/plugins/sharedsignals/caep"
 	"github.com/xraph/authsome/plugins/sharedsignals/jwksclient"
 	"github.com/xraph/authsome/plugins/sharedsignals/setjwt"
+	"github.com/xraph/authsome/settings"
 )
 
 // HashSecret returns the hex SHA-256 of a push secret. Only the hash is
@@ -46,15 +48,17 @@ func NewPushSecret() (raw, hash string, err error) {
 func (p *Plugin) registerReceiverRoutes(router forge.Router) error {
 	g := router.Group("/v1/ssf", forge.WithGroupTags("Shared Signals"))
 
-	opts := make([]forge.RouteOption, 0, 3)
+	// Nil when the host is not the concrete engine or rate limiting is off,
+	// which is why this is defence in depth and not the control.
+	rateLimitOpts := authsome.PluginRateLimit(p.engine,
+		func(c authsome.RateLimitConfig) int { return c.SSFPushLimit })
+
+	opts := make([]forge.RouteOption, 0, 2+len(rateLimitOpts))
 	opts = append(opts,
 		forge.WithSummary("Receive Security Event Tokens"),
 		forge.WithOperationID("receiveSecurityEventTokens"),
 	)
-	// Nil when the host is not the concrete engine or rate limiting is off,
-	// which is why this is defence in depth and not the control.
-	opts = append(opts, authsome.PluginRateLimit(p.engine,
-		func(c authsome.RateLimitConfig) int { return c.SSFPushLimit })...)
+	opts = append(opts, rateLimitOpts...)
 
 	// A raw handler: the body is a compact JWS rather than JSON, success is a
 	// bodiless 202, and failure is the RFC 8935 error object.
@@ -128,6 +132,24 @@ func (p *Plugin) servePush(w http.ResponseWriter, r *http.Request, pushPath stri
 		return
 	}
 
+	// Gate 4b: the operator's kill switch. sharedsignals.enabled is declared
+	// WithEnforceable(), so an operator who turns it off believes they have
+	// stopped the receiver -- and until now they still had a live remote
+	// session-kill endpoint. It is checked after authentication so that
+	// turning the receiver off does not also hand an unauthenticated caller
+	// a way to probe which push paths exist.
+	//
+	// 503, not 403: this is a temporary operator decision, and every RFC
+	// 8935 error code tells a well-behaved transmitter that the token is
+	// wrong and retrying is pointless. A 5xx with Retry-After leaves the
+	// transmitter free to deliver the same SET again once the receiver is
+	// switched back on, so nothing is lost while it is off.
+	if !p.receiverEnabled(ctx, stream) {
+		w.Header().Set("Retry-After", "300")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
 	// Gates 5 to 11 live in setjwt: algorithm allow-list, typ, key
 	// resolution, signature, issuer, audience, jti and iat.
 	token, err := setjwt.Validate(ctx, body, setjwt.Options{
@@ -140,6 +162,23 @@ func (p *Plugin) servePush(w http.ResponseWriter, r *http.Request, pushPath stri
 		MaxEvents: 10,
 	})
 	if err != nil {
+		// One case in here is not a verdict on the token at all: the key set
+		// could not be loaded, so the signature was never actually checked.
+		// Answering 400 invalid_key there tells a well-behaved transmitter
+		// to STOP retrying, which permanently drops whatever that SET was
+		// carrying because our own IdP fetch had a bad five minutes. Same
+		// reasoning as the store-failure branch below: a 5xx invites the
+		// retry that would succeed.
+		if errors.Is(err, setjwt.ErrKeyUnavailable) {
+			p.logger.Error("sharedsignals: could not load the stream's key set",
+				logString("stream_id", stream.ID.String()),
+				logString("jwks_uri", stream.JWKSURI),
+				logString("error", err.Error()),
+			)
+			w.Header().Set("Retry-After", "60")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		setError(w, http.StatusBadRequest, setjwt.ErrCode(err),
 			"the security event token was rejected")
 		return
@@ -185,8 +224,39 @@ type streamKeys struct {
 	uri    string
 }
 
+// Key translates the one jwksclient failure that is ours rather than the
+// token's. Everything else stays a plain error and setjwt turns it into
+// invalid_key, which is the right permanent answer for a token naming a key
+// the issuer does not publish.
 func (s *streamKeys) Key(ctx context.Context, kid string) (crypto.PublicKey, error) {
-	return s.client.Key(ctx, s.uri, kid)
+	key, err := s.client.Key(ctx, s.uri, kid)
+	if err != nil && errors.Is(err, jwksclient.ErrFetchFailed) {
+		return nil, fmt.Errorf("%w: %w", setjwt.ErrKeyUnavailable, err)
+	}
+	return key, err
+}
+
+// receiverEnabled reads the sharedsignals.enabled kill switch for this
+// stream's app. A settings manager that is absent or unreachable leaves the
+// receiver on: this switch exists so an operator can stop the receiver
+// deliberately, and a settings outage is not a deliberate decision. The
+// stream's own status field is the control that fails closed.
+func (p *Plugin) receiverEnabled(ctx context.Context, s *InboundStream) bool {
+	if p.settingsMgr == nil {
+		return true
+	}
+	enabled, err := settings.Get(ctx, p.settingsMgr, SettingEnabled,
+		settings.ResolveOpts{AppID: s.AppID.String()})
+	if err != nil {
+		// settings.Get already falls back to the registered default (true)
+		// on an error, so this only logs why.
+		p.logger.Warn("sharedsignals: could not resolve the enabled setting, staying on",
+			logString("stream_id", s.ID.String()),
+			logString("error", err.Error()),
+		)
+		return true
+	}
+	return enabled
 }
 
 // processSET records each event, resolves its subject and applies the
@@ -221,7 +291,8 @@ func (p *Plugin) processSET(ctx context.Context, stream *InboundStream,
 		}
 		anyNew = true
 
-		outcome, action, infra, failure := p.processOneEvent(ctx, stream, eventType, payload)
+		result := p.processOneEvent(ctx, stream, eventType, payload)
+		outcome, action, failure, infra := result.Outcome, result.Action, result.Failure, result.Infra
 		if infra {
 			// The dedupe row this event just wrote must not survive an
 			// infrastructure failure: leaving it committed would make the
@@ -241,6 +312,14 @@ func (p *Plugin) processSET(ctx context.Context, stream *InboundStream,
 			return failure
 		}
 
+		// The two fields that make this row an audit trail rather than a
+		// bare dedupe key. They were modelled, migrated and round-tripped by
+		// every backend, and never once written: processSET used to throw
+		// the Resolution away. That matters more here than it looks, because
+		// the receiver deliberately keeps offending values OUT of its error
+		// responses on the reasoning that they belong in the audit record.
+		record.SubjectJSON = result.SubjectJSON
+		record.ResolvedUserID = result.UserID
 		record.Outcome = outcome
 		record.ActionTaken = action
 		if failure != nil {
@@ -249,6 +328,15 @@ func (p *Plugin) processSET(ctx context.Context, stream *InboundStream,
 		if err := p.store.UpdateReceivedEvent(ctx, record); err != nil {
 			return err
 		}
+
+		// applyEvent audits every outcome that produced an action, with the
+		// metadata only it has (partial-revocation counts, observe mode).
+		// Everything else -- ignored, unresolved, rejected, signal-only --
+		// used to reach Chronicle never, against a spec that says every
+		// accepted and rejected event goes there.
+		if action == "" {
+			p.auditOutcome(ctx, stream, eventType, result)
+		}
 	}
 	if !anyNew {
 		return ErrDuplicateJTI
@@ -256,25 +344,61 @@ func (p *Plugin) processSET(ctx context.Context, stream *InboundStream,
 	return nil
 }
 
-// processOneEvent handles one event from a SET. infra is true only when
-// failure came from a store call breaking for its own reasons -- not from
-// any decision about the event's content -- and tells the caller this event
-// was never actually resolved one way or the other, so its dedupe row must
-// not be left standing. Every other return represents a genuine policy
-// outcome (ignored, unresolved, rejected, applied) and is meant to be
-// recorded and answered with success, exactly as before.
+// eventResult is what one event from a SET came to. It exists so the
+// audit row can carry the subject and the resolved user, which a bare
+// (outcome, action) pair had no way to express.
+type eventResult struct {
+	Outcome string
+	Action  string
+	// SubjectJSON is the subject exactly as the transmitter sent it.
+	SubjectJSON string
+	// UserID is set only when the subject resolved to one of our users.
+	UserID id.UserID
+	// Failure is the reason an outcome is not "applied", or the error that
+	// aborted an action. Recorded on the row; never returned to the caller.
+	Failure error
+	// Infra is true only when Failure came from a store call breaking for
+	// its own reasons -- not from any decision about the event's content --
+	// and tells the caller this event was never actually resolved one way
+	// or the other, so its dedupe row must not be left standing. Every
+	// other result represents a genuine policy outcome (ignored,
+	// unresolved, rejected, applied) and is meant to be recorded and
+	// answered with success.
+	Infra bool
+}
+
+func ignoredResult() eventResult { return eventResult{Outcome: OutcomeIgnored} }
+
+func infraResult(err error) eventResult { return eventResult{Failure: err, Infra: true} }
+
+// processOneEvent handles one event from a SET.
 func (p *Plugin) processOneEvent(ctx context.Context, stream *InboundStream,
-	eventType string, payload json.RawMessage) (outcome, action string, infra bool, failure error) {
+	eventType string, payload json.RawMessage) eventResult {
 	if !caep.IsKnownEventType(eventType) {
-		return OutcomeIgnored, "", false, nil
+		return ignoredResult()
 	}
 	if !allowsEventType(stream, eventType) {
-		return OutcomeIgnored, "", false, nil
+		return ignoredResult()
 	}
 
 	ev, err := caep.ParseEvent(eventType, payload)
 	if err != nil {
-		return OutcomeRejected, "", false, err
+		return eventResult{Outcome: OutcomeRejected, Failure: err}
+	}
+	subjectJSON := string(ev.RawSubject)
+
+	// A stream-level event describes the stream, not a principal on it, so
+	// it is dispatched ahead of subject resolution. Routing it through the
+	// subject path instead is what made the verification handshake
+	// impossible to complete: an event with no subject can never resolve,
+	// and an unresolved event stops before applyEvent is ever reached.
+	if caep.IsStreamLevel(eventType) {
+		if verr := p.completeVerification(ctx, stream, ev); verr != nil {
+			// The only failure in there is UpdateInboundStream breaking,
+			// which is our store, not the transmitter's problem.
+			return infraResult(verr)
+		}
+		return eventResult{Outcome: OutcomeApplied, SubjectJSON: subjectJSON}
 	}
 
 	res, err := p.resolveSubject(ctx, stream, ev.Subject)
@@ -284,31 +408,44 @@ func (p *Plugin) processOneEvent(ctx context.Context, stream *InboundStream,
 		// other than "not found" -- an infrastructure problem, not a policy
 		// decision about the subject. A miss is unresolved, not an error;
 		// see resolveViaLink.
-		return "", "", true, err
+		return infraResult(err)
 	}
 	if res.Outcome != OutcomeApplied {
 		// Unresolved and rejected both stop here without an error, so the
 		// transmitter learns nothing about who does or does not have an
 		// account and stops retrying.
-		return res.Outcome, "", false, nil
+		return eventResult{Outcome: res.Outcome, SubjectJSON: subjectJSON}
 	}
 
 	allowed, err := p.checkCircuitBreaker(ctx, stream)
 	if err != nil {
-		// Same reasoning as resolveSubject above: CountActionsSince failing
-		// is the store breaking, not a verdict that this event should be
-		// rejected.
-		return "", "", true, err
+		// Same reasoning as resolveSubject above: the breaker's count
+		// failing is the store breaking, not a verdict that this event
+		// should be rejected.
+		return infraResult(err)
 	}
 	if !allowed {
-		return OutcomeRejected, "", false, errors.New("stream paused by the circuit breaker")
+		return eventResult{
+			Outcome: OutcomeRejected, SubjectJSON: subjectJSON, UserID: res.UserID,
+			Failure: errors.New("stream paused by the circuit breaker"),
+		}
 	}
 
-	action, err = p.applyEvent(ctx, stream, ev, res)
+	action, err := p.applyEvent(ctx, stream, ev, res)
 	if err != nil {
-		return OutcomeRejected, "", false, err
+		// The action comes back even on the error path, because a partial
+		// revocation really did end some sessions and the row has to say so.
+		// It is also what tells the caller applyEvent already wrote its own,
+		// richer audit record for this event.
+		return eventResult{
+			Outcome: OutcomeRejected, Action: action, SubjectJSON: subjectJSON,
+			UserID: res.UserID, Failure: err,
+		}
 	}
-	return OutcomeApplied, action, false, nil
+	return eventResult{
+		Outcome: OutcomeApplied, Action: action,
+		SubjectJSON: subjectJSON, UserID: res.UserID,
+	}
 }
 
 func allowsEventType(s *InboundStream, eventType string) bool {

@@ -125,6 +125,65 @@ type ReceivedEvent struct {
 	ReceivedAt     time.Time
 }
 
+// ReceivedEventFilter narrows a ListReceivedEvents query. A received event
+// carries no app_id of its own -- the stream it arrived on is what binds it
+// to a tenant -- so StreamID is mandatory and every backend resolves the
+// stream before it reads a single row.
+type ReceivedEventFilter struct {
+	StreamID id.SSFStreamID
+	// Since and Until bound received_at, half-open: [Since, Until). Either
+	// may be zero, meaning unbounded on that side.
+	Since time.Time
+	Until time.Time
+	// Limit caps the rows returned. Zero or less means
+	// DefaultReceivedEventLimit; anything above MaxReceivedEventLimit is
+	// clamped down to it.
+	Limit int
+}
+
+// Row limits for ListReceivedEvents. The audit trail grows without bound --
+// a busy stream writes a row per delivery -- so a caller that names no limit
+// gets a page, not the table, and one that names an enormous limit does not
+// get to turn a dashboard request into a full scan.
+const (
+	DefaultReceivedEventLimit = 50
+	MaxReceivedEventLimit     = 500
+)
+
+// normalized applies the limit policy above. Every backend calls it, so a
+// missing or absurd limit means the same thing on all four.
+func (f ReceivedEventFilter) normalized() ReceivedEventFilter {
+	switch {
+	case f.Limit <= 0:
+		f.Limit = DefaultReceivedEventLimit
+	case f.Limit > MaxReceivedEventLimit:
+		f.Limit = MaxReceivedEventLimit
+	}
+	return f
+}
+
+// streamOwnedBy confirms streamID exists and belongs to appID, returning
+// ErrNotFound when it does not. It mirrors Plugin.streamInCallerApp,
+// including the choice to answer a cross-tenant hit identically to a miss:
+// anything else confirms to the caller that the ID is real for some OTHER
+// tenant, which is the fact an IDOR probe is trying to learn.
+//
+// It takes the lookup as an interface rather than a Store so each backend
+// can hand it its own receiver, which keeps the tenant rule written once
+// instead of four times.
+func streamOwnedBy(ctx context.Context, lookup interface {
+	GetInboundStream(context.Context, id.SSFStreamID) (*InboundStream, error)
+}, appID id.AppID, streamID id.SSFStreamID) error {
+	stream, err := lookup.GetInboundStream(ctx, streamID)
+	if err != nil {
+		return err
+	}
+	if stream.AppID.String() != appID.String() {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // Signal is durable risk state. An event that arrives while nobody is signing
 // in has to survive until the sign-in that cares about it.
 type Signal struct {
@@ -165,9 +224,28 @@ type Store interface {
 	// reprocessed, not read back later as a replay of a delivery that was
 	// never really handled.
 	DeleteReceivedEvent(ctx context.Context, id id.SSFEventID) error
-	// CountActionsSince counts events on a stream that actually did
-	// something since a cutoff. It backs the circuit breaker.
-	CountActionsSince(ctx context.Context, streamID id.SSFStreamID, since time.Time) (int, error)
+	// GetReceivedEvent loads one audit row by ID, scoped to appID. The
+	// row itself has no app_id, so the scope is enforced through the
+	// stream it arrived on; a row belonging to another tenant answers
+	// ErrNotFound, never a distinguishable "forbidden".
+	GetReceivedEvent(ctx context.Context, appID id.AppID,
+		eventID id.SSFEventID) (*ReceivedEvent, error)
+	// ListReceivedEvents returns one stream's audit rows newest first,
+	// bounded by the filter's time window and row limit. A stream that
+	// does not belong to appID answers ErrNotFound rather than an empty
+	// list, so a probe cannot tell "not yours" from "yours but quiet".
+	ListReceivedEvents(ctx context.Context, appID id.AppID,
+		f ReceivedEventFilter) ([]*ReceivedEvent, error)
+	// CountEventsSince counts every event RECORDED for a stream since a
+	// cutoff, whatever outcome it reached. It backs the circuit breaker.
+	//
+	// It deliberately does not filter on action_taken. Counting only the
+	// events that produced an action left the entire signal-only half of
+	// the matrix outside the breaker: an authentic but hostile transmitter
+	// could push unlimited risk-level-change events at HIGH, raising every
+	// user's risk score, while the counter stayed at zero. The breaker
+	// exists to bound authentic traffic, so it has to count all of it.
+	CountEventsSince(ctx context.Context, streamID id.SSFStreamID, since time.Time) (int, error)
 
 	CreateSignal(ctx context.Context, s *Signal) error
 	ListActiveSignals(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
