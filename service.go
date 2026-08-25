@@ -582,10 +582,28 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 
 	// account.RefreshSession always mints an opaque access token. If the app is
 	// configured for JWT access tokens, re-derive a JWT here (mirroring
-	// newSession) so a refresh does not silently downgrade the token format —
+	// newSession) so a refresh does not silently downgrade the token format,
 	// which would break stateless verification and JWT-revocation binding.
+	//
+	// Unless the session carries an actor chain. A chain-carrying session must
+	// never be handed a credential that drops the chain: the middleware
+	// reconstructs the chain from the session row, and a JWT is validated
+	// statelessly and loads no row at all. The row would keep its actors while
+	// the credential stopped carrying anyone to them.
+	//
+	// Without this guard the escalation closed at mint time reopens one door
+	// along. ExchangeToken and Impersonate both mint opaque tokens
+	// (see newOpaqueSession), but a refresh re-derived a JWT regardless, and
+	// /v1/admin/impersonate returns the refresh token in its body. So an
+	// impersonating admin on a JWT app could refresh into a JWT, present it to
+	// /token/exchange, and have middleware.SessionFrom find nothing:
+	// CallerActors arrives empty and the chained-exchange refusal never fires.
+	//
+	// The format downgrade this accepts is the lesser harm, and it is not
+	// really a downgrade: the token was already opaque when the session was
+	// minted, so a client holding it never had a JWT to lose.
 	tokFmt := e.TokenFormatForApp(sess.AppID.String())
-	if tokFmt.Name() == "jwt" {
+	if tokFmt.Name() == "jwt" && len(sess.Actors) == 0 {
 		jwtToken, genErr := tokFmt.GenerateAccessToken(tokenformat.TokenClaims{
 			UserID:    sess.UserID.String(),
 			AppID:     sess.AppID.String(),

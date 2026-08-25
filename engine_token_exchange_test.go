@@ -270,6 +270,90 @@ func TestExchangedCredentialCannotBeReExchangedOnAJWTApp(t *testing.T) {
 		"a credential minted by a prior exchange must not itself be exchangeable, JWT-configured app included")
 }
 
+// A refresh must not hand a chain-carrying session a credential that drops the
+// chain.
+//
+// Minting opaque is only half the fix. Engine.Refresh re-derives a JWT on a
+// JWT-configured app, and it did so unconditionally: the session kept its
+// actors while the credential stopped carrying the middleware to them. That is
+// the same escalation one door along, and it is reachable, because
+// /v1/admin/impersonate returns the refresh token in its response body. An
+// admin could refresh into a JWT, present it to /token/exchange, have
+// middleware.SessionFrom find nothing, and watch the chained-exchange refusal
+// never fire on an empty CallerActors.
+func TestRefreshKeepsAChainCarryingSessionOpaqueOnAJWTApp(t *testing.T) {
+	jwtFmt, err := tokenformat.NewJWT(tokenformat.JWTConfig{
+		SigningMethod: jwt.SigningMethodHS256,
+		SigningKey:    []byte("test-signing-key-0123456789abcdef"),
+	})
+	require.NoError(t, err)
+
+	e, appID, agent, userRef := setupExchangeFixture(t,
+		authsome.WithJWTFormat("aapp_01jf0000000000000000000000", jwtFmt))
+	ctx := context.Background()
+
+	_, err = e.GrantDelegation(ctx, appID, agent, userRef, []string{"repo:read"}, userRef, nil)
+	require.NoError(t, err)
+
+	sess, err := e.ExchangeToken(ctx, &authsome.ExchangeRequest{
+		AppID: appID, Actor: agent, RequestedSubject: userRef,
+		Scopes: []string{"repo:read"},
+	})
+	require.NoError(t, err)
+	require.False(t, tokenformat.IsJWT(sess.Token), "sanity: the minted token is opaque")
+	require.NotEmpty(t, sess.RefreshToken, "the exchanged session must be refreshable for this test to mean anything")
+
+	refreshed, err := e.Refresh(ctx, sess.RefreshToken)
+	require.NoError(t, err)
+
+	assert.False(t, tokenformat.IsJWT(refreshed.Token),
+		"a refreshed chain-carrying session must stay opaque, or the chain stops reaching the request while the row still carries it")
+	assert.Equal(t, principal.Chain{agent}, refreshed.Actors,
+		"the refresh must not have dropped the chain from the row either")
+
+	// The property that actually matters downstream: the refreshed credential
+	// still resolves back to a row carrying the agent, which is what
+	// middleware.SessionFrom hands the token-exchange handler.
+	stored, err := e.ResolveSessionByToken(refreshed.Token)
+	require.NoError(t, err, "a refreshed exchanged token must still resolve through the session path")
+	assert.Equal(t, principal.Chain{agent}, stored.Actors,
+		"the chain must survive the round trip, or a second exchange is judged on an empty chain")
+}
+
+// The same guard on the impersonation half, which is the door that is actually
+// reachable over HTTP: /v1/admin/impersonate returns refresh_token in its body,
+// where the exchange endpoint returns only the access token.
+func TestRefreshKeepsAnImpersonationSessionOpaqueOnAJWTApp(t *testing.T) {
+	jwtFmt, err := tokenformat.NewJWT(tokenformat.JWTConfig{
+		SigningMethod: jwt.SigningMethodHS256,
+		SigningKey:    []byte("test-signing-key-0123456789abcdef"),
+	})
+	require.NoError(t, err)
+
+	e, appID, _, target := setupExchangeFixture(t,
+		authsome.WithJWTFormat("aapp_01jf0000000000000000000000", jwtFmt))
+	ctx := context.Background()
+
+	adminRef := newExchangeUserRef(t, e, appID)
+	adminID, err := id.ParseUserID(adminRef.ID)
+	require.NoError(t, err)
+	targetID, err := id.ParseUserID(target.ID)
+	require.NoError(t, err)
+
+	_, sess, err := e.Impersonate(ctx, adminID, targetID)
+	require.NoError(t, err)
+	require.False(t, tokenformat.IsJWT(sess.Token), "sanity: the impersonation token is opaque")
+	require.NotEmpty(t, sess.RefreshToken)
+
+	refreshed, err := e.Refresh(ctx, sess.RefreshToken)
+	require.NoError(t, err)
+
+	assert.False(t, tokenformat.IsJWT(refreshed.Token),
+		"refreshing an impersonation session must not produce a JWT the middleware resolves without loading the row")
+	assert.Equal(t, adminID, refreshed.ImpersonatedBy(),
+		"the admin must still be on the refreshed session, for audit and for the exchange refusal")
+}
+
 // An exchange that names no scopes must land on the intersection of the grant
 // and the actor, never on nil.
 //
