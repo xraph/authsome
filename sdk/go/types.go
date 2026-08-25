@@ -1220,6 +1220,7 @@ type OAuth2Client struct {
 	ID                      string         `json:"id"`
 	Metadata                map[string]any `json:"metadata,omitempty"`
 	Name                    string         `json:"name"`
+	PrincipalID             string         `json:"principal_id,omitempty"`
 	Public                  bool           `json:"public"`
 	RedirectUris            []string       `json:"redirect_uris"`
 	Resources               []string       `json:"resources"`
@@ -1230,11 +1231,12 @@ type OAuth2Client struct {
 
 // Oauth2providerTokenResponse represents the Oauth2providerTokenResponse schema.
 type Oauth2providerTokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	ExpiresIn    int64  `json:"expires_in"`
-	RefreshToken string `json:"refresh_token,omitempty"`
-	Scope        string `json:"scope,omitempty"`
-	TokenType    string `json:"token_type"`
+	AccessToken     string `json:"access_token"`
+	ExpiresIn       int64  `json:"expires_in"`
+	IssuedTokenType string `json:"issued_token_type,omitempty"`
+	RefreshToken    string `json:"refresh_token,omitempty"`
+	Scope           string `json:"scope,omitempty"`
+	TokenType       string `json:"token_type"`
 }
 
 // ObjectFieldDef represents the ObjectFieldDef schema.
@@ -2205,14 +2207,21 @@ type Oauth2RevokeRequest struct {
 
 // Oauth2TokenRequest is the request body for Oauth2Token.
 type Oauth2TokenRequest struct {
-	ClientID     string   `json:"client_id,omitempty"`
-	ClientSecret string   `json:"client_secret,omitempty"`
-	Code         string   `json:"code,omitempty"`
-	CodeVerifier string   `json:"code_verifier,omitempty"`
-	DeviceCode   string   `json:"device_code,omitempty"`
-	GrantType    string   `json:"grant_type"`
-	RedirectURI  string   `json:"redirect_uri,omitempty"`
-	Resource     []string `json:"resource,omitempty"`
+	ActorToken         string   `json:"actor_token,omitempty"`
+	ActorTokenType     string   `json:"actor_token_type,omitempty"`
+	Audience           string   `json:"audience,omitempty"`
+	ClientID           string   `json:"client_id,omitempty"`
+	ClientSecret       string   `json:"client_secret,omitempty"`
+	Code               string   `json:"code,omitempty"`
+	CodeVerifier       string   `json:"code_verifier,omitempty"`
+	DeviceCode         string   `json:"device_code,omitempty"`
+	GrantType          string   `json:"grant_type"`
+	RedirectURI        string   `json:"redirect_uri,omitempty"`
+	RequestedTokenType string   `json:"requested_token_type,omitempty"`
+	Resource           []string `json:"resource,omitempty"`
+	Scope              string   `json:"scope,omitempty"`
+	SubjectToken       string   `json:"subject_token,omitempty"`
+	SubjectTokenType   string   `json:"subject_token_type,omitempty"`
 }
 
 // CreateOrganizationRequest is the request body for CreateOrganization.

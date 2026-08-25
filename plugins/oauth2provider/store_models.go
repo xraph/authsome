@@ -33,6 +33,7 @@ type oauth2ClientModel struct {
 	ClientSecretExpiresAt   *time.Time      `grove:"client_secret_expires_at"`
 	Metadata                json.RawMessage `grove:"metadata,type:jsonb"`
 	DPoPMode                string          `grove:"dpop_mode,notnull"`
+	PrincipalID             string          `grove:"principal_id,notnull"`
 
 	CreatedAt time.Time `grove:"created_at,notnull,default:now()"`
 	UpdatedAt time.Time `grove:"updated_at,notnull,default:now()"`
@@ -136,6 +137,7 @@ func toOAuth2Client(m *oauth2ClientModel) (*OAuth2Client, error) {
 		ClientSecretExpiresAt:   m.ClientSecretExpiresAt,
 		Metadata:                metadata,
 		DPoPMode:                m.DPoPMode,
+		PrincipalID:             parsePrincipalID(m.PrincipalID),
 		CreatedAt:               m.CreatedAt,
 		UpdatedAt:               m.UpdatedAt,
 	}, nil
@@ -181,6 +183,7 @@ func fromOAuth2Client(c *OAuth2Client) *oauth2ClientModel {
 		ClientSecretExpiresAt:   c.ClientSecretExpiresAt,
 		Metadata:                metadata,
 		DPoPMode:                c.DPoPMode,
+		PrincipalID:             principalIDString(c.PrincipalID),
 		CreatedAt:               c.CreatedAt,
 		UpdatedAt:               c.UpdatedAt,
 	}
@@ -332,4 +335,29 @@ func fromDeviceCode(dc *DeviceCode) *deviceCodeModel {
 		LastPolledAt:    dc.LastPolledAt,
 		CreatedAt:       dc.CreatedAt,
 	}
+}
+
+// principalIDString renders a client's principal link for storage. The column
+// is NOT NULL, so an unlinked client stores the empty string rather than a
+// zero id's textual form.
+func principalIDString(pid id.ServiceAccountID) string {
+	if pid.IsNil() {
+		return ""
+	}
+	return pid.String()
+}
+
+// parsePrincipalID reads the column back. A malformed value yields the zero
+// id rather than failing the whole row: the only consequence is that the
+// client cannot use token exchange, and rejecting the row would take out
+// every other grant it serves too.
+func parsePrincipalID(s string) id.ServiceAccountID {
+	if s == "" {
+		return id.ServiceAccountID{}
+	}
+	pid, err := id.ParseServiceAccountID(s)
+	if err != nil {
+		return id.ServiceAccountID{}
+	}
+	return pid
 }

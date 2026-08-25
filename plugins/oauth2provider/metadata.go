@@ -81,6 +81,7 @@ func (p *Plugin) buildAuthServerMetadata() *AuthServerMetadata {
 			"authorization_code",
 			"client_credentials",
 			deviceCodeGrantType,
+			tokenExchangeGrantType,
 		},
 		SubjectTypesSupported:            []string{"public"},
 		IDTokenSigningAlgValuesSupported: []string{"RS256", "ES256"},

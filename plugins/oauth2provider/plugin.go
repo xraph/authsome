@@ -572,6 +572,15 @@ type TokenRequest struct {
 	// parameters as a form body, and a JSON body is accepted too, so the field
 	// carries both tags.
 	Resource []string `json:"resource,omitempty" form:"resource,omitempty"`
+
+	// RFC 8693 token exchange.
+	SubjectToken       string `json:"subject_token,omitempty" form:"subject_token"`
+	SubjectTokenType   string `json:"subject_token_type,omitempty" form:"subject_token_type"`
+	ActorToken         string `json:"actor_token,omitempty" form:"actor_token"`
+	ActorTokenType     string `json:"actor_token_type,omitempty" form:"actor_token_type"`
+	RequestedTokenType string `json:"requested_token_type,omitempty" form:"requested_token_type"`
+	Scope              string `json:"scope,omitempty" form:"scope"`
+	Audience           string `json:"audience,omitempty" form:"audience"`
 }
 
 // RevokeRequest is the OAuth2 revocation request.
@@ -1075,6 +1084,8 @@ func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (*TokenRespon
 		return p.handleClientCredentialsGrant(ctx, req)
 	case "urn:ietf:params:oauth:grant-type:device_code":
 		return p.handleDeviceCodeGrant(ctx, req)
+	case tokenExchangeGrantType:
+		return p.handleTokenExchangeGrant(ctx, req)
 	default:
 		return nil, forge.BadRequest("unsupported grant_type")
 	}
