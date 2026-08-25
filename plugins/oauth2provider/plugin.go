@@ -498,7 +498,7 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 	// veto the authorization before a code is issued. orgID is whatever the
 	// session carries; it may be the zero value when the session has none.
 	orgID, _ := middleware.OrgIDFrom(ctx.Context())
-	if gateErr := p.EvaluateConsent(ctx.Context(), req.ClientID, userID, orgID, scopes); gateErr != nil {
+	if gateErr := p.EvaluateConsent(ctx.Context(), req.ClientID, userID, orgID, client.AppID, scopes); gateErr != nil {
 		return nil, gateErr
 	}
 
@@ -1165,7 +1165,7 @@ func (p *Plugin) handleDeviceComplete(ctx forge.Context, req *DeviceCompleteRequ
 		// Same veto point as the authorization-code flow: a gate refusal
 		// must block the approval, not be undone after the fact.
 		orgID, _ := middleware.OrgIDFrom(ctx.Context())
-		if gateErr := p.EvaluateConsent(ctx.Context(), dc.ClientID, userID, orgID, dc.Scopes); gateErr != nil {
+		if gateErr := p.EvaluateConsent(ctx.Context(), dc.ClientID, userID, orgID, dc.AppID, dc.Scopes); gateErr != nil {
 			return nil, gateErr
 		}
 		dc.Status = DeviceCodeStatusAuthorized

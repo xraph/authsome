@@ -29,7 +29,7 @@ type CreateGrantInput struct {
 // Evaluate implements oauth2provider.ConsentGate. It runs at the moment a
 // user consents, which is the only point where an org's stance on a given
 // agent is a well-formed question. Registration is app-global.
-func (p *Plugin) Evaluate(ctx context.Context, clientID string, _ id.UserID, orgID id.OrgID, scopes []string) error {
+func (p *Plugin) Evaluate(ctx context.Context, clientID string, _ id.UserID, orgID id.OrgID, appID id.AppID, scopes []string) error {
 	agent, err := p.store.GetAgentByClientID(ctx, clientID)
 	if errors.Is(err, ErrNotFound) {
 		// Not an agent, just an ordinary OAuth client. Not this gate's business.
@@ -39,6 +39,21 @@ func (p *Plugin) Evaluate(ctx context.Context, clientID string, _ id.UserID, org
 		// A genuine store failure denies. It must never collapse into the
 		// not-found branch above and allow the request through.
 		return forge.InternalError(fmt.Errorf("agentauth: load agent: %w", err))
+	}
+
+	// GetAgentByClientID resolves globally, and client_id uniqueness is only
+	// enforced within agentauth's own Agent records (CreateAgent's own
+	// ClientID collision check), never against oauth2provider's OAuth2Client
+	// table. Nothing stops an app A admin from registering an Agent row
+	// whose ClientID happens to equal app B's real first-party client id.
+	// Without this check, that app-A row's status and policy — including a
+	// deliberate block — would govern a client that has nothing to do with
+	// app A at all, denying consent for it in every app that client
+	// actually belongs to. An agent found under a different app than the
+	// one asking is simply not this gate's business, exactly like an
+	// unregistered client_id above.
+	if agent.AppID.String() != appID.String() {
+		return nil
 	}
 
 	if agent.Status == StatusBlocked {

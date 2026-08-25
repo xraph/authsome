@@ -25,7 +25,7 @@ type recordingGate struct {
 	err      error
 }
 
-func (g *recordingGate) Evaluate(_ context.Context, clientID string, _ id.UserID, _ id.OrgID, scopes []string) error {
+func (g *recordingGate) Evaluate(_ context.Context, clientID string, _ id.UserID, _ id.OrgID, _ id.AppID, scopes []string) error {
 	g.called = true
 	g.clientID = clientID
 	g.scopes = scopes
@@ -36,7 +36,7 @@ func TestConsentGate_GateIsConsulted(t *testing.T) {
 	gate := &recordingGate{}
 	p := oauth2provider.New(oauth2provider.Config{ConsentGate: gate})
 
-	err := p.EvaluateConsent(context.Background(), "client_abc", id.NewUserID(), id.NewOrgID(), []string{"invoices:read"})
+	err := p.EvaluateConsent(context.Background(), "client_abc", id.NewUserID(), id.NewOrgID(), id.NewAppID(), []string{"invoices:read"})
 
 	require.NoError(t, err)
 	assert.True(t, gate.called)
@@ -48,7 +48,7 @@ func TestConsentGate_RefusalPropagates(t *testing.T) {
 	denied := errors.New("org policy blocks this agent")
 	p := oauth2provider.New(oauth2provider.Config{ConsentGate: &recordingGate{err: denied}})
 
-	err := p.EvaluateConsent(context.Background(), "client_abc", id.NewUserID(), id.NewOrgID(), nil)
+	err := p.EvaluateConsent(context.Background(), "client_abc", id.NewUserID(), id.NewOrgID(), id.NewAppID(), nil)
 
 	require.ErrorIs(t, err, denied)
 }
@@ -59,14 +59,14 @@ func TestConsentGate_SetterWiresGate(t *testing.T) {
 	p := oauth2provider.New()
 	p.SetConsentGate(gate)
 
-	require.NoError(t, p.EvaluateConsent(context.Background(), "client_abc", id.NewUserID(), id.NewOrgID(), nil))
+	require.NoError(t, p.EvaluateConsent(context.Background(), "client_abc", id.NewUserID(), id.NewOrgID(), id.NewAppID(), nil))
 	assert.True(t, gate.called, "the setter must wire the gate as effectively as Config does")
 }
 
 func TestEvaluateConsent_NoGateAllows(t *testing.T) {
 	p := oauth2provider.New()
 
-	err := p.EvaluateConsent(context.Background(), "client_abc", id.NewUserID(), id.NewOrgID(), []string{"anything"})
+	err := p.EvaluateConsent(context.Background(), "client_abc", id.NewUserID(), id.NewOrgID(), id.NewAppID(), []string{"anything"})
 
 	require.NoError(t, err)
 }

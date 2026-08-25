@@ -29,8 +29,9 @@ import (
 func TestOnInit_RegistersAsOAuth2ProviderConsentGate(t *testing.T) {
 	agentStore := agentauth.NewMemoryStore()
 	clientID := "blocked-client-" + id.NewAgentID().String()
+	appID := id.NewAppID()
 	require.NoError(t, agentStore.CreateAgent(context.Background(), &agentauth.Agent{
-		ID: id.NewAgentID(), AppID: id.NewAppID(), ClientID: clientID,
+		ID: id.NewAgentID(), AppID: appID, ClientID: clientID,
 		Name: "blocked", Origin: agentauth.OriginOrgRegistered, Status: agentauth.StatusBlocked,
 	}))
 	p := agentauth.New(agentauth.WithStore(agentStore))
@@ -47,7 +48,7 @@ func TestOnInit_RegistersAsOAuth2ProviderConsentGate(t *testing.T) {
 	}
 	require.NoError(t, p.OnInit(context.Background(), eng))
 
-	err := op.EvaluateConsent(context.Background(), clientID, id.NewUserID(), id.OrgID{}, nil)
+	err := op.EvaluateConsent(context.Background(), clientID, id.NewUserID(), id.OrgID{}, appID, nil)
 	assert.Error(t, err, "OnInit must register agentauth as oauth2provider's consent gate")
 }
 

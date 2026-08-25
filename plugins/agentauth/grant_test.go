@@ -58,12 +58,12 @@ func TestEvaluate_BlockedOrgRefusesEvenApprovedAgent(t *testing.T) {
 		agentauth.WithScope("invoices:read", agentauth.Grants("read", "invoice")),
 	)
 	org := id.NewOrgID()
-	approvedAgent(t, store, org, "client_blocked")
+	agent := approvedAgent(t, store, org, "client_blocked")
 	require.NoError(t, store.PutOrgPolicy(context.Background(), &agentauth.OrgAgentPolicy{
 		OrgID: org, Mode: agentauth.ModeBlocked,
 	}))
 
-	err := p.Evaluate(context.Background(), "client_blocked", id.NewUserID(), org, []string{"invoices:read"})
+	err := p.Evaluate(context.Background(), "client_blocked", id.NewUserID(), org, agent.AppID, []string{"invoices:read"})
 
 	require.Error(t, err, "a blocked org must refuse consent even for an approved agent")
 	assert.Contains(t, err.Error(), "does not allow agent delegation")
@@ -83,7 +83,7 @@ func TestEvaluate_AllowlistRefusesPendingAgent(t *testing.T) {
 		OrgID: org, Mode: agentauth.ModeAllowlist,
 	}))
 
-	err := p.Evaluate(context.Background(), "client_pending", id.NewUserID(), org, []string{"invoices:read"})
+	err := p.Evaluate(context.Background(), "client_pending", id.NewUserID(), org, a.AppID, []string{"invoices:read"})
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not approved")
@@ -96,12 +96,12 @@ func TestEvaluate_UnmappedScopeRefusedAtConsent(t *testing.T) {
 		agentauth.WithScope("invoices:read", agentauth.Grants("read", "invoice")),
 	)
 	org := id.NewOrgID()
-	approvedAgent(t, store, org, "client_open")
+	agent := approvedAgent(t, store, org, "client_open")
 	require.NoError(t, store.PutOrgPolicy(context.Background(), &agentauth.OrgAgentPolicy{
 		OrgID: org, Mode: agentauth.ModeOpen,
 	}))
 
-	err := p.Evaluate(context.Background(), "client_open", id.NewUserID(), org, []string{"invoices:delete"})
+	err := p.Evaluate(context.Background(), "client_open", id.NewUserID(), org, agent.AppID, []string{"invoices:delete"})
 
 	require.Error(t, err, "a scope with no warden mapping must never reach a stored grant")
 	assert.Contains(t, err.Error(), "unknown delegation scope")
@@ -115,12 +115,12 @@ func TestEvaluate_ScopeOutsideOrgCeilingRefused(t *testing.T) {
 		agentauth.WithScope("invoices:write", agentauth.Grants("write", "invoice")),
 	)
 	org := id.NewOrgID()
-	approvedAgent(t, store, org, "client_ceiling")
+	agent := approvedAgent(t, store, org, "client_ceiling")
 	require.NoError(t, store.PutOrgPolicy(context.Background(), &agentauth.OrgAgentPolicy{
 		OrgID: org, Mode: agentauth.ModeOpen, AllowedScopes: []string{"invoices:read"},
 	}))
 
-	err := p.Evaluate(context.Background(), "client_ceiling", id.NewUserID(), org, []string{"invoices:write"})
+	err := p.Evaluate(context.Background(), "client_ceiling", id.NewUserID(), org, agent.AppID, []string{"invoices:write"})
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not permitted by organization policy")
@@ -133,12 +133,12 @@ func TestEvaluate_OpenOrgAllowsMappedScope(t *testing.T) {
 		agentauth.WithScope("invoices:read", agentauth.Grants("read", "invoice")),
 	)
 	org := id.NewOrgID()
-	approvedAgent(t, store, org, "client_ok")
+	agent := approvedAgent(t, store, org, "client_ok")
 	require.NoError(t, store.PutOrgPolicy(context.Background(), &agentauth.OrgAgentPolicy{
 		OrgID: org, Mode: agentauth.ModeOpen,
 	}))
 
-	err := p.Evaluate(context.Background(), "client_ok", id.NewUserID(), org, []string{"invoices:read"})
+	err := p.Evaluate(context.Background(), "client_ok", id.NewUserID(), org, agent.AppID, []string{"invoices:read"})
 
 	require.NoError(t, err)
 }
@@ -154,13 +154,13 @@ func TestEvaluate_AgentOrgGovernsWhenSessionHasNoOrg(t *testing.T) {
 		agentauth.WithScope("invoices:read", agentauth.Grants("read", "invoice")),
 	)
 	org := id.NewOrgID()
-	approvedAgent(t, store, org, "client_orgowned")
+	agent := approvedAgent(t, store, org, "client_orgowned")
 	require.NoError(t, store.PutOrgPolicy(context.Background(), &agentauth.OrgAgentPolicy{
 		OrgID: org, Mode: agentauth.ModeBlocked,
 	}))
 
 	// Zero org id, as an app-scoped session would produce.
-	err := p.Evaluate(context.Background(), "client_orgowned", id.NewUserID(), id.OrgID{}, []string{"invoices:read"})
+	err := p.Evaluate(context.Background(), "client_orgowned", id.NewUserID(), id.OrgID{}, agent.AppID, []string{"invoices:read"})
 
 	require.Error(t, err, "the agent's own org policy must apply when the session carries no org")
 	assert.Contains(t, err.Error(), "does not allow agent delegation")
@@ -180,7 +180,7 @@ func TestEvaluate_SessionOrgBlockDeniesDespitePermissiveAgentOrg(t *testing.T) {
 	)
 	agentOrg := id.NewOrgID()
 	sessionOrg := id.NewOrgID()
-	approvedAgent(t, store, agentOrg, "client_crossorg")
+	agent := approvedAgent(t, store, agentOrg, "client_crossorg")
 	require.NoError(t, store.PutOrgPolicy(context.Background(), &agentauth.OrgAgentPolicy{
 		OrgID: agentOrg, Mode: agentauth.ModeOpen,
 	}))
@@ -188,7 +188,7 @@ func TestEvaluate_SessionOrgBlockDeniesDespitePermissiveAgentOrg(t *testing.T) {
 		OrgID: sessionOrg, Mode: agentauth.ModeBlocked,
 	}))
 
-	err := p.Evaluate(context.Background(), "client_crossorg", id.NewUserID(), sessionOrg, []string{"invoices:read"})
+	err := p.Evaluate(context.Background(), "client_crossorg", id.NewUserID(), sessionOrg, agent.AppID, []string{"invoices:read"})
 
 	require.Error(t, err, "a consuming org's block must be enforced even when the agent's own org is permissive")
 	assert.Contains(t, err.Error(), "does not allow agent delegation")
@@ -203,9 +203,9 @@ func TestEvaluate_MissingPolicyDefaultsToOpen(t *testing.T) {
 		agentauth.WithScope("invoices:read", agentauth.Grants("read", "invoice")),
 	)
 	org := id.NewOrgID()
-	approvedAgent(t, store, org, "client_nopolicy")
+	agent := approvedAgent(t, store, org, "client_nopolicy")
 
-	err := p.Evaluate(context.Background(), "client_nopolicy", id.NewUserID(), org, []string{"invoices:read"})
+	err := p.Evaluate(context.Background(), "client_nopolicy", id.NewUserID(), org, agent.AppID, []string{"invoices:read"})
 
 	require.NoError(t, err)
 }
@@ -215,7 +215,7 @@ func TestEvaluate_MissingPolicyDefaultsToOpen(t *testing.T) {
 func TestEvaluate_UnknownClientIDAllows(t *testing.T) {
 	p := agentauth.New()
 
-	err := p.Evaluate(context.Background(), "not_an_agent_client", id.NewUserID(), id.NewOrgID(), []string{"anything"})
+	err := p.Evaluate(context.Background(), "not_an_agent_client", id.NewUserID(), id.NewOrgID(), id.NewAppID(), []string{"anything"})
 
 	require.NoError(t, err, "a client that is not a registered agent is not this gate's business")
 }
@@ -227,7 +227,7 @@ func TestEvaluate_UnknownClientIDAllows(t *testing.T) {
 func TestEvaluate_UnrecognizedPolicyModeDenies(t *testing.T) {
 	mem := agentauth.NewMemoryStore()
 	org := id.NewOrgID()
-	approvedAgent(t, mem, org, "client_badmode")
+	agent := approvedAgent(t, mem, org, "client_badmode")
 	store := &stubPolicyStore{
 		Store:  mem,
 		policy: &agentauth.OrgAgentPolicy{OrgID: org, Mode: agentauth.PolicyMode("bogus")},
@@ -237,7 +237,7 @@ func TestEvaluate_UnrecognizedPolicyModeDenies(t *testing.T) {
 		agentauth.WithScope("invoices:read", agentauth.Grants("read", "invoice")),
 	)
 
-	err := p.Evaluate(context.Background(), "client_badmode", id.NewUserID(), org, []string{"invoices:read"})
+	err := p.Evaluate(context.Background(), "client_badmode", id.NewUserID(), org, agent.AppID, []string{"invoices:read"})
 
 	require.Error(t, err, "a policy nobody can interpret must not be treated as permission")
 	assert.Contains(t, err.Error(), "not recognized")
@@ -250,9 +250,54 @@ func TestEvaluate_StoreErrorDenies(t *testing.T) {
 	store := &erroringAgentLookupStore{Store: mem, err: errors.New("boom: connection reset")}
 	p := agentauth.New(agentauth.WithStore(store))
 
-	err := p.Evaluate(context.Background(), "client_whatever", id.NewUserID(), id.NewOrgID(), []string{"invoices:read"})
+	err := p.Evaluate(context.Background(), "client_whatever", id.NewUserID(), id.NewOrgID(), id.NewAppID(), []string{"invoices:read"})
 
 	require.Error(t, err, "a genuine store error must deny, not be mistaken for an unregistered client")
+}
+
+// Final review item 6: GetAgentByClientID resolves globally, and client_id
+// uniqueness is only enforced within agentauth's own Agent records
+// (CreateAgent), never against oauth2provider's OAuth2Client table. Without
+// binding Evaluate's decision to the app the caller's OWN client actually
+// belongs to, an app A admin registering an Agent row whose ClientID happens
+// to equal app B's real first-party client id — deliberately or by
+// collision — could block consent for that client in every app it is
+// actually used in, not just app A.
+func TestEvaluate_AgentFromDifferentAppDoesNotGovern(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(agentauth.WithStore(store))
+	appA := id.NewAppID()
+	appB := id.NewAppID()
+	require.NoError(t, store.CreateAgent(context.Background(), &agentauth.Agent{
+		ID: id.NewAgentID(), AppID: appA, ClientID: "shared-client-id",
+		Name: "registered under app A, blocked", Origin: agentauth.OriginOrgRegistered,
+		Status: agentauth.StatusBlocked,
+	}))
+
+	// App B's own OAuth2 flow asks about its own client, passing app B's
+	// own AppID — resolved from app B's OAuth2Client/DeviceCode record, not
+	// from anything agentauth controls.
+	err := p.Evaluate(context.Background(), "shared-client-id", id.NewUserID(), id.OrgID{}, appB, nil)
+
+	assert.NoError(t, err, "an agent registered under a different app must not govern this app's client")
+}
+
+// The same client_id, evaluated by the app that actually registered the
+// agent, must still be governed by it — the appID check narrows Evaluate to
+// the right app, it does not disable it.
+func TestEvaluate_MatchesAgentWithinSameApp(t *testing.T) {
+	store := agentauth.NewMemoryStore()
+	p := agentauth.New(agentauth.WithStore(store))
+	appA := id.NewAppID()
+	require.NoError(t, store.CreateAgent(context.Background(), &agentauth.Agent{
+		ID: id.NewAgentID(), AppID: appA, ClientID: "same-app-client",
+		Name: "blocked", Origin: agentauth.OriginOrgRegistered, Status: agentauth.StatusBlocked,
+	}))
+
+	err := p.Evaluate(context.Background(), "same-app-client", id.NewUserID(), id.OrgID{}, appA, nil)
+
+	require.Error(t, err, "an agent within the same app must still govern its own client")
+	assert.Contains(t, err.Error(), "blocked")
 }
 
 func TestCreateGrant_ClampsTTLToOrgCeiling(t *testing.T) {

@@ -23,7 +23,14 @@ type ConsentGate interface {
 	// session is not org-scoped — that is not an assertion that no policy
 	// applies. An implementation must not treat a zero orgID as permission to
 	// skip its policy check; do the same evaluation you would for any org.
-	Evaluate(ctx context.Context, clientID string, userID id.UserID, orgID id.OrgID, scopes []string) error
+	//
+	// appID is the app the OAuth2 client (clientID) belongs to, resolved by
+	// the caller from its own client/device-code record rather than trusted
+	// from the request. A gate that resolves clientID to some other record
+	// globally (not scoped to an app) must bind its decision to appID, or a
+	// client_id collision across two apps lets one app's registration govern
+	// the other's client.
+	Evaluate(ctx context.Context, clientID string, userID id.UserID, orgID id.OrgID, appID id.AppID, scopes []string) error
 }
 
 // SetConsentGate registers a gate consulted before every authorization code is
@@ -32,9 +39,9 @@ type ConsentGate interface {
 func (p *Plugin) SetConsentGate(g ConsentGate) { p.consentGate = g }
 
 // EvaluateConsent runs the registered gate, if any.
-func (p *Plugin) EvaluateConsent(ctx context.Context, clientID string, userID id.UserID, orgID id.OrgID, scopes []string) error {
+func (p *Plugin) EvaluateConsent(ctx context.Context, clientID string, userID id.UserID, orgID id.OrgID, appID id.AppID, scopes []string) error {
 	if p.consentGate == nil {
 		return nil
 	}
-	return p.consentGate.Evaluate(ctx, clientID, userID, orgID, scopes)
+	return p.consentGate.Evaluate(ctx, clientID, userID, orgID, appID, scopes)
 }
