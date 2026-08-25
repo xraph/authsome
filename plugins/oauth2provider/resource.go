@@ -7,6 +7,35 @@ import (
 	"github.com/xraph/authsome/internal/resourceuri"
 )
 
+// resourceQuery documents the RFC 8707 resource indicator on the authorization
+// endpoint. It is never bound to and never populated.
+//
+// Nothing reads this struct at request time; resourceParams below does that off
+// the raw request. It exists because a parameter the handler reads by hand is a
+// parameter the generated document knows nothing about, and an undocumented
+// parameter is one no SDK can send. forge.WithQuerySchema reflects over the tags
+// for the document only -- its metadata key is read by the OpenAPI generator and
+// by nothing else -- so declaring the shape here cannot put a []string in front
+// of a binder that could not cope with one.
+//
+// The type is what carries the meaning. A query parameter defaults to style form
+// with explode true, so an array says "send it again per value", which is what
+// RFC 8707 asks for and what resourceParams already honours.
+//
+// Only /authorize needs this. It is a GET, so the query string is the only place
+// the value can go. The two POST endpoints carry it as a body field instead, for
+// the reason on TokenRequest.Resource.
+//
+// This replaced forge.WithParameter, which as of v1.9.11 wrote route metadata
+// that the OpenAPI generator never read: it compiled, ran, returned no error,
+// and put nothing in the document. That has since been fixed upstream, but the
+// struct stays. WithParameter has no type argument and infers one from the
+// example, and a field that says []string beats an example a later edit could
+// quietly change to a bare string.
+type resourceQuery struct {
+	Resource []string `query:"resource" description:"RFC 8707 resource indicator. Repeatable. Absolute URI, no fragment." optional:"true"`
+}
+
 // resourceParams extracts the repeatable RFC 8707 resource parameter.
 //
 // This cannot go through the struct binder. go-utils' bindQueryParam reads a

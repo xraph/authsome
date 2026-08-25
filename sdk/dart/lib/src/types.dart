@@ -8509,16 +8509,19 @@ class WebhookListResponse {
 
 class Oauth2DeviceAuthorizeRequest {
   final String clientId;
+  final List<String>? resource;
   final String? scope;
 
   const Oauth2DeviceAuthorizeRequest({
     required this.clientId,
+    this.resource,
     this.scope,
   });
 
   factory Oauth2DeviceAuthorizeRequest.fromJson(Map<String, dynamic> json) {
     return Oauth2DeviceAuthorizeRequest(
       clientId: json['client_id'] as String,
+      resource: json['resource'] == null ? null : (json['resource'] as List).map((e) => e as String).toList(),
       scope: json['scope'] as String?,
     );
   }
@@ -8526,6 +8529,7 @@ class Oauth2DeviceAuthorizeRequest {
   Map<String, dynamic> toJson() {
     return {
       'client_id': clientId,
+      if (resource != null) 'resource': resource,
       if (scope != null) 'scope': scope,
     };
   }

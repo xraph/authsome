@@ -152,7 +152,11 @@ export class AuthClient {
 {{- if hasQueryParams $op.QueryParams }}
     const params = new URLSearchParams();
 {{- range $op.QueryParams }}
+{{- if .Repeated }}
+    if ({{ .TSName }} !== undefined) for (const v of {{ .TSName }}) params.append('{{ .Name }}', String(v));
+{{- else }}
     if ({{ .TSName }} !== undefined) params.set('{{ .Name }}', String({{ .TSName }}));
+{{- end }}
 {{- end }}
     const qs = params.toString();
     const path = {{ buildPath $op.Path $op.PathParams }} + (qs ? `?${qs}` : '');

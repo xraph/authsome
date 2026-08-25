@@ -1759,7 +1759,7 @@ export type SendSMSCodeRequest = SMSSendRequest;
 
 export type VerifySMSCodeRequest = SMSVerifyRequest;
 
-export type Oauth2DeviceAuthorizeRequest = { client_id: string; scope?: string };
+export type Oauth2DeviceAuthorizeRequest = { client_id: string; resource?: string[]; scope?: string };
 
 export type Oauth2DeviceCompleteRequest = { action: string; user_code: string };
 

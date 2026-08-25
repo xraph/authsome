@@ -261,9 +261,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("OAuth2 Authorization"),
 		forge.WithDescription("Authorization endpoint for the OAuth2 authorization code flow."),
 		forge.WithOperationID("oauth2Authorize"),
-		forge.WithParameter("resource", "query",
-			"RFC 8707 resource indicator. Repeatable. Absolute URI, no fragment.",
-			false, "https://api.example.com"),
+		forge.WithQuerySchema(resourceQuery{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -273,10 +271,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("OAuth2 Token"),
 		forge.WithDescription("Token endpoint for exchanging authorization codes or client credentials for access tokens."),
 		forge.WithOperationID("oauth2Token"),
-		forge.WithParameter("resource", "query",
-			"RFC 8707 resource indicator. Repeatable. Absolute URI, no fragment. "+
-				"May also be sent in the form body.",
-			false, "https://api.example.com"),
 		forge.WithResponseSchema(http.StatusOK, "Token response", TokenResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
@@ -307,10 +301,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Device Authorization"),
 		forge.WithDescription("Device authorization endpoint (RFC 8628). Returns a device_code and user_code for device/CLI authentication."),
 		forge.WithOperationID("oauth2DeviceAuthorize"),
-		forge.WithParameter("resource", "query",
-			"RFC 8707 resource indicator. Repeatable. Absolute URI, no fragment. "+
-				"May also be sent in the form body.",
-			false, "https://api.example.com"),
 		forge.WithResponseSchema(http.StatusOK, "Device authorization response", DeviceAuthResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
@@ -661,6 +651,11 @@ type DeleteClientResponse struct {
 type DeviceAuthRequest struct {
 	ClientID string `json:"client_id" form:"client_id"`
 	Scope    string `json:"scope,omitempty" form:"scope,omitempty"`
+	// No form tag and no query tag, for the reason on TokenRequest.Resource.
+	// handleDeviceAuthorize reads the values through resourceParams; the field
+	// is here so the generated document describes them and the SDKs can send
+	// them.
+	Resource []string `json:"resource,omitempty"`
 }
 
 // DeviceAuthResponse is the device authorization response (RFC 8628 Section 3.2).
