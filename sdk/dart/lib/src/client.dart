@@ -2262,6 +2262,31 @@ class AuthClient {
     return PhoneVerifyResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// List what may act on your behalf
+  /// GET /v1/principals/me/delegations
+  Future<DelegationListResponse> listMyDelegations({required String token}) async {
+    final path = '/v1/principals/me/delegations';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return DelegationListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Mint an ephemeral child principal
+  /// POST /v1/principals/{id}/children
+  Future<MintChildResponse> mintChildPrincipal({required String id, required MintChildRequest body, required String token}) async {
+    final path = '/v1/principals/$id/children';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return MintChildResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Refresh tokens
   /// POST /v1/refresh
   Future<ApiTokenResponse> refreshTokens({required RefreshRequest body}) async {
@@ -2601,6 +2626,19 @@ class AuthClient {
       path,
       token: token,
     );
+  }
+
+  /// Exchange a credential for a delegated session
+  /// POST /v1/token/exchange
+  Future<TokenExchangeResponse> exchangeToken({required TokenExchangeRequest body, required String token}) async {
+    final path = '/v1/token/exchange';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return TokenExchangeResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List user roles

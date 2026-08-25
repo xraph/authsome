@@ -163,8 +163,12 @@ func dpopSignInProof(t *testing.T, key *ecdsa.PrivateKey, nonce string) string {
 	return signing + "." + base64.RawURLEncoding.EncodeToString(sig)
 }
 
-func postSignIn(email, password, dpopHeader string) *http.Request {
-	body, _ := json.Marshal(map[string]string{"email": email, "password": password})
+// dpopSignInPassword is the fixed password used across this file's sign-in
+// tests; only email and DPoP header vary between cases.
+const dpopSignInPassword = "SecureP@ss1"
+
+func postSignIn(email, dpopHeader string) *http.Request {
+	body, _ := json.Marshal(map[string]string{"email": email, "password": dpopSignInPassword})
 	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signin", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	if dpopHeader != "" {
@@ -187,12 +191,12 @@ func TestSignIn_OptionalWithProofBinds(t *testing.T) {
 	handler := withTestKey(a.Handler())
 	setSignInDPoPMode(t, eng, "optional")
 
-	signUp(t, eng, "dpop-signin-bound@test.com", "SecureP@ss1")
+	signUp(t, eng, "dpop-signin-bound@test.com", dpopSignInPassword)
 
 	key := dpopSignInKey(t)
 	wantJKT := dpopSignInThumbprint(t, key)
 
-	req := postSignIn("dpop-signin-bound@test.com", "SecureP@ss1", dpopSignInProof(t, key, ""))
+	req := postSignIn("dpop-signin-bound@test.com", dpopSignInProof(t, key, ""))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -216,9 +220,9 @@ func TestSignIn_OptionalWithoutProofStaysUnbound(t *testing.T) {
 	handler := withTestKey(a.Handler())
 	setSignInDPoPMode(t, eng, "optional")
 
-	signUp(t, eng, "dpop-signin-unbound@test.com", "SecureP@ss1")
+	signUp(t, eng, "dpop-signin-unbound@test.com", dpopSignInPassword)
 
-	req := postSignIn("dpop-signin-unbound@test.com", "SecureP@ss1", "")
+	req := postSignIn("dpop-signin-unbound@test.com", "")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -248,14 +252,14 @@ func TestSignIn_NonceChallengeIsRetryable(t *testing.T) {
 	setSignInDPoPMode(t, eng, "optional")
 	setSignInNonceRequired(t, eng, true)
 
-	signUp(t, eng, "dpop-signin-nonce@test.com", "SecureP@ss1")
+	signUp(t, eng, "dpop-signin-nonce@test.com", dpopSignInPassword)
 
 	key := dpopSignInKey(t)
 	wantJKT := dpopSignInThumbprint(t, key)
 
 	// First attempt: a valid proof, but no nonce.
 	first := httptest.NewRecorder()
-	handler.ServeHTTP(first, postSignIn("dpop-signin-nonce@test.com", "SecureP@ss1", dpopSignInProof(t, key, "")))
+	handler.ServeHTTP(first, postSignIn("dpop-signin-nonce@test.com", dpopSignInProof(t, key, "")))
 	require.Equal(t, http.StatusBadRequest, first.Code, "body: %s", first.Body.String())
 
 	var errBody map[string]any
@@ -268,7 +272,7 @@ func TestSignIn_NonceChallengeIsRetryable(t *testing.T) {
 	// Retry, now carrying the nonce. Sign-in has no single-use artifact to
 	// burn, so nothing prevents this from succeeding.
 	second := httptest.NewRecorder()
-	handler.ServeHTTP(second, postSignIn("dpop-signin-nonce@test.com", "SecureP@ss1", dpopSignInProof(t, key, nonce)))
+	handler.ServeHTTP(second, postSignIn("dpop-signin-nonce@test.com", dpopSignInProof(t, key, nonce)))
 	require.Equal(t, http.StatusOK, second.Code, "body: %s", second.Body.String())
 
 	var resp map[string]any

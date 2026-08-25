@@ -15,6 +15,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/geoip"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
@@ -22,10 +23,11 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ plugin.Plugin           = (*Plugin)(nil)
-	_ plugin.OnInit           = (*Plugin)(nil)
-	_ plugin.AfterSignIn      = (*Plugin)(nil)
-	_ plugin.SettingsProvider = (*Plugin)(nil)
+	_ plugin.Plugin             = (*Plugin)(nil)
+	_ plugin.OnInit             = (*Plugin)(nil)
+	_ plugin.AfterSignIn        = (*Plugin)(nil)
+	_ plugin.AfterPrincipalAuth = (*Plugin)(nil)
+	_ plugin.SettingsProvider   = (*Plugin)(nil)
 )
 
 // ──────────────────────────────────────────────────
@@ -113,7 +115,9 @@ func (c *Config) defaults() {
 
 // LoginLocation records a login position for travel calculation.
 type LoginLocation struct {
-	UserID    id.UserID
+	// Principal is the caller this location belongs to: a user for sign-in,
+	// an agent or workload for machine traffic.
+	Principal principal.Ref
 	IP        string
 	Country   string
 	City      string
@@ -124,7 +128,7 @@ type LoginLocation struct {
 
 // TravelAlert is emitted when impossible travel is detected.
 type TravelAlert struct {
-	UserID          id.UserID
+	Principal       principal.Ref
 	SessionID       id.SessionID
 	FromLocation    LoginLocation
 	ToLocation      LoginLocation
@@ -143,9 +147,14 @@ type Plugin struct {
 	logger      log.Logger
 	settingsMgr *settings.Manager
 
-	// In-memory last-login cache (keyed by user ID string).
+	// In-memory last-login cache, keyed by principal.Ref.String() rather
+	// than by user ID, so a machine caller gets its own travel history
+	// instead of sharing (or worse, colliding with) another principal's.
 	mu         sync.RWMutex
 	lastLogins map[string]*LoginLocation
+
+	// events records the alerts raised so far, for tests to assert against.
+	events []TravelAlert
 }
 
 // New creates a new impossible travel detection plugin.
@@ -199,20 +208,46 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	return nil
 }
 
-// OnAfterSignIn records the login location and checks for impossible travel.
+// OnAfterSignIn records a person's login location and checks for impossible
+// travel.
 func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, s *session.Session) error {
-	if p.geoIP == nil || s.IPAddress == "" {
+	return p.recordLocation(ctx, principal.UserRef(u.ID), u.AppID.String(), s.ID, s.IPAddress)
+}
+
+// OnAfterPrincipalAuth records a machine caller's login location and checks
+// for impossible travel.
+//
+// Keyed by principal rather than user. An agent has no user, and two agents
+// sharing one travel history would score each other's movements as travel,
+// which on a fleet spread across regions means a permanent false positive.
+func (p *Plugin) OnAfterPrincipalAuth(ctx context.Context, a *principal.AuthAttempt, s *session.Session) error {
+	ip := a.IPAddress
+	var sessionID id.SessionID
+	if s != nil {
+		if ip == "" {
+			ip = s.IPAddress
+		}
+		sessionID = s.ID
+	}
+	return p.recordLocation(ctx, a.Subject, a.AppID.String(), sessionID, ip)
+}
+
+// recordLocation is the body shared by OnAfterSignIn and
+// OnAfterPrincipalAuth: it records ref's login location and checks it
+// against ref's own last known location for impossible travel.
+func (p *Plugin) recordLocation(ctx context.Context, ref principal.Ref, appID string, sessionID id.SessionID, ipAddress string) error {
+	if p.geoIP == nil || ipAddress == "" {
 		return nil
 	}
 
-	loc := p.geoIP.Resolve(s.IPAddress)
+	loc := p.geoIP.Resolve(ipAddress)
 	if loc == nil || (loc.Latitude == 0 && loc.Longitude == 0) {
 		return nil
 	}
 
 	current := &LoginLocation{
-		UserID:    u.ID,
-		IP:        s.IPAddress,
+		Principal: ref,
+		IP:        ipAddress,
 		Country:   loc.Country,
 		City:      loc.City,
 		Latitude:  loc.Latitude,
@@ -221,9 +256,9 @@ func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, s *session.Ses
 	}
 
 	// Check against last login.
-	userKey := u.ID.String()
+	refKey := ref.String()
 	p.mu.RLock()
-	prev := p.lastLogins[userKey]
+	prev := p.lastLogins[refKey]
 	p.mu.RUnlock()
 
 	if prev != nil {
@@ -239,8 +274,8 @@ func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, s *session.Ses
 
 				if requiredSpeed > p.config.MaxSpeedKmH {
 					alert := &TravelAlert{
-						UserID:          u.ID,
-						SessionID:       s.ID,
+						Principal:       ref,
+						SessionID:       sessionID,
 						FromLocation:    *prev,
 						ToLocation:      *current,
 						DistanceKm:      distance,
@@ -248,7 +283,7 @@ func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, s *session.Ses
 						RequiredSpeedKm: requiredSpeed,
 						RiskLevel:       riskLevel(requiredSpeed, p.config.MaxSpeedKmH),
 					}
-					p.handleAlert(ctx, u.AppID, alert)
+					p.handleAlert(ctx, appID, alert)
 				}
 			}
 		}
@@ -256,10 +291,20 @@ func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, s *session.Ses
 
 	// Update last login.
 	p.mu.Lock()
-	p.lastLogins[userKey] = current
+	p.lastLogins[refKey] = current
 	p.mu.Unlock()
 
 	return nil
+}
+
+// RecordedEvents returns the impossible-travel alerts raised so far, for
+// tests to assert against.
+func (p *Plugin) RecordedEvents() []TravelAlert {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	out := make([]TravelAlert, len(p.events))
+	copy(out, p.events)
+	return out
 }
 
 func riskLevel(speed, threshold float64) string {
@@ -274,21 +319,25 @@ func riskLevel(speed, threshold float64) string {
 	}
 }
 
-func (p *Plugin) handleAlert(ctx context.Context, appID id.AppID, alert *TravelAlert) {
+func (p *Plugin) handleAlert(ctx context.Context, appID string, alert *TravelAlert) {
 	p.logger.Warn("impossibletravel: alert detected",
-		log.String("user_id", alert.UserID.String()),
+		log.String("principal", alert.Principal.String()),
 		log.String("from", fmt.Sprintf("%s, %s", alert.FromLocation.City, alert.FromLocation.Country)),
 		log.String("to", fmt.Sprintf("%s, %s", alert.ToLocation.City, alert.ToLocation.Country)),
 		log.String("risk", alert.RiskLevel),
 	)
+
+	p.mu.Lock()
+	p.events = append(p.events, *alert)
+	p.mu.Unlock()
 
 	if p.chronicle != nil {
 		_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 			Action:     "impossible_travel",
 			Resource:   "session",
 			ResourceID: alert.SessionID.String(),
-			ActorID:    alert.UserID.String(),
-			Tenant:     appID.String(),
+			ActorID:    alert.Principal.String(),
+			Tenant:     appID,
 			Outcome:    bridge.OutcomeFailure,
 			Severity:   bridge.SeverityCritical,
 			Metadata: map[string]string{
@@ -307,9 +356,9 @@ func (p *Plugin) handleAlert(ctx context.Context, appID id.AppID, alert *TravelA
 	if p.relay != nil {
 		_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 			Type:     "security.impossible_travel",
-			TenantID: appID.String(),
+			TenantID: appID,
 			Data: map[string]string{
-				"user_id":      alert.UserID.String(),
+				"principal":    alert.Principal.String(),
 				"session_id":   alert.SessionID.String(),
 				"from_country": alert.FromLocation.Country,
 				"to_country":   alert.ToLocation.Country,

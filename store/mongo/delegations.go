@@ -135,7 +135,29 @@ func (s *Store) ListPrincipals(ctx context.Context, q *principal.Query) ([]*prin
 // Delegation grants
 // ──────────────────────────────────────────────────
 
+// CreateDelegation stores a new grant, refusing one that would duplicate a
+// grant already live for the same (app, actor, subject, kind).
+//
+// The liveness check runs here rather than in the index. Live means
+// principal.Delegation.IsActive: not revoked AND not past its expiry, and a
+// partialFilterExpression has no way to name the current time, so the unique
+// index (see delegation_live_index_excludes_expired) now covers only grants
+// that never expire and this covers the rest.
+//
+// Read-then-write, not atomic, so two concurrent creates for the same tuple
+// can both land. That trade is deliberate: filtering on revoked_at alone meant
+// an impersonation grant that merely lapsed blocked every later impersonation
+// of that user by that admin forever, because nothing but StopImpersonation
+// ever writes revoked_at.
 func (s *Store) CreateDelegation(ctx context.Context, d *principal.Delegation) error {
+	existing, findErr := s.FindActiveDelegation(ctx, d.AppID, d.Actor, d.Subject, d.GrantKind)
+	switch {
+	case findErr != nil && !errors.Is(findErr, principal.ErrNotFound):
+		return findErr
+	case findErr == nil && existing != nil && existing.ID != d.ID:
+		return store.ErrConflict
+	}
+
 	m := toDelegationModel(d)
 	// NewInsert, not a raw driver InsertOne, matching CreateServiceAccount in
 	// this same package. Grove's insert path writes every mapped field

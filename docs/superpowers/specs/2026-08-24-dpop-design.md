@@ -350,6 +350,92 @@ and `EnforceDPoPForRequest` wraps it for callers that only get to say yes or
 no. Two copies of a rule this important would drift, and the copy nobody reads
 is the one that drifts first.
 
+## Issuance coverage
+
+Enforcement follows the token. `enforceDPoP` returns nil the moment it sees an
+empty thumbprint, which is the right rule for a deployment part way through a
+rollout, and it has a consequence worth stating plainly: an unbound session is
+exempt from proof of possession for its whole life, whatever the app is set to.
+A path that mints without resolving a binding does not produce a weaker
+session. It produces one the mandate never applies to.
+
+That makes every mint site a policy decision. The first version of this design
+only made the decision at the OAuth2 token endpoint and at first-party sign-in
+and sign-up, so `required` was true in three places and quietly false in eight
+others. Sharpest of those was MFA. Sign-in proved a thumbprint, `IssueSession`
+returned `MFARequiredError` before minting anything, and the MFA plugin then
+issued its own session with no thumbprint at all, so turning MFA on turned DPoP
+off for that user.
+
+The rule now lives in `IssueSession`, ahead of the MFA gate:
+
+```go
+if req.DPoPJKT == "" && e.DPoPModeForApp(ctx, req.AppID) == dpop.ModeRequired {
+    return nil, &DPoPRequiredError{}
+}
+```
+
+Ahead of the MFA gate because both refuse the same request, but the MFA gate
+refuses by persisting a ticket first, and there is no reason to spend a
+ceremony-store write on a login that cannot complete however the second factor
+goes. `DPoPRequiredError` renders as `400 invalid_dpop_proof`, the same shape
+the token endpoint returns.
+
+`Engine.DPoPBindingForRequest` is the shared resolver, moved out of the `api`
+package so plugins can reach it. It is the old `dpopBindingForRequest` with no
+behaviour change: mode off returns no binding, a proof is validated against
+method, URL and nonce, and a missing proof under `required` is refused.
+
+Every path that mints a session now falls into one of three groups.
+
+Most of them resolve a proof directly. First-party sign-in and sign-up, magic
+link, passkey, phone OTP, email-verification auto-login and admin
+impersonation are each a POST from the client that holds the key, so a proof is
+available and the session carries one. Magic link is the one that looks like an
+exception and is not: `/v1/magic-link/verify` is an SDK call with the token in
+the body, not the browser following the link.
+
+MFA carries a proof across a ceremony instead, because it is the only path
+where the session is minted on a different request from the one that proved the
+key. The thumbprint goes into the partial-auth ticket at sign-in and comes back
+out at `/v1/mfa/challenge`, so the session minted after the second factor keeps
+the binding the first factor established. The client never mints a second
+proof. A ticket that predates the mandate carries no thumbprint and is refused
+at challenge time, which is what happens to tickets in flight when you raise
+the mode.
+
+Carrying it buys something else worth having. A stolen ticket redeemed with a
+stolen code yields a session bound to the victim's key, which the thief cannot
+use.
+
+Social and SSO callbacks cannot obtain a proof at all, so they refuse. At both,
+the request is the identity provider redirecting the user agent, so the client
+holding the key is not the caller and has no opportunity to present anything.
+No version of these paths mints a bound session.
+
+Refusing is the deliberate part. An app on `required` is stating a mandate for
+every session under it, and if social sign-in quietly issued sessions the
+mandate could never apply to, anyone able to pick the sign-in method could opt
+out of it. If you need social or SSO on such an app, move the app back to
+`optional`. That is the same answer this design already gives for a legacy
+OAuth client, and for the same reason: explicit, visible and audited beats a
+hole nobody wrote down.
+
+`Engine.DPoPBindingUnavailable` is what they call, and they call it before the
+provider round trip. `IssueSession` would refuse them anyway, but by then the
+authorization code has been redeemed or the SAML assertion consumed, and the
+user gets an error for an artifact that is already spent. Social checks once
+the app ID is resolved from the OAuth state. SSO checks at the top of
+`authenticateUser`, where the JSON callback, the OIDC browser landing and the
+SAML ACS all converge.
+
+One thing is deliberately not covered. Magic link, social, SSO and phone each
+keep a fallback that mints through `account.NewSession` when the engine is not
+a concrete `*authsome.Engine`. Those bypass the MFA gate today and they bypass
+this too. They exist for test wiring that does not build a full engine, no
+production deployment reaches them, and folding them in is a separate change
+from this one.
+
 ## Nonce
 
 Stateless HMAC, built the same way as `dashboard/nonce.go`, keyed from

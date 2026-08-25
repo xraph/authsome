@@ -3143,6 +3143,80 @@ class DefinitionGroup {
   String toString() => 'DefinitionGroup(${toJson()})';
 }
 
+class DelegationListResponse {
+  final List<DelegationResponse> delegations;
+
+  const DelegationListResponse({
+    required this.delegations,
+  });
+
+  factory DelegationListResponse.fromJson(Map<String, dynamic> json) {
+    return DelegationListResponse(
+      delegations: (json['delegations'] as List).map((e) => DelegationResponse.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'delegations': delegations.map((e) => e.toJson()).toList(),
+    };
+  }
+
+  @override
+  String toString() => 'DelegationListResponse(${toJson()})';
+}
+
+class DelegationResponse {
+  final String actor;
+  final String createdAt;
+  final String? expiresAt;
+  final String grantKind;
+  final String grantedBy;
+  final String id;
+  final List<String>? scopes;
+  final String subject;
+
+  const DelegationResponse({
+    required this.actor,
+    required this.createdAt,
+    this.expiresAt,
+    required this.grantKind,
+    required this.grantedBy,
+    required this.id,
+    this.scopes,
+    required this.subject,
+  });
+
+  factory DelegationResponse.fromJson(Map<String, dynamic> json) {
+    return DelegationResponse(
+      actor: json['actor'] as String,
+      createdAt: json['created_at'] as String,
+      expiresAt: json['expires_at'] as String?,
+      grantKind: json['grant_kind'] as String,
+      grantedBy: json['granted_by'] as String,
+      id: json['id'] as String,
+      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+      subject: json['subject'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'actor': actor,
+      'created_at': createdAt,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      'grant_kind': grantKind,
+      'granted_by': grantedBy,
+      'id': id,
+      if (scopes != null) 'scopes': scopes,
+      'subject': subject,
+    };
+  }
+
+  @override
+  String toString() => 'DelegationResponse(${toJson()})';
+}
+
 class DeleteClientRequest {
   final String clientID;
 
@@ -5026,6 +5100,88 @@ class Meta {
 
   @override
   String toString() => 'Meta(${toJson()})';
+}
+
+class MintChildRequest {
+  final String name;
+  final List<String>? scopes;
+  final int ttlSeconds;
+
+  const MintChildRequest({
+    required this.name,
+    this.scopes,
+    required this.ttlSeconds,
+  });
+
+  factory MintChildRequest.fromJson(Map<String, dynamic> json) {
+    return MintChildRequest(
+      name: json['name'] as String,
+      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+      ttlSeconds: (json['ttl_seconds'] as num).toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      if (scopes != null) 'scopes': scopes,
+      'ttl_seconds': ttlSeconds,
+    };
+  }
+
+  @override
+  String toString() => 'MintChildRequest(${toJson()})';
+}
+
+class MintChildResponse {
+  final String createdAt;
+  final String? expiresAt;
+  final String id;
+  final String key;
+  final String keyPrefix;
+  final String name;
+  final String parentId;
+  final List<String>? scopes;
+
+  const MintChildResponse({
+    required this.createdAt,
+    this.expiresAt,
+    required this.id,
+    required this.key,
+    required this.keyPrefix,
+    required this.name,
+    required this.parentId,
+    this.scopes,
+  });
+
+  factory MintChildResponse.fromJson(Map<String, dynamic> json) {
+    return MintChildResponse(
+      createdAt: json['created_at'] as String,
+      expiresAt: json['expires_at'] as String?,
+      id: json['id'] as String,
+      key: json['key'] as String,
+      keyPrefix: json['key_prefix'] as String,
+      name: json['name'] as String,
+      parentId: json['parent_id'] as String,
+      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'created_at': createdAt,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      'id': id,
+      'key': key,
+      'key_prefix': keyPrefix,
+      'name': name,
+      'parent_id': parentId,
+      if (scopes != null) 'scopes': scopes,
+    };
+  }
+
+  @override
+  String toString() => 'MintChildResponse(${toJson()})';
 }
 
 class Name {
@@ -7290,6 +7446,80 @@ class TeamListResponse {
   String toString() => 'TeamListResponse(${toJson()})';
 }
 
+class TokenExchangeRequest {
+  final List<String>? scopes;
+  final String subject;
+
+  const TokenExchangeRequest({
+    this.scopes,
+    required this.subject,
+  });
+
+  factory TokenExchangeRequest.fromJson(Map<String, dynamic> json) {
+    return TokenExchangeRequest(
+      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+      subject: json['subject'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (scopes != null) 'scopes': scopes,
+      'subject': subject,
+    };
+  }
+
+  @override
+  String toString() => 'TokenExchangeRequest(${toJson()})';
+}
+
+class TokenExchangeResponse {
+  final String accessToken;
+  final String actor;
+  final int expiresIn;
+  final String issuedTokenType;
+  final List<String>? scopes;
+  final String subject;
+  final String tokenType;
+
+  const TokenExchangeResponse({
+    required this.accessToken,
+    required this.actor,
+    required this.expiresIn,
+    required this.issuedTokenType,
+    this.scopes,
+    required this.subject,
+    required this.tokenType,
+  });
+
+  factory TokenExchangeResponse.fromJson(Map<String, dynamic> json) {
+    return TokenExchangeResponse(
+      accessToken: json['access_token'] as String,
+      actor: json['actor'] as String,
+      expiresIn: (json['expires_in'] as num).toInt(),
+      issuedTokenType: json['issued_token_type'] as String,
+      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+      subject: json['subject'] as String,
+      tokenType: json['token_type'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'access_token': accessToken,
+      'actor': actor,
+      'expires_in': expiresIn,
+      'issued_token_type': issuedTokenType,
+      if (scopes != null) 'scopes': scopes,
+      'subject': subject,
+      'token_type': tokenType,
+    };
+  }
+
+  @override
+  String toString() => 'TokenExchangeResponse(${toJson()})';
+}
+
 class UIMetadata {
   final VisibilityCondition? condition;
   final String? helpText;
@@ -8378,16 +8608,22 @@ class Oauth2DeviceCompleteRequest {
 }
 
 class Oauth2RevokeRequest {
+  final String? clientId;
+  final String? clientSecret;
   final String token;
   final String? tokenTypeHint;
 
   const Oauth2RevokeRequest({
+    this.clientId,
+    this.clientSecret,
     required this.token,
     this.tokenTypeHint,
   });
 
   factory Oauth2RevokeRequest.fromJson(Map<String, dynamic> json) {
     return Oauth2RevokeRequest(
+      clientId: json['client_id'] as String?,
+      clientSecret: json['client_secret'] as String?,
       token: json['token'] as String,
       tokenTypeHint: json['token_type_hint'] as String?,
     );
@@ -8395,6 +8631,8 @@ class Oauth2RevokeRequest {
 
   Map<String, dynamic> toJson() {
     return {
+      if (clientId != null) 'client_id': clientId,
+      if (clientSecret != null) 'client_secret': clientSecret,
       'token': token,
       if (tokenTypeHint != null) 'token_type_hint': tokenTypeHint,
     };

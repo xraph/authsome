@@ -640,6 +640,21 @@ export interface DefinitionGroup {
   namespace: string;
 }
 
+export interface DelegationListResponse {
+  delegations: DelegationResponse[];
+}
+
+export interface DelegationResponse {
+  actor: string;
+  created_at: string;
+  expires_at?: string;
+  grant_kind: string;
+  granted_by: string;
+  id: string;
+  scopes?: string[];
+  subject: string;
+}
+
 export interface DeleteClientRequest {
   ClientID: string;
 }
@@ -1015,6 +1030,23 @@ export interface Meta {
   lastModified?: string;
   location?: string;
   resourceType: string;
+}
+
+export interface MintChildRequest {
+  name: string;
+  scopes?: string[];
+  ttl_seconds: number;
+}
+
+export interface MintChildResponse {
+  created_at: string;
+  expires_at?: string;
+  id: string;
+  key: string;
+  key_prefix: string;
+  name: string;
+  parent_id: string;
+  scopes?: string[];
 }
 
 export interface Name {
@@ -1473,6 +1505,21 @@ export interface TeamListResponse {
   teams: Team[];
 }
 
+export interface TokenExchangeRequest {
+  scopes?: string[];
+  subject: string;
+}
+
+export interface TokenExchangeResponse {
+  access_token: string;
+  actor: string;
+  expires_in: number;
+  issued_token_type: string;
+  scopes?: string[];
+  subject: string;
+  token_type: string;
+}
+
 export interface UIMetadata {
   condition?: VisibilityCondition;
   help_text?: string;
@@ -1730,7 +1777,7 @@ export type Oauth2RegisterClientRequest = RegisterClientRequest;
 
 export type Oauth2UpdateRegistrationRequest = UpdateRegistrationRequest;
 
-export type Oauth2RevokeRequest = { token: string; token_type_hint?: string };
+export type Oauth2RevokeRequest = { client_id?: string; client_secret?: string; token: string; token_type_hint?: string };
 
 export type Oauth2TokenRequest = { client_id?: string; client_secret?: string; code?: string; code_verifier?: string; device_code?: string; grant_type: string; redirect_uri?: string; resource?: string[] };
 
@@ -1748,6 +1795,8 @@ export type PhoneAuthStartRequest = StartRequest;
 
 export type PhoneAuthVerifyRequest = PhoneVerifyRequest;
 
+export type MintChildPrincipalRequest = MintChildRequest;
+
 export type RefreshTokensRequest = RefreshRequest;
 
 export type AuthsomeCreateRoleRequest = CreateRoleRequest;
@@ -1763,5 +1812,7 @@ export type AuthsomeUnassignRoleRequest = UnassignRoleRequest;
 export type SsoExchangeRequest = ExchangeRequest;
 
 export type StartSSOLoginByDomainRequest = LoginByDomainRequest;
+
+export type ExchangeTokenRequest = TokenExchangeRequest;
 
 export type ResendEmailVerificationRequest = ResendVerificationRequest;

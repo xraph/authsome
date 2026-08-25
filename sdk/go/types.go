@@ -725,6 +725,23 @@ type DefinitionGroup struct {
 	Namespace   string        `json:"namespace"`
 }
 
+// DelegationListResponse represents the DelegationListResponse schema.
+type DelegationListResponse struct {
+	Delegations []*DelegationResponse `json:"delegations"`
+}
+
+// DelegationResponse represents the DelegationResponse schema.
+type DelegationResponse struct {
+	Actor     string   `json:"actor"`
+	CreatedAt string   `json:"created_at"`
+	ExpiresAt string   `json:"expires_at,omitempty"`
+	GrantKind string   `json:"grant_kind"`
+	GrantedBy string   `json:"granted_by"`
+	ID        string   `json:"id"`
+	Scopes    []string `json:"scopes,omitempty"`
+	Subject   string   `json:"subject"`
+}
+
 // DeleteClientRequest represents the DeleteClientRequest schema.
 type DeleteClientRequest struct {
 	ClientID string `json:"client_id"`
@@ -1154,6 +1171,25 @@ type Meta struct {
 	LastModified string `json:"last_modified,omitempty"`
 	Location     string `json:"location,omitempty"`
 	ResourceType string `json:"resource_type"`
+}
+
+// MintChildRequest represents the MintChildRequest schema.
+type MintChildRequest struct {
+	Name       string   `json:"name"`
+	Scopes     []string `json:"scopes,omitempty"`
+	TtlSeconds int64    `json:"ttl_seconds"`
+}
+
+// MintChildResponse represents the MintChildResponse schema.
+type MintChildResponse struct {
+	CreatedAt string   `json:"created_at"`
+	ExpiresAt string   `json:"expires_at,omitempty"`
+	ID        string   `json:"id"`
+	Key       string   `json:"key"`
+	KeyPrefix string   `json:"key_prefix"`
+	Name      string   `json:"name"`
+	ParentID  string   `json:"parent_id"`
+	Scopes    []string `json:"scopes,omitempty"`
 }
 
 // Name represents the Name schema.
@@ -1675,6 +1711,23 @@ type TeamListResponse struct {
 	Teams []*Team `json:"teams"`
 }
 
+// TokenExchangeRequest represents the TokenExchangeRequest schema.
+type TokenExchangeRequest struct {
+	Scopes  []string `json:"scopes,omitempty"`
+	Subject string   `json:"subject"`
+}
+
+// TokenExchangeResponse represents the TokenExchangeResponse schema.
+type TokenExchangeResponse struct {
+	AccessToken     string   `json:"access_token"`
+	Actor           string   `json:"actor"`
+	ExpiresIn       int64    `json:"expires_in"`
+	IssuedTokenType string   `json:"issued_token_type"`
+	Scopes          []string `json:"scopes,omitempty"`
+	Subject         string   `json:"subject"`
+	TokenType       string   `json:"token_type"`
+}
+
 // UIMetadata represents the UIMetadata schema.
 type UIMetadata struct {
 	Condition    *VisibilityCondition `json:"condition,omitempty"`
@@ -2113,6 +2166,8 @@ type Oauth2UpdateRegistrationRequest struct {
 
 // Oauth2RevokeRequest is the request body for Oauth2Revoke.
 type Oauth2RevokeRequest struct {
+	ClientID      string `json:"client_id,omitempty"`
+	ClientSecret  string `json:"client_secret,omitempty"`
 	Token         string `json:"token"`
 	TokenTypeHint string `json:"token_type_hint,omitempty"`
 }
@@ -2177,6 +2232,13 @@ type PhoneAuthVerifyRequest struct {
 	Phone string `json:"phone"`
 }
 
+// MintChildPrincipalRequest is the request body for MintChildPrincipal.
+type MintChildPrincipalRequest struct {
+	Name       string   `json:"name"`
+	Scopes     []string `json:"scopes,omitempty"`
+	TtlSeconds int64    `json:"ttl_seconds"`
+}
+
 // RefreshTokensRequest is the request body for RefreshTokens.
 type RefreshTokensRequest struct {
 	RefreshToken string `json:"refresh_token,omitempty"`
@@ -2225,6 +2287,12 @@ type StartSSOLoginByDomainRequest struct {
 	ConnectionID string `json:"connection_id,omitempty"`
 	Email        string `json:"email"`
 	ReturnURL    string `json:"return_url,omitempty"`
+}
+
+// ExchangeTokenRequest is the request body for ExchangeToken.
+type ExchangeTokenRequest struct {
+	Scopes  []string `json:"scopes,omitempty"`
+	Subject string   `json:"subject"`
 }
 
 // ResendEmailVerificationRequest is the request body for ResendEmailVerification.

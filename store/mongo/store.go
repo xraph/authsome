@@ -498,7 +498,15 @@ func migrationIndexes() map[string][]mongo.IndexModel {
 		},
 		colUsers: {
 			{
-				Keys:    bson.D{{Key: "app_id", Value: 1}, {Key: "email", Value: 1}},
+				// env_id is part of the key because an address belongs to
+				// one account within an environment, not within a whole app.
+				// Migration 20260824000090 reshapes this on deployments that
+				// predate it.
+				Keys: bson.D{
+					{Key: "app_id", Value: 1},
+					{Key: "env_id", Value: 1},
+					{Key: "email", Value: 1},
+				},
 				Options: options.Index().SetUnique(true),
 			},
 			{
@@ -509,7 +517,11 @@ func migrationIndexes() map[string][]mongo.IndexModel {
 				// excludes by VALUE so empty strings don't collide.
 				// (See migration 20260502000004 that backfills this on
 				// existing deployments.)
-				Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "username", Value: 1}},
+				Keys: bson.D{
+					{Key: "app_id", Value: 1},
+					{Key: "env_id", Value: 1},
+					{Key: "username", Value: 1},
+				},
 				Options: options.Index().
 					SetUnique(true).
 					SetPartialFilterExpression(bson.M{"username": bson.M{"$gt": ""}}),

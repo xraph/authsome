@@ -585,7 +585,7 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 		if len(opts) > 0 {
 			o = opts[0]
 		}
-		if err := e.verifyRefreshDPoP(ctx, sess, o); err != nil {
+		if dpopErr := e.verifyRefreshDPoP(ctx, sess, o); dpopErr != nil {
 			return nil, account.ErrInvalidCredentials
 		}
 	}
@@ -608,10 +608,28 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 
 	// account.RefreshSession always mints an opaque access token. If the app is
 	// configured for JWT access tokens, re-derive a JWT here (mirroring
-	// newSession) so a refresh does not silently downgrade the token format —
+	// newSession) so a refresh does not silently downgrade the token format,
 	// which would break stateless verification and JWT-revocation binding.
+	//
+	// Unless the session carries an actor chain. A chain-carrying session must
+	// never be handed a credential that drops the chain: the middleware
+	// reconstructs the chain from the session row, and a JWT is validated
+	// statelessly and loads no row at all. The row would keep its actors while
+	// the credential stopped carrying anyone to them.
+	//
+	// Without this guard the escalation closed at mint time reopens one door
+	// along. ExchangeToken and Impersonate both mint opaque tokens
+	// (see newOpaqueSession), but a refresh re-derived a JWT regardless, and
+	// /v1/admin/impersonate returns the refresh token in its body. So an
+	// impersonating admin on a JWT app could refresh into a JWT, present it to
+	// /token/exchange, and have middleware.SessionFrom find nothing:
+	// CallerActors arrives empty and the chained-exchange refusal never fires.
+	//
+	// The format downgrade this accepts is the lesser harm, and it is not
+	// really a downgrade: the token was already opaque when the session was
+	// minted, so a client holding it never had a JWT to lose.
 	tokFmt := e.TokenFormatForApp(sess.AppID.String())
-	if tokFmt.Name() == "jwt" {
+	if tokFmt.Name() == "jwt" && len(sess.Actors) == 0 {
 		jwtToken, genErr := tokFmt.GenerateAccessToken(tokenformat.TokenClaims{
 			UserID:    sess.UserID.String(),
 			AppID:     sess.AppID.String(),
@@ -946,6 +964,41 @@ func (e *Engine) newSession(appID id.AppID, userID id.UserID, cfg account.Sessio
 		}
 	}
 
+	return sess, nil
+}
+
+// newOpaqueSession mints a session whose access token is always the opaque
+// random string, even on an app configured to issue JWTs.
+//
+// This exists for the two paths that put an actor chain on a session: a token
+// exchange and an impersonation. A JWT carries no RFC 8693 act claim in this
+// codebase (tokenformat.TokenClaims has UserID, AppID, SessionID and the
+// scopes, and nothing else), and AuthMiddlewareWithJWT tries JWT validation
+// FIRST and returns on success, so a JWT-format credential never causes the
+// session row to be loaded. The chain would simply not exist on the request:
+// no WithSession, no WithActors, no chain for a guard to narrow against and
+// none for the token-exchange endpoint to refuse a second exchange on.
+//
+// An opaque token has no dots, so tokenformat.IsJWT rejects it and the
+// middleware falls through to trySessionAuth, which loads the row and with it
+// the chain. The invariant that buys is worth stating plainly: a session
+// carrying actors is always an opaque token whose row carries those actors.
+//
+// The alternative was carrying the chain in an act claim and populating the
+// actor context from it in tryJWTAuth. That is more faithful to RFC 8693 and
+// considerably more work, and it would have to round-trip through every
+// token format. It is the right follow-up; this is the small, total and
+// reversible version of it.
+func (e *Engine) newOpaqueSession(
+	appID id.AppID, userID id.UserID, cfg account.SessionConfig, dpopJKT string,
+) (*session.Session, error) {
+	sess, err := account.NewSession(appID, userID, cfg)
+	if err != nil {
+		return nil, err
+	}
+	// Same stamping newSession does. Opaque tokens carry the binding on the
+	// row, which is the only place a bound opaque token can carry it.
+	sess.DPoPJKT = dpopJKT
 	return sess, nil
 }
 
@@ -2805,7 +2858,12 @@ func (e *Engine) ExportUserData(ctx context.Context, userID id.UserID) (*UserExp
 // Impersonate creates a new session for the target user, marked as impersonated
 // by the admin. The resulting session behaves as if the target user is signed in,
 // but carries the impersonator's identity for audit purposes.
-func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID) (*user.User, *session.Session, error) {
+func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID, opts ...ImpersonateOption) (*user.User, *session.Session, error) {
+	var o impersonateOpts
+	for _, apply := range opts {
+		apply(&o)
+	}
+
 	// Prevent self-impersonation
 	if adminID == targetID {
 		return nil, nil, fmt.Errorf("authsome: cannot impersonate yourself")
@@ -2817,16 +2875,62 @@ func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID) (
 		return nil, nil, fmt.Errorf("authsome: impersonate: get target user: %w", err)
 	}
 
+	// Apply the app's DPoP mandate. This mint does not go through
+	// IssueSession, so the central gate never sees it, and an unbound
+	// impersonation session would be exempt from proof-of-possession for its
+	// whole life on an app that requires it, while acting as another user.
+	if o.dpopJKT == "" && e.DPoPModeForApp(ctx, u.AppID) == dpop.ModeRequired {
+		return nil, nil, &DPoPRequiredError{}
+	}
+
 	// Create an impersonation session (short-lived: 1 hour, non-refreshable)
 	cfg := e.sessionConfigForApp(ctx, u.AppID)
 	cfg.TokenTTL = 1 * time.Hour
 	cfg.RefreshTokenTTL = 1 * time.Hour // same as token — not meant to be refreshed
 
-	sess, err := e.newSession(u.AppID, u.ID, cfg, "")
+	// newOpaqueSession, not newSession, for the same reason ExchangeToken
+	// uses it: an impersonation session carries an actor chain, and a
+	// JWT-format token would leave that chain unread on every request. The
+	// concrete loss on a JWT-configured app is the token-exchange endpoint's
+	// chained-exchange refusal, which can only see a chain the middleware
+	// actually loaded, so an admin could spend an impersonation JWT
+	// exchanging for a third party the impersonated user holds a grant over.
+	//
+	// The thumbprint still has to reach the row: this mint bypasses
+	// IssueSession, so an unbound impersonation session on a required-mode
+	// app would be exempt from proof-of-possession for its whole life.
+	sess, err := e.newOpaqueSession(u.AppID, u.ID, cfg, o.dpopJKT)
 	if err != nil {
 		return nil, nil, fmt.Errorf("authsome: impersonate: create session: %w", err)
 	}
+
+	now := time.Now()
+	// Impersonation is a delegation with its own grant kind, so it appears in
+	// the same listing and revocation surface as every other way one principal
+	// comes to act for another. The one thing that stays special is how it is
+	// authorized: Session.AuthzActors returns nil for it, so the admin's own
+	// permissions are not intersected in.
+	expires := now.Add(cfg.TokenTTL)
+	grant := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     u.AppID,
+		Actor:     principal.UserRef(adminID),
+		Subject:   principal.UserRef(targetID),
+		GrantKind: principal.GrantImpersonation,
+		GrantedBy: principal.UserRef(adminID),
+		ExpiresAt: &expires,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := e.store.CreateDelegation(ctx, grant); err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			return nil, nil, fmt.Errorf("authsome: impersonate: an impersonation session for this admin and target is already active and must be stopped first: %w", err)
+		}
+		return nil, nil, fmt.Errorf("authsome: impersonate: record grant: %w", err)
+	}
+
 	sess.SetImpersonatedBy(adminID)
+	sess.DelegationID = grant.ID
 
 	if err := e.store.CreateSession(ctx, sess); err != nil {
 		return nil, nil, fmt.Errorf("authsome: impersonate: store session: %w", err)
@@ -2869,6 +2973,23 @@ func (e *Engine) StopImpersonation(ctx context.Context, sessionID id.SessionID) 
 
 	if err := e.store.DeleteSession(ctx, sessionID); err != nil {
 		return fmt.Errorf("authsome: stop impersonation: delete session: %w", err)
+	}
+
+	if !sess.DelegationID.IsNil() {
+		// Best effort. The session is already gone, so the impersonation has
+		// ended whatever happens here, and failing the call would report an
+		// unstopped impersonation that has in fact stopped.
+		//
+		// Uses the engine method, not the store one directly, so this grant
+		// revocation goes through the same authorization check and hook
+		// emission as every other RevokeDelegation caller. The admin is the
+		// grant's own actor, so the check passes.
+		if err := e.RevokeDelegation(ctx, sess.AppID, principal.UserRef(sess.ImpersonatedBy()), sess.DelegationID); err != nil {
+			e.logger.Warn("authsome: stop impersonation: revoke grant failed",
+				log.String("delegation_id", sess.DelegationID.String()),
+				log.String("error", err.Error()),
+			)
+		}
 	}
 
 	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "stop_impersonation", "session", sessionID.String(), sess.ImpersonatedBy().String(), sess.AppID.String(), "admin", map[string]string{

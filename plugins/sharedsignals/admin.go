@@ -179,9 +179,20 @@ func (p *Plugin) CreateStream(ctx context.Context, appID id.AppID,
 		return nil, fmt.Errorf("sharedsignals: unknown enforcement mode %q", mode)
 	}
 
+	// An empty effective audience is not a usable stream. audienceFor would
+	// return "", setjwt would then require the token's aud to contain "",
+	// and every real SET the IdP ever sends would be refused. It fails
+	// closed, which is the right direction, but it fails looking exactly
+	// like an IdP problem when it is a misconfiguration on our side, so
+	// refuse to create the stream instead and say which knob is missing.
 	audience := req.Audience
 	if audience == "" {
 		audience = p.config.Audience
+	}
+	if audience == "" {
+		return nil, errors.New(
+			"sharedsignals: audience is required; set it on the stream or " +
+				"configure the plugin's Audience")
 	}
 
 	limit := req.MaxActionsPerHour
@@ -356,7 +367,7 @@ func (p *Plugin) handleCreateStream(ctx forge.Context) error {
 	if err != nil {
 		return forge.BadRequest("could not read the request body")
 	}
-	if unmarshalErr := json.Unmarshal(body, &req); unmarshalErr != nil {
+	if uerr := json.Unmarshal(body, &req); uerr != nil {
 		return forge.BadRequest("the request body is not valid JSON")
 	}
 
@@ -388,13 +399,13 @@ func (p *Plugin) handleListStreams(ctx forge.Context) error {
 	return writeJSON(ctx.Response(), http.StatusOK, ListStreamsResponse{Streams: views})
 }
 
-// requireStreamInCallerApp confirms the stream belongs to appID. A
+// streamInCallerApp loads a stream and confirms it belongs to appID. A
 // stream is what authorises session revocation, so an ID from one tenant
 // must never be actionable by another. It answers a mismatch identically to
 // a stream that does not exist -- NotFound, not Forbidden -- because
 // Forbidden would itself confirm to the caller that the ID is valid for some
 // OTHER tenant, which is exactly the fact an IDOR probe is trying to learn.
-func (p *Plugin) requireStreamInCallerApp(ctx context.Context, appID id.AppID,
+func (p *Plugin) streamInCallerApp(ctx context.Context, appID id.AppID,
 	streamID id.SSFStreamID) error {
 	stream, err := p.store.GetInboundStream(ctx, streamID)
 	if err != nil {
@@ -403,7 +414,6 @@ func (p *Plugin) requireStreamInCallerApp(ctx context.Context, appID id.AppID,
 	if stream.AppID.String() != appID.String() {
 		return ErrNotFound
 	}
-
 	return nil
 }
 
@@ -417,7 +427,7 @@ func (p *Plugin) handleUpdateStream(ctx forge.Context) error {
 	if err != nil {
 		return err
 	}
-	if serr := p.requireStreamInCallerApp(ctx.Context(), appID, streamID); serr != nil {
+	if serr := p.streamInCallerApp(ctx.Context(), appID, streamID); serr != nil {
 		return forge.NotFound("stream not found")
 	}
 
@@ -450,7 +460,7 @@ func (p *Plugin) handleDeleteStream(ctx forge.Context) error {
 	if err != nil {
 		return err
 	}
-	if serr := p.requireStreamInCallerApp(ctx.Context(), appID, streamID); serr != nil {
+	if serr := p.streamInCallerApp(ctx.Context(), appID, streamID); serr != nil {
 		return forge.NotFound("stream not found")
 	}
 
@@ -468,13 +478,13 @@ func (p *Plugin) handleDeleteStream(ctx forge.Context) error {
 // The publishable-key middleware puts both on the context; the configured
 // default app is the fallback, matching how plugins/sso resolves it in
 // requestAppID.
-func (p *Plugin) requestScope(ctx forge.Context) (appID id.AppID, envID id.EnvironmentID, err error) {
-	envID, _ = middleware.EnvIDFrom(ctx.Context())
+func (p *Plugin) requestScope(ctx forge.Context) (scopeAppID id.AppID, scopeEnvID id.EnvironmentID, scopeErr error) {
+	envID, _ := middleware.EnvIDFrom(ctx.Context())
 
-	if ctxAppID, ok := middleware.AppIDFrom(ctx.Context()); ok {
-		return ctxAppID, envID, nil
+	if appID, ok := middleware.AppIDFrom(ctx.Context()); ok {
+		return appID, envID, nil
 	}
-	appID, err = id.ParseAppID(p.engine.DefaultAppID())
+	appID, err := id.ParseAppID(p.engine.DefaultAppID())
 	if err != nil {
 		return id.Nil, id.Nil, forge.BadRequest("invalid app configuration")
 	}

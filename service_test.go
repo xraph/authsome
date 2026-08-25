@@ -13,8 +13,10 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/lockout"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
+	"github.com/xraph/authsome/user"
 )
 
 func testAppID(t *testing.T) id.AppID {
@@ -701,4 +703,101 @@ func TestSignIn_NoLockout_WhenTrackerNil(t *testing.T) {
 		Password: "SecureP@ss1",
 	})
 	require.NoError(t, err)
+}
+
+// setupImpersonationFixture seeds an admin and a target user in the same app,
+// so a test can call Engine.Impersonate(admin.ID, target.ID) directly. Users
+// are written straight through the store, the same way setupExchangeFixture
+// (engine_token_exchange_test.go) seeds its subject, since Impersonate does
+// not itself check that the caller holds an admin role.
+func setupImpersonationFixture(t *testing.T) (eng *authsome.Engine, appID id.AppID, admin, target *user.User) {
+	t.Helper()
+	eng, s := newTestEngine(t)
+	appID = testAppID(t)
+	ctx := context.Background()
+
+	admin = &user.User{
+		ID:           id.NewUserID(),
+		AppID:        appID,
+		Email:        "impersonation-admin@example.com",
+		FirstName:    "Admin",
+		Username:     "impersonation-admin",
+		PasswordHash: "$2a$10$fakehash",
+	}
+	require.NoError(t, s.CreateUser(ctx, admin))
+
+	target = &user.User{
+		ID:           id.NewUserID(),
+		AppID:        appID,
+		Email:        "impersonation-target@example.com",
+		FirstName:    "Target",
+		Username:     "impersonation-target",
+		PasswordHash: "$2a$10$fakehash",
+	}
+	require.NoError(t, s.CreateUser(ctx, target))
+
+	return eng, appID, admin, target
+}
+
+// An impersonation now leaves a grant behind, so it shows up wherever
+// delegations do and can be revoked the same way.
+func TestImpersonateRecordsAGrant(t *testing.T) {
+	e, appID, admin, target := setupImpersonationFixture(t)
+	ctx := context.Background()
+
+	_, sess, err := e.Impersonate(ctx, admin.ID, target.ID)
+	require.NoError(t, err)
+	require.False(t, sess.DelegationID.IsNil(), "the session must name its grant")
+
+	d, err := e.PrincipalStore().GetDelegation(ctx, sess.DelegationID)
+	require.NoError(t, err)
+	assert.Equal(t, principal.GrantImpersonation, d.GrantKind)
+	assert.Equal(t, principal.UserRef(admin.ID), d.Actor)
+	assert.Equal(t, principal.UserRef(target.ID), d.Subject)
+	assert.Equal(t, appID.String(), d.AppID.String())
+}
+
+// The behaviour every existing consumer depends on must be unchanged.
+func TestImpersonateStillReadsAsImpersonation(t *testing.T) {
+	e, _, admin, target := setupImpersonationFixture(t)
+
+	_, sess, err := e.Impersonate(context.Background(), admin.ID, target.ID)
+	require.NoError(t, err)
+
+	assert.Equal(t, admin.ID.String(), sess.ImpersonatedBy().String())
+	assert.Equal(t, target.ID.String(), sess.UserID.String())
+	assert.Empty(t, sess.AuthzActors(), "impersonation evaluates as the target alone")
+}
+
+// Ending an impersonation must revoke the grant as well as the session, or
+// the admin keeps standing authority to start a new one silently.
+func TestStopImpersonationRevokesTheGrant(t *testing.T) {
+	e, _, admin, target := setupImpersonationFixture(t)
+	ctx := context.Background()
+
+	_, sess, err := e.Impersonate(ctx, admin.ID, target.ID)
+	require.NoError(t, err)
+	require.NoError(t, e.StopImpersonation(ctx, sess.ID))
+
+	d, err := e.PrincipalStore().GetDelegation(ctx, sess.DelegationID)
+	require.NoError(t, err)
+	assert.NotNil(t, d.RevokedAt, "stopping must revoke the grant")
+}
+
+// A repeat Impersonate for the same admin and target while the first grant is
+// still live hits the partial unique index. That is intended: one admin
+// holding two concurrent impersonation sessions over one user has no use
+// case and makes the audit trail ambiguous. What matters is that the error
+// is legible rather than a bare store.ErrConflict.
+func TestImpersonateConflictIsLegible(t *testing.T) {
+	e, _, admin, target := setupImpersonationFixture(t)
+	ctx := context.Background()
+
+	_, _, err := e.Impersonate(ctx, admin.ID, target.ID)
+	require.NoError(t, err)
+
+	_, _, err = e.Impersonate(ctx, admin.ID, target.ID)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, store.ErrConflict)
+	assert.Contains(t, err.Error(), "already active")
 }

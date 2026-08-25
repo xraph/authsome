@@ -1,6 +1,10 @@
 package api
 
-import "github.com/xraph/authsome/environment"
+import (
+	"time"
+
+	"github.com/xraph/authsome/environment"
+)
 
 // ---------------------------------------------------------------------------
 // Auth requests
@@ -734,4 +738,75 @@ type AdminCreateServiceAccountAPIKeyRequest struct {
 	Name             string   `json:"name" description:"API key name"`
 	Scopes           []string `json:"scopes,omitempty" description:"Scopes for this key"`
 	ExpiresAt        *string  `json:"expires_at,omitempty" description:"Optional expiration time (RFC 3339)"`
+}
+
+// ---------------------------------------------------------------------------
+// Delegation / token exchange requests
+// ---------------------------------------------------------------------------
+
+// TokenExchangeRequest binds the body for POST /token/exchange, an RFC 8693
+// shaped grant_type=token-exchange call scoped to this engine's own
+// delegation grants. The caller's own credential (resolved from the request's
+// auth, not carried in the body) is the RFC's subject_token; Subject here is
+// the RFC's requested actor target.
+type TokenExchangeRequest struct {
+	Subject string   `json:"subject" description:"User ID the exchanged session should act on behalf of"`
+	Scopes  []string `json:"scopes,omitempty" description:"Scopes requested for the exchanged session; each must fall inside the delegation grant and the caller's own scopes, or the exchange is refused"`
+}
+
+// TokenExchangeResponse is the RFC 8693 (section 2.2.1) shaped response for
+// a successful exchange.
+type TokenExchangeResponse struct {
+	AccessToken     string   `json:"access_token" description:"The exchanged session token"`
+	IssuedTokenType string   `json:"issued_token_type" description:"RFC 8693 token type URN"`
+	TokenType       string   `json:"token_type" description:"Always \"Bearer\""`
+	ExpiresIn       int64    `json:"expires_in" description:"Seconds until the exchanged token expires"`
+	Scopes          []string `json:"scopes,omitempty" description:"Scopes granted on the exchanged session"`
+	Subject         string   `json:"subject" description:"The principal this session acts for"`
+	Actor           string   `json:"actor" description:"The principal exercising the delegation"`
+}
+
+// DelegationResponse is the wire shape of one delegation grant.
+type DelegationResponse struct {
+	ID        string   `json:"id"`
+	Actor     string   `json:"actor" description:"kind:id of the principal that may act"`
+	Subject   string   `json:"subject" description:"kind:id of the principal being acted for"`
+	GrantKind string   `json:"grant_kind"`
+	Scopes    []string `json:"scopes,omitempty"`
+	GrantedBy string   `json:"granted_by" description:"kind:id of who consented to this grant"`
+	ExpiresAt string   `json:"expires_at,omitempty" description:"RFC 3339; absent means no expiry"`
+	CreatedAt string   `json:"created_at"`
+}
+
+// DelegationListResponse wraps a list of delegation grants.
+type DelegationListResponse struct {
+	Delegations []DelegationResponse `json:"delegations"`
+}
+
+// ---------------------------------------------------------------------------
+// Ephemeral child principals
+// ---------------------------------------------------------------------------
+
+// MintChildRequest binds the path + body for POST /principals/:id/children.
+// ID is the calling principal's own id: a parent may only mint children
+// under itself, and the handler checks that against the authenticated
+// caller rather than trusting this field for anything but routing.
+type MintChildRequest struct {
+	ID         string   `path:"id" description:"The calling parent principal's own ID"`
+	Name       string   `json:"name" description:"Name for the ephemeral child"`
+	Scopes     []string `json:"scopes,omitempty" description:"Scopes for the child; must be a subset of the parent's own scopes"`
+	TTLSeconds int      `json:"ttl_seconds" description:"How long the child may live, in seconds. Capped by the parent's own expiry, if it has one"`
+}
+
+// MintChildResponse is the wire shape of a newly minted ephemeral child
+// principal, including its one-time credential.
+type MintChildResponse struct {
+	ID        string     `json:"id"`
+	ParentID  string     `json:"parent_id"`
+	Name      string     `json:"name"`
+	Scopes    []string   `json:"scopes,omitempty"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	Key       string     `json:"key" description:"Plaintext API key secret; returned once and never stored"`
+	KeyPrefix string     `json:"key_prefix"`
+	CreatedAt time.Time  `json:"created_at"`
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/geoip"
+	"github.com/xraph/authsome/principal"
 )
 
 // newTestPlugin creates a geofence Plugin with the given config and a geoip
@@ -42,6 +43,43 @@ func TestPlugin_ImplementsInterfaces(t *testing.T) {
 
 	_, ok = p.(plugin.BeforeSignUp)
 	assert.True(t, ok, "should implement plugin.BeforeSignUp")
+
+	_, ok = p.(plugin.BeforePrincipalAuth)
+	assert.True(t, ok, "should implement plugin.BeforePrincipalAuth")
+}
+
+// A machine caller from a blocked country must be denied, exactly as a
+// person is. This is the gap: API-key traffic never reached OnBeforeSignIn.
+func TestOnBeforePrincipalAuth_Blocks(t *testing.T) {
+	p := newTestPlugin(Config{
+		BlockedCountries: []string{"CN"},
+	}, map[string]*geoip.GeoLocation{
+		"1.2.3.4": {IP: "1.2.3.4", Country: "CN"},
+	})
+
+	err := p.OnBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject:        principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+		AppID:          id.NewAppID(),
+		IPAddress:      "1.2.3.4",
+		CredentialKind: "api_key",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "geofence:")
+}
+
+// An attempt with no IP must pass rather than fail closed, matching what
+// check already does for sign-in. A blank IP is a deployment detail, not a
+// signal.
+func TestOnBeforePrincipalAuth_AllowsAttemptWithNoIP(t *testing.T) {
+	p := newTestPlugin(Config{
+		DefaultPolicy: "deny_all",
+	}, map[string]*geoip.GeoLocation{})
+
+	err := p.OnBeforePrincipalAuth(context.Background(), &principal.AuthAttempt{
+		Subject: principal.Ref{Kind: principal.KindAgent, ID: "svc_1"},
+		AppID:   id.NewAppID(),
+	})
+	assert.NoError(t, err)
 }
 
 func TestAllowedCountries_Permits(t *testing.T) {

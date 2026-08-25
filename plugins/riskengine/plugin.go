@@ -13,6 +13,7 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
@@ -24,6 +25,7 @@ var (
 	_ plugin.OnInit              = (*Plugin)(nil)
 	_ plugin.BeforeSignIn        = (*Plugin)(nil)
 	_ plugin.BeforeSessionCreate = (*Plugin)(nil)
+	_ plugin.BeforePrincipalAuth = (*Plugin)(nil)
 	_ plugin.SettingsProvider    = (*Plugin)(nil)
 )
 
@@ -116,6 +118,13 @@ type RiskRequest struct {
 	// scores a user rather than an address has something to resolve.
 	Email    string
 	Username string
+
+	// Principal is the caller rendered as "kind:id" by principal.Ref.String().
+	// Set on the machine path, where the caller is already known. Left empty
+	// on sign-in: account.SignInRequest carries no user id at
+	// OnBeforeSignIn time, only Email and Username, and putting an email in
+	// an id position would let a contributor mistake it for one.
+	Principal string
 }
 
 // RiskContributor is a sub-plugin interface for plugins that contribute
@@ -225,11 +234,69 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.relay = engine.Relay()
 	p.settingsMgr = engine.Settings()
 
+	p.discoverContributors(engine)
+
 	return nil
 }
 
-// AddContributor adds a risk contributor to the engine.
+// discoverContributors sweeps the plugin registry for anything that scores
+// risk and adopts it. Until this existed, the only ways in were New,
+// NewWithConfig and AddContributor, all of which require the host application
+// to know that plugin X happens to be a contributor and to wire it by hand.
+// A plugin that implements RiskContributor and is registered with the engine
+// therefore shipped completely inert -- registered, compiled, never called.
+//
+// The idiom is the one the repo already uses in the other direction (see
+// plugins/sso finding sharedsignals through engine.Plugin plus an interface
+// assertion): capability by interface, discovered at init, never a hard
+// dependency between two plugins.
+//
+// Registration order does not matter. Every plugin is in the registry before
+// any OnInit runs, and what we keep is the plugin value itself, so a
+// contributor whose own OnInit has not happened yet still ends up fully
+// initialised by the time a sign-in asks it anything.
+func (p *Plugin) discoverContributors(engine plugin.Engine) {
+	registry := engine.Plugins()
+	if registry == nil {
+		return
+	}
+	for _, candidate := range registry.Plugins() {
+		contributor, ok := candidate.(RiskContributor)
+		if !ok {
+			continue
+		}
+		// A host may already have passed this one to New or AddContributor,
+		// and scoring the same signal twice would weight it twice.
+		if p.hasContributor(contributor) {
+			continue
+		}
+		p.contributors = append(p.contributors, contributor)
+		p.logger.Info("riskengine: adopted risk contributor from the plugin registry",
+			log.String("contributor", contributor.Name()),
+		)
+	}
+}
+
+func (p *Plugin) hasContributor(c RiskContributor) bool {
+	// Compared by name rather than by identity: the registry already
+	// enforces one plugin per name, the weight map and the audit metadata
+	// are both keyed on the name, and comparing interface values directly
+	// panics outright when the dynamic type is not comparable.
+	for _, existing := range p.contributors {
+		if existing.Name() == c.Name() {
+			return true
+		}
+	}
+	return false
+}
+
+// AddContributor adds a risk contributor to the engine. A contributor whose
+// name is already registered is not added a second time, so a host that wires
+// one by hand and also registers it as a plugin gets it scored once.
 func (p *Plugin) AddContributor(c RiskContributor) {
+	if c == nil || p.hasContributor(c) {
+		return
+	}
 	p.contributors = append(p.contributors, c)
 }
 
@@ -257,6 +324,31 @@ func (p *Plugin) OnBeforeSignIn(ctx context.Context, req *account.SignInRequest)
 		return fmt.Errorf("riskengine: %s", p.config.BlockMessage)
 	}
 
+	return nil
+}
+
+// OnBeforePrincipalAuth scores a machine caller and blocks above the high
+// threshold, exactly as OnBeforeSignIn does for a person.
+func (p *Plugin) OnBeforePrincipalAuth(ctx context.Context, a *principal.AuthAttempt) error {
+	if len(p.contributors) == 0 {
+		return nil
+	}
+
+	riskReq := &RiskRequest{
+		IPAddress: a.IPAddress,
+		UserAgent: a.UserAgent,
+		AppID:     a.AppID.String(),
+		EnvID:     a.EnvID.String(),
+		Principal: a.Subject.String(),
+	}
+
+	assessment := p.evaluate(ctx, riskReq)
+	p.lastAssessment = assessment
+	p.auditAssessment(ctx, riskReq, assessment)
+
+	if assessment.Decision == "block" {
+		return fmt.Errorf("riskengine: %s", p.config.BlockMessage)
+	}
 	return nil
 }
 
@@ -338,11 +430,20 @@ func (p *Plugin) auditAssessment(ctx context.Context, req *RiskRequest, assessme
 		"signals_count": fmt.Sprintf("%d", len(assessment.Signals)),
 	}
 
+	// A machine caller has no user id, so req.UserID is empty by design on
+	// that path. Fall back to Principal so a blocked or challenged agent
+	// still leaves an audit row with an actor on it: an audit row with no
+	// actor is not an audit row.
+	actorID := req.UserID
+	if actorID == "" {
+		actorID = req.Principal
+	}
+
 	if p.chronicle != nil {
 		_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 			Action:   "risk_assessment",
 			Resource: "auth",
-			ActorID:  req.UserID,
+			ActorID:  actorID,
 			Tenant:   req.AppID,
 			Outcome:  bridge.OutcomeSuccess,
 			Severity: severity,

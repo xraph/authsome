@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -44,10 +45,19 @@ import (
 // build raw requests via httptest.NewRequest against the bare handler.
 func newAPIWithRouter(t *testing.T, eng *authsome.Engine) http.Handler {
 	t.Helper()
+	_, h := newAPIHandler(t, eng)
+	return h
+}
+
+// newAPIHandler is newAPIWithRouter for tests that also need the *api.API
+// itself — typically to install one of the test-only seams in export_test.go
+// while still driving the handler through the real request pipeline.
+func newAPIHandler(t *testing.T, eng *authsome.Engine) (*api.API, http.Handler) {
+	t.Helper()
 	rootRouter := forge.NewRouter()
 	a := api.New(eng, rootRouter)
 	require.NoError(t, a.RegisterRoutes(rootRouter))
-	return withTestKey(rootRouter.Handler())
+	return a, withTestKey(rootRouter.Handler())
 }
 
 // withTestKey wraps an http.Handler so requests without an explicit
@@ -391,45 +401,86 @@ func TestSignup_DuplicateDoesNotLogInExistingUser(t *testing.T) {
 }
 
 // TestSignup_DuplicateRunsDummyHash verifies that the duplicate-email path
-// runs a dummy password hash so an attacker cannot use HTTP-response timing
-// to distinguish duplicate signups (which would otherwise skip argon2id
-// entirely and return in ~1ms) from fresh signups (~100ms argon2id). The
-// threshold is intentionally generous — CI noise dominates short measurements
-// — so we only guard against the "duplicate is 100x faster" oracle case.
+// runs a password hash with the same cost parameters a fresh signup pays, so
+// an attacker cannot use HTTP-response timing to tell registered addresses
+// from unregistered ones. Skipping the hash would make a duplicate return in
+// ~1ms against ~250ms for a fresh signup, which is a trivially probe-able
+// enumeration oracle.
+//
+// This test used to compare wall-clock durations and assert
+// dup >= fresh/2. That was flaky, and not because of CI noise alone: both
+// requests are dominated by one bcrypt-cost-12 hash, and a single bcrypt hash
+// on an idle machine here measured between 236ms and 403ms, so the ratio of
+// two single samples wanders across the 0.5 line by itself. Timing is only a
+// side effect of the property we care about. So observe the mechanism
+// instead: the duplicate branch must invoke the hash, with the engine's real
+// policy, during the request. Deterministic, and it fails for the right
+// reason if someone deletes the hash or moves it off the request path.
 func TestSignup_DuplicateRunsDummyHash(t *testing.T) {
 	t.Parallel()
 	_, eng := newTestAPI(t)
-	router := newAPIWithRouter(t, eng)
+	a, router := newAPIHandler(t, eng)
 
-	// First, create the user.
-	bodyA := []byte(`{"email":"timing@example.com","password":"SecureP@ss1"}`)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(bodyA)))
-	require.Equal(t, http.StatusCreated, rec.Code)
+	var mu sync.Mutex
+	var observed []account.PasswordPolicy
+	api.SetHashBudgetObserver(a, func(p account.PasswordPolicy) {
+		mu.Lock()
+		defer mu.Unlock()
+		observed = append(observed, p)
+	})
+	hashCalls := func() []account.PasswordPolicy {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]account.PasswordPolicy(nil), observed...)
+	}
 
-	// Time a fresh signup (different email, same password length).
-	freshBody := []byte(`{"email":"new1@example.com","password":"SecureP@ss1"}`)
-	freshStart := time.Now()
-	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(freshBody)))
-	freshDuration := time.Since(freshStart)
-	require.Equal(t, http.StatusCreated, rec.Code)
+	signup := func(email, password string) {
+		t.Helper()
+		body := jsonBody(t, map[string]string{"email": email, "password": password})
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", body)
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusCreated, rec.Code, "body=%s", rec.Body.String())
+	}
 
-	// Time a duplicate signup (same email, different password).
-	dupBody := []byte(`{"email":"timing@example.com","password":"DifferentP@ss2"}`)
-	dupStart := time.Now()
-	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(dupBody)))
-	dupDuration := time.Since(dupStart)
-	require.Equal(t, http.StatusCreated, rec.Code)
+	// Create the user, then sign up a second, unrelated address. Both are
+	// fresh signups: they hash through the engine, not through the
+	// duplicate-path budget consumer, so the observer must stay silent.
+	signup("timing@example.com", "SecureP@ss1")
+	signup("new1@example.com", "SecureP@ss1")
+	require.Empty(t, hashCalls(), "fresh signups must not go through the duplicate-path hash budget")
 
-	// Duplicate response time must be at least 50% of the fresh signup
-	// time (i.e. argon2/bcrypt ran on the duplicate path too). Loose
-	// threshold because CI is noisy; we're just guarding against the
-	// "duplicate is 100x faster" case.
-	minDuration := freshDuration / 2
-	if dupDuration < minDuration {
-		t.Errorf("duplicate signup was suspiciously fast (%v) compared to fresh (%v); expected dummy hash to consume comparable time", dupDuration, freshDuration)
+	// Duplicate email, different password. This is the branch that would
+	// otherwise return without hashing at all.
+	signup("timing@example.com", "DifferentP@ss2")
+
+	calls := hashCalls()
+	require.Len(t, calls, 1,
+		"duplicate signup must spend the password-hash budget exactly once, synchronously within the request; "+
+			"without it /v1/signup leaks account existence through response timing")
+
+	// The hash has to cost what a real signup costs. Hashing with, say,
+	// bcrypt cost 4 on the duplicate path would still leave a usable oracle.
+	require.Equal(t, enginePasswordPolicy(eng), calls[0],
+		"duplicate-path hash must use the engine's configured password policy")
+}
+
+// enginePasswordPolicy mirrors the policy handleSignUp derives from engine
+// config, so the dummy-hash assertion compares against the same cost
+// parameters a real signup pays rather than a hardcoded guess.
+func enginePasswordPolicy(eng *authsome.Engine) account.PasswordPolicy {
+	cfg := eng.Config().Password
+	return account.PasswordPolicy{
+		BcryptCost: cfg.BcryptCost,
+		Algorithm:  cfg.Algorithm,
+		Argon2Params: account.Argon2Params{
+			Memory:      cfg.Argon2.Memory,
+			Iterations:  cfg.Argon2.Iterations,
+			Parallelism: cfg.Argon2.Parallelism,
+			SaltLength:  cfg.Argon2.SaltLength,
+			KeyLength:   cfg.Argon2.KeyLength,
+		},
 	}
 }
 

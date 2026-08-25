@@ -191,10 +191,45 @@ func (s *Store) ListPrincipals(ctx context.Context, q *principal.Query) ([]*prin
 	return out, nil
 }
 
+// CreateDelegation stores a new grant, refusing one that would duplicate a
+// grant already live for the same (app, actor, subject, kind).
+//
+// The liveness check runs here, in Go, and not in the index predicate. Live
+// means principal.Delegation.IsActive: not revoked AND not past its expiry.
+// A partial index cannot express the second half, because postgres requires an index predicate to be immutable
+// and every spelling of the current time is not, so the index
+// (see the delegation_live_index_excludes_expired migration) now covers only
+// grants that never expire, and this is where the rest is enforced.
+//
+// This is a read followed by a write rather than one atomic statement, so two
+// concurrent creates for the same tuple can both land. That is a deliberate
+// trade against the bug it replaces: filtering on revoked_at alone meant an
+// impersonation grant that merely lapsed blocked every later impersonation of
+// that user by that admin forever, because nothing but StopImpersonation ever
+// writes revoked_at.
 func (s *Store) CreateDelegation(ctx context.Context, d *principal.Delegation) error {
+	if err := s.refuseLiveDuplicateDelegation(ctx, d); err != nil {
+		return err
+	}
 	m := fromDelegation(d)
 	_, err := s.pg.NewInsert(m).Exec(ctx)
 	return pgError(err)
+}
+
+// refuseLiveDuplicateDelegation returns store.ErrConflict when a live grant
+// already exists for d's (app, actor, subject, kind).
+func (s *Store) refuseLiveDuplicateDelegation(ctx context.Context, d *principal.Delegation) error {
+	existing, err := s.FindActiveDelegation(ctx, d.AppID, d.Actor, d.Subject, d.GrantKind)
+	if err != nil {
+		if errors.Is(err, principal.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	if existing != nil && existing.ID != d.ID {
+		return store.ErrConflict
+	}
+	return nil
 }
 
 func (s *Store) GetDelegation(ctx context.Context, delID id.DelegationID) (*principal.Delegation, error) {

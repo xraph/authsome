@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/plugins/riskengine"
@@ -200,7 +201,7 @@ func TestEndToEnd_UpstreamRevocationKillsLiveSessions(t *testing.T) {
 
 	// The IdP decides the account is compromised and pushes the event.
 	body := idp.sessionRevokedSET(t, "https://authsome.test/ssf", "idp-user-1")
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+	req := httptest.NewRequest(http.MethodPost,
 		"/v1/ssf/streams/"+created.PushURLPath+"/events", stringReader(body))
 	req.Header.Set("Content-Type", "application/secevent+jwt")
 	req.Header.Set("Authorization", "Bearer "+created.PushToken)
@@ -224,7 +225,7 @@ func TestEndToEnd_UpstreamRevocationKillsLiveSessions(t *testing.T) {
 	// time -- there is nothing left to revoke, and the dedupe row must
 	// answer 202 rather than reprocessing the event.
 	rec2 := httptest.NewRecorder()
-	req2 := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+	req2 := httptest.NewRequest(http.MethodPost,
 		"/v1/ssf/streams/"+created.PushURLPath+"/events", stringReader(body))
 	req2.Header.Set("Content-Type", "application/secevent+jwt")
 	req2.Header.Set("Authorization", "Bearer "+created.PushToken)
@@ -260,7 +261,7 @@ func TestEndToEnd_ForgedSETLeavesSessionsAlone(t *testing.T) {
 	// Signed by the attacker's key, but the stream only trusts the real IdP's
 	// JWKS, so the signature check fails.
 	body := attacker.sessionRevokedSET(t, "https://authsome.test/ssf", "idp-user-1")
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+	req := httptest.NewRequest(http.MethodPost,
 		"/v1/ssf/streams/"+created.PushURLPath+"/events", stringReader(body))
 	req.Header.Set("Content-Type", "application/secevent+jwt")
 	req.Header.Set("Authorization", "Bearer "+created.PushToken)
@@ -272,4 +273,64 @@ func TestEndToEnd_ForgedSETLeavesSessionsAlone(t *testing.T) {
 	after, err := eng.ListSessions(ctx, u.ID)
 	require.NoError(t, err)
 	assert.Len(t, after, 1, "a forged SET must leave every session alone")
+}
+
+// The durable half of the feature only pays off if the risk engine actually
+// asks us. It never did: riskengine only accepted contributors through New,
+// NewWithConfig and AddContributor, and nothing in the tree ever handed it
+// this plugin, so every stored signal sat in the table unread. This test
+// registers both plugins the way a host application would and then makes the
+// risk engine score a sign-in, with no manual wiring in between.
+func TestEndToEnd_StoredSignalReachesTheRiskEngine(t *testing.T) {
+	ctx := context.Background()
+	idp := newE2ETransmitter(t)
+
+	ssf := New(Config{Audience: "https://authsome.test/ssf"})
+	risk := riskengine.New()
+	eng := secutil.NewTestEngine(t,
+		authsome.WithPlugin(ssf), authsome.WithPlugin(risk))
+
+	ssf.jwks = jwksclient.New(jwksclient.Options{
+		HTTPClient: &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		},
+		ValidateURI: func(string) error { return nil },
+	})
+
+	appID, err := id.ParseAppID(eng.DefaultAppID())
+	require.NoError(t, err)
+	u := createE2EVictim(ctx, t, eng, appID, 1)
+
+	created, err := ssf.CreateStream(ctx, appID, id.Nil, CreateStreamRequest{
+		Name: "test-idp", Issuer: idp.issuer, JWKSURI: idp.jwksURI,
+	})
+	require.NoError(t, err)
+	require.NoError(t, ssf.LinkSubject(ctx, appID, id.Nil,
+		idp.issuer, "idp-user-1", u.ID, SourceSSO))
+
+	// A sign-in before anything has happened is unremarkable.
+	require.NoError(t, risk.OnBeforeSignIn(ctx, &account.SignInRequest{
+		AppID: appID, Email: u.Email, IPAddress: "203.0.113.10",
+	}), "a user with no signals must not be blocked")
+
+	// The IdP reports the compromise.
+	body := idp.sessionRevokedSET(t, "https://authsome.test/ssf", "idp-user-1")
+	req := httptest.NewRequest(http.MethodPost,
+		"/v1/ssf/streams/"+created.PushURLPath+"/events", stringReader(body))
+	req.Header.Set("Content-Type", "application/secevent+jwt")
+	req.Header.Set("Authorization", "Bearer "+created.PushToken)
+	rec := httptest.NewRecorder()
+	ssf.servePushForTest(rec, req, created.PushURLPath)
+	require.Equal(t, http.StatusAccepted, rec.Code, "body: %s", rec.Body.String())
+
+	// Now the same sign-in is scored on the signal that event left behind,
+	// through a contributor nobody wired by hand.
+	err = risk.OnBeforeSignIn(ctx, &account.SignInRequest{
+		AppID: appID, Email: u.Email, IPAddress: "203.0.113.10",
+	})
+	require.Error(t, err,
+		"a session-revoked signal must reach the risk engine and score high enough to stop the sign-in")
+	assert.Contains(t, err.Error(), "riskengine")
 }

@@ -2174,6 +2174,12 @@ func (c *Client) Oauth2DeleteRegistration(ctx context.Context, clientId string) 
 func (c *Client) Oauth2Revoke(ctx context.Context, req *Oauth2RevokeRequest) error {
 	form := url.Values{}
 	if req != nil {
+		if req.ClientID != "" {
+			form.Set("client_id", req.ClientID)
+		}
+		if req.ClientSecret != "" {
+			form.Set("client_secret", req.ClientSecret)
+		}
 		form.Set("token", req.Token)
 		if req.TokenTypeHint != "" {
 			form.Set("token_type_hint", req.TokenTypeHint)
@@ -2588,6 +2594,31 @@ func (c *Client) PhoneAuthVerify(ctx context.Context, req *PhoneAuthVerifyReques
 	return &result, nil
 }
 
+// ListMyDelegations — List what may act on your behalf
+func (c *Client) ListMyDelegations(ctx context.Context) (*DelegationListResponse, error) {
+	path := "/v1/principals/me/delegations"
+	var result DelegationListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// MintChildPrincipal — Mint an ephemeral child principal
+func (c *Client) MintChildPrincipal(ctx context.Context, id string, req *MintChildPrincipalRequest) (*MintChildResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/principals/{id}/children"
+	path = strings.Replace(path, "{id}", id, 1)
+	var result MintChildResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // RefreshTokens — Refresh tokens
 func (c *Client) RefreshTokens(ctx context.Context, req *RefreshTokensRequest) (*ApiTokenResponse, error) {
 	body, err := json.Marshal(req)
@@ -2955,6 +2986,20 @@ func (c *Client) SsoSPMetadata(ctx context.Context, provider string) error {
 	path := "/v1/sso/{provider}/metadata"
 	path = strings.Replace(path, "{provider}", provider, 1)
 	return c.do(ctx, "GET", path, nil, nil)
+}
+
+// ExchangeToken — Exchange a credential for a delegated session
+func (c *Client) ExchangeToken(ctx context.Context, req *ExchangeTokenRequest) (*TokenExchangeResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/token/exchange"
+	var result TokenExchangeResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // AuthsomeListUserRoles — List user roles

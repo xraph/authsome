@@ -21,13 +21,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func rsaJWKS(t *testing.T, pub *rsa.PublicKey) string {
+func rsaJWKS(t *testing.T, kid string, pub *rsa.PublicKey) string {
 	t.Helper()
 	n := base64.RawURLEncoding.EncodeToString(pub.N.Bytes())
 	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(pub.E)).Bytes())
 	body, err := json.Marshal(map[string]any{
 		"keys": []map[string]string{
-			{"kty": "RSA", "use": "sig", "alg": "RS256", "kid": "kid-1", "n": n, "e": e},
+			{"kty": "RSA", "use": "sig", "alg": "RS256", "kid": kid, "n": n, "e": e},
 		},
 	})
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func testOptions(srv *httptest.Server) Options {
 func TestKey_FetchesAndReturnsKey(t *testing.T) {
 	key := newKey(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, rsaJWKS(t, &key.PublicKey))
+		fmt.Fprint(w, rsaJWKS(t, "kid-1", &key.PublicKey))
 	}))
 	defer srv.Close()
 
@@ -77,7 +77,7 @@ func TestKey_CachesBetweenCalls(t *testing.T) {
 	var hits int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt64(&hits, 1)
-		fmt.Fprint(w, rsaJWKS(t, &key.PublicKey))
+		fmt.Fprint(w, rsaJWKS(t, "kid-1", &key.PublicKey))
 	}))
 	defer srv.Close()
 
@@ -96,7 +96,7 @@ func TestKey_UnknownKidRespectsRefetchInterval(t *testing.T) {
 	var hits int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt64(&hits, 1)
-		fmt.Fprint(w, rsaJWKS(t, &key.PublicKey))
+		fmt.Fprint(w, rsaJWKS(t, "kid-1", &key.PublicKey))
 	}))
 	defer srv.Close()
 
@@ -355,7 +355,7 @@ func TestKey_ConcurrentCallsSingleFlight(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt64(&hits, 1)
 		time.Sleep(50 * time.Millisecond)
-		fmt.Fprint(w, rsaJWKS(t, &key.PublicKey))
+		fmt.Fprint(w, rsaJWKS(t, "kid-1", &key.PublicKey))
 	}))
 	defer srv.Close()
 
@@ -392,4 +392,160 @@ func TestValidateURI(t *testing.T) {
 	require.Error(t, ValidateURI("https://10.0.0.5/keys"))
 	require.Error(t, ValidateURI("https://192.168.1.1/keys"))
 	require.Error(t, ValidateURI("not-a-url"))
+}
+
+// ──────────────────────────────────────────────────
+// A failed refresh must not cost us the keys we already have
+// ──────────────────────────────────────────────────
+
+// The bug this pins: refresh() used to replace the cache entry with an EMPTY
+// key map on any fetch error, and then refuse to refetch for
+// MinRefetchInterval. A warm cache holding kid-1 was therefore destroyed by
+// one 503 raised while looking up an unknown kid-2, and kid-1 became
+// unverifiable for the next five minutes -- long enough to drop a genuine
+// compromise event on the floor.
+func TestKey_WarmKeySurvivesAFailedRefresh(t *testing.T) {
+	key := newKey(t)
+	var fail atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if fail.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		fmt.Fprint(w, rsaJWKS(t, "kid-1", &key.PublicKey))
+	}))
+	defer srv.Close()
+
+	now := time.Now()
+	opts := testOptions(srv)
+	opts.MinRefetchInterval = 5 * time.Minute
+	opts.Now = func() time.Time { return now }
+	c := New(opts)
+
+	// Warm the cache with a good fetch.
+	_, err := c.Key(context.Background(), srv.URL, "kid-1")
+	require.NoError(t, err)
+
+	// The IdP starts failing, and a token arrives naming a kid we do not
+	// hold. Move past MinRefetchInterval so the lookup really does attempt a
+	// fetch, and let that fetch fail.
+	fail.Store(true)
+	now = now.Add(10 * time.Minute)
+
+	_, err = c.Key(context.Background(), srv.URL, "kid-2")
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrFetchFailed,
+		"a fetch that failed must be reported as a fetch failure, not as an unknown kid")
+
+	// The key we already had is still usable.
+	got, err := c.Key(context.Background(), srv.URL, "kid-1")
+	require.NoError(t, err, "a failed refresh must never destroy keys we already hold")
+	pub, ok := got.(*rsa.PublicKey)
+	require.True(t, ok)
+	assert.Equal(t, key.N, pub.N)
+}
+
+// The two failures a caller has to tell apart: the key set loaded fine and
+// carries no such kid (permanent, the token is wrong) versus we could not
+// load the key set at all (transient, our side, retry).
+func TestKey_DistinguishesFetchFailureFromUnknownKid(t *testing.T) {
+	key := newKey(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, rsaJWKS(t, "kid-1", &key.PublicKey))
+	}))
+	defer srv.Close()
+
+	c := New(testOptions(srv))
+	_, err := c.Key(context.Background(), srv.URL, "nope")
+	require.ErrorIs(t, err, ErrKeyNotFound)
+	assert.NotErrorIs(t, err, ErrFetchFailed,
+		"a key set that loaded cleanly must not look like a fetch failure")
+
+	dead := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer dead.Close()
+
+	c2 := New(testOptions(dead))
+	_, err = c2.Key(context.Background(), dead.URL, "kid-1")
+	require.ErrorIs(t, err, ErrFetchFailed)
+	assert.NotErrorIs(t, err, ErrKeyNotFound,
+		"an unreachable IdP must not look like a token naming a key that does not exist")
+}
+
+// A caller arriving inside the negative-cache window, after a failed fetch,
+// must still be told the fetch failed rather than being handed
+// ErrKeyNotFound -- that is the answer that becomes a 400 and stops the
+// transmitter retrying.
+func TestKey_NegativeCacheReportsTheFetchFailure(t *testing.T) {
+	var hits int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt64(&hits, 1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	c := New(testOptions(srv))
+	for i := 0; i < 5; i++ {
+		_, err := c.Key(context.Background(), srv.URL, "kid-1")
+		require.ErrorIs(t, err, ErrFetchFailed, "call %d", i)
+	}
+	assert.Equal(t, int64(1), atomic.LoadInt64(&hits),
+		"a broken endpoint must still be negative-cached")
+}
+
+// ──────────────────────────────────────────────────
+// Keys do not stay trusted forever
+// ──────────────────────────────────────────────────
+
+// An IdP that pulls a compromised signing key from its JWKS has to be able to
+// make us stop honouring it. Before MaxKeyAge, only an UNKNOWN kid ever
+// triggered a refetch, so a kid already in the cache was trusted for the life
+// of the process.
+func TestKey_AgedEntryRefetchesAndDropsARetiredKey(t *testing.T) {
+	retired, replacement := newKey(t), newKey(t)
+	var serveReplacement atomic.Bool
+	var hits int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt64(&hits, 1)
+		if serveReplacement.Load() {
+			fmt.Fprint(w, rsaJWKS(t, "kid-2", &replacement.PublicKey))
+			return
+		}
+		fmt.Fprint(w, rsaJWKS(t, "kid-1", &retired.PublicKey))
+	}))
+	defer srv.Close()
+
+	now := time.Now()
+	opts := testOptions(srv)
+	opts.MaxKeyAge = time.Hour
+	opts.MinRefetchInterval = time.Minute
+	opts.Now = func() time.Time { return now }
+	c := New(opts)
+
+	_, err := c.Key(context.Background(), srv.URL, "kid-1")
+	require.NoError(t, err)
+	require.Equal(t, int64(1), atomic.LoadInt64(&hits))
+
+	// Still inside MaxKeyAge: served from cache, no fetch.
+	now = now.Add(30 * time.Minute)
+	_, err = c.Key(context.Background(), srv.URL, "kid-1")
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), atomic.LoadInt64(&hits),
+		"a cached key younger than MaxKeyAge must not drive a fetch")
+
+	// Past MaxKeyAge, with the IdP now publishing a different key: the aged
+	// hit forces a refetch and the retired key stops verifying anything.
+	serveReplacement.Store(true)
+	now = now.Add(31 * time.Minute)
+	_, err = c.Key(context.Background(), srv.URL, "kid-1")
+	require.ErrorIs(t, err, ErrKeyNotFound,
+		"a key the IdP has retired must stop being honoured once the entry ages out")
+	assert.Equal(t, int64(2), atomic.LoadInt64(&hits))
+
+	got, err := c.Key(context.Background(), srv.URL, "kid-2")
+	require.NoError(t, err)
+	pub, ok := got.(*rsa.PublicKey)
+	require.True(t, ok)
+	assert.Equal(t, replacement.N, pub.N)
 }

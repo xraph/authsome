@@ -3,6 +3,7 @@ package mfa
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -615,8 +616,21 @@ func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*Cha
 		IPAddress:       ctx.Request().RemoteAddr,
 		UserAgent:       ctx.Request().UserAgent(),
 		MFAJustVerified: true,
+		// Carried across the ceremony by the ticket. Sign-in proved this
+		// thumbprint; without replaying it here the session minted after
+		// the second factor would be unbound, which on a required-mode app
+		// means enabling MFA quietly turns DPoP off for that user.
+		DPoPJKT: payload.DPoPJKT,
 	})
 	if issueErr != nil {
+		// A DPoP refusal is a 400 the client can act on. The app mandates a
+		// binding and this ticket carries none, which happens when the mode
+		// was raised while the ticket was in flight. It renders its own RFC
+		// 9449 body, so bubble it rather than flattening it into a 500 that
+		// tells the client nothing about what to retry.
+		if errors.Is(issueErr, authsome.ErrDPoPBindingRequired) {
+			return nil, issueErr
+		}
 		return nil, forge.InternalError(fmt.Errorf("mfa: issue session: %w", issueErr))
 	}
 

@@ -860,8 +860,19 @@ func tryStrategyAuth(
 func setPrincipalContext(
 	goCtx context.Context, sess *session.Session, resolve PrincipalResolver, logger log.Logger,
 ) context.Context {
-	if len(sess.Actors) > 0 {
-		goCtx = WithActors(goCtx, sess.Actors)
+	// AuthzActors, not Actors. The two differ for exactly one case and it is
+	// the case that matters: on an impersonation, AuthzActors is empty,
+	// because impersonating somebody is precisely the request to evaluate as
+	// them. Putting sess.Actors here instead would let a chain-aware guard
+	// intersect the impersonating ADMIN's own permissions into every check,
+	// which inverts impersonation entirely: the admin would be able to do
+	// less than the person they are standing in for, not the same.
+	//
+	// The full chain, admin included, is still on the context as the session
+	// itself (WithSession) and still reaches audit through
+	// Session.ImpersonatedBy. This value is the authorization view of it.
+	if actors := sess.AuthzActors(); len(actors) > 0 {
+		goCtx = WithActors(goCtx, actors)
 	}
 	if resolve == nil {
 		return goCtx

@@ -21,7 +21,7 @@ func TestRequestScope_SameProofTwiceOnOneRequest(t *testing.T) {
 	claims := validClaims()
 	claims["iat"] = now.Unix()
 
-	p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", claims))
+	p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", claims))
 	require.NoError(t, err)
 
 	v := newTestValidator(now)
@@ -42,7 +42,7 @@ func TestRequestScope_DoesNotCrossRequests(t *testing.T) {
 	claims := validClaims()
 	claims["iat"] = now.Unix()
 
-	p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", claims))
+	p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", claims))
 	require.NoError(t, err)
 
 	v := newTestValidator(now)
@@ -64,7 +64,7 @@ func TestRequestScope_FailedValidationIsNotRecorded(t *testing.T) {
 	claims := validClaims()
 	claims["iat"] = now.Unix()
 
-	p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", claims))
+	p, err := dpop.Parse(mintProof(t, key, "dpop+jwt", claims))
 	require.NoError(t, err)
 
 	v := newTestValidator(now)
@@ -91,13 +91,13 @@ func TestRequestScope_OnlyTheSameProofIsExempt(t *testing.T) {
 	first := validClaims()
 	first["iat"] = now.Unix()
 	first["jti"] = "scope-jti-a"
-	pa, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", first))
+	pa, err := dpop.Parse(mintProof(t, key, "dpop+jwt", first))
 	require.NoError(t, err)
 
 	second := validClaims()
 	second["iat"] = now.Unix()
 	second["jti"] = "scope-jti-b"
-	pb, err := dpop.Parse(mintProof(t, key, "dpop+jwt", "ES256", second))
+	pb, err := dpop.Parse(mintProof(t, key, "dpop+jwt", second))
 	require.NoError(t, err)
 
 	v := newTestValidator(now)

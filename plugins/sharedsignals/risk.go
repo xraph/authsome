@@ -12,7 +12,8 @@ var _ riskengine.RiskContributor = (*Plugin)(nil)
 
 // caepSignalWeight is how much more a CAEP event counts than an IP heuristic.
 // An identity provider that watched an account get taken over is a far better
-// source than a reputation list.
+// source than a reputation list. It is the fallback for
+// sharedsignals.risk_weight, which an operator can raise or lower per app.
 const caepSignalWeight = 2.0
 
 // EvaluateRisk replays stored signals at sign-in time. This is how an event
@@ -32,6 +33,8 @@ func (p *Plugin) EvaluateRisk(ctx context.Context, req *riskengine.RiskRequest) 
 	if err != nil {
 		return none, nil //nolint:nilerr // an unparseable app is not our failure
 	}
+	weight := p.riskWeight(ctx, appID)
+	none.Weight = weight
 	// EnvID is optional on the request; an empty/unparseable value resolves
 	// to id.Nil, which the user lookups below treat as "any environment".
 	var envID id.EnvironmentID
@@ -68,7 +71,7 @@ func (p *Plugin) EvaluateRisk(ctx context.Context, req *riskengine.RiskRequest) 
 	return &riskengine.RiskSignal{
 		Source: "sharedsignals",
 		Score:  best,
-		Weight: caepSignalWeight,
+		Weight: weight,
 		Reason: "shared signals event: " + reason,
 	}, nil
 }
@@ -82,10 +85,10 @@ func (p *Plugin) EvaluateRisk(ctx context.Context, req *riskengine.RiskRequest) 
 // must be queried with the environment the resolved user actually belongs
 // to, not the one the request guessed at.
 func (p *Plugin) resolveRiskUser(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
-	req *riskengine.RiskRequest) (userID id.UserID, userEnvID id.EnvironmentID, found bool) {
+	req *riskengine.RiskRequest) (resolvedUserID id.UserID, resolvedEnvID id.EnvironmentID, resolved bool) {
 	if req.UserID != "" {
-		if parsed, err := id.ParseUserID(req.UserID); err == nil {
-			return parsed, envID, true
+		if userID, err := id.ParseUserID(req.UserID); err == nil {
+			return userID, envID, true
 		}
 	}
 	if p.authStore == nil {

@@ -84,6 +84,8 @@ import type {
   DeclineInvitationRequest,
   Definition,
   DefinitionGroup,
+  DelegationListResponse,
+  DelegationResponse,
   DeleteClientRequest,
   DeleteResponse,
   Device,
@@ -138,6 +140,8 @@ import type {
   MemberListResponse,
   MemberRef,
   Meta,
+  MintChildRequest,
+  MintChildResponse,
   Name,
   OAuth2Client,
   Oauth2providerTokenResponse,
@@ -201,6 +205,8 @@ import type {
   SwitchOrgResponse,
   Team,
   TeamListResponse,
+  TokenExchangeRequest,
+  TokenExchangeResponse,
   UIMetadata,
   UnassignRoleRequest,
   UnlinkAuthMethodRequest,
@@ -259,6 +265,7 @@ import type {
   PasskeyRegisterFinishRequest,
   PhoneAuthStartRequest,
   PhoneAuthVerifyRequest,
+  MintChildPrincipalRequest,
   RefreshTokensRequest,
   AuthsomeCreateRoleRequest,
   AuthsomeUpdateRoleRequest,
@@ -267,6 +274,7 @@ import type {
   AuthsomeUnassignRoleRequest,
   SsoExchangeRequest,
   StartSSOLoginByDomainRequest,
+  ExchangeTokenRequest,
   ResendEmailVerificationRequest,
 } from './types';
 
@@ -2621,6 +2629,32 @@ export class AuthClient {
   }
 
   /**
+   * List what may act on your behalf
+   * GET /v1/principals/me/delegations
+   */
+  async listMyDelegations(): Promise<DelegationListResponse> {
+    const path = "/v1/principals/me/delegations";
+    return this.request<DelegationListResponse>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Mint an ephemeral child principal
+   * POST /v1/principals/{id}/children
+   */
+  async mintChildPrincipal(id: string, body: MintChildPrincipalRequest): Promise<MintChildResponse> {
+    const path = `/v1/principals/${id}/children`;
+    return this.request<MintChildResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
    * Refresh tokens
    * POST /v1/refresh
    */
@@ -2975,6 +3009,19 @@ export class AuthClient {
       'GET',
       path,
       undefined,
+    );
+  }
+
+  /**
+   * Exchange a credential for a delegated session
+   * POST /v1/token/exchange
+   */
+  async exchangeToken(body: ExchangeTokenRequest): Promise<TokenExchangeResponse> {
+    const path = "/v1/token/exchange";
+    return this.request<TokenExchangeResponse>(
+      'POST',
+      path,
+      body,
     );
   }
 

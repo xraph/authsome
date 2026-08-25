@@ -191,10 +191,45 @@ func (s *Store) ListPrincipals(ctx context.Context, q *principal.Query) ([]*prin
 	return out, nil
 }
 
+// CreateDelegation stores a new grant, refusing one that would duplicate a
+// grant already live for the same (app, actor, subject, kind).
+//
+// The liveness check runs here, in Go, and not in the index predicate. Live
+// means principal.Delegation.IsActive: not revoked AND not past its expiry.
+// A partial index cannot express the second half, because sqlite requires an index predicate to be deterministic
+// and datetime('now') is not, so the index
+// (see the delegation_live_index_excludes_expired migration) now covers only
+// grants that never expire, and this is where the rest is enforced.
+//
+// This is a read followed by a write rather than one atomic statement, so two
+// concurrent creates for the same tuple can both land. That is a deliberate
+// trade against the bug it replaces: filtering on revoked_at alone meant an
+// impersonation grant that merely lapsed blocked every later impersonation of
+// that user by that admin forever, because nothing but StopImpersonation ever
+// writes revoked_at.
 func (s *Store) CreateDelegation(ctx context.Context, d *principal.Delegation) error {
+	if err := s.refuseLiveDuplicateDelegation(ctx, d); err != nil {
+		return err
+	}
 	m := fromDelegation(d)
 	_, err := s.sdb.NewInsert(m).Exec(ctx)
 	return sqliteError(err)
+}
+
+// refuseLiveDuplicateDelegation returns store.ErrConflict when a live grant
+// already exists for d's (app, actor, subject, kind).
+func (s *Store) refuseLiveDuplicateDelegation(ctx context.Context, d *principal.Delegation) error {
+	existing, err := s.FindActiveDelegation(ctx, d.AppID, d.Actor, d.Subject, d.GrantKind)
+	if err != nil {
+		if errors.Is(err, principal.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	if existing != nil && existing.ID != d.ID {
+		return store.ErrConflict
+	}
+	return nil
 }
 
 func (s *Store) GetDelegation(ctx context.Context, delID id.DelegationID) (*principal.Delegation, error) {
@@ -211,29 +246,34 @@ func (s *Store) GetDelegation(ctx context.Context, delID id.DelegationID) (*prin
 
 // FindActiveDelegation resolves the live grant letting actor act for subject.
 //
-// Active is evaluated in SQL rather than by loading and filtering in Go: this
-// runs on the authentication path for every delegated request, and the partial
-// unique index means at most one row can match.
+// Revocation is filtered in SQL; expiry is filtered in Go. That split is not
+// a style choice, it is what this backend actually supports.
 //
-// The interface takes no time argument (unlike ListDelegations, which is
-// given q.ActiveAsOf as a bound parameter), so the expiry check has to name a
-// clock rather than have one passed in. Postgres names clock_timestamp() in
-// SQL for this. Sqlite has no equivalent server-side clock function to lean
-// on, and it would be the wrong thing to reach for anyway: NOW()-style
-// transaction-frozen clocks are a postgres concern, not a sqlite one. So the
-// app's own time.Now() is bound as a query parameter instead, exactly the
-// way GetActiveEmailVerification already compares against a TIMESTAMP column
-// elsewhere in this file.
+// A bare `expires_at >= ?` here matched every row whatever its expiry, and an
+// expired grant went on authenticating. The column is declared TIMESTAMP,
+// which sqlite gives NUMERIC affinity, but the driver writes an ISO-8601
+// string that sqlite cannot coerce to a number, so the stored value settles as
+// TEXT while the bound time.Time parameter arrives as a number. Sqlite then
+// compares across storage classes by its own type ordering, where every TEXT
+// value outranks every numeric one, and the predicate is constant-true.
 //
-// The comparison is `>=`, not `>`: principal.Delegation.IsActive defines a
-// grant expiring at exactly the query instant as still active
-// (`!at.After(expiresAt)`), and every store must agree with the domain
-// method, not just with each other.
+// Wrapping both sides in julianday() does not rescue it: julianday() applied
+// to a numeric argument reads that number as a Julian day count rather than as
+// an instant, so the bound parameter comes back astronomically large and the
+// predicate flips to constant-false. Constant-false is worse than
+// constant-true, because it fails closed on grants that are perfectly live.
+//
+// Filtering in Go removes the guesswork. principal.Delegation.IsActive is the
+// definition every other consumer already uses, boundary convention included:
+// a grant expiring at exactly this instant is still active. The row count this
+// walks is bounded by the live-grant uniqueness constraint on
+// (app, actor, subject, kind), so this is a handful of rows at most even on
+// the authentication path.
 func (s *Store) FindActiveDelegation(
 	ctx context.Context, appID id.AppID, actor, subject principal.Ref, grantKind principal.GrantKind,
 ) (*principal.Delegation, error) {
-	m := new(DelegationModel)
-	err := s.sdb.NewSelect(m).
+	var models []DelegationModel
+	err := s.sdb.NewSelect(&models).
 		Where("app_id = ?", appID.String()).
 		Where("actor_kind = ?", string(actor.Kind)).
 		Where("actor_id = ?", actor.ID).
@@ -241,7 +281,6 @@ func (s *Store) FindActiveDelegation(
 		Where("subject_id = ?", subject.ID).
 		Where("grant_kind = ?", string(grantKind)).
 		Where("revoked_at IS NULL").
-		Where("(expires_at IS NULL OR expires_at >= ?)", time.Now()).
 		Scan(ctx)
 	if err != nil {
 		if errors.Is(sqliteError(err), store.ErrNotFound) {
@@ -249,7 +288,18 @@ func (s *Store) FindActiveDelegation(
 		}
 		return nil, sqliteError(err)
 	}
-	return toDelegation(m)
+
+	now := time.Now()
+	for i := range models {
+		d, convErr := toDelegation(&models[i])
+		if convErr != nil {
+			return nil, convErr
+		}
+		if d.IsActive(now) {
+			return d, nil
+		}
+	}
+	return nil, principal.ErrNotFound
 }
 
 func (s *Store) ListDelegations(ctx context.Context, q *principal.DelegationQuery) ([]*principal.Delegation, error) {
@@ -273,13 +323,15 @@ func (s *Store) ListDelegations(ctx context.Context, q *principal.DelegationQuer
 		query = query.Where("grant_kind = ?", string(q.GrantKind))
 	}
 	if q.ActiveOnly {
-		// Inclusive at the boundary, matching principal.Delegation.IsActive:
-		// see the comment on ListPrincipals's ActiveOnly branch above.
-		query = query.
-			Where("revoked_at IS NULL").
-			Where("(expires_at IS NULL OR expires_at >= ?)", q.ActiveAsOf)
+		// Revocation in SQL, expiry in Go, for the reason spelled out on
+		// FindActiveDelegation above: no comparison this backend can express
+		// against this column answers "is it past its expiry" correctly.
+		query = query.Where("revoked_at IS NULL")
 	}
-	if q.Limit > 0 {
+	if q.Limit > 0 && !q.ActiveOnly {
+		// The limit only rides along in SQL when nothing is filtered out
+		// afterwards. With ActiveOnly it is applied below instead, or a page
+		// of mostly-expired grants would come back short.
 		query = query.Limit(q.Limit)
 	}
 
@@ -294,7 +346,15 @@ func (s *Store) ListDelegations(ctx context.Context, q *principal.DelegationQuer
 		if err != nil {
 			return nil, err
 		}
+		// Inclusive at the boundary, because IsActive is: a grant expiring at
+		// exactly ActiveAsOf is still active.
+		if q.ActiveOnly && !d.IsActive(q.ActiveAsOf) {
+			continue
+		}
 		out = append(out, d)
+		if q.Limit > 0 && len(out) == q.Limit {
+			break
+		}
 	}
 	return out, nil
 }

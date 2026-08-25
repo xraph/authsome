@@ -23,8 +23,18 @@ import (
 	"time"
 )
 
-// ErrKeyNotFound is returned when no key in the set carries the wanted kid.
+// ErrKeyNotFound is returned when the key set loaded cleanly and simply does
+// not carry the wanted kid. It is a statement about the IdP's published keys,
+// so a caller may safely treat it as a permanent rejection of the token.
 var ErrKeyNotFound = errors.New("jwksclient: no key for kid")
+
+// ErrFetchFailed is returned when we could not load the key set at all: the
+// endpoint was unreachable, answered non-200, sent something we could not
+// parse, or was refused by the URI/dial guards. It says nothing about the
+// token, only about our own ability to check it right now, so a caller must
+// answer with something that invites a retry rather than a permanent
+// rejection. Every error surfaced from a failed fetch wraps this.
+var ErrFetchFailed = errors.New("jwksclient: key set fetch failed")
 
 // ErrResponseTooLarge is returned when a JWKS response exceeds MaxResponseBytes.
 var ErrResponseTooLarge = errors.New("jwksclient: key set exceeds the size limit")
@@ -35,7 +45,15 @@ type Options struct {
 	MinRefetchInterval time.Duration
 	MaxResponseBytes   int64
 	MaxKeys            int
-	Now                func() time.Time
+	// MaxKeyAge bounds how long a cached key set is served without going
+	// back to the IdP. Without it, a kid that is present in the cache is
+	// trusted forever and an IdP that pulls a compromised signing key from
+	// its JWKS never causes us to stop honouring it, because only an
+	// UNKNOWN kid triggers a refetch. Checking the age inside Key is
+	// simpler than a background goroutine and needs no lifecycle of its
+	// own: the next inbound token pays for the refresh.
+	MaxKeyAge time.Duration
+	Now       func() time.Time
 	// ValidateURI gates every fetch. Defaults to the package-level
 	// ValidateURI. Tests substitute a permissive validator so they can serve
 	// a key set from an httptest loopback server; production must not.
@@ -70,6 +88,12 @@ func (o *Options) defaults() {
 	}
 	if o.MaxKeys == 0 {
 		o.MaxKeys = 20
+	}
+	if o.MaxKeyAge == 0 {
+		// An hour is long enough that ordinary traffic almost never pays for
+		// a fetch, and short enough that a key an IdP retired stops being
+		// honoured on the same day somebody noticed.
+		o.MaxKeyAge = time.Hour
 	}
 	if o.Now == nil {
 		o.Now = time.Now
@@ -121,9 +145,21 @@ func checkRedirect(req *http.Request, via []*http.Request) error {
 	return nil
 }
 
+// entry is one URI's cached key set. It carries two clocks on purpose.
+// lastAttempt stamps every fetch, successful or not, and is what the
+// negative-cache interval reads, so a broken endpoint cannot be hammered.
+// lastSuccess stamps only a fetch that actually produced a key set, and is
+// what MaxKeyAge reads. Keeping them apart is what stops a run of failures
+// from making a stale key look freshly confirmed.
 type entry struct {
 	keys        map[string]crypto.PublicKey
-	lastFetched time.Time
+	lastAttempt time.Time
+	lastSuccess time.Time
+	// lastErr is the failure from the most recent attempt, already wrapped
+	// with ErrFetchFailed, or nil when that attempt succeeded. It lets a
+	// caller arriving inside the negative-cache window learn that the fetch
+	// FAILED rather than being told the kid does not exist.
+	lastErr error
 }
 
 // Client caches one key set per JWKS URI.
@@ -145,20 +181,46 @@ func New(opts Options) *Client {
 	}
 }
 
-// Key returns the public key for kid from the set at jwksURI. A cache miss
-// triggers at most one fetch per MinRefetchInterval per URI, so an unknown
-// kid cannot be used to drive outbound traffic.
+// Key returns the public key for kid from the set at jwksURI. A cache miss,
+// or a hit older than MaxKeyAge, triggers at most one fetch per
+// MinRefetchInterval per URI, so neither an unknown kid nor an aged entry can
+// be used to drive outbound traffic.
+//
+// A key that is still cached is returned even when the refresh that was
+// supposed to confirm it failed. That is deliberate and it is the one place
+// this file trades a little freshness for availability: a successful refresh
+// replaces the entry wholesale, so a retired kid does disappear, while a
+// transient 503 on the IdP's side must not blind the receiver to a
+// compromise event signed with a key we already hold and already trust.
 func (c *Client) Key(ctx context.Context, jwksURI, kid string) (crypto.PublicKey, error) {
+	if key, ok := c.freshKey(jwksURI, kid); ok {
+		return key, nil
+	}
+	refreshErr := c.refresh(ctx, jwksURI)
 	if key, ok := c.cachedKey(jwksURI, kid); ok {
 		return key, nil
 	}
-	if err := c.refresh(ctx, jwksURI); err != nil {
-		return nil, err
-	}
-	if key, ok := c.cachedKey(jwksURI, kid); ok {
-		return key, nil
+	if refreshErr != nil {
+		return nil, refreshErr
 	}
 	return nil, ErrKeyNotFound
+}
+
+// freshKey returns a cached key only when the set it came from was
+// successfully loaded within MaxKeyAge.
+func (c *Client) freshKey(jwksURI, kid string) (crypto.PublicKey, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.cache[jwksURI]
+	if !ok {
+		return nil, false
+	}
+	if e.lastSuccess.IsZero() ||
+		c.opts.Now().Sub(e.lastSuccess) >= c.opts.MaxKeyAge {
+		return nil, false
+	}
+	key, ok := e.keys[kid]
+	return key, ok
 }
 
 func (c *Client) cachedKey(jwksURI, kid string) (crypto.PublicKey, bool) {
@@ -172,20 +234,40 @@ func (c *Client) cachedKey(jwksURI, kid string) (crypto.PublicKey, bool) {
 	return key, ok
 }
 
+// lastError reports how the most recent fetch of this URI ended, so a
+// goroutine that waited on somebody else's in-flight fetch learns the same
+// thing the owner did.
+func (c *Client) lastError(jwksURI string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if e, ok := c.cache[jwksURI]; ok {
+		return e.lastErr
+	}
+	return nil
+}
+
 // refresh fetches the key set, unless another goroutine is already doing so
 // or the last fetch is more recent than MinRefetchInterval.
 func (c *Client) refresh(ctx context.Context, jwksURI string) (err error) {
 	c.mu.Lock()
 	if e, ok := c.cache[jwksURI]; ok &&
-		c.opts.Now().Sub(e.lastFetched) < c.opts.MinRefetchInterval {
+		c.opts.Now().Sub(e.lastAttempt) < c.opts.MinRefetchInterval {
+		lastErr := e.lastErr
 		c.mu.Unlock()
+		// Inside the negative-cache window we cannot go and look, so answer
+		// with whatever the last look actually found. Reporting a fetch
+		// failure as "no such kid" is what turned one transient 503 into
+		// five minutes of 400s telling the transmitter to stop retrying.
+		if lastErr != nil {
+			return lastErr
+		}
 		return ErrKeyNotFound
 	}
 	if wait, ok := c.inflight[jwksURI]; ok {
 		c.mu.Unlock()
 		select {
 		case <-wait:
-			return nil
+			return c.lastError(jwksURI)
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -204,15 +286,45 @@ func (c *Client) refresh(ctx context.Context, jwksURI string) (err error) {
 	// triggered by a single bad response.
 	defer func() {
 		r := recover()
+		now := c.opts.Now()
 		c.mu.Lock()
 		delete(c.inflight, jwksURI)
-		if r == nil && err == nil {
-			c.cache[jwksURI] = &entry{keys: keys, lastFetched: c.opts.Now()}
-		} else {
+		switch {
+		case r == nil && err == nil:
+			c.cache[jwksURI] = &entry{
+				keys: keys, lastAttempt: now, lastSuccess: now,
+			}
+		default:
 			// Negative caching: a failed fetch (including a panic) still
-			// stamps the clock so a broken endpoint cannot be hammered on
+			// stamps lastAttempt so a broken endpoint cannot be hammered on
 			// every inbound request.
-			c.cache[jwksURI] = &entry{keys: map[string]crypto.PublicKey{}, lastFetched: c.opts.Now()}
+			//
+			// What it must NOT do is throw away keys that are already here.
+			// A warm cache holding the kid every real token is signed with
+			// used to be wiped by a single 503 raised while looking up some
+			// other, unknown kid, and stayed wiped for the whole
+			// negative-cache interval -- five minutes in which a genuine
+			// compromise event could not be verified at all.
+			failure := err
+			if r != nil {
+				failure = fmt.Errorf("panic while loading the key set: %v", r)
+			}
+			wrapped := fmt.Errorf("%w: %w", ErrFetchFailed, failure)
+			if existing, ok := c.cache[jwksURI]; ok {
+				existing.lastAttempt = now
+				existing.lastErr = wrapped
+			} else {
+				c.cache[jwksURI] = &entry{
+					keys:        map[string]crypto.PublicKey{},
+					lastAttempt: now,
+					lastErr:     wrapped,
+				}
+			}
+			// Hand the caller the sentinel too, so a receiver can tell "we
+			// could not check this token" from "this token names a key the
+			// IdP does not publish" and answer 5xx rather than a 400 that
+			// stops the transmitter retrying.
+			err = wrapped
 		}
 		c.mu.Unlock()
 		close(done)
@@ -249,7 +361,7 @@ func (c *Client) fetch(ctx context.Context, jwksURI string) (map[string]crypto.P
 	if err != nil {
 		return nil, fmt.Errorf("jwksclient: fetch: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() // response body close
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("jwksclient: fetch returned %d", resp.StatusCode)
@@ -319,11 +431,30 @@ func (k jwk) publicKey() (crypto.PublicKey, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &ecdsa.PublicKey{
-			Curve: curve,
-			X:     new(big.Int).SetBytes(x),
-			Y:     new(big.Int).SetBytes(y),
-		}, nil
+		// Assembling the point and parsing it, rather than assigning X and Y,
+		// is what Go 1.26 deprecated those fields in favour of. It is also
+		// stricter in a way that matters here: ParseUncompressedPublicKey
+		// rejects a point that is not on the curve or is the point at
+		// infinity, and a struct literal accepts both. These coordinates come
+		// off the wire from someone else's JWKS endpoint.
+		byteLen := (curve.Params().BitSize + 7) / 8
+		if len(x) > byteLen || len(y) > byteLen {
+			return nil, fmt.Errorf("jwksclient: coordinate longer than curve %s", k.CRV)
+		}
+
+		// RFC 7518 section 6.2.1.2 fixes the octet length per curve, but a
+		// leading zero byte is easy to drop, so left-pad rather than trust it.
+		point := make([]byte, 1+2*byteLen)
+		point[0] = 4
+		copy(point[1+byteLen-len(x):1+byteLen], x)
+		copy(point[1+2*byteLen-len(y):], y)
+
+		pub, parseErr := ecdsa.ParseUncompressedPublicKey(curve, point)
+		if parseErr != nil {
+			return nil, fmt.Errorf("jwksclient: invalid %s public key: %w", k.CRV, parseErr)
+		}
+
+		return pub, nil
 	default:
 		return nil, fmt.Errorf("jwksclient: unsupported key type %q", k.KTY)
 	}

@@ -2,6 +2,7 @@ package jwkutil_test
 
 import (
 	"crypto"
+	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -61,8 +62,9 @@ func TestParseJSON_RejectsPrivateMembers(t *testing.T) {
 }
 
 // TestParseJSON_RejectsOffCurvePoint guards against an attacker supplying a
-// point that is not on P-256. Go's elliptic package will happily hold such a
-// point in a struct; only an explicit IsOnCurve check refuses it.
+// point that is not on P-256. A struct literal will happily hold such a point,
+// which is why parseEC builds the key through ParseUncompressedPublicKey: the
+// on-curve check lives inside the constructor and cannot be skipped.
 func TestParseJSON_RejectsOffCurvePoint(t *testing.T) {
 	raw := json.RawMessage(`{"kty":"EC","crv":"P-256",` +
 		`"x":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",` +
@@ -88,7 +90,7 @@ func TestParseJSON_RejectsWeakRSA(t *testing.T) {
 // type: encoding a key and parsing the result back gives the same
 // crypto.PublicKey the encoder started from.
 //
-// This does NOT catch a coordinate padding regression in coordinate(): the
+// This does NOT catch a coordinate padding regression: the
 // comparison is on decoded *ecdsa.PublicKey structs, whose X and Y are
 // big.Int, and big.Int.SetBytes normalises away any leading zero byte on the
 // way in. An unpadded coordinate and a correctly padded one decode to the
@@ -142,15 +144,29 @@ func TestRoundTrip(t *testing.T) {
 //
 // Unlike TestRoundTrip, this asserts on the encoded wire form: the raw byte
 // length behind the base64url x and y in the resulting JWK. That is what a
-// third-party verifier actually parses, and what coordinate()'s padding
-// exists to keep at exactly 32 bytes for P-256 regardless of leading zeros.
+// third-party verifier actually parses, and what Encode must keep at exactly
+// 32 bytes for P-256 regardless of leading zeros.
 func TestEncode_PadsShortCoordinate(t *testing.T) {
-	curve := elliptic.P256()
-	x, y := curve.ScalarBaseMult(big.NewInt(43).Bytes())
-	require.LessOrEqualf(t, y.BitLen(), 248,
-		"fixture scalar k=43 no longer produces a short Y coordinate (BitLen=%d); pick a new scalar", y.BitLen())
+	// k=43 on P-256 lands on a point whose Y is short enough to need padding,
+	// which is the whole reason this fixture exists. Deriving it through
+	// crypto/ecdh rather than ScalarBaseMult gets the same point without the
+	// deprecated low-level call, and Bytes() hands back SEC 1 uncompressed
+	// form: 0x04, then X and Y at fixed width.
+	scalar := make([]byte, 32)
+	scalar[31] = 43
 
-	pub := &ecdsa.PublicKey{Curve: curve, X: x, Y: y}
+	priv, err := ecdh.P256().NewPrivateKey(scalar)
+	require.NoError(t, err)
+
+	point := priv.PublicKey().Bytes()
+	require.Len(t, point, 65)
+
+	yBits := new(big.Int).SetBytes(point[33:]).BitLen()
+	require.LessOrEqualf(t, yBits, 248,
+		"fixture scalar k=43 no longer produces a short Y coordinate (BitLen=%d); pick a new scalar", yBits)
+
+	pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), point)
+	require.NoError(t, err)
 	j, err := jwkutil.Encode(pub, "", "ES256")
 	require.NoError(t, err)
 
