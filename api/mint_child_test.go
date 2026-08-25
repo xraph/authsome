@@ -53,8 +53,8 @@ func seedMintChildParent(
 // context, mirroring what the auth middleware's strategy resolution sets in
 // production (see setPrincipalContext in middleware/auth.go). The bare
 // forge.Router these tests build via a.RegisterRoutes never runs that
-// middleware — it is only wired in by the Forge Extension system in a real
-// deployment — so every authenticated test in this package injects context
+// middleware: it is only wired in by the Forge Extension system in a real
+// deployment, so every authenticated test in this package injects context
 // directly rather than presenting real credentials over HTTP; asAdmin
 // (unauth_admin_endpoints_test.go) does the same for human callers.
 func asServiceAccount(t *testing.T, req *http.Request, eng *authsome.Engine, svcID id.ServiceAccountID) *http.Request {

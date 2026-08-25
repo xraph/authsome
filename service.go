@@ -2723,7 +2723,34 @@ func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID) (
 	if err != nil {
 		return nil, nil, fmt.Errorf("authsome: impersonate: create session: %w", err)
 	}
+
+	now := time.Now()
+	// Impersonation is a delegation with its own grant kind, so it appears in
+	// the same listing and revocation surface as every other way one principal
+	// comes to act for another. The one thing that stays special is how it is
+	// authorized: Session.AuthzActors returns nil for it, so the admin's own
+	// permissions are not intersected in.
+	expires := now.Add(cfg.TokenTTL)
+	grant := &principal.Delegation{
+		ID:        id.NewDelegationID(),
+		AppID:     u.AppID,
+		Actor:     principal.UserRef(adminID),
+		Subject:   principal.UserRef(targetID),
+		GrantKind: principal.GrantImpersonation,
+		GrantedBy: principal.UserRef(adminID),
+		ExpiresAt: &expires,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := e.store.CreateDelegation(ctx, grant); err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			return nil, nil, fmt.Errorf("authsome: impersonate: an impersonation session for this admin and target is already active and must be stopped first: %w", err)
+		}
+		return nil, nil, fmt.Errorf("authsome: impersonate: record grant: %w", err)
+	}
+
 	sess.SetImpersonatedBy(adminID)
+	sess.DelegationID = grant.ID
 
 	if err := e.store.CreateSession(ctx, sess); err != nil {
 		return nil, nil, fmt.Errorf("authsome: impersonate: store session: %w", err)
@@ -2766,6 +2793,23 @@ func (e *Engine) StopImpersonation(ctx context.Context, sessionID id.SessionID) 
 
 	if err := e.store.DeleteSession(ctx, sessionID); err != nil {
 		return fmt.Errorf("authsome: stop impersonation: delete session: %w", err)
+	}
+
+	if !sess.DelegationID.IsNil() {
+		// Best effort. The session is already gone, so the impersonation has
+		// ended whatever happens here, and failing the call would report an
+		// unstopped impersonation that has in fact stopped.
+		//
+		// Uses the engine method, not the store one directly, so this grant
+		// revocation goes through the same authorization check and hook
+		// emission as every other RevokeDelegation caller. The admin is the
+		// grant's own actor, so the check passes.
+		if err := e.RevokeDelegation(ctx, sess.AppID, principal.UserRef(sess.ImpersonatedBy()), sess.DelegationID); err != nil {
+			e.logger.Warn("authsome: stop impersonation: revoke grant failed",
+				log.String("delegation_id", sess.DelegationID.String()),
+				log.String("error", err.Error()),
+			)
+		}
 	}
 
 	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "stop_impersonation", "session", sessionID.String(), sess.ImpersonatedBy().String(), sess.AppID.String(), "admin", map[string]string{
