@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/xraph/forge"
+
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/session"
 )
@@ -127,4 +130,33 @@ func (p *Plugin) Authorize(ctx context.Context, sess *session.Session, action, r
 		return fmt.Errorf("%w: %s on %s", ErrUserNotPermitted, action, resource)
 	}
 	return nil
+}
+
+// Guard returns middleware enforcing the agent intersection for a route that
+// requires action on resource. It resolves the session the same way
+// middleware/rbac.go does, then delegates the decision entirely to
+// AuthorizeHTTP: a human session (or a request AuthorizeHTTP otherwise has no
+// opinion on) passes through untouched, and every denial gets the response
+// AuthorizeHTTP built for it, headers included, since forge's own error
+// handling would otherwise drop them on the floor.
+func (p *Plugin) Guard(action, resource string) forge.Middleware {
+	return func(next forge.Handler) forge.Handler {
+		return func(ctx forge.Context) error {
+			sess, _ := middleware.SessionFrom(ctx.Context())
+
+			err := p.AuthorizeHTTP(ctx.Context(), sess, action, resource)
+			if err == nil {
+				return next(ctx)
+			}
+
+			var he *httpError
+			if !errors.As(err, &he) {
+				return err
+			}
+			for name, value := range he.headers {
+				ctx.Response().Header().Set(name, value)
+			}
+			return ctx.JSON(he.status, he.ResponseBody())
+		}
+	}
 }
