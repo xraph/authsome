@@ -51,20 +51,17 @@ func (f *receiverFixture) signVerificationSET(t *testing.T, state string) string
 	return signed
 }
 
-// storedEvents returns every received-event row the fixture's memory store
-// holds. The row is the audit trail, and nothing else in the package reads it
-// back.
+// storedEvents returns the received-event rows the fixture's stream has
+// accumulated, newest first. It used to type-assert to *MemoryStore and read
+// its private map, which meant these assertions only ever held for one
+// backend; Store.ListReceivedEvents is the real read path now, so the same
+// checks would hold against any of the four.
 func (f *receiverFixture) storedEvents(t *testing.T) []*ReceivedEvent {
 	t.Helper()
-	mem, ok := f.plugin.store.(*MemoryStore)
-	require.True(t, ok, "the fixture uses the memory store")
-	mem.mu.RLock()
-	defer mem.mu.RUnlock()
-	out := make([]*ReceivedEvent, 0, len(mem.events))
-	for _, e := range mem.events {
-		out = append(out, e)
-	}
-	return out
+	rows, err := f.plugin.store.ListReceivedEvents(context.Background(),
+		f.stream.AppID, ReceivedEventFilter{StreamID: f.stream.ID})
+	require.NoError(t, err)
+	return rows
 }
 
 // withSettings gives the fixture's plugin a real settings manager backed by

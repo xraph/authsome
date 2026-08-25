@@ -379,6 +379,78 @@ func (s *MongoStore) DeleteReceivedEvent(ctx context.Context, eventID id.SSFEven
 	return nil
 }
 
+// GetReceivedEvent loads one audit row by ID and confirms it belongs to
+// appID. The document carries no app_id, so the scope comes from the stream
+// it arrived on.
+func (s *MongoStore) GetReceivedEvent(ctx context.Context, appID id.AppID,
+	eventID id.SSFEventID) (*ReceivedEvent, error) {
+	d := new(receivedEventDoc)
+	if err := s.mdb.Collection(colReceivedEvents).
+		FindOne(ctx, bson.M{"_id": eventID.String()}).Decode(d); err != nil {
+		return nil, mongoErr(err)
+	}
+	e, err := docToReceivedEvent(d)
+	if err != nil {
+		return nil, err
+	}
+	if oerr := streamOwnedBy(ctx, s, appID, e.StreamID); oerr != nil {
+		return nil, oerr
+	}
+	return e, nil
+}
+
+// ListReceivedEvents returns one stream's audit rows newest first. The
+// (stream_id, received_at DESC) index from the create migration is exactly
+// this query's access path.
+func (s *MongoStore) ListReceivedEvents(ctx context.Context, appID id.AppID,
+	f ReceivedEventFilter) ([]*ReceivedEvent, error) {
+	// Ownership before rows: a stream belonging to another tenant answers
+	// ErrNotFound, so a probe cannot tell "not yours" from "yours but quiet".
+	if err := streamOwnedBy(ctx, s, appID, f.StreamID); err != nil {
+		return nil, err
+	}
+	f = f.normalized()
+
+	filter := bson.M{"stream_id": f.StreamID.String()}
+	// Half-open [Since, Until), matching the SQL backends: $gte on the low
+	// end, $lt on the high one.
+	window := bson.M{}
+	if !f.Since.IsZero() {
+		window["$gte"] = f.Since
+	}
+	if !f.Until.IsZero() {
+		window["$lt"] = f.Until
+	}
+	if len(window) > 0 {
+		filter["received_at"] = window
+	}
+
+	// The _id tie-break makes the page deterministic when several rows share
+	// a received_at, which one multi-event SET produces by construction.
+	cur, err := s.mdb.Collection(colReceivedEvents).Find(ctx, filter,
+		options.Find().
+			SetSort(bson.D{{Key: "received_at", Value: -1}, {Key: "_id", Value: -1}}).
+			SetLimit(int64(f.Limit)))
+	if err != nil {
+		return nil, mongoErr(err)
+	}
+	defer cur.Close(ctx) // cursor close
+
+	out := make([]*ReceivedEvent, 0)
+	for cur.Next(ctx) {
+		d := new(receivedEventDoc)
+		if derr := cur.Decode(d); derr != nil {
+			return nil, derr
+		}
+		converted, cerr := docToReceivedEvent(d)
+		if cerr != nil {
+			return nil, cerr
+		}
+		out = append(out, converted)
+	}
+	return out, cur.Err()
+}
+
 func (s *MongoStore) CountEventsSince(ctx context.Context,
 	streamID id.SSFStreamID, since time.Time) (int, error) {
 	// Every recorded event counts, not just the ones that acted -- see
