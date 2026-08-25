@@ -52,6 +52,7 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"ClientSlicesRoundTrip", testClientSlicesRoundTrip},
 		{"UpdateClientPersistsEveryField", testUpdateClientPersistsEveryField},
 		{"UpdateClientOnMissingClient", testUpdateClientOnMissingClient},
+		{"UnlinkedClientHasNilPrincipal", testUnlinkedClientHasNilPrincipal},
 		{"AuthCodeRoundTrip", testAuthCodeRoundTrip},
 		{"ConsumeAuthCodeOnce", testConsumeAuthCodeOnce},
 		{"ConsumeAuthCodeReplay", testConsumeAuthCodeReplay},

@@ -145,6 +145,7 @@ func testUpdateClientPersistsEveryField(t *testing.T, f Fixture) {
 		Scopes:       []string{"openid", "offline_access"},
 		GrantTypes:   []string{"client_credentials"},
 		Resources:    []string{"https://other.example.test"},
+		PrincipalID:  id.NewServiceAccountID(),
 		Public:       !original.Public,
 		CreatedAt:    original.CreatedAt,
 		UpdatedAt:    now(),
@@ -162,6 +163,8 @@ func testUpdateClientPersistsEveryField(t *testing.T, f Fixture) {
 	assert.Equal(t, updated.Resources, got.Resources,
 		"the resource allow-list must survive a full-record update")
 	assert.Equal(t, updated.Public, got.Public)
+	assert.Equal(t, updated.PrincipalID, got.PrincipalID,
+		"the principal link is what lets this client exchange tokens; a full replace must carry it")
 }
 
 // testUpdateClientOnMissingClient pins the failure mode. Updating a client
@@ -172,4 +175,18 @@ func testUpdateClientOnMissingClient(t *testing.T, f Fixture) {
 	require.Error(t, err, "updating a client that was never created must not succeed")
 	assert.True(t, errors.Is(err, oauth2provider.ErrClientNotFound),
 		"a missing client must report ErrClientNotFound, got %v", err)
+}
+
+// testUnlinkedClientHasNilPrincipal pins the unlinked case. The column is
+// NOT NULL with an empty-string default, so a client with no principal must
+// read back as the zero id and not as a parse failure or a phantom link.
+func testUnlinkedClientHasNilPrincipal(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	c := newClient(f.AppID)
+	require.NoError(t, f.Store.CreateClient(ctx, c))
+
+	got, err := f.Store.GetClient(ctx, c.ClientID)
+	require.NoError(t, err)
+	assert.True(t, got.PrincipalID.IsNil(),
+		"a client with no principal link read back as %v", got.PrincipalID)
 }

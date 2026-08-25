@@ -377,6 +377,7 @@ func parsePrincipalID(s string) id.ServiceAccountID {
 	}
 	return pid
 }
+
 // utc normalizes a timestamp to UTC before it reaches a model.
 //
 // The SQLite schema stores timestamps as TEXT, so the driver renders whatever
