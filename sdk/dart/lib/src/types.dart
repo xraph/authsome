@@ -3143,29 +3143,6 @@ class DefinitionGroup {
   String toString() => 'DefinitionGroup(${toJson()})';
 }
 
-class DeleteClientRequest {
-  final String clientID;
-
-  const DeleteClientRequest({
-    required this.clientID,
-  });
-
-  factory DeleteClientRequest.fromJson(Map<String, dynamic> json) {
-    return DeleteClientRequest(
-      clientID: json['ClientID'] as String,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'ClientID': clientID,
-    };
-  }
-
-  @override
-  String toString() => 'DeleteClientRequest(${toJson()})';
-}
-
 class DeleteResponse {
   final String status;
 

@@ -645,14 +645,10 @@ func (c *Client) CreateOAuth2Client(ctx context.Context, req *CreateOAuth2Client
 }
 
 // DeleteOAuth2Client — Delete OAuth2 client
-func (c *Client) DeleteOAuth2Client(ctx context.Context, clientId string, req *DeleteOAuth2ClientRequest) error {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) DeleteOAuth2Client(ctx context.Context, clientId string) error {
 	path := "/v1/admin/oauth/clients/{clientId}"
 	path = strings.Replace(path, "{clientId}", clientId, 1)
-	return c.do(ctx, "DELETE", path, body, nil)
+	return c.do(ctx, "DELETE", path, nil, nil)
 }
 
 // AdminListOrgs — List organizations (admin)

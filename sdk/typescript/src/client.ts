@@ -84,7 +84,6 @@ import type {
   DeclineInvitationRequest,
   Definition,
   DefinitionGroup,
-  DeleteClientRequest,
   DeleteResponse,
   Device,
   DeviceAuthResponse,
@@ -228,7 +227,6 @@ import type {
   WebhookListResponse,
   AdminBulkImportUsersRequest,
   CreateOAuth2ClientRequest,
-  DeleteOAuth2ClientRequest,
   SocialAdminUpsertProviderRequest,
   SsoAdminCreateConnectionRequest,
   SsoAdminUpdateConnectionRequest,
@@ -771,12 +769,12 @@ export class AuthClient {
    * Delete OAuth2 client
    * DELETE /v1/admin/oauth/clients/{clientId}
    */
-  async deleteOAuth2Client(clientId: string, body: DeleteOAuth2ClientRequest): Promise<void> {
+  async deleteOAuth2Client(clientId: string): Promise<void> {
     const path = `/v1/admin/oauth/clients/${clientId}`;
     return this.request<void>(
       'DELETE',
       path,
-      body,
+      undefined,
     );
   }
 

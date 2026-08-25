@@ -2352,17 +2352,6 @@
         ],
         "type": "object"
       },
-      "DeleteClientRequest": {
-        "properties": {
-          "ClientID": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ClientID"
-        ],
-        "type": "object"
-      },
       "DeleteResponse": {
         "properties": {
           "status": {
@@ -9224,7 +9213,6 @@
         "operationId": "deleteOAuth2Client",
         "parameters": [
           {
-            "description": "Path parameter: clientId",
             "in": "path",
             "name": "clientId",
             "required": true,
@@ -9233,17 +9221,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeleteClientRequest"
-              }
-            }
-          },
-          "description": "Request body",
-          "required": true
-        },
         "responses": {
           "400": {
             "content": {
