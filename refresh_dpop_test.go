@@ -162,6 +162,7 @@ func TestRefresh_BoundSessionWrongKeyIsRefused(t *testing.T) {
 	keyA := refreshDPoPKey(t)
 	jktA := refreshDPoPThumbprint(t, keyA)
 	keyB := refreshDPoPKey(t)
+	jktB := refreshDPoPThumbprint(t, keyB)
 
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
@@ -180,7 +181,17 @@ func TestRefresh_BoundSessionWrongKeyIsRefused(t *testing.T) {
 	secutil.AssertAuditEvent(t, ch, "dpop_key_mismatch", func(ev *bridge.AuditEvent) {
 		require.NotNil(t, ev)
 		assert.Equal(t, jktA, ev.Metadata["bound_jkt"])
+		assert.Equal(t, jktB, ev.Metadata["proof_jkt"])
+		assert.Equal(t, bridge.SeverityWarning, ev.Severity)
 	})
+
+	// A wrong-key proof is a deliberate design decision, not something to
+	// wire into the replay cascade: that cascade fires on an old, already-
+	// rotated refresh token reappearing, a different signal from a valid,
+	// never-rotated token accompanied by the wrong key. This session's
+	// refresh token was never presented twice, so nothing should have
+	// tripped the cascade.
+	secutil.AssertNoAuditEvent(t, ch, "refresh_token_replayed")
 }
 
 // TestRefresh_BindingIsInherited is the anti-laundering property this task
@@ -227,15 +238,26 @@ func TestRefresh_BindingIsInherited(t *testing.T) {
 	validProof := refreshDPoPProof(t, keyA)
 	refreshed, err := eng.Refresh(ctx, sess.RefreshToken, refreshOptsForProof(validProof))
 	require.NoError(t, err, "a proof from the bound key must be accepted")
-
-	// The row: a rotation that dropped the binding would hand back an
-	// unbound token, which is exactly the attack this task prevents.
 	assert.Equal(t, jktA, refreshed.DPoPJKT, "the rotated session row must keep the original binding")
+
+	// Chain a second refresh off the freshly-rotated refresh token. Engine.Refresh
+	// fetches the session fresh from the store via GetSessionByRefreshToken at the
+	// top of the call, so this second round trip forces the assertions below to
+	// verify what RotateSession actually persisted, not just the in-memory struct
+	// the first call happened to still be holding. A RotateSession that dropped
+	// DPoPJKT on write would leave this second fetch believing the session is
+	// unbound, which would both skip enforcement and hand back an unbound token,
+	// exactly the laundering path this task exists to close.
+	secondProof := refreshDPoPProof(t, keyA)
+	refreshed2, err := eng.Refresh(ctx, refreshed.RefreshToken, refreshOptsForProof(secondProof))
+	require.NoError(t, err, "a second refresh with a proof from the bound key must also be accepted")
+	assert.Equal(t, jktA, refreshed2.DPoPJKT,
+		"the binding must survive a second rotation read back from the store, not just live in memory")
 
 	// The token: decode the JWT actually handed back and check its own cnf
 	// claim, not the session struct.
-	require.True(t, tokenformat.IsJWT(refreshed.Token), "the refreshed access token must remain a JWT")
-	claims, err := jwtFmt.ValidateAccessToken(refreshed.Token)
+	require.True(t, tokenformat.IsJWT(refreshed2.Token), "the refreshed access token must remain a JWT")
+	claims, err := jwtFmt.ValidateAccessToken(refreshed2.Token)
 	require.NoError(t, err, "the re-minted JWT must validate against the app's signing key")
 	assert.Equal(t, jktA, claims.DPoPJKT,
 		"the re-minted JWT's own cnf.jkt claim must carry the thumbprint, not just the session row")

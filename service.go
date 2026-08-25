@@ -700,12 +700,15 @@ func (e *Engine) verifyRefreshDPoP(ctx context.Context, sess *session.Session, o
 			"ip":         o.IPAddress,
 		}
 		e.hooks.Emit(ctx, &hook.Event{
-			Action:   hook.ActionDPoPKeyMismatch,
-			Resource: hook.ResourceSession,
-			Metadata: md,
+			Action:     hook.ActionDPoPKeyMismatch,
+			Resource:   hook.ResourceSession,
+			ResourceID: sess.ID.String(),
+			ActorID:    sess.UserID.String(),
+			Tenant:     sess.AppID.String(),
+			Metadata:   md,
 		})
 		e.audit(ctx, bridge.SeverityWarning, bridge.OutcomeFailure,
-			"dpop_key_mismatch", "session", sess.ID.String(), "", "", "auth", md)
+			"dpop_key_mismatch", "session", sess.ID.String(), sess.UserID.String(), sess.AppID.String(), "auth", md)
 	}
 	return err
 }
