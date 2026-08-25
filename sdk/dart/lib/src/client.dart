@@ -452,12 +452,11 @@ class AuthClient {
 
   /// Delete OAuth2 client
   /// DELETE /v1/admin/oauth/clients/{clientId}
-  Future<void> deleteOAuth2Client({required String clientId, required DeleteClientRequest body}) async {
+  Future<void> deleteOAuth2Client({required String clientId}) async {
     final path = '/v1/admin/oauth/clients/$clientId';
     await _request(
 'DELETE',
       path,
-      body: body.toJson(),
     );
   }
 

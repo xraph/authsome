@@ -639,10 +639,6 @@ export interface DefinitionGroup {
   namespace: string;
 }
 
-export interface DeleteClientRequest {
-  ClientID: string;
-}
-
 export interface DeleteResponse {
   status: string;
 }
@@ -1669,8 +1665,6 @@ export interface WebhookListResponse {
 export type AdminBulkImportUsersRequest = BulkImportUsersRequest;
 
 export type CreateOAuth2ClientRequest = CreateClientRequest;
-
-export type DeleteOAuth2ClientRequest = DeleteClientRequest;
 
 export type SocialAdminUpsertProviderRequest = AdminUpsertProviderRequest;
 

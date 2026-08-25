@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -629,8 +630,13 @@ type ListClientsResponse struct {
 }
 
 // DeleteClientRequest deletes a client by internal ID.
+//
+// The tag is `path`, not `param`: forge binds path parameters from the former
+// (internal/router/openapi_request_schema.go). Under `param` the field never
+// bound, so request validation rejected every call with "ClientID: field is
+// required" and the handler never ran.
 type DeleteClientRequest struct {
-	ClientID string `param:"clientId"`
+	ClientID string `path:"clientId"`
 }
 
 // DeleteClientResponse is the response after deleting a client.
@@ -1110,9 +1116,13 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 		return nil, forge.BadRequest("redirect_uris required for confidential clients")
 	}
 
-	appID, err := id.ParseAppID(req.AppID)
+	// manage:oauth2_client says the caller may administer clients. It does not
+	// say whose. A client carries redirect URIs and a secret, so minting one
+	// under an app_id the caller supplied would hand them the authorization
+	// code flow of an app they have no claim to.
+	appID, err := plugin.ScopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	// Generate client credentials.
@@ -1197,9 +1207,9 @@ func (p *Plugin) handleListClients(ctx forge.Context, req *ListClientsRequest) (
 		return nil, forge.BadRequest("app_id query parameter required")
 	}
 
-	appID, err := id.ParseAppID(req.AppID)
+	appID, err := plugin.ScopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	clients, err := p.oauth2Store.ListClients(ctx.Context(), appID)
@@ -1221,6 +1231,21 @@ func (p *Plugin) handleDeleteClient(ctx forge.Context, req *DeleteClientRequest)
 	clientID, err := id.ParseOAuth2ClientID(req.ClientID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid client ID")
+	}
+
+	// Load before deleting. The tenancy check needs the row's AppID and
+	// DeleteClient takes only an id, so there is no way to make this one call.
+	// A mismatch answers 404, not 403, so the route cannot be used to probe
+	// for the existence of another app's clients.
+	client, err := p.oauth2Store.GetClientByID(ctx.Context(), clientID)
+	if err != nil {
+		if errors.Is(err, ErrClientNotFound) {
+			return nil, forge.NotFound("oauth2 client not found")
+		}
+		return nil, forge.InternalError(fmt.Errorf("oauth2: load client: %w", err))
+	}
+	if err := plugin.AssertAppScope(ctx, client.AppID); err != nil {
+		return nil, err
 	}
 
 	if err := p.oauth2Store.DeleteClient(ctx.Context(), clientID); err != nil {
