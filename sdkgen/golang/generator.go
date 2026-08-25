@@ -144,7 +144,15 @@ type FieldDef struct {
 type ParamDef struct {
 	Name   string // original name from spec ("orgId")
 	GoName string // exported Go name ("OrgID")
-	Type   string // Go type ("string")
+	Type   string // Go type ("string", "[]string")
+
+	// Repeated marks an array-typed query parameter, which is sent once per
+	// value rather than once in total. Query parameters default to style form
+	// with explode true, so an array in the document means exactly that.
+	Repeated bool
+	// ItemType is the element type behind Repeated ("string"), so the template
+	// knows whether each value needs converting on its way into the query.
+	ItemType string
 }
 
 // OperationDef represents a generated client method.
@@ -262,6 +270,14 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) (*TemplateData, error)
 					Name:   param.Name,
 					GoName: exportedName(param.Name),
 					Type:   goType,
+				}
+				if param.Schema != nil && param.Schema.Type == "array" {
+					pd.Repeated = true
+					pd.ItemType = "string"
+
+					if param.Schema.Items != nil {
+						pd.ItemType = g.schemaToGoType(param.Schema.Items)
+					}
 				}
 				switch param.In {
 				case "path":

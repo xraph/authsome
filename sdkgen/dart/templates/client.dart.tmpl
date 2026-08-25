@@ -74,16 +74,26 @@ class AuthClient {
   Future<{{ if isVoid $op.ResponseType }}void{{ else }}{{ $op.ResponseType }}{{ end }}> {{ $op.Name }}({{ buildDartParams $op }}) async {
     final path = {{ buildDartPath $op.Path $op.PathParams }};
 {{- if hasQueryParams $op.QueryParams }}
-    final queryParams = <String, String>{};
+    // A list of pairs rather than a map, because a repeatable parameter sends
+    // the same name more than once and a Map<String, String> cannot hold that.
+    // Every parameter goes through it, so there is one way a query string gets
+    // built instead of two that have to agree.
+    final queryParams = <MapEntry<String, String>>[];
 {{- range $op.QueryParams }}
-{{- if .Required }}
-    queryParams['{{ .Name }}'] = {{ .DartName }}.toString();
+{{- if .Repeated }}
+    if ({{ .DartName }} != null) {
+      for (final v in {{ .DartName }}) {
+        queryParams.add(MapEntry('{{ .Name }}', v.toString()));
+      }
+    }
+{{- else if .Required }}
+    queryParams.add(MapEntry('{{ .Name }}', {{ .DartName }}.toString()));
 {{- else }}
-    if ({{ .DartName }} != null) queryParams['{{ .Name }}'] = {{ .DartName }}.toString();
+    if ({{ .DartName }} != null) queryParams.add(MapEntry('{{ .Name }}', {{ .DartName }}.toString()));
 {{- end }}
 {{- end }}
     final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        ? '?${queryParams.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
 {{- end }}
 {{ if isVoid $op.ResponseType }}    await _request(
