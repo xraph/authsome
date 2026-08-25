@@ -1082,6 +1082,18 @@ export interface OrganizationStatusResponse {
   status: string;
 }
 
+export interface PasskeyAssertionResponse {
+  authenticatorData: string;
+  clientDataJSON: string;
+  signature: string;
+  userHandle?: string;
+}
+
+export interface PasskeyAttestationResponse {
+  attestationObject: string;
+  clientDataJSON: string;
+}
+
 export interface PasskeyListResponse {
   credentials: CredentialInfo[];
 }
@@ -1726,7 +1738,11 @@ export type CreateOrganizationRequest = CreateOrgRequest;
 
 export type UpdateOrganizationRequest = UpdateOrgRequest;
 
+export type PasskeyLoginFinishRequest = { id: string; rawId: string; response: PasskeyAssertionResponse; type: string };
+
 export type PasskeyRegisterBeginRequest = RegisterBeginRequest;
+
+export type PasskeyRegisterFinishRequest = { id: string; rawId: string; response: PasskeyAttestationResponse; type: string };
 
 export type PhoneAuthStartRequest = StartRequest;
 

@@ -5337,6 +5337,68 @@ class OrganizationStatusResponse {
   String toString() => 'OrganizationStatusResponse(${toJson()})';
 }
 
+class PasskeyAssertionResponse {
+  final String authenticatorData;
+  final String clientDataJSON;
+  final String signature;
+  final String? userHandle;
+
+  const PasskeyAssertionResponse({
+    required this.authenticatorData,
+    required this.clientDataJSON,
+    required this.signature,
+    this.userHandle,
+  });
+
+  factory PasskeyAssertionResponse.fromJson(Map<String, dynamic> json) {
+    return PasskeyAssertionResponse(
+      authenticatorData: json['authenticatorData'] as String,
+      clientDataJSON: json['clientDataJSON'] as String,
+      signature: json['signature'] as String,
+      userHandle: json['userHandle'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'authenticatorData': authenticatorData,
+      'clientDataJSON': clientDataJSON,
+      'signature': signature,
+      if (userHandle != null) 'userHandle': userHandle,
+    };
+  }
+
+  @override
+  String toString() => 'PasskeyAssertionResponse(${toJson()})';
+}
+
+class PasskeyAttestationResponse {
+  final String attestationObject;
+  final String clientDataJSON;
+
+  const PasskeyAttestationResponse({
+    required this.attestationObject,
+    required this.clientDataJSON,
+  });
+
+  factory PasskeyAttestationResponse.fromJson(Map<String, dynamic> json) {
+    return PasskeyAttestationResponse(
+      attestationObject: json['attestationObject'] as String,
+      clientDataJSON: json['clientDataJSON'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'attestationObject': attestationObject,
+      'clientDataJSON': clientDataJSON,
+    };
+  }
+
+  @override
+  String toString() => 'PasskeyAttestationResponse(${toJson()})';
+}
+
 class PasskeyListResponse {
   final List<CredentialInfo> credentials;
 
@@ -8391,4 +8453,74 @@ class Oauth2TokenRequest {
 
   @override
   String toString() => 'Oauth2TokenRequest(${toJson()})';
+}
+
+class PasskeyLoginFinishRequest {
+  final String id;
+  final String rawId;
+  final PasskeyAssertionResponse response;
+  final String type;
+
+  const PasskeyLoginFinishRequest({
+    required this.id,
+    required this.rawId,
+    required this.response,
+    required this.type,
+  });
+
+  factory PasskeyLoginFinishRequest.fromJson(Map<String, dynamic> json) {
+    return PasskeyLoginFinishRequest(
+      id: json['id'] as String,
+      rawId: json['rawId'] as String,
+      response: PasskeyAssertionResponse.fromJson(Map<String, dynamic>.from(json['response'] as Map)),
+      type: json['type'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'rawId': rawId,
+      'response': response.toJson(),
+      'type': type,
+    };
+  }
+
+  @override
+  String toString() => 'PasskeyLoginFinishRequest(${toJson()})';
+}
+
+class PasskeyRegisterFinishRequest {
+  final String id;
+  final String rawId;
+  final PasskeyAttestationResponse response;
+  final String type;
+
+  const PasskeyRegisterFinishRequest({
+    required this.id,
+    required this.rawId,
+    required this.response,
+    required this.type,
+  });
+
+  factory PasskeyRegisterFinishRequest.fromJson(Map<String, dynamic> json) {
+    return PasskeyRegisterFinishRequest(
+      id: json['id'] as String,
+      rawId: json['rawId'] as String,
+      response: PasskeyAttestationResponse.fromJson(Map<String, dynamic>.from(json['response'] as Map)),
+      type: json['type'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'rawId': rawId,
+      'response': response.toJson(),
+      'type': type,
+    };
+  }
+
+  @override
+  String toString() => 'PasskeyRegisterFinishRequest(${toJson()})';
 }

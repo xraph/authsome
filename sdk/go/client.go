@@ -2508,10 +2508,14 @@ func (c *Client) PasskeyLoginBegin(ctx context.Context) (*LoginBeginResponse, er
 }
 
 // PasskeyLoginFinish — Complete passkey login
-func (c *Client) PasskeyLoginFinish(ctx context.Context) (*LoginFinishResponse, error) {
+func (c *Client) PasskeyLoginFinish(ctx context.Context, req *PasskeyLoginFinishRequest) (*LoginFinishResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
 	path := "/v1/passkeys/login/finish"
 	var result LoginFinishResponse
-	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -2532,10 +2536,14 @@ func (c *Client) PasskeyRegisterBegin(ctx context.Context, req *PasskeyRegisterB
 }
 
 // PasskeyRegisterFinish — Complete passkey registration
-func (c *Client) PasskeyRegisterFinish(ctx context.Context) (*RegisterFinishResponse, error) {
+func (c *Client) PasskeyRegisterFinish(ctx context.Context, req *PasskeyRegisterFinishRequest) (*RegisterFinishResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
 	path := "/v1/passkeys/register/finish"
 	var result RegisterFinishResponse
-	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil

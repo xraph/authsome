@@ -1228,6 +1228,20 @@ type OrganizationStatusResponse struct {
 	Status string `json:"status"`
 }
 
+// PasskeyAssertionResponse represents the PasskeyAssertionResponse schema.
+type PasskeyAssertionResponse struct {
+	AuthenticatorData string `json:"authenticator_data"`
+	ClientDataJSON    string `json:"client_data_json"`
+	Signature         string `json:"signature"`
+	UserHandle        string `json:"user_handle,omitempty"`
+}
+
+// PasskeyAttestationResponse represents the PasskeyAttestationResponse schema.
+type PasskeyAttestationResponse struct {
+	AttestationObject string `json:"attestation_object"`
+	ClientDataJSON    string `json:"client_data_json"`
+}
+
 // PasskeyListResponse represents the PasskeyListResponse schema.
 type PasskeyListResponse struct {
 	Credentials []*CredentialInfo `json:"credentials"`
@@ -2129,9 +2143,25 @@ type UpdateOrganizationRequest struct {
 	Name string `json:"name,omitempty"`
 }
 
+// PasskeyLoginFinishRequest is the request body for PasskeyLoginFinish.
+type PasskeyLoginFinishRequest struct {
+	ID       string                    `json:"id"`
+	RawId    string                    `json:"raw_id"`
+	Response *PasskeyAssertionResponse `json:"response"`
+	Type     string                    `json:"type"`
+}
+
 // PasskeyRegisterBeginRequest is the request body for PasskeyRegisterBegin.
 type PasskeyRegisterBeginRequest struct {
 	DisplayName string `json:"display_name,omitempty"`
+}
+
+// PasskeyRegisterFinishRequest is the request body for PasskeyRegisterFinish.
+type PasskeyRegisterFinishRequest struct {
+	ID       string                      `json:"id"`
+	RawId    string                      `json:"raw_id"`
+	Response *PasskeyAttestationResponse `json:"response"`
+	Type     string                      `json:"type"`
 }
 
 // PhoneAuthStartRequest is the request body for PhoneAuthStart.

@@ -145,6 +145,8 @@ import type {
   OrgListResponse,
   Organization,
   OrganizationStatusResponse,
+  PasskeyAssertionResponse,
+  PasskeyAttestationResponse,
   PasskeyListResponse,
   Permission,
   PermissionListResponse,
@@ -252,7 +254,9 @@ import type {
   Oauth2TokenRequest,
   CreateOrganizationRequest,
   UpdateOrganizationRequest,
+  PasskeyLoginFinishRequest,
   PasskeyRegisterBeginRequest,
+  PasskeyRegisterFinishRequest,
   PhoneAuthStartRequest,
   PhoneAuthVerifyRequest,
   RefreshTokensRequest,
@@ -2542,12 +2546,12 @@ export class AuthClient {
    * Complete passkey login
    * POST /v1/passkeys/login/finish
    */
-  async passkeyLoginFinish(): Promise<LoginFinishResponse> {
+  async passkeyLoginFinish(body: PasskeyLoginFinishRequest): Promise<LoginFinishResponse> {
     const path = "/v1/passkeys/login/finish";
     return this.request<LoginFinishResponse>(
       'POST',
       path,
-      undefined,
+      body,
     );
   }
 
@@ -2568,12 +2572,12 @@ export class AuthClient {
    * Complete passkey registration
    * POST /v1/passkeys/register/finish
    */
-  async passkeyRegisterFinish(): Promise<RegisterFinishResponse> {
+  async passkeyRegisterFinish(body: PasskeyRegisterFinishRequest): Promise<RegisterFinishResponse> {
     const path = "/v1/passkeys/register/finish";
     return this.request<RegisterFinishResponse>(
       'POST',
       path,
-      undefined,
+      body,
     );
   }
 

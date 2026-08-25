@@ -3870,6 +3870,43 @@
         ],
         "type": "object"
       },
+      "PasskeyAssertionResponse": {
+        "properties": {
+          "authenticatorData": {
+            "type": "string"
+          },
+          "clientDataJSON": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string"
+          },
+          "userHandle": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientDataJSON",
+          "authenticatorData",
+          "signature"
+        ],
+        "type": "object"
+      },
+      "PasskeyAttestationResponse": {
+        "properties": {
+          "attestationObject": {
+            "type": "string"
+          },
+          "clientDataJSON": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientDataJSON",
+          "attestationObject"
+        ],
+        "type": "object"
+      },
       "PasskeyListResponse": {
         "properties": {
           "credentials": {
@@ -5800,6 +5837,16 @@
         "bearerFormat": "JWT",
         "scheme": "bearer",
         "type": "http"
+      },
+      "session": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "session-cookie": {
+        "in": "cookie",
+        "name": "auth_token",
+        "type": "apiKey"
       }
     }
   },
@@ -32504,6 +32551,37 @@
     "/v1/passkeys/login/finish": {
       "post": {
         "operationId": "passkeyLoginFinish",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "rawId": {
+                    "type": "string"
+                  },
+                  "response": {
+                    "$ref": "#/components/schemas/PasskeyAssertionResponse"
+                  },
+                  "type": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "rawId",
+                  "type",
+                  "response"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "Request body",
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -32842,6 +32920,37 @@
     "/v1/passkeys/register/finish": {
       "post": {
         "operationId": "passkeyRegisterFinish",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "rawId": {
+                    "type": "string"
+                  },
+                  "response": {
+                    "$ref": "#/components/schemas/PasskeyAttestationResponse"
+                  },
+                  "type": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "rawId",
+                  "type",
+                  "response"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "Request body",
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
