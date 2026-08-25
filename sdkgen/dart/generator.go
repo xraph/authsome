@@ -236,7 +236,7 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 			}
 
 			// Determine if auth is required
-			opDef.AuthRequired = g.operationRequiresAuth(pair.op)
+			opDef.AuthRequired = openapi.OperationTakesToken(pair.op, spec.SecuritySchemes())
 
 			// Extract path and query parameters
 			for _, param := range pair.op.Parameters {
@@ -510,18 +510,6 @@ func (g *Generator) responseType(op *openapi.Operation) string {
 		return g.schemaToDartType(ct.Schema)
 	}
 	return "void"
-}
-
-func (g *Generator) operationRequiresAuth(op *openapi.Operation) bool {
-	if len(op.Security) == 0 {
-		return false
-	}
-	for _, sec := range op.Security {
-		if _, ok := sec["bearerAuth"]; ok {
-			return true
-		}
-	}
-	return false
 }
 
 // ── Template Rendering ─────────────────────────────

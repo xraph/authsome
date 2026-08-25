@@ -272,7 +272,7 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) (*TemplateData, error)
 			}
 
 			// Auth required?
-			opDef.AuthRequired = g.operationRequiresAuth(pair.op)
+			opDef.AuthRequired = openapi.OperationTakesToken(pair.op, spec.SecuritySchemes())
 
 			// Body fields
 			if pair.op.RequestBody != nil {
@@ -317,18 +317,6 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) (*TemplateData, error)
 	}
 
 	return data, nil
-}
-
-func (g *Generator) operationRequiresAuth(op *openapi.Operation) bool {
-	if len(op.Security) == 0 {
-		return false
-	}
-	for _, sec := range op.Security {
-		if _, ok := sec["bearerAuth"]; ok {
-			return true
-		}
-	}
-	return false
 }
 
 func (g *Generator) schemaToGoType(s *openapi.Schema) string {
