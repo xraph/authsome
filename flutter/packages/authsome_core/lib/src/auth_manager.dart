@@ -251,7 +251,9 @@ class AuthManager {
 
   /// Resend the email-verification message for [email].
   Future<void> resendVerification(String email) async {
-    await _client.resendEmailVerification(body: {'email': email});
+    await _client.resendEmailVerification(
+      body: ResendVerificationRequest(email: email),
+    );
   }
 
   /// Run a passkey / WebAuthn sign-in ceremony.
@@ -282,9 +284,9 @@ class AuthManager {
     }
     _setState(const AuthLoading());
     try {
-      final rawOptions = await _client.passkeyLoginBeginWithEmail(
-        email: email,
-      );
+      // No email is passed: the endpoint never read it, and the ceremony is
+      // selected by whether this caller is already authenticated.
+      final rawOptions = await _client.passkeyLoginBeginWithEmail();
       final prepared = prepareRequestOptions(rawOptions);
       final credential = await authenticator.authenticate(prepared);
       final res = await _client.passkeyLoginFinishWithCredential(credential);
@@ -301,7 +303,7 @@ class AuthManager {
 
   /// Verify the email-confirmation OTP.
   Future<void> verifyEmail(String token) async {
-    await _client.verifyEmail(body: {'token': token});
+    await _client.verifyEmail(body: VerifyEmailRequest(token: token));
   }
 
   /// Sign out and clear the session.

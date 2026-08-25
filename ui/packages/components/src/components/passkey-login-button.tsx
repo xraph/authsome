@@ -6,6 +6,7 @@ import { useAuth } from "@authsome/ui-react";
 import {
   prepareRequestOptions,
   serializeCredential,
+  type PasskeyLoginFinishRequest,
 } from "@authsome/ui-core";
 import { Fingerprint } from "lucide-react";
 import { cn } from "../lib/utils";
@@ -57,7 +58,7 @@ export function PasskeyLoginButton({
     setIsLoading(true);
 
     try {
-      const { options } = await client.passkeyLoginBegin({});
+      const { options } = await client.passkeyLoginBegin();
 
       const publicKey = prepareRequestOptions(
         options as Record<string, unknown>,
@@ -68,7 +69,12 @@ export function PasskeyLoginButton({
         throw new Error("No credential returned from authenticator");
       }
 
-      await client.passkeyLoginFinish(serializeCredential(credential));
+      // serializeCredential covers both ceremonies, so its response fields are
+      // individually optional. navigator.credentials.get always yields an
+      // assertion, which is what this endpoint requires.
+      await client.passkeyLoginFinish(
+        serializeCredential(credential) as PasskeyLoginFinishRequest,
+      );
       onSuccess?.();
     } catch (err) {
       const error =

@@ -145,11 +145,17 @@ class _UserProfileCardState extends State<UserProfileCard> {
     setState(() => _saving = true);
 
     try {
+      // PATCH /v1/me reads first_name and last_name, never "name", so this
+      // card's edits were being discarded. The field is a single display
+      // name, so split it on the first space.
+      final name = _nameController.text.trim();
+      final split = name.indexOf(' ');
       await auth.client.updateMe(
-        body: {
-          'name': _nameController.text.trim(),
-          'username': _usernameController.text.trim(),
-        },
+        body: UpdateMeRequest(
+          firstName: split == -1 ? name : name.substring(0, split),
+          lastName: split == -1 ? null : name.substring(split + 1).trim(),
+          username: _usernameController.text.trim(),
+        ),
         token: token,
       );
 
