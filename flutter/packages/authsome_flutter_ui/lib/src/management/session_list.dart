@@ -164,11 +164,7 @@ class _SessionListState extends State<SessionList> {
     try {
       final auth = context.auth;
       final token = auth.session?.sessionToken ?? '';
-      await auth.client.revokeSession(
-        sessionId: id,
-        body: RevokeSessionRequest(sessionID: id),
-        token: token,
-      );
+      await auth.client.revokeSession(sessionId: id, token: token);
 
       if (mounted) {
         setState(() {
@@ -224,11 +220,7 @@ class _SessionListState extends State<SessionList> {
       for (final session in otherSessions) {
         final id = _sessionField(session, 'id');
         if (id.isNotEmpty) {
-          await auth.client.revokeSession(
-            sessionId: id,
-            body: RevokeSessionRequest(sessionID: id),
-            token: token,
-          );
+          await auth.client.revokeSession(sessionId: id, token: token);
         }
       }
 

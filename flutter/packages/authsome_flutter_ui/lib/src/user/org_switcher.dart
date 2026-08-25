@@ -161,10 +161,10 @@ class _OrgSwitcherState extends State<OrgSwitcher> {
                       final auth = context.auth;
                       final token = auth.session?.sessionToken ?? '';
                       await auth.client.createOrganization(
-                        body: {
-                          'name': name,
-                          'slug': slug.isNotEmpty ? slug : _slugify(name),
-                        },
+                        body: CreateOrgRequest(
+                          name: name,
+                          slug: slug.isNotEmpty ? slug : _slugify(name),
+                        ),
                         token: token,
                       );
                       if (dialogContext.mounted) {

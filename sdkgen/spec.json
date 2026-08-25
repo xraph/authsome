@@ -2352,6 +2352,64 @@
         ],
         "type": "object"
       },
+      "DelegationListResponse": {
+        "properties": {
+          "delegations": {
+            "items": {
+              "$ref": "#/components/schemas/DelegationResponse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "delegations"
+        ],
+        "type": "object"
+      },
+      "DelegationResponse": {
+        "properties": {
+          "actor": {
+            "description": "kind:id of the principal that may act",
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "expires_at": {
+            "description": "RFC 3339; absent means no expiry",
+            "type": "string"
+          },
+          "grant_kind": {
+            "type": "string"
+          },
+          "granted_by": {
+            "description": "kind:id of who consented to this grant",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "subject": {
+            "description": "kind:id of the principal being acted for",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "actor",
+          "subject",
+          "grant_kind",
+          "granted_by",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "DeleteResponse": {
         "properties": {
           "status": {
@@ -3623,6 +3681,72 @@
         ],
         "type": "object"
       },
+      "MintChildRequest": {
+        "properties": {
+          "name": {
+            "description": "Name for the ephemeral child",
+            "type": "string"
+          },
+          "scopes": {
+            "description": "Scopes for the child; must be a subset of the parent's own scopes",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ttl_seconds": {
+            "description": "How long the child may live, in seconds. Capped by the parent's own expiry, if it has one",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "ttl_seconds"
+        ],
+        "type": "object"
+      },
+      "MintChildResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "key": {
+            "description": "Plaintext API key secret; returned once and never stored",
+            "type": "string"
+          },
+          "key_prefix": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "parent_id",
+          "name",
+          "key",
+          "key_prefix",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "Name": {
         "properties": {
           "familyName": {
@@ -3856,6 +3980,43 @@
         },
         "required": [
           "status"
+        ],
+        "type": "object"
+      },
+      "PasskeyAssertionResponse": {
+        "properties": {
+          "authenticatorData": {
+            "type": "string"
+          },
+          "clientDataJSON": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string"
+          },
+          "userHandle": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientDataJSON",
+          "authenticatorData",
+          "signature"
+        ],
+        "type": "object"
+      },
+      "PasskeyAttestationResponse": {
+        "properties": {
+          "attestationObject": {
+            "type": "string"
+          },
+          "clientDataJSON": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientDataJSON",
+          "attestationObject"
         ],
         "type": "object"
       },
@@ -5104,6 +5265,69 @@
         ],
         "type": "object"
       },
+      "TokenExchangeRequest": {
+        "properties": {
+          "scopes": {
+            "description": "Scopes requested for the exchanged session; each must fall inside the delegation grant and the caller's own scopes, or the exchange is refused",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "subject": {
+            "description": "User ID the exchanged session should act on behalf of",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject"
+        ],
+        "type": "object"
+      },
+      "TokenExchangeResponse": {
+        "properties": {
+          "access_token": {
+            "description": "The exchanged session token",
+            "type": "string"
+          },
+          "actor": {
+            "description": "The principal exercising the delegation",
+            "type": "string"
+          },
+          "expires_in": {
+            "description": "Seconds until the exchanged token expires",
+            "type": "integer"
+          },
+          "issued_token_type": {
+            "description": "RFC 8693 token type URN",
+            "type": "string"
+          },
+          "scopes": {
+            "description": "Scopes granted on the exchanged session",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "subject": {
+            "description": "The principal this session acts for",
+            "type": "string"
+          },
+          "token_type": {
+            "description": "Always \"Bearer\"",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "issued_token_type",
+          "token_type",
+          "expires_in",
+          "subject",
+          "actor"
+        ],
+        "type": "object"
+      },
       "UIMetadata": {
         "properties": {
           "condition": {
@@ -5778,6 +6002,16 @@
         "bearerFormat": "JWT",
         "scheme": "bearer",
         "type": "http"
+      },
+      "session": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "session-cookie": {
+        "in": "cookie",
+        "name": "auth_token",
+        "type": "apiKey"
       }
     }
   },
@@ -28094,6 +28328,12 @@
             "application/x-www-form-urlencoded": {
               "schema": {
                 "properties": {
+                  "client_id": {
+                    "type": "string"
+                  },
+                  "client_secret": {
+                    "type": "string"
+                  },
                   "token": {
                     "type": "string"
                   },
@@ -32460,6 +32700,37 @@
     "/v1/passkeys/login/finish": {
       "post": {
         "operationId": "passkeyLoginFinish",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "rawId": {
+                    "type": "string"
+                  },
+                  "response": {
+                    "$ref": "#/components/schemas/PasskeyAssertionResponse"
+                  },
+                  "type": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "rawId",
+                  "type",
+                  "response"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "Request body",
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -32798,6 +33069,37 @@
     "/v1/passkeys/register/finish": {
       "post": {
         "operationId": "passkeyRegisterFinish",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "rawId": {
+                    "type": "string"
+                  },
+                  "response": {
+                    "$ref": "#/components/schemas/PasskeyAttestationResponse"
+                  },
+                  "type": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "rawId",
+                  "type",
+                  "response"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "Request body",
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -33480,6 +33782,381 @@
         "summary": "Verify phone OTP",
         "tags": [
           "Phone Auth"
+        ]
+      }
+    },
+    "/v1/principals/me/delegations": {
+      "get": {
+        "description": "Lists the live delegation grants naming the calling principal as subject, so it can see the agents holding authority over it. There is no revoke route yet; Engine.RevokeDelegation is reachable only from engine-embedding code today.",
+        "operationId": "listMyDelegations",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DelegationListResponse"
+                }
+              }
+            },
+            "description": "Delegations"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "session-cookie": []
+          },
+          {
+            "api-key": []
+          },
+          {
+            "jwt": []
+          }
+        ],
+        "summary": "List what may act on your behalf",
+        "tags": [
+          "principals"
+        ]
+      }
+    },
+    "/v1/principals/{id}/children": {
+      "post": {
+        "description": "Creates a short-lived principal under the calling parent, with its own credential. Scopes must be a subset of the parent's and the TTL is capped by the parent's expiry.",
+        "operationId": "mintChildPrincipal",
+        "parameters": [
+          {
+            "description": "The calling parent principal's own ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The calling parent principal's own ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MintChildRequest"
+              }
+            }
+          },
+          "description": "Request body",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MintChildResponse"
+                }
+              }
+            },
+            "description": "Child principal"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "session-cookie": []
+          },
+          {
+            "api-key": []
+          },
+          {
+            "jwt": []
+          }
+        ],
+        "summary": "Mint an ephemeral child principal",
+        "tags": [
+          "principals"
         ]
       }
     },
@@ -37706,6 +38383,193 @@
         "summary": "SAML SP metadata",
         "tags": [
           "SSO"
+        ]
+      }
+    },
+    "/v1/token/exchange": {
+      "post": {
+        "description": "Mints a session in which the calling principal acts on behalf of another, against an existing delegation grant (RFC 8693 shaped token exchange). Returns 403 when no live grant matches the caller and the requested subject, or when the requested scopes are not all inside the grant.",
+        "operationId": "exchangeToken",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenExchangeRequest"
+              }
+            }
+          },
+          "description": "Request body",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenExchangeResponse"
+                }
+              }
+            },
+            "description": "Delegated session"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "session-cookie": []
+          },
+          {
+            "api-key": []
+          },
+          {
+            "jwt": []
+          }
+        ],
+        "summary": "Exchange a credential for a delegated session",
+        "tags": [
+          "principals"
         ]
       }
     },

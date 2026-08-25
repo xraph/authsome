@@ -84,6 +84,8 @@ import type {
   DeclineInvitationRequest,
   Definition,
   DefinitionGroup,
+  DelegationListResponse,
+  DelegationResponse,
   DeleteResponse,
   Device,
   DeviceAuthResponse,
@@ -137,6 +139,8 @@ import type {
   MemberListResponse,
   MemberRef,
   Meta,
+  MintChildRequest,
+  MintChildResponse,
   Name,
   OAuth2Client,
   Oauth2providerTokenResponse,
@@ -144,6 +148,8 @@ import type {
   OrgListResponse,
   Organization,
   OrganizationStatusResponse,
+  PasskeyAssertionResponse,
+  PasskeyAttestationResponse,
   PasskeyListResponse,
   Permission,
   PermissionListResponse,
@@ -198,6 +204,8 @@ import type {
   SwitchOrgResponse,
   Team,
   TeamListResponse,
+  TokenExchangeRequest,
+  TokenExchangeResponse,
   UIMetadata,
   UnassignRoleRequest,
   UnlinkAuthMethodResponse,
@@ -249,9 +257,12 @@ import type {
   Oauth2TokenRequest,
   CreateOrganizationRequest,
   UpdateOrganizationRequest,
+  PasskeyLoginFinishRequest,
   PasskeyRegisterBeginRequest,
+  PasskeyRegisterFinishRequest,
   PhoneAuthStartRequest,
   PhoneAuthVerifyRequest,
+  MintChildPrincipalRequest,
   RefreshTokensRequest,
   AuthsomeCreateRoleRequest,
   AuthsomeUpdateRoleRequest,
@@ -260,6 +271,7 @@ import type {
   AuthsomeUnassignRoleRequest,
   SsoExchangeRequest,
   StartSSOLoginByDomainRequest,
+  ExchangeTokenRequest,
   ResendEmailVerificationRequest,
 } from './types';
 
@@ -2539,12 +2551,12 @@ export class AuthClient {
    * Complete passkey login
    * POST /v1/passkeys/login/finish
    */
-  async passkeyLoginFinish(): Promise<LoginFinishResponse> {
+  async passkeyLoginFinish(body: PasskeyLoginFinishRequest): Promise<LoginFinishResponse> {
     const path = "/v1/passkeys/login/finish";
     return this.request<LoginFinishResponse>(
       'POST',
       path,
-      undefined,
+      body,
     );
   }
 
@@ -2565,12 +2577,12 @@ export class AuthClient {
    * Complete passkey registration
    * POST /v1/passkeys/register/finish
    */
-  async passkeyRegisterFinish(): Promise<RegisterFinishResponse> {
+  async passkeyRegisterFinish(body: PasskeyRegisterFinishRequest): Promise<RegisterFinishResponse> {
     const path = "/v1/passkeys/register/finish";
     return this.request<RegisterFinishResponse>(
       'POST',
       path,
-      undefined,
+      body,
     );
   }
 
@@ -2607,6 +2619,32 @@ export class AuthClient {
   async phoneAuthVerify(body: PhoneAuthVerifyRequest): Promise<PhoneVerifyResponse> {
     const path = "/v1/phone/verify";
     return this.request<PhoneVerifyResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * List what may act on your behalf
+   * GET /v1/principals/me/delegations
+   */
+  async listMyDelegations(): Promise<DelegationListResponse> {
+    const path = "/v1/principals/me/delegations";
+    return this.request<DelegationListResponse>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Mint an ephemeral child principal
+   * POST /v1/principals/{id}/children
+   */
+  async mintChildPrincipal(id: string, body: MintChildPrincipalRequest): Promise<MintChildResponse> {
+    const path = `/v1/principals/${id}/children`;
+    return this.request<MintChildResponse>(
       'POST',
       path,
       body,
@@ -2968,6 +3006,19 @@ export class AuthClient {
       'GET',
       path,
       undefined,
+    );
+  }
+
+  /**
+   * Exchange a credential for a delegated session
+   * POST /v1/token/exchange
+   */
+  async exchangeToken(body: ExchangeTokenRequest): Promise<TokenExchangeResponse> {
+    const path = "/v1/token/exchange";
+    return this.request<TokenExchangeResponse>(
+      'POST',
+      path,
+      body,
     );
   }
 

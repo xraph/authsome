@@ -117,7 +117,9 @@ class _ForgotPasswordFormState extends State<ForgotPasswordForm> {
     });
 
     try {
-      await _auth!.client.forgotPassword(body: {'email': email});
+      await _auth!.client.forgotPassword(
+        body: ForgotPasswordRequest(email: email),
+      );
       if (mounted) {
         setState(() {
           _isSent = true;

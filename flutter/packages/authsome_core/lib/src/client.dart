@@ -54,8 +54,13 @@ class AuthSomeClient extends generated.AuthClient {
   // ── Bridge methods for AuthManager ──────────────────
 
   /// Get current user profile using a session token.
-  Future<User> getMeWithToken(String token) {
-    return super.getMe(token: token);
+  ///
+  /// GET /v1/me is described as returning MeResponse, which carries the same
+  /// fields as User under the same JSON names. AuthManager works in User, so
+  /// convert here rather than pushing the generated type through it.
+  Future<User> getMeWithToken(String token) async {
+    final me = await super.getMe(token: token);
+    return User.fromJson(me.toJson());
   }
 
   /// Sign in with email & password.
@@ -63,7 +68,7 @@ class AuthSomeClient extends generated.AuthClient {
     required String email,
     required String password,
   }) {
-    return super.signIn(body: {'email': email, 'password': password});
+    return super.signIn(body: SignInRequest(email: email, password: password));
   }
 
   /// Sign up with email & password.
@@ -72,12 +77,30 @@ class AuthSomeClient extends generated.AuthClient {
     required String password,
     String? name,
   }) {
-    final body = <String, dynamic>{
-      'email': email,
-      'password': password,
-    };
-    if (name != null) body['name'] = name;
-    return super.signUp(body: body);
+    // This used to post a "name" key, which POST /v1/signup has never read:
+    // the body carries first_name and last_name. The value was being dropped
+    // on the floor. Split on the first space so a single display name lands
+    // somewhere rather than nowhere.
+    String? firstName;
+    String? lastName;
+    if (name != null && name.trim().isNotEmpty) {
+      final trimmed = name.trim();
+      final split = trimmed.indexOf(' ');
+      if (split == -1) {
+        firstName = trimmed;
+      } else {
+        firstName = trimmed.substring(0, split);
+        lastName = trimmed.substring(split + 1).trim();
+      }
+    }
+    return super.signUp(
+      body: SignUpRequest(
+        email: email,
+        password: password,
+        firstName: firstName,
+        lastName: lastName,
+      ),
+    );
   }
 
   /// Refresh session tokens using a refresh token string.
@@ -97,7 +120,7 @@ class AuthSomeClient extends generated.AuthClient {
 
   /// Sign out with a token string.
   Future<void> signOutWithToken(String token) async {
-    await super.signOut(body: const SignOutRequest(), token: token);
+    await super.signOut(token: token);
   }
 
   /// MFA challenge — bridge for auth_manager.dart.
@@ -148,12 +171,17 @@ class AuthSomeClient extends generated.AuthClient {
   /// base64url-encoded binary fields) as the server provides it — the
   /// caller is responsible for decoding it via [prepareRequestOptions]
   /// before handing it to a [PasskeyAuthenticator].
+  ///
+  /// [email] is ignored and kept only so existing callers still compile.
+  /// The endpoint never read it: which ceremony to start is decided by whether
+  /// the caller is already authenticated. Honouring an email would also
+  /// disclose whether an address has passkeys registered, which the
+  /// discoverable flow avoids by design.
   Future<Map<String, dynamic>> passkeyLoginBeginWithEmail({
+    @Deprecated('Never read by the server; will be removed in a future release.')
     String? email,
   }) async {
-    final res = await super.passkeyLoginBegin(
-      body: LoginBeginRequest(email: email),
-    );
+    final res = await super.passkeyLoginBegin();
     return Map<String, dynamic>.from(res.options);
   }
 

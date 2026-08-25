@@ -151,16 +151,28 @@ jobs:
       - name: Generate SDKs
         run: make -C sdkgen generate SDK_OUT=../sdk SDK_PLUGINS=social,mfa,apikey,magiclink,sso
 
-      # The step above regenerates into the working tree. Until this check
+      # The same generator also emits embedded-mode clients into the ui and
+      # flutter packages. Those were left out of the check below when it was
+      # first written, and drifted roughly three months behind the routes as a
+      # result — long enough that catching up meant a breaking change to both
+      # packages rather than a regeneration. They are generated and compared
+      # here for the same reason the standalone SDKs are.
+      - name: Generate embedded clients
+        run: |
+          make -C sdkgen generate-ui-core
+          make -C sdkgen generate-flutter-core
+
+      # The steps above regenerate into the working tree. Until this check
       # existed nothing compared the result against what is committed, so a
       # change to a route or a request struct could ship without spec.json or
       # the SDKs ever catching up, and the job still went green. That is how
       # the SSO connection_id field reached main described nowhere in the spec.
       - name: Check the committed SDKs match the generated ones
         run: |
-          if ! git diff --quiet -- sdk/ sdkgen/spec.json; then
-            echo "::error::Generated SDKs differ from what is committed. Run: make -C sdkgen generate SDK_OUT=../sdk SDK_PLUGINS=social,mfa,apikey,magiclink,sso"
-            git diff --stat -- sdk/ sdkgen/spec.json
+          paths="sdk/ sdkgen/spec.json ui/packages/core/src/generated flutter/packages/authsome_core/lib/src/generated"
+          if ! git diff --quiet -- $paths; then
+            echo "::error::Generated SDKs differ from what is committed. Run: make -C sdkgen generate SDK_OUT=../sdk && make -C sdkgen generate-ui-core && make -C sdkgen generate-flutter-core"
+            git diff --stat -- $paths
             git diff -- sdkgen/spec.json | head -200
             exit 1
           fi

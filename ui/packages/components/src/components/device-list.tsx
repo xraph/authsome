@@ -129,7 +129,7 @@ export function DeviceList({
     setActionLoading(device.id);
 
     try {
-      await client.trustDevice(device.id, { DeviceID: device.id }, token);
+      await client.trustDevice(device.id, token);
       await fetchDevices();
       onTrust?.(device.id);
     } catch (err) {
@@ -148,7 +148,7 @@ export function DeviceList({
     setDeleteTarget(null);
 
     try {
-      await client.deleteDevice(device.id, { DeviceID: device.id }, token);
+      await client.deleteDevice(device.id, token);
       await fetchDevices();
       onDelete?.(device.id);
     } catch (err) {

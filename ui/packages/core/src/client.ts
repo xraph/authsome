@@ -12,6 +12,11 @@ import {
   AuthClientError,
   type AuthClientConfig,
 } from "./generated/api-client";
+import type {
+  ApiStatusResponse,
+  ApiTokenResponse,
+  RefreshRequest,
+} from "./generated/api-types";
 import type { ClientConfig } from "./types";
 
 // ── Re-exports ───────────────────────────────────────
@@ -31,13 +36,13 @@ export type {
   KeyListItem,
   Member,
   Organization,
-  TokenResponse,
   User,
 } from "./generated/api-types";
 
 // Backward-compatible type aliases for types renamed in the dynamic spec.
 export type { KeyListItem as APIKey } from "./generated/api-types";
 export type { EnrollResponse as MFAEnrollment } from "./generated/api-types";
+export type { ApiTokenResponse as TokenResponse } from "./generated/api-types";
 
 // Re-export all generated request types
 export type {
@@ -57,13 +62,19 @@ export type {
   UpdateOrganizationRequest,
   CreateInvitationRequest,
   AddMemberRequest,
+  PasskeyLoginFinishRequest,
+  PasskeyRegisterFinishRequest,
   RefreshRequest,
   ResetPasswordRequest,
-  SsoACSRequest,
-  SsoCallbackRequest,
   VerifyEmailRequest,
   VerifyRecoveryCodeRequest,
 } from "./generated/api-types";
+
+// SsoACSRequest and SsoCallbackRequest used to be re-exported here. Both
+// endpoints now carry their input in the path and query string rather than a
+// body, so the spec no longer describes a request schema for either and there
+// is nothing left to alias. Call ssoACS(provider) and ssoCallback(provider,
+// state, code, error) directly.
 
 // Backward-compatible request type aliases
 export type { SendMagicLinkRequest as MagicLinkSendRequest } from "./generated/api-types";
@@ -107,7 +118,7 @@ export class AuthClient extends GeneratedClient {
    * Accepts a raw refresh-token string (used by auth.ts) or the full
    * RefreshRequest body.
    */
-  override async refresh(body: { refresh_token: string } | string): Promise<any> {
+  override async refresh(body: RefreshRequest | string): Promise<ApiTokenResponse> {
     const req = typeof body === "string" ? { refresh_token: body } : body;
     return super.refresh(req);
   }
@@ -115,14 +126,16 @@ export class AuthClient extends GeneratedClient {
   /**
    * Sign out.
    *
-   * Accepts a raw token string (used by auth.ts) or the full
-   * (body, token) pair from the generated client.
+   * Accepts a raw token string (used by auth.ts). The generated client used
+   * to take a (body, token) pair; the endpoint no longer reads a body, so the
+   * two-argument form is still accepted and its first argument ignored rather
+   * than breaking callers outside this package.
    */
-  override async signOut(bodyOrToken: unknown, token?: string): Promise<any> {
+  override async signOut(bodyOrToken: unknown, token?: string): Promise<ApiStatusResponse> {
     if (typeof bodyOrToken === "string") {
-      return super.signOut({} as any, bodyOrToken);
+      return super.signOut(bodyOrToken);
     }
-    return super.signOut(bodyOrToken as any, token!);
+    return super.signOut(token!);
   }
 
   /**

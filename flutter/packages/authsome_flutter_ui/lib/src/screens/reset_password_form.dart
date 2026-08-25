@@ -131,10 +131,14 @@ class _ResetPasswordFormState extends State<ResetPasswordForm> {
     });
 
     try {
-      await _auth!.client.resetPassword(body: {
-        'token': widget.token,
-        'password': password,
-      });
+      // The key here was "password", which the endpoint does not read: the
+      // body field is new_password. The reset silently did nothing.
+      await _auth!.client.resetPassword(
+        body: ResetPasswordRequest(
+          token: widget.token,
+          newPassword: password,
+        ),
+      );
       if (mounted) {
         setState(() {
           _isSuccess = true;

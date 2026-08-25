@@ -725,6 +725,23 @@ type DefinitionGroup struct {
 	Namespace   string        `json:"namespace"`
 }
 
+// DelegationListResponse represents the DelegationListResponse schema.
+type DelegationListResponse struct {
+	Delegations []*DelegationResponse `json:"delegations"`
+}
+
+// DelegationResponse represents the DelegationResponse schema.
+type DelegationResponse struct {
+	Actor     string   `json:"actor"`
+	CreatedAt string   `json:"created_at"`
+	ExpiresAt string   `json:"expires_at,omitempty"`
+	GrantKind string   `json:"grant_kind"`
+	GrantedBy string   `json:"granted_by"`
+	ID        string   `json:"id"`
+	Scopes    []string `json:"scopes,omitempty"`
+	Subject   string   `json:"subject"`
+}
+
 // DeleteResponse represents the DeleteResponse schema.
 type DeleteResponse struct {
 	Status string `json:"status"`
@@ -1151,6 +1168,25 @@ type Meta struct {
 	ResourceType string `json:"resource_type"`
 }
 
+// MintChildRequest represents the MintChildRequest schema.
+type MintChildRequest struct {
+	Name       string   `json:"name"`
+	Scopes     []string `json:"scopes,omitempty"`
+	TtlSeconds int64    `json:"ttl_seconds"`
+}
+
+// MintChildResponse represents the MintChildResponse schema.
+type MintChildResponse struct {
+	CreatedAt string   `json:"created_at"`
+	ExpiresAt string   `json:"expires_at,omitempty"`
+	ID        string   `json:"id"`
+	Key       string   `json:"key"`
+	KeyPrefix string   `json:"key_prefix"`
+	Name      string   `json:"name"`
+	ParentID  string   `json:"parent_id"`
+	Scopes    []string `json:"scopes,omitempty"`
+}
+
 // Name represents the Name schema.
 type Name struct {
 	FamilyName string `json:"family_name"`
@@ -1221,6 +1257,20 @@ type Organization struct {
 // OrganizationStatusResponse represents the OrganizationStatusResponse schema.
 type OrganizationStatusResponse struct {
 	Status string `json:"status"`
+}
+
+// PasskeyAssertionResponse represents the PasskeyAssertionResponse schema.
+type PasskeyAssertionResponse struct {
+	AuthenticatorData string `json:"authenticator_data"`
+	ClientDataJSON    string `json:"client_data_json"`
+	Signature         string `json:"signature"`
+	UserHandle        string `json:"user_handle,omitempty"`
+}
+
+// PasskeyAttestationResponse represents the PasskeyAttestationResponse schema.
+type PasskeyAttestationResponse struct {
+	AttestationObject string `json:"attestation_object"`
+	ClientDataJSON    string `json:"client_data_json"`
 }
 
 // PasskeyListResponse represents the PasskeyListResponse schema.
@@ -1656,6 +1706,23 @@ type TeamListResponse struct {
 	Teams []*Team `json:"teams"`
 }
 
+// TokenExchangeRequest represents the TokenExchangeRequest schema.
+type TokenExchangeRequest struct {
+	Scopes  []string `json:"scopes,omitempty"`
+	Subject string   `json:"subject"`
+}
+
+// TokenExchangeResponse represents the TokenExchangeResponse schema.
+type TokenExchangeResponse struct {
+	AccessToken     string   `json:"access_token"`
+	Actor           string   `json:"actor"`
+	ExpiresIn       int64    `json:"expires_in"`
+	IssuedTokenType string   `json:"issued_token_type"`
+	Scopes          []string `json:"scopes,omitempty"`
+	Subject         string   `json:"subject"`
+	TokenType       string   `json:"token_type"`
+}
+
 // UIMetadata represents the UIMetadata schema.
 type UIMetadata struct {
 	Condition    *VisibilityCondition `json:"condition,omitempty"`
@@ -2084,6 +2151,8 @@ type Oauth2UpdateRegistrationRequest struct {
 
 // Oauth2RevokeRequest is the request body for Oauth2Revoke.
 type Oauth2RevokeRequest struct {
+	ClientID      string `json:"client_id,omitempty"`
+	ClientSecret  string `json:"client_secret,omitempty"`
 	Token         string `json:"token"`
 	TokenTypeHint string `json:"token_type_hint,omitempty"`
 }
@@ -2114,9 +2183,25 @@ type UpdateOrganizationRequest struct {
 	Name string `json:"name,omitempty"`
 }
 
+// PasskeyLoginFinishRequest is the request body for PasskeyLoginFinish.
+type PasskeyLoginFinishRequest struct {
+	ID       string                    `json:"id"`
+	RawId    string                    `json:"raw_id"`
+	Response *PasskeyAssertionResponse `json:"response"`
+	Type     string                    `json:"type"`
+}
+
 // PasskeyRegisterBeginRequest is the request body for PasskeyRegisterBegin.
 type PasskeyRegisterBeginRequest struct {
 	DisplayName string `json:"display_name,omitempty"`
+}
+
+// PasskeyRegisterFinishRequest is the request body for PasskeyRegisterFinish.
+type PasskeyRegisterFinishRequest struct {
+	ID       string                      `json:"id"`
+	RawId    string                      `json:"raw_id"`
+	Response *PasskeyAttestationResponse `json:"response"`
+	Type     string                      `json:"type"`
 }
 
 // PhoneAuthStartRequest is the request body for PhoneAuthStart.
@@ -2130,6 +2215,13 @@ type PhoneAuthVerifyRequest struct {
 	AppID string `json:"app_id,omitempty"`
 	Code  string `json:"code"`
 	Phone string `json:"phone"`
+}
+
+// MintChildPrincipalRequest is the request body for MintChildPrincipal.
+type MintChildPrincipalRequest struct {
+	Name       string   `json:"name"`
+	Scopes     []string `json:"scopes,omitempty"`
+	TtlSeconds int64    `json:"ttl_seconds"`
 }
 
 // RefreshTokensRequest is the request body for RefreshTokens.
@@ -2180,6 +2272,12 @@ type StartSSOLoginByDomainRequest struct {
 	ConnectionID string `json:"connection_id,omitempty"`
 	Email        string `json:"email"`
 	ReturnURL    string `json:"return_url,omitempty"`
+}
+
+// ExchangeTokenRequest is the request body for ExchangeToken.
+type ExchangeTokenRequest struct {
+	Scopes  []string `json:"scopes,omitempty"`
+	Subject string   `json:"subject"`
 }
 
 // ResendEmailVerificationRequest is the request body for ResendEmailVerification.

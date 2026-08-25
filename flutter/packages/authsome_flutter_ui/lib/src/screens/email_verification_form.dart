@@ -100,10 +100,9 @@ class _EmailVerificationFormState extends State<EmailVerificationForm> {
 
     try {
       final auth = context.auth;
-      await auth.client.verifyEmail(body: {
-        'email': widget.email,
-        'code': code,
-      });
+      await auth.client.verifyEmail(
+        body: VerifyEmailRequest(email: widget.email, code: code),
+      );
       if (mounted) {
         setState(() {
           _isSuccess = true;
@@ -130,7 +129,9 @@ class _EmailVerificationFormState extends State<EmailVerificationForm> {
       // Default: trigger a new verification code via the client.
       final auth = context.auth;
       try {
-        await auth.client.verifyEmail(body: {'email': widget.email});
+        await auth.client.verifyEmail(
+          body: VerifyEmailRequest(email: widget.email),
+        );
       } catch (e) {
         if (mounted) {
           setState(() => _error = e.toString());

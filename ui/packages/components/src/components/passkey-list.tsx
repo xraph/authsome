@@ -253,11 +253,7 @@ export function PasskeyList({
     setIsDeleting(true);
 
     try {
-      await client.deletePasskey(
-        deleteTarget.id,
-        { CredentialID: deleteTarget.id },
-        session.session_token,
-      );
+      await client.deletePasskey(deleteTarget.id, session.session_token);
       setCredentials((prev) => prev.filter((c) => c.id !== deleteTarget.id));
       setDeleteTarget(null);
       onDelete?.(deleteTarget.id);
