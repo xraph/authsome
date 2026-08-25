@@ -178,6 +178,7 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
+			installDPoPRequestScope(ctx)
 			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
 			scheme, token := extractCredential(ctx.Request(), cookieName)
 			if token == "" {
@@ -298,6 +299,7 @@ func AuthMiddlewareWithStrategies(
 
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
+			installDPoPRequestScope(ctx)
 			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
 			scheme, token := extractCredential(ctx.Request(), cookieName)
 
@@ -343,6 +345,7 @@ func AuthMiddlewareWithJWT(
 
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
+			installDPoPRequestScope(ctx)
 			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
 			scheme, token := extractCredential(ctx.Request(), cookieName)
 
@@ -813,6 +816,25 @@ func resolveCookieName(resolver CookieNameResolver, ctx context.Context) string 
 // its IP). Kept as a thin alias so existing call sites read naturally.
 func clientIPFromRequest(r *http.Request) string {
 	return ClientIP(r)
+}
+
+// installDPoPRequestScope marks the request context so that every enforcement
+// point on this request shares one record of which proofs already cleared the
+// replay cache.
+//
+// Without it the second point to look at a proof sees the jti the first one
+// recorded and refuses the request as a replay of itself. That is not
+// hypothetical: the global auth middleware and a route's own session auth
+// provider both enforce, and so do the refresh and token endpoints when a
+// bound token rides along in the Authorization header.
+//
+// Requests with no DPoP header carry no proof for anything to re-check, so
+// they skip the allocation and take the path they took before this existed.
+func installDPoPRequestScope(ctx forge.Context) {
+	if ctx.Request().Header.Get("DPoP") == "" {
+		return
+	}
+	ctx.WithContext(dpop.WithRequestScope(ctx.Context()))
 }
 
 // dpopCheck is the outcome of applying RFC 9449 to a presented credential. It

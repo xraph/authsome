@@ -146,13 +146,30 @@ func (v *Validator) Validate(ctx context.Context, p *Proof, e Expectation) error
 		}
 	}
 
+	replayKey := p.JKT + ":" + p.JTI
+
+	// A request that reaches two enforcement points presents one proof to
+	// both. The second consultation would find the jti the first one recorded
+	// and call the request a replay of itself, so a proof already accepted
+	// under this request's scope skips the cache rather than re-recording it.
+	// Only this last step is skipped; every check above has already run again
+	// against whatever expectation this caller passed.
+	scope := requestScopeFrom(ctx)
+	if scope != nil && scope.alreadyAccepted(replayKey) {
+		return nil
+	}
+
 	ttl := v.cfg.IatLeewayPast + v.cfg.IatLeewayFuture
-	seen, err := v.cfg.Replay.Seen(ctx, p.JKT+":"+p.JTI, ttl)
+	seen, err := v.cfg.Replay.Seen(ctx, replayKey, ttl)
 	if err != nil {
 		return fmt.Errorf("dpop: replay check: %w", err)
 	}
 	if seen {
 		return fmt.Errorf("%w: jti %q", ErrReplayed, p.JTI)
+	}
+
+	if scope != nil {
+		scope.accept(replayKey)
 	}
 
 	return nil

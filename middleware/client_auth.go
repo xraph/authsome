@@ -60,6 +60,7 @@ func ClientAuthMiddleware(client *authclient.Client, logger log.Logger, bind ...
 
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
+			installDPoPRequestScope(ctx)
 			scheme, token := extractCredential(ctx.Request(), "")
 			if token == "" {
 				return next(ctx)
