@@ -35,12 +35,6 @@ func (s *MemoryStore) CreateAgent(_ context.Context, a *Agent) error {
 	// whichever one Evaluate sees (approved or blocked) a coin flip. Checked
 	// under the same lock as the write below, so two concurrent registrations
 	// for the same ClientID cannot both pass the check and both land.
-	// A ClientID must resolve to at most one agent: GetAgentByClientID ranges
-	// over this same map and returns the first match, in nondeterministic Go
-	// map-iteration order, so two agents sharing a ClientID would make
-	// whichever one Evaluate sees (approved or blocked) a coin flip. Checked
-	// under the same lock as the write below, so two concurrent registrations
-	// for the same ClientID cannot both pass the check and both land.
 	if a.ClientID != "" {
 		for _, existing := range s.agents {
 			if existing.ClientID == a.ClientID {

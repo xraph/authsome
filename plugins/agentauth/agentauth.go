@@ -116,13 +116,17 @@ type Store interface {
 	UpdateAgentGrant(ctx context.Context, g *AgentGrant) error
 	RevokeAgentGrant(ctx context.Context, grantID id.AgentGrantID) error
 	// RevokeGrantsByUser, RevokeGrantsByUserOrg, RevokeGrantsByOrg and
-	// RevokeGrantsByAgent each return the ids of the grants they actually
-	// revoked, so the caller can sweep the sessions those grants issued
-	// through session.Store.DeleteSessionsByGrant. Without that, a bulk
-	// revocation (banning a user, a member leaving an org, an org being
-	// deleted, an agent being blocked) would revoke the grant but leave any
-	// session it already minted live — carrying the delegating human's
-	// UserID — until the session separately expired.
+	// RevokeGrantsByAgent each return the ids of the grants matched by their
+	// query (not necessarily newly revoked — an already-revoked grant that
+	// still matches is included too), so the caller can sweep the sessions
+	// those grants issued through session.Store.DeleteSessionsByGrant.
+	// Sweeping an already-revoked grant's sessions again is harmless and, if
+	// anything, safer: the alternative of narrowing to only-just-revoked ids
+	// risks under-sweeping. Without the sweep at all, a bulk revocation
+	// (banning a user, a member leaving an org, an org being deleted, an
+	// agent being blocked) would revoke the grant but leave any session it
+	// already minted live — carrying the delegating human's UserID — until
+	// the session separately expired.
 	RevokeGrantsByUser(ctx context.Context, userID id.UserID) ([]id.AgentGrantID, error)
 	RevokeGrantsByUserOrg(ctx context.Context, userID id.UserID, orgID id.OrgID) ([]id.AgentGrantID, error)
 	RevokeGrantsByOrg(ctx context.Context, orgID id.OrgID) ([]id.AgentGrantID, error)

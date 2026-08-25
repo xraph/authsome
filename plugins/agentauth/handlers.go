@@ -70,7 +70,7 @@ func (p *Plugin) RevokeMyGrant(ctx context.Context, userID id.UserID, grantID id
 		return forge.NotFound("grant not found")
 	}
 	if err != nil {
-		return fmt.Errorf("agentauth: load grant: %w", err)
+		return forge.InternalError(fmt.Errorf("agentauth: load grant: %w", err))
 	}
 	if g.UserID.String() != userID.String() {
 		// Same response as a missing grant, so the endpoint does not confirm
@@ -169,7 +169,7 @@ func (p *Plugin) handleListMyGrants(ctx forge.Context, _ *apitypes.Empty) (*List
 	if err != nil {
 		return nil, err
 	}
-	return resp, ctx.JSON(http.StatusOK, resp)
+	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
 // RevokeMyGrantRequest binds the path parameter for DELETE /me/agents/:id.
@@ -190,7 +190,7 @@ func (p *Plugin) handleRevokeMyGrant(ctx forge.Context, req *RevokeMyGrantReques
 		return nil, err
 	}
 	resp := &StatusResponse{Status: "revoked"}
-	return resp, ctx.JSON(http.StatusOK, resp)
+	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
 // callerAppID resolves the authenticated caller's app from context. The
@@ -230,24 +230,43 @@ func requestAppMatchesCaller(ctx context.Context, reqAppID string) error {
 	return nil
 }
 
-// callerOrgOrReject resolves an optional org_id request field against the
-// caller's own org, taken from context (see callerAppID for why the request
-// body cannot be trusted on its own). An empty reqOrgID means the caller did
-// not scope the request to an org, which is valid for an app-global agent;
-// callerOrgOrReject then returns the zero org rather than rejecting.
+// callerOrgOrReject resolves the org an admin request may act within. The
+// caller's own org, when the caller has one, is a FLOOR — not an optional
+// filter a request can opt out of. Treating an omitted org_id as "no org
+// scope" let an org-scoped admin holding read/write on agent enumerate every
+// org's agents (ListAgents skips the org filter on a nil org) or revoke
+// every org's grants on an agent (RevokeGrantsByAgent does the same) just by
+// leaving org_id out of the request — the same class of cross-tenant hole
+// requestAppMatchesCaller closes for app, one notch smaller: same-app
+// cross-org rather than cross-app.
+//
+// So: when the caller has a real org in context, that org is always what is
+// used, regardless of whether reqOrgID was supplied — an empty reqOrgID no
+// longer means "go wider", it means "use my own org". A non-empty reqOrgID
+// still must agree with it. Only a caller with no org context at all (a
+// genuinely app-scoped session) can reach the app-wide zero org, and only
+// when it doesn't try to name one.
 func callerOrgOrReject(ctx context.Context, reqOrgID string) (id.OrgID, error) {
+	callerOrgID, hasOrg := middleware.OrgIDFrom(ctx)
+	hasOrg = hasOrg && !callerOrgID.IsNil()
+
+	if hasOrg {
+		if reqOrgID != "" {
+			parsed, err := id.ParseOrgID(reqOrgID)
+			if err != nil {
+				return id.Nil, forge.BadRequest("invalid org_id")
+			}
+			if parsed.String() != callerOrgID.String() {
+				return id.Nil, forge.Forbidden("org_id does not match the authenticated organization")
+			}
+		}
+		return callerOrgID, nil
+	}
+
 	if reqOrgID == "" {
 		return id.Nil, nil
 	}
-	parsed, err := id.ParseOrgID(reqOrgID)
-	if err != nil {
-		return id.Nil, forge.BadRequest("invalid org_id")
-	}
-	callerOrgID, hasOrg := middleware.OrgIDFrom(ctx)
-	if !hasOrg || parsed.String() != callerOrgID.String() {
-		return id.Nil, forge.Forbidden("org_id does not match the authenticated organization")
-	}
-	return parsed, nil
+	return id.Nil, forge.Forbidden("org_id does not match the authenticated organization")
 }
 
 // requiredCallerOrgID is callerOrgOrReject for an endpoint where an org is
@@ -307,7 +326,7 @@ func (p *Plugin) handleListAgents(ctx forge.Context, req *ListAgentsRequest) (*L
 		agents = []*Agent{}
 	}
 	resp := &ListAgentsResponse{Agents: agents}
-	return resp, ctx.JSON(http.StatusOK, resp)
+	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
 // RegisterAgentRequest binds the body for POST /admin/agents. AppID and OrgID
@@ -347,7 +366,7 @@ func (p *Plugin) handleRegisterAgent(ctx forge.Context, req *RegisterAgentReques
 	if err != nil {
 		return nil, err
 	}
-	return a, ctx.JSON(http.StatusCreated, a)
+	return nil, ctx.JSON(http.StatusCreated, a)
 }
 
 // SetAgentStatusRequest binds the path and body for PATCH /admin/agents/:id/status.
@@ -398,7 +417,7 @@ func (p *Plugin) handleSetAgentStatus(ctx forge.Context, req *SetAgentStatusRequ
 		return nil, err
 	}
 	resp := &StatusResponse{Status: "updated"}
-	return resp, ctx.JSON(http.StatusOK, resp)
+	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
 // PutOrgPolicyRequest binds the body for PUT /admin/agents/policy. OrgID is
@@ -443,5 +462,5 @@ func (p *Plugin) handlePutOrgPolicy(ctx forge.Context, req *PutOrgPolicyRequest)
 	if err := p.store.PutOrgPolicy(ctx.Context(), policy); err != nil {
 		return nil, forge.InternalError(fmt.Errorf("agentauth: put org policy: %w", err))
 	}
-	return policy, ctx.JSON(http.StatusOK, policy)
+	return nil, ctx.JSON(http.StatusOK, policy)
 }

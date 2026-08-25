@@ -325,6 +325,168 @@ func TestHandleSetAgentStatus_RefusesCrossAppTarget(t *testing.T) {
 }
 
 // ──────────────────────────────────────────────────
+// ITEM 1 (fix round 2) — the caller's own org must be a FLOOR, not an
+// optional filter a request can opt out of by leaving org_id out. Before
+// this fix, callerOrgOrReject treated an omitted org_id as "no org scope"
+// and returned the zero org regardless of whether the caller actually had
+// one — which MemoryStore.ListAgents and RevokeGrantsByAgent both read as
+// "app-wide": an org-scoped admin could enumerate every org's agents, or
+// revoke every org's grants on an agent, just by leaving org_id out.
+// ──────────────────────────────────────────────────
+
+// listedAgentIDs decodes a GET /v1/admin/agents response into just the ids,
+// which is all these tests need to assert against.
+func listedAgentIDs(t *testing.T, w *httptest.ResponseRecorder) []string {
+	t.Helper()
+	var resp struct {
+		Agents []struct {
+			ID string `json:"id"`
+		} `json:"agents"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	ids := make([]string, len(resp.Agents))
+	for i, a := range resp.Agents {
+		ids[i] = a.ID
+	}
+	return ids
+}
+
+func TestHandleListAgents_OrgScopedAdminOmittingOrgIDSeesOnlyOwnOrg(t *testing.T) {
+	agentStore, mux := newRoutesTestPlugin(t)
+	appID, myOrg, otherOrg := id.NewAppID(), id.NewOrgID(), id.NewOrgID()
+	mine := &agentauth.Agent{
+		ID: id.NewAgentID(), AppID: appID, OrgID: myOrg, ClientID: "client_org_floor_mine",
+		Name: "Mine", Origin: agentauth.OriginOrgRegistered, Status: agentauth.StatusApproved,
+	}
+	theirs := &agentauth.Agent{
+		ID: id.NewAgentID(), AppID: appID, OrgID: otherOrg, ClientID: "client_org_floor_theirs",
+		Name: "Theirs", Origin: agentauth.OriginOrgRegistered, Status: agentauth.StatusApproved,
+	}
+	require.NoError(t, agentStore.CreateAgent(context.Background(), mine))
+	require.NoError(t, agentStore.CreateAgent(context.Background(), theirs))
+
+	// Org-scoped admin (context carries myOrg), org_id left out of the query.
+	ctx := adminCtx(id.NewUserID(), appID, myOrg)
+	w := doRequest(ctx, t, mux, http.MethodGet, "/v1/admin/agents", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	ids := listedAgentIDs(t, w)
+	assert.Contains(t, ids, mine.ID.String(), "the caller's own org's agent must still be visible")
+	assert.NotContains(t, ids, theirs.ID.String(),
+		"omitting org_id must not widen an org-scoped admin's reach to another org in the same app")
+}
+
+func TestHandleListAgents_AdminWithNoOrgContextSeesAppWide(t *testing.T) {
+	agentStore, mux := newRoutesTestPlugin(t)
+	appID, orgA, orgB := id.NewAppID(), id.NewOrgID(), id.NewOrgID()
+	a1 := &agentauth.Agent{
+		ID: id.NewAgentID(), AppID: appID, OrgID: orgA, ClientID: "client_appwide_list_a",
+		Name: "A", Origin: agentauth.OriginOrgRegistered, Status: agentauth.StatusApproved,
+	}
+	a2 := &agentauth.Agent{
+		ID: id.NewAgentID(), AppID: appID, OrgID: orgB, ClientID: "client_appwide_list_b",
+		Name: "B", Origin: agentauth.OriginOrgRegistered, Status: agentauth.StatusApproved,
+	}
+	require.NoError(t, agentStore.CreateAgent(context.Background(), a1))
+	require.NoError(t, agentStore.CreateAgent(context.Background(), a2))
+
+	// A genuinely app-scoped caller: no org in context at all, not merely an
+	// omitted org_id on an org-scoped session.
+	ctx := adminCtx(id.NewUserID(), appID, id.OrgID{})
+	w := doRequest(ctx, t, mux, http.MethodGet, "/v1/admin/agents", nil)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	ids := listedAgentIDs(t, w)
+	assert.Contains(t, ids, a1.ID.String(), "a caller with no org context at all must still reach the app-wide listing")
+	assert.Contains(t, ids, a2.ID.String())
+}
+
+func TestHandleSetAgentStatus_OrgScopedAdminOmittingOrgIDOnlyRevokesOwnOrgsGrants(t *testing.T) {
+	agentStore, mux := newRoutesTestPlugin(t)
+	appID, myOrg, otherOrg := id.NewAppID(), id.NewOrgID(), id.NewOrgID()
+	agent := &agentauth.Agent{
+		ID: id.NewAgentID(), AppID: appID, ClientID: "client_org_floor_status",
+		Name: "Shared Agent", Origin: agentauth.OriginOrgRegistered, Status: agentauth.StatusApproved,
+	}
+	require.NoError(t, agentStore.CreateAgent(context.Background(), agent))
+	inMyOrg := &agentauth.AgentGrant{
+		ID: id.NewAgentGrantID(), AppID: appID, AgentID: agent.ID, UserID: id.NewUserID(),
+		OrgID: myOrg, Scopes: []string{"invoices:read"}, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	inOtherOrg := &agentauth.AgentGrant{
+		ID: id.NewAgentGrantID(), AppID: appID, AgentID: agent.ID, UserID: id.NewUserID(),
+		OrgID: otherOrg, Scopes: []string{"invoices:read"}, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	require.NoError(t, agentStore.CreateAgentGrant(context.Background(), inMyOrg))
+	require.NoError(t, agentStore.CreateAgentGrant(context.Background(), inOtherOrg))
+
+	// Org-scoped admin, org_id left out of the body.
+	ctx := adminCtx(id.NewUserID(), appID, myOrg)
+	w := doRequest(ctx, t, mux, http.MethodPatch, "/v1/admin/agents/"+agent.ID.String()+"/status",
+		map[string]any{"status": "blocked"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	mine, err := agentStore.GetAgentGrant(context.Background(), inMyOrg.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, mine.RevokedAt, "the caller's own org's grant on this agent must be revoked")
+
+	other, err := agentStore.GetAgentGrant(context.Background(), inOtherOrg.ID)
+	require.NoError(t, err)
+	assert.Nil(t, other.RevokedAt,
+		"omitting org_id must not let an org-scoped admin revoke another org's grants on the same agent — this is the destructive half of the same hole")
+}
+
+func TestHandleSetAgentStatus_AdminWithNoOrgContextRevokesAppWide(t *testing.T) {
+	agentStore, mux := newRoutesTestPlugin(t)
+	appID, orgA, orgB := id.NewAppID(), id.NewOrgID(), id.NewOrgID()
+	agent := &agentauth.Agent{
+		ID: id.NewAgentID(), AppID: appID, ClientID: "client_appwide_status",
+		Name: "Shared Agent", Origin: agentauth.OriginOrgRegistered, Status: agentauth.StatusApproved,
+	}
+	require.NoError(t, agentStore.CreateAgent(context.Background(), agent))
+	inOrgA := &agentauth.AgentGrant{
+		ID: id.NewAgentGrantID(), AppID: appID, AgentID: agent.ID, UserID: id.NewUserID(),
+		OrgID: orgA, Scopes: []string{"invoices:read"}, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	inOrgB := &agentauth.AgentGrant{
+		ID: id.NewAgentGrantID(), AppID: appID, AgentID: agent.ID, UserID: id.NewUserID(),
+		OrgID: orgB, Scopes: []string{"invoices:read"}, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	require.NoError(t, agentStore.CreateAgentGrant(context.Background(), inOrgA))
+	require.NoError(t, agentStore.CreateAgentGrant(context.Background(), inOrgB))
+
+	// A genuinely app-scoped caller: no org in context at all.
+	ctx := adminCtx(id.NewUserID(), appID, id.OrgID{})
+	w := doRequest(ctx, t, mux, http.MethodPatch, "/v1/admin/agents/"+agent.ID.String()+"/status",
+		map[string]any{"status": "blocked"})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	a, err := agentStore.GetAgentGrant(context.Background(), inOrgA.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, a.RevokedAt, "a caller with no org context at all must still be able to perform the app-wide block")
+	b, err := agentStore.GetAgentGrant(context.Background(), inOrgB.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, b.RevokedAt)
+}
+
+// TestHandleListAgents_OrgScopedAdminCannotNameAnotherOrgEither is the write
+// side of the same helper: even with an explicit org_id in the request, an
+// org-scoped admin still cannot escape their own org by naming a different
+// one outright (this half was already covered by the original C3 fix; kept
+// here as a companion to the omitted-org_id cases above so the full
+// behavior of callerOrgOrReject's floor is documented in one place).
+func TestHandleListAgents_OrgScopedAdminCannotNameAnotherOrgEither(t *testing.T) {
+	_, mux := newRoutesTestPlugin(t)
+	appID, myOrg, otherOrg := id.NewAppID(), id.NewOrgID(), id.NewOrgID()
+	ctx := adminCtx(id.NewUserID(), appID, myOrg)
+
+	w := doRequest(ctx, t, mux, http.MethodGet, "/v1/admin/agents?org_id="+otherOrg.String(), nil)
+
+	assert.Equal(t, http.StatusForbidden, w.Code,
+		"an org-scoped admin must not be able to name a different org's id either")
+}
+
+// ──────────────────────────────────────────────────
 // I1 — the admin handlers must fail closed on their own, since SessionGuard
 // and AdminGuard both no-op when the engine has no auth registry / RBAC
 // (exactly what stubEngine models here, matching a real deployment missing
