@@ -767,9 +767,14 @@ export interface HealthResponse {
   status: string;
 }
 
+export interface IntrospectConfirmation {
+  jkt: string;
+}
+
 export interface IntrospectResponse {
   active: boolean;
   app_id?: string;
+  cnf?: IntrospectConfirmation;
   env_id?: string;
   expires_at?: string;
   org_id?: string;

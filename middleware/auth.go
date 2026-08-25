@@ -815,6 +815,129 @@ func clientIPFromRequest(r *http.Request) string {
 	return ClientIP(r)
 }
 
+// dpopCheck is the outcome of applying RFC 9449 to a presented credential. It
+// makes no HTTP response decisions, so the middleware (which can answer with a
+// challenge) and the forge auth provider (which only gets to say yes or no)
+// run one rule instead of two that drift apart.
+type dpopCheck struct {
+	ok    bool
+	proof *dpop.Proof
+
+	// code is the RFC 9449 error code for the challenge. Empty means refuse
+	// without a challenge: the server could not check the binding at all, so
+	// there is no proof the client could retry with.
+	code string
+
+	// action and reason describe the audit record. action is empty when
+	// there is nothing worth auditing.
+	action string
+	reason string
+
+	// nonceRequired carries what the app's nonce policy said, so a caller
+	// that rotates the nonce does not resolve the setting a second time.
+	nonceRequired bool
+}
+
+// checkDPoP runs the RFC 9449 checks for a credential already known to be
+// bound. Callers deal with the unbound case before getting here.
+func checkDPoP(
+	ctx context.Context,
+	cfg SessionBindingConfig,
+	r *http.Request,
+	boundJKT, scheme, token, appID string,
+	logger log.Logger,
+) dpopCheck {
+	if cfg.DPoPValidator == nil {
+		// A bound token with no validator configured cannot be checked. Refuse
+		// rather than admit it: failing closed here turns a misconfiguration
+		// into an outage, and failing open turns it into a silent bypass.
+		logger.Error("auth middleware: DPoP-bound token but no validator configured")
+		return dpopCheck{}
+	}
+
+	if scheme != schemeDPoP {
+		logger.Warn("auth middleware: DPoP-bound token presented under the wrong scheme",
+			log.String("scheme", scheme),
+		)
+		return dpopCheck{code: dpopErrInvalidToken, action: hook.ActionDPoPProofInvalid, reason: "wrong_scheme"}
+	}
+
+	raw := r.Header.Get("DPoP")
+	if raw == "" {
+		return dpopCheck{code: dpopErrInvalidToken, action: hook.ActionDPoPProofInvalid, reason: "missing_proof"}
+	}
+
+	proof, err := dpop.Parse(raw)
+	if err != nil {
+		logger.Warn("auth middleware: DPoP proof rejected",
+			log.String("error", err.Error()),
+		)
+		return dpopCheck{code: dpopErrInvalidToken, action: hook.ActionDPoPProofInvalid, reason: "parse_failed"}
+	}
+
+	nonceRequired := cfg.DPoPNonceRequired != nil && cfg.DPoPNonceRequired(ctx, appID)
+
+	err = cfg.DPoPValidator.Validate(ctx, proof, dpop.Expectation{
+		Method:        r.Method,
+		URL:           RequestURL(r),
+		AccessToken:   token,
+		ExpectedJKT:   boundJKT,
+		NonceRequired: nonceRequired,
+	})
+	switch {
+	case err == nil:
+		return dpopCheck{ok: true, proof: proof, nonceRequired: nonceRequired}
+
+	case errors.Is(err, dpop.ErrNonceRequired), errors.Is(err, dpop.ErrNonceMismatch):
+		return dpopCheck{proof: proof, code: dpopErrUseNonce}
+
+	case errors.Is(err, dpop.ErrKeyMismatch):
+		// A structurally valid proof for the wrong key has no innocent
+		// explanation the way a changed IP does, so it is logged apart from
+		// ordinary client breakage.
+		logger.Warn("auth middleware: DPoP key mismatch",
+			log.String("bound_jkt", boundJKT),
+			log.String("proof_jkt", proof.JKT),
+		)
+		return dpopCheck{proof: proof, code: dpopErrInvalidToken, action: hook.ActionDPoPProofInvalid, reason: "key_mismatch"}
+
+	case errors.Is(err, dpop.ErrReplayed):
+		// Rare, and interesting when it happens: it means somebody captured a
+		// proof and the token it was minted for.
+		logger.Warn("auth middleware: DPoP proof replayed",
+			log.String("proof_jkt", proof.JKT),
+		)
+		return dpopCheck{proof: proof, code: dpopErrInvalidToken, action: hook.ActionDPoPProofReplayed}
+
+	default:
+		logger.Warn("auth middleware: DPoP validation failed",
+			log.String("error", err.Error()),
+		)
+		return dpopCheck{proof: proof, code: dpopErrInvalidToken, action: hook.ActionDPoPProofInvalid, reason: "validation_failed"}
+	}
+}
+
+// RFC 9449 error codes carried in a WWW-Authenticate challenge.
+const (
+	dpopErrInvalidToken = "invalid_token"
+	dpopErrUseNonce     = "use_dpop_nonce"
+)
+
+// auditDPoP records a DPoP failure. session_id and app_id identify who tripped
+// the rule; the raw proof and the token itself never go in, since metadata
+// routinely ends up in longer-lived audit storage than the request that
+// produced it.
+func auditDPoP(ctx context.Context, cfg SessionBindingConfig, result dpopCheck, appID, sessionID string) {
+	if cfg.DPoPAudit == nil || result.action == "" {
+		return
+	}
+	md := map[string]string{"session_id": sessionID, "app_id": appID}
+	if result.reason != "" {
+		md["reason"] = result.reason
+	}
+	cfg.DPoPAudit(ctx, result.action, md)
+}
+
 // enforceDPoP applies RFC 9449 to a resolved credential.
 //
 // Enforcement follows the token, not the route and not the configuration. A
@@ -832,100 +955,67 @@ func enforceDPoP(
 		return nil // Unbound. Nothing to enforce.
 	}
 
-	// audit records a DPoP failure. session_id and app_id identify who
-	// tripped the rule; the raw proof and the token itself never go in,
-	// since metadata routinely ends up in longer-lived audit storage than
-	// the request that produced it.
-	audit := func(action string, reason string) {
-		if cfg.DPoPAudit == nil {
-			return
-		}
-		md := map[string]string{"session_id": sessionID, "app_id": appID}
-		if reason != "" {
-			md["reason"] = reason
-		}
-		cfg.DPoPAudit(ctx.Context(), action, md)
-	}
+	result := checkDPoP(ctx.Context(), cfg, ctx.Request(), boundJKT, scheme, token, appID, logger)
+	auditDPoP(ctx.Context(), cfg, result, appID, sessionID)
 
-	if cfg.DPoPValidator == nil {
-		// A bound token with no validator configured cannot be checked. Refuse
-		// rather than admit it: failing closed here turns a misconfiguration
-		// into an outage, and failing open turns it into a silent bypass.
-		logger.Error("auth middleware: DPoP-bound token but no validator configured")
-		return forge.Unauthorized("token requires proof of possession")
-	}
-
-	if scheme != schemeDPoP {
-		logger.Warn("auth middleware: DPoP-bound token presented under the wrong scheme",
-			log.String("scheme", scheme),
-		)
-		audit(hook.ActionDPoPProofInvalid, "wrong_scheme")
-		return dpopChallenge(ctx, cfg, "", "invalid_token")
-	}
-
-	raw := ctx.Request().Header.Get("DPoP")
-	if raw == "" {
-		audit(hook.ActionDPoPProofInvalid, "missing_proof")
-		return dpopChallenge(ctx, cfg, "", "invalid_token")
-	}
-
-	proof, err := dpop.Parse(raw)
-	if err != nil {
-		logger.Warn("auth middleware: DPoP proof rejected",
-			log.String("error", err.Error()),
-		)
-		audit(hook.ActionDPoPProofInvalid, "parse_failed")
-		return dpopChallenge(ctx, cfg, "", "invalid_token")
-	}
-
-	nonceRequired := cfg.DPoPNonceRequired != nil && cfg.DPoPNonceRequired(ctx.Context(), appID)
-
-	err = cfg.DPoPValidator.Validate(ctx.Context(), proof, dpop.Expectation{
-		Method:        ctx.Request().Method,
-		URL:           RequestURL(ctx.Request()),
-		AccessToken:   token,
-		ExpectedJKT:   boundJKT,
-		NonceRequired: nonceRequired,
-	})
 	switch {
-	case err == nil:
+	case result.ok:
 		// Rotate the nonce before the client's current one expires, so a
 		// long-lived client never has to eat a challenge round trip.
-		if nonceRequired && cfg.DPoPNonceSigner != nil && cfg.DPoPNonceSigner.NeedsRefresh(proof.Nonce) {
-			ctx.Response().Header().Set("DPoP-Nonce", cfg.DPoPNonceSigner.Issue(proof.JKT))
+		if result.nonceRequired && cfg.DPoPNonceSigner != nil && cfg.DPoPNonceSigner.NeedsRefresh(result.proof.Nonce) {
+			ctx.Response().Header().Set("DPoP-Nonce", cfg.DPoPNonceSigner.Issue(result.proof.JKT))
 		}
 		return nil
 
-	case errors.Is(err, dpop.ErrNonceRequired), errors.Is(err, dpop.ErrNonceMismatch):
-		return dpopChallenge(ctx, cfg, proof.JKT, "use_dpop_nonce")
+	case result.code == "":
+		// The binding could not be checked at all, so there is no retry to
+		// point the client at and no challenge to write.
+		return forge.Unauthorized("token requires proof of possession")
 
-	case errors.Is(err, dpop.ErrKeyMismatch):
-		// A structurally valid proof for the wrong key has no innocent
-		// explanation the way a changed IP does, so it is logged apart from
-		// ordinary client breakage.
-		logger.Warn("auth middleware: DPoP key mismatch",
-			log.String("bound_jkt", boundJKT),
-			log.String("proof_jkt", proof.JKT),
-		)
-		audit(hook.ActionDPoPProofInvalid, "key_mismatch")
-		return dpopChallenge(ctx, cfg, "", "invalid_token")
-
-	case errors.Is(err, dpop.ErrReplayed):
-		// Rare, and interesting when it happens: it means somebody captured a
-		// proof and the token it was minted for.
-		logger.Warn("auth middleware: DPoP proof replayed",
-			log.String("proof_jkt", proof.JKT),
-		)
-		audit(hook.ActionDPoPProofReplayed, "")
-		return dpopChallenge(ctx, cfg, "", "invalid_token")
+	case result.code == dpopErrUseNonce:
+		return dpopChallenge(ctx, cfg, result.proof.JKT, result.code)
 
 	default:
-		logger.Warn("auth middleware: DPoP validation failed",
-			log.String("error", err.Error()),
-		)
-		audit(hook.ActionDPoPProofInvalid, "validation_failed")
-		return dpopChallenge(ctx, cfg, "", "invalid_token")
+		return dpopChallenge(ctx, cfg, "", result.code)
 	}
+}
+
+// ErrDPoPBindingFailed reports a bound token presented without an acceptable
+// proof, for callers outside the middleware chain that only get to answer yes
+// or no and cannot write an RFC 9449 challenge.
+var ErrDPoPBindingFailed = errors.New("authsome: token requires proof of possession")
+
+// EnforceDPoPForRequest applies the rule enforceDPoP applies, for a credential
+// resolved outside the HTTP middleware chain. The forge auth providers are the
+// case that needs it: they return an auth context rather than a response, so
+// they cannot answer with a challenge, but the binding still has to hold. A
+// caller that can write a response should go through the middleware instead,
+// so the client learns which retry would work.
+func EnforceDPoPForRequest(
+	ctx context.Context,
+	cfg SessionBindingConfig,
+	r *http.Request,
+	boundJKT, scheme, token, appID, sessionID string,
+	logger log.Logger,
+) error {
+	if boundJKT == "" {
+		return nil // Unbound. Nothing to enforce.
+	}
+
+	result := checkDPoP(ctx, cfg, r, boundJKT, scheme, token, appID, logger)
+	auditDPoP(ctx, cfg, result, appID, sessionID)
+	if result.ok {
+		return nil
+	}
+	return ErrDPoPBindingFailed
+}
+
+// ExtractCredential pulls the token out of a request and reports which scheme
+// carried it, for auth paths outside this package that have to read a
+// credential the way the middleware reads it. cookieName may be empty for the
+// default session cookie.
+func ExtractCredential(r *http.Request, cookieName string) (scheme, token string) {
+	return extractCredential(r, cookieName)
 }
 
 // dpopChallenge writes an RFC 9449 challenge and returns the 401 to propagate.
