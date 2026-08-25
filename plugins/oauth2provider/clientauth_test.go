@@ -20,6 +20,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const (
+	ccClientID     = "cc-client"
+	ccClientSecret = "cc-secret-value"
+)
+
 // registerRawClient adds a confidential client with credentials given verbatim,
 // so a test can pick an id or secret that needs encoding on the wire.
 func registerRawClient(t *testing.T, st oauth2provider.Store, clientID, secret string) {
@@ -90,9 +95,10 @@ func TestTokenExchange_AcceptsBasicAuth(t *testing.T) {
 }
 
 func TestClientCredentials_AcceptsBasicAuth(t *testing.T) {
-	_, _, mux := newFixture(t)
+	_, st, mux := newFixture(t)
+	registerRawClient(t, st, ccClientID, ccClientSecret)
 
-	rec := postTokenAuth(t, mux, basicHeader(confidentialID, confidentialSecret), map[string]string{
+	rec := postTokenAuth(t, mux, basicHeader(ccClientID, ccClientSecret), map[string]string{
 		"grant_type": "client_credentials",
 	})
 
@@ -125,9 +131,10 @@ func TestDeviceCodeGrant_AcceptsBasicAuth(t *testing.T) {
 }
 
 func TestTokenEndpoint_RejectsWrongSecretInBasicAuth(t *testing.T) {
-	_, _, mux := newFixture(t)
+	_, st, mux := newFixture(t)
+	registerRawClient(t, st, ccClientID, ccClientSecret)
 
-	rec := postTokenAuth(t, mux, basicHeader(confidentialID, "not-the-secret"), map[string]string{
+	rec := postTokenAuth(t, mux, basicHeader(ccClientID, "not-the-secret"), map[string]string{
 		"grant_type": "client_credentials",
 	})
 
@@ -178,11 +185,12 @@ func TestTokenEndpoint_RejectsBasicClientIDConflictingWithBody(t *testing.T) {
 }
 
 func TestTokenEndpoint_AcceptsBasicWithAgreeingBodyClientID(t *testing.T) {
-	_, _, mux := newFixture(t)
+	_, st, mux := newFixture(t)
+	registerRawClient(t, st, ccClientID, ccClientSecret)
 
-	rec := postTokenAuth(t, mux, basicHeader(confidentialID, confidentialSecret), map[string]string{
+	rec := postTokenAuth(t, mux, basicHeader(ccClientID, ccClientSecret), map[string]string{
 		"grant_type": "client_credentials",
-		"client_id":  confidentialID,
+		"client_id":  ccClientID,
 	})
 
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
@@ -222,12 +230,13 @@ func TestTokenEndpoint_BasicAuthKeepsPlusSignInSecret(t *testing.T) {
 // ── the existing body method keeps working ──────────────────────────────
 
 func TestTokenEndpoint_BodyCredentialsStillWorkWithoutBasicHeader(t *testing.T) {
-	_, _, mux := newFixture(t)
+	_, st, mux := newFixture(t)
+	registerRawClient(t, st, ccClientID, ccClientSecret)
 
 	rec := postToken(t, mux, map[string]string{
 		"grant_type":    "client_credentials",
-		"client_id":     confidentialID,
-		"client_secret": confidentialSecret,
+		"client_id":     ccClientID,
+		"client_secret": ccClientSecret,
 	})
 
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
