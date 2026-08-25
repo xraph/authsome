@@ -5144,17 +5144,6 @@
         ],
         "type": "object"
       },
-      "UnlinkAuthMethodRequest": {
-        "properties": {
-          "Provider": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "Provider"
-        ],
-        "type": "object"
-      },
       "UnlinkAuthMethodResponse": {
         "properties": {
           "status": {
@@ -24891,26 +24880,16 @@
         "operationId": "unlinkAuthMethod",
         "parameters": [
           {
-            "description": "Path parameter: provider",
+            "description": "Auth method provider (password, google, ...)",
             "in": "path",
             "name": "provider",
             "required": true,
             "schema": {
+              "description": "Auth method provider (password, google, ...)",
               "type": "string"
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UnlinkAuthMethodRequest"
-              }
-            }
-          },
-          "description": "Request body",
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {

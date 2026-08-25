@@ -1470,10 +1470,6 @@ export interface UnassignRoleRequest {
   user_id: string;
 }
 
-export interface UnlinkAuthMethodRequest {
-  Provider: string;
-}
-
 export interface UnlinkAuthMethodResponse {
   status: string;
 }

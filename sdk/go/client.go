@@ -1910,15 +1910,11 @@ func (c *Client) ListAuthMethods(ctx context.Context) (*ListAuthMethodsResponse,
 }
 
 // UnlinkAuthMethod — Unlink an auth method
-func (c *Client) UnlinkAuthMethod(ctx context.Context, provider string, req *UnlinkAuthMethodRequest) (*UnlinkAuthMethodResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
+func (c *Client) UnlinkAuthMethod(ctx context.Context, provider string) (*UnlinkAuthMethodResponse, error) {
 	path := "/v1/me/auth-methods/{provider}"
 	path = strings.Replace(path, "{provider}", provider, 1)
 	var result UnlinkAuthMethodResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil

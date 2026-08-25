@@ -50,7 +50,7 @@ type ListAuthMethodsResponse struct {
 
 // UnlinkAuthMethodRequest carries the provider name to unlink.
 type UnlinkAuthMethodRequest struct {
-	Provider string `path:"provider"`
+	Provider string `path:"provider" description:"Auth method provider (password, google, ...)"`
 }
 
 // UnlinkAuthMethodResponse confirms the unlink operation.
@@ -83,10 +83,6 @@ func (a *API) handleUnlinkAuthMethod(ctx forge.Context, req *UnlinkAuthMethodReq
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
 		return nil, forge.Unauthorized("authentication required")
-	}
-
-	if req.Provider == "" {
-		return nil, forge.BadRequest("provider is required")
 	}
 
 	if err := a.engine.UnlinkAuthMethod(ctx.Context(), userID, req.Provider); err != nil {
