@@ -67,8 +67,8 @@ func TestBuildAuthMiddlewareWiresPrincipalResolver(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.True(t, gotOK, "the engine's own auth middleware must put a resolved "+
 		"*principal.Principal on the context, not leave principal.FromContext empty")
-	assert.Equal(t, principal.KindService, got.Ref.Kind)
-	assert.Equal(t, svc.ID.String(), got.Ref.ID)
+	assert.Equal(t, principal.KindService, got.Kind)
+	assert.Equal(t, svc.ID.String(), got.ID)
 	assert.ElementsMatch(t, []string{"ci:build", "ci:deploy"}, got.Scopes,
 		"Scopes only exists on the store row: seeing it here proves ResolvePrincipal ran")
 }

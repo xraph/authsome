@@ -605,8 +605,8 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 		At:             now,
 	}
 	if s.gate != nil {
-		if err := s.gate.Authorize(ctx, att); err != nil {
-			return nil, fmt.Errorf("apikey: %w", err)
+		if authErr := s.gate.Authorize(ctx, att); authErr != nil {
+			return nil, fmt.Errorf("apikey: %w", authErr)
 		}
 	}
 

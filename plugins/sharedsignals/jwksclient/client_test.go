@@ -21,13 +21,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func rsaJWKS(t *testing.T, kid string, pub *rsa.PublicKey) string {
+func rsaJWKS(t *testing.T, pub *rsa.PublicKey) string {
 	t.Helper()
 	n := base64.RawURLEncoding.EncodeToString(pub.N.Bytes())
 	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(pub.E)).Bytes())
 	body, err := json.Marshal(map[string]any{
 		"keys": []map[string]string{
-			{"kty": "RSA", "use": "sig", "alg": "RS256", "kid": kid, "n": n, "e": e},
+			{"kty": "RSA", "use": "sig", "alg": "RS256", "kid": "kid-1", "n": n, "e": e},
 		},
 	})
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func testOptions(srv *httptest.Server) Options {
 func TestKey_FetchesAndReturnsKey(t *testing.T) {
 	key := newKey(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, rsaJWKS(t, "kid-1", &key.PublicKey))
+		fmt.Fprint(w, rsaJWKS(t, &key.PublicKey))
 	}))
 	defer srv.Close()
 
@@ -69,7 +69,7 @@ func TestKey_FetchesAndReturnsKey(t *testing.T) {
 
 	pub, ok := got.(*rsa.PublicKey)
 	require.True(t, ok)
-	assert.Equal(t, key.PublicKey.N, pub.N)
+	assert.Equal(t, key.N, pub.N)
 }
 
 func TestKey_CachesBetweenCalls(t *testing.T) {
@@ -77,7 +77,7 @@ func TestKey_CachesBetweenCalls(t *testing.T) {
 	var hits int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt64(&hits, 1)
-		fmt.Fprint(w, rsaJWKS(t, "kid-1", &key.PublicKey))
+		fmt.Fprint(w, rsaJWKS(t, &key.PublicKey))
 	}))
 	defer srv.Close()
 
@@ -96,7 +96,7 @@ func TestKey_UnknownKidRespectsRefetchInterval(t *testing.T) {
 	var hits int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt64(&hits, 1)
-		fmt.Fprint(w, rsaJWKS(t, "kid-1", &key.PublicKey))
+		fmt.Fprint(w, rsaJWKS(t, &key.PublicKey))
 	}))
 	defer srv.Close()
 
@@ -135,7 +135,7 @@ func TestKey_RejectsOversizedDocument(t *testing.T) {
 
 func TestKey_RejectsTooManyKeys(t *testing.T) {
 	key := newKey(t)
-	n := base64.RawURLEncoding.EncodeToString(key.PublicKey.N.Bytes())
+	n := base64.RawURLEncoding.EncodeToString(key.N.Bytes())
 	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.PublicKey.E)).Bytes())
 	var entries []string
 	for i := 0; i < 50; i++ {
@@ -355,7 +355,7 @@ func TestKey_ConcurrentCallsSingleFlight(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt64(&hits, 1)
 		time.Sleep(50 * time.Millisecond)
-		fmt.Fprint(w, rsaJWKS(t, "kid-1", &key.PublicKey))
+		fmt.Fprint(w, rsaJWKS(t, &key.PublicKey))
 	}))
 	defer srv.Close()
 

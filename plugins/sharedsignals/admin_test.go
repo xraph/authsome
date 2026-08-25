@@ -288,7 +288,7 @@ type fakeAuthEngine struct {
 }
 
 func (e *fakeAuthEngine) AuthRegistry() auth.Registry { return e.registry }
-func (e *fakeAuthEngine) DefaultAppID() string         { return e.defaultApp }
+func (e *fakeAuthEngine) DefaultAppID() string        { return e.defaultApp }
 
 func (e *fakeAuthEngine) HasPermission(_ context.Context, userID id.UserID, action, resource string) (bool, error) {
 	return e.permissions[userID.String()+"|"+action+"|"+resource], nil
@@ -352,7 +352,7 @@ func TestRegisterAdminRoutes_RejectsUnauthenticated(t *testing.T) {
 
 	cases := []struct {
 		name, method, path string
-		body                []byte
+		body               []byte
 	}{
 		{"create", http.MethodPost, "/v1/ssf/admin/streams", createBody},
 		{"list", http.MethodGet, "/v1/ssf/admin/streams", nil},

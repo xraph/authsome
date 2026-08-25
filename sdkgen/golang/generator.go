@@ -395,7 +395,7 @@ const (
 //
 // Remaining content types are considered in sorted order, so a route offering
 // several does not generate a different struct from one run to the next.
-func requestBodyContent(rb *openapi.RequestBody) (*openapi.Schema, string) {
+func requestBodyContent(rb *openapi.RequestBody) (schema *openapi.Schema, mediaType string) {
 	if ct, ok := rb.Content[mediaTypeJSON]; ok && ct.Schema != nil {
 		return ct.Schema, mediaTypeJSON
 	}
@@ -520,9 +520,9 @@ func (g *Generator) renderTemplate(name string, data *TemplateData) (string, err
 	// readable and makes the output match what `gofmt -l` expects, so the
 	// committed SDK stays clean without anyone remembering to run gofmt.
 	src := buf.Bytes()
-	formatted, err := format.Source(src)
-	if err != nil {
-		return "", fmt.Errorf("format %s: %w%s", tmplName, err, offendingLine(src, err))
+	formatted, formatErr := format.Source(src)
+	if formatErr != nil {
+		return "", fmt.Errorf("format %s: %w%s", tmplName, formatErr, offendingLine(src, formatErr))
 	}
 
 	return string(formatted), nil

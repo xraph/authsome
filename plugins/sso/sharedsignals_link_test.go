@@ -115,7 +115,7 @@ func newSSOPluginWithPlugin(t *testing.T, p plugin.Plugin) *Plugin {
 	return pl
 }
 
-func TestLinkSharedSignalsSubject_SkipsWhenPluginAbsent(t *testing.T) {
+func TestLinkSharedSignalsSubject_SkipsWhenPluginAbsent(_ *testing.T) {
 	p := &Plugin{}
 	// No engine means no plugin registry; this must not panic.
 	p.linkSharedSignalsSubject(context.Background(),

@@ -118,6 +118,6 @@ func TestEvaluateRisk_UnknownUserScoresZero(t *testing.T) {
 	assert.Equal(t, 0, got.Score)
 }
 
-func TestPlugin_IsRiskContributor(t *testing.T) {
+func TestPlugin_IsRiskContributor(_ *testing.T) {
 	var _ riskengine.RiskContributor = New()
 }

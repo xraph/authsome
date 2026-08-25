@@ -46,10 +46,11 @@ func NewPushSecret() (raw, hash string, err error) {
 func (p *Plugin) registerReceiverRoutes(router forge.Router) error {
 	g := router.Group("/v1/ssf", forge.WithGroupTags("Shared Signals"))
 
-	opts := []forge.RouteOption{
+	opts := make([]forge.RouteOption, 0, 3)
+	opts = append(opts,
 		forge.WithSummary("Receive Security Event Tokens"),
 		forge.WithOperationID("receiveSecurityEventTokens"),
-	}
+	)
 	// Nil when the host is not the concrete engine or rate limiting is off,
 	// which is why this is defence in depth and not the control.
 	opts = append(opts, authsome.PluginRateLimit(p.engine,
@@ -220,7 +221,7 @@ func (p *Plugin) processSET(ctx context.Context, stream *InboundStream,
 		}
 		anyNew = true
 
-		outcome, action, failure, infra := p.processOneEvent(ctx, stream, eventType, payload)
+		outcome, action, infra, failure := p.processOneEvent(ctx, stream, eventType, payload)
 		if infra {
 			// The dedupe row this event just wrote must not survive an
 			// infrastructure failure: leaving it committed would make the
@@ -263,17 +264,17 @@ func (p *Plugin) processSET(ctx context.Context, stream *InboundStream,
 // outcome (ignored, unresolved, rejected, applied) and is meant to be
 // recorded and answered with success, exactly as before.
 func (p *Plugin) processOneEvent(ctx context.Context, stream *InboundStream,
-	eventType string, payload json.RawMessage) (outcome, action string, failure error, infra bool) {
+	eventType string, payload json.RawMessage) (outcome, action string, infra bool, failure error) {
 	if !caep.IsKnownEventType(eventType) {
-		return OutcomeIgnored, "", nil, false
+		return OutcomeIgnored, "", false, nil
 	}
 	if !allowsEventType(stream, eventType) {
-		return OutcomeIgnored, "", nil, false
+		return OutcomeIgnored, "", false, nil
 	}
 
 	ev, err := caep.ParseEvent(eventType, payload)
 	if err != nil {
-		return OutcomeRejected, "", err, false
+		return OutcomeRejected, "", false, err
 	}
 
 	res, err := p.resolveSubject(ctx, stream, ev.Subject)
@@ -283,13 +284,13 @@ func (p *Plugin) processOneEvent(ctx context.Context, stream *InboundStream,
 		// other than "not found" -- an infrastructure problem, not a policy
 		// decision about the subject. A miss is unresolved, not an error;
 		// see resolveViaLink.
-		return "", "", err, true
+		return "", "", true, err
 	}
 	if res.Outcome != OutcomeApplied {
 		// Unresolved and rejected both stop here without an error, so the
 		// transmitter learns nothing about who does or does not have an
 		// account and stops retrying.
-		return res.Outcome, "", nil, false
+		return res.Outcome, "", false, nil
 	}
 
 	allowed, err := p.checkCircuitBreaker(ctx, stream)
@@ -297,17 +298,17 @@ func (p *Plugin) processOneEvent(ctx context.Context, stream *InboundStream,
 		// Same reasoning as resolveSubject above: CountActionsSince failing
 		// is the store breaking, not a verdict that this event should be
 		// rejected.
-		return "", "", err, true
+		return "", "", true, err
 	}
 	if !allowed {
-		return OutcomeRejected, "", errors.New("stream paused by the circuit breaker"), false
+		return OutcomeRejected, "", false, errors.New("stream paused by the circuit breaker")
 	}
 
 	action, err = p.applyEvent(ctx, stream, ev, res)
 	if err != nil {
-		return OutcomeRejected, "", err, false
+		return OutcomeRejected, "", false, err
 	}
-	return OutcomeApplied, action, nil, false
+	return OutcomeApplied, action, false, nil
 }
 
 func allowsEventType(s *InboundStream, eventType string) bool {

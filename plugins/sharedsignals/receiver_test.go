@@ -54,7 +54,7 @@ func newReceiverFixture(t *testing.T) *receiverFixture {
 	// A fake transmitter serving its own JWKS, which is the only way to test
 	// the verification path the way it actually runs.
 	jwksSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		n := base64.RawURLEncoding.EncodeToString(key.PublicKey.N.Bytes())
+		n := base64.RawURLEncoding.EncodeToString(key.N.Bytes())
 		e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.PublicKey.E)).Bytes())
 		fmt.Fprintf(w, `{"keys":[{"kty":"RSA","use":"sig","alg":"RS256","kid":%q,"n":%q,"e":%q}]}`,
 			fixtureKID, n, e)
@@ -206,7 +206,7 @@ func countReceivedEvents(t *testing.T, s Store, streamID id.SSFStreamID, jti str
 // pattern and the parameter binding are exercised, not bypassed.
 func (f *receiverFixture) post(t *testing.T, path, token, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost,
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
 		"/v1/ssf/streams/"+path+"/events", stringReader(body))
 	req.Header.Set("Content-Type", "application/secevent+jwt")
 	if token != "" {

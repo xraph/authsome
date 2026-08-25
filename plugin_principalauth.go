@@ -98,7 +98,7 @@ func (g *principalAuthGate) Observe(ctx context.Context, a *principal.AuthAttemp
 //
 // This runs on the authentication path for every machine caller, so what it
 // costs matters as much as what it reclaims.
-func (g *principalAuthGate) evictLocked(now time.Time) {
+func (g *principalAuthGate) evictLocked(now time.Time) { //nolint:revive // now feeds the eviction policy below, which is deliberately unimplemented
 	// TODO: eviction policy is the repository owner's decision. Deliberately
 	// left unimplemented so the map's growth bound is chosen explicitly
 	// rather than defaulted into. See task 12 of the non-human principals plan.
