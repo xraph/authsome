@@ -903,7 +903,7 @@ func init() {
 
 		&migrate.Migration{
 			Name:    "add_session_audience",
-			Version: "20260824000090",
+			Version: "20260824000080",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				mexec, ok := exec.(*mongomigrate.Executor)
 				if !ok {

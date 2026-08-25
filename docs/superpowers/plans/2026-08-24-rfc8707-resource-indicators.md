@@ -19,12 +19,16 @@ Several designs dated 2026-08-24 add columns to the same two tables, and two mig
 
 | Group | Version | Migration | Table |
 |---|---|---|---|
-| `authsome` | `20260824000090` | `add_session_audience` | `authsome_sessions` |
+| `authsome` | `20260824000080` | `add_session_audience` | `authsome_sessions` |
 | `authsome-oauth2` | `20260824000001` | `add_oauth2_resources` | `authsome_oauth2_clients`, `authsome_oauth2_auth_codes`, `authsome_oauth2_device_codes` |
 
 Both numbers were checked against every plan and spec in `docs/superpowers/` and neither is claimed elsewhere. The oauth2 number is the one dynamic client registration vacated in commit `a8489d8`.
 
-The core number has moved twice, which is worth recording so nobody moves it back. It started at `20260824000040`, then moved to `000060` after DPoP published a claim table for `000040`. It then moved again to `000090`, because token exchange landed `add_session_scopes` on `000060` in the integration branch, on the same table. The integrated side wins a collision, since moving it would mean rewriting integration history. Taken in the `authsome` group as of this writing: `000040`, `000050`, `000051`, `000052`, `000060`, `000080`.
+The core number moved three times before settling, which is worth recording so nobody moves it back. It started at `20260824000040`, then moved to `000060` after DPoP published a claim table for `000040`. It then moved to `000090`, because token exchange landed `add_session_scopes` on `000060` in the integration branch, on the same table. `000090` turned out to be taken as well, by token exchange's `env_scope_user_unique_indexes` in the sqlite and mongo backends, which a postgres-only check missed.
+
+It now sits at `000080`, and that is not a fourth free number. `integration/agent-work` already carries `add_session_audience` at `000080` in all three backends, renumbered there by PR #71, and the bodies are byte-identical to these. Matching it means the same logical migration carries one version everywhere and the merge collapses to nothing on this file. Landing on any other free number would union two migrations performing the same ALTER under different versions, which is a worse outcome than the collision it would avoid.
+
+Two lessons for the next person renumbering here. Check every backend, not just postgres: sqlite and mongo registries diverge. And check the local branches, not just `origin/*`, because the peer branches run ahead of their pushed refs.
 
 Do not use `20260824000001` in the `authsome` group. As of writing, the agentauth delegation plan (`add_session_agent_principal`) and the token-exchange plan (`add_session_scopes_and_actors`) both still claim it there and collide with each other. That is not this plan's problem to fix, but do not add a third.
 
@@ -204,7 +208,7 @@ In `store/postgres/migrations.go`, in the same `init()` block that holds `add_se
 ```go
 		&migrate.Migration{
 			Name:    "add_session_audience",
-			Version: "20260824000090",
+			Version: "20260824000080",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `
 ALTER TABLE authsome_sessions
@@ -228,7 +232,7 @@ In `store/sqlite/migrations.go`, in the same `init()` block:
 ```go
 		&migrate.Migration{
 			Name:    "add_session_audience",
-			Version: "20260824000090",
+			Version: "20260824000080",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `
 ALTER TABLE authsome_sessions ADD COLUMN audience TEXT NOT NULL DEFAULT '[]';
@@ -251,7 +255,7 @@ In `store/mongo/migrations.go`, following the shape of `add_session_principal_id
 ```go
 		&migrate.Migration{
 			Name:    "add_session_audience",
-			Version: "20260824000090",
+			Version: "20260824000080",
 			Up: func(ctx context.Context, exec migrate.Executor) error {
 				mexec, ok := exec.(*mongomigrate.Executor)
 				if !ok {
@@ -2101,4 +2105,4 @@ After Task 12, confirm the whole feature end to end before calling it done.
 - [ ] `go vet ./...` is clean.
 - [ ] Point `AUTHSOME_MONGO_URI` at a live mongo and run `go test ./store/mongo/ -run 'TestStore/SessionAudienceRoundTrip' -v`. This is the only way the null-array trap surfaces, and skipping it is how `9116564` reached main.
 - [ ] Confirm no `[]string` field anywhere in the diff carries a `query:` or `form:` struct tag.
-- [ ] Confirm migration versions: `20260824000090` in the core group, `20260824000001` in `authsome-oauth2`, and neither duplicated. Run `grep -rn '20260824' store/*/migrations.go plugins/*/migrations.go` and read the result.
+- [ ] Confirm migration versions: `20260824000080` in the core group, `20260824000001` in `authsome-oauth2`, and neither duplicated. Run `grep -rn '20260824' store/*/migrations.go plugins/*/migrations.go` and read the result.
