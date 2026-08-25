@@ -517,6 +517,12 @@ func (g *Generator) responseType(op *openapi.Operation) string {
 func (g *Generator) renderTemplate(name string, data *TemplateData) (string, error) {
 	funcMap := template.FuncMap{
 		"lower": strings.ToLower,
+		// A list-typed parameter is written once per element rather than
+		// stringified, since List.toString() emits Dart's bracket notation and
+		// a query string carries repeated keys rather than lists.
+		"isArrayType": func(t string) bool {
+			return strings.HasPrefix(t, "List<")
+		},
 		"dartType": func(t string, optional bool) string {
 			if optional {
 				return t + "?"

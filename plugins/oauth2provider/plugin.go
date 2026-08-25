@@ -534,11 +534,10 @@ type AuthorizeRequest struct {
 	State               string `query:"state,omitempty"`
 	CodeChallenge       string `query:"code_challenge,omitempty"`
 	CodeChallengeMethod string `query:"code_challenge_method,omitempty"`
-	// No resource field. go-utils' bindFormParam gained multi-value binding in
-	// v1.1.7, but bindQueryParam still reads one value through c.Query, so a
-	// []string query field silently keeps the first value and drops the rest.
-	// That is worse than the error it used to raise, so the authorization
-	// endpoint reads the raw query; see resourceParams.
+	// RFC 8707, repeatable. A field rather than a raw-request read, because
+	// only a declared field reaches the OpenAPI document, and only a described
+	// parameter reaches the generated clients.
+	Resource []string `query:"resource,omitempty"`
 }
 
 // TokenRequest is the OAuth2 token request.
@@ -754,9 +753,8 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		return nil, err
 	}
 
-	// RFC 8707. Read off the raw query: the struct binder still collapses a
-	// repeated query parameter to its first value; see resourceParams.
-	resources, err := resolveResources(client, resourceParams(ctx.Request()))
+	// RFC 8707.
+	resources, err := resolveResources(client, req.Resource)
 	if err != nil {
 		return nil, err
 	}

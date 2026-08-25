@@ -108,4 +108,60 @@ void main() {
       );
     });
   });
+
+  group('query-string parameters', () {
+    // A query string carries repeated keys, the same as a form body does. The
+    // authorization endpoint reads every `resource` it is given, so a list has
+    // to be written one element at a time rather than stringified.
+    ({AuthClient client, Uri Function() url}) clientRecordingUrl() {
+      var seen = Uri.parse('https://auth.example.com');
+
+      final client = AuthClient(AuthClientConfig(
+        baseUrl: 'https://auth.example.com',
+        httpClient: MockClient((request) async {
+          seen = request.url;
+          return http.Response('', 204);
+        }),
+      ));
+
+      return (client: client, url: () => seen);
+    }
+
+    test('sends a one-element list as a single parameter', () async {
+      final recorder = clientRecordingUrl();
+
+      await recorder.client.oauth2Authorize(
+        responseType: 'code',
+        clientId: 'the-client',
+        resource: ['https://api.example.com'],
+      );
+
+      expect(recorder.url().queryParametersAll['resource'],
+          ['https://api.example.com']);
+    });
+
+    test('repeats the parameter once per element for a two-element list',
+        () async {
+      final recorder = clientRecordingUrl();
+
+      await recorder.client.oauth2Authorize(
+        responseType: 'code',
+        clientId: 'the-client',
+        resource: ['https://a.example.com', 'https://b.example.com'],
+      );
+
+      expect(recorder.url().queryParametersAll['resource'],
+          ['https://a.example.com', 'https://b.example.com']);
+    });
+
+    test('keeps an absent list off the query string', () async {
+      final recorder = clientRecordingUrl();
+
+      await recorder.client
+          .oauth2Authorize(responseType: 'code', clientId: 'the-client');
+
+      expect(recorder.url().queryParametersAll.containsKey('resource'),
+          isFalse);
+    });
+  });
 }

@@ -166,7 +166,14 @@ export class AuthClient {
 {{- if hasQueryParams $op.QueryParams }}
     const params = new URLSearchParams();
 {{- range $op.QueryParams }}
+{{- if isArrayType .Type }}
+    // Repeated once per element: a query string carries repeated keys, not
+    // lists, which is how RFC 8707 sends `resource`. String() on an array
+    // would join it on commas and reach the server as one value.
+    if ({{ .TSName }} !== undefined) for (const element of {{ .TSName }}) params.append('{{ .Name }}', String(element));
+{{- else }}
     if ({{ .TSName }} !== undefined) params.set('{{ .Name }}', String({{ .TSName }}));
+{{- end }}
 {{- end }}
     const qs = params.toString();
     const path = {{ buildPath $op.Path $op.PathParams }} + (qs ? `?${qs}` : '');

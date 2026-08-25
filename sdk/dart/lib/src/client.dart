@@ -384,10 +384,13 @@ class AuthClient {
   /// DELETE /v1/admin/bulk/sessions
   Future<BulkRevokeSessionsResponse> adminBulkRevokeSessions({required String userId, required String token}) async {
     final path = '/v1/admin/bulk/sessions';
-    final queryParams = <String, String>{};
-    queryParams['user_id'] = userId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('user_id', userId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'DELETE',
@@ -438,10 +441,13 @@ class AuthClient {
   /// GET /v1/admin/oauth/clients
   Future<ListClientsResponse> listOAuth2Clients({required String appId, required String token}) async {
     final path = '/v1/admin/oauth/clients';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -479,10 +485,13 @@ class AuthClient {
   /// GET /v1/admin/orgs
   Future<OrgListResponse> adminListOrgs({required String appId, required String token}) async {
     final path = '/v1/admin/orgs';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -521,12 +530,15 @@ class AuthClient {
   /// GET /v1/admin/service-accounts
   Future<AdminServiceAccountListResponse> adminListServiceAccounts({required String appId, required String token, int? limit, String? cursor}) async {
     final path = '/v1/admin/service-accounts';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    if (limit != null) queryParams['limit'] = limit.toString();
-    if (cursor != null) queryParams['cursor'] = cursor.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    if (limit != null) queryPairs.add(MapEntry('limit', limit.toString()));
+    if (cursor != null) queryPairs.add(MapEntry('cursor', cursor.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -590,11 +602,14 @@ class AuthClient {
   /// GET /v1/admin/settings/definitions
   Future<ListDefinitionsResponse> listSettingsDefinitions({required String namespace, required String category, required String token}) async {
     final path = '/v1/admin/settings/definitions';
-    final queryParams = <String, String>{};
-    queryParams['namespace'] = namespace.toString();
-    queryParams['category'] = category.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('namespace', namespace.toString()));
+    queryPairs.add(MapEntry('category', category.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -633,11 +648,14 @@ class AuthClient {
   /// DELETE /v1/admin/settings/enforce/{key}
   Future<ApiStatusResponse> unenforceSetting({required String key, required String scope, required String scopeId, required String token}) async {
     final path = '/v1/admin/settings/enforce/$key';
-    final queryParams = <String, String>{};
-    queryParams['scope'] = scope.toString();
-    queryParams['scope_id'] = scopeId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('scope', scope.toString()));
+    queryPairs.add(MapEntry('scope_id', scopeId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'DELETE',
@@ -651,13 +669,16 @@ class AuthClient {
   /// GET /v1/admin/settings/resolve
   Future<ResolvedSettingsResponse> resolveSettings({required String namespace, required String appId, required String orgId, required String userId, required String token}) async {
     final path = '/v1/admin/settings/resolve';
-    final queryParams = <String, String>{};
-    queryParams['namespace'] = namespace.toString();
-    queryParams['app_id'] = appId.toString();
-    queryParams['org_id'] = orgId.toString();
-    queryParams['user_id'] = userId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('namespace', namespace.toString()));
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    queryPairs.add(MapEntry('org_id', orgId.toString()));
+    queryPairs.add(MapEntry('user_id', userId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -671,12 +692,15 @@ class AuthClient {
   /// GET /v1/admin/settings/resolve/{key}
   Future<ResolvedSettingResponse> resolveSetting({required String key, required String appId, required String orgId, required String userId, required String token}) async {
     final path = '/v1/admin/settings/resolve/$key';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    queryParams['org_id'] = orgId.toString();
-    queryParams['user_id'] = userId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    queryPairs.add(MapEntry('org_id', orgId.toString()));
+    queryPairs.add(MapEntry('user_id', userId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -703,11 +727,14 @@ class AuthClient {
   /// DELETE /v1/admin/settings/values/{key}
   Future<ApiStatusResponse> deleteSetting({required String key, required String scope, required String scopeId, required String token}) async {
     final path = '/v1/admin/settings/values/$key';
-    final queryParams = <String, String>{};
-    queryParams['scope'] = scope.toString();
-    queryParams['scope_id'] = scopeId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('scope', scope.toString()));
+    queryPairs.add(MapEntry('scope_id', scopeId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'DELETE',
@@ -721,10 +748,13 @@ class AuthClient {
   /// GET /v1/admin/social/providers
   Future<AdminListProvidersResponse> socialAdminListProviders({required String appId, required String token}) async {
     final path = '/v1/admin/social/providers';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -750,10 +780,13 @@ class AuthClient {
   /// PUT /v1/admin/social/providers/{provider}
   Future<AdminProviderResponse> socialAdminUpsertProvider({required String provider, required AdminUpsertProviderRequest body, required String appId, required String token}) async {
     final path = '/v1/admin/social/providers/$provider';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'PUT',
@@ -768,10 +801,13 @@ class AuthClient {
   /// DELETE /v1/admin/social/providers/{provider}
   Future<AdminDeleteProviderResponse> socialAdminDeleteProvider({required String provider, required String appId, required String token}) async {
     final path = '/v1/admin/social/providers/$provider';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'DELETE',
@@ -785,10 +821,13 @@ class AuthClient {
   /// GET /v1/admin/sso/connections
   Future<AdminListConnectionsResponse> ssoAdminListConnections({required String appId, required String token}) async {
     final path = '/v1/admin/sso/connections';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -852,10 +891,13 @@ class AuthClient {
   /// GET /v1/admin/stats
   Future<AdminStatsResponse> adminGetStats({required String appId, required String token}) async {
     final path = '/v1/admin/stats';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -869,13 +911,16 @@ class AuthClient {
   /// GET /v1/admin/users
   Future<AdminUserListResponse> adminListUsers({required String appId, required String token, String? email, String? cursor, int? limit}) async {
     final path = '/v1/admin/users';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    if (email != null) queryParams['email'] = email.toString();
-    if (cursor != null) queryParams['cursor'] = cursor.toString();
-    if (limit != null) queryParams['limit'] = limit.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    if (email != null) queryPairs.add(MapEntry('email', email.toString()));
+    if (cursor != null) queryPairs.add(MapEntry('cursor', cursor.toString()));
+    if (limit != null) queryPairs.add(MapEntry('limit', limit.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -977,10 +1022,13 @@ class AuthClient {
   /// GET /v1/billing/coupons
   Future<ListCouponsResponse> listCoupons({required String appId, required String token}) async {
     final path = '/v1/billing/coupons';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -1030,11 +1078,14 @@ class AuthClient {
   /// GET /v1/billing/invoices
   Future<ListInvoicesResponse> listInvoices({required String appId, required String tenantId, required String token}) async {
     final path = '/v1/billing/invoices';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    queryParams['tenant_id'] = tenantId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    queryPairs.add(MapEntry('tenant_id', tenantId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -1084,10 +1135,13 @@ class AuthClient {
   /// GET /v1/billing/plans
   Future<ListPlansResponse> listBillingPlans({required String appId, required String token}) async {
     final path = '/v1/billing/plans';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -1148,12 +1202,15 @@ class AuthClient {
   /// GET /v1/billing/subscriptions
   Future<ListSubscriptionsResponse> listSubscriptions({required String appId, required String tenantId, required String token, String? status}) async {
     final path = '/v1/billing/subscriptions';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    queryParams['tenant_id'] = tenantId.toString();
-    if (status != null) queryParams['status'] = status.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    queryPairs.add(MapEntry('tenant_id', tenantId.toString()));
+    if (status != null) queryPairs.add(MapEntry('status', status.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -1180,11 +1237,14 @@ class AuthClient {
   /// GET /v1/billing/subscriptions/active
   Future<Response> getActiveSubscription({required String appId, required String tenantId, required String token}) async {
     final path = '/v1/billing/subscriptions/active';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    queryParams['tenant_id'] = tenantId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    queryPairs.add(MapEntry('tenant_id', tenantId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -1244,11 +1304,14 @@ class AuthClient {
   /// GET /v1/billing/usage
   Future<UsageSummaryResponse> getUsageSummary({required String appId, required String tenantId, required String token}) async {
     final path = '/v1/billing/usage';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    queryParams['tenant_id'] = tenantId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    queryPairs.add(MapEntry('tenant_id', tenantId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -1275,10 +1338,13 @@ class AuthClient {
   /// GET /v1/client-config
   Future<ClientConfigResponse> getClientConfig({required String token, String? key}) async {
     final path = '/v1/client-config';
-    final queryParams = <String, String>{};
-    if (key != null) queryParams['key'] = key.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    if (key != null) queryPairs.add(MapEntry('key', key.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -1292,12 +1358,15 @@ class AuthClient {
   /// GET /v1/consent
   Future<ConsentListResponse> listConsents({required String purpose, required String cursor, required int limit, required String token}) async {
     final path = '/v1/consent';
-    final queryParams = <String, String>{};
-    queryParams['purpose'] = purpose.toString();
-    queryParams['cursor'] = cursor.toString();
-    queryParams['limit'] = limit.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('purpose', purpose.toString()));
+    queryPairs.add(MapEntry('cursor', cursor.toString()));
+    queryPairs.add(MapEntry('limit', limit.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -1385,10 +1454,13 @@ class AuthClient {
   /// GET /v1/environments
   Future<EnvironmentListResponse> listEnvironments({required String appId, required String token}) async {
     final path = '/v1/environments';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -1537,11 +1609,14 @@ class AuthClient {
   /// GET /v1/keys
   Future<ListKeysResponse> listAPIKeys({required String appId, required String token, String? userId}) async {
     final path = '/v1/keys';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    if (userId != null) queryParams['user_id'] = userId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    if (userId != null) queryPairs.add(MapEntry('user_id', userId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -1787,18 +1862,24 @@ class AuthClient {
 
   /// OAuth2 Authorization
   /// GET /v1/oauth/authorize
-  Future<void> oauth2Authorize({required String responseType, required String clientId, String? redirectUri, String? scope, String? state, String? codeChallenge, String? codeChallengeMethod}) async {
+  Future<void> oauth2Authorize({required String responseType, required String clientId, String? redirectUri, String? scope, String? state, String? codeChallenge, String? codeChallengeMethod, List<String>? resource}) async {
     final path = '/v1/oauth/authorize';
-    final queryParams = <String, String>{};
-    queryParams['response_type'] = responseType.toString();
-    queryParams['client_id'] = clientId.toString();
-    if (redirectUri != null) queryParams['redirect_uri'] = redirectUri.toString();
-    if (scope != null) queryParams['scope'] = scope.toString();
-    if (state != null) queryParams['state'] = state.toString();
-    if (codeChallenge != null) queryParams['code_challenge'] = codeChallenge.toString();
-    if (codeChallengeMethod != null) queryParams['code_challenge_method'] = codeChallengeMethod.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('response_type', responseType.toString()));
+    queryPairs.add(MapEntry('client_id', clientId.toString()));
+    if (redirectUri != null) queryPairs.add(MapEntry('redirect_uri', redirectUri.toString()));
+    if (scope != null) queryPairs.add(MapEntry('scope', scope.toString()));
+    if (state != null) queryPairs.add(MapEntry('state', state.toString()));
+    if (codeChallenge != null) queryPairs.add(MapEntry('code_challenge', codeChallenge.toString()));
+    if (codeChallengeMethod != null) queryPairs.add(MapEntry('code_challenge_method', codeChallengeMethod.toString()));
+    for (final element in resource ?? const []) {
+      queryPairs.add(MapEntry('resource', element.toString()));
+    }
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     await _request(
 'GET',
@@ -1949,11 +2030,14 @@ class AuthClient {
   /// GET /v1/orgs/check-slug
   Future<SlugAvailableResponse> checkOrgSlug({required String appId, required String slug, required String token}) async {
     final path = '/v1/orgs/check-slug';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    queryParams['slug'] = slug.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    queryPairs.add(MapEntry('slug', slug.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -2313,10 +2397,13 @@ class AuthClient {
   /// GET /v1/roles
   Future<RoleListResponse> authsomeListRoles({required String appId, required String token}) async {
     final path = '/v1/roles';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -2503,11 +2590,14 @@ class AuthClient {
   /// POST /v1/social/{provider}
   Future<SocialStartResponse> startOAuth({required String provider, String? frontendUrl, String? redirectUrl}) async {
     final path = '/v1/social/$provider';
-    final queryParams = <String, String>{};
-    if (frontendUrl != null) queryParams['frontend_url'] = frontendUrl.toString();
-    if (redirectUrl != null) queryParams['redirect_url'] = redirectUrl.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    if (frontendUrl != null) queryPairs.add(MapEntry('frontend_url', frontendUrl.toString()));
+    if (redirectUrl != null) queryPairs.add(MapEntry('redirect_url', redirectUrl.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'POST',
@@ -2520,12 +2610,15 @@ class AuthClient {
   /// GET /v1/social/{provider}/callback
   Future<SocialCallbackResponse> oauthCallback({required String provider, String? state, String? code, String? error}) async {
     final path = '/v1/social/$provider/callback';
-    final queryParams = <String, String>{};
-    if (state != null) queryParams['state'] = state.toString();
-    if (code != null) queryParams['code'] = code.toString();
-    if (error != null) queryParams['error'] = error.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    if (state != null) queryPairs.add(MapEntry('state', state.toString()));
+    if (code != null) queryPairs.add(MapEntry('code', code.toString()));
+    if (error != null) queryPairs.add(MapEntry('error', error.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -2585,12 +2678,15 @@ class AuthClient {
   /// POST /v1/sso/{provider}/callback
   Future<SsoCallbackResponse> ssoCallback({required String provider, String? state, String? code, String? error}) async {
     final path = '/v1/sso/$provider/callback';
-    final queryParams = <String, String>{};
-    if (state != null) queryParams['state'] = state.toString();
-    if (code != null) queryParams['code'] = code.toString();
-    if (error != null) queryParams['error'] = error.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    if (state != null) queryPairs.add(MapEntry('state', state.toString()));
+    if (code != null) queryPairs.add(MapEntry('code', code.toString()));
+    if (error != null) queryPairs.add(MapEntry('error', error.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'POST',
@@ -2603,10 +2699,13 @@ class AuthClient {
   /// POST /v1/sso/{provider}/login
   Future<LoginResponse> startSSOLogin({required String provider, String? returnUrl}) async {
     final path = '/v1/sso/$provider/login';
-    final queryParams = <String, String>{};
-    if (returnUrl != null) queryParams['return_url'] = returnUrl.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    if (returnUrl != null) queryPairs.add(MapEntry('return_url', returnUrl.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'POST',
@@ -2643,10 +2742,13 @@ class AuthClient {
   /// GET /v1/users/{userId}/roles
   Future<UserRoleListResponse> authsomeListUserRoles({required String userId, required String token, String? appId}) async {
     final path = '/v1/users/$userId/roles';
-    final queryParams = <String, String>{};
-    if (appId != null) queryParams['app_id'] = appId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    if (appId != null) queryPairs.add(MapEntry('app_id', appId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
@@ -2684,10 +2786,13 @@ class AuthClient {
   /// GET /v1/webhooks
   Future<WebhookListResponse> listWebhooks({required String appId, required String token}) async {
     final path = '/v1/webhooks';
-    final queryParams = <String, String>{};
-    queryParams['app_id'] = appId.toString();
-    final queryString = queryParams.isNotEmpty
-        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('app_id', appId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
     final res = await _request(
 'GET',
