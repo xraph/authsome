@@ -33,10 +33,25 @@ jobs:
   # ─── Store Conformance (Postgres + Mongo) ───────────────────────────
   # Runs the cross-backend store conformance suite against real Postgres
   # (testcontainers) and MongoDB (single-node replica set, so app/org cascade
-  # transactions work). Scoped to `-run TestConformance` so it does NOT run the
-  # older per-backend store_test.go suites — those now pass on postgres (env_id
-  # is seeded), but the mongo suite still has a hanging migration-lock test
-  # (TestMigrate_DoesNotBreakFreshLock) tracked separately.
+  # transactions work). The -run filter below is what stops this job also
+  # running the older per-backend store_test.go suites, which now pass on
+  # postgres since env_id is seeded.
+  #
+  # That filter used to be justified here by the claim that the mongo suite
+  # contains a hanging migration-lock test, TestMigrate_DoesNotBreakFreshLock.
+  # It does not hang. Measured against a single-node rs0 replica set matching
+  # this job's own service, it passes in 11 to 12 seconds over four runs,
+  # waiting out the migration lock-acquire retry rather than blocking on it.
+  # The claim was stale and cost at least one person time chasing a hang that
+  # was not there.
+  #
+  # What that correction does not settle is whether the rest of the
+  # integration-tagged tests belong in this job. There are 96 of them, this
+  # pattern matches 7, and the remaining 89 are built by nothing and run by
+  # nothing. That is a real question with a real cost either way, and it wants
+  # deciding rather than inheriting. If you widen the filter, run them as a set
+  # against main first, because the last count taken of them was taken against
+  # a stale tree and was wrong.
   #
   # BLOCKING: all four backends (memory + sqlite from the `go` job, and
   # postgres + mongo here) must pass the same store contract, so behavioral
