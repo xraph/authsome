@@ -43,6 +43,27 @@ describe("extractSubPath", () => {
   it("returns undefined when the path is outside the base path", () => {
     expect(extractSubPath("/settings/profile", "/sign-in")).toBeUndefined();
   });
+
+  it("normalizes a long run of trailing slashes", () => {
+    const base = "/sign-in" + "/".repeat(50_000);
+    expect(extractSubPath("/sign-in/verify-email", base)).toBe("verify-email");
+  });
+
+  it("stays linear on a long run of slashes followed by a non-slash", () => {
+    // basePath is the `path` prop, so it is library input rather than
+    // something this module controls. Trimming the trailing slashes with
+    // /\/+$/ is polynomial on this shape: the engine matches \/+ up to the
+    // "x" from every start position in the run, fails $, and backtracks the
+    // whole way. Measured on the regex version: 46ms at 10k, 4.2s at 100k,
+    // 16.8s at 200k. CodeQL reports it as js/polynomial-redos.
+    const base = "/".repeat(100_000) + "x";
+
+    const started = performance.now();
+    expect(extractSubPath("/unrelated", base)).toBeUndefined();
+    const elapsed = performance.now() - started;
+
+    expect(elapsed).toBeLessThan(250);
+  });
 });
 
 describe("useSubPath", () => {

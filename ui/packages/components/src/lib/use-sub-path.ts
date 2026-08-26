@@ -12,10 +12,23 @@ export function extractSubPath(
   pathname: string,
   basePath: string,
 ): string | undefined {
-  const normalized = basePath.replace(/\/+$/, "");
+  // The slashes are trimmed by scanning rather than with a regex. /\/+$/ is
+  // polynomial on a run of slashes that does not end the string: the engine
+  // consumes the run from every start position, fails the $, and backtracks
+  // through the whole run before trying the next one. It cost 46ms at 10k
+  // slashes and 4.2s at 100k. basePath is the caller's `path` prop, so it is
+  // input this module does not control, which is why CodeQL reports it as
+  // js/polynomial-redos. Scanning does the same job in linear time.
+  let end = basePath.length;
+  while (end > 0 && basePath[end - 1] === "/") end--;
+  const normalized = basePath.slice(0, end);
+
   if (!pathname.startsWith(normalized)) return undefined;
-  const rest = pathname.slice(normalized.length).replace(/^\/+/, "");
-  return rest || undefined;
+
+  let start = normalized.length;
+  while (start < pathname.length && pathname[start] === "/") start++;
+
+  return pathname.slice(start) || undefined;
 }
 
 /**
