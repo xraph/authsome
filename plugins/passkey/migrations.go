@@ -50,6 +50,22 @@ CREATE INDEX IF NOT EXISTS idx_authsome_passkey_credentials_user
 				return err
 			},
 		},
+		&migrate.Migration{
+			// WebAuthn defines signCount as a uint32, but INTEGER in postgres
+			// is int4 and tops out at 2^31-1. An authenticator reporting a
+			// counter above that made the write fail outright with an encode
+			// error rather than storing the value. SQLite needs no equivalent
+			// migration: its INTEGER is already 64-bit.
+			Name:    "widen_sign_count_to_bigint",
+			Version: "20240201000002",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_passkey_credentials
+    ALTER COLUMN sign_count TYPE BIGINT;
+`)
+				return err
+			},
+		},
 	)
 
 	// ──────────────────────────────────────────────────

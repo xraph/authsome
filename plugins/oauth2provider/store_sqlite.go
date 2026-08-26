@@ -34,7 +34,7 @@ var _ Store = (*SqliteStore)(nil)
 // ──────────────────────────────────────────────────
 
 func (s *SqliteStore) CreateClient(ctx context.Context, c *OAuth2Client) error {
-	now := time.Now()
+	now := utc(time.Now())
 	if c.CreatedAt.IsZero() {
 		c.CreatedAt = now
 	}
@@ -117,7 +117,7 @@ func (s *SqliteStore) DeleteClient(ctx context.Context, clientID id.OAuth2Client
 // ──────────────────────────────────────────────────
 
 func (s *SqliteStore) CreateAuthCode(ctx context.Context, code *AuthorizationCode) error {
-	now := time.Now()
+	now := utc(time.Now())
 	if code.CreatedAt.IsZero() {
 		code.CreatedAt = now
 	}
@@ -159,7 +159,7 @@ func (s *SqliteStore) ConsumeAuthCode(ctx context.Context, code string) (bool, e
 
 func (s *SqliteStore) CreateDeviceCode(ctx context.Context, dc *DeviceCode) error {
 	if dc.CreatedAt.IsZero() {
-		dc.CreatedAt = time.Now()
+		dc.CreatedAt = utc(time.Now())
 	}
 	m := fromDeviceCode(dc)
 	_, err := s.sdb.NewInsert(m).Exec(ctx)
@@ -204,7 +204,10 @@ func (s *SqliteStore) UpdateDeviceCode(ctx context.Context, dc *DeviceCode) erro
 
 func (s *SqliteStore) DeleteExpiredDeviceCodes(ctx context.Context) error {
 	_, err := s.sdb.NewDelete((*deviceCodeModel)(nil)).
-		Where("expires_at < ?", time.Now()).
+		// utc(), not a bare time.Now(): expires_at is TEXT in SQLite, so this
+		// predicate is a string comparison and both sides must be on the same
+		// clock. A local-zone bound sweeps late west of UTC and early east of it.
+		Where("expires_at < ?", utc(time.Now())).
 		Exec(ctx)
 	return oauth2SqliteError(err)
 }

@@ -120,6 +120,22 @@ func toOAuth2Client(m *oauth2ClientModel) (*OAuth2Client, error) {
 		_ = json.Unmarshal(m.Metadata, &metadata) //nolint:errcheck // best-effort decode
 	}
 
+	// Rows written before the empty-slice guard was fixed still hold JSON
+	// null, which decodes to a nil slice and serialises straight back out as
+	// null. The mongo decoder has always normalised here; match it.
+	if resources == nil {
+		resources = []string{}
+	}
+	if redirectURIs == nil {
+		redirectURIs = []string{}
+	}
+	if scopes == nil {
+		scopes = []string{}
+	}
+	if grantTypes == nil {
+		grantTypes = []string{}
+	}
+
 	return &OAuth2Client{
 		ID:                      clientID,
 		AppID:                   appID,
@@ -145,19 +161,19 @@ func toOAuth2Client(m *oauth2ClientModel) (*OAuth2Client, error) {
 
 func fromOAuth2Client(c *OAuth2Client) *oauth2ClientModel {
 	redirectURIs, _ := json.Marshal(c.RedirectURIs) //nolint:errcheck // marshaling known types
-	if len(redirectURIs) == 0 {
+	if len(c.RedirectURIs) == 0 {
 		redirectURIs = []byte("[]")
 	}
 	scopes, _ := json.Marshal(c.Scopes) //nolint:errcheck // marshaling known types
-	if len(scopes) == 0 {
+	if len(c.Scopes) == 0 {
 		scopes = []byte("[]")
 	}
 	grantTypes, _ := json.Marshal(c.GrantTypes) //nolint:errcheck // marshaling known types
-	if len(grantTypes) == 0 {
+	if len(c.GrantTypes) == 0 {
 		grantTypes = []byte("[]")
 	}
 	resources, _ := json.Marshal(c.Resources) //nolint:errcheck // marshaling known types
-	if len(resources) == 0 {
+	if len(c.Resources) == 0 {
 		resources = []byte("[]")
 	}
 
@@ -235,7 +251,7 @@ func toAuthCode(m *authCodeModel) (*AuthorizationCode, error) {
 
 func fromAuthCode(c *AuthorizationCode) *authCodeModel {
 	scopes, _ := json.Marshal(c.Scopes) //nolint:errcheck // marshaling known types
-	if len(scopes) == 0 {
+	if len(c.Scopes) == 0 {
 		scopes = []byte("[]")
 	}
 	resources, _ := json.Marshal(c.Resources) //nolint:errcheck // marshaling known types
@@ -254,9 +270,9 @@ func fromAuthCode(c *AuthorizationCode) *authCodeModel {
 		Resources:           resources,
 		CodeChallenge:       c.CodeChallenge,
 		CodeChallengeMethod: c.CodeChallengeMethod,
-		ExpiresAt:           c.ExpiresAt,
+		ExpiresAt:           utc(c.ExpiresAt),
 		Consumed:            c.Consumed,
-		CreatedAt:           c.CreatedAt,
+		CreatedAt:           utc(c.CreatedAt),
 	}
 }
 
@@ -311,7 +327,7 @@ func toDeviceCode(m *deviceCodeModel) (*DeviceCode, error) {
 
 func fromDeviceCode(dc *DeviceCode) *deviceCodeModel {
 	scopes, _ := json.Marshal(dc.Scopes) //nolint:errcheck // marshaling known types
-	if len(scopes) == 0 {
+	if len(dc.Scopes) == 0 {
 		scopes = []byte("[]")
 	}
 	resources, _ := json.Marshal(dc.Resources) //nolint:errcheck // marshaling known types
@@ -328,12 +344,12 @@ func fromDeviceCode(dc *DeviceCode) *deviceCodeModel {
 		Scopes:          scopes,
 		Resources:       resources,
 		VerificationURI: dc.VerificationURI,
-		ExpiresAt:       dc.ExpiresAt,
+		ExpiresAt:       utc(dc.ExpiresAt),
 		Interval:        dc.Interval,
 		Status:          dc.Status,
 		UserID:          dc.UserID.String(),
-		LastPolledAt:    dc.LastPolledAt,
-		CreatedAt:       dc.CreatedAt,
+		LastPolledAt:    utc(dc.LastPolledAt),
+		CreatedAt:       utc(dc.CreatedAt),
 	}
 }
 
@@ -361,3 +377,13 @@ func parsePrincipalID(s string) id.ServiceAccountID {
 	}
 	return pid
 }
+
+// utc normalizes a timestamp to UTC before it reaches a model.
+//
+// The SQLite schema stores timestamps as TEXT, so the driver renders whatever
+// wall clock the time.Time carries. A local-zone value is written as local
+// text and compared as local text, which makes range predicates like
+// "expires_at < now" wrong by the zone offset: west of UTC nothing expires
+// on time, east of UTC live rows are swept early. Normalizing on the way in
+// keeps every stored timestamp on one clock.
+func utc(t time.Time) time.Time { return t.UTC() }

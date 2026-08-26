@@ -54,6 +54,7 @@ type oauth2ClientDoc struct {
 	ClientSecretExpiresAt   *time.Time     `bson:"client_secret_expires_at,omitempty"`
 	Metadata                map[string]any `bson:"metadata"`
 	DPoPMode                string         `bson:"dpop_mode"`
+	PrincipalID             string         `bson:"principal_id"`
 
 	CreatedAt time.Time `bson:"created_at"`
 	UpdatedAt time.Time `bson:"updated_at"`
@@ -122,6 +123,7 @@ func oauth2ClientDocToModel(d *oauth2ClientDoc) (*OAuth2Client, error) {
 		Resources:               resources,
 		GrantTypes:              grantTypes,
 		Public:                  d.Public,
+		PrincipalID:             parsePrincipalID(d.PrincipalID),
 		TokenEndpointAuthMethod: d.TokenEndpointAuthMethod,
 		RegistrationTokenHash:   d.RegistrationTokenHash,
 		DynamicallyRegistered:   d.DynamicallyRegistered,
@@ -173,6 +175,7 @@ func oauth2ClientToDoc(c *OAuth2Client) *oauth2ClientDoc {
 		ClientSecretExpiresAt:   c.ClientSecretExpiresAt,
 		Metadata:                metadata,
 		DPoPMode:                c.DPoPMode,
+		PrincipalID:             principalIDString(c.PrincipalID),
 		CreatedAt:               c.CreatedAt,
 		UpdatedAt:               c.UpdatedAt,
 	}

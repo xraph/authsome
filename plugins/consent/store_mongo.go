@@ -128,8 +128,13 @@ func (s *MongoStore) GrantConsent(ctx context.Context, c *Consent) error {
 			"purpose": doc.Purpose,
 		},
 		bson.M{
+			// _id belongs in $setOnInsert, not $set. Callers mint a fresh
+			// ConsentID on every grant while the natural key is
+			// (user_id, app_id, purpose), so $set-ting it made mongo reject
+			// the second grant for a purpose outright: the (immutable) field
+			// '_id' was found to have been altered. Re-consenting, and
+			// re-granting after a revocation, both failed on mongo alone.
 			"$set": bson.M{
-				"_id":        doc.ID,
 				"granted":    doc.Granted,
 				"version":    doc.Version,
 				"ip_address": doc.IPAddress,
@@ -138,6 +143,7 @@ func (s *MongoStore) GrantConsent(ctx context.Context, c *Consent) error {
 				"updated_at": doc.UpdatedAt,
 			},
 			"$setOnInsert": bson.M{
+				"_id":        doc.ID,
 				"user_id":    doc.UserID,
 				"app_id":     doc.AppID,
 				"purpose":    doc.Purpose,

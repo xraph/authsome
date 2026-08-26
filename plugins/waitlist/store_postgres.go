@@ -151,7 +151,11 @@ func (s *PostgresStore) CountByStatus(ctx context.Context, appID id.AppID) (pend
 
 	var rows []countRow
 	err = s.pg.NewRaw(
-		"SELECT status, COUNT(*) AS count FROM authsome_waitlist_entries WHERE app_id = ? GROUP BY status",
+		// $1, not ?: this is a raw query handed straight to postgres, which
+		// does not accept the ? placeholder the query builder rewrites
+		// elsewhere. With ? the statement never parsed and CountByStatus
+		// failed on every call.
+		"SELECT status, COUNT(*) AS count FROM authsome_waitlist_entries WHERE app_id = $1 GROUP BY status",
 		appID.String(),
 	).Scan(ctx, &rows)
 	if err != nil {

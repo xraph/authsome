@@ -1493,3 +1493,30 @@ func testSessionActorChainRoundTrip(t *testing.T, s store.Store) {
 	require.NoError(t, err)
 	assert.Equal(t, admin.ID.String(), gotImp.ImpersonatedBy().String())
 }
+
+// ──────────────────────────────────────────────────
+// Exported seeding helpers for plugin conformance suites
+// ──────────────────────────────────────────────────
+
+// Tenant is an app plus its default environment: the parent rows that every
+// FK-enforcing backend needs in place before app-scoped rows can be written.
+type Tenant struct {
+	AppID id.AppID
+	EnvID id.EnvironmentID
+}
+
+// SeedTenant creates an app and its default environment in s. Plugin
+// conformance suites use it so their rows can satisfy the foreign keys the
+// SQL backends declare against authsome_apps and authsome_environments.
+func SeedTenant(t *testing.T, s store.Store) Tenant {
+	t.Helper()
+	tn := seedTenant(t, s)
+	return Tenant(tn)
+}
+
+// SeedUser creates a user under tn and returns its id. Plugin tables that
+// reference authsome_users need a real row here, not a synthetic id.
+func SeedUser(t *testing.T, s store.Store, tn Tenant, email string) id.UserID {
+	t.Helper()
+	return seedUser(t, s, tenant(tn), email).ID
+}
