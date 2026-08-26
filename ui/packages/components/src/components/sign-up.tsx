@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useClientConfig } from "@authsome/ui-react";
 import { safeRedirectTarget } from "@authsome/ui-core";
+import { useSubPath } from "../lib/use-sub-path";
 import { SignUpForm } from "./sign-up-form";
 import { EmailVerificationForm } from "./email-verification-form";
 import type { AuthCardAlign, AuthCardVariant } from "./auth-card";
@@ -118,28 +119,3 @@ export function SignUp({
   );
 }
 
-function useSubPath(basePath: string): string | undefined {
-  const [subPath, setSubPath] = React.useState<string | undefined>(() => {
-    if (typeof window === "undefined") return undefined;
-    return extractSubPath(window.location.pathname, basePath);
-  });
-
-  React.useEffect(() => {
-    setSubPath(extractSubPath(window.location.pathname, basePath));
-
-    const handler = () => {
-      setSubPath(extractSubPath(window.location.pathname, basePath));
-    };
-    window.addEventListener("popstate", handler);
-    return () => window.removeEventListener("popstate", handler);
-  }, [basePath]);
-
-  return subPath;
-}
-
-function extractSubPath(pathname: string, basePath: string): string | undefined {
-  const normalized = basePath.replace(/\/+$/, "");
-  if (!pathname.startsWith(normalized)) return undefined;
-  const rest = pathname.slice(normalized.length).replace(/^\/+/, "");
-  return rest || undefined;
-}

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useAuth } from "@authsome/ui-react";
 import { safeRedirectTarget } from "@authsome/ui-core";
+import { useSubPath } from "../lib/use-sub-path";
 import { SignInForm } from "./sign-in-form";
 import { ForgotPasswordForm } from "./forgot-password-form";
 import { ResetPasswordForm } from "./reset-password-form";
@@ -198,32 +199,3 @@ function VerifyEmailRoute({
   );
 }
 
-/**
- * Extracts the sub-path segment after the base path from the current URL.
- * E.g. for base="/sign-in" and URL="/sign-in/forgot-password", returns "forgot-password".
- */
-function useSubPath(basePath: string): string | undefined {
-  const [subPath, setSubPath] = React.useState<string | undefined>(() => {
-    if (typeof window === "undefined") return undefined;
-    return extractSubPath(window.location.pathname, basePath);
-  });
-
-  React.useEffect(() => {
-    setSubPath(extractSubPath(window.location.pathname, basePath));
-
-    const handler = () => {
-      setSubPath(extractSubPath(window.location.pathname, basePath));
-    };
-    window.addEventListener("popstate", handler);
-    return () => window.removeEventListener("popstate", handler);
-  }, [basePath]);
-
-  return subPath;
-}
-
-function extractSubPath(pathname: string, basePath: string): string | undefined {
-  const normalized = basePath.replace(/\/+$/, "");
-  if (!pathname.startsWith(normalized)) return undefined;
-  const rest = pathname.slice(normalized.length).replace(/^\/+/, "");
-  return rest || undefined;
-}
