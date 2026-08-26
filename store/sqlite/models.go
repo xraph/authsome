@@ -496,9 +496,9 @@ func fromVerification(v *account.Verification) *VerificationModel {
 		Token:     v.Token,
 		Type:      string(v.Type),
 		Attempts:  v.Attempts,
-		ExpiresAt: v.ExpiresAt,
+		ExpiresAt: v.ExpiresAt.UTC(),
 		Consumed:  v.Consumed,
-		CreatedAt: v.CreatedAt,
+		CreatedAt: v.CreatedAt.UTC(),
 	}
 }
 

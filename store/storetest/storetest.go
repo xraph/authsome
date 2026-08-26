@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
@@ -76,6 +77,7 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"SessionActorChainRoundTrip", testSessionActorChainRoundTrip},
 		{"ServiceAccountKindDefaultsToService", testServiceAccountKindDefaultsToService},
 		{"SessionDPoPJKTRoundTrip", testSessionDPoPJKTRoundTrip},
+		{"ExpiredEmailVerificationIsNotActive", testExpiredEmailVerificationIsNotActive},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -1519,4 +1521,56 @@ func SeedTenant(t *testing.T, s store.Store) Tenant {
 func SeedUser(t *testing.T, s store.Store, tn Tenant, email string) id.UserID {
 	t.Helper()
 	return seedUser(t, s, tenant(tn), email).ID
+}
+
+// testExpiredEmailVerificationIsNotActive checks the expiry boundary on the
+// active-verification lookup. The token in a verification email is a bearer
+// credential, so one that outlives its expiry is a credential that works
+// after it was supposed to stop.
+//
+// It is a boundary worth testing on every backend rather than trusting,
+// because the comparison happens in the database and not in Go: SQLite stores
+// these timestamps as TEXT and compares them as strings, so a query that
+// binds a differently-zoned value than the one it stored gets an answer that
+// is wrong by the offset in whichever direction the zone runs.
+func testExpiredEmailVerificationIsNotActive(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "verify-expiry-"+suffix(tn.AppID.String())+"@example.test")
+
+	expired := &account.Verification{
+		ID:        id.NewVerificationID(),
+		AppID:     tn.AppID,
+		EnvID:     tn.EnvID,
+		UserID:    u.ID,
+		Token:     "expired-" + suffix(tn.AppID.String()),
+		Type:      account.VerificationEmail,
+		ExpiresAt: now().Add(-time.Hour),
+		CreatedAt: now().Add(-2 * time.Hour),
+	}
+	require.NoError(t, s.CreateVerification(ctx, expired))
+
+	got, err := s.GetActiveEmailVerification(ctx, u.ID)
+	if err == nil {
+		assert.NotEqual(t, expired.ID, got.ID,
+			"a verification that expired an hour ago is still being served as active")
+	}
+
+	// And the live one is found, so the boundary is not simply rejecting
+	// everything.
+	live := &account.Verification{
+		ID:        id.NewVerificationID(),
+		AppID:     tn.AppID,
+		EnvID:     tn.EnvID,
+		UserID:    u.ID,
+		Token:     "live-" + suffix(tn.AppID.String()),
+		Type:      account.VerificationEmail,
+		ExpiresAt: now().Add(time.Hour),
+		CreatedAt: now(),
+	}
+	require.NoError(t, s.CreateVerification(ctx, live))
+
+	got, err = s.GetActiveEmailVerification(ctx, u.ID)
+	require.NoError(t, err, "a verification with an hour left must be found")
+	assert.Equal(t, live.ID, got.ID, "the active lookup returned the wrong verification")
 }

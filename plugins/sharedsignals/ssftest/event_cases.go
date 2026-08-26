@@ -209,3 +209,46 @@ func testCountEventsSince(t *testing.T, f Fixture) {
 	require.NoError(t, err)
 	assert.Equal(t, 4, n, "the breaker must count events that took no action, not just the ones that did")
 }
+
+// testExpiredSignalIsNotActive checks the expiry boundary on the risk-signal
+// lookup, which is what decides whether a past event still constrains a
+// sign-in now. It takes the caller's clock as an argument, so the case passes
+// a local-zone time on purpose: that is what the risk path actually does, and
+// on a backend storing expires_at as text the comparison is only correct if
+// the store normalises what it is handed.
+func testExpiredSignalIsNotActive(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	s := seedStream(t, f)
+
+	expired := &ssf.Signal{
+		ID: id.NewSSFSignalID(), AppID: f.AppID, EnvID: f.EnvID, UserID: f.UserID,
+		StreamID: s.ID, EventType: sessionRevoked, Severity: 5, Reason: "expired",
+		EventAt: now().Add(-2 * time.Hour), ExpiresAt: now().Add(-time.Hour),
+		CreatedAt: now().Add(-2 * time.Hour),
+	}
+	require.NoError(t, f.Store.CreateSignal(ctx, expired))
+
+	live := &ssf.Signal{
+		ID: id.NewSSFSignalID(), AppID: f.AppID, EnvID: f.EnvID, UserID: f.UserID,
+		StreamID: s.ID, EventType: sessionRevoked, Severity: 7, Reason: "live",
+		EventAt: now(), ExpiresAt: now().Add(time.Hour), CreatedAt: now(),
+	}
+	require.NoError(t, f.Store.CreateSignal(ctx, live))
+
+	// time.Now() unqualified, matching the risk path's own call.
+	got, err := f.Store.ListActiveSignals(ctx, f.AppID, f.EnvID, f.UserID, time.Now())
+	require.NoError(t, err)
+
+	var sawExpired, sawLive bool
+	for _, sig := range got {
+		if sig.ID == expired.ID {
+			sawExpired = true
+		}
+		if sig.ID == live.ID {
+			sawLive = true
+		}
+	}
+	assert.False(t, sawExpired,
+		"a risk signal that expired an hour ago is still constraining sign-in")
+	assert.True(t, sawLive, "a signal with an hour left must still apply")
+}

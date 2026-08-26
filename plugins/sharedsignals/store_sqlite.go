@@ -231,7 +231,7 @@ func (s *SqliteStore) CountEventsSince(ctx context.Context,
 
 func (s *SqliteStore) CreateSignal(ctx context.Context, sig *Signal) error {
 	if sig.CreatedAt.IsZero() {
-		sig.CreatedAt = time.Now()
+		sig.CreatedAt = time.Now().UTC()
 	}
 	_, err := s.sdb.NewInsert(fromSignal(sig)).Exec(ctx)
 	return sqlErr(err)
@@ -244,7 +244,13 @@ func (s *SqliteStore) ListActiveSignals(ctx context.Context, appID id.AppID,
 		Where("app_id = ?", appID.String()).
 		Where("env_id = ?", envID.String()).
 		Where("user_id = ?", userID.String()).
-		Where("expires_at > ?", now).
+		// now.UTC(), not the caller's clock as given: expires_at is TEXT in
+		// this schema, so this predicate is a string comparison and both
+		// sides have to agree. The risk path calls this with a bare
+		// time.Now(), and west of UTC an unnormalised bound value keeps
+		// expired signals constraining sign-in while east of it live signals
+		// stop applying early.
+		Where("expires_at > ?", now.UTC()).
 		OrderExpr("severity DESC").
 		Scan(ctx); err != nil {
 		return nil, sqlErr(err)

@@ -310,9 +310,9 @@ func fromSignal(s *Signal) *signalModel {
 		EventType: s.EventType,
 		Severity:  s.Severity,
 		Reason:    s.Reason,
-		EventAt:   s.EventAt,
-		ExpiresAt: s.ExpiresAt,
-		CreatedAt: s.CreatedAt,
+		EventAt:   s.EventAt.UTC(),
+		ExpiresAt: s.ExpiresAt.UTC(),
+		CreatedAt: s.CreatedAt.UTC(),
 	}
 }
 
