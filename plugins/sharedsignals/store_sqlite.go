@@ -191,11 +191,15 @@ func (s *SqliteStore) ListReceivedEvents(ctx context.Context, appID id.AppID,
 
 	var models []*receivedEventModel
 	q := s.sdb.NewSelect(&models).Where("stream_id = ?", f.StreamID.String())
+	// .UTC() on both bounds: received_at is TEXT here, so these are string
+	// comparisons and a caller passing a local-zone window would select by
+	// wall-clock text against stored UTC text, shifting the window by the
+	// zone offset.
 	if !f.Since.IsZero() {
-		q = q.Where("received_at >= ?", f.Since)
+		q = q.Where("received_at >= ?", f.Since.UTC())
 	}
 	if !f.Until.IsZero() {
-		q = q.Where("received_at < ?", f.Until)
+		q = q.Where("received_at < ?", f.Until.UTC())
 	}
 	// The id tie-break makes the page deterministic when several rows share
 	// a received_at, which one multi-event SET produces by construction.
@@ -221,7 +225,10 @@ func (s *SqliteStore) CountEventsSince(ctx context.Context,
 	// Store.CountEventsSince.
 	count, err := s.sdb.NewSelect((*receivedEventModel)(nil)).
 		Where("stream_id = ?", streamID.String()).
-		Where("received_at > ?", since).
+		// .UTC(): actions.go calls this with a bare time.Now(), and the
+		// breaker counting the wrong window either trips early or, east of
+		// UTC, fails to trip at all.
+		Where("received_at > ?", since.UTC()).
 		Count(ctx)
 	if err != nil {
 		return 0, sqlErr(err)
@@ -231,7 +238,7 @@ func (s *SqliteStore) CountEventsSince(ctx context.Context,
 
 func (s *SqliteStore) CreateSignal(ctx context.Context, sig *Signal) error {
 	if sig.CreatedAt.IsZero() {
-		sig.CreatedAt = time.Now()
+		sig.CreatedAt = time.Now().UTC()
 	}
 	_, err := s.sdb.NewInsert(fromSignal(sig)).Exec(ctx)
 	return sqlErr(err)
@@ -244,7 +251,13 @@ func (s *SqliteStore) ListActiveSignals(ctx context.Context, appID id.AppID,
 		Where("app_id = ?", appID.String()).
 		Where("env_id = ?", envID.String()).
 		Where("user_id = ?", userID.String()).
-		Where("expires_at > ?", now).
+		// now.UTC(), not the caller's clock as given: expires_at is TEXT in
+		// this schema, so this predicate is a string comparison and both
+		// sides have to agree. The risk path calls this with a bare
+		// time.Now(), and west of UTC an unnormalised bound value keeps
+		// expired signals constraining sign-in while east of it live signals
+		// stop applying early.
+		Where("expires_at > ?", now.UTC()).
 		OrderExpr("severity DESC").
 		Scan(ctx); err != nil {
 		return nil, sqlErr(err)

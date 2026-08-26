@@ -124,8 +124,8 @@ func testListReceivedEventsRespectsWindow(t *testing.T, f Fixture) {
 	// [base+1m, base+2m) must hold exactly the middle event.
 	got, err := f.Store.ListReceivedEvents(ctx, f.AppID, ssf.ReceivedEventFilter{
 		StreamID: s.ID,
-		Since:    base.Add(time.Minute),
-		Until:    base.Add(2 * time.Minute),
+		Since:    base.Add(time.Minute).Local(),
+		Until:    base.Add(2 * time.Minute).Local(),
 	})
 	require.NoError(t, err)
 	assert.Len(t, got, 1, "the window is half-open: Since is inclusive and Until is exclusive")
@@ -133,6 +133,16 @@ func testListReceivedEventsRespectsWindow(t *testing.T, f Fixture) {
 	all, err := f.Store.ListReceivedEvents(ctx, f.AppID, ssf.ReceivedEventFilter{StreamID: s.ID})
 	require.NoError(t, err)
 	assert.Len(t, all, 3, "an unbounded window must return every row on the stream")
+
+	// Newest first, as the interface documents. Worth asserting rather than
+	// assuming: on a backend ordering a text timestamp column this is a
+	// string sort, and it only agrees with chronological order while every
+	// stored value is on the same clock.
+	for i := 1; i < len(all); i++ {
+		assert.False(t, all[i].ReceivedAt.After(all[i-1].ReceivedAt),
+			"audit rows came back out of order: %v then %v",
+			all[i-1].ReceivedAt, all[i].ReceivedAt)
+	}
 }
 
 // testListReceivedEventsClampsLimit covers the two documented bounds: no
@@ -193,7 +203,10 @@ func testCountEventsSince(t *testing.T, f Fixture) {
 		require.NoError(t, f.Store.InsertReceivedEvent(ctx, e))
 	}
 
-	n, err := f.Store.CountEventsSince(ctx, s.ID, now().Add(-time.Minute))
+	// time.Now() unqualified, matching the breaker's own call in actions.go.
+	// A UTC bound value here would pass on every backend and hide the fact
+	// that the comparison happens in the database against a text column.
+	n, err := f.Store.CountEventsSince(ctx, s.ID, time.Now().Add(-time.Minute))
 	require.NoError(t, err)
 	assert.Equal(t, 3, n, "the breaker count must see recent events and not the older one")
 
@@ -205,7 +218,50 @@ func testCountEventsSince(t *testing.T, f Fixture) {
 	signal.ReceivedAt = now()
 	require.NoError(t, f.Store.InsertReceivedEvent(ctx, signal))
 
-	n, err = f.Store.CountEventsSince(ctx, s.ID, now().Add(-time.Minute))
+	n, err = f.Store.CountEventsSince(ctx, s.ID, time.Now().Add(-time.Minute))
 	require.NoError(t, err)
 	assert.Equal(t, 4, n, "the breaker must count events that took no action, not just the ones that did")
+}
+
+// testExpiredSignalIsNotActive checks the expiry boundary on the risk-signal
+// lookup, which is what decides whether a past event still constrains a
+// sign-in now. It takes the caller's clock as an argument, so the case passes
+// a local-zone time on purpose: that is what the risk path actually does, and
+// on a backend storing expires_at as text the comparison is only correct if
+// the store normalises what it is handed.
+func testExpiredSignalIsNotActive(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	s := seedStream(t, f)
+
+	expired := &ssf.Signal{
+		ID: id.NewSSFSignalID(), AppID: f.AppID, EnvID: f.EnvID, UserID: f.UserID,
+		StreamID: s.ID, EventType: sessionRevoked, Severity: 5, Reason: "expired",
+		EventAt: now().Add(-2 * time.Hour), ExpiresAt: now().Add(-time.Hour),
+		CreatedAt: now().Add(-2 * time.Hour),
+	}
+	require.NoError(t, f.Store.CreateSignal(ctx, expired))
+
+	live := &ssf.Signal{
+		ID: id.NewSSFSignalID(), AppID: f.AppID, EnvID: f.EnvID, UserID: f.UserID,
+		StreamID: s.ID, EventType: sessionRevoked, Severity: 7, Reason: "live",
+		EventAt: now(), ExpiresAt: now().Add(time.Hour), CreatedAt: now(),
+	}
+	require.NoError(t, f.Store.CreateSignal(ctx, live))
+
+	// time.Now() unqualified, matching the risk path's own call.
+	got, err := f.Store.ListActiveSignals(ctx, f.AppID, f.EnvID, f.UserID, time.Now())
+	require.NoError(t, err)
+
+	var sawExpired, sawLive bool
+	for _, sig := range got {
+		if sig.ID == expired.ID {
+			sawExpired = true
+		}
+		if sig.ID == live.ID {
+			sawLive = true
+		}
+	}
+	assert.False(t, sawExpired,
+		"a risk signal that expired an hour ago is still constraining sign-in")
+	assert.True(t, sawLive, "a signal with an hour left must still apply")
 }

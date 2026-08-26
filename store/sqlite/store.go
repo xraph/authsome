@@ -528,7 +528,12 @@ func (s *Store) GetActiveEmailVerification(ctx context.Context, userID id.UserID
 		Where("user_id = ?", userID.String()).
 		Where("type = ?", string(account.VerificationEmail)).
 		Where("consumed = FALSE").
-		Where("expires_at > ?", time.Now()).
+		// .UTC(), not a bare time.Now(): expires_at is TEXT in this schema,
+		// so this predicate is a string comparison and both sides have to be
+		// on the same clock. With a local-zone bound value the answer is
+		// wrong by the offset, and west of UTC it is wrong in the direction
+		// that keeps an expired verification token working.
+		Where("expires_at > ?", time.Now().UTC()).
 		OrderExpr("created_at DESC").
 		Limit(1).
 		Scan(ctx)

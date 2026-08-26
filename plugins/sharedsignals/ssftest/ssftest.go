@@ -63,6 +63,7 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"ListReceivedEventsClampsLimit", testListReceivedEventsClampsLimit},
 		{"DeleteReceivedEventFreesTheJTI", testDeleteReceivedEventFreesTheJTI},
 		{"CountEventsSince", testCountEventsSince},
+		{"ExpiredSignalIsNotActive", testExpiredSignalIsNotActive},
 	}
 	for _, tc := range cases {
 		if skipSet[tc.name] {

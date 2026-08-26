@@ -270,7 +270,7 @@ func fromReceivedEvent(e *ReceivedEvent) *receivedEventModel {
 		Outcome:        e.Outcome,
 		ActionTaken:    e.ActionTaken,
 		Error:          e.Error,
-		ReceivedAt:     e.ReceivedAt,
+		ReceivedAt:     e.ReceivedAt.UTC(),
 	}
 }
 
@@ -310,9 +310,9 @@ func fromSignal(s *Signal) *signalModel {
 		EventType: s.EventType,
 		Severity:  s.Severity,
 		Reason:    s.Reason,
-		EventAt:   s.EventAt,
-		ExpiresAt: s.ExpiresAt,
-		CreatedAt: s.CreatedAt,
+		EventAt:   s.EventAt.UTC(),
+		ExpiresAt: s.ExpiresAt.UTC(),
+		CreatedAt: s.CreatedAt.UTC(),
 	}
 }
 
