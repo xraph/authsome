@@ -240,6 +240,17 @@ jobs:
       - name: Typecheck
         run: cd ui && pnpm run typecheck
 
+      # Neither of these ran here before. `pnpm lint` had been failing in
+      # ui-components for long enough to accumulate 13 findings, and nothing
+      # reported it, because this job only built and typechecked. The tests are
+      # added for the same reason: a harness CI never runs is only marginally
+      # more visible than a lint that CI never runs.
+      - name: Lint
+        run: cd ui && pnpm run lint
+
+      - name: Test
+        run: cd ui && pnpm run test
+
       - name: Build SDK TypeScript
         run: |
           cd sdk/typescript
