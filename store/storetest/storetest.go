@@ -1144,8 +1144,11 @@ func testEphemeralPrincipalExpiry(t *testing.T, s store.Store) {
 	assert.Equal(t, parent.ID.String(), gotLapsed.Parent.ID)
 	assert.False(t, gotLapsed.IsActive(now()), "an expired principal must not read as active")
 
+	// ActiveAsOf on the local clock, matching engine_principal.go's own call.
+	// A UTC value here passes on every backend and hides that the filtering
+	// happens in the database against a text column.
 	active, err := s.ListPrincipals(ctx, &principal.Query{
-		AppID: tn.AppID, Kind: principal.KindAgent, ActiveOnly: true, ActiveAsOf: now(),
+		AppID: tn.AppID, Kind: principal.KindAgent, ActiveOnly: true, ActiveAsOf: time.Now(),
 	})
 	require.NoError(t, err)
 	ids := make([]string, 0, len(active))

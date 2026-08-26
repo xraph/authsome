@@ -169,7 +169,12 @@ func (s *Store) ListPrincipals(ctx context.Context, q *principal.Query) ([]*prin
 		// disagree with the domain method every non-store caller uses.
 		query = query.
 			Where("active = TRUE").
-			Where("(expires_at IS NULL OR expires_at >= ?)", q.ActiveAsOf)
+			// .UTC(): expires_at is TEXT here, so this is a string
+			// comparison and the caller's clock has to be normalised.
+			// engine_principal.go passes a bare time.Now(), and west of UTC
+			// an unnormalised bound value keeps an expired principal
+			// authenticating for the length of the zone offset.
+			Where("(expires_at IS NULL OR expires_at >= ?)", q.ActiveAsOf.UTC())
 	}
 	if q.Limit > 0 {
 		query = query.Limit(q.Limit)
