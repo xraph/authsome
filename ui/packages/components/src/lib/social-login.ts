@@ -29,17 +29,19 @@ export function openOAuthPopup(
  * so the caller typically just needs to redirect/reload after completion.
  */
 export async function handleSocialLogin(
-  // The codegen mis-types this endpoint on both sides: the social-OAuth
-  // Start{Request,Response} Go structs collide with the phone-auth pair,
-  // and the wrong shapes win (request gains a required `phone`, response
-  // loses `auth_url`). The real backend takes {app_id?, redirect_url?}
-  // and returns {auth_url}. The body is typed as `any` so this function
-  // accepts the real AuthClient; the response is cast at the assertion
-  // site below.
+  // The codegen mis-types this endpoint's response: the social-OAuth
+  // Start{Request,Response} Go structs collide with the phone-auth pair and
+  // the wrong shape wins, so the declared response loses `auth_url`. It is
+  // cast at the assertion site below.
+  //
+  // The request is not a body. startOAuth takes frontend_url and redirect_url
+  // positionally and puts them in the query string, which is what
+  // plugins/social/plugin.go reads (both are `query:` tagged there).
   client: {
     startOAuth: (
       provider: string,
-      body: any,
+      frontendUrl?: string,
+      redirectUrl?: string,
     ) => Promise<unknown>;
   },
   providerId: string,
@@ -47,11 +49,14 @@ export async function handleSocialLogin(
   onError?: (err: unknown) => void,
 ): Promise<void> {
   try {
-    // The provider is a path parameter (already passed positionally); the
-    // body only carries the post-auth redirect target.
-    const res = (await client.startOAuth(providerId, {
-      redirect_url: window.location.href,
-    })) as { auth_url: string };
+    // redirect_url is the post-auth return target. frontend_url is left unset
+    // so the backend falls back to the Origin/Referer it already trusts,
+    // rather than a value this function would be asserting.
+    const res = (await client.startOAuth(
+      providerId,
+      undefined,
+      window.location.href,
+    )) as { auth_url: string };
     const { auth_url } = res;
 
     const popup = openOAuthPopup(auth_url);
