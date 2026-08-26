@@ -191,11 +191,15 @@ func (s *SqliteStore) ListReceivedEvents(ctx context.Context, appID id.AppID,
 
 	var models []*receivedEventModel
 	q := s.sdb.NewSelect(&models).Where("stream_id = ?", f.StreamID.String())
+	// .UTC() on both bounds: received_at is TEXT here, so these are string
+	// comparisons and a caller passing a local-zone window would select by
+	// wall-clock text against stored UTC text, shifting the window by the
+	// zone offset.
 	if !f.Since.IsZero() {
-		q = q.Where("received_at >= ?", f.Since)
+		q = q.Where("received_at >= ?", f.Since.UTC())
 	}
 	if !f.Until.IsZero() {
-		q = q.Where("received_at < ?", f.Until)
+		q = q.Where("received_at < ?", f.Until.UTC())
 	}
 	// The id tie-break makes the page deterministic when several rows share
 	// a received_at, which one multi-event SET produces by construction.
@@ -221,7 +225,10 @@ func (s *SqliteStore) CountEventsSince(ctx context.Context,
 	// Store.CountEventsSince.
 	count, err := s.sdb.NewSelect((*receivedEventModel)(nil)).
 		Where("stream_id = ?", streamID.String()).
-		Where("received_at > ?", since).
+		// .UTC(): actions.go calls this with a bare time.Now(), and the
+		// breaker counting the wrong window either trips early or, east of
+		// UTC, fails to trip at all.
+		Where("received_at > ?", since.UTC()).
 		Count(ctx)
 	if err != nil {
 		return 0, sqlErr(err)

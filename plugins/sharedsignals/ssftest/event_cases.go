@@ -124,8 +124,8 @@ func testListReceivedEventsRespectsWindow(t *testing.T, f Fixture) {
 	// [base+1m, base+2m) must hold exactly the middle event.
 	got, err := f.Store.ListReceivedEvents(ctx, f.AppID, ssf.ReceivedEventFilter{
 		StreamID: s.ID,
-		Since:    base.Add(time.Minute),
-		Until:    base.Add(2 * time.Minute),
+		Since:    base.Add(time.Minute).Local(),
+		Until:    base.Add(2 * time.Minute).Local(),
 	})
 	require.NoError(t, err)
 	assert.Len(t, got, 1, "the window is half-open: Since is inclusive and Until is exclusive")
@@ -133,6 +133,16 @@ func testListReceivedEventsRespectsWindow(t *testing.T, f Fixture) {
 	all, err := f.Store.ListReceivedEvents(ctx, f.AppID, ssf.ReceivedEventFilter{StreamID: s.ID})
 	require.NoError(t, err)
 	assert.Len(t, all, 3, "an unbounded window must return every row on the stream")
+
+	// Newest first, as the interface documents. Worth asserting rather than
+	// assuming: on a backend ordering a text timestamp column this is a
+	// string sort, and it only agrees with chronological order while every
+	// stored value is on the same clock.
+	for i := 1; i < len(all); i++ {
+		assert.False(t, all[i].ReceivedAt.After(all[i-1].ReceivedAt),
+			"audit rows came back out of order: %v then %v",
+			all[i-1].ReceivedAt, all[i].ReceivedAt)
+	}
 }
 
 // testListReceivedEventsClampsLimit covers the two documented bounds: no
@@ -193,7 +203,10 @@ func testCountEventsSince(t *testing.T, f Fixture) {
 		require.NoError(t, f.Store.InsertReceivedEvent(ctx, e))
 	}
 
-	n, err := f.Store.CountEventsSince(ctx, s.ID, now().Add(-time.Minute))
+	// time.Now() unqualified, matching the breaker's own call in actions.go.
+	// A UTC bound value here would pass on every backend and hide the fact
+	// that the comparison happens in the database against a text column.
+	n, err := f.Store.CountEventsSince(ctx, s.ID, time.Now().Add(-time.Minute))
 	require.NoError(t, err)
 	assert.Equal(t, 3, n, "the breaker count must see recent events and not the older one")
 
@@ -205,7 +218,7 @@ func testCountEventsSince(t *testing.T, f Fixture) {
 	signal.ReceivedAt = now()
 	require.NoError(t, f.Store.InsertReceivedEvent(ctx, signal))
 
-	n, err = f.Store.CountEventsSince(ctx, s.ID, now().Add(-time.Minute))
+	n, err = f.Store.CountEventsSince(ctx, s.ID, time.Now().Add(-time.Minute))
 	require.NoError(t, err)
 	assert.Equal(t, 4, n, "the breaker must count events that took no action, not just the ones that did")
 }

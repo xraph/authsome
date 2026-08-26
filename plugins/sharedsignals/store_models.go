@@ -270,7 +270,7 @@ func fromReceivedEvent(e *ReceivedEvent) *receivedEventModel {
 		Outcome:        e.Outcome,
 		ActionTaken:    e.ActionTaken,
 		Error:          e.Error,
-		ReceivedAt:     e.ReceivedAt,
+		ReceivedAt:     e.ReceivedAt.UTC(),
 	}
 }
 
