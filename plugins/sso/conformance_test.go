@@ -11,6 +11,7 @@ import (
 	"github.com/xraph/grove/drivers/sqlitedriver"
 	_ "github.com/xraph/grove/drivers/sqlitedriver/sqlitemigrate"
 
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugins/sso"
 	"github.com/xraph/authsome/plugins/sso/ssotest"
 	"github.com/xraph/authsome/store"
@@ -57,6 +58,8 @@ func seedFixture(t *testing.T, core store.Store, plugin sso.Store) ssotest.Fixtu
 		EnvID:      tn.EnvID.String(),
 		OtherAppID: other.AppID,
 		OtherEnvID: other.EnvID.String(),
+		OrgID:      id.NewOrgID(),
+		OtherOrgID: id.NewOrgID(),
 	}
 }
 

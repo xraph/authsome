@@ -265,3 +265,44 @@ func testExpiredSignalIsNotActive(t *testing.T, f Fixture) {
 		"a risk signal that expired an hour ago is still constraining sign-in")
 	assert.True(t, sawLive, "a signal with an hour left must still apply")
 }
+
+// testActiveSignalsAreEnvironmentScoped keeps a signal raised in one
+// environment out of another. Risk decisions run per environment, so a
+// production compromise must not raise the risk on a development sign-in for
+// the same app and the same user, and vice versa. A query that filters on
+// app and user but forgets the environment predicate fails exactly here.
+func testActiveSignalsAreEnvironmentScoped(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	s := seedStream(t, f)
+
+	// A second environment under the same app. Neither the signals table nor
+	// its indexes declare a foreign key on env_id, so this needs no row of
+	// its own on any backend.
+	otherEnv := id.NewEnvironmentID()
+
+	sig := &ssf.Signal{
+		ID: id.NewSSFSignalID(), AppID: f.AppID, EnvID: f.EnvID, UserID: f.UserID,
+		StreamID: s.ID, EventType: sessionRevoked, Severity: 100,
+		Reason: "credential-leak", EventAt: now(),
+		ExpiresAt: now().Add(time.Hour), CreatedAt: now(),
+	}
+	require.NoError(t, f.Store.CreateSignal(ctx, sig))
+
+	// time.Now() unqualified, matching the risk path's own call in risk.go.
+	other, err := f.Store.ListActiveSignals(ctx, f.AppID, otherEnv, f.UserID, time.Now())
+	require.NoError(t, err)
+	for _, got := range other {
+		assert.NotEqual(t, sig.ID, got.ID,
+			"a signal from another environment leaked into env %s", otherEnv)
+	}
+
+	mine, err := f.Store.ListActiveSignals(ctx, f.AppID, f.EnvID, f.UserID, time.Now())
+	require.NoError(t, err)
+	var found bool
+	for _, got := range mine {
+		if got.ID == sig.ID {
+			found = true
+		}
+	}
+	assert.True(t, found, "the signal must still be active in its own environment")
+}

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/plugins/sso"
 )
 
 func testConnectionCRUD(t *testing.T, f Fixture) {
@@ -34,11 +35,16 @@ func testConnectionCRUD(t *testing.T, f Fixture) {
 func testConnectionNotFound(t *testing.T, f Fixture) {
 	ctx := context.Background()
 
+	// The sentinel, not a bare Error: callers branch on ErrConnectionNotFound
+	// to tell "no SSO configured for this domain" from a backend that failed,
+	// and the first sends the user to password login while the second must
+	// surface. A backend returning some other error passes assert.Error and
+	// breaks that branch.
 	_, err := f.Store.GetConnection(ctx, id.NewSSOConnectionID())
-	assert.Error(t, err, "an unknown connection id must not resolve")
+	assert.ErrorIs(t, err, sso.ErrConnectionNotFound, "an unknown connection id must not resolve")
 
 	_, err = f.Store.GetConnectionByDomain(ctx, f.AppID, unique("absent")+".test")
-	assert.Error(t, err, "an unconfigured domain must not resolve")
+	assert.ErrorIs(t, err, sso.ErrConnectionNotFound, "an unconfigured domain must not resolve")
 }
 
 // testDomainLookupIsAppScoped is the one that matters most in this store.
@@ -221,4 +227,55 @@ func testDeleteConnection(t *testing.T, f Fixture) {
 
 	_, err = f.Store.GetConnectionByDomain(ctx, f.AppID, c.Domain)
 	assert.Error(t, err, "a deleted connection must stop resolving by domain too")
+}
+
+// testDomainLookupIsOrgScoped covers the multi-tenant case one level below
+// testDomainLookupIsAppScoped. One company can run SSO for several of its own
+// organizations, and the unique index is on (app_id, org_id, domain) where
+// active, so the same domain is legitimately configured twice inside one app.
+// GetConnectionByDomainAndOrg has to return the right one. A lookup that
+// drops the org predicate resolves an email to whichever org happens to sort
+// first, sending that user to another org's identity provider.
+func testDomainLookupIsOrgScoped(t *testing.T, f Fixture) {
+	if f.OrgID.IsNil() || f.OtherOrgID.IsNil() {
+		t.Skip("fixture provides no second organization")
+	}
+	ctx := context.Background()
+
+	// One domain, two orgs, same app. Both rows are active, which the partial
+	// unique index permits precisely because org_id is part of the key.
+	domain := unique("shared") + ".test"
+
+	mine := newConnection(f.AppID, f.EnvID)
+	mine.Domain, mine.OrgID = domain, f.OrgID
+	require.NoError(t, f.Store.CreateConnection(ctx, mine))
+
+	theirs := newConnection(f.AppID, f.EnvID)
+	theirs.Domain, theirs.OrgID = domain, f.OtherOrgID
+	require.NoError(t, f.Store.CreateConnection(ctx, theirs),
+		"the same domain must be configurable in a second org of the same app")
+
+	got, err := f.Store.GetConnectionByDomainAndOrg(ctx, f.AppID, f.OrgID, domain)
+	require.NoError(t, err)
+	assert.Equal(t, mine.ID, got.ID, "domain lookup returned the wrong organization's connection")
+
+	got, err = f.Store.GetConnectionByDomainAndOrg(ctx, f.AppID, f.OtherOrgID, domain)
+	require.NoError(t, err)
+	assert.Equal(t, theirs.ID, got.ID, "domain lookup returned the wrong organization's connection")
+
+	// An org with nothing configured for the domain must come up empty rather
+	// than borrowing a sibling org's connection.
+	_, err = f.Store.GetConnectionByDomainAndOrg(ctx, f.AppID, id.NewOrgID(), domain)
+	assert.ErrorIs(t, err, sso.ErrConnectionNotFound)
+
+	// Deactivating one org's connection must leave the other untouched.
+	mine.Active = false
+	require.NoError(t, f.Store.UpdateConnection(ctx, mine))
+	_, err = f.Store.GetConnectionByDomainAndOrg(ctx, f.AppID, f.OrgID, domain)
+	assert.ErrorIs(t, err, sso.ErrConnectionNotFound)
+
+	still, err := f.Store.GetConnectionByDomainAndOrg(ctx, f.AppID, f.OtherOrgID, domain)
+	require.NoError(t, err)
+	assert.Equal(t, theirs.ID, still.ID,
+		"deactivating one organization's connection removed another's")
 }

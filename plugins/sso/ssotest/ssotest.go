@@ -30,6 +30,12 @@ type Fixture struct {
 	OtherAppID id.AppID
 	// OtherEnvID is that second tenant's default environment.
 	OtherEnvID string
+	// OrgID and OtherOrgID are two organizations inside AppID. Connections
+	// route per organization as well as per app, so proving that lookup needs
+	// two orgs under one tenant rather than two tenants. org_id carries no
+	// foreign key on any backend, so these need no row of their own.
+	OrgID      id.OrgID
+	OtherOrgID id.OrgID
 }
 
 // Factory builds a fresh, empty, migrated fixture for a single test.
@@ -49,6 +55,7 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"ConnectionCRUD", testConnectionCRUD},
 		{"ConnectionNotFound", testConnectionNotFound},
 		{"DomainLookupIsAppScoped", testDomainLookupIsAppScoped},
+		{"DomainLookupIsOrgScoped", testDomainLookupIsOrgScoped},
 		{"ProviderLookupIsAppScoped", testProviderLookupIsAppScoped},
 		{"ListConnectionsIsAppScoped", testListConnectionsIsAppScoped},
 		{"SAMLFieldsRoundTrip", testSAMLFieldsRoundTrip},

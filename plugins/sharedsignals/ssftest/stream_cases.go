@@ -3,6 +3,7 @@ package ssftest
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -186,4 +187,64 @@ func testSubjectLinkLookupIsTenantScoped(t *testing.T, f Fixture) {
 	_, err := f.Store.GetSubjectLink(ctx, f.AppID, f.EnvID, issuer, subject)
 	require.Error(t, err, "subject link lookup crossed a tenant boundary")
 	assert.True(t, errors.Is(err, ssf.ErrNotFound), "got %v", err)
+}
+
+// testSubjectLinkUpsertIsConcurrencySafe fires the same tuple at the store
+// from many goroutines at once. This is not ceremony and the goroutine count
+// is not arbitrary: a subject link is written on every SSO sign-in, so two
+// writes for one subject arriving together is what happens when somebody
+// opens two tabs. testSubjectLinkUpsertIsIdempotent proves the second call
+// updates rather than collides when it arrives afterwards. It says nothing
+// about what happens when both arrive at once.
+//
+// A read-then-write implementation loses that race. Both readers see "not
+// found", both insert, and the loser hits the unique index and surfaces a raw
+// constraint error instead of succeeding. So every call here must return nil,
+// and exactly one row must survive.
+func testSubjectLinkUpsertIsConcurrencySafe(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	issuer := "https://" + unique("race") + ".test"
+	subject := unique("subject")
+
+	const n = 30
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			defer wg.Done()
+			errs[i] = f.Store.UpsertSubjectLink(ctx, &ssf.SubjectLink{
+				ID: id.NewSSFLinkID(), AppID: f.AppID, EnvID: f.EnvID,
+				Issuer: issuer, Subject: subject, UserID: id.NewUserID(),
+				Source: "verified", CreatedAt: now(), LastSeenAt: now(),
+			})
+		}(i)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		assert.NoError(t, err, "concurrent upsert %d must not surface a constraint error", i)
+	}
+
+	// The loop above is also what establishes that exactly one row exists. A
+	// second row for this tuple could only come from a writer that hit the
+	// unique index on (app_id, env_id, issuer, subject) and reported it, and
+	// that writer would have failed the loop. On memory there is no index and
+	// the mutex does that work instead. The read below is a FindOne either
+	// way, so it is not what proves the count.
+	//
+	// What the storm leaves undetermined is which of the n writes landed
+	// last, because real concurrency gives no way to know. One more
+	// deterministic write after it settles pins that down.
+	last := id.NewUserID()
+	require.NoError(t, f.Store.UpsertSubjectLink(ctx, &ssf.SubjectLink{
+		ID: id.NewSSFLinkID(), AppID: f.AppID, EnvID: f.EnvID,
+		Issuer: issuer, Subject: subject, UserID: last,
+		Source: "verified", CreatedAt: now(), LastSeenAt: now(),
+	}))
+
+	got, err := f.Store.GetSubjectLink(ctx, f.AppID, f.EnvID, issuer, subject)
+	require.NoError(t, err)
+	assert.Equal(t, last, got.UserID,
+		"the upsert must be last-write-wins, not first-write-wins")
 }
