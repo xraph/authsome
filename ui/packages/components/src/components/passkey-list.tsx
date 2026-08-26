@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@authsome/ui-react";
 import {
   Key,
@@ -210,40 +210,70 @@ export function PasskeyList({
   const { client, session } = useAuth();
 
   const [credentials, setCredentials] = useState<CredentialInfo[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CredentialInfo | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const fetchPasskeys = useCallback(async () => {
-    if (!session?.session_token) {
-      setIsLoading(false);
-      return;
-    }
+  const token = session?.session_token;
 
-    setError(null);
-    setIsLoading(true);
+  // Which token the list on screen belongs to. `undefined` means nothing has
+  // settled yet, `null` means the signed-out case has settled, a string means
+  // that token's passkeys are what is rendered.
+  const [loadedFor, setLoadedFor] = useState<string | null | undefined>(
+    undefined,
+  );
 
-    try {
-      // The codegen collapses multiple Go "ListResponse" structs into one
-      // TS type and the consents-list shape wins. The real passkey
-      // endpoint returns {credentials}; cast to the actual shape here.
-      const { credentials } = (await client.listPasskeys(
-        session.session_token,
-      )) as unknown as { credentials: CredentialInfo[] };
-      setCredentials(credentials);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load passkeys",
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [client, session?.session_token]);
+  // Loading is derived rather than stored, so the effect below can avoid
+  // setting state synchronously (react-hooks/set-state-in-effect) without
+  // losing the spinner. Deriving it also keeps the signed-out case honest:
+  // once that settles to null it stops loading instead of spinning forever.
+  //
+  // The tempting alternative, moving setIsLoading past the await, is worse
+  // here than it was in #94: the pre-hydration pass has no token, settles
+  // loading to false, and the spinner never appears at all. passkey-list.test
+  // .tsx pins both that and the reload case.
+  const isLoading = loadedFor !== (token ?? null);
+
+  // A message from the previous attempt does not belong to this one, which is
+  // what clearing the error at the start of a fetch used to express.
+  const visibleError = isLoading ? null : error;
 
   useEffect(() => {
-    void fetchPasskeys();
-  }, [fetchPasskeys]);
+    const current = token ?? null;
+    if (loadedFor === current) return;
+
+    let cancelled = false;
+    void (async () => {
+      if (current === null) {
+        // Nothing to fetch. Settle so the empty state can replace the skeleton.
+        if (!cancelled) setLoadedFor(null);
+        return;
+      }
+
+      try {
+        // The codegen collapses multiple Go "ListResponse" structs into one
+        // TS type and the consents-list shape wins. The real passkey
+        // endpoint returns {credentials}; cast to the actual shape here.
+        const { credentials } = (await client.listPasskeys(
+          current,
+        )) as unknown as { credentials: CredentialInfo[] };
+        if (cancelled) return;
+        setCredentials(credentials);
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setError(
+          err instanceof Error ? err.message : "Failed to load passkeys",
+        );
+      } finally {
+        if (!cancelled) setLoadedFor(current);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, token, loadedFor]);
 
   async function handleDelete(): Promise<void> {
     if (!deleteTarget || !session?.session_token) {
@@ -285,11 +315,11 @@ export function PasskeyList({
           )}
         </CardHeader>
         <CardContent>
-          <ErrorDisplay error={error} className="mb-3" />
+          <ErrorDisplay error={visibleError} className="mb-3" />
 
           {isLoading && <LoadingSkeleton />}
 
-          {!isLoading && credentials.length === 0 && !error && (
+          {!isLoading && credentials.length === 0 && !visibleError && (
             <EmptyState onRegister={onRegister} />
           )}
 

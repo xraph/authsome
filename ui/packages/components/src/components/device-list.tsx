@@ -94,17 +94,67 @@ export function DeviceList({
   const { client, session } = useAuth();
 
   const [devices, setDevices] = useState<Device[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadedToken, setLoadedToken] = useState<string | null>(null);
+  const [isReloading, setIsReloading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Device | null>(null);
 
   const token = session?.session_token;
 
+  // Loading is derived, not stored. The list is loading whenever what is on
+  // screen does not belong to the token it is now being asked about: true on
+  // the first render, and true again the instant the token changes.
+  //
+  // Deriving it is the whole point. It lets the effect below set no state
+  // synchronously, which is what react-hooks/set-state-in-effect asks for,
+  // without losing the spinner on a reload. Moving setIsLoading(true) past the
+  // await instead satisfies the rule and silently drops the reload spinner,
+  // because the initial `true` covers the mount and nothing covers the rest.
+  // That is the regression #94 shipped, and device-list.test.tsx pins it.
+  const isLoading =
+    isReloading ||
+    loadedToken === null ||
+    (token !== undefined && loadedToken !== token);
+
+  // A message from the previous attempt does not belong to this one, which is
+  // what clearing the error at the start of a fetch used to express.
+  const visibleError = isLoading ? null : error;
+
+  // The automatic load. Runs on mount and whenever the token changes, and
+  // touches state only after the await.
+  useEffect(() => {
+    if (!token || loadedToken === token) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await client.listDevices(token);
+        if (cancelled) return;
+        setDevices((response.devices ?? []) as unknown as Device[]);
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setError(
+          err instanceof Error ? err.message : "Failed to load devices",
+        );
+      } finally {
+        if (!cancelled) setLoadedToken(token);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, token, loadedToken]);
+
+  // The refetch the action handlers trigger. This one is called from an event
+  // handler, where setting state synchronously is exactly what React expects,
+  // so it can raise the loading flag up front the way the old code did.
   const fetchDevices = useCallback(async () => {
     if (!token) return;
 
-    setIsLoading(true);
+    setIsReloading(true);
     setError(null);
 
     try {
@@ -115,13 +165,9 @@ export function DeviceList({
         err instanceof Error ? err.message : "Failed to load devices",
       );
     } finally {
-      setIsLoading(false);
+      setIsReloading(false);
     }
   }, [client, token]);
-
-  useEffect(() => {
-    void fetchDevices();
-  }, [fetchDevices]);
 
   const handleTrust = async (device: Device) => {
     if (!token) return;
@@ -169,7 +215,7 @@ export function DeviceList({
         </CardHeader>
 
         <CardContent className="grid gap-1">
-          <ErrorDisplay error={error} className="mb-3" />
+          <ErrorDisplay error={visibleError} className="mb-3" />
 
           {isLoading ? (
             <div className="grid gap-4">

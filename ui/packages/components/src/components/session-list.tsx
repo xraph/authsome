@@ -68,7 +68,8 @@ export function SessionList({
   const { client, session } = useAuth();
 
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loadedToken, setLoadedToken] = useState<string | null>(null);
+  const [isReloading, setIsReloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<Session | null>(null);
@@ -77,10 +78,49 @@ export function SessionList({
   const token = session?.session_token;
   const activeToken = currentSessionToken ?? token;
 
+  // Loading is derived, not stored: the list is loading whenever what is on
+  // screen does not belong to the token it is now being asked about. See the
+  // longer note in device-list.tsx — moving setIsLoading(true) past the await
+  // instead is lint-clean and silently drops the reload spinner.
+  const isLoading =
+    isReloading ||
+    loadedToken === null ||
+    (token !== undefined && loadedToken !== token);
+
+  const visibleError = isLoading ? null : error;
+
+  // The automatic load. Touches state only after the await.
+  useEffect(() => {
+    if (!token || loadedToken === token) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await client.listSessions(token);
+        if (cancelled) return;
+        setSessions((response.sessions ?? []) as unknown as Session[]);
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setError(
+          err instanceof Error ? err.message : "Failed to load sessions",
+        );
+      } finally {
+        if (!cancelled) setLoadedToken(token);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, token, loadedToken]);
+
+  // The refetch the revoke handlers trigger. Called from an event handler, so
+  // it can raise the flag up front the way the old code did.
   const fetchSessions = useCallback(async () => {
     if (!token) return;
 
-    setIsLoading(true);
+    setIsReloading(true);
     setError(null);
 
     try {
@@ -91,13 +131,9 @@ export function SessionList({
         err instanceof Error ? err.message : "Failed to load sessions",
       );
     } finally {
-      setIsLoading(false);
+      setIsReloading(false);
     }
   }, [client, token]);
-
-  useEffect(() => {
-    void fetchSessions();
-  }, [fetchSessions]);
 
   const isCurrentSession = (s: Session): boolean => {
     return Boolean(activeToken && s.session_token === activeToken);
@@ -162,7 +198,7 @@ export function SessionList({
         </CardHeader>
 
         <CardContent className="grid gap-1">
-          <ErrorDisplay error={error} className="mb-3" />
+          <ErrorDisplay error={visibleError} className="mb-3" />
 
           {isLoading ? (
             <div className="grid gap-4">

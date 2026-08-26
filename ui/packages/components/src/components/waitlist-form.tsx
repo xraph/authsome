@@ -58,8 +58,11 @@ export function WaitlistForm({
     setIsSubmitting(true);
 
     try {
-      // Access baseURL from the client instance.
-      const baseURL = (client as any).baseURL ?? "";
+      // There is no waitlist method on the generated client and no public
+      // accessor for its base URL, so this reads the field directly — the same
+      // reach-in that ui-core's own client.ts uses for /v1/client-config. Named
+      // shape rather than `any`, so what is being assumed is written down.
+      const baseURL = (client as unknown as { baseURL?: string }).baseURL ?? "";
       const res = await fetch(baseURL + "/v1/waitlist/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

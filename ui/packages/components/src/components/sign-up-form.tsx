@@ -56,6 +56,17 @@ export interface SignUpFormComponentProps {
 /**
  * Renders a single dynamic signup field based on its type.
  */
+/** The configured default value for each field that declares one. */
+function defaultsFor(
+  fields: SignupFieldConfig[] | null,
+): Record<string, string> {
+  const defaults: Record<string, string> = {};
+  for (const f of fields ?? []) {
+    if (f.default) defaults[f.key] = f.default;
+  }
+  return defaults;
+}
+
 function DynamicField({
   field,
   value,
@@ -242,23 +253,32 @@ export function SignUpForm({
     captchaCfg.provider === "turnstile" &&
     !!captchaCfg.site_key;
 
-  // Dynamic field values — keyed by field key.
-  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  // Dynamic field values — keyed by field key. Seeded from the configured
+  // defaults on the first render rather than from an effect afterwards, so
+  // the first paint already shows them.
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>(() =>
+    defaultsFor(signupFields),
+  );
 
-  // Initialize defaults when signup fields change.
-  React.useEffect(() => {
-    if (signupFields) {
-      const defaults: Record<string, string> = {};
-      for (const f of signupFields) {
-        if (f.default && !fieldValues[f.key]) {
-          defaults[f.key] = f.default;
-        }
-      }
-      if (Object.keys(defaults).length > 0) {
-        setFieldValues((prev) => ({ ...defaults, ...prev }));
-      }
+  // Re-seed when the configured fields change. This is React's documented
+  // "adjusting state when a prop changes" pattern rather than an effect, so
+  // nothing is set synchronously inside one.
+  //
+  // Seeding has to happen on the first render as well as on a change, which is
+  // what the initializer above covers. Keying only on the identity comparison
+  // here would compare equal on mount and never apply the defaults at all —
+  // the failure sign-up-form.test.tsx pins.
+  //
+  // `prev` deliberately wins the spread: a default may only fill a field the
+  // user has not set.
+  const [appliedFields, setAppliedFields] = useState(signupFields);
+  if (signupFields !== appliedFields) {
+    setAppliedFields(signupFields);
+    const defaults = defaultsFor(signupFields);
+    if (Object.keys(defaults).length > 0) {
+      setFieldValues((prev) => ({ ...defaults, ...prev }));
     }
-  }, [signupFields]); // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   const setFieldValue = (key: string, value: string) => {
     setFieldValues((prev) => ({ ...prev, [key]: value }));
