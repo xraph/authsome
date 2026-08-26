@@ -226,11 +226,16 @@ func testSubjectLinkUpsertIsConcurrencySafe(t *testing.T, f Fixture) {
 		assert.NoError(t, err, "concurrent upsert %d must not surface a constraint error", i)
 	}
 
-	// The storm proves no writer surfaces a raw constraint error, but real
-	// concurrency leaves no way to know which of the n writes landed last.
-	// One more deterministic write after it settles pins that down: if this
-	// one, and only this one, comes back, then exactly one row survived and
-	// the operation is genuinely last-write-wins.
+	// The loop above is also what establishes that exactly one row exists. A
+	// second row for this tuple could only come from a writer that hit the
+	// unique index on (app_id, env_id, issuer, subject) and reported it, and
+	// that writer would have failed the loop. On memory there is no index and
+	// the mutex does that work instead. The read below is a FindOne either
+	// way, so it is not what proves the count.
+	//
+	// What the storm leaves undetermined is which of the n writes landed
+	// last, because real concurrency gives no way to know. One more
+	// deterministic write after it settles pins that down.
 	last := id.NewUserID()
 	require.NoError(t, f.Store.UpsertSubjectLink(ctx, &ssf.SubjectLink{
 		ID: id.NewSSFLinkID(), AppID: f.AppID, EnvID: f.EnvID,
@@ -241,5 +246,5 @@ func testSubjectLinkUpsertIsConcurrencySafe(t *testing.T, f Fixture) {
 	got, err := f.Store.GetSubjectLink(ctx, f.AppID, f.EnvID, issuer, subject)
 	require.NoError(t, err)
 	assert.Equal(t, last, got.UserID,
-		"exactly one row must survive the race, holding the last-written UserID")
+		"the upsert must be last-write-wins, not first-write-wins")
 }

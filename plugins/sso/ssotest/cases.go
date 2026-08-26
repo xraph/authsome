@@ -35,11 +35,16 @@ func testConnectionCRUD(t *testing.T, f Fixture) {
 func testConnectionNotFound(t *testing.T, f Fixture) {
 	ctx := context.Background()
 
+	// The sentinel, not a bare Error: callers branch on ErrConnectionNotFound
+	// to tell "no SSO configured for this domain" from a backend that failed,
+	// and the first sends the user to password login while the second must
+	// surface. A backend returning some other error passes assert.Error and
+	// breaks that branch.
 	_, err := f.Store.GetConnection(ctx, id.NewSSOConnectionID())
-	assert.Error(t, err, "an unknown connection id must not resolve")
+	assert.ErrorIs(t, err, sso.ErrConnectionNotFound, "an unknown connection id must not resolve")
 
 	_, err = f.Store.GetConnectionByDomain(ctx, f.AppID, unique("absent")+".test")
-	assert.Error(t, err, "an unconfigured domain must not resolve")
+	assert.ErrorIs(t, err, sso.ErrConnectionNotFound, "an unconfigured domain must not resolve")
 }
 
 // testDomainLookupIsAppScoped is the one that matters most in this store.

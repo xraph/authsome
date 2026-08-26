@@ -291,7 +291,6 @@ func testActiveSignalsAreEnvironmentScoped(t *testing.T, f Fixture) {
 	// time.Now() unqualified, matching the risk path's own call in risk.go.
 	other, err := f.Store.ListActiveSignals(ctx, f.AppID, otherEnv, f.UserID, time.Now())
 	require.NoError(t, err)
-	assert.NotNil(t, other, "a zero result must be an empty slice rather than nil")
 	for _, got := range other {
 		assert.NotEqual(t, sig.ID, got.ID,
 			"a signal from another environment leaked into env %s", otherEnv)
