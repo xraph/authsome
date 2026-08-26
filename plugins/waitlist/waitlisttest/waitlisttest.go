@@ -20,11 +20,12 @@ type Fixture struct {
 	// OtherAppID is a second tenant. Waitlist entries are keyed by email
 	// within an app, so the interesting cases all involve two apps.
 	OtherAppID id.AppID
-	// EnforcesUniqueEmail says whether this backend actually rejects a second
-	// entry for the same address in the same app. The SQL backends declare a
-	// unique index in their migrations. The mongo group exists but its only
-	// migration is a no-op, so nothing declares the index and duplicates are
-	// accepted; the case reports as skipped there rather than quietly passing.
+	// EnforcesUniqueEmail says whether this backend rejects a second entry
+	// for the same address in the same app. Every backend does now, so every
+	// backend sets it. The flag stays because it is what made the gap visible
+	// as a skip while mongo was missing the index, and a future backend
+	// arriving without one should report the same way rather than passing
+	// a case it never ran.
 	EnforcesUniqueEmail bool
 }
 

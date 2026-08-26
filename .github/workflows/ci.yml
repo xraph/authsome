@@ -46,10 +46,21 @@ jobs:
   # their own four-backend stores and drift between those is the same class of
   # bug. Packages with no matching test simply match nothing.
   #
-  # The -run pattern matches TestStoreConformance_ too. plugins/agentauth
-  # already had a four-backend suite under that name, and its postgres and
-  # mongo halves are integration-tagged, so before this they were built by
-  # nothing and run by nothing.
+  # The -run pattern matches three prefixes, and adding a fourth name to it
+  # is a smell: prefer naming a new test to fit one of these.
+  #
+  #   TestConformance         the cross-backend store contract suites
+  #   TestStoreConformance_   plugins/agentauth, which predates that name and
+  #                           whose postgres and mongo halves were, before
+  #                           this pattern, built by nothing and run by
+  #                           nothing while looking like coverage
+  #   TestMigration_          integration tests for a single migration, where
+  #                           the thing under test is what the migration does
+  #                           to data that is already there
+  #
+  # A check that runs zero tests is indistinguishable from a check that
+  # passes, so anything integration-tagged that this pattern does not match
+  # is dead weight in the tree.
   #
   # -p 1 is load-bearing. Every package here shares the one mongo database
   # this job starts, and at least one drops it during teardown, so running
@@ -94,7 +105,7 @@ jobs:
       - name: Run store conformance suite
         env:
           AUTHSOME_MONGO_URI: mongodb://localhost:27017/authsome_test?replicaSet=rs0&directConnection=true
-        run: go test -tags integration -p 1 -run '^TestConformance$|^TestStoreConformance_' -count=1 -timeout 15m ./store/... ./plugins/...
+        run: go test -tags integration -p 1 -run '^TestConformance$|^TestStoreConformance_|^TestMigration_' -count=1 -timeout 15m ./store/... ./plugins/...
 
   # ─── Lint ───────────────────────────────────────────────────────────
   lint:

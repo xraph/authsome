@@ -90,10 +90,7 @@ func mongoSetup(t *testing.T) waitlisttest.Factory {
 	require.NoError(t, core.Migrate(ctx, waitlist.MongoMigrations), "run migrations")
 
 	plugin := waitlist.NewMongoStore(db)
-	// waitlist.MongoMigrations exists and runs above, but its only migration
-	// is a no-op, so nothing declares a unique index on (app_id, email) the
-	// way the SQL migrations do.
-	const enforcesUniqueEmail = false
+	const enforcesUniqueEmail = true
 	return func(t *testing.T) waitlisttest.Fixture {
 		t.Helper()
 		return seedFixture(t, core, plugin, enforcesUniqueEmail)
