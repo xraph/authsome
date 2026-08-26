@@ -1,4 +1,4 @@
-.PHONY: help test clean fmt lint lint-fix vet tidy deps check coverage t c f l lf v check-deps
+.PHONY: help test test-integration clean fmt lint lint-fix vet tidy deps check coverage t c f l lf v check-deps
 
 # Default target
 .DEFAULT_GOAL := help
@@ -6,6 +6,11 @@
 # Variables
 GO=go
 GOFLAGS=-v
+
+# Local integration run. The port is deliberately not 27017, so this does not
+# collide with a MongoDB you already have running.
+MONGO_PORT ?= 27019
+MONGO_CONTAINER ?= authsome-integration-mongo
 
 # Colors for output
 RED=\033[0;31m
@@ -101,6 +106,39 @@ test-race:
 	@echo "$(BLUE)Running tests with race detector...$(NC)"
 	$(GO) test -race -v ./...
 	@echo "$(GREEN)✓ Race tests complete$(NC)"
+
+## test-integration: Run the Store Conformance CI job locally (needs Docker)
+# Same command the "Store Conformance (pg + mongo)" job runs, including its
+# -run pattern and its -p 1. Postgres comes up on its own through
+# testcontainers. Mongo needs a replica set, because the app and org cascades
+# run in transactions, so this starts one and tears it down again after.
+#
+# You get a new database every run, and you want that. Several of these tests
+# write fixed literals and never clean up after themselves, so a second run
+# against a database the first one dirtied fails on duplicate keys. CI never
+# sees it because CI gets a fresh container.
+test-integration:
+	@echo "$(BLUE)Starting MongoDB replica set on port $(MONGO_PORT)...$(NC)"
+	@docker rm -f $(MONGO_CONTAINER) >/dev/null 2>&1 || true
+	@docker run -d --name $(MONGO_CONTAINER) -p $(MONGO_PORT):27017 mongo:7 --replSet rs0 >/dev/null
+	@for i in $$(seq 1 30); do \
+		docker exec $(MONGO_CONTAINER) mongosh --quiet --eval 'db.runCommand({ping:1})' >/dev/null 2>&1 && break; \
+		sleep 2; \
+	done
+	@docker exec $(MONGO_CONTAINER) mongosh --quiet \
+		--eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"localhost:27017"}]})' >/dev/null 2>&1 || true
+	@for i in $$(seq 1 30); do \
+		docker exec $(MONGO_CONTAINER) mongosh --quiet --eval 'db.hello().isWritablePrimary' 2>/dev/null | grep -q true && break; \
+		sleep 2; \
+	done
+	@echo "$(BLUE)Running integration suite...$(NC)"
+	@AUTHSOME_MONGO_URI='mongodb://localhost:$(MONGO_PORT)/authsome_test?replicaSet=rs0&directConnection=true' \
+		$(GO) test -tags integration -p 1 -count=1 -timeout 15m \
+		-run '^TestConformance$$|^TestStoreConformance_|^TestMigration_' ./store/... ./plugins/...; \
+	status=$$?; \
+	docker rm -f $(MONGO_CONTAINER) >/dev/null 2>&1 || true; \
+	if [ $$status -ne 0 ]; then exit $$status; fi; \
+	printf '$(GREEN)✓ Integration suite complete$(NC)\n'
 
 ## coverage: Generate test coverage
 coverage:

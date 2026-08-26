@@ -55,6 +55,7 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"DeleteStream", testDeleteStream},
 		{"SubjectLinkUpsertIsIdempotent", testSubjectLinkUpsertIsIdempotent},
 		{"SubjectLinkLookupIsTenantScoped", testSubjectLinkLookupIsTenantScoped},
+		{"SubjectLinkUpsertIsConcurrencySafe", testSubjectLinkUpsertIsConcurrencySafe},
 		{"DuplicateJTIIsRejected", testDuplicateJTIIsRejected},
 		{"SameJTIOnAnotherStreamIsAllowed", testSameJTIOnAnotherStreamIsAllowed},
 		{"GetReceivedEventIsAppScoped", testGetReceivedEventIsAppScoped},
@@ -64,6 +65,7 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"DeleteReceivedEventFreesTheJTI", testDeleteReceivedEventFreesTheJTI},
 		{"CountEventsSince", testCountEventsSince},
 		{"ExpiredSignalIsNotActive", testExpiredSignalIsNotActive},
+		{"ActiveSignalsAreEnvironmentScoped", testActiveSignalsAreEnvironmentScoped},
 	}
 	for _, tc := range cases {
 		if skipSet[tc.name] {
