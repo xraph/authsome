@@ -161,15 +161,17 @@ app := forge.New(
 
 ## Plugins
 
-Authsome ships with **24 plugins** organized by category:
+Authsome ships with **26 plugins** organized by category:
 
 | Category | Plugins |
 |----------|---------|
 | **Authentication** | `password`, `social`, `magiclink`, `passkey`, `mfa`, `apikey`, `sso`, `phone` |
 | **Identity** | `organization`, `consent`, `subscription`, `waitlist` |
 | **Communication** | `email`, `notification` |
-| **Risk & Security** | `anomaly`, `geofence`, `geoip`, `impossibletravel`, `ipreputation`, `riskengine`, `vpndetect` |
-| **Provisioning** | `scim`, `deviceverify`, `oauth2provider` |
+| **Risk & Security** | `anomaly`, `geofence`, `geoip`, `impossibletravel`, `ipreputation`, `riskengine`, `sharedsignals`, `vpndetect` |
+| **Provisioning** | `scim`, `deviceverify`, `oauth2provider`, `agentauth` |
+
+Every plugin has a README covering what it is for, when not to use it, its config and settings, and its endpoints. Start at [plugins/README.md](plugins/README.md).
 
 Enable only the plugins you need:
 
@@ -260,7 +262,7 @@ authsome/
   config.go          Configuration types
   api/               REST API handlers and route registration
   middleware/        Auth and RBAC middleware
-  plugins/           24 swappable authentication plugins
+  plugins/           26 swappable authentication plugins
   store/             Database backends (pg, sqlite, mongo, memory)
   sdk/               Auto-generated client SDKs (Go, TS, Dart)
   dashboard/         Admin dashboard UI
