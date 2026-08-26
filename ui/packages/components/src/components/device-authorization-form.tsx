@@ -5,6 +5,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "@authsome/ui-react";
 import { CheckCircle2 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useCodeFromURL } from "../lib/use-code-from-url";
 import { Button } from "../primitives/button";
 import {
   InputOTP,
@@ -79,6 +80,7 @@ export function DeviceAuthorizationForm({
   const initialCode = initialCodeProp ?? autoCode;
 
   const [code, setCode] = useState(initialCode?.toUpperCase() ?? "");
+  const [appliedCode, setAppliedCode] = useState(initialCode?.toUpperCase());
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -102,7 +104,7 @@ export function DeviceAuthorizationForm({
           // Use the AuthClient method — routes through the client's baseURL.
           // Sends Bearer token when available; the method also sets
           // credentials: "include" so cookies are sent for same-origin setups.
-          await (client as any).completeDeviceAuthorization(
+          await client.completeDeviceAuthorization(
             clean,
             "approve",
             token ?? undefined,
@@ -126,13 +128,23 @@ export function DeviceAuthorizationForm({
     [client, codeLength, isSubmitting, onError, onSubmitProp, onSuccess, token],
   );
 
-  // Update code if initialCode changes.
-  useEffect(() => {
-    const newCode = (initialCodeProp ?? autoCode)?.toUpperCase();
-    if (newCode && newCode !== code && !isSubmitting) {
-      setCode(newCode);
+  // Adopt a new code from the props or the URL. This is React's documented
+  // "adjusting state when a prop changes" pattern rather than an effect: it
+  // compares against the last code it applied, so it fires once when that
+  // source changes and never on an unrelated re-render.
+  //
+  // The effect it replaces listed only [initialCodeProp, autoCode], which is
+  // what react-hooks/exhaustive-deps reported. Completing that dep list the
+  // way the rule asks is worse than leaving it: with `code` in the deps, every
+  // keystroke re-runs the effect, sees the typed value differ from the URL
+  // code, and overwrites what the user just typed. The test file pins that.
+  const desiredCode = (initialCodeProp ?? autoCode)?.toUpperCase();
+  if (desiredCode !== appliedCode) {
+    setAppliedCode(desiredCode);
+    if (desiredCode && !isSubmitting) {
+      setCode(desiredCode);
     }
-  }, [initialCodeProp, autoCode]);
+  }
 
   // Auto-submit when code is pre-filled from URL and is complete.
   // Wait for auth to finish loading so the token is available.
@@ -258,35 +270,4 @@ export function DeviceAuthorizationForm({
       </form>
     </AuthCard>
   );
-}
-
-/**
- * Reads user_code or code from the current URL query params.
- * Supports both raw codes (`ABCDEFGH`) and dash-formatted (`ABCD-EFGH`).
- */
-function useCodeFromURL(): string | undefined {
-  const [code, setCode] = useState<string | undefined>(() => {
-    if (typeof window === "undefined") return undefined;
-    return parseCodeFromSearch(window.location.search);
-  });
-
-  useEffect(() => {
-    setCode(parseCodeFromSearch(window.location.search));
-
-    const handlePopState = () => {
-      setCode(parseCodeFromSearch(window.location.search));
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
-
-  return code;
-}
-
-function parseCodeFromSearch(search: string): string | undefined {
-  const params = new URLSearchParams(search);
-  const raw = params.get("user_code") ?? params.get("code");
-  if (!raw) return undefined;
-  const cleaned = raw.replace(/[^A-Z0-9]/gi, "").toUpperCase();
-  return cleaned || undefined;
 }
