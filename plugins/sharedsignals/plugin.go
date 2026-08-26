@@ -86,6 +86,18 @@ var (
 		settings.WithHelpText("A CAEP event is higher confidence than an IP heuristic. Default: 2"),
 		settings.WithOrder(40),
 	)
+
+	// SettingMaxRiskScore caps what a CAEP signal contributes to the score.
+	SettingMaxRiskScore = settings.Define("sharedsignals.max_risk_score", 84,
+		settings.WithDisplayName("Max Risk Score"),
+		settings.WithDescription("Highest score a Shared Signals event may contribute"),
+		settings.WithCategory("Shared Signals"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Min: intPtr(1), Max: intPtr(100)}),
+		settings.WithHelpText("84 keeps a confirmed compromise in the challenge band. Raise to 100 to block the sign-in outright"),
+		settings.WithOrder(50),
+	)
 )
 
 // Config configures the plugin. Every field has a sane default.
@@ -110,6 +122,21 @@ type Config struct {
 	// MaxBodyBytes bounds the push request body.
 	MaxBodyBytes int64
 
+	// MaxRiskScore caps the score this plugin hands to the risk engine.
+	//
+	// severityFor scores a session-revoked event at 100, which is honest: an
+	// identity provider that watched an account be taken over is as certain as
+	// a signal gets, and that number is what the stored signal keeps for
+	// forensics. But a single contributor's score becomes the whole composite,
+	// and riskengine blocks at 85 by default, so handing 100 straight through
+	// refused the sign-in outright rather than stepping it up. A user with
+	// correct credentials and a correct second factor could not get in.
+	//
+	// The default of 84 sits one below that threshold, so a CAEP signal
+	// challenges. Raise it to 100 if you would rather a confirmed compromise
+	// bar the door; the number is a policy statement, not a measurement.
+	MaxRiskScore int
+
 	// KeyRefreshInterval is how often cached JWKS entries are re-fetched in
 	// the background. A value of zero takes the default; a negative value
 	// turns the ticker off entirely, for an embedder that does not want a
@@ -133,6 +160,9 @@ func (c *Config) defaults() {
 	}
 	if c.MaxBodyBytes == 0 {
 		c.MaxBodyBytes = 64 * 1024
+	}
+	if c.MaxRiskScore == 0 {
+		c.MaxRiskScore = 84
 	}
 	if c.KeyRefreshInterval == 0 {
 		// Four times inside the JWKS client's one-hour MaxKeyAge, so an
@@ -296,7 +326,10 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 	if err := settings.RegisterTyped(m, "sharedsignals", SettingMaxActionsPerHour); err != nil {
 		return err
 	}
-	return settings.RegisterTyped(m, "sharedsignals", SettingCAEPSignalWeight)
+	if err := settings.RegisterTyped(m, "sharedsignals", SettingCAEPSignalWeight); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "sharedsignals", SettingMaxRiskScore)
 }
 
 // RegisterRoutes implements plugin.RouteProvider. The receiver endpoint lands
