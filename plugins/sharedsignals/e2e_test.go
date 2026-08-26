@@ -201,7 +201,7 @@ func TestEndToEnd_UpstreamRevocationKillsLiveSessions(t *testing.T) {
 
 	// The IdP decides the account is compromised and pushes the event.
 	body := idp.sessionRevokedSET(t, "https://authsome.test/ssf", "idp-user-1")
-	req := httptest.NewRequest(http.MethodPost,
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
 		"/v1/ssf/streams/"+created.PushURLPath+"/events", stringReader(body))
 	req.Header.Set("Content-Type", "application/secevent+jwt")
 	req.Header.Set("Authorization", "Bearer "+created.PushToken)
@@ -229,7 +229,7 @@ func TestEndToEnd_UpstreamRevocationKillsLiveSessions(t *testing.T) {
 	// time -- there is nothing left to revoke, and the dedupe row must
 	// answer 202 rather than reprocessing the event.
 	rec2 := httptest.NewRecorder()
-	req2 := httptest.NewRequest(http.MethodPost,
+	req2 := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
 		"/v1/ssf/streams/"+created.PushURLPath+"/events", stringReader(body))
 	req2.Header.Set("Content-Type", "application/secevent+jwt")
 	req2.Header.Set("Authorization", "Bearer "+created.PushToken)
@@ -265,7 +265,7 @@ func TestEndToEnd_ForgedSETLeavesSessionsAlone(t *testing.T) {
 	// Signed by the attacker's key, but the stream only trusts the real IdP's
 	// JWKS, so the signature check fails.
 	body := attacker.sessionRevokedSET(t, "https://authsome.test/ssf", "idp-user-1")
-	req := httptest.NewRequest(http.MethodPost,
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
 		"/v1/ssf/streams/"+created.PushURLPath+"/events", stringReader(body))
 	req.Header.Set("Content-Type", "application/secevent+jwt")
 	req.Header.Set("Authorization", "Bearer "+created.PushToken)
@@ -324,7 +324,7 @@ func TestEndToEnd_StoredSignalReachesTheRiskEngine(t *testing.T) {
 
 	// The IdP reports the compromise.
 	body := idp.sessionRevokedSET(t, "https://authsome.test/ssf", "idp-user-1")
-	req := httptest.NewRequest(http.MethodPost,
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
 		"/v1/ssf/streams/"+created.PushURLPath+"/events", stringReader(body))
 	req.Header.Set("Content-Type", "application/secevent+jwt")
 	req.Header.Set("Authorization", "Bearer "+created.PushToken)
