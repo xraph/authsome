@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -532,3 +533,74 @@ func TestPush_RejectedSubjectFormatIs202AndDoesNothing(t *testing.T) {
 }
 
 func stringReader(s string) *strings.Reader { return strings.NewReader(s) }
+
+// The receiver has to keep three answers apart, and the hard limit adds the
+// case that is easiest to get backwards. A key we can no longer confirm is
+// refused -- but refusing it is a statement about OUR reach, not a verdict on
+// the token, so it has to come out as the 503 a transmitter retries and never
+// as the 400 invalid_key that tells it to give up and drop the SET.
+func TestPush_AKeyPastTheHardLimitIs503NotInvalidKey(t *testing.T) {
+	f := newReceiverFixture(t)
+
+	// The same key the fixture signs with, from an endpoint we can switch off.
+	fail := new(atomic.Bool)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if fail.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		n := base64.RawURLEncoding.EncodeToString(f.key.N.Bytes())
+		e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(f.key.E)).Bytes())
+		fmt.Fprintf(w, `{"keys":[{"kty":"RSA","use":"sig","alg":"RS256","kid":%q,"n":%q,"e":%q}]}`,
+			fixtureKID, n, e)
+	}))
+	defer srv.Close()
+
+	// Only the key cache's clock moves. The SETs are signed at real time, so
+	// nothing here is testing iat handling by accident.
+	now := time.Now()
+	f.plugin.jwks = jwksclient.New(jwksclient.Options{
+		HTTPClient:         srv.Client(),
+		ValidateURI:        func(string) error { return nil },
+		MinRefetchInterval: 5 * time.Minute,
+		MaxKeyAge:          time.Hour,
+		MaxKeyUsableAge:    12 * time.Hour,
+		Now:                func() time.Time { return now },
+	})
+	f.stream.JWKSURI = srv.URL
+	require.NoError(t, f.plugin.store.UpdateInboundStream(context.Background(), f.stream))
+
+	rec := f.post(t, f.pushPath, f.pushToken, f.signSET(t, nil))
+	require.Equal(t, http.StatusAccepted, rec.Code, "warming the key cache")
+
+	// The IdP goes dark. Past the soft limit only: the delivery still lands,
+	// which is the availability half of the trade and must not regress.
+	fail.Store(true)
+	now = now.Add(2 * time.Hour)
+	rec = f.post(t, f.pushPath, f.pushToken, f.signSET(t, nil))
+	require.Equal(t, http.StatusAccepted, rec.Code,
+		"a transient outage must not stop us acting on a key we already hold")
+
+	// Past the hard limit: the key is refused.
+	now = now.Add(11 * time.Hour)
+	rec = f.post(t, f.pushPath, f.pushToken, f.signSET(t, nil))
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code,
+		"an unconfirmable key must produce a retryable 503")
+	assert.NotEqual(t, http.StatusBadRequest, rec.Code,
+		"a 400 invalid_key here would tell the transmitter to drop the SET")
+	assert.NotEmpty(t, rec.Header().Get("Retry-After"))
+
+	// And the third case is untouched: the endpoint comes back, the key set
+	// loads, and a token naming a kid it does not carry is still the token's
+	// problem.
+	fail.Store(false)
+	now = now.Add(10 * time.Minute)
+	body := f.signSET(t, func(c jwt.MapClaims) { c["jti"] = "jti-unknown-kid" })
+	parts := strings.SplitN(body, ".", 2)
+	require.Len(t, parts, 2)
+	unknownKidHeader := base64.RawURLEncoding.EncodeToString(
+		[]byte(`{"alg":"RS256","typ":"secevent+jwt","kid":"kid-nobody-publishes"}`))
+	rec = f.post(t, f.pushPath, f.pushToken, unknownKidHeader+"."+parts[1])
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "invalid_key", errBody(t, rec)["err"])
+}
