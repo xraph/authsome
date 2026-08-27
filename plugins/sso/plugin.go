@@ -1305,8 +1305,20 @@ func (p *Plugin) isAllowedReturnURL(raw string) bool {
 	}
 	origin := u.Scheme + "://" + u.Host
 	for _, a := range p.config.AllowedReturnOrigins {
-		if strings.EqualFold(strings.TrimRight(a, "/"), origin) {
+		a = strings.TrimRight(a, "/")
+		if strings.EqualFold(a, origin) {
 			return true
+		}
+		// Wildcard suffix: "https://*.kineta.ai" matches "https://acme.kineta.ai".
+		// Enables stay-on-domain tenant SSO, where per-tenant return URLs can't be
+		// enumerated in the allowlist. The scheme must match and the host must be a
+		// proper subdomain of the base (the base itself does not match — allowlist
+		// it explicitly if the apex is also a valid return origin).
+		if scheme, base, ok := strings.Cut(a, "://*."); ok && base != "" {
+			if strings.EqualFold(u.Scheme, scheme) &&
+				strings.HasSuffix(strings.ToLower(u.Hostname()), "."+strings.ToLower(base)) {
+				return true
+			}
 		}
 	}
 	return false
