@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/authsome/user"
 )
 
-func seedUserWithEmail(t *testing.T, s *memory.Store, appID id.AppID, envID id.EnvironmentID, email string, verified bool) *user.User {
+func seedUserWithEmail(t *testing.T, s *memory.Store, appID id.AppID, envID id.EnvironmentID, email string, verified bool, passwordHash string) *user.User {
 	t.Helper()
 	u := &user.User{
 		ID:            id.NewUserID(),
@@ -20,6 +20,7 @@ func seedUserWithEmail(t *testing.T, s *memory.Store, appID id.AppID, envID id.E
 		EnvID:         envID,
 		Email:         email,
 		EmailVerified: verified,
+		PasswordHash:  passwordHash,
 	}
 	row := &user.UserEmail{
 		ID:        id.NewUserEmailID(),
@@ -45,11 +46,13 @@ func TestLinkableExistingUser_RefusesUnverified(t *testing.T) {
 	p.SetStore(s)
 	appID, envID := id.NewAppID(), id.NewEnvironmentID()
 
-	seedUserWithEmail(t, s, appID, envID, "victim@corp.com", false)
+	// A self-registered account: unverified email AND a password credential an
+	// attacker could have set. Linking SSO to it must still be refused.
+	seedUserWithEmail(t, s, appID, envID, "victim@corp.com", false, "attacker-set-password-hash")
 
 	got, err := p.linkableExistingUser(context.Background(), appID, envID, "victim@corp.com")
 
-	require.Error(t, err, "linking to an unverified pre-existing account must be refused")
+	require.Error(t, err, "linking to an unverified password-bearing account must be refused")
 	assert.Nil(t, got)
 }
 
@@ -61,7 +64,7 @@ func TestLinkableExistingUser_LinksVerified(t *testing.T) {
 	p.SetStore(s)
 	appID, envID := id.NewAppID(), id.NewEnvironmentID()
 
-	u := seedUserWithEmail(t, s, appID, envID, "member@corp.com", true)
+	u := seedUserWithEmail(t, s, appID, envID, "member@corp.com", true, "")
 
 	got, err := p.linkableExistingUser(context.Background(), appID, envID, "member@corp.com")
 

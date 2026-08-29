@@ -960,10 +960,28 @@ func (p *Plugin) linkableExistingUser(ctx context.Context, appID id.AppID, envID
 		return nil, err
 	}
 	rec, recErr := p.store.GetUserEmailRecord(ctx, appID, envID, email)
-	if recErr != nil || rec == nil || !rec.Verified {
-		return nil, errUnverifiedSSOLink
+	if recErr == nil && rec != nil && rec.Verified {
+		return u, nil // email already verified — safe to link
 	}
-	return u, nil
+	// The email is unverified. Linking SSO to an unverified pre-existing account
+	// is an account-takeover risk ONLY when that account carries a password
+	// credential an attacker could have set (a self-registration): the attacker
+	// pre-registers the victim's email + password, and an auto-link would drop the
+	// victim into the attacker-controlled account.
+	//
+	// An invited-but-never-activated account has NO password — there is nothing to
+	// hijack — and the SSO assertion (from the domain's admin-configured IdP) is
+	// itself proof the user controls the email. So linking is safe there. This is
+	// the common "admin invites user, user then signs in via SSO" flow, which the
+	// blanket refusal used to break. Verify the email on link so the account is
+	// clean (and the denormalized users.email_verified is mirrored) going forward.
+	if strings.TrimSpace(u.PasswordHash) == "" {
+		if verr := p.store.MarkUserEmailVerified(ctx, u.ID, email); verr != nil && p.logger != nil {
+			p.logger.Warn("sso: verify invited email on SSO link failed", log.String("error", verr.Error()))
+		}
+		return u, nil
+	}
+	return nil, errUnverifiedSSOLink
 }
 
 func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Provider, conn *Connection, params map[string]string) (*CallbackResponse, error) {
