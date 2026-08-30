@@ -1111,6 +1111,14 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 			return nil, issueErr
 		}
 		sess = result.Session
+
+		// Fire the after-sign-in plugins for SSO logins too. IssueSession emits
+		// the session-create hooks, but leaves the sign-in-as-auth-event hook to
+		// the caller (password SignIn and agentauth both emit it themselves).
+		// Without this, SSO sign-ins skip the audit / anomaly / geo / device
+		// plugins entirely — e.g. no auth.signin audit record for SSO. Notification
+		// hooks are fire-and-forget, so there is nothing to fail the login on.
+		eng.Plugins().EmitAfterSignIn(goCtx, u, sess)
 	} else {
 		sessCfg := account.SessionConfig{
 			TokenTTL:        p.config.SessionTokenTTL,
