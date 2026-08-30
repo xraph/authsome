@@ -28,6 +28,7 @@ type ssoConnectionModel struct {
 	ClientSecret string `grove:"client_secret,notnull"`
 	Issuer       string `grove:"issuer,notnull"`
 	Active       bool   `grove:"active,notnull"`
+	Enforced     bool   `grove:"enforced,notnull"`
 
 	// SAML fields. attribute_mappings is stored as a JSON object.
 	IDPMetadataXML    string `grove:"idp_metadata_xml,notnull"`
@@ -70,6 +71,7 @@ func toConnection(m *ssoConnectionModel) (*Connection, error) {
 		ClientSecret: m.ClientSecret,
 		Issuer:       m.Issuer,
 		Active:       m.Active,
+		Enforced:     m.Enforced,
 
 		IDPMetadataXML: m.IDPMetadataXML,
 		IDPSSOURL:      m.IDPSSOURL,
@@ -114,6 +116,7 @@ func fromConnection(c *Connection) *ssoConnectionModel {
 		ClientSecret: c.ClientSecret,
 		Issuer:       c.Issuer,
 		Active:       c.Active,
+		Enforced:     c.Enforced,
 
 		IDPMetadataXML: c.IDPMetadataXML,
 		IDPSSOURL:      c.IDPSSOURL,

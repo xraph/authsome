@@ -60,6 +60,7 @@ type ssoConnectionDoc struct {
 	SignRequests      bool      `bson:"sign_requests"`
 	AttributeMappings string    `bson:"attribute_mappings"`
 	Active            bool      `bson:"active"`
+	Enforced          bool      `bson:"enforced"`
 	CreatedAt         time.Time `bson:"created_at"`
 	UpdatedAt         time.Time `bson:"updated_at"`
 }
@@ -98,6 +99,7 @@ func ssoDocToConnection(d *ssoConnectionDoc) (*Connection, error) {
 		SPPrivateKey:   d.SPPrivateKey,
 		SignRequests:   d.SignRequests,
 		Active:         d.Active,
+		Enforced:       d.Enforced,
 		CreatedAt:      d.CreatedAt,
 		UpdatedAt:      d.UpdatedAt,
 	}
@@ -140,6 +142,7 @@ func ssoConnectionToDoc(c *Connection) *ssoConnectionDoc {
 		SPPrivateKey:   c.SPPrivateKey,
 		SignRequests:   c.SignRequests,
 		Active:         c.Active,
+		Enforced:       c.Enforced,
 		CreatedAt:      c.CreatedAt,
 		UpdatedAt:      c.UpdatedAt,
 	}
@@ -278,6 +281,7 @@ func (s *MongoStore) UpdateConnection(ctx context.Context, c *Connection) error 
 			"sign_requests":      doc.SignRequests,
 			"attribute_mappings": doc.AttributeMappings,
 			"active":             doc.Active,
+			"enforced":           doc.Enforced,
 			"updated_at":         doc.UpdatedAt,
 		}},
 	)

@@ -63,6 +63,10 @@ type Connection struct {
 	ClientSecret string             `json:"-"`
 	Issuer       string             `json:"issuer,omitempty"`
 	Active       bool               `json:"active"`
+	// Enforced requires users on this connection's domain to sign in via SSO —
+	// password login is blocked for them (workspace owners/admins excepted). See
+	// the plugin's OnBeforeSignIn.
+	Enforced bool `json:"enforced"`
 
 	// SAML-specific configuration. Populated only for SAML connections.
 	IDPMetadataXML    string            `json:"idp_metadata_xml,omitempty"`

@@ -984,6 +984,75 @@ func (p *Plugin) linkableExistingUser(ctx context.Context, appID id.AppID, envID
 	return nil, errUnverifiedSSOLink
 }
 
+// OnBeforeSignIn enforces SSO: when a user's email domain has an active +
+// enforced SSO connection, password sign-in is vetoed — they must use SSO.
+// Workspace owners/admins are exempt (break-glass, so a misconfigured IdP can't
+// lock out the people who administer it). Non-email sign-ins and domains without
+// an enforced connection pass through untouched.
+func (p *Plugin) OnBeforeSignIn(ctx context.Context, req *account.SignInRequest) error {
+	if p.ssoStore == nil || p.store == nil || req == nil {
+		return nil
+	}
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	at := strings.LastIndexByte(email, '@')
+	if at <= 0 || at == len(email)-1 {
+		return nil
+	}
+	domain := email[at+1:]
+
+	enforced := p.enforcedConnectionsForDomain(ctx, req.AppID, domain)
+	if len(enforced) == 0 {
+		return nil // domain isn't SSO-enforced
+	}
+
+	// Break-glass: an owner/admin of an enforcing org may still use a password.
+	if u, err := p.store.GetUserByAnyEmail(ctx, req.AppID, req.EnvID, email); err == nil && u != nil {
+		for _, c := range enforced {
+			if p.isOrgOwnerOrAdmin(ctx, c.OrgID, u.ID) {
+				return nil
+			}
+		}
+	}
+
+	return forge.NewHTTPError(http.StatusForbidden,
+		"single sign-on is required for this domain; sign in with SSO")
+}
+
+// enforcedConnectionsForDomain returns the app's active + enforced connections
+// whose domain matches (case-insensitive). SSO connections per app are few, so
+// listing + filtering is acceptable at sign-in time.
+func (p *Plugin) enforcedConnectionsForDomain(ctx context.Context, appID id.AppID, domain string) []*Connection {
+	all, err := p.ssoStore.ListConnections(ctx, appID)
+	if err != nil {
+		return nil
+	}
+	var out []*Connection
+	for _, c := range all {
+		if c != nil && c.Active && c.Enforced && strings.EqualFold(c.Domain, domain) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// isOrgOwnerOrAdmin reports whether userID is an owner or admin of orgID.
+func (p *Plugin) isOrgOwnerOrAdmin(ctx context.Context, orgID id.OrgID, userID id.UserID) bool {
+	if orgID.Prefix() == "" {
+		return false
+	}
+	members, err := p.store.ListMembers(ctx, orgID)
+	if err != nil {
+		return false
+	}
+	for _, m := range members {
+		if m != nil && m.UserID == userID &&
+			(m.Role == organization.RoleOwner || m.Role == organization.RoleAdmin) {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Provider, conn *Connection, params map[string]string) (*CallbackResponse, error) {
 	// Every SSO entry point funnels through here: the JSON callback, the OIDC
 	// browser landing and the SAML ACS. All three are the identity
@@ -1447,6 +1516,10 @@ type CreateConnectionInput struct {
 	ACSURL            string
 	SignRequests      bool
 	AttributeMappings map[string]string
+
+	// Enforced requires users on this domain to sign in via SSO (password login
+	// blocked). Usually toggled on later via UpdateConnection, not at create.
+	Enforced bool
 }
 
 // CreateConnection provisions an SSO connection: it resolves the app's default
@@ -1487,6 +1560,7 @@ func (p *Plugin) CreateConnection(ctx context.Context, in CreateConnectionInput)
 		Protocol:  in.Protocol,
 		Domain:    in.Domain,
 		Active:    true,
+		Enforced:  in.Enforced,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}

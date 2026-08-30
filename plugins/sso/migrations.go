@@ -249,4 +249,39 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_sso_connections_domain
 			},
 		},
 	)
+
+	// ──────────────────────────────────────────────────
+	// SSO enforcement: require SSO for a connection's domain
+	// ──────────────────────────────────────────────────
+	// When enforced, the plugin's BeforeSignIn vetoes password login for users on
+	// the connection's domain (owners/admins excepted). Defaults false.
+
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_enforced",
+			Version: "20240201000005",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_sso_connections ADD COLUMN IF NOT EXISTS enforced BOOLEAN NOT NULL DEFAULT FALSE;`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_sso_connections DROP COLUMN IF EXISTS enforced;`)
+				return err
+			},
+		},
+	)
+
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_enforced",
+			Version: "20240201000005",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_sso_connections ADD COLUMN enforced INTEGER NOT NULL DEFAULT 0;`)
+				return err
+			},
+			Down: func(_ context.Context, _ migrate.Executor) error {
+				return nil // SQLite lacks DROP COLUMN on older versions; best-effort.
+			},
+		},
+	)
 }
