@@ -1600,6 +1600,9 @@
           "domain": {
             "type": "string"
           },
+          "enforced": {
+            "type": "boolean"
+          },
           "entity_id": {
             "type": "string"
           },
@@ -1651,6 +1654,7 @@
           "protocol",
           "domain",
           "active",
+          "enforced",
           "created_at",
           "updated_at"
         ],

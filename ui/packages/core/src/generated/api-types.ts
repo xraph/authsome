@@ -451,6 +451,7 @@ export interface Connection {
   client_id?: string;
   created_at: string;
   domain: string;
+  enforced: boolean;
   entity_id?: string;
   env_id?: string;
   id: string;

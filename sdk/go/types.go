@@ -517,6 +517,7 @@ type Connection struct {
 	ClientID          string         `json:"client_id,omitempty"`
 	CreatedAt         string         `json:"created_at"`
 	Domain            string         `json:"domain"`
+	Enforced          bool           `json:"enforced"`
 	EntityID          string         `json:"entity_id,omitempty"`
 	EnvID             string         `json:"env_id,omitempty"`
 	ID                string         `json:"id"`

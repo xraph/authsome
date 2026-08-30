@@ -2223,6 +2223,7 @@ class Connection {
   final String? clientId;
   final String createdAt;
   final String domain;
+  final bool enforced;
   final String? entityId;
   final String? envId;
   final String id;
@@ -2246,6 +2247,7 @@ class Connection {
     this.clientId,
     required this.createdAt,
     required this.domain,
+    required this.enforced,
     this.entityId,
     this.envId,
     required this.id,
@@ -2271,6 +2273,7 @@ class Connection {
       clientId: json['client_id'] as String?,
       createdAt: json['created_at'] as String,
       domain: json['domain'] as String,
+      enforced: json['enforced'] as bool,
       entityId: json['entity_id'] as String?,
       envId: json['env_id'] as String?,
       id: json['id'] as String,
@@ -2297,6 +2300,7 @@ class Connection {
       if (clientId != null) 'client_id': clientId,
       'created_at': createdAt,
       'domain': domain,
+      'enforced': enforced,
       if (entityId != null) 'entity_id': entityId,
       if (envId != null) 'env_id': envId,
       'id': id,
