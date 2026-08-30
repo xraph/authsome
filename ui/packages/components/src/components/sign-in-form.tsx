@@ -203,7 +203,7 @@ export function SignInForm({
     // Home-realm discovery. A rejection (or any non-resolution) fails open to
     // password entry — a discovery outage must never lock a user out.
     setIsResolvingSSO(true);
-    let resolution: SSOResolution | null | undefined = null;
+    let resolution: SSOResolution | null | undefined;
     try {
       resolution = await resolveSSO(email.trim());
     } catch {
