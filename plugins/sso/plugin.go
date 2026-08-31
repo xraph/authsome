@@ -373,7 +373,11 @@ func (p *Plugin) acsURLFor(conn *Connection) string {
 // the GET handler can recover the connection and its app without a publishable
 // key. This must be registered as an allowed redirect URI with the IdP.
 func (p *Plugin) oidcRedirectURLFor(conn *Connection) string {
-	return p.publicBaseURL() + "/v1/sso/" + conn.Provider + "/callback?connection=" + conn.ID.String()
+	// Domain-only (no `?connection=`): some IdPs reject or strip query params on
+	// the OAuth redirect_uri (Google → redirect_uri_mismatch; Entra likewise).
+	// The callback recovers the exact connection from the OAuth `state` ceremony
+	// (ssoState.ConnID) instead — see handleOIDCRedirect.
+	return p.publicBaseURL() + "/v1/sso/" + conn.Provider + "/callback"
 }
 
 // entityIDFor returns the SP EntityID for a connection: the stored override, or
@@ -548,6 +552,12 @@ type ssoState struct {
 	// RequestID is the SAML AuthnRequest ID minted at login, matched against the
 	// assertion's InResponseTo at the ACS. Empty for OIDC.
 	RequestID string `json:"request_id,omitempty"`
+	// ConnID pins the exact connection resolved at login, so the callback can
+	// recover it without a `?connection=` query param on the redirect_uri (which
+	// some IdPs — Google, Entra — reject or strip). Multi-tenant safe: the same
+	// domain in several orgs resolves to distinct connections at login, and each
+	// login's state carries its own id.
+	ConnID string `json:"conn_id,omitempty"`
 }
 
 // requestIDProvider is implemented by SAML providers that expose the AuthnRequest
@@ -608,18 +618,22 @@ func (p *Plugin) handleLogin(ctx forge.Context, req *LoginRequest) (*LoginRespon
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("invalid app_id configuration: %w", err))
 	}
-	provider, _, err := p.resolveProvider(ctx.Context(), appID, req.Provider)
+	provider, conn, err := p.resolveProvider(ctx.Context(), appID, req.Provider)
 	if err != nil {
 		return nil, providerResolveError(req.Provider, err)
 	}
-	return p.startLogin(ctx.Context(), appID, provider, req.Provider, req.ReturnURL)
+	var connID string
+	if conn != nil {
+		connID = conn.ID.String()
+	}
+	return p.startLogin(ctx.Context(), appID, provider, req.Provider, connID, req.ReturnURL)
 }
 
 // startLogin generates a CSRF state (carrying the app + return URL), caches it,
 // and returns the IdP login URL. Shared by provider-name and email-domain entry
 // points. The return URL is validated here (login is publishable-key-authed), so
 // the opaque state token that round-trips through the IdP can't be tampered with.
-func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provider, providerName, returnURL string) (*LoginResponse, error) {
+func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provider, providerName, connID, returnURL string) (*LoginResponse, error) {
 	if returnURL != "" && !p.isAllowedReturnURL(returnURL) {
 		return nil, forge.BadRequest("return_url is not allowed")
 	}
@@ -642,7 +656,7 @@ func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provid
 		return nil, forge.InternalError(fmt.Errorf("failed to get login URL: %w", err))
 	}
 
-	stateData, _ := json.Marshal(ssoState{Provider: providerName, AppID: appID.String(), ReturnURL: returnURL, RequestID: requestID}) //nolint:errcheck // best-effort cache
+	stateData, _ := json.Marshal(ssoState{Provider: providerName, AppID: appID.String(), ReturnURL: returnURL, RequestID: requestID, ConnID: connID}) //nolint:errcheck // best-effort cache
 	_ = p.ceremonies.Set(ctx, "sso:state:"+state, stateData, 10*time.Minute)                                                          //nolint:errcheck // best-effort cache
 
 	return &LoginResponse{
@@ -707,7 +721,7 @@ func (p *Plugin) handleLoginByDomain(ctx forge.Context, req *LoginByDomainReques
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("sso: build provider: %w", err))
 	}
-	return p.startLogin(ctx.Context(), appID, provider, conn.Provider, req.ReturnURL)
+	return p.startLogin(ctx.Context(), appID, provider, conn.Provider, conn.ID.String(), req.ReturnURL)
 }
 
 // handleSPMetadata serves the SAML SP metadata XML for an IdP to consume. Raw
@@ -766,7 +780,17 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		return nil, forge.InternalError(fmt.Errorf("invalid app_id configuration: %w", err))
 	}
 
-	provider, conn, err := p.resolveProvider(ctx.Context(), appID, req.Provider)
+	// Prefer the exact connection pinned in the login state (multi-tenant safe);
+	// fall back to resolving by provider-name (domain) under the app.
+	var provider Provider
+	var conn *Connection
+	if st.ConnID != "" {
+		if conn, err = p.connectionByID(ctx.Context(), st.ConnID); err == nil {
+			provider, err = p.connectionToProvider(conn)
+		}
+	} else {
+		provider, conn, err = p.resolveProvider(ctx.Context(), appID, req.Provider)
+	}
 	if err != nil {
 		return nil, providerResolveError(req.Provider, err)
 	}
@@ -822,8 +846,14 @@ func (p *Plugin) handleOIDCRedirect(ctx forge.Context) error {
 		return fail(providerErr)
 	}
 
-	// Resolve the connection (and its app) from `?connection=`; fall back to
-	// provider-name under the request app for legacy/platform links.
+	// Resolve the connection. Preference order:
+	//   1. `?connection=` query param — legacy redirect URIs that still carry it.
+	//   2. the id carried in the login `state` (ssoState.ConnID) — the current
+	//      path, since the redirect_uri is now domain-only. Multi-tenant safe.
+	//   3. provider-name (domain) under the request app — last-resort fallback.
+	if connID == "" && st != nil {
+		connID = st.ConnID
+	}
 	var conn *Connection
 	var err error
 	if connID != "" {
