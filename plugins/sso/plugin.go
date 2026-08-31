@@ -657,7 +657,7 @@ func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provid
 	}
 
 	stateData, _ := json.Marshal(ssoState{Provider: providerName, AppID: appID.String(), ReturnURL: returnURL, RequestID: requestID, ConnID: connID}) //nolint:errcheck // best-effort cache
-	_ = p.ceremonies.Set(ctx, "sso:state:"+state, stateData, 10*time.Minute)                                                          //nolint:errcheck // best-effort cache
+	_ = p.ceremonies.Set(ctx, "sso:state:"+state, stateData, 10*time.Minute)                                                                          //nolint:errcheck // best-effort cache
 
 	return &LoginResponse{
 		LoginURL: loginURL,
