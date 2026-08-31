@@ -48,9 +48,9 @@ func TestLinkableExistingUser_RefusesUnverified(t *testing.T) {
 
 	// A self-registered account: unverified email AND a password credential an
 	// attacker could have set. Linking SSO to it must still be refused.
-	seedUserWithEmail(t, s, appID, envID, "victim@corp.com", false, "attacker-set-password-hash")
+	seedUserWithEmail(t, s, appID, envID, "victim@example.org", false, "attacker-set-password-hash")
 
-	got, err := p.linkableExistingUser(context.Background(), appID, envID, "victim@corp.com")
+	got, err := p.linkableExistingUser(context.Background(), appID, envID, "victim@example.org")
 
 	require.Error(t, err, "linking to an unverified password-bearing account must be refused")
 	assert.Nil(t, got)
@@ -64,9 +64,9 @@ func TestLinkableExistingUser_LinksVerified(t *testing.T) {
 	p.SetStore(s)
 	appID, envID := id.NewAppID(), id.NewEnvironmentID()
 
-	u := seedUserWithEmail(t, s, appID, envID, "member@corp.com", true, "")
+	u := seedUserWithEmail(t, s, appID, envID, "member@example.org", true, "")
 
-	got, err := p.linkableExistingUser(context.Background(), appID, envID, "member@corp.com")
+	got, err := p.linkableExistingUser(context.Background(), appID, envID, "member@example.org")
 
 	require.NoError(t, err)
 	require.NotNil(t, got)
@@ -82,7 +82,7 @@ func TestLinkableExistingUser_NoMatchCreatesFresh(t *testing.T) {
 	p.SetStore(s)
 	appID, envID := id.NewAppID(), id.NewEnvironmentID()
 
-	got, err := p.linkableExistingUser(context.Background(), appID, envID, "nobody@corp.com")
+	got, err := p.linkableExistingUser(context.Background(), appID, envID, "nobody@example.org")
 
 	require.NoError(t, err)
 	assert.Nil(t, got)

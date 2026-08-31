@@ -28,16 +28,16 @@ func TestOnBeforeSignIn_Enforcement(t *testing.T) {
 			ID:       id.NewSSOConnectionID(),
 			AppID:    appID,
 			OrgID:    orgID,
-			Provider: "acme.com",
+			Provider: "example.com",
 			Protocol: "saml",
-			Domain:   "acme.com",
+			Domain:   "example.com",
 			Active:   true,
 			Enforced: enforced,
 		}); err != nil {
 			t.Fatalf("seed connection: %v", err)
 		}
 
-		email := "user@acme.com"
+		email := "user@example.com"
 		u := &user.User{ID: id.NewUserID(), AppID: appID, Email: email}
 		if err := coreMem.CreateUserWithPrimaryEmail(ctx, u, user.NewPrimaryEmail(u, "test")); err != nil {
 			t.Fatalf("seed user: %v", err)
@@ -82,7 +82,7 @@ func TestOnBeforeSignIn_Enforcement(t *testing.T) {
 
 	t.Run("unrelated domain passes through", func(t *testing.T) {
 		p, _ := setup(t, true, false)
-		if err := p.OnBeforeSignIn(ctx, req("someone@other.com")); err != nil {
+		if err := p.OnBeforeSignIn(ctx, req("someone@example.net")); err != nil {
 			t.Fatalf("unrelated domain must pass, got %v", err)
 		}
 	})

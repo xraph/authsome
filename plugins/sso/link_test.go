@@ -39,7 +39,7 @@ func TestLinkableExistingUser(t *testing.T) {
 
 	t.Run("no account returns nil,nil (caller creates fresh)", func(t *testing.T) {
 		p, _ := newPlugin()
-		u, err := p.linkableExistingUser(ctx, appID, envID, "nobody@acme.com")
+		u, err := p.linkableExistingUser(ctx, appID, envID, "nobody@example.com")
 		if u != nil || err != nil {
 			t.Fatalf("got (%v, %v), want (nil, nil)", u, err)
 		}
@@ -47,8 +47,8 @@ func TestLinkableExistingUser(t *testing.T) {
 
 	t.Run("verified email links", func(t *testing.T) {
 		p, st := newPlugin()
-		seed(t, st, "verified@acme.com", "pwhash", true)
-		u, err := p.linkableExistingUser(ctx, appID, envID, "verified@acme.com")
+		seed(t, st, "verified@example.com", "pwhash", true)
+		u, err := p.linkableExistingUser(ctx, appID, envID, "verified@example.com")
 		if u == nil || err != nil {
 			t.Fatalf("got (%v, %v), want linked", u, err)
 		}
@@ -56,12 +56,12 @@ func TestLinkableExistingUser(t *testing.T) {
 
 	t.Run("unverified invited (no password) links and gets verified", func(t *testing.T) {
 		p, st := newPlugin()
-		seed(t, st, "invited@acme.com", "", false)
-		u, err := p.linkableExistingUser(ctx, appID, envID, "invited@acme.com")
+		seed(t, st, "invited@example.com", "", false)
+		u, err := p.linkableExistingUser(ctx, appID, envID, "invited@example.com")
 		if u == nil || err != nil {
 			t.Fatalf("got (%v, %v), want linked", u, err)
 		}
-		rec, _ := st.GetUserEmailRecord(ctx, appID, envID, "invited@acme.com")
+		rec, _ := st.GetUserEmailRecord(ctx, appID, envID, "invited@example.com")
 		if rec == nil || !rec.Verified {
 			t.Fatal("email should be marked verified after linking an invited account")
 		}
@@ -69,8 +69,8 @@ func TestLinkableExistingUser(t *testing.T) {
 
 	t.Run("unverified self-signup (has password) is refused", func(t *testing.T) {
 		p, st := newPlugin()
-		seed(t, st, "attacker@acme.com", "pwhash", false)
-		_, err := p.linkableExistingUser(ctx, appID, envID, "attacker@acme.com")
+		seed(t, st, "attacker@example.com", "pwhash", false)
+		_, err := p.linkableExistingUser(ctx, appID, envID, "attacker@example.com")
 		if !errors.Is(err, errUnverifiedSSOLink) {
 			t.Fatalf("got %v, want errUnverifiedSSOLink", err)
 		}

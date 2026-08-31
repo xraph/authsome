@@ -35,11 +35,11 @@ describe("SignInForm SSO discovery", () => {
     const resolveSSO = vi.fn(async () => ({ continue: start, enforced: true }));
 
     mount(resolveSSO);
-    submitEmail("user@enforced.com");
+    submitEmail("user@enforced.example.com");
 
     // The SSO step renders and password entry is not offered.
     await screen.findByRole("button", { name: /continue with sso/i });
-    expect(resolveSSO).toHaveBeenCalledWith("user@enforced.com");
+    expect(resolveSSO).toHaveBeenCalledWith("user@enforced.example.com");
     expect(screen.queryByLabelText("Password")).toBeNull();
     expect(screen.queryByText(/password instead/i)).toBeNull();
     // Enforced auto-starts the IdP handoff.
@@ -55,7 +55,7 @@ describe("SignInForm SSO discovery", () => {
     }));
 
     mount(resolveSSO);
-    submitEmail("user@optional.com");
+    submitEmail("user@optional.example.com");
 
     // Provider name brands the SSO button; password remains reachable.
     const ssoButton = await screen.findByRole("button", {
@@ -77,10 +77,10 @@ describe("SignInForm SSO discovery", () => {
     const resolveSSO = vi.fn(async () => null);
 
     mount(resolveSSO);
-    submitEmail("user@nosso.com");
+    submitEmail("user@nosso.example.com");
 
     await screen.findByLabelText("Password");
-    expect(resolveSSO).toHaveBeenCalledWith("user@nosso.com");
+    expect(resolveSSO).toHaveBeenCalledWith("user@nosso.example.com");
   });
 
   it("fails open to password when the resolver throws", async () => {
@@ -89,7 +89,7 @@ describe("SignInForm SSO discovery", () => {
     });
 
     mount(resolveSSO);
-    submitEmail("user@flaky.com");
+    submitEmail("user@flaky.example.com");
 
     // Discovery failure must never lock a user out of password login.
     await screen.findByLabelText("Password");
@@ -97,7 +97,7 @@ describe("SignInForm SSO discovery", () => {
 
   it("keeps the plain email→password flow when no resolver is supplied", async () => {
     mount(undefined);
-    submitEmail("user@plain.com");
+    submitEmail("user@plain.example.com");
 
     await waitFor(() =>
       expect(screen.getByLabelText("Password")).toBeTruthy(),
