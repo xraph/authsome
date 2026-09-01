@@ -284,4 +284,38 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_sso_connections_domain
 			},
 		},
 	)
+
+	// ──────────────────────────────────────────────────
+	// Optional admin-set connection label (e.g. "Okta", "Google Workspace") so
+	// multiple connections for one domain can be told apart. Cosmetic; defaults "".
+	// ──────────────────────────────────────────────────
+
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_display_name",
+			Version: "20240201000006",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_sso_connections ADD COLUMN IF NOT EXISTS display_name TEXT NOT NULL DEFAULT '';`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_sso_connections DROP COLUMN IF EXISTS display_name;`)
+				return err
+			},
+		},
+	)
+
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_display_name",
+			Version: "20240201000006",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_sso_connections ADD COLUMN display_name TEXT NOT NULL DEFAULT '';`)
+				return err
+			},
+			Down: func(_ context.Context, _ migrate.Executor) error {
+				return nil // SQLite lacks DROP COLUMN on older versions; best-effort.
+			},
+		},
+	)
 }

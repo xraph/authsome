@@ -450,6 +450,7 @@ export interface Connection {
   attribute_mappings?: Record<string, unknown>;
   client_id?: string;
   created_at: string;
+  display_name?: string;
   domain: string;
   enforced: boolean;
   entity_id?: string;

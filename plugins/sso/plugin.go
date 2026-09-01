@@ -1550,6 +1550,8 @@ type CreateConnectionInput struct {
 	// Enforced requires users on this domain to sign in via SSO (password login
 	// blocked). Usually toggled on later via UpdateConnection, not at create.
 	Enforced bool
+	// DisplayName is an optional admin-set label for the connection (cosmetic).
+	DisplayName string
 }
 
 // CreateConnection provisions an SSO connection: it resolves the app's default
@@ -1582,17 +1584,18 @@ func (p *Plugin) CreateConnection(ctx context.Context, in CreateConnectionInput)
 
 	now := time.Now()
 	conn := &Connection{
-		ID:        id.NewSSOConnectionID(),
-		AppID:     in.AppID,
-		EnvID:     env.ID.String(),
-		OrgID:     in.OrgID,
-		Provider:  in.Provider,
-		Protocol:  in.Protocol,
-		Domain:    in.Domain,
-		Active:    true,
-		Enforced:  in.Enforced,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:          id.NewSSOConnectionID(),
+		AppID:       in.AppID,
+		EnvID:       env.ID.String(),
+		OrgID:       in.OrgID,
+		Provider:    in.Provider,
+		Protocol:    in.Protocol,
+		Domain:      in.Domain,
+		Active:      true,
+		Enforced:    in.Enforced,
+		DisplayName: strings.TrimSpace(in.DisplayName),
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 	switch in.Protocol {
 	case "oidc":

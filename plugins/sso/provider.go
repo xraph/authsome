@@ -51,18 +51,22 @@ type User struct {
 
 // Connection represents a stored SSO connection for a tenant.
 type Connection struct {
-	ID           id.SSOConnectionID `json:"id"`
-	AppID        id.AppID           `json:"app_id"`
-	EnvID        string             `json:"env_id,omitempty"`
-	OrgID        id.OrgID           `json:"org_id,omitempty"`
-	Provider     string             `json:"provider"`
-	Protocol     string             `json:"protocol"`
-	Domain       string             `json:"domain"`
-	MetadataURL  string             `json:"metadata_url,omitempty"`
-	ClientID     string             `json:"client_id,omitempty"`
-	ClientSecret string             `json:"-"`
-	Issuer       string             `json:"issuer,omitempty"`
-	Active       bool               `json:"active"`
+	ID       id.SSOConnectionID `json:"id"`
+	AppID    id.AppID           `json:"app_id"`
+	EnvID    string             `json:"env_id,omitempty"`
+	OrgID    id.OrgID           `json:"org_id,omitempty"`
+	Provider string             `json:"provider"`
+	Protocol string             `json:"protocol"`
+	Domain   string             `json:"domain"`
+	// DisplayName is an optional admin-set label for the connection (e.g. "Okta",
+	// "Google Workspace"), so multiple connections for the same domain can be told
+	// apart. Cosmetic — never used for routing.
+	DisplayName  string `json:"display_name,omitempty"`
+	MetadataURL  string `json:"metadata_url,omitempty"`
+	ClientID     string `json:"client_id,omitempty"`
+	ClientSecret string `json:"-"`
+	Issuer       string `json:"issuer,omitempty"`
+	Active       bool   `json:"active"`
 	// Enforced requires users on this connection's domain to sign in via SSO —
 	// password login is blocked for them (workspace owners/admins excepted). See
 	// the plugin's OnBeforeSignIn.

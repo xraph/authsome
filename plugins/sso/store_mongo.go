@@ -45,6 +45,7 @@ type ssoConnectionDoc struct {
 	Provider     string `bson:"provider"`
 	Protocol     string `bson:"protocol"`
 	Domain       string `bson:"domain"`
+	DisplayName  string `bson:"display_name"`
 	MetadataURL  string `bson:"metadata_url"`
 	ClientID     string `bson:"client_id"`
 	ClientSecret string `bson:"client_secret"`
@@ -86,6 +87,7 @@ func ssoDocToConnection(d *ssoConnectionDoc) (*Connection, error) {
 		Provider:       d.Provider,
 		Protocol:       d.Protocol,
 		Domain:         d.Domain,
+		DisplayName:    d.DisplayName,
 		MetadataURL:    d.MetadataURL,
 		ClientID:       d.ClientID,
 		ClientSecret:   d.ClientSecret,
@@ -129,6 +131,7 @@ func ssoConnectionToDoc(c *Connection) *ssoConnectionDoc {
 		Provider:       c.Provider,
 		Protocol:       c.Protocol,
 		Domain:         c.Domain,
+		DisplayName:    c.DisplayName,
 		MetadataURL:    c.MetadataURL,
 		ClientID:       c.ClientID,
 		ClientSecret:   c.ClientSecret,
@@ -267,6 +270,7 @@ func (s *MongoStore) UpdateConnection(ctx context.Context, c *Connection) error 
 			"provider":           doc.Provider,
 			"protocol":           doc.Protocol,
 			"domain":             doc.Domain,
+			"display_name":       doc.DisplayName,
 			"metadata_url":       doc.MetadataURL,
 			"client_id":          doc.ClientID,
 			"client_secret":      doc.ClientSecret,
