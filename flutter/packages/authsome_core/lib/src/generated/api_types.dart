@@ -2222,7 +2222,9 @@ class Connection {
   final Map<String, dynamic>? attributeMappings;
   final String? clientId;
   final String createdAt;
+  final String? displayName;
   final String domain;
+  final bool enforced;
   final String? entityId;
   final String? envId;
   final String id;
@@ -2245,7 +2247,9 @@ class Connection {
     this.attributeMappings,
     this.clientId,
     required this.createdAt,
+    this.displayName,
     required this.domain,
+    required this.enforced,
     this.entityId,
     this.envId,
     required this.id,
@@ -2270,7 +2274,9 @@ class Connection {
       attributeMappings: json['attribute_mappings'] == null ? null : Map<String, dynamic>.from(json['attribute_mappings'] as Map),
       clientId: json['client_id'] as String?,
       createdAt: json['created_at'] as String,
+      displayName: json['display_name'] as String?,
       domain: json['domain'] as String,
+      enforced: json['enforced'] as bool,
       entityId: json['entity_id'] as String?,
       envId: json['env_id'] as String?,
       id: json['id'] as String,
@@ -2296,7 +2302,9 @@ class Connection {
       if (attributeMappings != null) 'attribute_mappings': attributeMappings,
       if (clientId != null) 'client_id': clientId,
       'created_at': createdAt,
+      if (displayName != null) 'display_name': displayName,
       'domain': domain,
+      'enforced': enforced,
       if (entityId != null) 'entity_id': entityId,
       if (envId != null) 'env_id': envId,
       'id': id,

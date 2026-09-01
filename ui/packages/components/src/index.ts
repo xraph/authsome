@@ -96,7 +96,11 @@ export { SignedIn, SignedOut, Protect } from "@authsome/ui-react";
 export type { SignedInProps, SignedOutProps, ProtectProps } from "@authsome/ui-react";
 
 // Auth form components (lower-level)
-export { SignInForm, type SignInFormComponentProps } from "./components/sign-in-form";
+export {
+  SignInForm,
+  type SignInFormComponentProps,
+  type SSOResolution,
+} from "./components/sign-in-form";
 export { SignUpForm, type SignUpFormComponentProps } from "./components/sign-up-form";
 export { ForgotPasswordForm, type ForgotPasswordFormProps } from "./components/forgot-password-form";
 export { ResetPasswordForm, type ResetPasswordFormProps } from "./components/reset-password-form";

@@ -373,7 +373,11 @@ func (p *Plugin) acsURLFor(conn *Connection) string {
 // the GET handler can recover the connection and its app without a publishable
 // key. This must be registered as an allowed redirect URI with the IdP.
 func (p *Plugin) oidcRedirectURLFor(conn *Connection) string {
-	return p.publicBaseURL() + "/v1/sso/" + conn.Provider + "/callback?connection=" + conn.ID.String()
+	// Domain-only (no `?connection=`): some IdPs reject or strip query params on
+	// the OAuth redirect_uri (Google → redirect_uri_mismatch; Entra likewise).
+	// The callback recovers the exact connection from the OAuth `state` ceremony
+	// (ssoState.ConnID) instead — see handleOIDCRedirect.
+	return p.publicBaseURL() + "/v1/sso/" + conn.Provider + "/callback"
 }
 
 // entityIDFor returns the SP EntityID for a connection: the stored override, or
@@ -548,6 +552,12 @@ type ssoState struct {
 	// RequestID is the SAML AuthnRequest ID minted at login, matched against the
 	// assertion's InResponseTo at the ACS. Empty for OIDC.
 	RequestID string `json:"request_id,omitempty"`
+	// ConnID pins the exact connection resolved at login, so the callback can
+	// recover it without a `?connection=` query param on the redirect_uri (which
+	// some IdPs — Google, Entra — reject or strip). Multi-tenant safe: the same
+	// domain in several orgs resolves to distinct connections at login, and each
+	// login's state carries its own id.
+	ConnID string `json:"conn_id,omitempty"`
 }
 
 // requestIDProvider is implemented by SAML providers that expose the AuthnRequest
@@ -608,18 +618,22 @@ func (p *Plugin) handleLogin(ctx forge.Context, req *LoginRequest) (*LoginRespon
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("invalid app_id configuration: %w", err))
 	}
-	provider, _, err := p.resolveProvider(ctx.Context(), appID, req.Provider)
+	provider, conn, err := p.resolveProvider(ctx.Context(), appID, req.Provider)
 	if err != nil {
 		return nil, providerResolveError(req.Provider, err)
 	}
-	return p.startLogin(ctx.Context(), appID, provider, req.Provider, req.ReturnURL)
+	var connID string
+	if conn != nil {
+		connID = conn.ID.String()
+	}
+	return p.startLogin(ctx.Context(), appID, provider, req.Provider, connID, req.ReturnURL)
 }
 
 // startLogin generates a CSRF state (carrying the app + return URL), caches it,
 // and returns the IdP login URL. Shared by provider-name and email-domain entry
 // points. The return URL is validated here (login is publishable-key-authed), so
 // the opaque state token that round-trips through the IdP can't be tampered with.
-func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provider, providerName, returnURL string) (*LoginResponse, error) {
+func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provider, providerName, connID, returnURL string) (*LoginResponse, error) {
 	if returnURL != "" && !p.isAllowedReturnURL(returnURL) {
 		return nil, forge.BadRequest("return_url is not allowed")
 	}
@@ -642,8 +656,8 @@ func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provid
 		return nil, forge.InternalError(fmt.Errorf("failed to get login URL: %w", err))
 	}
 
-	stateData, _ := json.Marshal(ssoState{Provider: providerName, AppID: appID.String(), ReturnURL: returnURL, RequestID: requestID}) //nolint:errcheck // best-effort cache
-	_ = p.ceremonies.Set(ctx, "sso:state:"+state, stateData, 10*time.Minute)                                                          //nolint:errcheck // best-effort cache
+	stateData, _ := json.Marshal(ssoState{Provider: providerName, AppID: appID.String(), ReturnURL: returnURL, RequestID: requestID, ConnID: connID}) //nolint:errcheck // best-effort cache
+	_ = p.ceremonies.Set(ctx, "sso:state:"+state, stateData, 10*time.Minute)                                                                          //nolint:errcheck // best-effort cache
 
 	return &LoginResponse{
 		LoginURL: loginURL,
@@ -707,7 +721,7 @@ func (p *Plugin) handleLoginByDomain(ctx forge.Context, req *LoginByDomainReques
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("sso: build provider: %w", err))
 	}
-	return p.startLogin(ctx.Context(), appID, provider, conn.Provider, req.ReturnURL)
+	return p.startLogin(ctx.Context(), appID, provider, conn.Provider, conn.ID.String(), req.ReturnURL)
 }
 
 // handleSPMetadata serves the SAML SP metadata XML for an IdP to consume. Raw
@@ -766,7 +780,17 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		return nil, forge.InternalError(fmt.Errorf("invalid app_id configuration: %w", err))
 	}
 
-	provider, conn, err := p.resolveProvider(ctx.Context(), appID, req.Provider)
+	// Prefer the exact connection pinned in the login state (multi-tenant safe);
+	// fall back to resolving by provider-name (domain) under the app.
+	var provider Provider
+	var conn *Connection
+	if st.ConnID != "" {
+		if conn, err = p.connectionByID(ctx.Context(), st.ConnID); err == nil {
+			provider, err = p.connectionToProvider(conn)
+		}
+	} else {
+		provider, conn, err = p.resolveProvider(ctx.Context(), appID, req.Provider)
+	}
 	if err != nil {
 		return nil, providerResolveError(req.Provider, err)
 	}
@@ -822,8 +846,14 @@ func (p *Plugin) handleOIDCRedirect(ctx forge.Context) error {
 		return fail(providerErr)
 	}
 
-	// Resolve the connection (and its app) from `?connection=`; fall back to
-	// provider-name under the request app for legacy/platform links.
+	// Resolve the connection. Preference order:
+	//   1. `?connection=` query param — legacy redirect URIs that still carry it.
+	//   2. the id carried in the login `state` (ssoState.ConnID) — the current
+	//      path, since the redirect_uri is now domain-only. Multi-tenant safe.
+	//   3. provider-name (domain) under the request app — last-resort fallback.
+	if connID == "" && st != nil {
+		connID = st.ConnID
+	}
 	var conn *Connection
 	var err error
 	if connID != "" {
@@ -960,10 +990,97 @@ func (p *Plugin) linkableExistingUser(ctx context.Context, appID id.AppID, envID
 		return nil, err
 	}
 	rec, recErr := p.store.GetUserEmailRecord(ctx, appID, envID, email)
-	if recErr != nil || rec == nil || !rec.Verified {
-		return nil, errUnverifiedSSOLink
+	if recErr == nil && rec != nil && rec.Verified {
+		return u, nil // email already verified — safe to link
 	}
-	return u, nil
+	// The email is unverified. Linking SSO to an unverified pre-existing account
+	// is an account-takeover risk ONLY when that account carries a password
+	// credential an attacker could have set (a self-registration): the attacker
+	// pre-registers the victim's email + password, and an auto-link would drop the
+	// victim into the attacker-controlled account.
+	//
+	// An invited-but-never-activated account has NO password — there is nothing to
+	// hijack — and the SSO assertion (from the domain's admin-configured IdP) is
+	// itself proof the user controls the email. So linking is safe there. This is
+	// the common "admin invites user, user then signs in via SSO" flow, which the
+	// blanket refusal used to break. Verify the email on link so the account is
+	// clean (and the denormalized users.email_verified is mirrored) going forward.
+	if strings.TrimSpace(u.PasswordHash) == "" {
+		if verr := p.store.MarkUserEmailVerified(ctx, u.ID, email); verr != nil && p.logger != nil {
+			p.logger.Warn("sso: verify invited email on SSO link failed", log.String("error", verr.Error()))
+		}
+		return u, nil
+	}
+	return nil, errUnverifiedSSOLink
+}
+
+// OnBeforeSignIn enforces SSO: when a user's email domain has an active +
+// enforced SSO connection, password sign-in is vetoed — they must use SSO.
+// Workspace owners/admins are exempt (break-glass, so a misconfigured IdP can't
+// lock out the people who administer it). Non-email sign-ins and domains without
+// an enforced connection pass through untouched.
+func (p *Plugin) OnBeforeSignIn(ctx context.Context, req *account.SignInRequest) error {
+	if p.ssoStore == nil || p.store == nil || req == nil {
+		return nil
+	}
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	at := strings.LastIndexByte(email, '@')
+	if at <= 0 || at == len(email)-1 {
+		return nil
+	}
+	domain := email[at+1:]
+
+	enforced := p.enforcedConnectionsForDomain(ctx, req.AppID, domain)
+	if len(enforced) == 0 {
+		return nil // domain isn't SSO-enforced
+	}
+
+	// Break-glass: an owner/admin of an enforcing org may still use a password.
+	if u, err := p.store.GetUserByAnyEmail(ctx, req.AppID, req.EnvID, email); err == nil && u != nil {
+		for _, c := range enforced {
+			if p.isOrgOwnerOrAdmin(ctx, c.OrgID, u.ID) {
+				return nil
+			}
+		}
+	}
+
+	return forge.NewHTTPError(http.StatusForbidden,
+		"single sign-on is required for this domain; sign in with SSO")
+}
+
+// enforcedConnectionsForDomain returns the app's active + enforced connections
+// whose domain matches (case-insensitive). SSO connections per app are few, so
+// listing + filtering is acceptable at sign-in time.
+func (p *Plugin) enforcedConnectionsForDomain(ctx context.Context, appID id.AppID, domain string) []*Connection {
+	all, err := p.ssoStore.ListConnections(ctx, appID)
+	if err != nil {
+		return nil
+	}
+	var out []*Connection
+	for _, c := range all {
+		if c != nil && c.Active && c.Enforced && strings.EqualFold(c.Domain, domain) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// isOrgOwnerOrAdmin reports whether userID is an owner or admin of orgID.
+func (p *Plugin) isOrgOwnerOrAdmin(ctx context.Context, orgID id.OrgID, userID id.UserID) bool {
+	if orgID.Prefix() == "" {
+		return false
+	}
+	members, err := p.store.ListMembers(ctx, orgID)
+	if err != nil {
+		return false
+	}
+	for _, m := range members {
+		if m != nil && m.UserID == userID &&
+			(m.Role == organization.RoleOwner || m.Role == organization.RoleAdmin) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Provider, conn *Connection, params map[string]string) (*CallbackResponse, error) {
@@ -1093,6 +1210,14 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 			return nil, issueErr
 		}
 		sess = result.Session
+
+		// Fire the after-sign-in plugins for SSO logins too. IssueSession emits
+		// the session-create hooks, but leaves the sign-in-as-auth-event hook to
+		// the caller (password SignIn and agentauth both emit it themselves).
+		// Without this, SSO sign-ins skip the audit / anomaly / geo / device
+		// plugins entirely — e.g. no auth.signin audit record for SSO. Notification
+		// hooks are fire-and-forget, so there is nothing to fail the login on.
+		eng.Plugins().EmitAfterSignIn(goCtx, u, sess)
 	} else {
 		sessCfg := account.SessionConfig{
 			TokenTTL:        p.config.SessionTokenTTL,
@@ -1421,6 +1546,12 @@ type CreateConnectionInput struct {
 	ACSURL            string
 	SignRequests      bool
 	AttributeMappings map[string]string
+
+	// Enforced requires users on this domain to sign in via SSO (password login
+	// blocked). Usually toggled on later via UpdateConnection, not at create.
+	Enforced bool
+	// DisplayName is an optional admin-set label for the connection (cosmetic).
+	DisplayName string
 }
 
 // CreateConnection provisions an SSO connection: it resolves the app's default
@@ -1453,16 +1584,18 @@ func (p *Plugin) CreateConnection(ctx context.Context, in CreateConnectionInput)
 
 	now := time.Now()
 	conn := &Connection{
-		ID:        id.NewSSOConnectionID(),
-		AppID:     in.AppID,
-		EnvID:     env.ID.String(),
-		OrgID:     in.OrgID,
-		Provider:  in.Provider,
-		Protocol:  in.Protocol,
-		Domain:    in.Domain,
-		Active:    true,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:          id.NewSSOConnectionID(),
+		AppID:       in.AppID,
+		EnvID:       env.ID.String(),
+		OrgID:       in.OrgID,
+		Provider:    in.Provider,
+		Protocol:    in.Protocol,
+		Domain:      in.Domain,
+		Active:      true,
+		Enforced:    in.Enforced,
+		DisplayName: strings.TrimSpace(in.DisplayName),
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 	switch in.Protocol {
 	case "oidc":

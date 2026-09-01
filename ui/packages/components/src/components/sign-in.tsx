@@ -4,7 +4,7 @@ import * as React from "react";
 import { useAuth } from "@authsome/ui-react";
 import { safeRedirectTarget } from "@authsome/ui-core";
 import { useSubPath } from "../lib/use-sub-path";
-import { SignInForm } from "./sign-in-form";
+import { SignInForm, type SSOResolution } from "./sign-in-form";
 import { ForgotPasswordForm } from "./forgot-password-form";
 import { ResetPasswordForm } from "./reset-password-form";
 import { EmailVerificationForm } from "./email-verification-form";
@@ -18,6 +18,14 @@ export interface SignInProps {
   signUpUrl?: string;
   /** Callback invoked after a successful sign-in (any method). */
   onSuccess?: () => void;
+  /**
+   * Home-realm discovery hook forwarded to the sign-in form. Return an
+   * {@link SSOResolution} to route an email's domain to its IdP
+   * (identifier-first), or `null` to fall through to password.
+   */
+  resolveSSO?: (
+    email: string,
+  ) => Promise<SSOResolution | null | undefined>;
   /** Social/OAuth providers to display. Auto-derived from config when omitted. */
   socialProviders?: SocialProvider[];
   /** Override social login click handler. */
@@ -57,6 +65,7 @@ export function SignIn({
   path = "/sign-in",
   signUpUrl = "/sign-up",
   onSuccess,
+  resolveSSO,
   socialProviders,
   onSocialLogin,
   socialLayout,
@@ -127,6 +136,7 @@ export function SignIn({
   return (
     <SignInForm
       onSuccess={handleSuccess}
+      resolveSSO={resolveSSO}
       signUpUrl={signUpUrl}
       forgotPasswordUrl={`${path}/forgot-password`}
       verifyEmailUrl={`${path}/verify-email`}

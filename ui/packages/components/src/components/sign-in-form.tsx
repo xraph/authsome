@@ -23,9 +23,44 @@ import { ArrowLeft, MailCheck } from "lucide-react";
 import { TurnstileWidget } from "./turnstile-widget";
 import { AuthClientError } from "@authsome/ui-core";
 
+/**
+ * The outcome of home-realm discovery for a sign-in email. Returned by
+ * {@link SignInFormComponentProps.resolveSSO} to tell the form that the email's
+ * domain is served by a single-sign-on IdP.
+ */
+export interface SSOResolution {
+  /**
+   * Begin the SSO login (typically a redirect to the IdP, or an API call that
+   * ends in one). Invoked when the user chooses SSO, and immediately when
+   * `enforced` is true.
+   */
+  continue: () => void | Promise<void>;
+  /**
+   * When true the domain requires SSO: the password field is never shown and
+   * the form routes straight to the IdP. When false/omitted, SSO is offered
+   * alongside password so the user can pick.
+   */
+  enforced?: boolean;
+  /**
+   * Display name for the SSO button, e.g. "Okta" renders "Continue with Okta".
+   * Falls back to a generic "Continue with SSO".
+   */
+  provider?: string;
+}
+
 export interface SignInFormComponentProps {
   /** Callback invoked after a successful sign-in. */
   onSuccess?: () => void;
+  /**
+   * Home-realm discovery hook. Called with the entered email when the user
+   * submits the email step. Return an {@link SSOResolution} to route the domain
+   * to its IdP (identifier-first, Okta/Microsoft/Google style), or `null` to
+   * fall through to password entry. Rejections fail open to password so a
+   * discovery outage never locks users out.
+   */
+  resolveSSO?: (
+    email: string,
+  ) => Promise<SSOResolution | null | undefined>;
   /** URL to the sign-up page. Renders a "Don't have an account?" footer link. */
   signUpUrl?: string;
   /** URL to the forgot-password page. Renders a "Forgot password?" link. */
@@ -79,6 +114,7 @@ export interface SignInFormComponentProps {
  */
 export function SignInForm({
   onSuccess,
+  resolveSSO,
   signUpUrl,
   forgotPasswordUrl,
   verifyEmailUrl,
@@ -127,11 +163,17 @@ export function SignInForm({
   const hasSocial =
     socialProviders && socialProviders.length > 0 && onSocialLogin;
 
-  const [step, setStep] = useState<"email" | "password" | "verify">("email");
+  const [step, setStep] = useState<"email" | "password" | "sso" | "verify">(
+    "email",
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Set while resolveSSO is in flight (email step → discovery round trip).
+  const [isResolvingSSO, setIsResolvingSSO] = useState(false);
+  // The resolved IdP handoff once discovery finds SSO for the domain.
+  const [sso, setSso] = useState<SSOResolution | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [resendStatus, setResendStatus] = useState<"idle" | "sent" | "error">(
     "idle",
@@ -143,7 +185,7 @@ export function SignInForm({
     captchaCfg.provider === "turnstile" &&
     !!captchaCfg.site_key;
 
-  const handleEmailContinue = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleEmailContinue = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
 
@@ -152,7 +194,39 @@ export function SignInForm({
       return;
     }
 
-    setStep("password");
+    // No discovery hook: keep the plain email → password flow.
+    if (!resolveSSO) {
+      setStep("password");
+      return;
+    }
+
+    // Home-realm discovery. A rejection (or any non-resolution) fails open to
+    // password entry — a discovery outage must never lock a user out.
+    setIsResolvingSSO(true);
+    let resolution: SSOResolution | null | undefined;
+    try {
+      resolution = await resolveSSO(email.trim());
+    } catch {
+      resolution = null;
+    } finally {
+      setIsResolvingSSO(false);
+    }
+
+    if (!resolution) {
+      setStep("password");
+      return;
+    }
+
+    setSso(resolution);
+    setStep("sso");
+    // An enforced domain routes straight to the IdP — no password offered.
+    if (resolution.enforced) {
+      void resolution.continue();
+    }
+  };
+
+  const startSSO = () => {
+    if (sso) void sso.continue();
   };
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -213,6 +287,7 @@ export function SignInForm({
     setStep("email");
     setPassword("");
     setError(null);
+    setSso(null);
   };
 
   const footer = signUpUrl ? (
@@ -368,7 +443,7 @@ export function SignInForm({
                 placeholder="name@example.com"
                 autoComplete="username"
                 required
-                disabled={isSubmitting}
+                disabled={isSubmitting || isResolvingSSO}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -377,8 +452,9 @@ export function SignInForm({
             <Button
               type="submit"
               className="w-full"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isResolvingSSO}
             >
+              {isResolvingSSO && <LoadingSpinner size="sm" className="mr-2" />}
               Continue
             </Button>
           </form>
@@ -393,6 +469,64 @@ export function SignInForm({
               />
             </>
           )}
+        </div>
+      </AuthCard>
+    );
+  }
+
+  /* ── Step: SSO (home-realm discovery matched an IdP) ── */
+
+  if (step === "sso") {
+    const providerLabel = sso?.provider
+      ? `Continue with ${sso.provider}`
+      : "Continue with SSO";
+    return (
+      <AuthCard
+        title="Single sign-on"
+        description={email}
+        logo={logo}
+        footer={footer}
+        align={align}
+        variant={variant}
+        className={cn(className)}
+      >
+        <div className="grid gap-4">
+          <p className="text-sm text-muted-foreground">
+            {sso?.enforced
+              ? "Your organization requires single sign-on for this email."
+              : "Your organization supports single sign-on for this email."}
+          </p>
+
+          <Button type="button" className="w-full" onClick={startSSO}>
+            {providerLabel}
+          </Button>
+
+          {/* Non-enforced domains may still use a password. */}
+          {!sso?.enforced && showPassword && (
+            <>
+              <OrDivider />
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setStep("password");
+                  setError(null);
+                }}
+              >
+                Sign in with password instead
+              </Button>
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={goBack}
+            className="inline-flex items-center justify-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Use a different email
+          </button>
         </div>
       </AuthCard>
     );

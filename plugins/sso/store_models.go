@@ -23,11 +23,13 @@ type ssoConnectionModel struct {
 	Provider     string `grove:"provider,notnull"`
 	Protocol     string `grove:"protocol,notnull"`
 	Domain       string `grove:"domain,notnull"`
+	DisplayName  string `grove:"display_name,notnull"`
 	MetadataURL  string `grove:"metadata_url,notnull"`
 	ClientID     string `grove:"client_id,notnull"`
 	ClientSecret string `grove:"client_secret,notnull"`
 	Issuer       string `grove:"issuer,notnull"`
 	Active       bool   `grove:"active,notnull"`
+	Enforced     bool   `grove:"enforced,notnull"`
 
 	// SAML fields. attribute_mappings is stored as a JSON object.
 	IDPMetadataXML    string `grove:"idp_metadata_xml,notnull"`
@@ -65,11 +67,13 @@ func toConnection(m *ssoConnectionModel) (*Connection, error) {
 		Provider:     m.Provider,
 		Protocol:     m.Protocol,
 		Domain:       m.Domain,
+		DisplayName:  m.DisplayName,
 		MetadataURL:  m.MetadataURL,
 		ClientID:     m.ClientID,
 		ClientSecret: m.ClientSecret,
 		Issuer:       m.Issuer,
 		Active:       m.Active,
+		Enforced:     m.Enforced,
 
 		IDPMetadataXML: m.IDPMetadataXML,
 		IDPSSOURL:      m.IDPSSOURL,
@@ -109,11 +113,13 @@ func fromConnection(c *Connection) *ssoConnectionModel {
 		Provider:     c.Provider,
 		Protocol:     c.Protocol,
 		Domain:       c.Domain,
+		DisplayName:  c.DisplayName,
 		MetadataURL:  c.MetadataURL,
 		ClientID:     c.ClientID,
 		ClientSecret: c.ClientSecret,
 		Issuer:       c.Issuer,
 		Active:       c.Active,
+		Enforced:     c.Enforced,
 
 		IDPMetadataXML: c.IDPMetadataXML,
 		IDPSSOURL:      c.IDPSSOURL,
