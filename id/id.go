@@ -68,6 +68,8 @@ const (
 	PrefixSSFSignal       Prefix = "assg"
 	PrefixAgent           Prefix = "aagt"
 	PrefixAgentGrant      Prefix = "aagr"
+	PrefixRetentionJob    Prefix = "artj"
+	PrefixRetentionRef    Prefix = "artr"
 )
 
 // ID is the primary identifier type for all AuthSome entities.
@@ -225,6 +227,12 @@ type SSFEventID = ID
 
 // SSFSignalID identifies a stored Shared Signals risk signal.
 type SSFSignalID = ID
+
+// RetentionJobID is a type-safe identifier for retention outbox jobs (prefix: "artj").
+type RetentionJobID = ID
+
+// RetentionRefID is a type-safe identifier for retention contact refs (prefix: "artr").
+type RetentionRefID = ID
 
 // ──────────────────────────────────────────────────
 // Core functions
@@ -428,6 +436,12 @@ func NewSSFEventID() ID { return New(PrefixSSFEvent) }
 // NewSSFSignalID generates a new Shared Signals risk signal ID.
 func NewSSFSignalID() ID { return New(PrefixSSFSignal) }
 
+// NewRetentionJobID generates a new unique retention outbox job ID.
+func NewRetentionJobID() ID { return New(PrefixRetentionJob) }
+
+// NewRetentionRefID generates a new unique retention contact ref ID.
+func NewRetentionRefID() ID { return New(PrefixRetentionRef) }
+
 // ──────────────────────────────────────────────────
 // Convenience parsers
 // ──────────────────────────────────────────────────
@@ -555,6 +569,12 @@ func ParseServiceAccountID(s string) (ID, error) { return ParseWithPrefix(s, Pre
 
 // ParseDelegationID parses a string and validates the "adel" prefix.
 func ParseDelegationID(s string) (ID, error) { return ParseWithPrefix(s, PrefixDelegation) }
+
+// ParseRetentionJobID parses a string and validates the "artj" prefix.
+func ParseRetentionJobID(s string) (ID, error) { return ParseWithPrefix(s, PrefixRetentionJob) }
+
+// ParseRetentionRefID parses a string and validates the "artr" prefix.
+func ParseRetentionRefID(s string) (ID, error) { return ParseWithPrefix(s, PrefixRetentionRef) }
 
 // ParseAny parses a string into an ID without type checking the prefix.
 func ParseAny(s string) (ID, error) { return Parse(s) }
