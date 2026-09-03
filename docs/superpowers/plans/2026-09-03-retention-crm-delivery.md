@@ -2236,11 +2236,42 @@ func TestHookNoOpWithoutProviders(t *testing.T) {
 }
 
 func TestIdempotencyKeyIsStableAndDistinct(t *testing.T) {
-	a := idempotencyKey("hubspot", "ausr_1", "logged_in", "2026-09-03T10:00:00Z")
-	b := idempotencyKey("hubspot", "ausr_1", "logged_in", "2026-09-03T10:00:00Z")
-	c := idempotencyKey("hubspot", "ausr_1", "logged_in", "2026-09-03T10:00:01Z")
+	a := idempotencyKey("hubspot", "ausr_1", "logged_in", "ases_1")
+	b := idempotencyKey("hubspot", "ausr_1", "logged_in", "ases_1")
+	c := idempotencyKey("hubspot", "ausr_1", "logged_in", "ases_2")
 	assert.Equal(t, a, b)
 	assert.NotEqual(t, a, c)
+}
+
+// This is the case the pure-function test above cannot reach: it goes through
+// the real enqueue path twice for one event, which is where a clock read would
+// have leaked into the key.
+func TestEnqueueForSameEventTwiceEnqueuesOnce(t *testing.T) {
+	ctx := context.Background()
+	s := NewMemoryStore()
+	p := newHookPlugin(s)
+	appID, userID := id.NewAppID(), id.NewUserID()
+
+	p.enqueueFor(ctx, appID, id.EnvironmentID{}, userID, KindActivityLog, "logged_in", "ases_dupe")
+	p.enqueueFor(ctx, appID, id.EnvironmentID{}, userID, KindActivityLog, "logged_in", "ases_dupe")
+
+	jobs, err := s.ClaimDue(ctx, 10, 0, timeNow())
+	require.NoError(t, err)
+	assert.Len(t, jobs, 1, "the same logical event must enqueue once, not once per dispatch")
+}
+
+func TestEnqueueForDistinctEventsEnqueuesBoth(t *testing.T) {
+	ctx := context.Background()
+	s := NewMemoryStore()
+	p := newHookPlugin(s)
+	appID, userID := id.NewAppID(), id.NewUserID()
+
+	p.enqueueFor(ctx, appID, id.EnvironmentID{}, userID, KindActivityLog, "logged_in", "ases_1")
+	p.enqueueFor(ctx, appID, id.EnvironmentID{}, userID, KindActivityLog, "logged_in", "ases_2")
+
+	jobs, err := s.ClaimDue(ctx, 10, 0, timeNow())
+	require.NoError(t, err)
+	assert.Len(t, jobs, 2, "two separate logins must not collapse into one job")
 }
 ```
 
@@ -2259,19 +2290,25 @@ Create `plugins/retention/hooks.go`. Every exported hook wraps one internal help
 // enqueueFor writes one job per configured provider. It is the only thing a
 // hook does. No reads: a lookup here would put a query on the login path, and
 // the whole point of the outbox is that a login writes one row and gets out.
+//
+// eventID must be stable for one logical event and different across events.
+// The callers pass the session id for sign-up and sign-in (one session is one
+// login) and the user's UpdatedAt for a profile change. Deriving it from
+// time.Now() here instead would defeat the whole mechanism: two dispatches of
+// the same hook would stamp two different nanosecond values, hash to two keys,
+// and enqueue the work twice.
 func (p *Plugin) enqueueFor(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
-	userID id.UserID, kind, activityType string) {
+	userID id.UserID, kind, activityType, eventID string) {
 	if p.store == nil || len(p.providers) == 0 {
 		return
 	}
 	now := time.Now()
-	stamp := now.UTC().Format(time.RFC3339Nano)
 	for name := range p.providers {
 		j := &Job{
 			ID: id.NewRetentionJobID(), AppID: appID, EnvID: envID, UserID: userID,
 			Provider: name, Kind: kind,
 			Payload:        map[string]string{"activity_type": activityType},
-			IdempotencyKey: idempotencyKey(name, userID.String(), kind+":"+activityType, stamp),
+			IdempotencyKey: idempotencyKey(name, userID.String(), kind+":"+activityType, eventID),
 			State:          StatePending,
 			NextAttemptAt:  now,
 			CreatedAt:      now,
@@ -2288,7 +2325,9 @@ func (p *Plugin) enqueueFor(ctx context.Context, appID id.AppID, envID id.Enviro
 }
 
 // idempotencyKey is a stable hash of the parts that make one delivery unique,
-// so a hook that fires twice for the same event enqueues once.
+// so a hook that fires twice for the same event enqueues once. Every part must
+// be stable across those two firings; anything derived from the clock at call
+// time is not.
 func idempotencyKey(parts ...string) string {
 	h := sha256.New()
 	for _, part := range parts {
@@ -2299,7 +2338,15 @@ func idempotencyKey(parts ...string) string {
 }
 ```
 
-`afterSignUpFor` calls `enqueueFor` twice, with `KindContactUpsert`/`"signed_up"` and `KindActivityLog`/`"signed_up"`. `afterSignInFor` calls it once with `KindActivityLog`/`"logged_in"`. `afterUserUpdateFor` calls it once with `KindContactUpsert`/`"profile_updated"`. Add a `timeNow()` test helper returning `time.Now().Add(time.Minute)` so `ClaimDue` in the tests sees everything as due.
+`afterSignUpFor` calls `enqueueFor` twice, with `KindContactUpsert`/`"signed_up"` and `KindActivityLog`/`"signed_up"`. `afterSignInFor` calls it once with `KindActivityLog`/`"logged_in"`. `afterUserUpdateFor` calls it once with `KindContactUpsert`/`"profile_updated"`.
+
+The exported hooks supply `eventID` from what their signature already hands
+them, so no extra read is needed:
+
+- `OnAfterSignUp(ctx, u, s)` and `OnAfterSignIn(ctx, u, s)` pass `s.ID.String()`. One session is one login event, which is exactly the granularity the key wants.
+- `OnAfterUserUpdate(ctx, u)` passes `u.UpdatedAt.UTC().Format(time.RFC3339Nano)`. Two dispatches of the same update carry the same `UpdatedAt`; a genuinely later edit carries a new one.
+
+When `s` is nil, fall back to a fresh timestamp and accept the loss of dedup for that call. Enqueuing twice is recoverable; refusing to enqueue is not. Add a `timeNow()` test helper returning `time.Now().Add(time.Minute)` so `ClaimDue` in the tests sees everything as due.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
