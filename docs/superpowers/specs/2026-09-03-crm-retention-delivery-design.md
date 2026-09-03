@@ -238,12 +238,19 @@ and a dashboard page. The relay stays available as an extra fan-out but it
 can't be the transport, because `Send` returns no response payload and there's
 nowhere to put the `RemoteRef`.
 
-## Open questions
+## Decisions taken after review
 
-Which CRM is the reference vendor provider. HubSpot is the recommendation: free
-developer accounts, a simple REST surface, and contacts plus engagements that
-map cleanly onto the two interface methods. Salesforce is the more impressive
-demo and considerably more work.
+HubSpot is the reference vendor provider. Free developer accounts, a simple
+REST surface, and contacts plus engagements that map onto the two interface
+methods without much translation. Salesforce would be the more impressive
+demo and considerably more work, so it stays a candidate for a later
+provider rather than the one that proves the interface.
+
+Treat the exact endpoint paths, the auth header shape and the search-by-email
+call as things to confirm against HubSpot's current docs while implementing,
+not as settled by this document. Vendor APIs move and this spec will not.
+
+## Open questions
 
 The body of `classifyHTTPError` in `provider_generic.go`. The signature and
 everything around it gets scaffolded, and Rex writes the classification. It
