@@ -1902,9 +1902,15 @@ func (c *Config) defaults() {
 
 `buildProviders` maps each `ProviderConfig` onto an implementation by `Type`,
 returning an error for an unknown type so a typo in config fails at startup
-instead of dead-lettering every job later. Until Tasks 9 and 10 land, it
-returns an error for every type; that is expected, and `TestPluginFallsBackToMemoryStore`
-passes an empty `Providers` list so it does not depend on them.
+rather than dead-lettering every job later. Call it from `OnInit`, never from
+`New`: Task 7's tests construct a plugin with a `Providers` entry and inject
+fake providers directly, so a `New` that tried to build them would fail before
+those tests could run.
+
+Until Tasks 9 and 10 land, every `Type` is unknown and `buildProviders` errors
+for all of them. That is expected at this point in the plan. Both of this
+task's store tests pass an empty `Providers` list so they do not depend on
+providers existing.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1934,8 +1940,8 @@ func TestPluginImplementsExpectedInterfaces(t *testing.T) {
 	assert.Implements(t, (*plugin.OnShutdown)(nil), p)
 	assert.Implements(t, (*plugin.MigrationProvider)(nil), p)
 	assert.Implements(t, (*plugin.SettingsProvider)(nil), p)
-	assert.Implements(t, (*plugin.AfterSignUp)(nil), p)
-	assert.Implements(t, (*plugin.AfterSignIn)(nil), p)
+	// Hook interfaces are asserted in hooks_test.go (Task 7), where the
+	// methods exist.
 }
 
 func TestPluginFallsBackToMemoryStore(t *testing.T) {
@@ -1978,11 +1984,11 @@ var (
 	_ plugin.OnShutdown        = (*Plugin)(nil)
 	_ plugin.MigrationProvider = (*Plugin)(nil)
 	_ plugin.SettingsProvider  = (*Plugin)(nil)
-	_ plugin.AfterSignUp       = (*Plugin)(nil)
-	_ plugin.AfterSignIn       = (*Plugin)(nil)
-	_ plugin.AfterSignOut      = (*Plugin)(nil)
-	_ plugin.AfterUserUpdate   = (*Plugin)(nil)
 )
+
+// The four hook interface checks live in hooks.go (Task 7), not here. A
+// compile-time assertion for a method that does not exist yet would stop this
+// task from building at all.
 
 var (
 	// SettingEnabled turns delivery off without dropping queued work.
@@ -2036,7 +2042,13 @@ swallowed store error into a panic inside a login.
 
 The `Plugin` struct holds `config Config`, `store Store`, `providers map[string]Provider`, `engine plugin.Engine`, `logger log.Logger`, `settingsMgr *settings.Manager`, `consent consentChecker` and `worker *worker`.
 
-`OnInit` captures the engine references, runs the same driver switch as sharedsignals (`pg`/`sqlite`/`mongo`, falling back to `NewMemoryStore()` with a Warn naming the impact: a pending backlog is process-local and dies with the process), builds providers from `p.config.Providers`, resolves the consent plugin, then starts the worker with `LoadContact` and `AllowSend` wired to the engine. `OnShutdown` calls `p.worker.stop()` when non-nil and returns nil, so it is safe on a plugin whose `OnInit` never ran.
+`OnInit` captures the engine references, runs the same driver switch as sharedsignals (`pg`/`sqlite`/`mongo`, falling back to `NewMemoryStore()` with a Warn naming the impact: a pending backlog is process-local and dies with the process), builds providers from `p.config.Providers`, then starts the worker with `LoadContact` wired to the engine and `AllowSend` left nil.
+
+`AllowSend` is nil at this task on purpose. The worker's contract from Task 5
+already documents nil as "always allow", and the consent gate that fills it in
+does not exist until Task 8. Wiring `p.allowSend` here would reference a method
+this task does not define, and the package would not build. Task 8 replaces the
+nil and resolves the consent plugin in the same change. `OnShutdown` calls `p.worker.stop()` when non-nil and returns nil, so it is safe on a plugin whose `OnInit` never ran.
 
 `DeclareSettings` registers the four settings via `settings.RegisterTyped(m, "retention", ...)`, matching `plugins/social/plugin.go:214`.
 
@@ -2065,6 +2077,33 @@ git commit -m "feat(retention): add plugin lifecycle, settings and store selecti
 - Produces: `(*Plugin).AfterSignUp`, `AfterSignIn`, `AfterSignOut`, `AfterUserUpdate`, and `idempotencyKey(parts ...string) string`.
 
 Read the exact signatures from `plugin/plugin.go:245-330` before writing, and match them. They are the contract; this plan does not restate them because a stale copy here would be worse than a lookup.
+
+This task also owns the four hook interface assertions that Task 6 deliberately
+left out, because this is where the methods start existing. Add to `hooks.go`:
+
+```go
+// Compile-time interface checks for the hooks this file implements.
+var (
+	_ plugin.AfterSignUp     = (*Plugin)(nil)
+	_ plugin.AfterSignIn     = (*Plugin)(nil)
+	_ plugin.AfterSignOut    = (*Plugin)(nil)
+	_ plugin.AfterUserUpdate = (*Plugin)(nil)
+)
+```
+
+and add the matching runtime assertion to `hooks_test.go`:
+
+```go
+func TestPluginImplementsHookInterfaces(t *testing.T) {
+	p := New()
+	assert.Implements(t, (*plugin.AfterSignUp)(nil), p)
+	assert.Implements(t, (*plugin.AfterSignIn)(nil), p)
+	assert.Implements(t, (*plugin.AfterSignOut)(nil), p)
+	assert.Implements(t, (*plugin.AfterUserUpdate)(nil), p)
+}
+```
+
+That needs `"github.com/xraph/authsome/plugin"` in the test imports.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2478,7 +2517,7 @@ Add `requireConsent bool`, `consentPurpose string` and `consent consentChecker` 
 	}
 ```
 
-Read `requireConsent` and `consentPurpose` from the settings manager in `OnInit`, then pass `p.allowSend` as the worker's `AllowSend`.
+Read `requireConsent` and `consentPurpose` from the settings manager in `OnInit`, then pass `p.allowSend` as the worker's `AllowSend`, replacing the nil that Task 6 left there. Both changes land in `OnInit` in this task: resolving the consent plugin and filling in the gate are the same change, and neither compiles before this task defines `consentChecker` and `allowSend`.
 
 - [ ] **Step 7: Run tests to verify they pass**
 
