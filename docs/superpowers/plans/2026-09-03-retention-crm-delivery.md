@@ -1238,7 +1238,14 @@ git commit -m "feat(retention): add migrations and the sqlite outbox store"
 
 - [ ] **Step 1: Write the failing conformance runners**
 
-Create both test files behind the integration tag, copying the harness in `plugins/sharedsignals/store_postgres_conformance_test.go` and `plugins/sharedsignals/store_mongo_conformance_test.go` (testcontainers for Postgres, `AUTHSOME_MONGO_URI` for Mongo). Each is a five-line wrapper calling `runStoreConformance` with a factory that migrates the group and returns the store.
+Create both test files behind the `//go:build integration` tag. Copy the harness shapes from the files that actually exist on this branch:
+
+- Postgres: `plugins/agentauth/store_conformance_postgres_test.go` — testcontainers, `pgmodule.Run(ctx, "postgres:16-alpine", ...)`, then `pgdriver.New()` and `pgstore "github.com/xraph/authsome/store/postgres"` to migrate. Requires Docker.
+- Mongo: `plugins/sharedsignals/store_mongo_conformance_test.go` — `AUTHSOME_MONGO_URI` from the environment, `mongodriver`, `mongostore "github.com/xraph/authsome/store/mongo"`, skipping when the variable is unset.
+
+Each is a thin wrapper calling `runStoreConformance` with a factory that migrates the right group and returns the store.
+
+**Both files must declare `package retention`, not `package retention_test`.** `runStoreConformance` is unexported and lives in the internal test package, so an external test package cannot call it. Note that the agentauth harness you are copying uses `package agentauth_test` — do not copy that part.
 
 - [ ] **Step 2: Run to verify they fail**
 
@@ -1431,6 +1438,22 @@ func TestWorkerActivityUpsertsFirstWhenRefMissing(t *testing.T) {
 	assert.Equal(t, StateDone, stored.State)
 }
 
+func TestWorkerSuppressesWhenProviderCannotHoldContacts(t *testing.T) {
+	ctx := context.Background()
+	s := NewMemoryStore()
+	p := &fakeProvider{caps: CapActivities} // no CapContacts
+	j := enqueued(t, s, KindContactUpsert, "k3a")
+
+	newTestWorker(t, s, p).runOnce(ctx)
+
+	assert.Zero(t, p.upserts, "a provider without CapContacts must not be called")
+	stored, err := s.GetJob(ctx, j.ID)
+	require.NoError(t, err)
+	assert.Equal(t, StateSuppressed, stored.State,
+		"a statically-impossible delivery is suppressed, not dead-lettered: "+
+			"dead means we tried and failed, and we never tried")
+}
+
 func TestWorkerSkipsActivityWhenProviderLacksCapability(t *testing.T) {
 	ctx := context.Background()
 	s := NewMemoryStore()
@@ -1604,6 +1627,11 @@ import (
 	log "github.com/xraph/go-utils/log"
 )
 
+// errNoContactCapability means the provider cannot hold contacts at all, so
+// this job was never deliverable. deliver routes it to suppressed rather than
+// dead, because the provider declared the limitation up front.
+var errNoContactCapability = errors.New("retention: provider does not support contacts")
+
 // workerDeps is everything the delivery loop needs. It takes function values
 // for the two things that would otherwise drag the engine into this file,
 // which also makes both trivially fakeable in tests.
@@ -1736,6 +1764,15 @@ func (w *worker) deliver(ctx context.Context, j *Job) {
 
 	ref, err := w.ensureRef(ctx, p, j, contact)
 	if err != nil {
+		if errors.Is(err, errNoContactCapability) {
+			// Symmetric with the CapActivities check below. The provider told
+			// us up front it cannot do this, so the right record is a
+			// deliberate skip, not a failed delivery. Dead-lettering here
+			// would put "we tried and failed" in the audit trail for
+			// something we never attempted.
+			w.suppress(ctx, j, "provider does not support contacts")
+			return
+		}
 		w.fail(ctx, j, err, !isRetryable(err))
 		return
 	}
@@ -1777,7 +1814,7 @@ func (w *worker) ensureRef(ctx context.Context, p Provider, j *Job, c *Contact) 
 	}
 
 	if !p.Capabilities().Has(CapContacts) {
-		return RemoteRef{}, fmt.Errorf("provider %q cannot upsert contacts", j.Provider)
+		return RemoteRef{}, errNoContactCapability
 	}
 	ref, err := p.UpsertContact(ctx, c)
 	if err != nil {
