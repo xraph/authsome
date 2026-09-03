@@ -1139,6 +1139,11 @@ func (s *SqliteStore) Enqueue(ctx context.Context, j *Job) error {
 // store/sqlite/refresh_replay.go:137 — conditional update plus RowsAffected.
 func (s *SqliteStore) ClaimDue(ctx context.Context, limit int, lease time.Duration,
 	now time.Time) ([]*Job, error) {
+	// .UTC(): next_attempt_at and in_flight_until are TEXT in SQLite, so these
+	// comparisons are string sorts. Binding a local-offset time compares
+	// "2026-09-03T05:22:45-05:00" against a stored "2026-09-03T10:22:45Z" and
+	// silently claims the wrong rows. internal/sqliteguard enforces this.
+	now = now.UTC()
 	q := s.sdb.NewSelect(&models).
 		Where("(state = ? AND next_attempt_at <= ?) OR (state = ? AND in_flight_until < ?)",
 			StatePending, now, StateInFlight, now).
