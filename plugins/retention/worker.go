@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -14,8 +15,8 @@ import (
 )
 
 // workerDeps is everything the delivery loop needs. It takes function values
-// for the two things that would otherwise drag the engine into this file,
-// which also makes both trivially fakeable in tests.
+// for the three things that would otherwise drag the engine into this file,
+// which also makes all of them trivially fakeable in tests.
 type workerDeps struct {
 	Store     Store
 	Providers map[string]Provider
@@ -33,15 +34,52 @@ type workerDeps struct {
 	// mutable as the consent grant.
 	LoadContact func(ctx context.Context, j *Job) (*Contact, error)
 
+	// Enabled reports whether retention.enabled is on for the job's app. Nil
+	// means enabled, which is what a plugin with no settings manager gets.
+	//
+	// It is resolved per job rather than once at startup because
+	// retention.enabled is ScopeApp: one process serves apps that disagree
+	// about it, and it is a dynamic setting, so flipping it has to bite
+	// without a restart.
+	Enabled func(ctx context.Context, j *Job) bool
+
 	// AllowSend is the consent gate. Nil means always allow. It runs here and
 	// not at enqueue so a revocation between login and delivery is honoured.
-	AllowSend func(ctx context.Context, j *Job) (bool, string)
+	//
+	// The error return is what separates "we asked and the answer was no"
+	// from "we could not ask". Only the first is a deliberate choice, and
+	// only a deliberate choice may be recorded as suppressed.
+	AllowSend func(ctx context.Context, j *Job) (allowed bool, reason string, err error)
 }
 
 // errNoContactCapability means the provider cannot hold contacts at all, so
 // this job was never deliverable. deliver routes it to suppressed rather than
 // dead, because the provider declared the limitation up front.
 var errNoContactCapability = errors.New("retention: provider does not support contacts")
+
+// errLocal marks a failure in our own infrastructure - the store, the engine,
+// the settings manager - rather than a verdict from the CRM. Terminal-by-
+// default is right for an unclassified CRM response, and wrong for our own
+// database: a failover would otherwise dead-letter every job claimed in that
+// window, and nothing re-enqueues a dead row.
+var errLocal = errors.New("retention: local infrastructure failure")
+
+// localError tags err as ours rather than the CRM's. Both verbs are %w, so
+// errors.Is still sees errLocal and everything err already wrapped.
+func localError(where string, err error) error {
+	return fmt.Errorf("%s: %w: %w", where, errLocal, err)
+}
+
+// terminal decides whether a failure should stop the job for good.
+//
+// An unclassified response from the CRM is terminal on purpose: retried
+// forever it is a queue that never drains, and the dead-letter row is the
+// thing that gets it looked at. A failure of our own infrastructure is not,
+// because a database blip would otherwise destroy work permanently, and
+// nothing in this plugin re-enqueues a dead row.
+func terminal(err error) bool {
+	return !isRetryable(err) && !errors.Is(err, errLocal)
+}
 
 type worker struct {
 	deps   workerDeps
@@ -127,7 +165,47 @@ func (w *worker) runOnce(ctx context.Context) {
 	}
 }
 
+// deliver runs one job with a recover around it, so that no provider, present
+// or future, can take the auth process down.
+//
+// A panic on this goroutine kills the whole binary, and the outbox exists
+// precisely so a misbehaving CRM integration cannot reach the login path. The
+// job is dead-lettered rather than retried: a panic is a bug, not a
+// transient, and running the same bug again on the same row panics again.
+// The rest of the batch carries on.
 func (w *worker) deliver(ctx context.Context, j *Job) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		w.deps.Logger.Error("retention: delivery panicked, job dead-lettered",
+			log.String("job_id", j.ID.String()),
+			log.String("provider", j.Provider),
+			log.String("panic", fmt.Sprint(r)),
+			log.String("stack", string(debug.Stack())))
+		if err := w.deps.Store.MarkDead(ctx, j.ID,
+			fmt.Sprintf("panic during delivery: %v", r)); err != nil {
+			w.deps.Logger.Warn("retention: mark dead failed", log.String("error", err.Error()))
+		}
+	}()
+	w.deliverOne(ctx, j)
+}
+
+func (w *worker) deliverOne(ctx context.Context, j *Job) {
+	if w.deps.Enabled != nil && !w.deps.Enabled(ctx, j) {
+		// Neither dead nor done. The operator turned delivery off, most
+		// likely mid-incident, and the work should still be there when they
+		// turn it back on: "dead" would claim we tried and failed, "done"
+		// would claim we delivered, and nothing in this plugin re-enqueues
+		// either. Deferring spends no attempt budget because nothing failed.
+		// Spending one would mean a long enough disable quietly burns the
+		// whole budget, and the first real error after re-enabling kills a
+		// job that never actually failed.
+		w.deferJob(ctx, j, "delivery disabled for this app (retention.enabled)")
+		return
+	}
+
 	p, ok := w.deps.Providers[j.Provider]
 	if !ok {
 		// Dead-letter rather than retry. A provider that is not configured
@@ -138,8 +216,15 @@ func (w *worker) deliver(ctx context.Context, j *Job) {
 	}
 
 	if w.deps.AllowSend != nil {
-		allowed, reason := w.deps.AllowSend(ctx, j)
-		if !allowed {
+		allowed, reason, err := w.deps.AllowSend(ctx, j)
+		switch {
+		case err != nil:
+			// We could not ask, so we have not chosen anything. Recording
+			// that as suppressed would write "we deliberately did not send
+			// this" into the audit trail for a lookup that never completed.
+			w.fail(ctx, j, err, terminal(err))
+			return
+		case !allowed:
 			w.suppress(ctx, j, reason)
 			return
 		}
@@ -147,7 +232,7 @@ func (w *worker) deliver(ctx context.Context, j *Job) {
 
 	contact, err := w.deps.LoadContact(ctx, j)
 	if err != nil {
-		w.fail(ctx, j, err, !isRetryable(err))
+		w.fail(ctx, j, err, terminal(err))
 		return
 	}
 
@@ -162,7 +247,7 @@ func (w *worker) deliver(ctx context.Context, j *Job) {
 			w.suppress(ctx, j, "provider does not support contacts")
 			return
 		}
-		w.fail(ctx, j, err, !isRetryable(err))
+		w.fail(ctx, j, err, terminal(err))
 		return
 	}
 
@@ -179,7 +264,7 @@ func (w *worker) deliver(ctx context.Context, j *Job) {
 			Properties: j.Payload,
 		}
 		if err := p.LogActivity(ctx, ref, activity); err != nil {
-			w.fail(ctx, j, err, !isRetryable(err))
+			w.fail(ctx, j, err, terminal(err))
 			return
 		}
 	}
@@ -199,7 +284,9 @@ func (w *worker) ensureRef(ctx context.Context, p Provider, j *Job, c *Contact) 
 	case err == nil && j.Kind != KindContactUpsert:
 		return existing.Ref(), nil
 	case err != nil && !errors.Is(err, ErrNotFound):
-		return RemoteRef{}, err
+		// Our store, not the CRM. Retry inside the normal budget instead of
+		// dead-lettering a whole claimed batch because the database blinked.
+		return RemoteRef{}, localError("retention: read contact ref", err)
 	}
 
 	if !p.Capabilities().Has(CapContacts) {
@@ -218,7 +305,10 @@ func (w *worker) ensureRef(ctx context.Context, p Provider, j *Job, c *Contact) 
 		row.ID = existing.ID
 	}
 	if err := w.deps.Store.PutRef(ctx, row); err != nil {
-		return RemoteRef{}, err
+		// This one is worse than a lost job if we give up: the contact
+		// already exists in the CRM and the ref row does not, so the next
+		// login creates a second contact and the dedup spine is defeated.
+		return RemoteRef{}, localError("retention: write contact ref", err)
 	}
 	return ref, nil
 }
@@ -228,10 +318,10 @@ func isRetryable(err error) bool {
 	return ok
 }
 
-// fail either defers the job or parks it. terminal short-circuits the retry
+// fail either defers the job or parks it. isTerminal short-circuits the retry
 // budget for errors that will never succeed.
-func (w *worker) fail(ctx context.Context, j *Job, cause error, terminal bool) {
-	if terminal || j.Attempts+1 >= w.deps.MaxAttempts {
+func (w *worker) fail(ctx context.Context, j *Job, cause error, isTerminal bool) {
+	if isTerminal || j.Attempts+1 >= w.deps.MaxAttempts {
 		if err := w.deps.Store.MarkDead(ctx, j.ID, cause.Error()); err != nil {
 			w.deps.Logger.Warn("retention: mark dead failed", log.String("error", err.Error()))
 		}
@@ -247,6 +337,15 @@ func (w *worker) fail(ctx context.Context, j *Job, cause error, terminal bool) {
 	}
 	if err := w.deps.Store.MarkRetry(ctx, j.ID, time.Now().Add(after), cause.Error()); err != nil {
 		w.deps.Logger.Warn("retention: mark retry failed", log.String("error", err.Error()))
+	}
+}
+
+// deferJob puts a claimed job back without spending an attempt, for the case
+// where nothing failed and nothing was decided: we are simply not delivering
+// right now. It comes back up roughly one tick later.
+func (w *worker) deferJob(ctx context.Context, j *Job, reason string) {
+	if err := w.deps.Store.MarkDeferred(ctx, j.ID, time.Now().Add(w.deps.Interval), reason); err != nil {
+		w.deps.Logger.Warn("retention: mark deferred failed", log.String("error", err.Error()))
 	}
 }
 

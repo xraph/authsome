@@ -200,7 +200,11 @@ func TestWorkerDeadLettersTerminalError(t *testing.T) {
 	assert.Contains(t, stored.LastError, "400")
 }
 
-func TestWorkerDeadLettersAfterMaxAttempts(t *testing.T) {
+// The name is about the attempt budget, not about how many deliveries this
+// test performs: the forced MarkRetry calls below inflate the attempt count
+// on purpose, so the job reaches the budget sooner than the number of
+// provider calls suggests.
+func TestWorkerDeadLettersOnceTheAttemptBudgetIsSpent(t *testing.T) {
 	ctx := context.Background()
 	s := NewMemoryStore()
 	retry := func() error { return &ProviderError{Err: errors.New("503"), Retryable: true} }
@@ -229,8 +233,8 @@ func TestWorkerSuppressesWhenAllowSendSaysNo(t *testing.T) {
 	j := enqueued(t, s, KindContactUpsert, "k8")
 
 	w := newTestWorker(t, s, p)
-	w.deps.AllowSend = func(_ context.Context, _ *Job) (bool, string) {
-		return false, "no marketing consent"
+	w.deps.AllowSend = func(_ context.Context, _ *Job) (bool, string, error) {
+		return false, "no marketing consent", nil
 	}
 	w.runOnce(ctx)
 

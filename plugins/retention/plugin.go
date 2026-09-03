@@ -35,6 +35,10 @@ var (
 
 var (
 	// SettingEnabled turns delivery off without dropping queued work.
+	//
+	// The worker reads it per app immediately before delivering, so
+	// flipping it off during a CRM incident stops the sends and leaves
+	// the backlog claimable. See deliveryEnabled.
 	SettingEnabled = settings.Define("retention.enabled", true,
 		settings.WithDisplayName("CRM Retention Sync Enabled"),
 		settings.WithDescription("Mirror signup and login activity into the configured CRM"),
@@ -144,6 +148,13 @@ type Plugin struct {
 	// a restart. Tests stub this directly, the same way workerDeps.AllowSend
 	// is stubbed.
 	consentPolicy func(ctx context.Context, appID id.AppID) (require bool, purpose string)
+
+	// enabledPolicy resolves retention.enabled for one app at delivery
+	// time. A function field for the same reasons consentPolicy is one:
+	// the setting is ScopeApp and dynamic, so a value read once during
+	// OnInit would hand the first app's answer to every other app and
+	// would ignore the operator flipping the switch. Nil means enabled.
+	enabledPolicy func(ctx context.Context, appID id.AppID) bool
 }
 
 // New builds the plugin. Config is optional.
@@ -215,6 +226,13 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		p.store = NewMemoryStore()
 	}
 
+	// The SQL and Mongo stores can hit a row they cannot map, and
+	// skipping it silently would leave nothing to grep for. MemoryStore
+	// has no mapping step and so does not implement this.
+	if sl, ok := p.store.(interface{ SetLogger(log.Logger) }); ok {
+		sl.SetLogger(p.logger)
+	}
+
 	built, err := buildProviders(p.config.Providers)
 	if err != nil {
 		return fmt.Errorf("retention: %w", err)
@@ -237,6 +255,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	// of false: allowSend treats a nil policy as "gate off".
 	if p.settingsMgr != nil {
 		p.consentPolicy = newConsentPolicy(p.settingsMgr, p.logger)
+		p.enabledPolicy = newEnabledPolicy(p.settingsMgr, p.logger)
 	}
 
 	p.worker = newWorker(workerDeps{
@@ -249,6 +268,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		MaxAttempts: p.config.MaxAttempts,
 		BaseBackoff: p.config.BaseBackoff,
 		LoadContact: p.loadContact,
+		Enabled:     p.deliveryEnabled,
 		AllowSend:   p.allowSend,
 	})
 	p.worker.start()
@@ -262,7 +282,9 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 func (p *Plugin) loadContact(ctx context.Context, j *Job) (*Contact, error) {
 	u, err := p.engine.GetUser(ctx, j.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("retention: load user %s: %w", j.UserID, err)
+		// Our engine and its store, not the CRM. A user store that is
+		// briefly unreachable must not permanently dead-letter the job.
+		return nil, localError(fmt.Sprintf("retention: load user %s", j.UserID), err)
 	}
 	if u == nil {
 		return nil, fmt.Errorf("retention: user %s not found", j.UserID)
@@ -274,6 +296,41 @@ func (p *Plugin) loadContact(ctx context.Context, j *Job) (*Contact, error) {
 		FirstName: u.FirstName,
 		LastName:  u.LastName,
 	}, nil
+}
+
+// newEnabledPolicy builds the enabledPolicy closure against a live settings
+// manager, the same shape as newConsentPolicy so both are stubbable and
+// both resolve per app rather than once at startup.
+//
+// An unreadable setting resolves to enabled, the opposite of the consent
+// gate, and deliberately so. Consent gates PII leaving the building, where
+// uncertainty has to block. This gates a feature: a settings-store outage
+// must not silently stop a working integration, which is a failure nobody
+// would think to look for.
+//
+// mgr and logger must not be nil; OnInit only calls this once it has both.
+func newEnabledPolicy(mgr *settings.Manager, logger log.Logger) func(ctx context.Context, appID id.AppID) bool {
+	return func(ctx context.Context, appID id.AppID) bool {
+		opts := settings.ResolveOpts{AppID: appID.String()}
+		enabled, err := settings.Get(ctx, mgr, SettingEnabled, opts)
+		if err != nil {
+			logger.Warn("retention: enabled setting unreadable, delivering anyway",
+				log.String("app_id", appID.String()),
+				log.String("error", err.Error()))
+			return true
+		}
+		return enabled
+	}
+}
+
+// deliveryEnabled is the worker's Enabled. A nil policy (no settings
+// manager, which is what the stub engine in tests gives us) means enabled,
+// matching the setting's registered default of true.
+func (p *Plugin) deliveryEnabled(ctx context.Context, j *Job) bool {
+	if p.enabledPolicy == nil {
+		return true
+	}
+	return p.enabledPolicy(ctx, j.AppID)
 }
 
 // buildProviders maps each ProviderConfig onto an implementation by Type,

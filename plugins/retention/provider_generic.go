@@ -27,11 +27,40 @@ type GenericProvider struct {
 	client *http.Client
 }
 
+// classifierPolicyDecided flips to true when the retry-classification policy
+// in classifyHTTPError is written. Until then the generic provider refuses
+// to construct, so an unwritten policy fails loudly at startup rather than
+// at the first CRM error.
+//
+// The marker used to be the panic in classifyHTTPError alone, which did the
+// opposite of what it intended: it ran on the worker goroutine, where a Go
+// panic kills the whole process, and it was reached on a plain transport
+// error, so the first DNS blip would have taken down the auth server. That
+// is far worse than the login latency this entire outbox exists to prevent.
+const classifierPolicyDecided = false
+
 // NewGenericProvider builds a Provider from a ProviderConfig. ContactURL is
 // required: Capabilities always advertises CapContacts, so a provider that
 // could never actually reach a contacts endpoint must fail at construction
 // rather than fail every delivery later.
+//
+// It also refuses to build at all while classifierPolicyDecided is false.
+// Flipping that constant, once classifyHTTPError has a body, is the one
+// line that turns this provider on.
 func NewGenericProvider(cfg ProviderConfig) (*GenericProvider, error) {
+	if !classifierPolicyDecided {
+		return nil, fmt.Errorf(
+			"retention: generic provider %q cannot be used until classifyHTTPError's "+
+				"retry-classification policy is written (see provider_generic.go)", cfg.Name)
+	}
+	return newGenericProvider(cfg)
+}
+
+// newGenericProvider is the constructor without the policy guard, so the
+// package's own tests can still exercise the transport, auth and field
+// mapping paths that are finished. It stays unexported: nothing outside
+// this package may build a provider whose error classification is a panic.
+func newGenericProvider(cfg ProviderConfig) (*GenericProvider, error) {
 	if cfg.Name == "" {
 		return nil, fmt.Errorf("retention: generic provider requires a name")
 	}
@@ -274,6 +303,12 @@ func stringifyJSONLeaf(v interface{}) (string, bool) {
 // classifyHTTPError maps a CRM's HTTP response onto a ProviderError so the
 // worker can decide retry vs dead-letter. resp may be nil when the request
 // never completed (dial failure, timeout).
+//
+// The body is Rex's to write; the panic stays as the marker that it is not
+// written yet. It is unreachable in production now that NewGenericProvider
+// refuses to construct while classifierPolicyDecided is false, and the
+// worker recovers around every job besides, so reaching it can no longer
+// take the process down.
 func classifyHTTPError(resp *http.Response, body []byte, err error) *ProviderError {
 	panic("classifyHTTPError: policy not yet decided, see Task 9 Step 3")
 }

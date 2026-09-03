@@ -56,23 +56,36 @@ func newConsentPolicy(mgr *settings.Manager, logger log.Logger) func(ctx context
 // explicit request for consent to be established before data leaves, and
 // treating an error or a missing consent plugin as permission would quietly
 // defeat that.
-func (p *Plugin) allowSend(ctx context.Context, j *Job) (bool, string) {
+//
+// The error return separates "we asked and the answer was no" from "we
+// could not ask". Both refuse to send, but only the first is a decision:
+// the worker records it as suppressed, while a returned error retries
+// inside the normal budget. Collapsing them would leave a permanent audit
+// record saying we chose not to send, off the back of a lookup that never
+// completed, which is exactly the confusion suppressed exists to prevent.
+func (p *Plugin) allowSend(ctx context.Context, j *Job) (allowed bool, reason string, err error) {
 	require, purpose := false, "marketing"
 	if p.consentPolicy != nil {
 		require, purpose = p.consentPolicy(ctx, j.AppID)
 	}
 	if !require {
-		return true, ""
+		return true, "", nil
 	}
 	if p.consent == nil {
-		return false, "consent required but the consent plugin is unavailable"
+		// Not an error: the gate is on and there is no consent plugin to
+		// evaluate it, which is a standing configuration answer rather
+		// than a transient one. Retrying would never change it.
+		return false, "consent required but the consent plugin is unavailable", nil
 	}
 	granted, err := p.consent.HasConsent(ctx, j.UserID, j.AppID, purpose)
 	if err != nil {
-		return false, "consent lookup failed: " + err.Error()
+		// The consent plugin's own store, not a refusal. Tagged local so
+		// the worker retries rather than recording a choice we did not
+		// make.
+		return false, "", localError("retention: consent lookup", err)
 	}
 	if !granted {
-		return false, "no active consent for purpose " + purpose
+		return false, "no active consent for purpose " + purpose, nil
 	}
-	return true, ""
+	return true, "", nil
 }

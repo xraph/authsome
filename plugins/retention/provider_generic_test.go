@@ -16,9 +16,15 @@ import (
 // NOTE: every test server in this file returns 2xx. classifyHTTPError panics
 // until Task 9 Step 3 is decided, so no test here may drive a non-2xx
 // response — that is intentional, not an oversight.
+//
+// These tests build through newGenericProvider, the unexported constructor,
+// so the finished transport, auth and field-mapping paths stay covered while
+// the exported NewGenericProvider refuses to build anything at all. Do not
+// weaken that guard to make a test convenient: it is the whole reason an
+// unwritten policy cannot ship.
 
 func TestGenericProviderCapabilities_NoActivityURL(t *testing.T) {
-	p, err := NewGenericProvider(ProviderConfig{
+	p, err := newGenericProvider(ProviderConfig{
 		Name:       "acme",
 		Type:       "generic",
 		ContactURL: "http://example.invalid/contacts",
@@ -32,7 +38,7 @@ func TestGenericProviderCapabilities_NoActivityURL(t *testing.T) {
 }
 
 func TestGenericProviderCapabilities_WithActivityURL(t *testing.T) {
-	p, err := NewGenericProvider(ProviderConfig{
+	p, err := newGenericProvider(ProviderConfig{
 		Name:        "acme",
 		Type:        "generic",
 		ContactURL:  "http://example.invalid/contacts",
@@ -45,18 +51,18 @@ func TestGenericProviderCapabilities_WithActivityURL(t *testing.T) {
 	assert.True(t, caps.Has(CapActivities))
 }
 
-func TestNewGenericProvider_RequiresContactURL(t *testing.T) {
-	_, err := NewGenericProvider(ProviderConfig{Name: "acme", Type: "generic"})
+func TestGenericProviderConstructor_RequiresContactURL(t *testing.T) {
+	_, err := newGenericProvider(ProviderConfig{Name: "acme", Type: "generic"})
 	assert.Error(t, err, "a provider with no contact_url at all cannot upsert contacts, so construction must fail fast")
 }
 
-func TestNewGenericProvider_RequiresName(t *testing.T) {
-	_, err := NewGenericProvider(ProviderConfig{Type: "generic", ContactURL: "http://example.invalid/contacts"})
+func TestGenericProviderConstructor_RequiresName(t *testing.T) {
+	_, err := newGenericProvider(ProviderConfig{Type: "generic", ContactURL: "http://example.invalid/contacts"})
 	assert.Error(t, err)
 }
 
 func TestGenericProviderName(t *testing.T) {
-	p, err := NewGenericProvider(ProviderConfig{
+	p, err := newGenericProvider(ProviderConfig{
 		Name:       "acme-crm",
 		ContactURL: "http://example.invalid/contacts",
 	})
@@ -72,7 +78,7 @@ func TestGenericProviderUpsertContact_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewGenericProvider(ProviderConfig{
+	p, err := newGenericProvider(ProviderConfig{
 		Name:       "acme",
 		ContactURL: srv.URL,
 	})
@@ -98,7 +104,7 @@ func TestGenericProviderUpsertContact_DefaultBearerAuth(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewGenericProvider(ProviderConfig{
+	p, err := newGenericProvider(ProviderConfig{
 		Name:       "acme",
 		ContactURL: srv.URL,
 		Token:      "tok_abc123",
@@ -120,7 +126,7 @@ func TestGenericProviderUpsertContact_CustomHeaderAuth(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewGenericProvider(ProviderConfig{
+	p, err := newGenericProvider(ProviderConfig{
 		Name:       "acme",
 		ContactURL: srv.URL,
 		AuthType:   "header",
@@ -144,7 +150,7 @@ func TestGenericProviderUpsertContact_FieldMapRenamesOutgoingFields(t *testing.T
 	}))
 	defer srv.Close()
 
-	p, err := NewGenericProvider(ProviderConfig{
+	p, err := newGenericProvider(ProviderConfig{
 		Name:       "acme",
 		ContactURL: srv.URL,
 		FieldMap: map[string]string{
@@ -174,7 +180,7 @@ func TestGenericProviderUpsertContact_RemoteIDDefaultsToID(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewGenericProvider(ProviderConfig{Name: "acme", ContactURL: srv.URL})
+	p, err := newGenericProvider(ProviderConfig{Name: "acme", ContactURL: srv.URL})
 	require.NoError(t, err)
 
 	ref, err := p.UpsertContact(t.Context(), &Contact{Email: "x@example.com"})
@@ -189,7 +195,7 @@ func TestGenericProviderUpsertContact_RemoteIDFromConfiguredPath(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewGenericProvider(ProviderConfig{
+	p, err := newGenericProvider(ProviderConfig{
 		Name:       "acme",
 		ContactURL: srv.URL,
 		FieldMap: map[string]string{
@@ -212,7 +218,7 @@ func TestGenericProviderLogActivity_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewGenericProvider(ProviderConfig{
+	p, err := newGenericProvider(ProviderConfig{
 		Name:        "acme",
 		ContactURL:  "http://example.invalid/contacts",
 		ActivityURL: srv.URL,
@@ -239,7 +245,7 @@ func TestGenericProviderLogActivity_FieldMapRenames(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p, err := NewGenericProvider(ProviderConfig{
+	p, err := newGenericProvider(ProviderConfig{
 		Name:        "acme",
 		ContactURL:  "http://example.invalid/contacts",
 		ActivityURL: srv.URL,
@@ -258,4 +264,24 @@ func TestGenericProviderLogActivity_FieldMapRenames(t *testing.T) {
 	assert.Equal(t, "remote-501", gotBody["ContactRef"])
 	assert.NotContains(t, gotBody, "type")
 	assert.NotContains(t, gotBody, "contact_id")
+}
+
+func TestNewGenericProviderRefusesUntilClassifierPolicyDecided(t *testing.T) {
+	p, err := NewGenericProvider(ProviderConfig{
+		Name:       "acme",
+		Type:       "generic",
+		ContactURL: "http://example.invalid/contacts",
+	})
+	require.Error(t, err,
+		"an unwritten retry-classification policy must fail at startup, "+
+			"not on the worker goroutine at the first CRM hiccup")
+	assert.Nil(t, p)
+	assert.Contains(t, err.Error(), "classifyHTTPError")
+}
+
+func TestBuildProvidersSurfacesTheGenericRefusal(t *testing.T) {
+	_, err := buildProviders([]ProviderConfig{{
+		Name: "crm", Type: "generic", ContactURL: "http://example.invalid/contacts",
+	}})
+	require.Error(t, err, "OnInit must not start a worker holding a provider that panics")
 }

@@ -13,11 +13,12 @@ import (
 	"github.com/xraph/authsome/settings"
 )
 
-// newTestSettingsManager registers the same two definitions DeclareSettings
+// newTestSettingsManager registers the same definitions DeclareSettings
 // registers in production, against a manager backed by store.
 func newTestSettingsManager(t *testing.T, store settings.Store) *settings.Manager {
 	t.Helper()
 	m := settings.NewManager(store, log.NewNoopLogger())
+	require.NoError(t, settings.RegisterTyped(m, "retention", SettingEnabled))
 	require.NoError(t, settings.RegisterTyped(m, "retention", SettingRequireConsent))
 	require.NoError(t, settings.RegisterTyped(m, "retention", SettingConsentPurpose))
 	return m
