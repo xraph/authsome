@@ -235,22 +235,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	// engine used in tests returns nil), matching require_consent's default
 	// of false: allowSend treats a nil policy as "gate off".
 	if p.settingsMgr != nil {
-		p.consentPolicy = func(ctx context.Context, appID id.AppID) (bool, string) {
-			opts := settings.ResolveOpts{AppID: appID.String()}
-			require, err := settings.Get(ctx, p.settingsMgr, SettingRequireConsent, opts)
-			if err != nil {
-				// An unreadable gate setting must not be read as "no gate".
-				p.logger.Warn("retention: consent setting unreadable, gating on",
-					log.String("app_id", appID.String()),
-					log.String("error", err.Error()))
-				return true, "marketing"
-			}
-			purpose, err := settings.Get(ctx, p.settingsMgr, SettingConsentPurpose, opts)
-			if err != nil || purpose == "" {
-				purpose = "marketing"
-			}
-			return require, purpose
-		}
+		p.consentPolicy = newConsentPolicy(p.settingsMgr, p.logger)
 	}
 
 	p.worker = newWorker(workerDeps{
