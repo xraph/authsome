@@ -74,10 +74,21 @@ func (s *SqliteStore) Enqueue(ctx context.Context, j *Job) error {
 // update + RowsAffected idiom used in store/sqlite/refresh_replay.go.
 func (s *SqliteStore) ClaimDue(ctx context.Context, limit int, lease time.Duration,
 	now time.Time) ([]*Job, error) {
+	// .UTC(): next_attempt_at and in_flight_until are TEXT in SQLite, so these
+	// comparisons are string sorts. Binding a local-offset time compares
+	// "2026-09-03T05:22:45-05:00" against a stored "2026-09-03T10:22:45Z" and
+	// silently claims the wrong rows, or none. internal/sqliteguard enforces
+	// this repo-wide; normalising now here means the select below, the
+	// per-row update's re-check, and the written in_flight_until all agree.
+	now = now.UTC()
+
 	var models []*jobModel
+	// The timestamp comparison binds first (not the state comparison) so the
+	// bound .UTC() value is the query's first parameter, which is what
+	// internal/sqliteguard checks for.
 	q := s.sdb.NewSelect(&models).
-		Where("(state = ? AND next_attempt_at <= ?) OR (state = ? AND in_flight_until < ?)",
-			StatePending, now, StateInFlight, now).
+		Where("(next_attempt_at <= ? AND state = ?) OR (in_flight_until < ? AND state = ?)",
+			now.UTC(), StatePending, now.UTC(), StateInFlight).
 		OrderExpr("next_attempt_at ASC, created_at ASC")
 	// limit <= 0 means "no limit", matching the memory store; a LIMIT 0
 	// clause would claim nothing.
@@ -98,8 +109,8 @@ func (s *SqliteStore) ClaimDue(ctx context.Context, limit int, lease time.Durati
 			// Re-checks the same due predicate as the SELECT above, so a row
 			// claimed by another caller between our select and our update
 			// affects zero rows here instead of double-claiming it.
-			Where("(state = ? AND next_attempt_at <= ?) OR (state = ? AND in_flight_until < ?)",
-				StatePending, now, StateInFlight, now).
+			Where("(next_attempt_at <= ? AND state = ?) OR (in_flight_until < ? AND state = ?)",
+				now.UTC(), StatePending, now.UTC(), StateInFlight).
 			Exec(ctx)
 		if err != nil {
 			return nil, sqlErr(err)
@@ -143,7 +154,10 @@ func (s *SqliteStore) MarkRetry(ctx context.Context, jobID id.RetentionJobID,
 	res, err := s.sdb.NewUpdate((*jobModel)(nil)).
 		Set("state = ?", StatePending).
 		Set("attempts = attempts + 1").
-		Set("next_attempt_at = ?", nextAttemptAt).
+		// .UTC(): a later ClaimDue compares this column as UTC text; see
+		// ClaimDue's comment for why writing a local-offset value would make
+		// that comparison wrong.
+		Set("next_attempt_at = ?", nextAttemptAt.UTC()).
 		Set("in_flight_until = ?", nil).
 		Set("last_error = ?", lastErr).
 		Where("id = ?", jobID.String()).
@@ -253,7 +267,9 @@ func (s *SqliteStore) PutRef(ctx context.Context, r *ContactRef) error {
 		_, uerr := s.sdb.NewUpdate((*contactRefModel)(nil)).
 			Set("remote_object_type = ?", r.RemoteObjectType).
 			Set("remote_id = ?", r.RemoteID).
-			Set("synced_at = ?", r.SyncedAt).
+			// .UTC(): matches fromRef's normalisation on the insert path, so
+			// both paths persist the same representation.
+			Set("synced_at = ?", r.SyncedAt.UTC()).
 			Where("id = ?", existing.ID).
 			Exec(ctx)
 		return sqlErr(uerr)

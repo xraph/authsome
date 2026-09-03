@@ -53,10 +53,17 @@ func fromJob(j *Job) *jobModel {
 		UserID: j.UserID.String(), Provider: j.Provider, Kind: j.Kind,
 		Payload: string(payload), IdempotencyKey: j.IdempotencyKey,
 		State: j.State, Attempts: j.Attempts,
-		NextAttemptAt: j.NextAttemptAt, LastError: j.LastError, CreatedAt: j.CreatedAt,
+		// .UTC(): SQLite has no timestamp type, so these columns are TEXT and
+		// a later WHERE compares them as strings (see SqliteStore.ClaimDue).
+		// A value written with a local offset would sort wrong against one
+		// written in UTC. Postgres columns are TIMESTAMPTZ and normalise
+		// regardless, so calling .UTC() here is harmless there too, and
+		// keeps both backends persisting the same representation since this
+		// model is shared between them.
+		NextAttemptAt: j.NextAttemptAt.UTC(), LastError: j.LastError, CreatedAt: j.CreatedAt.UTC(),
 	}
 	if !j.InFlightUntil.IsZero() {
-		m.InFlightUntil = sql.NullTime{Time: j.InFlightUntil, Valid: true}
+		m.InFlightUntil = sql.NullTime{Time: j.InFlightUntil.UTC(), Valid: true}
 	}
 	return m
 }
@@ -104,7 +111,9 @@ func fromRef(r *ContactRef) *contactRefModel {
 	return &contactRefModel{
 		ID: r.ID.String(), AppID: r.AppID.String(), EnvID: r.EnvID.String(),
 		UserID: r.UserID.String(), Provider: r.Provider,
-		RemoteObjectType: r.RemoteObjectType, RemoteID: r.RemoteID, SyncedAt: r.SyncedAt,
+		RemoteObjectType: r.RemoteObjectType, RemoteID: r.RemoteID,
+		// .UTC(): see fromJob's comment.
+		SyncedAt: r.SyncedAt.UTC(),
 	}
 }
 
