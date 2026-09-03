@@ -2444,6 +2444,11 @@ import (
 	"github.com/xraph/authsome/id"
 )
 
+// policy builds a fixed consentPolicy for tests.
+func policy(require bool, purpose string) func(context.Context, id.AppID) (bool, string) {
+	return func(context.Context, id.AppID) (bool, string) { return require, purpose }
+}
+
 type stubConsent struct {
 	granted bool
 	err     error
@@ -2457,7 +2462,7 @@ func (s *stubConsent) HasConsent(context.Context, id.UserID, id.AppID, string) (
 
 func TestAllowSendPassesWhenGateDisabled(t *testing.T) {
 	p := New()
-	p.requireConsent = false
+	p.consentPolicy = policy(false, "marketing")
 	p.consent = &stubConsent{granted: false}
 
 	ok, _ := p.allowSend(context.Background(), &Job{})
@@ -2467,8 +2472,7 @@ func TestAllowSendPassesWhenGateDisabled(t *testing.T) {
 
 func TestAllowSendBlocksWithoutGrant(t *testing.T) {
 	p := New()
-	p.requireConsent = true
-	p.consentPurpose = "marketing"
+	p.consentPolicy = policy(true, "marketing")
 	p.consent = &stubConsent{granted: false}
 
 	ok, reason := p.allowSend(context.Background(), &Job{})
@@ -2478,8 +2482,7 @@ func TestAllowSendBlocksWithoutGrant(t *testing.T) {
 
 func TestAllowSendPassesWithGrant(t *testing.T) {
 	p := New()
-	p.requireConsent = true
-	p.consentPurpose = "marketing"
+	p.consentPolicy = policy(true, "marketing")
 	p.consent = &stubConsent{granted: true}
 
 	ok, _ := p.allowSend(context.Background(), &Job{})
@@ -2488,8 +2491,7 @@ func TestAllowSendPassesWithGrant(t *testing.T) {
 
 func TestAllowSendBlocksWhenGateOnButConsentUnavailable(t *testing.T) {
 	p := New()
-	p.requireConsent = true
-	p.consentPurpose = "marketing"
+	p.consentPolicy = policy(true, "marketing")
 	p.consent = nil // consent plugin not registered
 
 	ok, reason := p.allowSend(context.Background(), &Job{})
@@ -2499,7 +2501,7 @@ func TestAllowSendBlocksWhenGateOnButConsentUnavailable(t *testing.T) {
 
 func TestAllowSendBlocksOnLookupError(t *testing.T) {
 	p := New()
-	p.requireConsent = true
+	p.consentPolicy = policy(true, "marketing")
 	p.consent = &stubConsent{err: assert.AnError}
 
 	ok, _ := p.allowSend(context.Background(), &Job{})
@@ -2540,16 +2542,17 @@ type consentChecker interface {
 // treating an error or a missing consent plugin as permission would quietly
 // defeat that.
 func (p *Plugin) allowSend(ctx context.Context, j *Job) (bool, string) {
-	if !p.requireConsent {
+	require, purpose := false, "marketing"
+	if p.consentPolicy != nil {
+		require, purpose = p.consentPolicy(ctx, j.AppID)
+	}
+	if !require {
 		return true, ""
 	}
 	if p.consent == nil {
 		return false, "consent required but the consent plugin is unavailable"
 	}
-	purpose := p.consentPurpose
-	if purpose == "" {
-		purpose = "marketing"
-	}
+	purpose := "marketing"
 	granted, err := p.consent.HasConsent(ctx, j.UserID, j.AppID, purpose)
 	if err != nil {
 		return false, "consent lookup failed: " + err.Error()
@@ -2561,7 +2564,44 @@ func (p *Plugin) allowSend(ctx context.Context, j *Job) (bool, string) {
 }
 ```
 
-Add `requireConsent bool`, `consentPurpose string` and `consent consentChecker` to the `Plugin` struct, and in `OnInit` resolve them:
+Add `consent consentChecker` and a `consentPolicy` function field to the `Plugin` struct:
+
+```go
+	// consentPolicy resolves the consent gate for one app at delivery time.
+	//
+	// A function field rather than two cached booleans, for two reasons.
+	// retention.require_consent and retention.consent_purpose are declared
+	// ScopeApp, so one process serves apps that disagree about them, and a
+	// value read once during OnInit would apply the first app's answer to
+	// every app. They are also dynamic settings, so an operator turning the
+	// gate on expects it to take effect without a restart. Tests stub this
+	// directly, the same way workerDeps.AllowSend is stubbed.
+	consentPolicy func(ctx context.Context, appID id.AppID) (require bool, purpose string)
+```
+
+`OnInit` points it at the settings manager using the typed accessor
+`settings.Get`, scoped to the app the job belongs to:
+
+```go
+	p.consentPolicy = func(ctx context.Context, appID id.AppID) (bool, string) {
+		opts := settings.ResolveOpts{AppID: appID.String()}
+		require, err := settings.Get(ctx, p.settingsMgr, SettingRequireConsent, opts)
+		if err != nil {
+			// An unreadable gate setting must not be read as "no gate".
+			p.logger.Warn("retention: consent setting unreadable, gating on",
+				log.String("app_id", appID.String()),
+				log.String("error", err.Error()))
+			return true, "marketing"
+		}
+		purpose, err := settings.Get(ctx, p.settingsMgr, SettingConsentPurpose, opts)
+		if err != nil || purpose == "" {
+			purpose = "marketing"
+		}
+		return require, purpose
+	}
+```
+
+and resolve the consent plugin:
 
 ```go
 	if cp := engine.Plugin("consent"); cp != nil {
