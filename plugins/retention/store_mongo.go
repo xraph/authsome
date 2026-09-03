@@ -37,20 +37,26 @@ var _ Store = (*MongoStore)(nil)
 type outboxDoc struct {
 	grove.BaseModel `grove:"table:authsome_retention_outbox"`
 
-	ID             string            `bson:"_id"`
-	AppID          string            `bson:"app_id"`
-	EnvID          string            `bson:"env_id"`
-	UserID         string            `bson:"user_id"`
-	Provider       string            `bson:"provider"`
-	Kind           string            `bson:"kind"`
-	Payload        map[string]string `bson:"payload"`
-	IdempotencyKey string            `bson:"idempotency_key"`
-	State          string            `bson:"state"`
-	Attempts       int               `bson:"attempts"`
-	NextAttemptAt  time.Time         `bson:"next_attempt_at"`
-	InFlightUntil  *time.Time        `bson:"in_flight_until,omitempty"`
-	LastError      string            `bson:"last_error"`
-	CreatedAt      time.Time         `bson:"created_at"`
+	ID       string            `bson:"_id"`
+	AppID    string            `bson:"app_id"`
+	EnvID    string            `bson:"env_id"`
+	UserID   string            `bson:"user_id"`
+	Provider string            `bson:"provider"`
+	Kind     string            `bson:"kind"`
+	Payload  map[string]string `bson:"payload"`
+	// Do not add omitempty here: the partial unique index in
+	// MongoMigrations matches on idempotency_key existing as a string
+	// ($gt: ""), not on it being non-empty ($ne would cover missing/null
+	// too, but Mongo rejects $ne in a partial filter). Omitting the field
+	// on a zero value would drop that document out of the index's coverage
+	// and silently stop enforcing uniqueness for it.
+	IdempotencyKey string     `bson:"idempotency_key"`
+	State          string     `bson:"state"`
+	Attempts       int        `bson:"attempts"`
+	NextAttemptAt  time.Time  `bson:"next_attempt_at"`
+	InFlightUntil  *time.Time `bson:"in_flight_until,omitempty"`
+	LastError      string     `bson:"last_error"`
+	CreatedAt      time.Time  `bson:"created_at"`
 }
 
 type contactRefDoc struct {

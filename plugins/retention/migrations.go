@@ -161,16 +161,15 @@ func init() {
 			// Same partial-uniqueness guard as the SQL schemas: an empty key
 			// must never collide with another empty key.
 			//
-			// MongoDB's partial filter expressions only accept a small
-			// operator set ($eq, $exists, $gt, $gte, $lt, $lte, $type, and
-			// $and of those) because it rejects anything it cannot prove is
-			// a strict subset without evaluating documents at match time.
-			// $ne is not on that list -- the server errors the whole
-			// CreateIndexes call with "Expression not supported in partial
-			// index: $not" since $ne desugars to $not internally. $gt: ""
-			// says the same thing for a string field: BSON string ordering
-			// puts "" below every non-empty string, so "greater than empty"
-			// and "not equal to empty" select the same documents.
+			// $ne is rejected by Mongo's partial-filter validator (it
+			// desugars to $not, which the validator refuses outright), so
+			// this uses $gt: "" instead. That is NOT equivalent to $ne: "":
+			// $gt only matches documents where idempotency_key exists and is
+			// a string, so it silently excludes missing/null, which $ne
+			// would have caught. This is safe only because every write goes
+			// through jobToDoc (store_mongo.go), which always sets the
+			// field -- mirroring the SQL side's idempotency_key TEXT NOT
+			// NULL DEFAULT ''. See the warning on outboxDoc.IdempotencyKey.
 			return mexec.CreateIndexes(ctx, colOutbox, []mongo.IndexModel{
 				{
 					Keys: bson.D{{Key: "idempotency_key", Value: 1}},
