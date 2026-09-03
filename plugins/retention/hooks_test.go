@@ -42,7 +42,7 @@ func TestAfterSignUpEnqueuesContactAndActivity(t *testing.T) {
 	p := newHookPlugin(s)
 	appID, userID := id.NewAppID(), id.NewUserID()
 
-	require.NoError(t, p.afterSignUpFor(ctx, appID, id.EnvironmentID{}, userID))
+	require.NoError(t, p.afterSignUpFor(ctx, appID, id.EnvironmentID{}, userID, "ases_1"))
 
 	jobs, err := s.ClaimDue(ctx, 10, 0, timeNow())
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func TestAfterSignInEnqueuesActivityOnly(t *testing.T) {
 	p := newHookPlugin(s)
 	appID, userID := id.NewAppID(), id.NewUserID()
 
-	require.NoError(t, p.afterSignInFor(ctx, appID, id.EnvironmentID{}, userID))
+	require.NoError(t, p.afterSignInFor(ctx, appID, id.EnvironmentID{}, userID, "ases_1"))
 
 	jobs, err := s.ClaimDue(ctx, 10, 0, timeNow())
 	require.NoError(t, err)
@@ -71,7 +71,7 @@ func TestAfterSignInEnqueuesActivityOnly(t *testing.T) {
 func TestHookSwallowsStoreErrors(t *testing.T) {
 	ctx := context.Background()
 	p := newHookPlugin(failingStore{Store: NewMemoryStore()})
-	err := p.afterSignInFor(ctx, id.NewAppID(), id.EnvironmentID{}, id.NewUserID())
+	err := p.afterSignInFor(ctx, id.NewAppID(), id.EnvironmentID{}, id.NewUserID(), "ases_1")
 	assert.NoError(t, err, "a retention failure must never fail a login")
 }
 
@@ -82,7 +82,7 @@ func TestHookNoOpWithoutProviders(t *testing.T) {
 	p.store = s
 	p.providers = map[string]Provider{}
 
-	require.NoError(t, p.afterSignInFor(ctx, id.NewAppID(), id.EnvironmentID{}, id.NewUserID()))
+	require.NoError(t, p.afterSignInFor(ctx, id.NewAppID(), id.EnvironmentID{}, id.NewUserID(), "ases_1"))
 	jobs, err := s.ClaimDue(ctx, 10, 0, timeNow())
 	require.NoError(t, err)
 	assert.Empty(t, jobs, "no configured provider means no queued work")
@@ -94,7 +94,7 @@ func TestAfterUserUpdateEnqueuesContactUpsert(t *testing.T) {
 	p := newHookPlugin(s)
 	appID, userID := id.NewAppID(), id.NewUserID()
 
-	require.NoError(t, p.afterUserUpdateFor(ctx, appID, id.EnvironmentID{}, userID))
+	require.NoError(t, p.afterUserUpdateFor(ctx, appID, id.EnvironmentID{}, userID, "2026-09-03T10:00:00Z"))
 
 	jobs, err := s.ClaimDue(ctx, 10, 0, timeNow())
 	require.NoError(t, err)
@@ -104,11 +104,42 @@ func TestAfterUserUpdateEnqueuesContactUpsert(t *testing.T) {
 }
 
 func TestIdempotencyKeyIsStableAndDistinct(t *testing.T) {
-	a := idempotencyKey("hubspot", "ausr_1", "logged_in", "2026-09-03T10:00:00Z")
-	b := idempotencyKey("hubspot", "ausr_1", "logged_in", "2026-09-03T10:00:00Z")
-	c := idempotencyKey("hubspot", "ausr_1", "logged_in", "2026-09-03T10:00:01Z")
+	a := idempotencyKey("hubspot", "ausr_1", "logged_in", "ases_1")
+	b := idempotencyKey("hubspot", "ausr_1", "logged_in", "ases_1")
+	c := idempotencyKey("hubspot", "ausr_1", "logged_in", "ases_2")
 	assert.Equal(t, a, b)
 	assert.NotEqual(t, a, c)
+}
+
+// This is the case the pure-function test above cannot reach: it goes through
+// the real enqueue path twice for one event, which is where a clock read would
+// have leaked into the key.
+func TestEnqueueForSameEventTwiceEnqueuesOnce(t *testing.T) {
+	ctx := context.Background()
+	s := NewMemoryStore()
+	p := newHookPlugin(s)
+	appID, userID := id.NewAppID(), id.NewUserID()
+
+	p.enqueueFor(ctx, appID, id.EnvironmentID{}, userID, KindActivityLog, "logged_in", "ases_dupe")
+	p.enqueueFor(ctx, appID, id.EnvironmentID{}, userID, KindActivityLog, "logged_in", "ases_dupe")
+
+	jobs, err := s.ClaimDue(ctx, 10, 0, timeNow())
+	require.NoError(t, err)
+	assert.Len(t, jobs, 1, "the same logical event must enqueue once, not once per dispatch")
+}
+
+func TestEnqueueForDistinctEventsEnqueuesBoth(t *testing.T) {
+	ctx := context.Background()
+	s := NewMemoryStore()
+	p := newHookPlugin(s)
+	appID, userID := id.NewAppID(), id.NewUserID()
+
+	p.enqueueFor(ctx, appID, id.EnvironmentID{}, userID, KindActivityLog, "logged_in", "ases_1")
+	p.enqueueFor(ctx, appID, id.EnvironmentID{}, userID, KindActivityLog, "logged_in", "ases_2")
+
+	jobs, err := s.ClaimDue(ctx, 10, 0, timeNow())
+	require.NoError(t, err)
+	assert.Len(t, jobs, 2, "two separate logins must not collapse into one job")
 }
 
 func TestPluginImplementsHookInterfaces(t *testing.T) {

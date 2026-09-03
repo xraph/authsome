@@ -30,14 +30,14 @@ var (
 // ──────────────────────────────────────────────────
 
 // OnAfterSignUp implements plugin.AfterSignUp.
-func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, _ *session.Session) error {
-	_ = p.afterSignUpFor(ctx, u.AppID, u.EnvID, u.ID) //nolint:errcheck // afterSignUpFor never returns a non-nil error; see its doc comment
+func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, s *session.Session) error {
+	_ = p.afterSignUpFor(ctx, u.AppID, u.EnvID, u.ID, signupSigninEventID(s)) //nolint:errcheck // afterSignUpFor never returns a non-nil error; see its doc comment
 	return nil
 }
 
 // OnAfterSignIn implements plugin.AfterSignIn.
-func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, _ *session.Session) error {
-	_ = p.afterSignInFor(ctx, u.AppID, u.EnvID, u.ID) //nolint:errcheck // afterSignInFor never returns a non-nil error; see its doc comment
+func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, s *session.Session) error {
+	_ = p.afterSignInFor(ctx, u.AppID, u.EnvID, u.ID, signupSigninEventID(s)) //nolint:errcheck // afterSignInFor never returns a non-nil error; see its doc comment
 	return nil
 }
 
@@ -51,8 +51,29 @@ func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, _ *session.Ses
 
 // OnAfterUserUpdate implements plugin.AfterUserUpdate.
 func (p *Plugin) OnAfterUserUpdate(ctx context.Context, u *user.User) error {
-	_ = p.afterUserUpdateFor(ctx, u.AppID, u.EnvID, u.ID) //nolint:errcheck // afterUserUpdateFor never returns a non-nil error; see its doc comment
+	// UpdatedAt is stable across two dispatches of the same edit and changes
+	// on the next one, which is exactly the shape idempotencyKey needs.
+	eventID := u.UpdatedAt.UTC().Format(time.RFC3339Nano)
+	_ = p.afterUserUpdateFor(ctx, u.AppID, u.EnvID, u.ID, eventID) //nolint:errcheck // afterUserUpdateFor never returns a non-nil error; see its doc comment
 	return nil
+}
+
+// signupSigninEventID derives the idempotency event id for the signup/signin
+// hooks from the session the engine just issued. A session id is stable
+// across two dispatches of the same signup or signin and distinct across
+// different ones, which is what idempotencyKey needs; a value read from the
+// clock at call time is neither.
+//
+// If s is nil there is nothing stable to key on, so this falls back to a
+// fresh timestamp and accepts losing dedup for that one call. Enqueuing the
+// same event twice is recoverable, the worker's ensureRef and the CRM's own
+// upsert-by-email both tolerate it; silently refusing to enqueue because
+// there is no session to key on is not.
+func signupSigninEventID(s *session.Session) string {
+	if s != nil {
+		return s.ID.String()
+	}
+	return time.Now().UTC().Format(time.RFC3339Nano)
 }
 
 // ──────────────────────────────────────────────────
@@ -65,9 +86,9 @@ func (p *Plugin) OnAfterUserUpdate(ctx context.Context, u *user.User) error {
 // yet; the worker's ensureRef creates it as part of delivering the activity
 // job, but sending the upsert too means the contact record is populated
 // (name, email) rather than created bare and back-filled later.
-func (p *Plugin) afterSignUpFor(ctx context.Context, appID id.AppID, envID id.EnvironmentID, userID id.UserID) error { //nolint:unparam // error return matches hooks_test.go's require.NoError(t, p.xxxFor(...)) contract; every hook must swallow its own failures
-	p.enqueueFor(ctx, appID, envID, userID, KindContactUpsert, "signed_up")
-	p.enqueueFor(ctx, appID, envID, userID, KindActivityLog, "signed_up")
+func (p *Plugin) afterSignUpFor(ctx context.Context, appID id.AppID, envID id.EnvironmentID, userID id.UserID, eventID string) error { //nolint:unparam // error return matches hooks_test.go's require.NoError(t, p.xxxFor(...)) contract; every hook must swallow its own failures
+	p.enqueueFor(ctx, appID, envID, userID, KindContactUpsert, "signed_up", eventID)
+	p.enqueueFor(ctx, appID, envID, userID, KindActivityLog, "signed_up", eventID)
 	return nil
 }
 
@@ -77,8 +98,8 @@ func (p *Plugin) afterSignUpFor(ctx context.Context, appID id.AppID, envID id.En
 // delivering the activity job, which also makes this self-healing - a
 // contact deleted upstream, or a provider enabled after the user already
 // existed, both recover on the next login with no backfill step.
-func (p *Plugin) afterSignInFor(ctx context.Context, appID id.AppID, envID id.EnvironmentID, userID id.UserID) error { //nolint:unparam // error return matches hooks_test.go's require.NoError(t, p.xxxFor(...)) contract; every hook must swallow its own failures
-	p.enqueueFor(ctx, appID, envID, userID, KindActivityLog, "logged_in")
+func (p *Plugin) afterSignInFor(ctx context.Context, appID id.AppID, envID id.EnvironmentID, userID id.UserID, eventID string) error { //nolint:unparam // error return matches hooks_test.go's require.NoError(t, p.xxxFor(...)) contract; every hook must swallow its own failures
+	p.enqueueFor(ctx, appID, envID, userID, KindActivityLog, "logged_in", eventID)
 	return nil
 }
 
@@ -86,27 +107,33 @@ func (p *Plugin) afterSignInFor(ctx context.Context, appID id.AppID, envID id.En
 // reaches the CRM. loadContact (plugin.go) re-reads the user at delivery
 // time, so the worker always sends the current profile regardless of how
 // stale this enqueue-time snapshot is by the time it is delivered.
-func (p *Plugin) afterUserUpdateFor(ctx context.Context, appID id.AppID, envID id.EnvironmentID, userID id.UserID) error { //nolint:unparam // error return matches hooks_test.go's require.NoError(t, p.xxxFor(...)) contract; every hook must swallow its own failures
-	p.enqueueFor(ctx, appID, envID, userID, KindContactUpsert, "profile_updated")
+func (p *Plugin) afterUserUpdateFor(ctx context.Context, appID id.AppID, envID id.EnvironmentID, userID id.UserID, eventID string) error { //nolint:unparam // error return matches hooks_test.go's require.NoError(t, p.xxxFor(...)) contract; every hook must swallow its own failures
+	p.enqueueFor(ctx, appID, envID, userID, KindContactUpsert, "profile_updated", eventID)
 	return nil
 }
 
 // enqueueFor writes one job per configured provider. It is the only thing a
 // hook does. No reads: a lookup here would put a query on the login path, and
 // the whole point of the outbox is that a login writes one row and gets out.
+//
+// eventID must be stable for one logical event and different across events.
+// The callers pass the session id for sign-up and sign-in (one session is one
+// login) and the user's UpdatedAt for a profile change. Deriving it from
+// time.Now() here instead would defeat the whole mechanism: two dispatches of
+// the same hook would stamp two different nanosecond values, hash to two keys,
+// and enqueue the work twice.
 func (p *Plugin) enqueueFor(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
-	userID id.UserID, kind, activityType string) {
+	userID id.UserID, kind, activityType, eventID string) {
 	if p.store == nil || len(p.providers) == 0 {
 		return
 	}
 	now := time.Now()
-	stamp := now.UTC().Format(time.RFC3339Nano)
 	for name := range p.providers {
 		j := &Job{
 			ID: id.NewRetentionJobID(), AppID: appID, EnvID: envID, UserID: userID,
 			Provider: name, Kind: kind,
 			Payload:        map[string]string{"activity_type": activityType},
-			IdempotencyKey: idempotencyKey(name, userID.String(), kind+":"+activityType, stamp),
+			IdempotencyKey: idempotencyKey(name, userID.String(), kind+":"+activityType, eventID),
 			State:          StatePending,
 			NextAttemptAt:  now,
 			CreatedAt:      now,
@@ -123,7 +150,9 @@ func (p *Plugin) enqueueFor(ctx context.Context, appID id.AppID, envID id.Enviro
 }
 
 // idempotencyKey is a stable hash of the parts that make one delivery unique,
-// so a hook that fires twice for the same event enqueues once.
+// so a hook that fires twice for the same event enqueues once. Every part must
+// be stable across those two firings; anything derived from the clock at call
+// time is not.
 func idempotencyKey(parts ...string) string {
 	h := sha256.New()
 	for _, part := range parts {
