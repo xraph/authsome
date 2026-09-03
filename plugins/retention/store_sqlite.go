@@ -63,9 +63,15 @@ func (s *SqliteStore) Enqueue(ctx context.Context, j *Job) error {
 	return nil
 }
 
-// ClaimDue takes due rows one transaction at a time. SQLite is single-writer,
-// so a select-then-update under one transaction is sufficient here; the
-// Postgres store uses FOR UPDATE SKIP LOCKED instead.
+// ClaimDue claims due rows with a conditional update per row. The SELECT is
+// only a candidate list: the UPDATE re-checks the due predicate and the row
+// is kept only when it actually changed something, so two callers racing on
+// the same candidate cannot both claim it.
+//
+// A plain unconditional "UPDATE ... WHERE id = ?" would let both win. SQLite
+// being single-writer does not help, because nothing stops two readers
+// seeing the same row before either writes. This is the same conditional
+// update + RowsAffected idiom used in store/sqlite/refresh_replay.go.
 func (s *SqliteStore) ClaimDue(ctx context.Context, limit int, lease time.Duration,
 	now time.Time) ([]*Job, error) {
 	var models []*jobModel
@@ -82,21 +88,33 @@ func (s *SqliteStore) ClaimDue(ctx context.Context, limit int, lease time.Durati
 		return nil, sqlErr(err)
 	}
 
+	until := now.Add(lease)
 	out := make([]*Job, 0, len(models))
 	for _, m := range models {
+		res, err := s.sdb.NewUpdate((*jobModel)(nil)).
+			Set("state = ?", StateInFlight).
+			Set("in_flight_until = ?", until).
+			Where("id = ?", m.ID).
+			// Re-checks the same due predicate as the SELECT above, so a row
+			// claimed by another caller between our select and our update
+			// affects zero rows here instead of double-claiming it.
+			Where("(state = ? AND next_attempt_at <= ?) OR (state = ? AND in_flight_until < ?)",
+				StatePending, now, StateInFlight, now).
+			Exec(ctx)
+		if err != nil {
+			return nil, sqlErr(err)
+		}
+		n, _ := res.RowsAffected() //nolint:errcheck // driver always supports RowsAffected
+		if n == 0 {
+			// Somebody else claimed it between our select and our update.
+			continue
+		}
 		j, err := toJob(m)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := s.sdb.NewUpdate((*jobModel)(nil)).
-			Set("state = ?", StateInFlight).
-			Set("in_flight_until = ?", now.Add(lease)).
-			Where("id = ?", m.ID).
-			Exec(ctx); err != nil {
-			return nil, sqlErr(err)
-		}
 		j.State = StateInFlight
-		j.InFlightUntil = now.Add(lease)
+		j.InFlightUntil = until
 		out = append(out, j)
 	}
 	return out, nil
