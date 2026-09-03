@@ -10,6 +10,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	log "github.com/xraph/go-utils/log"
+
 	"github.com/xraph/grove"
 	"github.com/xraph/grove/drivers/mongodriver"
 
@@ -21,11 +23,23 @@ import (
 type MongoStore struct {
 	db  *grove.DB
 	mdb *mongodriver.MongoDB
+
+	// logger reports documents the mappers cannot read. Never nil: the
+	// constructor installs a no-op one, and SetLogger replaces it.
+	logger log.Logger
 }
 
 // NewMongoStore builds a MongoDB-backed store.
 func NewMongoStore(db *grove.DB) *MongoStore {
-	return &MongoStore{db: db, mdb: mongodriver.Unwrap(db)}
+	return &MongoStore{db: db, mdb: mongodriver.Unwrap(db), logger: log.NewNoopLogger()}
+}
+
+// SetLogger installs the plugin's logger. Optional: the store works
+// without it, it just cannot tell anyone about a document it had to skip.
+func (s *MongoStore) SetLogger(l log.Logger) {
+	if l != nil {
+		s.logger = l
+	}
 }
 
 var _ Store = (*MongoStore)(nil)
@@ -251,7 +265,18 @@ func (s *MongoStore) ClaimDue(ctx context.Context, limit int, lease time.Duratio
 		}
 		j, jerr := docToJob(d)
 		if jerr != nil {
-			return nil, jerr
+			// One unreadable document must not discard the batch. It is
+			// already in_flight, so returning here strands every document
+			// claimed with it until their leases expire, and the same
+			// poison document is then re-claimed and stalls the queue
+			// again, forever. Skipping it means it comes back on every
+			// claim once its own lease expires: noisy, but it blocks
+			// nothing behind it, and the live lease keeps this loop from
+			// re-matching it on the very next iteration.
+			s.logger.Warn("retention: skipping unreadable outbox document",
+				log.String("job_id", d.ID),
+				log.String("error", jerr.Error()))
+			continue
 		}
 		out = append(out, j)
 	}
@@ -286,6 +311,30 @@ func (s *MongoStore) MarkRetry(ctx context.Context, jobID id.RetentionJobID,
 			},
 			"$unset": bson.M{"in_flight_until": ""},
 			"$inc":   bson.M{"attempts": 1},
+		})
+	if err != nil {
+		return mongoErr(err)
+	}
+	if res.MatchedCount == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// MarkDeferred returns a job to pending at nextAttemptAt without touching
+// the attempt count. See the Store interface for why that is a separate
+// method rather than a flag on MarkRetry.
+func (s *MongoStore) MarkDeferred(ctx context.Context, jobID id.RetentionJobID,
+	nextAttemptAt time.Time, reason string) error {
+	res, err := s.mdb.Collection(colOutbox).UpdateOne(ctx,
+		bson.M{"_id": jobID.String()},
+		bson.M{
+			"$set": bson.M{
+				"state":           StatePending,
+				"next_attempt_at": nextAttemptAt,
+				"last_error":      reason,
+			},
+			"$unset": bson.M{"in_flight_until": ""},
 		})
 	if err != nil {
 		return mongoErr(err)
@@ -380,10 +429,32 @@ func refFilter(appID id.AppID, envID id.EnvironmentID, userID id.UserID, provide
 	}
 }
 
+// updateRefByFilter updates the mutable fields of the ref addressed by the
+// unique (app_id, env_id, user_id, provider) tuple. Addressing it by the
+// tuple rather than by an _id read a moment ago is what lets the insert
+// path fall back onto it after losing a race.
+func (s *MongoStore) updateRefByFilter(ctx context.Context, r *ContactRef) error {
+	_, err := s.mdb.Collection(colContactRef).UpdateOne(ctx,
+		refFilter(r.AppID, r.EnvID, r.UserID, r.Provider),
+		bson.M{"$set": bson.M{
+			"remote_object_type": r.RemoteObjectType,
+			"remote_id":          r.RemoteID,
+			"synced_at":          r.SyncedAt,
+		}})
+	return mongoErr(err)
+}
+
 // PutRef inserts or updates the contact ref for the unique tuple. It looks
 // up the existing document by the unique (app_id, env_id, user_id, provider)
 // tuple first: an insert when absent, otherwise an update of the fields that
 // can change.
+//
+// Find-then-insert is not atomic, so two workers can both miss and both
+// insert. That is likely rather than theoretical: a signup enqueues a
+// contact_upsert and an activity_log for the same user in the same breath.
+// The loser gets a duplicate key on the unique tuple index, so it falls
+// back to the update instead of returning an error that would cost the job
+// its retry budget for a document that is already where it should be.
 func (s *MongoStore) PutRef(ctx context.Context, r *ContactRef) error {
 	coll := s.mdb.Collection(colContactRef)
 	filter := refFilter(r.AppID, r.EnvID, r.UserID, r.Provider)
@@ -392,14 +463,12 @@ func (s *MongoStore) PutRef(ctx context.Context, r *ContactRef) error {
 	err := coll.FindOne(ctx, filter).Decode(existing)
 	switch {
 	case err == nil:
-		_, uerr := coll.UpdateOne(ctx, bson.M{"_id": existing.ID}, bson.M{"$set": bson.M{
-			"remote_object_type": r.RemoteObjectType,
-			"remote_id":          r.RemoteID,
-			"synced_at":          r.SyncedAt,
-		}})
-		return mongoErr(uerr)
+		return s.updateRefByFilter(ctx, r)
 	case errors.Is(err, mongo.ErrNoDocuments):
 		_, ierr := coll.InsertOne(ctx, refToDoc(r))
+		if ierr != nil && isMongoDuplicate(ierr) {
+			return s.updateRefByFilter(ctx, r)
+		}
 		return mongoErr(ierr)
 	default:
 		return mongoErr(err)

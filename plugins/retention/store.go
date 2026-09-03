@@ -90,6 +90,18 @@ type Store interface {
 	// MarkRetry returns a job to pending with an incremented attempt count.
 	MarkRetry(ctx context.Context, jobID id.RetentionJobID, nextAttemptAt time.Time, lastErr string) error
 
+	// MarkDeferred returns a job to pending at nextAttemptAt WITHOUT
+	// incrementing the attempt count, and records reason in the same field
+	// MarkRetry uses for its last error.
+	//
+	// It exists for the case where nothing failed and nothing was decided:
+	// delivery is switched off for the job's app, so the job goes back on
+	// the queue untouched. MarkRetry would spend an attempt, and a long
+	// enough disable would then burn the whole budget for jobs that never
+	// failed, so the first real error after re-enabling would dead-letter
+	// them immediately.
+	MarkDeferred(ctx context.Context, jobID id.RetentionJobID, nextAttemptAt time.Time, reason string) error
+
 	// MarkDead parks a job permanently after too many attempts.
 	MarkDead(ctx context.Context, jobID id.RetentionJobID, lastErr string) error
 

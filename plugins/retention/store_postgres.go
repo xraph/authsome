@@ -6,6 +6,8 @@ import (
 	"sort"
 	"time"
 
+	log "github.com/xraph/go-utils/log"
+
 	"github.com/xraph/grove"
 	"github.com/xraph/grove/drivers/pgdriver"
 
@@ -20,11 +22,23 @@ import (
 type PostgresStore struct {
 	db *grove.DB
 	pg *pgdriver.PgDB
+
+	// logger reports rows the mappers cannot read. Never nil: the
+	// constructor installs a no-op one, and SetLogger replaces it.
+	logger log.Logger
 }
 
 // NewPostgresStore builds a PostgreSQL-backed store.
 func NewPostgresStore(db *grove.DB) *PostgresStore {
-	return &PostgresStore{db: db, pg: pgdriver.Unwrap(db)}
+	return &PostgresStore{db: db, pg: pgdriver.Unwrap(db), logger: log.NewNoopLogger()}
+}
+
+// SetLogger installs the plugin's logger. Optional: the store works
+// without it, it just cannot tell anyone about a row it had to skip.
+func (s *PostgresStore) SetLogger(l log.Logger) {
+	if l != nil {
+		s.logger = l
+	}
 }
 
 var _ Store = (*PostgresStore)(nil)
@@ -116,7 +130,16 @@ func (s *PostgresStore) ClaimDue(ctx context.Context, limit int, lease time.Dura
 		}
 		j, jerr := toJob(m)
 		if jerr != nil {
-			return nil, jerr
+			// One unreadable row must not discard the batch. Every row in
+			// it is already in_flight, so returning here strands all of
+			// them until their leases expire, and the same poison row is
+			// then re-claimed and stalls the queue again, forever. Skipping
+			// it means it comes back on every claim until somebody fixes or
+			// removes the row: noisy, but it blocks nothing behind it.
+			s.logger.Warn("retention: skipping unreadable outbox row",
+				log.String("job_id", m.ID),
+				log.String("error", jerr.Error()))
+			continue
 		}
 		out = append(out, j)
 	}
@@ -163,6 +186,27 @@ func (s *PostgresStore) MarkRetry(ctx context.Context, jobID id.RetentionJobID,
 		Set("next_attempt_at = ?", nextAttemptAt).
 		Set("in_flight_until = ?", nil).
 		Set("last_error = ?", lastErr).
+		Where("id = ?", jobID.String()).
+		Exec(ctx)
+	if err != nil {
+		return sqlErr(err)
+	}
+	if n, rerr := res.RowsAffected(); rerr == nil && n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// MarkDeferred returns a job to pending at nextAttemptAt without touching
+// the attempt count. See the Store interface for why that is a separate
+// method rather than a flag on MarkRetry.
+func (s *PostgresStore) MarkDeferred(ctx context.Context, jobID id.RetentionJobID,
+	nextAttemptAt time.Time, reason string) error {
+	res, err := s.pg.NewUpdate((*jobModel)(nil)).
+		Set("state = ?", StatePending).
+		Set("next_attempt_at = ?", nextAttemptAt).
+		Set("in_flight_until = ?", nil).
+		Set("last_error = ?", reason).
 		Where("id = ?", jobID.String()).
 		Exec(ctx)
 	if err != nil {
@@ -254,9 +298,33 @@ func (s *PostgresStore) GetRef(ctx context.Context, appID id.AppID, envID id.Env
 	return toRef(m)
 }
 
+// updateRefByTuple updates the mutable columns of the ref addressed by the
+// unique (app_id, env_id, user_id, provider) tuple. Addressing it by the
+// tuple rather than by a primary key read a moment ago is what lets the
+// insert path fall back onto it after losing a race.
+func (s *PostgresStore) updateRefByTuple(ctx context.Context, r *ContactRef) error {
+	_, err := s.pg.NewUpdate((*contactRefModel)(nil)).
+		Set("remote_object_type = ?", r.RemoteObjectType).
+		Set("remote_id = ?", r.RemoteID).
+		Set("synced_at = ?", r.SyncedAt).
+		Where("app_id = ?", r.AppID.String()).
+		Where("env_id = ?", r.EnvID.String()).
+		Where("user_id = ?", r.UserID.String()).
+		Where("provider = ?", r.Provider).
+		Exec(ctx)
+	return sqlErr(err)
+}
+
 // PutRef inserts or updates the contact ref for the unique tuple. It selects
 // by the unique (app_id, env_id, user_id, provider) tuple first: an insert
 // when absent, otherwise an update of the fields that can change.
+//
+// Select-then-insert is not atomic, so two workers can both miss and both
+// insert. That is likely rather than theoretical: a signup enqueues a
+// contact_upsert and an activity_log for the same user in the same breath.
+// The loser gets a unique violation on ux_retention_ref, so it falls back
+// to the update instead of returning an error that would cost the job its
+// retry budget for a row that is already exactly where it should be.
 func (s *PostgresStore) PutRef(ctx context.Context, r *ContactRef) error {
 	existing := new(contactRefModel)
 	err := s.pg.NewSelect(existing).
@@ -267,15 +335,12 @@ func (s *PostgresStore) PutRef(ctx context.Context, r *ContactRef) error {
 		Scan(ctx)
 	switch {
 	case err == nil:
-		_, uerr := s.pg.NewUpdate((*contactRefModel)(nil)).
-			Set("remote_object_type = ?", r.RemoteObjectType).
-			Set("remote_id = ?", r.RemoteID).
-			Set("synced_at = ?", r.SyncedAt).
-			Where("id = ?", existing.ID).
-			Exec(ctx)
-		return sqlErr(uerr)
+		return s.updateRefByTuple(ctx, r)
 	case errors.Is(sqlErr(err), ErrNotFound):
 		_, ierr := s.pg.NewInsert(fromRef(r)).Exec(ctx)
+		if ierr != nil && isUniqueViolation(ierr) {
+			return s.updateRefByTuple(ctx, r)
+		}
 		return sqlErr(ierr)
 	default:
 		return sqlErr(err)

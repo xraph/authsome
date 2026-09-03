@@ -120,6 +120,17 @@ func (s *MemoryStore) MarkRetry(_ context.Context, jobID id.RetentionJobID, next
 	})
 }
 
+// MarkDeferred returns the job to pending at next without spending an
+// attempt. See the Store interface for why that distinction matters.
+func (s *MemoryStore) MarkDeferred(_ context.Context, jobID id.RetentionJobID, next time.Time, reason string) error {
+	return s.set(jobID, func(j *Job) {
+		j.State = StatePending
+		j.NextAttemptAt = next
+		j.InFlightUntil = time.Time{}
+		j.LastError = reason
+	})
+}
+
 func (s *MemoryStore) MarkDead(_ context.Context, jobID id.RetentionJobID, lastErr string) error {
 	return s.set(jobID, func(j *Job) { j.State = StateDead; j.LastError = lastErr })
 }
