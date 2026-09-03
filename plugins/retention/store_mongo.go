@@ -1,0 +1,409 @@
+package retention
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"time"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	"github.com/xraph/grove"
+	"github.com/xraph/grove/drivers/mongodriver"
+
+	"github.com/xraph/authsome/id"
+)
+
+// MongoStore implements Store on MongoDB. It shares neither models nor
+// mappers with the SQL-backed stores: Mongo gets its own bson documents.
+type MongoStore struct {
+	db  *grove.DB
+	mdb *mongodriver.MongoDB
+}
+
+// NewMongoStore builds a MongoDB-backed store.
+func NewMongoStore(db *grove.DB) *MongoStore {
+	return &MongoStore{db: db, mdb: mongodriver.Unwrap(db)}
+}
+
+var _ Store = (*MongoStore)(nil)
+
+// ──────────────────────────────────────────────────
+// Documents
+// ──────────────────────────────────────────────────
+
+type outboxDoc struct {
+	grove.BaseModel `grove:"table:authsome_retention_outbox"`
+
+	ID             string            `bson:"_id"`
+	AppID          string            `bson:"app_id"`
+	EnvID          string            `bson:"env_id"`
+	UserID         string            `bson:"user_id"`
+	Provider       string            `bson:"provider"`
+	Kind           string            `bson:"kind"`
+	Payload        map[string]string `bson:"payload"`
+	IdempotencyKey string            `bson:"idempotency_key"`
+	State          string            `bson:"state"`
+	Attempts       int               `bson:"attempts"`
+	NextAttemptAt  time.Time         `bson:"next_attempt_at"`
+	InFlightUntil  *time.Time        `bson:"in_flight_until,omitempty"`
+	LastError      string            `bson:"last_error"`
+	CreatedAt      time.Time         `bson:"created_at"`
+}
+
+type contactRefDoc struct {
+	grove.BaseModel `grove:"table:authsome_retention_contact_ref"`
+
+	ID               string    `bson:"_id"`
+	AppID            string    `bson:"app_id"`
+	EnvID            string    `bson:"env_id"`
+	UserID           string    `bson:"user_id"`
+	Provider         string    `bson:"provider"`
+	RemoteObjectType string    `bson:"remote_object_type"`
+	RemoteID         string    `bson:"remote_id"`
+	SyncedAt         time.Time `bson:"synced_at"`
+}
+
+// ──────────────────────────────────────────────────
+// Converters
+// ──────────────────────────────────────────────────
+
+func jobToDoc(j *Job) *outboxDoc {
+	d := &outboxDoc{
+		ID: j.ID.String(), AppID: j.AppID.String(), EnvID: j.EnvID.String(),
+		UserID: j.UserID.String(), Provider: j.Provider, Kind: j.Kind,
+		Payload: j.Payload, IdempotencyKey: j.IdempotencyKey,
+		State: j.State, Attempts: j.Attempts,
+		NextAttemptAt: j.NextAttemptAt, LastError: j.LastError, CreatedAt: j.CreatedAt,
+	}
+	if !j.InFlightUntil.IsZero() {
+		until := j.InFlightUntil
+		d.InFlightUntil = &until
+	}
+	return d
+}
+
+func docToJob(d *outboxDoc) (*Job, error) {
+	jobID, err := id.ParseRetentionJobID(d.ID)
+	if err != nil {
+		return nil, err
+	}
+	appID, err := id.ParseAppID(d.AppID)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := id.ParseUserID(d.UserID)
+	if err != nil {
+		return nil, err
+	}
+	j := &Job{
+		ID: jobID, AppID: appID, UserID: userID, Provider: d.Provider, Kind: d.Kind,
+		IdempotencyKey: d.IdempotencyKey, State: d.State, Attempts: d.Attempts,
+		NextAttemptAt: d.NextAttemptAt, LastError: d.LastError, CreatedAt: d.CreatedAt,
+	}
+	if d.InFlightUntil != nil {
+		j.InFlightUntil = *d.InFlightUntil
+	}
+	// The empty environment is the zero id.EnvironmentID, whose String() is
+	// "". ParseEnvironmentID("") would fail, so only parse a non-empty field.
+	if d.EnvID != "" {
+		envID, err := id.ParseEnvironmentID(d.EnvID)
+		if err != nil {
+			return nil, err
+		}
+		j.EnvID = envID
+	}
+	j.Payload = d.Payload
+	if j.Payload == nil {
+		j.Payload = make(map[string]string)
+	}
+	return j, nil
+}
+
+func refToDoc(r *ContactRef) *contactRefDoc {
+	return &contactRefDoc{
+		ID: r.ID.String(), AppID: r.AppID.String(), EnvID: r.EnvID.String(),
+		UserID: r.UserID.String(), Provider: r.Provider,
+		RemoteObjectType: r.RemoteObjectType, RemoteID: r.RemoteID, SyncedAt: r.SyncedAt,
+	}
+}
+
+func docToRef(d *contactRefDoc) (*ContactRef, error) {
+	refID, err := id.ParseRetentionRefID(d.ID)
+	if err != nil {
+		return nil, err
+	}
+	appID, err := id.ParseAppID(d.AppID)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := id.ParseUserID(d.UserID)
+	if err != nil {
+		return nil, err
+	}
+	r := &ContactRef{
+		ID: refID, AppID: appID, UserID: userID, Provider: d.Provider,
+		RemoteObjectType: d.RemoteObjectType, RemoteID: d.RemoteID, SyncedAt: d.SyncedAt,
+	}
+	// Same empty-environment guard as docToJob.
+	if d.EnvID != "" {
+		envID, err := id.ParseEnvironmentID(d.EnvID)
+		if err != nil {
+			return nil, err
+		}
+		r.EnvID = envID
+	}
+	return r, nil
+}
+
+// ──────────────────────────────────────────────────
+// Store methods
+// ──────────────────────────────────────────────────
+
+// mongoErr maps a driver miss onto ErrNotFound so callers never see
+// mongo.ErrNoDocuments.
+func mongoErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return ErrNotFound
+	}
+	return err
+}
+
+// isMongoDuplicate reports whether err is a duplicate-key failure, which
+// Enqueue treats as success rather than a fault.
+func isMongoDuplicate(err error) bool {
+	if err == nil {
+		return false
+	}
+	if mongo.IsDuplicateKeyError(err) {
+		return true
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "duplicate key")
+}
+
+// Enqueue inserts a pending job, treating a duplicate idempotency key as
+// success. The partial unique index on idempotency_key (see MongoMigrations)
+// is what makes this safe under concurrency.
+func (s *MongoStore) Enqueue(ctx context.Context, j *Job) error {
+	if j.State == "" {
+		j.State = StatePending
+	}
+	_, err := s.mdb.Collection(colOutbox).InsertOne(ctx, jobToDoc(j))
+	if err != nil {
+		if isMongoDuplicate(err) {
+			return nil
+		}
+		return mongoErr(err)
+	}
+	return nil
+}
+
+// claimFilter matches a job that is due: pending and past its next attempt,
+// or in_flight with an expired lease. The second clause is what recovers
+// work from a process that died mid delivery.
+func claimFilter(now time.Time) bson.M {
+	return bson.M{
+		"$or": bson.A{
+			bson.M{"state": StatePending, "next_attempt_at": bson.M{"$lte": now}},
+			bson.M{"state": StateInFlight, "in_flight_until": bson.M{"$lt": now}},
+		},
+	}
+}
+
+// ClaimDue loops FindOneAndUpdate with the due-or-expired filter, sorted by
+// next_attempt_at then created_at, until it has limit documents or the
+// filter stops matching. Each FindOneAndUpdate is atomic per document, which
+// is what the contract needs: two callers racing on the same candidate
+// cannot both claim it, because the second one's filter no longer matches
+// once the first has flipped the state.
+//
+// limit <= 0 means "no limit," matching every other backend: the loop then
+// runs until the filter is exhausted instead of stopping at a count.
+func (s *MongoStore) ClaimDue(ctx context.Context, limit int, lease time.Duration,
+	now time.Time) ([]*Job, error) {
+	until := now.Add(lease)
+	update := bson.M{"$set": bson.M{"state": StateInFlight, "in_flight_until": until}}
+	opts := options.FindOneAndUpdate().
+		SetSort(bson.D{{Key: "next_attempt_at", Value: 1}, {Key: "created_at", Value: 1}}).
+		SetReturnDocument(options.After)
+
+	coll := s.mdb.Collection(colOutbox)
+	var out []*Job
+	for limit <= 0 || len(out) < limit {
+		d := new(outboxDoc)
+		err := coll.FindOneAndUpdate(ctx, claimFilter(now), update, opts).Decode(d)
+		if err != nil {
+			if errors.Is(err, mongo.ErrNoDocuments) {
+				break
+			}
+			return nil, mongoErr(err)
+		}
+		j, jerr := docToJob(d)
+		if jerr != nil {
+			return nil, jerr
+		}
+		out = append(out, j)
+	}
+	return out, nil
+}
+
+// MarkDone completes a job. now is intentionally unused: there is no
+// completed_at field in the document.
+func (s *MongoStore) MarkDone(ctx context.Context, jobID id.RetentionJobID, _ time.Time) error {
+	res, err := s.mdb.Collection(colOutbox).UpdateOne(ctx,
+		bson.M{"_id": jobID.String()},
+		bson.M{"$set": bson.M{"state": StateDone, "last_error": ""}})
+	if err != nil {
+		return mongoErr(err)
+	}
+	if res.MatchedCount == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// MarkRetry returns a job to pending with an incremented attempt count.
+func (s *MongoStore) MarkRetry(ctx context.Context, jobID id.RetentionJobID,
+	nextAttemptAt time.Time, lastErr string) error {
+	res, err := s.mdb.Collection(colOutbox).UpdateOne(ctx,
+		bson.M{"_id": jobID.String()},
+		bson.M{
+			"$set": bson.M{
+				"state":           StatePending,
+				"next_attempt_at": nextAttemptAt,
+				"last_error":      lastErr,
+			},
+			"$unset": bson.M{"in_flight_until": ""},
+			"$inc":   bson.M{"attempts": 1},
+		})
+	if err != nil {
+		return mongoErr(err)
+	}
+	if res.MatchedCount == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// MarkDead parks a job permanently after too many attempts.
+func (s *MongoStore) MarkDead(ctx context.Context, jobID id.RetentionJobID, lastErr string) error {
+	res, err := s.mdb.Collection(colOutbox).UpdateOne(ctx,
+		bson.M{"_id": jobID.String()},
+		bson.M{"$set": bson.M{"state": StateDead, "last_error": lastErr}})
+	if err != nil {
+		return mongoErr(err)
+	}
+	if res.MatchedCount == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// MarkSuppressed records that the job was deliberately not delivered.
+func (s *MongoStore) MarkSuppressed(ctx context.Context, jobID id.RetentionJobID, reason string) error {
+	res, err := s.mdb.Collection(colOutbox).UpdateOne(ctx,
+		bson.M{"_id": jobID.String()},
+		bson.M{"$set": bson.M{"state": StateSuppressed, "last_error": reason}})
+	if err != nil {
+		return mongoErr(err)
+	}
+	if res.MatchedCount == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// GetJob fetches one job. Returns ErrNotFound when absent.
+func (s *MongoStore) GetJob(ctx context.Context, jobID id.RetentionJobID) (*Job, error) {
+	d := new(outboxDoc)
+	if err := s.mdb.Collection(colOutbox).
+		FindOne(ctx, bson.M{"_id": jobID.String()}).Decode(d); err != nil {
+		return nil, mongoErr(err)
+	}
+	return docToJob(d)
+}
+
+// ListDead returns dead-lettered jobs for an app, newest first.
+func (s *MongoStore) ListDead(ctx context.Context, appID id.AppID, limit int) ([]*Job, error) {
+	findOpts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
+	if limit > 0 {
+		findOpts.SetLimit(int64(limit))
+	}
+	cur, err := s.mdb.Collection(colOutbox).Find(ctx,
+		bson.M{"app_id": appID.String(), "state": StateDead}, findOpts)
+	if err != nil {
+		return nil, mongoErr(err)
+	}
+	defer func() { _ = cur.Close(ctx) }()
+
+	out := make([]*Job, 0)
+	for cur.Next(ctx) {
+		d := new(outboxDoc)
+		if derr := cur.Decode(d); derr != nil {
+			return nil, derr
+		}
+		j, jerr := docToJob(d)
+		if jerr != nil {
+			return nil, jerr
+		}
+		out = append(out, j)
+	}
+	return out, cur.Err()
+}
+
+// GetRef returns the contact ref. Returns ErrNotFound when absent.
+func (s *MongoStore) GetRef(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
+	userID id.UserID, provider string) (*ContactRef, error) {
+	d := new(contactRefDoc)
+	if err := s.mdb.Collection(colContactRef).FindOne(ctx, refFilter(appID, envID, userID, provider)).
+		Decode(d); err != nil {
+		return nil, mongoErr(err)
+	}
+	return docToRef(d)
+}
+
+func refFilter(appID id.AppID, envID id.EnvironmentID, userID id.UserID, provider string) bson.M {
+	return bson.M{
+		"app_id": appID.String(), "env_id": envID.String(),
+		"user_id": userID.String(), "provider": provider,
+	}
+}
+
+// PutRef inserts or updates the contact ref for the unique tuple. It looks
+// up the existing document by the unique (app_id, env_id, user_id, provider)
+// tuple first: an insert when absent, otherwise an update of the fields that
+// can change.
+func (s *MongoStore) PutRef(ctx context.Context, r *ContactRef) error {
+	coll := s.mdb.Collection(colContactRef)
+	filter := refFilter(r.AppID, r.EnvID, r.UserID, r.Provider)
+
+	existing := new(contactRefDoc)
+	err := coll.FindOne(ctx, filter).Decode(existing)
+	switch {
+	case err == nil:
+		_, uerr := coll.UpdateOne(ctx, bson.M{"_id": existing.ID}, bson.M{"$set": bson.M{
+			"remote_object_type": r.RemoteObjectType,
+			"remote_id":          r.RemoteID,
+			"synced_at":          r.SyncedAt,
+		}})
+		return mongoErr(uerr)
+	case errors.Is(err, mongo.ErrNoDocuments):
+		_, ierr := coll.InsertOne(ctx, refToDoc(r))
+		return mongoErr(ierr)
+	default:
+		return mongoErr(err)
+	}
+}
+
+// DeleteRef removes the contact ref. Deleting an absent ref is not an error.
+func (s *MongoStore) DeleteRef(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
+	userID id.UserID, provider string) error {
+	_, err := s.mdb.Collection(colContactRef).
+		DeleteOne(ctx, refFilter(appID, envID, userID, provider))
+	return mongoErr(err)
+}

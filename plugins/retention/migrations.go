@@ -160,12 +160,23 @@ func init() {
 			}
 			// Same partial-uniqueness guard as the SQL schemas: an empty key
 			// must never collide with another empty key.
+			//
+			// MongoDB's partial filter expressions only accept a small
+			// operator set ($eq, $exists, $gt, $gte, $lt, $lte, $type, and
+			// $and of those) because it rejects anything it cannot prove is
+			// a strict subset without evaluating documents at match time.
+			// $ne is not on that list -- the server errors the whole
+			// CreateIndexes call with "Expression not supported in partial
+			// index: $not" since $ne desugars to $not internally. $gt: ""
+			// says the same thing for a string field: BSON string ordering
+			// puts "" below every non-empty string, so "greater than empty"
+			// and "not equal to empty" select the same documents.
 			return mexec.CreateIndexes(ctx, colOutbox, []mongo.IndexModel{
 				{
 					Keys: bson.D{{Key: "idempotency_key", Value: 1}},
 					Options: options.Index().SetUnique(true).
 						SetPartialFilterExpression(bson.D{
-							{Key: "idempotency_key", Value: bson.D{{Key: "$ne", Value: ""}}},
+							{Key: "idempotency_key", Value: bson.D{{Key: "$gt", Value: ""}}},
 						}),
 				},
 			})
