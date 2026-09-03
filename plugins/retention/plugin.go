@@ -9,6 +9,7 @@ import (
 
 	"github.com/xraph/grove/migrate"
 
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/settings"
 )
@@ -127,9 +128,21 @@ type Plugin struct {
 
 	worker *worker
 
-	// consent resolution and the AllowSend gate are added in Task 8. Adding
-	// an unused field for them now would only invite drift before that task
-	// defines the type it needs.
+	// consent is the resolved consent plugin, if one is registered. Nil means
+	// no consent plugin is available; allowSend treats that as "cannot
+	// evaluate the gate" and refuses to send whenever the gate is on.
+	consent consentChecker
+
+	// consentPolicy resolves the consent gate for one app at delivery time.
+	//
+	// A function field rather than two cached booleans, because
+	// retention.require_consent and retention.consent_purpose are ScopeApp:
+	// one process serves apps that disagree about them, and a value read once
+	// during OnInit would hand the first app's answer to every other app.
+	// They are dynamic settings too, so enabling the gate should bite without
+	// a restart. Tests stub this directly, the same way workerDeps.AllowSend
+	// is stubbed.
+	consentPolicy func(ctx context.Context, appID id.AppID) (require bool, purpose string)
 }
 
 // New builds the plugin. Config is optional.
@@ -212,9 +225,34 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		p.providers[name] = pr
 	}
 
-	// AllowSend is left nil on purpose: the worker's contract already
-	// documents nil as "always allow", and the consent gate that fills it in
-	// does not exist until Task 8.
+	if cp := engine.Plugin("consent"); cp != nil {
+		if checker, ok := cp.(consentChecker); ok {
+			p.consent = checker
+		}
+	}
+
+	// consentPolicy is left nil when there is no settings manager (the stub
+	// engine used in tests returns nil), matching require_consent's default
+	// of false: allowSend treats a nil policy as "gate off".
+	if p.settingsMgr != nil {
+		p.consentPolicy = func(ctx context.Context, appID id.AppID) (bool, string) {
+			opts := settings.ResolveOpts{AppID: appID.String()}
+			require, err := settings.Get(ctx, p.settingsMgr, SettingRequireConsent, opts)
+			if err != nil {
+				// An unreadable gate setting must not be read as "no gate".
+				p.logger.Warn("retention: consent setting unreadable, gating on",
+					log.String("app_id", appID.String()),
+					log.String("error", err.Error()))
+				return true, "marketing"
+			}
+			purpose, err := settings.Get(ctx, p.settingsMgr, SettingConsentPurpose, opts)
+			if err != nil || purpose == "" {
+				purpose = "marketing"
+			}
+			return require, purpose
+		}
+	}
+
 	p.worker = newWorker(workerDeps{
 		Store:       p.store,
 		Providers:   p.providers,
@@ -225,7 +263,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		MaxAttempts: p.config.MaxAttempts,
 		BaseBackoff: p.config.BaseBackoff,
 		LoadContact: p.loadContact,
-		AllowSend:   nil,
+		AllowSend:   p.allowSend,
 	})
 	p.worker.start()
 

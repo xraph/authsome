@@ -56,6 +56,25 @@ func (p *Plugin) Name() string { return "consent" }
 // SetConsentStore allows direct consent store injection.
 func (p *Plugin) SetConsentStore(s Store) { p.store = s }
 
+// HasConsent reports whether the user currently has an active grant for
+// purpose. A missing record, a revoked grant and an unconfigured store all
+// report false, so a caller gating an outbound send never has to distinguish
+// "no" from "do not know" before deciding not to send.
+func (p *Plugin) HasConsent(ctx context.Context, userID id.UserID,
+	appID id.AppID, purpose string) (bool, error) {
+	if p.store == nil {
+		return false, nil
+	}
+	c, err := p.store.GetConsent(ctx, userID, appID, purpose)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return c != nil && c.Granted && c.RevokedAt == nil, nil
+}
+
 // MigrationGroups returns the consent migration groups for the given driver.
 func (p *Plugin) MigrationGroups(driverName string) []*migrate.Group {
 	switch driverName {
