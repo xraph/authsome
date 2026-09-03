@@ -64,16 +64,6 @@ var (
 		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
 		settings.WithOrder(30),
 	)
-
-	// SettingTrackSignOut records sign-out as an activity. Off by default
-	// because most CRMs do not want the noise.
-	SettingTrackSignOut = settings.Define("retention.track_sign_out", false,
-		settings.WithDisplayName("Track Sign-Out"),
-		settings.WithDescription("Log a sign-out activity alongside sign-in"),
-		settings.WithCategory("Retention"),
-		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
-		settings.WithOrder(40),
-	)
 )
 
 // ProviderConfig configures one CRM destination. Type selects the
@@ -310,8 +300,5 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 	if err := settings.RegisterTyped(m, "retention", SettingRequireConsent); err != nil {
 		return err
 	}
-	if err := settings.RegisterTyped(m, "retention", SettingConsentPurpose); err != nil {
-		return err
-	}
-	return settings.RegisterTyped(m, "retention", SettingTrackSignOut)
+	return settings.RegisterTyped(m, "retention", SettingConsentPurpose)
 }
