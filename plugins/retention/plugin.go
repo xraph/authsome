@@ -279,12 +279,18 @@ func (p *Plugin) loadContact(ctx context.Context, j *Job) (*Contact, error) {
 // returning an error for an unknown type so a typo in config fails at
 // startup rather than dead-lettering every job later.
 //
-// Every Type is unknown until Tasks 9 (hubspot) and 10 (generic) land, so
-// this errors for any non-empty Providers list today. That is expected.
+// Only "generic" is wired up so far (Task 9). "hubspot" and any other vendor
+// Type still errors until its task lands.
 func buildProviders(cfgs []ProviderConfig) (map[string]Provider, error) {
 	out := make(map[string]Provider, len(cfgs))
 	for _, c := range cfgs {
 		switch c.Type {
+		case "generic":
+			p, err := NewGenericProvider(c)
+			if err != nil {
+				return nil, err
+			}
+			out[c.Name] = p
 		default:
 			return nil, fmt.Errorf("unknown provider type %q for provider %q", c.Type, c.Name)
 		}
