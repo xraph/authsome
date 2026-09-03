@@ -163,7 +163,6 @@ address just as much as the consent grant.
 ```
 AfterSignUp     -> enqueue contact_upsert + activity("signed_up")
 AfterSignIn     -> enqueue activity("logged_in")
-AfterSignOut    -> enqueue activity("logged_out")   // off by default
 AfterUserUpdate -> enqueue contact_upsert
 ```
 
@@ -232,6 +231,18 @@ already landed in the CRM, honouring that means issuing a delete or a
 suppression against a remote system, and it needs its own `Capability`, its own
 job kind, and its own thinking about what a CRM that quietly refuses to delete
 does to your compliance story. It's a real gap and it gets its own slice.
+
+Sign-out activity. It was in this design until implementation proved it
+cannot be built. `OnAfterSignOut(ctx, sessionID)` carries a session id and
+nothing else, and `service.go` deletes the session row before it emits, so by
+the time the hook runs there is nothing left to resolve the id against. You
+cannot get a user, an app or an environment out of it. Reading the app id off
+the request context instead would work for HTTP sign-outs and silently miss
+every other path, which is a worse answer than not shipping it. Unblocking it
+means changing the hook to carry the user, or emitting before the delete, and
+both are engine changes rather than plugin ones. The `retention.track_sign_out`
+setting is gone with it: an operator toggle that provably does nothing is worse
+than an absent feature.
 
 Also out: lifecycle state and scoring (slice B), rules and actions (slice C),
 and a dashboard page. The relay stays available as an extra fan-out but it

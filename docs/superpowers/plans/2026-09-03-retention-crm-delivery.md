@@ -39,7 +39,7 @@
 | `plugins/retention/migrations.go` | per-driver migration groups and DDL |
 | `plugins/retention/worker.go` | claim loop, delivery, backoff, dead-letter, consent gate |
 | `plugins/retention/plugin.go` | `Plugin` struct, lifecycle, settings, driver store selection |
-| `plugins/retention/hooks.go` | `AfterSignUp`, `AfterSignIn`, `AfterSignOut`, `AfterUserUpdate` |
+| `plugins/retention/hooks.go` | `AfterSignUp`, `AfterSignIn`, `AfterUserUpdate` |
 | `plugins/retention/provider_generic.go` | config-driven REST provider and `classifyHTTPError` |
 | `plugins/retention/provider_hubspot.go` | HubSpot reference provider |
 | `plugins/retention/export.go` | `DataExportContributor` |
@@ -1903,7 +1903,7 @@ git commit -m "feat(retention): add the outbox delivery worker"
 
 **Interfaces:**
 - Consumes: everything from Tasks 1 to 5.
-- Produces: `retention.New(cfg ...Config) *Plugin`, `Config`, `ProviderConfig`, `(*Plugin).SetStore(Store)`, `(*Plugin).RegisterProvider(Provider)`, and the settings `SettingEnabled`, `SettingRequireConsent`, `SettingConsentPurpose`, `SettingTrackSignOut`. Both config structs are defined here, in full, because Tasks 7, 9, 10 and 11 all name them:
+- Produces: `retention.New(cfg ...Config) *Plugin`, `Config`, `ProviderConfig`, `(*Plugin).SetStore(Store)`, `(*Plugin).RegisterProvider(Provider)`, and the settings `SettingEnabled`, `SettingRequireConsent`, `SettingConsentPurpose`. Both config structs are defined here, in full, because Tasks 7, 9, 10 and 11 all name them:
 
 ```go
 // ProviderConfig configures one CRM destination. Type selects the
@@ -2078,15 +2078,6 @@ var (
 		settings.WithOrder(30),
 	)
 
-	// SettingTrackSignOut records sign-out as an activity. Off by default
-	// because most CRMs do not want the noise.
-	SettingTrackSignOut = settings.Define("retention.track_sign_out", false,
-		settings.WithDisplayName("Track Sign-Out"),
-		settings.WithDescription("Log a sign-out activity alongside sign-in"),
-		settings.WithCategory("Retention"),
-		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
-		settings.WithOrder(40),
-	)
 )
 ```
 
@@ -2128,7 +2119,7 @@ git commit -m "feat(retention): add plugin lifecycle, settings and store selecti
 
 **Interfaces:**
 - Consumes: `Store`, `Job`, `KindContactUpsert`, `KindActivityLog`, `Plugin` from Task 6.
-- Produces: `(*Plugin).AfterSignUp`, `AfterSignIn`, `AfterSignOut`, `AfterUserUpdate`, and `idempotencyKey(parts ...string) string`.
+- Produces: `(*Plugin).OnAfterSignUp`, `OnAfterSignIn`, `OnAfterUserUpdate`, and `idempotencyKey(parts ...string) string`. Sign-out is deliberately absent — see the spec's out-of-scope section.
 
 Read the exact signatures from `plugin/plugin.go:245-330` before writing, and match them. They are the contract; this plan does not restate them because a stale copy here would be worse than a lookup.
 
@@ -2140,7 +2131,6 @@ left out, because this is where the methods start existing. Add to `hooks.go`:
 var (
 	_ plugin.AfterSignUp     = (*Plugin)(nil)
 	_ plugin.AfterSignIn     = (*Plugin)(nil)
-	_ plugin.AfterSignOut    = (*Plugin)(nil)
 	_ plugin.AfterUserUpdate = (*Plugin)(nil)
 )
 ```
@@ -2152,7 +2142,6 @@ func TestPluginImplementsHookInterfaces(t *testing.T) {
 	p := New()
 	assert.Implements(t, (*plugin.AfterSignUp)(nil), p)
 	assert.Implements(t, (*plugin.AfterSignIn)(nil), p)
-	assert.Implements(t, (*plugin.AfterSignOut)(nil), p)
 	assert.Implements(t, (*plugin.AfterUserUpdate)(nil), p)
 }
 ```
@@ -2310,7 +2299,7 @@ func idempotencyKey(parts ...string) string {
 }
 ```
 
-`afterSignUpFor` calls `enqueueFor` twice, with `KindContactUpsert`/`"signed_up"` and `KindActivityLog`/`"signed_up"`. `afterSignInFor` calls it once with `KindActivityLog`/`"logged_in"`. `afterSignOutFor` calls it once with `"logged_out"`, guarded on `SettingTrackSignOut`. `afterUserUpdateFor` calls it once with `KindContactUpsert`/`"profile_updated"`. Add a `timeNow()` test helper returning `time.Now().Add(time.Minute)` so `ClaimDue` in the tests sees everything as due.
+`afterSignUpFor` calls `enqueueFor` twice, with `KindContactUpsert`/`"signed_up"` and `KindActivityLog`/`"signed_up"`. `afterSignInFor` calls it once with `KindActivityLog`/`"logged_in"`. `afterUserUpdateFor` calls it once with `KindContactUpsert`/`"profile_updated"`. Add a `timeNow()` test helper returning `time.Now().Add(time.Minute)` so `ClaimDue` in the tests sees everything as due.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
