@@ -117,6 +117,22 @@ func TestWorkerActivityUpsertsFirstWhenRefMissing(t *testing.T) {
 	assert.Equal(t, StateDone, stored.State)
 }
 
+func TestWorkerSuppressesWhenProviderCannotHoldContacts(t *testing.T) {
+	ctx := context.Background()
+	s := NewMemoryStore()
+	p := &fakeProvider{caps: CapActivities} // no CapContacts
+	j := enqueued(t, s, KindContactUpsert, "k3a")
+
+	newTestWorker(t, s, p).runOnce(ctx)
+
+	assert.Zero(t, p.upserts, "a provider without CapContacts must not be called")
+	stored, err := s.GetJob(ctx, j.ID)
+	require.NoError(t, err)
+	assert.Equal(t, StateSuppressed, stored.State,
+		"a statically-impossible delivery is suppressed, not dead-lettered: "+
+			"dead means we tried and failed, and we never tried")
+}
+
 func TestWorkerSkipsActivityWhenProviderLacksCapability(t *testing.T) {
 	ctx := context.Background()
 	s := NewMemoryStore()

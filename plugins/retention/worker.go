@@ -38,6 +38,11 @@ type workerDeps struct {
 	AllowSend func(ctx context.Context, j *Job) (bool, string)
 }
 
+// errNoContactCapability means the provider cannot hold contacts at all, so
+// this job was never deliverable. deliver routes it to suppressed rather than
+// dead, because the provider declared the limitation up front.
+var errNoContactCapability = errors.New("retention: provider does not support contacts")
+
 type worker struct {
 	deps   workerDeps
 	ticker *time.Ticker
@@ -148,6 +153,15 @@ func (w *worker) deliver(ctx context.Context, j *Job) {
 
 	ref, err := w.ensureRef(ctx, p, j, contact)
 	if err != nil {
+		if errors.Is(err, errNoContactCapability) {
+			// Symmetric with the CapActivities check below. The provider told
+			// us up front it cannot do this, so the right record is a
+			// deliberate skip, not a failed delivery. Dead-lettering here
+			// would put "we tried and failed" in the audit trail for
+			// something we never attempted.
+			w.suppress(ctx, j, "provider does not support contacts")
+			return
+		}
 		w.fail(ctx, j, err, !isRetryable(err))
 		return
 	}
@@ -189,7 +203,7 @@ func (w *worker) ensureRef(ctx context.Context, p Provider, j *Job, c *Contact) 
 	}
 
 	if !p.Capabilities().Has(CapContacts) {
-		return RemoteRef{}, fmt.Errorf("provider %q cannot upsert contacts", j.Provider)
+		return RemoteRef{}, errNoContactCapability
 	}
 	ref, err := p.UpsertContact(ctx, c)
 	if err != nil {
