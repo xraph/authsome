@@ -103,6 +103,25 @@ func TestAfterUserUpdateEnqueuesContactUpsert(t *testing.T) {
 	assert.Equal(t, "profile_updated", jobs[0].Payload["activity_type"])
 }
 
+// hooks.go passes user.EnvID through untouched, and every other test in
+// this file uses the zero environment. In a multi-environment deployment
+// it is never zero, and an environment lost between the hook and the
+// outbox row is a contact written against the wrong environment's ref.
+func TestEnqueueCarriesTheEnvironmentID(t *testing.T) {
+	ctx := context.Background()
+	s := NewMemoryStore()
+	p := newHookPlugin(s)
+	appID, userID := id.NewAppID(), id.NewUserID()
+	envID := id.NewEnvironmentID()
+
+	require.NoError(t, p.afterSignInFor(ctx, appID, envID, userID, "ases_env"))
+
+	jobs, err := s.ClaimDue(ctx, 10, 0, timeNow())
+	require.NoError(t, err)
+	require.Len(t, jobs, 1)
+	assert.Equal(t, envID.String(), jobs[0].EnvID.String())
+}
+
 func TestIdempotencyKeyIsStableAndDistinct(t *testing.T) {
 	a := idempotencyKey("hubspot", "ausr_1", "logged_in", "ases_1")
 	b := idempotencyKey("hubspot", "ausr_1", "logged_in", "ases_1")

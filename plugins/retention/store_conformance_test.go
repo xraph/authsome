@@ -174,6 +174,92 @@ func runStoreConformance(t *testing.T, newStore storeFactory) {
 		assert.Equal(t, "b", got[1].IdempotencyKey)
 	})
 
+	t.Run("claim with a non-positive limit takes everything due", func(t *testing.T) {
+		s := newStore(t)
+		appID, userID := id.NewAppID(), id.NewUserID()
+		for _, key := range []string{"n1", "n2", "n3"} {
+			require.NoError(t, s.Enqueue(ctx, newJob(appID, userID, KindActivityLog, key, base)))
+		}
+
+		got, err := s.ClaimDue(ctx, 0, time.Minute, base)
+		require.NoError(t, err)
+		assert.Len(t, got, 3,
+			"limit <= 0 means no limit; binding it into a LIMIT clause would claim nothing")
+	})
+
+	t.Run("marked deferred returns to pending without spending an attempt", func(t *testing.T) {
+		s := newStore(t)
+		appID, userID := id.NewAppID(), id.NewUserID()
+		j := newJob(appID, userID, KindActivityLog, "deferred", base)
+		require.NoError(t, s.Enqueue(ctx, j))
+		_, err := s.ClaimDue(ctx, 10, time.Minute, base)
+		require.NoError(t, err)
+		require.NoError(t, s.MarkRetry(ctx, j.ID, base, "503"))
+		_, err = s.ClaimDue(ctx, 10, time.Minute, base)
+		require.NoError(t, err)
+
+		require.NoError(t, s.MarkDeferred(ctx, j.ID, base.Add(10*time.Second), "delivery disabled"))
+
+		stored, err := s.GetJob(ctx, j.ID)
+		require.NoError(t, err)
+		assert.Equal(t, StatePending, stored.State)
+		assert.Equal(t, 1, stored.Attempts,
+			"the attempt from the earlier real failure stands; deferring adds nothing")
+		assert.Equal(t, "delivery disabled", stored.LastError)
+
+		got, err := s.ClaimDue(ctx, 10, time.Minute, base.Add(11*time.Second))
+		require.NoError(t, err)
+		require.Len(t, got, 1, "a deferred job comes back once its new due time passes")
+	})
+
+	// hooks.go passes user.EnvID straight through, and that is never empty in
+	// a multi-environment deployment, so the non-empty parse branch in every
+	// mapper needs a backend that actually runs it.
+	t.Run("job round trips a non-empty env id", func(t *testing.T) {
+		s := newStore(t)
+		appID, userID := id.NewAppID(), id.NewUserID()
+		envID := id.NewEnvironmentID()
+		j := newJob(appID, userID, KindActivityLog, "envjob", base)
+		j.EnvID = envID
+		require.NoError(t, s.Enqueue(ctx, j))
+
+		got, err := s.ClaimDue(ctx, 10, time.Minute, base)
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+		assert.Equal(t, envID.String(), got[0].EnvID.String(),
+			"a claimed job must carry its environment, not a parse failure")
+
+		stored, err := s.GetJob(ctx, j.ID)
+		require.NoError(t, err)
+		assert.Equal(t, envID.String(), stored.EnvID.String())
+	})
+
+	t.Run("ref round trips a non-empty env id and is keyed on it", func(t *testing.T) {
+		s := newStore(t)
+		appID, userID := id.NewAppID(), id.NewUserID()
+		envA, envB := id.NewEnvironmentID(), id.NewEnvironmentID()
+
+		require.NoError(t, s.PutRef(ctx, &ContactRef{
+			ID: id.NewRetentionRefID(), AppID: appID, EnvID: envA, UserID: userID,
+			Provider: "hubspot", RemoteObjectType: "contact", RemoteID: "env-a", SyncedAt: base,
+		}))
+
+		got, err := s.GetRef(ctx, appID, envA, userID, "hubspot")
+		require.NoError(t, err)
+		assert.Equal(t, envA.String(), got.EnvID.String())
+		assert.Equal(t, "env-a", got.RemoteID)
+
+		_, err = s.GetRef(ctx, appID, envB, userID, "hubspot")
+		assert.ErrorIs(t, err, ErrNotFound,
+			"the same user in another environment is a different contact")
+
+		refs, err := s.ListRefsForUser(ctx, userID)
+		require.NoError(t, err)
+		require.Len(t, refs, 1)
+		assert.Equal(t, envA.String(), refs[0].EnvID.String(),
+			"the export must not lose the environment either")
+	})
+
 	t.Run("get job missing returns ErrNotFound", func(t *testing.T) {
 		s := newStore(t)
 		_, err := s.GetJob(ctx, id.NewRetentionJobID())

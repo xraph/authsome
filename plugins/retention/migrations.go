@@ -14,7 +14,10 @@ import (
 )
 
 // Migration groups, one per driver. All depend on the core authsome group
-// because the outbox and contact-ref tables reference authsome_apps.
+// because both tables live in the same schema and the core group has to
+// create it first. There is deliberately no foreign key from app_id to
+// authsome_apps: see the design note for why the outbox does not carry
+// one.
 var (
 	PostgresMigrations = migrate.NewGroup("authsome-retention", migrate.DependsOn("authsome"))
 	SqliteMigrations   = migrate.NewGroup("authsome-retention", migrate.DependsOn("authsome"))
