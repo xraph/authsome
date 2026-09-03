@@ -16,11 +16,12 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ plugin.Plugin            = (*Plugin)(nil)
-	_ plugin.OnInit            = (*Plugin)(nil)
-	_ plugin.OnShutdown        = (*Plugin)(nil)
-	_ plugin.MigrationProvider = (*Plugin)(nil)
-	_ plugin.SettingsProvider  = (*Plugin)(nil)
+	_ plugin.Plugin                = (*Plugin)(nil)
+	_ plugin.OnInit                = (*Plugin)(nil)
+	_ plugin.OnShutdown            = (*Plugin)(nil)
+	_ plugin.MigrationProvider     = (*Plugin)(nil)
+	_ plugin.SettingsProvider      = (*Plugin)(nil)
+	_ plugin.DataExportContributor = (*Plugin)(nil)
 )
 
 // The four hook interface checks (AfterSignUp, AfterSignIn, AfterSignOut,

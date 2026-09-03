@@ -276,3 +276,24 @@ func (s *SqliteStore) DeleteRef(ctx context.Context, appID id.AppID, envID id.En
 		Exec(ctx)
 	return sqlErr(err)
 }
+
+// ListRefsForUser returns every ref held for the user across all apps and
+// providers. Deliberately unscoped by app: a data-subject export covers the
+// person, not one app's view of them.
+func (s *SqliteStore) ListRefsForUser(ctx context.Context, userID id.UserID) ([]*ContactRef, error) {
+	var models []*contactRefModel
+	if err := s.sdb.NewSelect(&models).
+		Where("user_id = ?", userID.String()).
+		Scan(ctx); err != nil {
+		return nil, sqlErr(err)
+	}
+	out := make([]*ContactRef, 0, len(models))
+	for _, m := range models {
+		r, err := toRef(m)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}

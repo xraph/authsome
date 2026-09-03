@@ -181,3 +181,20 @@ func (s *MemoryStore) DeleteRef(_ context.Context, appID id.AppID, envID id.Envi
 	delete(s.refs, refKey(appID, envID, userID, provider))
 	return nil
 }
+
+// ListRefsForUser returns every ref held for the user across all apps and
+// providers. Deliberately unscoped by app: a data-subject export covers the
+// person, not one app's view of them.
+func (s *MemoryStore) ListRefsForUser(_ context.Context, userID id.UserID) ([]*ContactRef, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*ContactRef, 0)
+	for _, r := range s.refs {
+		if r.UserID.String() == userID.String() {
+			cp := *r
+			out = append(out, &cp)
+		}
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].Provider < out[b].Provider })
+	return out, nil
+}

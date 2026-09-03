@@ -221,4 +221,36 @@ func runStoreConformance(t *testing.T, newStore storeFactory) {
 		_, err := s.GetRef(ctx, appID, envID, userID, "generic")
 		assert.ErrorIs(t, err, ErrNotFound)
 	})
+
+	t.Run("list refs for user spans apps and providers", func(t *testing.T) {
+		s := newStore(t)
+		userID := id.NewUserID()
+		appA, appB := id.NewAppID(), id.NewAppID()
+		envID := id.EnvironmentID{}
+		other := id.NewUserID()
+
+		empty, err := s.ListRefsForUser(ctx, userID)
+		require.NoError(t, err)
+		assert.Empty(t, empty, "a user with no refs gets an empty slice, not an error")
+
+		require.NoError(t, s.PutRef(ctx, &ContactRef{
+			ID: id.NewRetentionRefID(), AppID: appA, EnvID: envID, UserID: userID,
+			Provider: "hubspot", RemoteObjectType: "contact", RemoteID: "1", SyncedAt: base,
+		}))
+		require.NoError(t, s.PutRef(ctx, &ContactRef{
+			ID: id.NewRetentionRefID(), AppID: appB, EnvID: envID, UserID: userID,
+			Provider: "generic", RemoteObjectType: "contact", RemoteID: "2", SyncedAt: base,
+		}))
+		// A different user's ref must never leak into this user's export.
+		require.NoError(t, s.PutRef(ctx, &ContactRef{
+			ID: id.NewRetentionRefID(), AppID: appA, EnvID: envID, UserID: other,
+			Provider: "hubspot", RemoteObjectType: "contact", RemoteID: "3", SyncedAt: base,
+		}))
+
+		got, err := s.ListRefsForUser(ctx, userID)
+		require.NoError(t, err)
+		require.Len(t, got, 2, "a data-subject export covers the person, not one app's view of them")
+		providers := []string{got[0].Provider, got[1].Provider}
+		assert.ElementsMatch(t, []string{"hubspot", "generic"}, providers)
+	})
 }

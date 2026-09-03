@@ -1,6 +1,3 @@
-// Package retention mirrors authsome auth activity into a CRM. Hooks write to
-// an outbox and a background worker delivers, so a slow or unavailable CRM
-// never shows up as login latency.
 package retention
 
 import (

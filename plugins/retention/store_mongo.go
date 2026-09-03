@@ -413,3 +413,28 @@ func (s *MongoStore) DeleteRef(ctx context.Context, appID id.AppID, envID id.Env
 		DeleteOne(ctx, refFilter(appID, envID, userID, provider))
 	return mongoErr(err)
 }
+
+// ListRefsForUser returns every ref held for the user across all apps and
+// providers. Deliberately unscoped by app: a data-subject export covers the
+// person, not one app's view of them.
+func (s *MongoStore) ListRefsForUser(ctx context.Context, userID id.UserID) ([]*ContactRef, error) {
+	cur, err := s.mdb.Collection(colContactRef).Find(ctx, bson.M{"user_id": userID.String()})
+	if err != nil {
+		return nil, mongoErr(err)
+	}
+	defer func() { _ = cur.Close(ctx) }()
+
+	out := make([]*ContactRef, 0)
+	for cur.Next(ctx) {
+		d := new(contactRefDoc)
+		if derr := cur.Decode(d); derr != nil {
+			return nil, derr
+		}
+		r, rerr := docToRef(d)
+		if rerr != nil {
+			return nil, rerr
+		}
+		out = append(out, r)
+	}
+	return out, cur.Err()
+}

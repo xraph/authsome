@@ -113,4 +113,9 @@ type Store interface {
 	// contact. Deleting an absent ref is not an error.
 	DeleteRef(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
 		userID id.UserID, provider string) error
+
+	// ListRefsForUser returns every CRM ref held for one user across all
+	// providers, for the data export. Returns an empty slice, not an error,
+	// when the user has none.
+	ListRefsForUser(ctx context.Context, userID id.UserID) ([]*ContactRef, error)
 }
