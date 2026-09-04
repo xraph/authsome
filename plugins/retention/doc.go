@@ -7,13 +7,11 @@
 // today; a provider Type the plugin does not recognise fails at OnInit
 // rather than dead-lettering every job later.
 //
-// The generic provider is not usable yet. Its retry-classification policy
-// (classifyHTTPError in provider_generic.go) has not been written, so
-// NewGenericProvider returns an error and the configuration below fails at
-// startup with that message. Failing there is deliberate: an unwritten
-// policy that only surfaced at the first CRM error would decide, by
-// accident, whether a transient 503 permanently drops a customer's sync.
-// Writing the policy and flipping classifierPolicyDecided turns it on.
+// The generic provider's retry-classification policy (classifyHTTPError in
+// provider_generic.go) is decided and recorded in "Retry classification" in
+// docs/superpowers/specs/2026-09-03-crm-retention-delivery-design.md: one
+// rule generates the whole table, that a failure affecting every job
+// retries and a failure affecting only this job dies now.
 //
 // Consent is optional. When the consent plugin is also registered and
 // retention.require_consent is turned on, delivery is gated on an active

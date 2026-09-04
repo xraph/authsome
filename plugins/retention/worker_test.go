@@ -17,12 +17,13 @@ import (
 
 // fakeProvider records calls and returns scripted results.
 type fakeProvider struct {
-	mu        sync.Mutex
-	caps      Capability
-	upsertErr []error // consumed one per call
-	activity  []*Activity
-	upserts   int
-	refID     string
+	mu          sync.Mutex
+	caps        Capability
+	upsertErr   []error // consumed one per call
+	activityErr []error // consumed one per call
+	activity    []*Activity
+	upserts     int
+	refID       string
 }
 
 func (f *fakeProvider) Name() string             { return "fake" }
@@ -50,6 +51,13 @@ func (f *fakeProvider) LogActivity(_ context.Context, _ RemoteRef, a *Activity) 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.activity = append(f.activity, a)
+	if len(f.activityErr) > 0 {
+		err := f.activityErr[0]
+		f.activityErr = f.activityErr[1:]
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

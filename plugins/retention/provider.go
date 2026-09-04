@@ -72,6 +72,11 @@ type ProviderError struct {
 	Err        error
 	Retryable  bool
 	RetryAfter time.Duration // honoured when non-zero, e.g. from 429
+
+	// DropRef means the remote record is gone, so the worker should delete
+	// the local contact ref and let the retry recreate the contact rather
+	// than keep updating something that no longer exists.
+	DropRef bool
 }
 
 func (e *ProviderError) Error() string {

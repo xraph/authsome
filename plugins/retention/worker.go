@@ -236,7 +236,7 @@ func (w *worker) deliverOne(ctx context.Context, j *Job) {
 		return
 	}
 
-	ref, err := w.ensureRef(ctx, p, j, contact)
+	ref, hadRef, err := w.ensureRef(ctx, p, j, contact)
 	if err != nil {
 		if errors.Is(err, errNoContactCapability) {
 			// Symmetric with the CapActivities check below. The provider told
@@ -247,6 +247,7 @@ func (w *worker) deliverOne(ctx context.Context, j *Job) {
 			w.suppress(ctx, j, "provider does not support contacts")
 			return
 		}
+		w.dropRefIfNeeded(ctx, j, hadRef, err)
 		w.fail(ctx, j, err, terminal(err))
 		return
 	}
@@ -264,6 +265,7 @@ func (w *worker) deliverOne(ctx context.Context, j *Job) {
 			Properties: j.Payload,
 		}
 		if err := p.LogActivity(ctx, ref, activity); err != nil {
+			w.dropRefIfNeeded(ctx, j, hadRef, err)
 			w.fail(ctx, j, err, terminal(err))
 			return
 		}
@@ -278,23 +280,30 @@ func (w *worker) deliverOne(ctx context.Context, j *Job) {
 // seen it before. This is why a sign-in hook does not need to check for a ref:
 // the worker heals it here, so a contact deleted upstream or a provider
 // enabled after the user existed both recover on the next login.
-func (w *worker) ensureRef(ctx context.Context, p Provider, j *Job, c *Contact) (RemoteRef, error) {
+//
+// The second return, hadRef, tells the caller whether a ref already existed
+// in the store when this attempt started, as opposed to being created just
+// now. That distinction is what lets dropRefIfNeeded tell a stale reference
+// (drop it) from a transient failure on a brand-new create (nothing to
+// orphan, so leave it alone).
+func (w *worker) ensureRef(ctx context.Context, p Provider, j *Job, c *Contact) (RemoteRef, bool, error) {
 	existing, err := w.deps.Store.GetRef(ctx, j.AppID, j.EnvID, j.UserID, j.Provider)
+	hadRef := err == nil
 	switch {
 	case err == nil && j.Kind != KindContactUpsert:
-		return existing.Ref(), nil
+		return existing.Ref(), hadRef, nil
 	case err != nil && !errors.Is(err, ErrNotFound):
 		// Our store, not the CRM. Retry inside the normal budget instead of
 		// dead-lettering a whole claimed batch because the database blinked.
-		return RemoteRef{}, localError("retention: read contact ref", err)
+		return RemoteRef{}, false, localError("retention: read contact ref", err)
 	}
 
 	if !p.Capabilities().Has(CapContacts) {
-		return RemoteRef{}, errNoContactCapability
+		return RemoteRef{}, hadRef, errNoContactCapability
 	}
 	ref, err := p.UpsertContact(ctx, c)
 	if err != nil {
-		return RemoteRef{}, err
+		return RemoteRef{}, hadRef, err
 	}
 	row := &ContactRef{
 		ID: id.NewRetentionRefID(), AppID: j.AppID, EnvID: j.EnvID, UserID: j.UserID,
@@ -308,9 +317,32 @@ func (w *worker) ensureRef(ctx context.Context, p Provider, j *Job, c *Contact) 
 		// This one is worse than a lost job if we give up: the contact
 		// already exists in the CRM and the ref row does not, so the next
 		// login creates a second contact and the dedup spine is defeated.
-		return RemoteRef{}, localError("retention: write contact ref", err)
+		return RemoteRef{}, hadRef, localError("retention: write contact ref", err)
 	}
-	return ref, nil
+	return ref, hadRef, nil
+}
+
+// dropRefIfNeeded deletes the local contact ref when the CRM reports the
+// record is gone (ProviderError.DropRef) and this attempt actually held a
+// ref going in. hadRef == false means either there was nothing to drop, or
+// the ref that just failed is the one this very attempt was about to create
+// — a transient 404 there must not orphan a ref that does not exist yet. A
+// failed delete is logged, not escalated: it is our own store, and the job
+// is about to be retried anyway.
+func (w *worker) dropRefIfNeeded(ctx context.Context, j *Job, hadRef bool, err error) {
+	if !hadRef {
+		return
+	}
+	var pe *ProviderError
+	if !errors.As(err, &pe) || !pe.DropRef {
+		return
+	}
+	if delErr := w.deps.Store.DeleteRef(ctx, j.AppID, j.EnvID, j.UserID, j.Provider); delErr != nil {
+		w.deps.Logger.Warn("retention: drop ref failed",
+			log.String("job_id", j.ID.String()),
+			log.String("provider", j.Provider),
+			log.String("error", delErr.Error()))
+	}
 }
 
 func isRetryable(err error) bool {

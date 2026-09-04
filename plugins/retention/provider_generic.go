@@ -27,40 +27,22 @@ type GenericProvider struct {
 	client *http.Client
 }
 
-// classifierPolicyDecided flips to true when the retry-classification policy
-// in classifyHTTPError is written. Until then the generic provider refuses
-// to construct, so an unwritten policy fails loudly at startup rather than
-// at the first CRM error.
-//
-// The marker used to be the panic in classifyHTTPError alone, which did the
-// opposite of what it intended: it ran on the worker goroutine, where a Go
-// panic kills the whole process, and it was reached on a plain transport
-// error, so the first DNS blip would have taken down the auth server. That
-// is far worse than the login latency this entire outbox exists to prevent.
-const classifierPolicyDecided = false
+// classifierPolicyDecided marks that the retry-classification policy in
+// classifyHTTPError has been written and recorded in the spec (see
+// "Retry classification" in
+// docs/superpowers/specs/2026-09-03-crm-retention-delivery-design.md). It
+// used to gate construction while the policy was still an open decision; now
+// that it is decided, the constant just documents that the guard was here
+// and why: an unwritten policy that only surfaced at the first CRM error
+// would decide, by accident, whether a transient 503 permanently drops a
+// customer's sync.
+const classifierPolicyDecided = true
 
 // NewGenericProvider builds a Provider from a ProviderConfig. ContactURL is
 // required: Capabilities always advertises CapContacts, so a provider that
 // could never actually reach a contacts endpoint must fail at construction
 // rather than fail every delivery later.
-//
-// It also refuses to build at all while classifierPolicyDecided is false.
-// Flipping that constant, once classifyHTTPError has a body, is the one
-// line that turns this provider on.
 func NewGenericProvider(cfg ProviderConfig) (*GenericProvider, error) {
-	if !classifierPolicyDecided {
-		return nil, fmt.Errorf(
-			"retention: generic provider %q cannot be used until classifyHTTPError's "+
-				"retry-classification policy is written (see provider_generic.go)", cfg.Name)
-	}
-	return newGenericProvider(cfg)
-}
-
-// newGenericProvider is the constructor without the policy guard, so the
-// package's own tests can still exercise the transport, auth and field
-// mapping paths that are finished. It stays unexported: nothing outside
-// this package may build a provider whose error classification is a panic.
-func newGenericProvider(cfg ProviderConfig) (*GenericProvider, error) {
 	if cfg.Name == "" {
 		return nil, fmt.Errorf("retention: generic provider requires a name")
 	}
@@ -304,11 +286,98 @@ func stringifyJSONLeaf(v interface{}) (string, bool) {
 // worker can decide retry vs dead-letter. resp may be nil when the request
 // never completed (dial failure, timeout).
 //
-// The body is Rex's to write; the panic stays as the marker that it is not
-// written yet. It is unreachable in production now that NewGenericProvider
-// refuses to construct while classifierPolicyDecided is false, and the
-// worker recovers around every job besides, so reaching it can no longer
-// take the process down.
+// The policy is decided and recorded in "Retry classification" in
+// docs/superpowers/specs/2026-09-03-crm-retention-delivery-design.md. One
+// rule generates the whole table: a failure that affects every job retries,
+// a failure that affects only this job dies now. `dead` is terminal and
+// nothing in this codebase re-enqueues it, so dead-lettering a
+// whole-integration problem (a revoked token, an outage) destroys the entire
+// backlog over something an operator is about to fix, while retrying a bad
+// payload only wastes a bounded number of requests.
 func classifyHTTPError(resp *http.Response, body []byte, err error) *ProviderError {
-	panic("classifyHTTPError: policy not yet decided, see Task 9 Step 3")
+	// The request never landed, so nobody decided anything.
+	if resp == nil {
+		return &ProviderError{Err: err, Retryable: true}
+	}
+
+	detail := fmt.Errorf("%s: %s", resp.Status, truncate(body, 512))
+
+	switch resp.StatusCode {
+	case http.StatusTooManyRequests:
+		return &ProviderError{Err: detail, Retryable: true, RetryAfter: retryAfter(resp)}
+
+	case http.StatusUnauthorized, http.StatusForbidden:
+		// Whole-integration failure: a bad or revoked token fails every job,
+		// and a dead row is never re-enqueued. Retry flat and slow so a broken
+		// credential does not burn its budget inside the first minute.
+		return &ProviderError{Err: detail, Retryable: true, RetryAfter: 2 * time.Minute}
+
+	case http.StatusNotFound:
+		// Deleted upstream. Drop the ref so the retry recreates the contact
+		// instead of updating a record that is gone.
+		return &ProviderError{Err: detail, Retryable: true, DropRef: true}
+
+	case http.StatusRequestTimeout, http.StatusConflict:
+		return &ProviderError{Err: detail, Retryable: true}
+
+	case http.StatusNotImplemented:
+		// The endpoint does not implement this. Configuration, not weather.
+		return &ProviderError{Err: detail}
+	}
+
+	if resp.StatusCode >= 500 {
+		return &ProviderError{Err: detail, Retryable: true}
+	}
+
+	// Every other 4xx is this job's own payload: 400, 422, 413. It will not
+	// become valid on the ninth attempt. Anything unrecognised is terminal
+	// too, matching the package rule that an unclassified failure does not
+	// retry forever.
+	return &ProviderError{Err: detail}
+}
+
+// retryAfter parses the response's RFC 7231 Retry-After header, in both its
+// delta-seconds form ("120") and its HTTP-date form
+// ("Wed, 21 Oct 2026 07:28:00 GMT"). It clamps the result to [1s, 30m]: the
+// floor stops a "Retry-After: 0" becoming a hot loop, and the ceiling exists
+// because a server asking us to wait a day would park the job past the point
+// anyone is watching. It returns 0 when the header is absent or unparseable,
+// so the caller falls back to its own exponential backoff.
+func retryAfter(resp *http.Response) time.Duration {
+	const (
+		floor = time.Second
+		ceil  = 30 * time.Minute
+	)
+
+	v := resp.Header.Get("Retry-After")
+	if v == "" {
+		return 0
+	}
+
+	var d time.Duration
+	if secs, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+		d = time.Duration(secs) * time.Second
+	} else if t, err := http.ParseTime(v); err == nil {
+		d = time.Until(t)
+	} else {
+		return 0
+	}
+
+	if d < floor {
+		return floor
+	}
+	if d > ceil {
+		return ceil
+	}
+	return d
+}
+
+// truncate caps a response body to n bytes for inclusion in the detail
+// error, so a large HTML error page does not bloat the last_error column. It
+// indicates when truncation happened.
+func truncate(body []byte, n int) string {
+	if len(body) <= n {
+		return string(body)
+	}
+	return string(body[:n]) + "... (truncated)"
 }
