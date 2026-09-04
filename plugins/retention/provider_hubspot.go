@@ -159,6 +159,31 @@ func (h *HubSpotProvider) LogActivity(ctx context.Context, ref RemoteRef, a *Act
 // contact's id, or "" if there is no match. A search that runs cleanly but
 // finds nothing is not an error: it is the normal "this is a new contact"
 // path.
+//
+// A response we cannot make sense of is a different thing entirely, and
+// must never be read as "not found": out["results"] missing or null, not
+// being an array, a result that is not an object, or an id we cannot
+// stringify, all mean we do not actually know whether a contact exists.
+// Reading any of those as "no match" would send UpsertContact down the
+// create path and mint a duplicate contact for a user who may already have
+// one, which silently defeats the ref-dedup this whole design depends on
+// and which nobody downstream can clean up. Only a genuinely empty
+// []interface{} means "no such contact, go create one".
+//
+// Each of these is built as a *ProviderError directly rather than going
+// through classifyHTTPError, because classifyHTTPError only classifies by
+// HTTP status and this is a 2xx response whose body shape is the surprise.
+// Retryable is set true: a response-shape surprise on an otherwise-successful
+// status is more likely to be a transient gateway/proxy body, a brief
+// HubSpot-side incident, or an API contract change than something specific
+// to this one contact's payload, and classifyHTTPError's own rule --- "a
+// failure that affects every job retries, a failure that affects only this
+// job dies now" --- reads a shape surprise as affecting every job hitting
+// this endpoint, not just this one. Terminal is defensible too if you would
+// rather a persistent bad state fail loudly rather than fill the retry
+// budget silently; this codebase chose the side that keeps a working
+// integration syncing through a blip, matching the same choice
+// classifyHTTPError makes for a plain 5xx.
 func (h *HubSpotProvider) findContactByEmail(ctx context.Context, email string) (string, error) {
 	body := map[string]interface{}{
 		"filterGroups": []map[string]interface{}{
@@ -177,17 +202,47 @@ func (h *HubSpotProvider) findContactByEmail(ctx context.Context, email string) 
 		return "", err
 	}
 
-	results, ok := out["results"].([]interface{})
-	if !ok || len(results) == 0 {
+	raw, present := out["results"]
+	if !present || raw == nil {
+		return "", &ProviderError{
+			Err:       fmt.Errorf("retention: hubspot provider %q: search response has no results field", h.name),
+			Retryable: true,
+		}
+	}
+	results, ok := raw.([]interface{})
+	if !ok {
+		return "", &ProviderError{
+			Err:       fmt.Errorf("retention: hubspot provider %q: search results is %T, want array", h.name, raw),
+			Retryable: true,
+		}
+	}
+	if len(results) == 0 {
+		// A clean, well-shaped response that genuinely found nothing: the
+		// normal "this is a new contact" case.
 		return "", nil
 	}
+
+	// HubSpot can return more than one match even on an exact email filter
+	// (a portal can loosen email's default uniqueness, or a shared/free-tier
+	// account may carry test data). Taking the first is deliberate, not an
+	// oversight: every candidate matched the same exact email filter, so
+	// none is a better address match than another, and there is nothing else
+	// in the response to rank them by. Picking the first keeps this a single
+	// round trip instead of an ambiguous merge decision this package has no
+	// basis to make on its own.
 	first, ok := results[0].(map[string]interface{})
 	if !ok {
-		return "", nil
+		return "", &ProviderError{
+			Err:       fmt.Errorf("retention: hubspot provider %q: search result is %T, want object", h.name, results[0]),
+			Retryable: true,
+		}
 	}
 	id, ok := stringifyJSONLeaf(first["id"])
 	if !ok {
-		return "", nil
+		return "", &ProviderError{
+			Err:       fmt.Errorf("retention: hubspot provider %q: search result has an unreadable id", h.name),
+			Retryable: true,
+		}
 	}
 	return id, nil
 }

@@ -215,6 +215,71 @@ func TestHubSpotProviderUpsertContact_UpdateNotFoundDropsRef(t *testing.T) {
 	assert.True(t, pe.Retryable, "the classifier retries a dropped-ref 404 so the recreate can happen")
 }
 
+// TestHubSpotProviderUpsertContact_MalformedSearchResponse drives a 2xx
+// search response whose body does not look the way the docs describe, in
+// each of the shapes that used to be silently treated as "no match found".
+// Reading any of these as "not found" would send UpsertContact down the
+// create path and mint a duplicate contact for a user who may already have
+// one — the opposite of what a genuinely empty `results: []` means. Each
+// case must come back as an error, and none may reach the create endpoint.
+func TestHubSpotProviderUpsertContact_MalformedSearchResponse(t *testing.T) {
+	cases := []struct {
+		name       string
+		searchBody string
+	}{
+		{"results field missing entirely", `{}`},
+		{"results field present but null", `{"results":null}`},
+		{"results field present but not an array", `{"results":"unexpected-string"}`},
+		{"results field present but a number", `{"results":42}`},
+		{"result present but not an object", `{"results":["not-an-object"]}`},
+		{"result present but id is unreadable", `{"results":[{"id":null,"properties":{"email":"x@example.com"}}]}`},
+		{"result present but id field is absent", `{"results":[{"properties":{"email":"x@example.com"}}]}`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newHubSpotFakeServer(t)
+			f.searchBody = tc.searchBody
+			srv := httptest.NewServer(f.handler())
+			defer srv.Close()
+
+			p, err := NewHubSpotProvider(ProviderConfig{Name: "hubspot", Token: "tok", BaseURL: srv.URL})
+			require.NoError(t, err)
+
+			_, err = p.UpsertContact(t.Context(), &Contact{Email: "x@example.com"})
+			require.Error(t, err, "an unreadable search response must not be treated as a clean miss")
+
+			var pe *ProviderError
+			require.True(t, errors.As(err, &pe), "the error must be a *ProviderError, not a bare error")
+			assert.True(t, pe.Retryable,
+				"a malformed response body on a 2xx status is treated as a transient shape surprise, not a permanent one")
+
+			assert.Empty(t, f.createRequests,
+				"a response we could not read must never fall through to create and duplicate an existing contact")
+			assert.Empty(t, f.updateRequests)
+		})
+	}
+}
+
+// TestHubSpotProviderUpsertContact_UnknownEmailStillCreatesAfterTightening
+// re-asserts the genuinely-empty-array case now that malformed shapes are
+// rejected: {"results":[]} is the one shape that must still mean "create",
+// not an error.
+func TestHubSpotProviderUpsertContact_UnknownEmailStillCreatesAfterTightening(t *testing.T) {
+	f := newHubSpotFakeServer(t)
+	f.searchBody = `{"results":[]}`
+	srv := httptest.NewServer(f.handler())
+	defer srv.Close()
+
+	p, err := NewHubSpotProvider(ProviderConfig{Name: "hubspot", Token: "tok", BaseURL: srv.URL})
+	require.NoError(t, err)
+
+	ref, err := p.UpsertContact(t.Context(), &Contact{Email: "brand-new@example.com"})
+	require.NoError(t, err, "a genuinely empty results array must still mean \"no contact, go create one\"")
+	assert.Equal(t, "new-1", ref.ID)
+	require.Len(t, f.createRequests, 1)
+}
+
 func TestHubSpotProviderLogActivity_PostsNoteAssociatedToContact(t *testing.T) {
 	f := newHubSpotFakeServer(t)
 	srv := httptest.NewServer(f.handler())
