@@ -257,10 +257,14 @@ func (s *Store) GetUserByUsername(ctx context.Context, appID id.AppID, envID id.
 }
 
 func (s *Store) UpdateUser(ctx context.Context, u *user.User) error {
+	now := time.Now()
 	m := fromUser(u)
-	m.UpdatedAt = time.Now()
-	_, err := s.pg.NewUpdate(m).WherePK().Exec(ctx)
-	return pgError(err)
+	m.UpdatedAt = now
+	if _, err := s.pg.NewUpdate(m).WherePK().Exec(ctx); err != nil {
+		return pgError(err)
+	}
+	u.UpdatedAt = now
+	return nil
 }
 
 func (s *Store) DeleteUser(ctx context.Context, userID id.UserID) error {

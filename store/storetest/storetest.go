@@ -56,6 +56,7 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"UserUsernameLookupIsEnvScoped", testUserUsernameLookupIsEnvScoped},
 		{"ListUsersTotalAndFilter", testListUsersTotalAndFilter},
 		{"ListUsersEmailMetacharsAreSafe", testListUsersEmailMetacharsAreSafe},
+		{"UpdateUserWritesBackTimestamp", testUpdateUserWritesBackTimestamp},
 		{"SessionCRUD", testSessionCRUD},
 		{"SessionLookupByTokenIsScoped", testSessionLookupByTokenIsScoped},
 		{"SessionRolesRoundTrip", testSessionRolesRoundTrip},
@@ -488,6 +489,37 @@ func testListUsersEmailMetacharsAreSafe(t *testing.T, s store.Store) {
 	res, err := s.ListUsers(ctx, &user.Query{AppID: tn.AppID, Email: "(a+)+$.*%_", Limit: 50})
 	require.NoError(t, err, "metacharacter search must not error")
 	assert.Empty(t, res.Users, "a literal search for a nonexistent value must match nothing")
+}
+
+// testUpdateUserWritesBackTimestamp is the regression test for the
+// UpdateUser copy-vs-write-back bug: every backend's UpdateUser copied the
+// domain struct into a storage model, stamped the new UpdatedAt on that
+// copy, and persisted only the copy — leaving the caller's own *user.User
+// holding whatever UpdatedAt it walked in with. Two rapid updates to the
+// same user then look identical to any caller keying an idempotency check
+// off UpdatedAt (the retention plugin's outbox does exactly that), so the
+// second one is silently treated as a duplicate. UpdateUser must write the
+// new timestamp back onto u before returning, and what lands in the row must
+// agree with what was written back.
+func testUpdateUserWritesBackTimestamp(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "writeback@test.com")
+	before := u.UpdatedAt
+
+	// A short sleep so the new timestamp is observably later even on a
+	// backend or clock whose resolution is coarse.
+	time.Sleep(2 * time.Millisecond)
+
+	u.FirstName = "Ada"
+	require.NoError(t, s.UpdateUser(ctx, u))
+	assert.True(t, u.UpdatedAt.After(before),
+		"UpdateUser must write the new UpdatedAt back onto the caller's struct")
+
+	got, err := s.GetUser(ctx, u.ID)
+	require.NoError(t, err)
+	assert.WithinDuration(t, u.UpdatedAt, got.UpdatedAt, time.Second,
+		"the timestamp written back onto the caller must match what was persisted")
 }
 
 // ──────────────────────────────────────────────────
