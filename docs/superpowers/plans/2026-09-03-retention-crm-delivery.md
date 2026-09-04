@@ -20,7 +20,7 @@
 - Hook methods must never return a non-nil error. A retention failure must not fail a login.
 - Hooks perform exactly one store write and no store reads. Any read on the login path is a plan violation.
 - Mongo and Postgres conformance runners sit behind the `integration` build tag, matching `plugins/sharedsignals/store_mongo_conformance_test.go`.
-- **Task 9 is not for an agentic worker.** It contains a policy decision reserved for Rex. Halt and ask.
+- **Task 9 Step 3 is decided.** The retry classification policy is in the spec under "Retry classification". Implement it verbatim; it is not open for re-derivation.
 
 ---
 
@@ -2671,8 +2671,9 @@ git commit -m "feat(retention): gate CRM delivery on consent at send time"
 
 ## Task 9: Generic HTTP provider and retry classification
 
-> **STOP. This task is not for an agentic worker.**
-> Step 3 is a policy decision reserved for Rex. If you are a subagent, complete Steps 1 and 2, then halt and report that Step 3 needs him.
+> **Step 3 was reserved for Rex and he has now decided it.** The policy is
+> recorded in the spec under "Retry classification". Implement it as written
+> there; do not re-derive it.
 
 **Files:**
 - Create: `plugins/retention/provider_generic.go`

@@ -79,6 +79,7 @@ type ProviderError struct {
     Err        error
     Retryable  bool
     RetryAfter time.Duration // honoured when non-zero, e.g. from 429
+    DropRef    bool          // the CRM no longer holds this record
 }
 ```
 
@@ -261,15 +262,58 @@ Treat the exact endpoint paths, the auth header shape and the search-by-email
 call as things to confirm against HubSpot's current docs while implementing,
 not as settled by this document. Vendor APIs move and this spec will not.
 
+## Retry classification
+
+One rule generates the whole table: **a failure that affects every job retries,
+a failure that affects only this job dies now.**
+
+That asymmetry comes from this codebase rather than from taste. `dead` is
+terminal and nothing re-enqueues it, so dead-lettering a whole-integration
+problem destroys the entire backlog over something an operator is about to fix.
+Retrying a bad payload, by contrast, wastes eight requests and delays a
+diagnostic you wanted immediately. The costs are nowhere near symmetric, so the
+policy is not either.
+
+| Response | Verdict | Delay |
+|---|---|---|
+| no response (DNS, dial, timeout) | retry | exponential |
+| 429 with `Retry-After` | retry | honour it, clamped to 1s..30m |
+| 429 without | retry | exponential |
+| 401, 403 | retry | flat 2 minutes |
+| 500, 502, 503, 504, other 5xx | retry | exponential |
+| 501 | terminal | |
+| 404 on a record we hold a ref for | retry, and drop the ref | exponential |
+| 408, 409 | retry | exponential |
+| 400, 422, 413, other 4xx | terminal | |
+| anything unrecognised | terminal | |
+
+Two rows are worth explaining, because both look wrong at a glance.
+
+**401 and 403 retry.** The instinct is that a dead credential should fail fast.
+But a bad token fails every job, not this one, and a dead row never comes back.
+Getting it wrong this way costs eight wasted requests per job. Getting it wrong
+the other way permanently destroys the backlog because somebody fat-fingered a
+token rotation. The flat two minutes buys roughly a fourteen-minute window at a
+low request rate, instead of burning the whole budget inside the first minute.
+
+**404 drops the ref.** The contact was deleted upstream, so retrying the same
+update fails forever. Dropping the ref makes the next attempt find nothing and
+recreate the contact, which turns a permanent failure into a self-healing one.
+That is what `DropRef` on `ProviderError` is for, and it only fires when a ref
+actually existed, so a transient 404 on a create cannot orphan anything.
+
+A note on what the classifier can and cannot express. It never sees the attempt
+count, so `RetryAfter` replaces the exponential curve rather than raising its
+floor. A flat delay therefore trades a long tail for a low early rate, which is
+why 401 and 403 take one and 429-without-a-header does not. If that trade shows
+up a third time, add a `MinBackoff` field so a classification can lift the floor
+without flattening the curve.
+
 ## Open questions
 
-The body of `classifyHTTPError` in `provider_generic.go`. The signature and
-everything around it gets scaffolded, and Rex writes the classification. It
-decides whether a bad CRM response means try again soon, wait exactly this
-long, or give up for good. Wrong one way and you hammer a rate-limited API
-until it bans you. Wrong the other way and a transient 503 permanently drops a
-customer's sync. Worth weighing: 429 with and without `Retry-After`, 5xx
-against 4xx, whether a 401 is a dead credential or a token about to refresh,
-whether a 404 on update means the contact was deleted upstream and the ref
-should be dropped so the next attempt recreates it, and the transport case
-where there's no response at all.
+The retry budget. `MaxAttempts` defaults to 8 and the backoff doubles from five
+seconds, so a retryable failure survives seven retries across about ten and a
+half minutes before it dead-letters. A CRM outage longer than that loses the
+backlog no matter how well the classifier behaves. `MaxAttempts: 12` buys about
+an hour, because the later steps sit at the thirty-minute cap. That is a config
+default rather than a policy decision, and it is still open.
