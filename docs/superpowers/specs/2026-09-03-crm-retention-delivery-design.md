@@ -309,11 +309,24 @@ why 401 and 403 take one and 429-without-a-header does not. If that trade shows
 up a third time, add a `MinBackoff` field so a classification can lift the floor
 without flattening the curve.
 
-## Open questions
+## Retry budget
 
-The retry budget. `MaxAttempts` defaults to 8 and the backoff doubles from five
-seconds, so a retryable failure survives seven retries across about ten and a
-half minutes before it dead-letters. A CRM outage longer than that loses the
-backlog no matter how well the classifier behaves. `MaxAttempts: 12` buys about
-an hour, because the later steps sit at the thirty-minute cap. That is a config
-default rather than a policy decision, and it is still open.
+`MaxAttempts` defaults to 12 now, not 8: this section used to leave that
+number open, and it doesn't anymore.
+
+The old default of 8 bought seven retries and about ten and a half minutes
+before a retryable failure dead-lettered: 5, 10, 20, 40, 80, 160, 320 seconds,
+doubling from `BaseBackoff`. That's shorter than plenty of ordinary vendor
+incidents, and once a job dead-letters nothing re-enqueues it, so the backlog
+for everyone who signed in during the outage is gone for good.
+
+Twelve attempts gets you eleven retries and roughly 1.7 hours: the same curve
+out to 1280 seconds, then two more waits pinned at the thirty-minute cap.
+That covers a real CRM outage instead of just a blip. The price is four extra
+requests per job that was always going to fail anyway, and a row that sits
+around longer before it dead-letters. Both are cheap next to losing real
+signup and login activity, for an error the classifier already decided was
+worth retrying.
+
+`BaseBackoff` and the thirty-minute cap are untouched. Only the attempt count
+moved.

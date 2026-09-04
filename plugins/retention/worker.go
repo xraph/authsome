@@ -97,7 +97,7 @@ func newWorker(deps workerDeps) *worker {
 		deps.BatchSize = 50
 	}
 	if deps.MaxAttempts <= 0 {
-		deps.MaxAttempts = 8
+		deps.MaxAttempts = 12
 	}
 	if deps.BaseBackoff <= 0 {
 		deps.BaseBackoff = 5 * time.Second

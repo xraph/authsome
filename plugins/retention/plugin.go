@@ -96,7 +96,7 @@ type Config struct {
 	Lease        time.Duration    `json:"lease"`         // default 2m
 	BaseBackoff  time.Duration    `json:"base_backoff"`  // default 5s
 	BatchSize    int              `json:"batch_size"`    // default 50
-	MaxAttempts  int              `json:"max_attempts"`  // default 8
+	MaxAttempts  int              `json:"max_attempts"`  // default 12
 }
 
 // defaults fills the zero values, matching the Config.defaults() convention in
@@ -115,7 +115,7 @@ func (c *Config) defaults() {
 		c.BatchSize = 50
 	}
 	if c.MaxAttempts <= 0 {
-		c.MaxAttempts = 8
+		c.MaxAttempts = 12
 	}
 }
 
