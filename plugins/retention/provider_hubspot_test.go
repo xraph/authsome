@@ -26,6 +26,8 @@ func TestHubSpotProviderCapabilities(t *testing.T) {
 	caps := p.Capabilities()
 	assert.True(t, caps.Has(CapContacts))
 	assert.True(t, caps.Has(CapActivities))
+	assert.True(t, caps.Has(CapActivityDedupe),
+		"LogActivity searches before it recreates, so the bit is earned")
 }
 
 func TestHubSpotProviderName(t *testing.T) {
@@ -66,6 +68,13 @@ type hubspotFakeServer struct {
 
 	noteRequests []map[string]interface{}
 
+	// The note-search endpoint backs LogActivity's redelivery guard. Its
+	// default is an empty result set, so a test that says nothing about it
+	// gets "this note does not exist yet".
+	noteSearchRequests []map[string]interface{}
+	noteSearchStatus   int
+	noteSearchBody     string
+
 	authHeaders []string
 }
 
@@ -77,6 +86,9 @@ func newHubSpotFakeServer(t *testing.T) *hubspotFakeServer {
 		createBody:   `{"id":"new-1"}`,
 		updateStatus: http.StatusOK,
 		updateBody:   `{}`,
+
+		noteSearchStatus: http.StatusOK,
+		noteSearchBody:   `{"results":[]}`,
 	}
 }
 
@@ -111,6 +123,11 @@ func (f *hubspotFakeServer) handler() http.HandlerFunc {
 			f.updateHeader = r.Header.Clone()
 			w.WriteHeader(f.updateStatus)
 			_, _ = w.Write([]byte(f.updateBody))
+
+		case r.Method == http.MethodPost && r.URL.Path == hubspotNoteSearchPath:
+			f.noteSearchRequests = append(f.noteSearchRequests, body)
+			w.WriteHeader(f.noteSearchStatus)
+			_, _ = w.Write([]byte(f.noteSearchBody))
 
 		case r.Method == http.MethodPost && r.URL.Path == hubspotNotesPath:
 			f.noteRequests = append(f.noteRequests, body)

@@ -336,10 +336,30 @@ func (w *worker) deliverOne(ctx context.Context, j *Job) {
 			w.suppress(ctx, j, "provider does not support activities")
 			return
 		}
+		// Delivery is at-least-once, and the contact ref that makes a
+		// repeated upsert harmless has no counterpart for activities. So
+		// the job's own idempotency key travels with the activity, and a
+		// provider that can key on it says so with CapActivityDedupe.
 		activity := &Activity{
 			Type:       j.Payload["activity_type"],
 			OccurredAt: j.CreatedAt,
 			Properties: j.Payload,
+			ExternalID: j.IdempotencyKey,
+			Redelivery: j.Redelivered(),
+		}
+		if activity.Redelivery && !p.Capabilities().Has(CapActivityDedupe) {
+			// Said out loud rather than swallowed. The provider cannot
+			// promise the CRM will end up with one entry, and a silent
+			// retry here is how somebody finds three "logged in" notes on a
+			// contact and has no idea where they came from.
+			w.deps.Logger.Warn(
+				"retention: redelivering an activity to a provider that cannot deduplicate; "+
+					"the CRM may end up with a duplicate entry",
+				log.String("job_id", j.ID.String()),
+				log.String("provider", j.Provider),
+				log.String("activity_type", activity.Type),
+				log.Int("attempts", j.Attempts),
+				log.Bool("reclaimed", j.Reclaimed))
 		}
 		if err := p.LogActivity(ctx, ref, activity); err != nil {
 			w.dropRefIfNeeded(ctx, j, hadRef, err)

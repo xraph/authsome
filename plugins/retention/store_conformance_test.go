@@ -340,6 +340,60 @@ func runStoreConformance(t *testing.T, newStore storeFactory) {
 		assert.ElementsMatch(t, []string{"hubspot", "generic"}, providers)
 	})
 
+	// ── Reclaimed ──────────────────────────────────────────────────
+	//
+	// The only signal anywhere that a job may already have been delivered
+	// once. A provider call that succeeded and a MarkDone that then failed
+	// leaves the row in_flight with Attempts untouched, because nothing got
+	// to record a failure. Every backend has to compute this from the state
+	// the row was in before the claim flipped it.
+
+	t.Run("a job claimed from an expired lease is flagged as reclaimed", func(t *testing.T) {
+		s := newStore(t)
+		appID, userID := id.NewAppID(), id.NewUserID()
+		require.NoError(t, s.Enqueue(ctx, newJob(appID, userID, KindActivityLog, "reclaim-flag", base)))
+
+		first, err := s.ClaimDue(ctx, 10, time.Minute, base)
+		require.NoError(t, err)
+		require.Len(t, first, 1)
+		assert.False(t, first[0].Reclaimed, "the first time out is not a redelivery")
+		assert.False(t, first[0].Redelivered())
+
+		again, err := s.ClaimDue(ctx, 10, time.Minute, base.Add(2*time.Minute))
+		require.NoError(t, err)
+		require.Len(t, again, 1)
+		assert.True(t, again[0].Reclaimed,
+			"this row was already out once; the provider has to be told")
+		assert.Equal(t, 0, again[0].Attempts,
+			"nothing recorded a failure, so the attempt count cannot carry this")
+		assert.True(t, again[0].Redelivered())
+
+		// It describes the claim, not the row. A later read must not
+		// inherit it.
+		stored, err := s.GetJob(ctx, again[0].ID)
+		require.NoError(t, err)
+		assert.False(t, stored.Reclaimed, "Reclaimed is not a column")
+	})
+
+	t.Run("a retried job comes back pending rather than reclaimed", func(t *testing.T) {
+		s := newStore(t)
+		appID, userID := id.NewAppID(), id.NewUserID()
+		j := newJob(appID, userID, KindActivityLog, "retry-flag", base)
+		require.NoError(t, s.Enqueue(ctx, j))
+		_, err := s.ClaimDue(ctx, 10, time.Minute, base)
+		require.NoError(t, err)
+		require.NoError(t, s.MarkRetry(ctx, j.ID, base, "503"))
+
+		got, err := s.ClaimDue(ctx, 10, time.Minute, base.Add(time.Second))
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+		assert.False(t, got[0].Reclaimed,
+			"MarkRetry cleared the lease, so this is a plain pending claim")
+		assert.Equal(t, 1, got[0].Attempts)
+		assert.True(t, got[0].Redelivered(),
+			"the attempt count carries it instead; a failed attempt is no proof the CRM did nothing")
+	})
+
 	// ── PurgeTerminal ──────────────────────────────────────────────
 	//
 	// Nothing pruned the outbox before this, so every login ever served sat

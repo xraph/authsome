@@ -69,7 +69,35 @@ type Job struct {
 	InFlightUntil  time.Time         `json:"in_flight_until"`
 	LastError      string            `json:"last_error,omitempty"`
 	CreatedAt      time.Time         `json:"created_at"`
+
+	// Reclaimed is set by ClaimDue when this job was taken from an expired
+	// lease rather than from pending. It is computed at claim time from the
+	// row's state before the claim, and it is not a column: GetJob and
+	// ListDead always report false.
+	//
+	// It exists because Attempts is blind to exactly the case that matters.
+	// A delivery whose provider call succeeded and whose MarkDone then
+	// failed leaves the row in_flight with Attempts unchanged, because
+	// nothing got to record a failure. The lease expires, the row comes
+	// back, and the only trace that it already went out once is that the
+	// claim matched the expired-lease clause instead of the pending one.
+	//
+	// It cannot be recorded any earlier either. The failure it detects is a
+	// store outage, and any marker we would write to warn ourselves goes to
+	// the same store that just refused the write. The claim is the first
+	// moment anything can see it.
+	Reclaimed bool `json:"-"`
 }
+
+// Redelivered reports whether this job may already have reached the provider
+// once, so a delivery that is not naturally idempotent should check before
+// repeating itself.
+//
+// Two ways in. Attempts > 0 means a previous attempt reported an error, and
+// an error is no proof the CRM did nothing: a request that succeeded and
+// whose response we failed to read looks identical to one that never landed.
+// Reclaimed means the previous attempt never reported anything at all.
+func (j *Job) Redelivered() bool { return j.Reclaimed || j.Attempts > 0 }
 
 // ContactRef records where a user landed in a given CRM. It is the only thing
 // standing between a thousand logins and a thousand duplicate contacts.
@@ -104,6 +132,10 @@ type Store interface {
 	// second clause is what recovers work from a process that died mid
 	// delivery; without it those rows are invisible to every later claim and
 	// the user behind them silently stops syncing.
+	//
+	// A job claimed through that second clause comes back with Reclaimed
+	// set, which is the only signal anywhere that it may already have been
+	// delivered once. See Job.Reclaimed.
 	ClaimDue(ctx context.Context, limit int, lease time.Duration, now time.Time) ([]*Job, error)
 
 	// MarkDone completes a job.

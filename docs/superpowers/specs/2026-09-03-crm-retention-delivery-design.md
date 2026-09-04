@@ -363,3 +363,60 @@ worth retrying.
 
 `BaseBackoff` and the thirty-minute cap are untouched. Only the attempt count
 moved.
+
+## Duplicate activities
+
+Delivery is at-least-once and the two job kinds are not equally protected.
+A repeated `contact_upsert` is absorbed by the contact ref, which turns it
+into an update. Nothing plays that role for `activity_log`, so a `MarkDone`
+that fails after the provider call already succeeded leaves the job
+`in_flight`, the lease expires, it is redelivered, and the CS team sees the
+same login twice.
+
+Three shapes were on the table. HubSpot has no idempotency key you can send:
+`hs_unique_creation_key` reads like one and is managed internally, not
+settable on a create. A local "already delivered" marker written just before
+`MarkDone` only narrows the window, because the marker write fails in
+exactly the same way the `MarkDone` did. What is left is to carry a
+deterministic id into the activity and look for it before creating a second
+one, which is what ships.
+
+The id is the outbox job's own `idempotency_key`, which is already stable
+across attempts and unique across events. HubSpot carries it in
+`hs_note_body`, on its own line, and finds it again with `CONTAINS_TOKEN` on
+the notes search endpoint. Not a custom property, which would be the tidier
+home: a custom property has to exist in the target portal first and HubSpot
+answers a create naming an undefined one with a 400, the same constraint
+that keeps the contact upsert to three built-in fields. `hs_note_body` is
+built in and documented as searchable. `CONTAINS_TOKEN` matches tokens
+rather than substrings, so every hit is checked against the exact marker
+before it counts.
+
+The search runs only on a redelivery. HubSpot rate limits search to five
+requests per second per account, twenty times tighter than the ordinary
+object endpoints, and a first delivery has nothing to collide with.
+
+Knowing it is a redelivery is the part that needed a new signal, because
+`attempts` is blind to precisely this case: nothing incremented it, since
+nothing got to record a failure. The row's state before the claim is the
+only trace, so `ClaimDue` now reports `Job.Reclaimed` when it took a row
+through the expired-lease clause. It cannot be recorded any earlier either.
+The failure it detects is a store outage, and any marker we would write to
+warn ourselves goes to the store that just refused a write.
+
+Two gaps stay open, and they stay open in writing rather than quietly.
+HubSpot's docs say newly created objects take a few moments to appear in
+search results, so a redelivery landing inside that lag can still create a
+second note. The window this is built for is a failed `MarkDone`, which
+comes back only after the lease expires, two minutes by default, and that is
+clear of it. A redelivery after a failed attempt can come back in five
+seconds and is not.
+
+The generic provider cannot close this at all and does not pretend to. It
+sends the id as `external_id`, mapped through `FieldMap` like everything
+else, so a CRM that upserts on a field of its own gets what it needs. It
+does not advertise `CapActivityDedupe`, because sending a field is not
+knowing the far end honours it. The worker warns on every redelivery to a
+provider without that bit, which is the same reasoning `Capabilities` was
+introduced with: a provider that quietly returns `nil` for something it
+cannot do leaves you unable to tell delivered from dropped.

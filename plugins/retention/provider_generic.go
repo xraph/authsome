@@ -69,6 +69,20 @@ func (g *GenericProvider) Name() string { return g.name }
 // ActivityURL is configured, so a CRM with no activity endpoint never gets
 // handed an activity delivery it has no way to honour: the worker treats an
 // unadvertised capability as a deliberate skip, not a failed send.
+//
+// CapActivityDedupe is never advertised, and that is the honest answer
+// rather than a gap waiting to be filled. This provider knows one endpoint
+// and one field mapping. It cannot search the remote system, because it has
+// no search URL, no query language and no result shape to read. It cannot
+// assume the endpoint dedupes on external_id either: plenty of REST
+// collections answer a repeated POST with a second row.
+//
+// So the external id is sent (see activityFields) and the promise is not
+// made. An operator whose CRM does upsert on that field gets the behaviour
+// for free; everyone else gets a warning from the worker on every
+// redelivery instead of a duplicate they never hear about. Claiming the bit
+// to look complete is precisely the "works with any X" lie Capabilities was
+// added to prevent.
 func (g *GenericProvider) Capabilities() Capability {
 	caps := CapContacts
 	if g.activityURL != "" {
@@ -225,10 +239,19 @@ func contactFields(c *Contact) map[string]interface{} {
 // activityFields is the canonical (pre-FieldMap) JSON shape of an Activity.
 // contact_id is added by the caller, since it comes from the RemoteRef, not
 // the Activity itself.
+//
+// external_id is the same value on every delivery attempt at one activity,
+// so a CRM that can upsert on a field of its own gets what it needs, mapped
+// through FieldMap like anything else. This provider still does not
+// advertise CapActivityDedupe, because sending the field is not the same as
+// knowing the far end honours it. See Capabilities.
 func activityFields(a *Activity) map[string]interface{} {
 	out := map[string]interface{}{
 		"type":        a.Type,
 		"occurred_at": a.OccurredAt.Format(time.RFC3339),
+	}
+	if a.ExternalID != "" {
+		out["external_id"] = a.ExternalID
 	}
 	if len(a.Properties) > 0 {
 		out["properties"] = a.Properties

@@ -44,14 +44,43 @@ import (
 //     confirmed independently via the HubSpot community and the live
 //     association-types endpoint, which reports {"id": "202", "name":
 //     "note_to_contact"}.)
+//   - Search notes: POST /crm/objects/2026-03/notes/search. Notes are one
+//     of the five engagement types the CRM Search API covers, hs_note_body
+//     is one of the note's default searchable properties, and
+//     CONTAINS_TOKEN is a documented operator on it.
+//     (developers.hubspot.com/docs/api-reference/latest/crm/search-the-crm)
 const (
 	hubspotDefaultBaseURL = "https://api.hubapi.com"
 
 	hubspotContactsPath      = "/crm/objects/2026-03/contacts"
 	hubspotContactSearchPath = hubspotContactsPath + "/search"
 	hubspotNotesPath         = "/crm/objects/2026-03/notes"
+	hubspotNoteSearchPath    = hubspotNotesPath + "/search"
 	hubspotNoteToContactAssn = 202
+
+	// hubspotExternalIDLabel prefixes the line that carries an activity's
+	// external id in the note body.
+	//
+	// The body rather than a custom property, and not for want of trying. A
+	// custom property would be the tidier home and it is not available to
+	// us: it has to exist in the target portal before it can be written, and
+	// HubSpot answers a create that names an undefined property with a 400.
+	// That is the same constraint that keeps hubspotContactProperties to the
+	// three built-ins. hs_note_body is a built-in, it is documented as
+	// searchable, and it is present in every portal by definition.
+	//
+	// The cost is a line of machine text on a note a human may read. It is
+	// one line, at the end, after the content.
+	hubspotExternalIDLabel = "authsome_external_id"
 )
+
+// hubspotExternalIDMarker is the exact text the note body carries and the
+// search result is verified against. CONTAINS_TOKEN matches tokens rather
+// than substrings, so a hit is a candidate and not a proof; checking the
+// body for this string is what turns it into one.
+func hubspotExternalIDMarker(externalID string) string {
+	return hubspotExternalIDLabel + ": " + externalID
+}
 
 // HubSpotProvider is the reference vendor Provider: a real CRM's contacts
 // and notes (engagements) APIs mapped onto the two Provider methods.
@@ -93,10 +122,20 @@ func NewHubSpotProvider(cfg ProviderConfig) (*HubSpotProvider, error) {
 func (h *HubSpotProvider) Name() string { return h.name }
 
 // Capabilities implements Provider. HubSpot's contacts and notes APIs cover
-// both, unconditionally, unlike the generic provider where CapActivities
-// depends on config.
+// contacts and activities unconditionally, unlike the generic provider where
+// CapActivities depends on config.
+//
+// CapActivityDedupe is claimed on the strength of LogActivity's
+// search-before-create, with one honest limit: HubSpot's own docs say "it
+// may take a few moments for newly created or updated CRM objects to appear
+// in search results", so a redelivery that arrives inside that indexing lag
+// can still create a second note. The window this exists to close is a
+// failed MarkDone, which comes back only after the lease expires (two
+// minutes by default), and that is well clear of a few moments. A
+// redelivery driven by a failed attempt can come back in five seconds and
+// is not.
 func (h *HubSpotProvider) Capabilities() Capability {
-	return CapContacts | CapActivities
+	return CapContacts | CapActivities | CapActivityDedupe
 }
 
 // UpsertContact implements Provider. It searches for an existing contact by
@@ -133,7 +172,35 @@ func (h *HubSpotProvider) UpsertContact(ctx context.Context, c *Contact) (Remote
 // LogActivity implements Provider. It records the activity as a HubSpot
 // note (the Notes/engagements API), associated to the contact via the
 // HubSpot-defined note-to-contact association type.
+//
+// On a redelivery it looks for the note first. Delivery is at-least-once,
+// and where a repeated contact upsert is absorbed by the contact ref,
+// nothing absorbs a repeated note: the CRM just gets the same login logged
+// twice, in front of the CS team who asked for this data in the first
+// place.
+//
+// The search runs only when the worker says this job has been out before.
+// A first delivery has nothing to collide with, and HubSpot rate limits the
+// search endpoints to five requests per second per account, which is twenty
+// times tighter than the ordinary object endpoints. Paying that on every
+// login to protect the small fraction that get redelivered would cap the
+// common case on the rarest one.
 func (h *HubSpotProvider) LogActivity(ctx context.Context, ref RemoteRef, a *Activity) error {
+	if a.Redelivery && a.ExternalID != "" {
+		found, err := h.findNoteByExternalID(ctx, a.ExternalID)
+		if err != nil {
+			// Do not fall through to the create. The search failing means
+			// we do not know whether the note is there, and creating on
+			// "do not know" is exactly the duplicate this guard exists to
+			// stop. The job is retried, and classifyHTTPError has already
+			// decided whether that is worth doing.
+			return err
+		}
+		if found {
+			return nil
+		}
+	}
+
 	body := map[string]interface{}{
 		"properties": map[string]interface{}{
 			"hs_timestamp": a.OccurredAt.Format(time.RFC3339),
@@ -247,6 +314,92 @@ func (h *HubSpotProvider) findContactByEmail(ctx context.Context, email string) 
 	return id, nil
 }
 
+// findNoteByExternalID reports whether a note carrying this activity's
+// external id already exists. A clean search that matches nothing is not an
+// error: it is the normal "this really is a new note" answer.
+//
+// The filter is CONTAINS_TOKEN on hs_note_body, which is a built-in and a
+// documented searchable property for notes. CONTAINS_TOKEN matches whole
+// tokens, so a hit is a candidate rather than a proof, and every candidate
+// is checked against the exact marker text before it counts. The external
+// id is a hex digest, which tokenises as one token, but relying on that
+// alone would make a duplicate depend on somebody else's tokeniser.
+//
+// The response-shape handling mirrors findContactByEmail's, for a reason
+// that is stronger here. A surprise we cannot read must never be reported
+// as "no such note": that answer sends LogActivity straight to the create
+// and mints the duplicate. Retryable is set for the same reason it is set
+// there, that a shape surprise on a 2xx affects every job hitting this
+// endpoint rather than this one activity.
+func (h *HubSpotProvider) findNoteByExternalID(ctx context.Context, externalID string) (bool, error) {
+	marker := hubspotExternalIDMarker(externalID)
+
+	body := map[string]interface{}{
+		"filterGroups": []map[string]interface{}{
+			{
+				"filters": []map[string]interface{}{
+					{"propertyName": "hs_note_body", "operator": "CONTAINS_TOKEN", "value": externalID},
+				},
+			},
+		},
+		"properties": []string{"hs_note_body"},
+		// More than one, because CONTAINS_TOKEN can return neighbours the
+		// marker check then rejects, and a limit of one would let a single
+		// near-miss hide the real note behind it.
+		"limit": 10,
+	}
+
+	out, err := h.request(ctx, http.MethodPost, hubspotNoteSearchPath, body)
+	if err != nil {
+		return false, err
+	}
+
+	raw, present := out["results"]
+	if !present || raw == nil {
+		return false, &ProviderError{
+			Err:       fmt.Errorf("retention: hubspot provider %q: note search response has no results field", h.name),
+			Retryable: true,
+		}
+	}
+	results, ok := raw.([]interface{})
+	if !ok {
+		return false, &ProviderError{
+			Err:       fmt.Errorf("retention: hubspot provider %q: note search results is %T, want array", h.name, raw),
+			Retryable: true,
+		}
+	}
+
+	for _, r := range results {
+		note, ok := r.(map[string]interface{})
+		if !ok {
+			return false, &ProviderError{
+				Err:       fmt.Errorf("retention: hubspot provider %q: note search result is %T, want object", h.name, r),
+				Retryable: true,
+			}
+		}
+		props, ok := note["properties"].(map[string]interface{})
+		if !ok {
+			return false, &ProviderError{
+				Err:       fmt.Errorf("retention: hubspot provider %q: note search result has no properties object", h.name),
+				Retryable: true,
+			}
+		}
+		// A body we cannot read is not a shape surprise worth failing on,
+		// unlike the cases above. The marker lives in the body, so a
+		// result whose body is missing or is not a string cannot be the
+		// note we are looking for; it is a neighbour the token filter
+		// swept up. Skip it and keep checking the rest.
+		if noteBody, ok := props["hs_note_body"].(string); ok && strings.Contains(noteBody, marker) {
+			return true, nil
+		}
+	}
+
+	// Either nothing matched, or everything that matched the token filter
+	// turned out not to carry the marker. Both mean this activity has not
+	// been written yet.
+	return false, nil
+}
+
 // request marshals payload (nil for none) as the request body, sends it
 // with bearer auth, and decodes the JSON response on 2xx. Every transport
 // failure and every non-2xx status is handed to classifyHTTPError, so
@@ -321,6 +474,11 @@ func hubspotContactProperties(c *Contact) map[string]interface{} {
 // activity type on the first line, then its properties one per line in a
 // stable (sorted) order so the same activity always produces the same note
 // text.
+//
+// The external id goes last, on its own line, and it is what
+// findNoteByExternalID looks for. Last so the part a person reads comes
+// first, and in the same "key: value" shape as everything above it so it
+// does not read as a glitch.
 func hubspotNoteBody(a *Activity) string {
 	var b strings.Builder
 	b.WriteString(a.Type)
@@ -334,6 +492,10 @@ func hubspotNoteBody(a *Activity) string {
 		for _, k := range keys {
 			fmt.Fprintf(&b, "\n%s: %s", k, a.Properties[k])
 		}
+	}
+
+	if a.ExternalID != "" {
+		fmt.Fprintf(&b, "\n%s", hubspotExternalIDMarker(a.ExternalID))
 	}
 
 	return b.String()

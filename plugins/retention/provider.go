@@ -18,6 +18,21 @@ const (
 	CapContacts Capability = 1 << iota
 	// CapActivities means the provider can record an activity against a contact.
 	CapActivities
+	// CapActivityDedupe means LogActivity is idempotent on
+	// Activity.ExternalID: given the same external id twice, the CRM ends up
+	// with one activity entry, not two.
+	//
+	// It exists because delivery is at-least-once and contacts are protected
+	// while activities are not. A contact ref makes a redelivered upsert an
+	// update. Nothing plays that role for an activity, so a MarkDone that
+	// fails after the provider call succeeded leaves the job in_flight, the
+	// lease expires, and the CRM gets the same login logged twice.
+	//
+	// A provider that cannot promise this must not set the bit. The worker
+	// then says so out loud when it redelivers, which is the honest answer:
+	// the gap is real, and a silent nil would hide it the same way a
+	// provider faking success on an unsupported call would.
+	CapActivityDedupe
 )
 
 // Has reports whether every bit in want is set.
@@ -49,6 +64,25 @@ type Activity struct {
 	Type       string            `json:"type"`
 	OccurredAt time.Time         `json:"occurred_at"`
 	Properties map[string]string `json:"properties,omitempty"`
+
+	// ExternalID names this activity from our side, deterministically. It is
+	// the outbox job's own idempotency key, so every delivery attempt at the
+	// same job carries the same value and two different logins never share
+	// one. A provider advertising CapActivityDedupe keys on it.
+	//
+	// Empty means the job carried no idempotency key, which the hooks never
+	// produce. A provider must treat that as "cannot deduplicate" and create,
+	// rather than matching every activity that also has no external id.
+	ExternalID string `json:"external_id,omitempty"`
+
+	// Redelivery says this job has already been through at least one
+	// delivery attempt, so the activity may already exist in the CRM. It is
+	// the signal a provider needs to decide whether the dedupe check is
+	// worth its cost: on a first delivery there is nothing to collide with,
+	// and HubSpot's search endpoint is rate limited to five requests per
+	// second per account, so checking every time would halve the throughput
+	// of the common case to protect the rare one.
+	Redelivery bool `json:"redelivery,omitempty"`
 }
 
 // Provider is a CRM the retention plugin can mirror auth activity into.

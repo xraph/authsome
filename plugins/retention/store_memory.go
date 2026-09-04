@@ -88,9 +88,18 @@ func (s *MemoryStore) ClaimDue(_ context.Context, limit int, lease time.Duration
 
 	out := make([]*Job, 0, len(due))
 	for _, j := range due {
+		// Read before the claim overwrites it: in_flight here means this row
+		// matched the expired-lease clause, so somebody already had it out
+		// once. See Job.Reclaimed.
+		reclaimed := j.State == StateInFlight
 		j.State = StateInFlight
 		j.InFlightUntil = now.Add(lease)
-		out = append(out, cloneJob(j))
+		claimed := cloneJob(j)
+		// Set on the copy, not on the stored row: Reclaimed describes this
+		// claim, and leaving it on the stored job would make every later
+		// GetJob report it too.
+		claimed.Reclaimed = reclaimed
+		out = append(out, claimed)
 	}
 	return out, nil
 }

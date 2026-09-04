@@ -69,38 +69,48 @@ func (s *PostgresStore) Enqueue(ctx context.Context, j *Job) error {
 // from a process that died mid-delivery comes back at all: without it those
 // rows are invisible to every later claim and the user behind them silently
 // stops syncing.
+// The candidate rows come back through a FROM subquery rather than a
+// "WHERE id IN (...)" so the statement can return each row's pre-claim
+// state alongside the updated row. RETURNING on its own reports the new
+// values, and 'in_flight' after the update tells you nothing; 'in_flight'
+// before it is the whole signal, because it means this row matched the
+// expired-lease clause and was already delivered once. See Job.Reclaimed.
+// Postgres 18 could say RETURNING old.state instead; the supported floor
+// here is older than that.
 const claimSQL = `
-UPDATE authsome_retention_outbox
+UPDATE authsome_retention_outbox AS o
    SET state = 'in_flight', in_flight_until = $1
- WHERE id IN (
-       SELECT id FROM authsome_retention_outbox
+  FROM (
+       SELECT id, state AS prev_state FROM authsome_retention_outbox
         WHERE (state = 'pending'   AND next_attempt_at <= $2)
            OR (state = 'in_flight' AND in_flight_until < $2)
         ORDER BY next_attempt_at ASC, created_at ASC
         LIMIT $3
         FOR UPDATE SKIP LOCKED
-       )
-RETURNING id, app_id, env_id, user_id, provider, kind, payload,
-          idempotency_key, state, attempts, next_attempt_at,
-          in_flight_until, last_error, created_at`
+       ) AS c
+ WHERE o.id = c.id
+RETURNING o.id, o.app_id, o.env_id, o.user_id, o.provider, o.kind, o.payload,
+          o.idempotency_key, o.state, o.attempts, o.next_attempt_at,
+          o.in_flight_until, o.last_error, o.created_at, c.prev_state`
 
 // claimSQLNoLimit is the same statement with the LIMIT clause dropped. limit
 // <= 0 means "no limit" per the Store contract, and a literal "LIMIT $3" with
 // a zero or negative bind would claim nothing instead, so the clause is
 // omitted entirely rather than bound to a sentinel value.
 const claimSQLNoLimit = `
-UPDATE authsome_retention_outbox
+UPDATE authsome_retention_outbox AS o
    SET state = 'in_flight', in_flight_until = $1
- WHERE id IN (
-       SELECT id FROM authsome_retention_outbox
+  FROM (
+       SELECT id, state AS prev_state FROM authsome_retention_outbox
         WHERE (state = 'pending'   AND next_attempt_at <= $2)
            OR (state = 'in_flight' AND in_flight_until < $2)
         ORDER BY next_attempt_at ASC, created_at ASC
         FOR UPDATE SKIP LOCKED
-       )
-RETURNING id, app_id, env_id, user_id, provider, kind, payload,
-          idempotency_key, state, attempts, next_attempt_at,
-          in_flight_until, last_error, created_at`
+       ) AS c
+ WHERE o.id = c.id
+RETURNING o.id, o.app_id, o.env_id, o.user_id, o.provider, o.kind, o.payload,
+          o.idempotency_key, o.state, o.attempts, o.next_attempt_at,
+          o.in_flight_until, o.last_error, o.created_at, c.prev_state`
 
 // ClaimDue atomically moves up to limit due jobs to in_flight in one
 // statement and returns them. See claimSQL for why the statement is shaped
@@ -123,9 +133,10 @@ func (s *PostgresStore) ClaimDue(ctx context.Context, limit int, lease time.Dura
 	var out []*Job
 	for rows.Next() {
 		m := new(jobModel)
+		var prevState string
 		if serr := rows.Scan(&m.ID, &m.AppID, &m.EnvID, &m.UserID, &m.Provider, &m.Kind,
 			&m.Payload, &m.IdempotencyKey, &m.State, &m.Attempts, &m.NextAttemptAt,
-			&m.InFlightUntil, &m.LastError, &m.CreatedAt); serr != nil {
+			&m.InFlightUntil, &m.LastError, &m.CreatedAt, &prevState); serr != nil {
 			return nil, serr
 		}
 		j, jerr := toJob(m)
@@ -141,6 +152,10 @@ func (s *PostgresStore) ClaimDue(ctx context.Context, limit int, lease time.Dura
 				log.String("error", jerr.Error()))
 			continue
 		}
+		// prev_state is the row's state before this statement flipped it.
+		// in_flight there means the claim matched the expired-lease clause,
+		// so this job was already delivered once. See Job.Reclaimed.
+		j.Reclaimed = prevState == StateInFlight
 		out = append(out, j)
 	}
 	if rerr := rows.Err(); rerr != nil {

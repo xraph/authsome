@@ -248,9 +248,15 @@ func (s *MongoStore) ClaimDue(ctx context.Context, limit int, lease time.Duratio
 	now time.Time) ([]*Job, error) {
 	until := now.Add(lease)
 	update := bson.M{"$set": bson.M{"state": StateInFlight, "in_flight_until": until}}
+	// Before, not After. The updated document says in_flight whichever
+	// clause matched, so it cannot tell a fresh pending claim from a
+	// reclaimed expired lease; the pre-update document can. The two fields
+	// the update changes are then written back onto the mapped job below,
+	// which is exactly what SqliteStore.ClaimDue does with its own
+	// pre-update rows. See Job.Reclaimed.
 	opts := options.FindOneAndUpdate().
 		SetSort(bson.D{{Key: "next_attempt_at", Value: 1}, {Key: "created_at", Value: 1}}).
-		SetReturnDocument(options.After)
+		SetReturnDocument(options.Before)
 
 	coll := s.mdb.Collection(colOutbox)
 	var out []*Job
@@ -278,6 +284,9 @@ func (s *MongoStore) ClaimDue(ctx context.Context, limit int, lease time.Duratio
 				log.String("error", jerr.Error()))
 			continue
 		}
+		j.Reclaimed = d.State == StateInFlight
+		j.State = StateInFlight
+		j.InFlightUntil = until
 		out = append(out, j)
 	}
 	return out, nil

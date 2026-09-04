@@ -147,6 +147,11 @@ func (s *SqliteStore) ClaimDue(ctx context.Context, limit int, lease time.Durati
 				log.String("error", err.Error()))
 			continue
 		}
+		// m holds the row as it was before the update above, so its state is
+		// the pre-claim one. in_flight there means this row matched the
+		// expired-lease clause and somebody already had it out once. See
+		// Job.Reclaimed.
+		j.Reclaimed = m.State == StateInFlight
 		j.State = StateInFlight
 		j.InFlightUntil = until
 		out = append(out, j)

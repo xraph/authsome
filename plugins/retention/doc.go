@@ -24,6 +24,14 @@
 // section of docs/superpowers/specs/2026-09-03-crm-retention-delivery-design.md
 // for the reasoning.
 //
+// Delivery is at-least-once. A repeated contact upsert is harmless because
+// the contact ref turns it into an update; a repeated activity is not, so
+// the job's idempotency key travels with the activity as its ExternalID and
+// a provider that can key on it advertises CapActivityDedupe. HubSpot does,
+// by searching for the id before it creates a second note. The generic
+// provider sends the field and makes no promise, and the worker says so on
+// every redelivery rather than leaving a duplicate nobody hears about.
+//
 // Consent is optional. When the consent plugin is also registered and
 // retention.require_consent is turned on, delivery is gated on an active
 // grant for retention.consent_purpose; a user with no grant is never sent.
