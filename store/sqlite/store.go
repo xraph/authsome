@@ -131,10 +131,14 @@ func (s *Store) GetPlatformApp(ctx context.Context) (*app.App, error) {
 }
 
 func (s *Store) UpdateApp(ctx context.Context, a *app.App) error {
+	now := time.Now()
 	m := fromApp(a)
-	m.UpdatedAt = time.Now()
-	_, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx)
-	return sqliteError(err)
+	m.UpdatedAt = now
+	if _, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx); err != nil {
+		return sqliteError(err)
+	}
+	a.UpdatedAt = now
+	return nil
 }
 
 // DeleteApp removes the app and every child record scoped to it. The sqlite
@@ -390,10 +394,14 @@ func (s *Store) GetSessionByRefreshToken(ctx context.Context, refreshToken strin
 }
 
 func (s *Store) UpdateSession(ctx context.Context, sess *session.Session) error {
+	now := time.Now()
 	m := fromSession(sess)
-	m.UpdatedAt = time.Now()
-	_, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx)
-	return sqliteError(err)
+	m.UpdatedAt = now
+	if _, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx); err != nil {
+		return sqliteError(err)
+	}
+	sess.UpdatedAt = now
+	return nil
 }
 
 func (s *Store) RotateSession(ctx context.Context, sess *session.Session, expectedToken string) (bool, error) {
@@ -612,10 +620,14 @@ func (s *Store) GetOrganizationBySlug(ctx context.Context, appID id.AppID, slug 
 }
 
 func (s *Store) UpdateOrganization(ctx context.Context, o *organization.Organization) error {
+	now := time.Now()
 	m := fromOrganization(o)
-	m.UpdatedAt = time.Now()
-	_, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx)
-	return sqliteError(err)
+	m.UpdatedAt = now
+	if _, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx); err != nil {
+		return sqliteError(err)
+	}
+	o.UpdatedAt = now
+	return nil
 }
 
 func (s *Store) DeleteOrganization(ctx context.Context, orgID id.OrgID) error {
@@ -692,10 +704,14 @@ func (s *Store) GetMemberByUserAndOrg(ctx context.Context, userID id.UserID, org
 }
 
 func (s *Store) UpdateMember(ctx context.Context, mem *organization.Member) error {
+	now := time.Now()
 	m := fromMember(mem)
-	m.UpdatedAt = time.Now()
-	_, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx)
-	return sqliteError(err)
+	m.UpdatedAt = now
+	if _, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx); err != nil {
+		return sqliteError(err)
+	}
+	mem.UpdatedAt = now
+	return nil
 }
 
 func (s *Store) DeleteMember(ctx context.Context, memberID id.MemberID) error {
@@ -802,10 +818,14 @@ func (s *Store) GetTeam(ctx context.Context, teamID id.TeamID) (*organization.Te
 }
 
 func (s *Store) UpdateTeam(ctx context.Context, t *organization.Team) error {
+	now := time.Now()
 	m := fromTeam(t)
-	m.UpdatedAt = time.Now()
-	_, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx)
-	return sqliteError(err)
+	m.UpdatedAt = now
+	if _, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx); err != nil {
+		return sqliteError(err)
+	}
+	t.UpdatedAt = now
+	return nil
 }
 
 func (s *Store) DeleteTeam(ctx context.Context, teamID id.TeamID) error {
@@ -865,10 +885,14 @@ func (s *Store) GetDeviceByFingerprint(ctx context.Context, userID id.UserID, fi
 }
 
 func (s *Store) UpdateDevice(ctx context.Context, d *device.Device) error {
+	now := time.Now()
 	m := fromDevice(d)
-	m.UpdatedAt = time.Now()
-	_, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx)
-	return sqliteError(err)
+	m.UpdatedAt = now
+	if _, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx); err != nil {
+		return sqliteError(err)
+	}
+	d.UpdatedAt = now
+	return nil
 }
 
 func (s *Store) DeleteDevice(ctx context.Context, deviceID id.DeviceID) error {
@@ -937,10 +961,14 @@ func (s *Store) GetWebhook(ctx context.Context, webhookID id.WebhookID) (*webhoo
 }
 
 func (s *Store) UpdateWebhook(ctx context.Context, w *webhook.Webhook) error {
+	now := time.Now()
 	m := fromWebhook(w)
-	m.UpdatedAt = time.Now()
-	_, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx)
-	return sqliteError(err)
+	m.UpdatedAt = now
+	if _, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx); err != nil {
+		return sqliteError(err)
+	}
+	w.UpdatedAt = now
+	return nil
 }
 
 func (s *Store) DeleteWebhook(ctx context.Context, webhookID id.WebhookID) error {
@@ -1070,10 +1098,14 @@ func (s *Store) GetAPIKeyByPublicKey(ctx context.Context, appID id.AppID, public
 }
 
 func (s *Store) UpdateAPIKey(ctx context.Context, k *apikey.APIKey) error {
+	now := time.Now()
 	m := fromAPIKey(k)
-	m.UpdatedAt = time.Now()
-	_, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx)
-	return sqliteError(err)
+	m.UpdatedAt = now
+	if _, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx); err != nil {
+		return sqliteError(err)
+	}
+	k.UpdatedAt = now
+	return nil
 }
 
 func (s *Store) DeleteAPIKey(ctx context.Context, keyID id.APIKeyID) error {
@@ -1166,10 +1198,14 @@ func (s *Store) GetDefaultEnvironment(ctx context.Context, appID id.AppID) (*env
 }
 
 func (s *Store) UpdateEnvironment(ctx context.Context, e *environment.Environment) error {
+	now := time.Now()
 	m := fromEnvironment(e)
-	m.UpdatedAt = time.Now()
-	_, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx)
-	return sqliteError(err)
+	m.UpdatedAt = now
+	if _, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx); err != nil {
+		return sqliteError(err)
+	}
+	e.UpdatedAt = now
+	return nil
 }
 
 func (s *Store) DeleteEnvironment(ctx context.Context, envID id.EnvironmentID) error {
@@ -1244,10 +1280,14 @@ func (s *Store) GetFormConfig(ctx context.Context, appID id.AppID, formType stri
 }
 
 func (s *Store) UpdateFormConfig(ctx context.Context, fc *formconfig.FormConfig) error {
+	now := time.Now()
 	m := fromFormConfig(fc)
-	m.UpdatedAt = time.Now()
-	_, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx)
-	return sqliteError(err)
+	m.UpdatedAt = now
+	if _, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx); err != nil {
+		return sqliteError(err)
+	}
+	fc.UpdatedAt = now
+	return nil
 }
 
 func (s *Store) DeleteFormConfig(ctx context.Context, appID id.AppID, formType string) error {

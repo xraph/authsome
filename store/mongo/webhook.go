@@ -43,8 +43,9 @@ func (s *Store) GetWebhook(ctx context.Context, webhookID id.WebhookID) (*webhoo
 
 // UpdateWebhook modifies an existing webhook.
 func (s *Store) UpdateWebhook(ctx context.Context, w *webhook.Webhook) error {
+	updatedAt := now()
 	m := toWebhookModel(w)
-	m.UpdatedAt = now()
+	m.UpdatedAt = updatedAt
 
 	res, err := s.mdb.NewUpdate(m).
 		Filter(bson.M{"_id": m.ID}).
@@ -57,6 +58,7 @@ func (s *Store) UpdateWebhook(ctx context.Context, w *webhook.Webhook) error {
 		return store.ErrNotFound
 	}
 
+	w.UpdatedAt = updatedAt
 	return nil
 }
 

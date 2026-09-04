@@ -47,8 +47,9 @@ func (s *Store) GetFormConfig(ctx context.Context, appID id.AppID, formType stri
 }
 
 func (s *Store) UpdateFormConfig(ctx context.Context, fc *formconfig.FormConfig) error {
+	updatedAt := now()
 	m := toFormConfigModel(fc)
-	m.UpdatedAt = now()
+	m.UpdatedAt = updatedAt
 
 	res, err := s.mdb.NewUpdate(m).
 		Filter(bson.M{"_id": m.ID}).
@@ -61,6 +62,7 @@ func (s *Store) UpdateFormConfig(ctx context.Context, fc *formconfig.FormConfig)
 		return store.ErrNotFound
 	}
 
+	fc.UpdatedAt = updatedAt
 	return nil
 }
 

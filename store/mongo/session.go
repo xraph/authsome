@@ -80,8 +80,9 @@ func (s *Store) GetSessionByRefreshToken(ctx context.Context, refreshToken strin
 
 // UpdateSession modifies an existing session.
 func (s *Store) UpdateSession(ctx context.Context, sess *session.Session) error {
+	updatedAt := now()
 	m := toSessionModel(sess)
-	m.UpdatedAt = now()
+	m.UpdatedAt = updatedAt
 
 	res, err := s.mdb.NewUpdate(m).
 		Filter(bson.M{"_id": m.ID}).
@@ -94,6 +95,7 @@ func (s *Store) UpdateSession(ctx context.Context, sess *session.Session) error 
 		return store.ErrNotFound
 	}
 
+	sess.UpdatedAt = updatedAt
 	return nil
 }
 

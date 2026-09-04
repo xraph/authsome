@@ -70,8 +70,9 @@ func (s *Store) GetOrganizationBySlug(ctx context.Context, appID id.AppID, slug 
 
 // UpdateOrganization modifies an existing organization.
 func (s *Store) UpdateOrganization(ctx context.Context, o *organization.Organization) error {
+	updatedAt := now()
 	m := toOrganizationModel(o)
-	m.UpdatedAt = now()
+	m.UpdatedAt = updatedAt
 
 	res, err := s.mdb.NewUpdate(m).
 		Filter(bson.M{"_id": m.ID}).
@@ -84,6 +85,7 @@ func (s *Store) UpdateOrganization(ctx context.Context, o *organization.Organiza
 		return store.ErrNotFound
 	}
 
+	o.UpdatedAt = updatedAt
 	return nil
 }
 
@@ -225,8 +227,9 @@ func (s *Store) GetMemberByUserAndOrg(ctx context.Context, userID id.UserID, org
 
 // UpdateMember modifies an existing member.
 func (s *Store) UpdateMember(ctx context.Context, mem *organization.Member) error {
+	updatedAt := now()
 	m := toMemberModel(mem)
-	m.UpdatedAt = now()
+	m.UpdatedAt = updatedAt
 
 	res, err := s.mdb.NewUpdate(m).
 		Filter(bson.M{"_id": m.ID}).
@@ -239,6 +242,7 @@ func (s *Store) UpdateMember(ctx context.Context, mem *organization.Member) erro
 		return store.ErrNotFound
 	}
 
+	mem.UpdatedAt = updatedAt
 	return nil
 }
 
@@ -432,8 +436,9 @@ func (s *Store) GetTeam(ctx context.Context, teamID id.TeamID) (*organization.Te
 
 // UpdateTeam modifies an existing team.
 func (s *Store) UpdateTeam(ctx context.Context, t *organization.Team) error {
+	updatedAt := now()
 	m := toTeamModel(t)
-	m.UpdatedAt = now()
+	m.UpdatedAt = updatedAt
 
 	res, err := s.mdb.NewUpdate(m).
 		Filter(bson.M{"_id": m.ID}).
@@ -446,6 +451,7 @@ func (s *Store) UpdateTeam(ctx context.Context, t *organization.Team) error {
 		return store.ErrNotFound
 	}
 
+	t.UpdatedAt = updatedAt
 	return nil
 }
 

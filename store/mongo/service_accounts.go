@@ -101,8 +101,9 @@ func (s *Store) ListServiceAccounts(ctx context.Context, q *serviceaccount.Query
 
 // UpdateServiceAccount modifies an existing service account.
 func (s *Store) UpdateServiceAccount(ctx context.Context, svc *serviceaccount.ServiceAccount) error {
+	updatedAt := now()
 	m := toServiceAccountModel(svc)
-	m.UpdatedAt = now()
+	m.UpdatedAt = updatedAt
 
 	res, err := s.mdb.NewUpdate(m).
 		Filter(bson.M{"_id": m.ID}).
@@ -115,6 +116,7 @@ func (s *Store) UpdateServiceAccount(ctx context.Context, svc *serviceaccount.Se
 		return store.ErrNotFound
 	}
 
+	svc.UpdatedAt = updatedAt
 	return nil
 }
 
