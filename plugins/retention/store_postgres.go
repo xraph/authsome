@@ -250,6 +250,31 @@ func (s *PostgresStore) MarkSuppressed(ctx context.Context, jobID id.RetentionJo
 	return nil
 }
 
+// PurgeTerminal deletes terminal rows older than their class cutoff, one
+// statement per class. Same shape as SqliteStore.PurgeTerminal: three cheap
+// statements running hourly, rather than one predicate whose AND/OR
+// precedence a reader has to check before believing that a pending row is
+// out of reach.
+//
+// Deleting the row releases its idempotency key, because the unique index
+// is on the table and not on a side ledger. That is deliberate and it is
+// the property the retention window is chosen to make safe.
+func (s *PostgresStore) PurgeTerminal(ctx context.Context, doneBefore, auditBefore time.Time) (int, error) {
+	total := 0
+	for _, c := range purgeClasses(doneBefore, auditBefore) {
+		res, err := s.pg.NewDelete((*jobModel)(nil)).
+			Where("created_at < ?", c.Before.UTC()).
+			Where("state = ?", c.State).
+			Exec(ctx)
+		if err != nil {
+			return total, sqlErr(err)
+		}
+		n, _ := res.RowsAffected() //nolint:errcheck // driver always supports RowsAffected
+		total += int(n)
+	}
+	return total, nil
+}
+
 // GetJob fetches one job. Returns ErrNotFound when absent.
 func (s *PostgresStore) GetJob(ctx context.Context, jobID id.RetentionJobID) (*Job, error) {
 	m := new(jobModel)

@@ -28,6 +28,14 @@ type workerDeps struct {
 	MaxAttempts int
 	BaseBackoff time.Duration
 
+	// DoneRetention, AuditRetention and PurgeInterval drive the outbox
+	// sweep. See Config in plugin.go for what the numbers mean and why they
+	// are what they are. A negative retention keeps that class forever; a
+	// non-positive PurgeInterval switches the sweep off altogether.
+	DoneRetention  time.Duration
+	AuditRetention time.Duration
+	PurgeInterval  time.Duration
+
 	// LoadContact reloads the user at delivery time. The worker does not trust
 	// the enqueued payload: anything evaluated on the near side of a queue is
 	// a snapshot of a fact that may have moved, and the email address is as
@@ -87,6 +95,12 @@ type worker struct {
 	cancel context.CancelFunc
 	done   chan struct{}
 	once   sync.Once
+
+	// lastPurge gates the outbox sweep down to PurgeInterval while it rides
+	// the delivery ticker. Touched only from the run goroutine (and from
+	// tests, which drive maybePurge directly and never start the loop), so
+	// it needs no lock.
+	lastPurge time.Time
 }
 
 func newWorker(deps workerDeps) *worker {
@@ -105,10 +119,24 @@ func newWorker(deps workerDeps) *worker {
 	if deps.Lease <= 0 {
 		deps.Lease = 2 * time.Minute
 	}
+	if deps.DoneRetention == 0 {
+		deps.DoneRetention = 30 * 24 * time.Hour
+	}
+	if deps.AuditRetention == 0 {
+		deps.AuditRetention = 180 * 24 * time.Hour
+	}
+	if deps.PurgeInterval == 0 {
+		deps.PurgeInterval = time.Hour
+	}
 	if deps.Logger == nil {
 		deps.Logger = log.NewNoopLogger()
 	}
-	return &worker{deps: deps, done: make(chan struct{})}
+	// lastPurge starts at now, not at the zero time, so the first sweep
+	// happens one PurgeInterval into the process rather than on the first
+	// tick. A fleet that restarts often would otherwise run a full-table
+	// sweep on every rollout, which is the one moment you least want the
+	// database doing extra work.
+	return &worker{deps: deps, done: make(chan struct{}), lastPurge: time.Now()}
 }
 
 // start begins the loop on its own ticker.
@@ -152,9 +180,11 @@ func (w *worker) stop() {
 	})
 }
 
-// runOnce claims one batch and delivers it.
+// runOnce claims one batch and delivers it, sweeping expired terminal rows
+// first on the ticks where that is due.
 func (w *worker) runOnce(ctx context.Context) {
 	now := time.Now()
+	w.maybePurge(ctx, now)
 	jobs, err := w.deps.Store.ClaimDue(ctx, w.deps.BatchSize, w.deps.Lease, now)
 	if err != nil {
 		w.deps.Logger.Warn("retention: claim failed", log.String("error", err.Error()))
@@ -162,6 +192,53 @@ func (w *worker) runOnce(ctx context.Context) {
 	}
 	for _, j := range jobs {
 		w.deliver(ctx, j)
+	}
+}
+
+// maybePurge sweeps expired terminal rows, at most once per PurgeInterval.
+//
+// It rides the delivery ticker rather than taking a goroutine of its own.
+// A second goroutine would need its own lifecycle, its own stop, and its
+// own answer for what happens when it overlaps a delivery round; sharing
+// this one costs a comparison per tick and inherits all of that for free.
+// The gate is what keeps a sweep off the other 119 ticks in the hour.
+//
+// A sweep that finds a very large backlog holds this goroutine for its
+// duration and delays that round's deliveries. That is accepted rather than
+// batched: after the first sweep the working set is one interval's worth of
+// terminal rows, and the queue it delays is already asynchronous by design.
+//
+// Errors are logged, never escalated. Failing to prune is a disk problem
+// somebody can look at tomorrow; refusing to deliver because pruning failed
+// would turn it into a sync outage today.
+func (w *worker) maybePurge(ctx context.Context, now time.Time) {
+	if w.deps.PurgeInterval <= 0 || now.Sub(w.lastPurge) < w.deps.PurgeInterval {
+		return
+	}
+	w.lastPurge = now
+
+	// A zero cutoff reaches nothing, which is how a negative retention
+	// setting means "keep this class forever". See purgeClasses.
+	var doneBefore, auditBefore time.Time
+	if w.deps.DoneRetention > 0 {
+		doneBefore = now.Add(-w.deps.DoneRetention)
+	}
+	if w.deps.AuditRetention > 0 {
+		auditBefore = now.Add(-w.deps.AuditRetention)
+	}
+	if doneBefore.IsZero() && auditBefore.IsZero() {
+		return
+	}
+
+	removed, err := w.deps.Store.PurgeTerminal(ctx, doneBefore, auditBefore)
+	if err != nil {
+		w.deps.Logger.Warn("retention: outbox purge failed",
+			log.String("error", err.Error()))
+		return
+	}
+	if removed > 0 {
+		w.deps.Logger.Info("retention: purged expired outbox rows",
+			log.Int("removed", removed))
 	}
 }
 

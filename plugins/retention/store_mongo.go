@@ -373,6 +373,37 @@ func (s *MongoStore) MarkSuppressed(ctx context.Context, jobID id.RetentionJobID
 	return nil
 }
 
+// PurgeTerminal deletes terminal documents older than their class cutoff.
+//
+// A TTL index is the obvious Mongo-native alternative and it was rejected.
+// TTL indexes are single-field, and MongoDB refuses two indexes with the
+// same key specification differing only in options, so `created_at` cannot
+// carry both a 30-day window for done and a 180-day one for the audit
+// states. Partial TTL indexes are documented only for time series
+// collections (MongoDB 7.0, keyed on timeField and filtered on metaField),
+// so there is no supported way to say "terminal states only" on an ordinary
+// collection either, and an unfiltered TTL index on created_at would delete
+// pending work. Beyond that the reaper runs on its own 60-second schedule,
+// only on a primary, and would put the retention window in a migration
+// constant instead of the plugin's config: Mongo would be the one backend
+// whose purge behaviour the conformance suite cannot observe. An explicit
+// DeleteMany keeps all four backends answering to the same contract.
+func (s *MongoStore) PurgeTerminal(ctx context.Context, doneBefore, auditBefore time.Time) (int, error) {
+	coll := s.mdb.Collection(colOutbox)
+	total := 0
+	for _, c := range purgeClasses(doneBefore, auditBefore) {
+		res, err := coll.DeleteMany(ctx, bson.M{
+			"state":      c.State,
+			"created_at": bson.M{"$lt": c.Before},
+		})
+		if err != nil {
+			return total, mongoErr(err)
+		}
+		total += int(res.DeletedCount)
+	}
+	return total, nil
+}
+
 // GetJob fetches one job. Returns ErrNotFound when absent.
 func (s *MongoStore) GetJob(ctx context.Context, jobID id.RetentionJobID) (*Job, error) {
 	d := new(outboxDoc)

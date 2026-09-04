@@ -31,6 +31,28 @@ const (
 	KindActivityLog   = "activity_log"
 )
 
+// purgeClass pairs one terminal state with the cutoff that governs it.
+type purgeClass struct {
+	State  string
+	Before time.Time
+}
+
+// purgeClasses is the single definition of what PurgeTerminal sweeps, so all
+// four backends delete the same states under the same cutoffs and none of
+// them can quietly forget one. Non-terminal states are absent on purpose and
+// must stay absent: see PurgeTerminal on Store.
+//
+// A class whose Before is zero deletes nothing, because no row was created
+// before year one. That is what turns a non-positive retention setting into
+// "keep everything" without any backend special-casing it.
+func purgeClasses(doneBefore, auditBefore time.Time) []purgeClass {
+	return []purgeClass{
+		{State: StateDone, Before: doneBefore},
+		{State: StateDead, Before: auditBefore},
+		{State: StateSuppressed, Before: auditBefore},
+	}
+}
+
 // Job is one unit of pending delivery work.
 type Job struct {
 	ID             id.RetentionJobID `json:"id"`
@@ -107,6 +129,31 @@ type Store interface {
 
 	// MarkSuppressed records that the job was deliberately not delivered.
 	MarkSuppressed(ctx context.Context, jobID id.RetentionJobID, reason string) error
+
+	// PurgeTerminal deletes terminal rows that are older than their cutoff
+	// and returns how many went. `done` rows are compared against
+	// doneBefore; `dead` and `suppressed` against auditBefore, which is the
+	// longer of the two because those two are the audit trail.
+	//
+	// Only terminal rows are eligible. A `pending` or `in_flight` row is
+	// never deleted however old it is: age there means a stuck job, and
+	// deleting it destroys work nobody knows is missing.
+	//
+	// The comparison is on CreatedAt, because there is no completed_at
+	// column and adding one to buy a few hours of precision against a
+	// window measured in months is not worth the migration. A job that
+	// spent its whole retry budget dying therefore ages out about 1.7
+	// hours "early" relative to the moment it actually died.
+	//
+	// A zero cutoff means "delete nothing in that class", which is how a
+	// non-positive retention setting switches the sweep off. Every backend
+	// gets that for free: nothing was created before year one.
+	//
+	// Deleting a `done` row releases its idempotency key. See the
+	// replay-window note in the Data model section of
+	// docs/superpowers/specs/2026-09-03-crm-retention-delivery-design.md
+	// for why that is safe at these distances and not at shorter ones.
+	PurgeTerminal(ctx context.Context, doneBefore, auditBefore time.Time) (int, error)
 
 	// GetJob fetches one job. Returns ErrNotFound when absent.
 	GetJob(ctx context.Context, jobID id.RetentionJobID) (*Job, error)

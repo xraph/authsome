@@ -339,4 +339,132 @@ func runStoreConformance(t *testing.T, newStore storeFactory) {
 		providers := []string{got[0].Provider, got[1].Provider}
 		assert.ElementsMatch(t, []string{"hubspot", "generic"}, providers)
 	})
+
+	// ── PurgeTerminal ──────────────────────────────────────────────
+	//
+	// Nothing pruned the outbox before this, so every login ever served sat
+	// in the table forever. The cases below pin the three properties that
+	// make pruning safe: age decides, state decides harder, and a
+	// non-terminal row is out of reach at any age.
+
+	t.Run("purge removes done rows past the window and keeps the rest", func(t *testing.T) {
+		s := newStore(t)
+		appID, userID := id.NewAppID(), id.NewUserID()
+
+		old := newJob(appID, userID, KindActivityLog, "old-done", base.Add(-60*24*time.Hour))
+		fresh := newJob(appID, userID, KindActivityLog, "fresh-done", base.Add(-24*time.Hour))
+		require.NoError(t, s.Enqueue(ctx, old))
+		require.NoError(t, s.Enqueue(ctx, fresh))
+		require.NoError(t, s.MarkDone(ctx, old.ID, base))
+		require.NoError(t, s.MarkDone(ctx, fresh.ID, base))
+
+		removed, err := s.PurgeTerminal(ctx, base.Add(-30*24*time.Hour), base.Add(-180*24*time.Hour))
+		require.NoError(t, err)
+		assert.Equal(t, 1, removed)
+
+		_, err = s.GetJob(ctx, old.ID)
+		assert.ErrorIs(t, err, ErrNotFound, "a done row past the window must be gone")
+		_, err = s.GetJob(ctx, fresh.ID)
+		assert.NoError(t, err, "a done row inside the window must survive")
+	})
+
+	t.Run("purge never touches a non-terminal row however old", func(t *testing.T) {
+		s := newStore(t)
+		appID, userID := id.NewAppID(), id.NewUserID()
+
+		// Older than any window anyone would configure. A pending row this
+		// old is a stuck job, not litter, and deleting it destroys work
+		// nobody knows is missing.
+		stuck := newJob(appID, userID, KindActivityLog, "stuck", base.Add(-400*24*time.Hour))
+		require.NoError(t, s.Enqueue(ctx, stuck))
+
+		inflight := newJob(appID, userID, KindContactUpsert, "inflight", base.Add(-400*24*time.Hour))
+		require.NoError(t, s.Enqueue(ctx, inflight))
+		claimed, err := s.ClaimDue(ctx, 1, time.Minute, base.Add(-400*24*time.Hour))
+		require.NoError(t, err)
+		require.Len(t, claimed, 1)
+
+		// Cutoffs in the future: everything eligible is eligible.
+		removed, err := s.PurgeTerminal(ctx, base.Add(time.Hour), base.Add(time.Hour))
+		require.NoError(t, err)
+		assert.Equal(t, 0, removed, "pending and in_flight are not terminal at any age")
+
+		_, err = s.GetJob(ctx, stuck.ID)
+		assert.NoError(t, err, "a pending row must survive its own age")
+		_, err = s.GetJob(ctx, inflight.ID)
+		assert.NoError(t, err, "an in_flight row must survive its own age")
+	})
+
+	t.Run("dead and suppressed keep the longer audit window", func(t *testing.T) {
+		s := newStore(t)
+		appID, userID := id.NewAppID(), id.NewUserID()
+
+		dead := newJob(appID, userID, KindActivityLog, "aged-dead", base.Add(-60*24*time.Hour))
+		supp := newJob(appID, userID, KindActivityLog, "aged-supp", base.Add(-60*24*time.Hour))
+		require.NoError(t, s.Enqueue(ctx, dead))
+		require.NoError(t, s.Enqueue(ctx, supp))
+		require.NoError(t, s.MarkDead(ctx, dead.ID, "500"))
+		require.NoError(t, s.MarkSuppressed(ctx, supp.ID, "no consent"))
+
+		// Sixty days old, past the done window and well inside the audit one.
+		removed, err := s.PurgeTerminal(ctx, base.Add(-30*24*time.Hour), base.Add(-180*24*time.Hour))
+		require.NoError(t, err)
+		assert.Equal(t, 0, removed, "the audit trail outlives the done window")
+		_, err = s.GetJob(ctx, dead.ID)
+		assert.NoError(t, err)
+		_, err = s.GetJob(ctx, supp.ID)
+		assert.NoError(t, err)
+
+		// Same rows, once the audit window has passed them too.
+		removed, err = s.PurgeTerminal(ctx, base.Add(-30*24*time.Hour), base.Add(-30*24*time.Hour))
+		require.NoError(t, err)
+		assert.Equal(t, 2, removed)
+		_, err = s.GetJob(ctx, dead.ID)
+		assert.ErrorIs(t, err, ErrNotFound)
+		_, err = s.GetJob(ctx, supp.ID)
+		assert.ErrorIs(t, err, ErrNotFound)
+	})
+
+	t.Run("a zero cutoff purges nothing", func(t *testing.T) {
+		s := newStore(t)
+		appID, userID := id.NewAppID(), id.NewUserID()
+		j := newJob(appID, userID, KindActivityLog, "zero-cutoff", base.Add(-400*24*time.Hour))
+		require.NoError(t, s.Enqueue(ctx, j))
+		require.NoError(t, s.MarkDone(ctx, j.ID, base))
+
+		removed, err := s.PurgeTerminal(ctx, time.Time{}, time.Time{})
+		require.NoError(t, err)
+		assert.Equal(t, 0, removed,
+			"a zero cutoff is how a negative retention setting says keep everything")
+		_, err = s.GetJob(ctx, j.ID)
+		assert.NoError(t, err)
+	})
+
+	t.Run("purging a done row releases its idempotency key", func(t *testing.T) {
+		s := newStore(t)
+		appID, userID := id.NewAppID(), id.NewUserID()
+
+		first := newJob(appID, userID, KindActivityLog, "recycled", base.Add(-60*24*time.Hour))
+		require.NoError(t, s.Enqueue(ctx, first))
+		require.NoError(t, s.MarkDone(ctx, first.ID, base))
+
+		// While the row is there, the key is the replay guard.
+		blocked := newJob(appID, userID, KindActivityLog, "recycled", base)
+		require.NoError(t, s.Enqueue(ctx, blocked))
+		_, err := s.GetJob(ctx, blocked.ID)
+		assert.ErrorIs(t, err, ErrNotFound, "the key still holds while the done row lives")
+
+		removed, err := s.PurgeTerminal(ctx, base.Add(-30*24*time.Hour), base.Add(-180*24*time.Hour))
+		require.NoError(t, err)
+		require.Equal(t, 1, removed)
+
+		// Once it is gone the key is free again. That is the cost of
+		// pruning, stated out loud rather than discovered later: the
+		// retention window IS the replay window.
+		reused := newJob(appID, userID, KindActivityLog, "recycled", base)
+		require.NoError(t, s.Enqueue(ctx, reused))
+		stored, err := s.GetJob(ctx, reused.ID)
+		require.NoError(t, err)
+		assert.Equal(t, StatePending, stored.State)
+	})
 }

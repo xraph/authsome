@@ -139,6 +139,42 @@ func (s *MemoryStore) MarkSuppressed(_ context.Context, jobID id.RetentionJobID,
 	return s.set(jobID, func(j *Job) { j.State = StateSuppressed; j.LastError = reason })
 }
 
+// PurgeTerminal deletes terminal jobs older than their class cutoff. It also
+// drops the row's idempotency key from the key index, which is the whole
+// point: the key is only worth holding for as long as a replay of the hook
+// that produced it is plausible, and the store's memory of it must go with
+// the row rather than outlive it and block a legitimate re-enqueue forever.
+func (s *MemoryStore) PurgeTerminal(_ context.Context, doneBefore, auditBefore time.Time) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cutoff := make(map[string]time.Time, 3)
+	for _, c := range purgeClasses(doneBefore, auditBefore) {
+		cutoff[c.State] = c.Before
+	}
+
+	removed := 0
+	for jobID, j := range s.jobs {
+		before, terminal := cutoff[j.State]
+		if !terminal || !j.CreatedAt.Before(before) {
+			continue
+		}
+		delete(s.jobs, jobID)
+		if j.IdempotencyKey != "" {
+			// Only if it still points at this job: a later row could have
+			// taken the key over after this one was purged in an earlier
+			// sweep. It cannot happen today (the key is unique while the
+			// row lives) but leaving the guard out would make a future
+			// key-reuse bug silently un-dedup the queue.
+			if owner, ok := s.keys[j.IdempotencyKey]; ok && owner == jobID {
+				delete(s.keys, j.IdempotencyKey)
+			}
+		}
+		removed++
+	}
+	return removed, nil
+}
+
 func (s *MemoryStore) GetJob(_ context.Context, jobID id.RetentionJobID) (*Job, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

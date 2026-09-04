@@ -112,6 +112,39 @@ one is how a consent refusal records itself, because "we chose not to send
 this" and "we tried and failed to send this" need to be different rows when
 somebody audits you.
 
+Rows do not live forever. `PurgeTerminal` deletes `done` rows after 30 days
+and `dead` and `suppressed` rows after 180, both configurable, both swept on
+the delivery worker's own ticker once an hour. Non-terminal rows are never
+eligible at any age. A `pending` row older than the window is a stuck job,
+not litter, and deleting it destroys work nobody knows is missing.
+
+Pruning costs you something, and it is worth naming rather than discovering.
+The unique index on `idempotency_key` lives on the table, so deleting a row
+releases its key. **The retention window is therefore also the replay
+window.** Inside it, a hook that fires twice for one event still enqueues
+once. Outside it, that same replay would enqueue again.
+
+Thirty days is chosen against that, not against disk. A duplicate hook
+dispatch arrives within seconds of the original, from the same request or a
+retry of it. The outermost thing that can re-present a job to this table is
+its own retry budget, and twelve attempts against a thirty-minute cap tops
+out around 1.7 hours. Thirty days is four hundred times that. For a replay to
+land outside the window you would need the identical request, carrying the
+identical session id, dispatched a month later, which is not a thing that
+happens to a login. And the sign-up and sign-in keys derive from a session
+id, which is never reissued.
+
+`dead` and `suppressed` get six times longer because they are the audit
+trail rather than the steady state. `suppressed` is the row that proves the
+consent gate refused a send, `dead` is the row that says what an outage cost
+you, and both get read on a review cycle measured in quarters. They are also
+rare, so keeping them half a year costs almost nothing next to the login
+traffic in `done`.
+
+The comparison is on `created_at`, because there is no `completed_at` column
+and adding one to buy a few hours of precision against a window measured in
+months is not worth the migration.
+
 ## The worker
 
 One goroutine, started in `OnInit` and stopped in `OnShutdown`, built the way

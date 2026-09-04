@@ -13,6 +13,17 @@
 // rule generates the whole table, that a failure affecting every job
 // retries and a failure affecting only this job dies now.
 //
+// The outbox is pruned rather than kept forever. The delivery worker sweeps
+// terminal rows on its own ticker once an hour: done rows after 30 days,
+// dead and suppressed rows after 180, all three configurable. Non-terminal
+// rows are never eligible however old they are.
+//
+// Deleting a done row releases its idempotency key, so the retention window
+// is also the window in which a replayed hook is still deduplicated. Thirty
+// days is chosen against that rather than against disk; see the Data model
+// section of docs/superpowers/specs/2026-09-03-crm-retention-delivery-design.md
+// for the reasoning.
+//
 // Consent is optional. When the consent plugin is also registered and
 // retention.require_consent is turned on, delivery is gated on an active
 // grant for retention.consent_purpose; a user with no grant is never sent.

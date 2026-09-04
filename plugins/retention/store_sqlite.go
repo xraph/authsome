@@ -248,6 +248,36 @@ func (s *SqliteStore) MarkSuppressed(ctx context.Context, jobID id.RetentionJobI
 	return nil
 }
 
+// PurgeTerminal deletes terminal rows older than their class cutoff, one
+// statement per class.
+//
+// One statement per class rather than a single OR'd predicate so that the
+// timestamp comparison is always the first bound parameter, which is what
+// internal/sqliteguard checks, and so that no reader has to work out
+// AND/OR precedence to see which rows a sweep can reach. It runs hourly by
+// default; three round trips there cost nothing.
+//
+// Deleting the row releases its idempotency key, because the unique index
+// is on the table and not on a side ledger. That is deliberate and it is
+// the property the retention window is chosen to make safe.
+func (s *SqliteStore) PurgeTerminal(ctx context.Context, doneBefore, auditBefore time.Time) (int, error) {
+	total := 0
+	for _, c := range purgeClasses(doneBefore, auditBefore) {
+		res, err := s.sdb.NewDelete((*jobModel)(nil)).
+			// .UTC(): created_at is TEXT in SQLite, so this is a string
+			// sort. See ClaimDue for what a local-offset bind does to it.
+			Where("created_at < ?", c.Before.UTC()).
+			Where("state = ?", c.State).
+			Exec(ctx)
+		if err != nil {
+			return total, sqlErr(err)
+		}
+		n, _ := res.RowsAffected() //nolint:errcheck // driver always supports RowsAffected
+		total += int(n)
+	}
+	return total, nil
+}
+
 // GetJob fetches one job. Returns ErrNotFound when absent.
 func (s *SqliteStore) GetJob(ctx context.Context, jobID id.RetentionJobID) (*Job, error) {
 	m := new(jobModel)

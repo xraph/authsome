@@ -97,6 +97,33 @@ type Config struct {
 	BaseBackoff  time.Duration    `json:"base_backoff"`  // default 5s
 	BatchSize    int              `json:"batch_size"`    // default 50
 	MaxAttempts  int              `json:"max_attempts"`  // default 12
+
+	// DoneRetention is how long a delivered row stays in the outbox.
+	// Default 30 days. Set it to a negative duration to keep them forever.
+	//
+	// Deleting a done row releases its idempotency key, so this is also the
+	// window in which a replayed hook is still deduplicated. Thirty days is
+	// chosen against that, not against disk: a duplicate hook dispatch
+	// happens within seconds of the original, and the outermost thing that
+	// can re-present a job is its own retry budget, which tops out at
+	// roughly 1.7 hours. See the Data model section of the spec.
+	DoneRetention time.Duration `json:"done_retention"`
+
+	// AuditRetention is how long a dead or suppressed row stays. Default
+	// 180 days, six times DoneRetention, because these two are the audit
+	// trail rather than the steady state. `suppressed` is the record that
+	// the consent gate refused a send and `dead` is the record of what an
+	// outage cost you; both are read after the fact, on a review or audit
+	// cycle measured in quarters. They are also rare, so keeping them far
+	// longer costs almost nothing. Negative keeps them forever.
+	AuditRetention time.Duration `json:"audit_retention"`
+
+	// PurgeInterval is how often the delivery worker sweeps expired rows.
+	// Default 1 hour, which is 120 delivery ticks: the sweep shares the
+	// worker's ticker rather than running a goroutine of its own, and it
+	// must not run anywhere near delivery frequency. Non-positive disables
+	// the sweep entirely.
+	PurgeInterval time.Duration `json:"purge_interval"`
 }
 
 // defaults fills the zero values, matching the Config.defaults() convention in
@@ -116,6 +143,21 @@ func (c *Config) defaults() {
 	}
 	if c.MaxAttempts <= 0 {
 		c.MaxAttempts = 12
+	}
+	// The three retention fields test == 0 rather than <= 0, unlike every
+	// field above them. They need three states, not two: unset takes the
+	// default, positive takes the operator's value, and negative means
+	// "never purge". Folding negative back onto the default would leave an
+	// operator who wants to keep everything with no way to say so, and the
+	// only alternative spelling is a separate boolean nobody would find.
+	if c.DoneRetention == 0 {
+		c.DoneRetention = 30 * 24 * time.Hour
+	}
+	if c.AuditRetention == 0 {
+		c.AuditRetention = 180 * 24 * time.Hour
+	}
+	if c.PurgeInterval == 0 {
+		c.PurgeInterval = time.Hour
 	}
 }
 
@@ -284,6 +326,11 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		BatchSize:   p.config.BatchSize,
 		MaxAttempts: p.config.MaxAttempts,
 		BaseBackoff: p.config.BaseBackoff,
+
+		DoneRetention:  p.config.DoneRetention,
+		AuditRetention: p.config.AuditRetention,
+		PurgeInterval:  p.config.PurgeInterval,
+
 		LoadContact: p.loadContact,
 		Enabled:     p.deliveryEnabled,
 		AllowSend:   p.allowSend,
