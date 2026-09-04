@@ -29,6 +29,7 @@ import (
 	orgplugin "github.com/xraph/authsome/plugins/organization"
 	"github.com/xraph/authsome/plugins/password"
 	"github.com/xraph/authsome/plugins/phone"
+	"github.com/xraph/authsome/plugins/retention"
 	"github.com/xraph/authsome/plugins/scim"
 	"github.com/xraph/authsome/plugins/subscription"
 	authclient "github.com/xraph/authsome/sdk/go"
@@ -144,7 +145,7 @@ func NewTestServer(t *testing.T, opts ...ServerOption) *TestServer {
 
 	orgPlugin := orgplugin.New()
 
-	engineOpts := make([]authsome.Option, 0, 13+len(cfg.plugins)) //nolint:mnd // preallocate for base opts + plugins
+	engineOpts := make([]authsome.Option, 0, 14+len(cfg.plugins)) //nolint:mnd // preallocate for base opts + plugins
 	engineOpts = append(engineOpts,
 		authsome.WithStore(store),
 		authsome.WithLogger(logger),
@@ -161,6 +162,7 @@ func NewTestServer(t *testing.T, opts ...ServerOption) *TestServer {
 		authsome.WithPlugin(phone.New()),
 		authsome.WithPlugin(consent.New()),
 		authsome.WithPlugin(oauth2provider.New()),
+		authsome.WithPlugin(retention.New()),
 	)
 
 	for _, p := range cfg.plugins {

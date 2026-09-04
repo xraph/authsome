@@ -82,10 +82,14 @@ func (s *Store) ListServiceAccounts(ctx context.Context, q *serviceaccount.Query
 }
 
 func (s *Store) UpdateServiceAccount(ctx context.Context, svc *serviceaccount.ServiceAccount) error {
+	now := time.Now()
 	m := fromServiceAccount(svc)
-	m.UpdatedAt = time.Now()
-	_, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx)
-	return sqliteError(err)
+	m.UpdatedAt = now
+	if _, err := s.sdb.NewUpdate(m).WherePK().Exec(ctx); err != nil {
+		return sqliteError(err)
+	}
+	svc.UpdatedAt = now
+	return nil
 }
 
 func (s *Store) DeleteServiceAccount(ctx context.Context, svcID id.ServiceAccountID) error {

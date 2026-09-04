@@ -64,8 +64,9 @@ func (s *Store) GetDeviceByFingerprint(ctx context.Context, userID id.UserID, fi
 
 // UpdateDevice modifies an existing device.
 func (s *Store) UpdateDevice(ctx context.Context, d *device.Device) error {
+	updatedAt := now()
 	m := toDeviceModel(d)
-	m.UpdatedAt = now()
+	m.UpdatedAt = updatedAt
 
 	res, err := s.mdb.NewUpdate(m).
 		Filter(bson.M{"_id": m.ID}).
@@ -78,6 +79,7 @@ func (s *Store) UpdateDevice(ctx context.Context, d *device.Device) error {
 		return store.ErrNotFound
 	}
 
+	d.UpdatedAt = updatedAt
 	return nil
 }
 

@@ -19,8 +19,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/device"
 	"github.com/xraph/authsome/environment"
+	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/principal"
@@ -28,6 +31,7 @@ import (
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
+	"github.com/xraph/authsome/webhook"
 )
 
 // Factory creates a fresh, empty, migrated store for a single test.
@@ -56,6 +60,18 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"UserUsernameLookupIsEnvScoped", testUserUsernameLookupIsEnvScoped},
 		{"ListUsersTotalAndFilter", testListUsersTotalAndFilter},
 		{"ListUsersEmailMetacharsAreSafe", testListUsersEmailMetacharsAreSafe},
+		{"UpdateUserWritesBackTimestamp", testUpdateUserWritesBackTimestamp},
+		{"UpdateAppWritesBackTimestamp", testUpdateAppWritesBackTimestamp},
+		{"UpdateSessionWritesBackTimestamp", testUpdateSessionWritesBackTimestamp},
+		{"UpdateOrganizationWritesBackTimestamp", testUpdateOrganizationWritesBackTimestamp},
+		{"UpdateMemberWritesBackTimestamp", testUpdateMemberWritesBackTimestamp},
+		{"UpdateTeamWritesBackTimestamp", testUpdateTeamWritesBackTimestamp},
+		{"UpdateDeviceWritesBackTimestamp", testUpdateDeviceWritesBackTimestamp},
+		{"UpdateWebhookWritesBackTimestamp", testUpdateWebhookWritesBackTimestamp},
+		{"UpdateAPIKeyWritesBackTimestamp", testUpdateAPIKeyWritesBackTimestamp},
+		{"UpdateEnvironmentWritesBackTimestamp", testUpdateEnvironmentWritesBackTimestamp},
+		{"UpdateFormConfigWritesBackTimestamp", testUpdateFormConfigWritesBackTimestamp},
+		{"UpdateServiceAccountWritesBackTimestamp", testUpdateServiceAccountWritesBackTimestamp},
 		{"SessionCRUD", testSessionCRUD},
 		{"SessionLookupByTokenIsScoped", testSessionLookupByTokenIsScoped},
 		{"SessionRolesRoundTrip", testSessionRolesRoundTrip},
@@ -488,6 +504,37 @@ func testListUsersEmailMetacharsAreSafe(t *testing.T, s store.Store) {
 	res, err := s.ListUsers(ctx, &user.Query{AppID: tn.AppID, Email: "(a+)+$.*%_", Limit: 50})
 	require.NoError(t, err, "metacharacter search must not error")
 	assert.Empty(t, res.Users, "a literal search for a nonexistent value must match nothing")
+}
+
+// testUpdateUserWritesBackTimestamp is the regression test for the
+// UpdateUser copy-vs-write-back bug: every backend's UpdateUser copied the
+// domain struct into a storage model, stamped the new UpdatedAt on that
+// copy, and persisted only the copy — leaving the caller's own *user.User
+// holding whatever UpdatedAt it walked in with. Two rapid updates to the
+// same user then look identical to any caller keying an idempotency check
+// off UpdatedAt (the retention plugin's outbox does exactly that), so the
+// second one is silently treated as a duplicate. UpdateUser must write the
+// new timestamp back onto u before returning, and what lands in the row must
+// agree with what was written back.
+func testUpdateUserWritesBackTimestamp(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "writeback@test.com")
+	before := u.UpdatedAt
+
+	// A short sleep so the new timestamp is observably later even on a
+	// backend or clock whose resolution is coarse.
+	time.Sleep(2 * time.Millisecond)
+
+	u.FirstName = "Ada"
+	require.NoError(t, s.UpdateUser(ctx, u))
+	assert.True(t, u.UpdatedAt.After(before),
+		"UpdateUser must write the new UpdatedAt back onto the caller's struct")
+
+	got, err := s.GetUser(ctx, u.ID)
+	require.NoError(t, err)
+	assert.WithinDuration(t, u.UpdatedAt, got.UpdatedAt, time.Second,
+		"the timestamp written back onto the caller must match what was persisted")
 }
 
 // ──────────────────────────────────────────────────
@@ -1576,4 +1623,236 @@ func testExpiredEmailVerificationIsNotActive(t *testing.T, s store.Store) {
 	got, err = s.GetActiveEmailVerification(ctx, u.ID)
 	require.NoError(t, err, "a verification with an hour left must be found")
 	assert.Equal(t, live.ID, got.ID, "the active lookup returned the wrong verification")
+}
+
+// ──────────────────────────────────────────────────
+// Update write-back regression tests
+//
+// testUpdateUserWritesBackTimestamp (above) pinned the fix for UpdateUser's
+// copy-vs-write-back bug. The same defect shape — Update* copies the
+// caller's domain struct into a storage model, stamps the fresh UpdatedAt on
+// that copy, and persists only the copy — recurred across the other Update*
+// methods that take a pointer to a mutable domain struct. Each case below
+// pins the fix for one of them: after a successful update, the caller's own
+// struct must carry the new UpdatedAt, and it must agree with what a
+// subsequent read returns.
+// ──────────────────────────────────────────────────
+
+func testUpdateAppWritesBackTimestamp(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	appID := id.NewAppID()
+	sfx := suffix(appID.String())
+	a := &app.App{ID: appID, Name: "Acme", Slug: "acme-" + sfx, PublishableKey: "pk_" + sfx, CreatedAt: now(), UpdatedAt: now()}
+	require.NoError(t, s.CreateApp(ctx, a))
+	before := a.UpdatedAt
+
+	time.Sleep(2 * time.Millisecond)
+	a.Name = "Renamed"
+	require.NoError(t, s.UpdateApp(ctx, a))
+	assert.True(t, a.UpdatedAt.After(before),
+		"UpdateApp must write the new UpdatedAt back onto the caller's struct")
+
+	got, err := s.GetApp(ctx, appID)
+	require.NoError(t, err)
+	assert.WithinDuration(t, a.UpdatedAt, got.UpdatedAt, time.Second,
+		"the timestamp written back onto the caller must match what was persisted")
+}
+
+func testUpdateSessionWritesBackTimestamp(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "sess-writeback@test.com")
+	sess := seedSession(t, s, tn, u.ID, "tok-writeback-"+suffix(tn.AppID.String()), "rtok-writeback-"+suffix(tn.AppID.String()))
+	before := sess.UpdatedAt
+
+	time.Sleep(2 * time.Millisecond)
+	sess.IPAddress = "203.0.113.5"
+	require.NoError(t, s.UpdateSession(ctx, sess))
+	assert.True(t, sess.UpdatedAt.After(before),
+		"UpdateSession must write the new UpdatedAt back onto the caller's struct")
+
+	got, err := s.GetSession(ctx, sess.ID)
+	require.NoError(t, err)
+	assert.WithinDuration(t, sess.UpdatedAt, got.UpdatedAt, time.Second,
+		"the timestamp written back onto the caller must match what was persisted")
+}
+
+func testUpdateOrganizationWritesBackTimestamp(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "org-writeback@test.com")
+	org := &organization.Organization{ID: id.NewOrgID(), AppID: tn.AppID, EnvID: tn.EnvID, Name: "Org", Slug: "org-" + suffix(id.NewOrgID().String()), CreatedBy: u.ID, CreatedAt: now(), UpdatedAt: now()}
+	require.NoError(t, s.CreateOrganization(ctx, org))
+	before := org.UpdatedAt
+
+	time.Sleep(2 * time.Millisecond)
+	org.Name = "Renamed Org"
+	require.NoError(t, s.UpdateOrganization(ctx, org))
+	assert.True(t, org.UpdatedAt.After(before),
+		"UpdateOrganization must write the new UpdatedAt back onto the caller's struct")
+
+	got, err := s.GetOrganization(ctx, org.ID)
+	require.NoError(t, err)
+	assert.WithinDuration(t, org.UpdatedAt, got.UpdatedAt, time.Second,
+		"the timestamp written back onto the caller must match what was persisted")
+}
+
+func testUpdateMemberWritesBackTimestamp(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "member-writeback@test.com")
+	org := &organization.Organization{ID: id.NewOrgID(), AppID: tn.AppID, EnvID: tn.EnvID, Name: "Org", Slug: "org-" + suffix(id.NewOrgID().String()), CreatedBy: u.ID, CreatedAt: now(), UpdatedAt: now()}
+	require.NoError(t, s.CreateOrganization(ctx, org))
+	mem := &organization.Member{ID: id.NewMemberID(), OrgID: org.ID, UserID: u.ID, Role: organization.RoleOwner, CreatedAt: now(), UpdatedAt: now()}
+	require.NoError(t, s.CreateMember(ctx, mem))
+	before := mem.UpdatedAt
+
+	time.Sleep(2 * time.Millisecond)
+	mem.Role = organization.RoleAdmin
+	require.NoError(t, s.UpdateMember(ctx, mem))
+	assert.True(t, mem.UpdatedAt.After(before),
+		"UpdateMember must write the new UpdatedAt back onto the caller's struct")
+
+	got, err := s.GetMember(ctx, mem.ID)
+	require.NoError(t, err)
+	assert.WithinDuration(t, mem.UpdatedAt, got.UpdatedAt, time.Second,
+		"the timestamp written back onto the caller must match what was persisted")
+}
+
+func testUpdateTeamWritesBackTimestamp(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "team-writeback@test.com")
+	org := &organization.Organization{ID: id.NewOrgID(), AppID: tn.AppID, EnvID: tn.EnvID, Name: "Org", Slug: "org-" + suffix(id.NewOrgID().String()), CreatedBy: u.ID, CreatedAt: now(), UpdatedAt: now()}
+	require.NoError(t, s.CreateOrganization(ctx, org))
+	team := &organization.Team{ID: id.NewTeamID(), OrgID: org.ID, Name: "Team", Slug: "team-" + suffix(org.ID.String()), CreatedAt: now(), UpdatedAt: now()}
+	require.NoError(t, s.CreateTeam(ctx, team))
+	before := team.UpdatedAt
+
+	time.Sleep(2 * time.Millisecond)
+	team.Name = "Renamed Team"
+	require.NoError(t, s.UpdateTeam(ctx, team))
+	assert.True(t, team.UpdatedAt.After(before),
+		"UpdateTeam must write the new UpdatedAt back onto the caller's struct")
+
+	got, err := s.GetTeam(ctx, team.ID)
+	require.NoError(t, err)
+	assert.WithinDuration(t, team.UpdatedAt, got.UpdatedAt, time.Second,
+		"the timestamp written back onto the caller must match what was persisted")
+}
+
+func testUpdateDeviceWritesBackTimestamp(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "device-writeback@test.com")
+	dev := &device.Device{ID: id.NewDeviceID(), UserID: u.ID, AppID: tn.AppID, EnvID: tn.EnvID, Fingerprint: "fp-" + suffix(u.ID.String()), CreatedAt: now(), UpdatedAt: now()}
+	require.NoError(t, s.CreateDevice(ctx, dev))
+	before := dev.UpdatedAt
+
+	time.Sleep(2 * time.Millisecond)
+	dev.Trusted = true
+	require.NoError(t, s.UpdateDevice(ctx, dev))
+	assert.True(t, dev.UpdatedAt.After(before),
+		"UpdateDevice must write the new UpdatedAt back onto the caller's struct")
+
+	got, err := s.GetDevice(ctx, dev.ID)
+	require.NoError(t, err)
+	assert.WithinDuration(t, dev.UpdatedAt, got.UpdatedAt, time.Second,
+		"the timestamp written back onto the caller must match what was persisted")
+}
+
+func testUpdateWebhookWritesBackTimestamp(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	wh := &webhook.Webhook{ID: id.NewWebhookID(), AppID: tn.AppID, EnvID: tn.EnvID, URL: "https://example.test/hook", Events: []string{"user.created"}, Active: true, CreatedAt: now(), UpdatedAt: now()}
+	require.NoError(t, s.CreateWebhook(ctx, wh))
+	before := wh.UpdatedAt
+
+	time.Sleep(2 * time.Millisecond)
+	wh.Active = false
+	require.NoError(t, s.UpdateWebhook(ctx, wh))
+	assert.True(t, wh.UpdatedAt.After(before),
+		"UpdateWebhook must write the new UpdatedAt back onto the caller's struct")
+
+	got, err := s.GetWebhook(ctx, wh.ID)
+	require.NoError(t, err)
+	assert.WithinDuration(t, wh.UpdatedAt, got.UpdatedAt, time.Second,
+		"the timestamp written back onto the caller must match what was persisted")
+}
+
+func testUpdateAPIKeyWritesBackTimestamp(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "apikey-writeback@test.com")
+	sfx := suffix(id.NewAPIKeyID().String())
+	k := &apikey.APIKey{ID: id.NewAPIKeyID(), AppID: tn.AppID, EnvID: tn.EnvID, UserID: u.ID, Name: "Key", KeyHash: "hash-" + sfx, KeyPrefix: "pfx_" + sfx, CreatedAt: now(), UpdatedAt: now()}
+	require.NoError(t, s.CreateAPIKey(ctx, k))
+	before := k.UpdatedAt
+
+	time.Sleep(2 * time.Millisecond)
+	k.Revoked = true
+	require.NoError(t, s.UpdateAPIKey(ctx, k))
+	assert.True(t, k.UpdatedAt.After(before),
+		"UpdateAPIKey must write the new UpdatedAt back onto the caller's struct")
+
+	got, err := s.GetAPIKey(ctx, k.ID)
+	require.NoError(t, err)
+	assert.WithinDuration(t, k.UpdatedAt, got.UpdatedAt, time.Second,
+		"the timestamp written back onto the caller must match what was persisted")
+}
+
+func testUpdateEnvironmentWritesBackTimestamp(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	env, err := s.GetEnvironment(ctx, tn.EnvID)
+	require.NoError(t, err)
+	before := env.UpdatedAt
+
+	time.Sleep(2 * time.Millisecond)
+	env.Description = "updated description"
+	require.NoError(t, s.UpdateEnvironment(ctx, env))
+	assert.True(t, env.UpdatedAt.After(before),
+		"UpdateEnvironment must write the new UpdatedAt back onto the caller's struct")
+
+	got, err := s.GetEnvironment(ctx, env.ID)
+	require.NoError(t, err)
+	assert.WithinDuration(t, env.UpdatedAt, got.UpdatedAt, time.Second,
+		"the timestamp written back onto the caller must match what was persisted")
+}
+
+func testUpdateFormConfigWritesBackTimestamp(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	fc := &formconfig.FormConfig{ID: id.NewFormConfigID(), AppID: tn.AppID, FormType: formconfig.FormTypeSignup, Active: true, CreatedAt: now(), UpdatedAt: now()}
+	require.NoError(t, s.CreateFormConfig(ctx, fc))
+	before := fc.UpdatedAt
+
+	time.Sleep(2 * time.Millisecond)
+	fc.Version++
+	require.NoError(t, s.UpdateFormConfig(ctx, fc))
+	assert.True(t, fc.UpdatedAt.After(before),
+		"UpdateFormConfig must write the new UpdatedAt back onto the caller's struct")
+
+	got, err := s.GetFormConfig(ctx, tn.AppID, formconfig.FormTypeSignup)
+	require.NoError(t, err)
+	assert.WithinDuration(t, fc.UpdatedAt, got.UpdatedAt, time.Second,
+		"the timestamp written back onto the caller must match what was persisted")
+}
+
+func testUpdateServiceAccountWritesBackTimestamp(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	svc := seedPrincipal(t, s, tn, principal.KindAgent, "svc-writeback")
+	before := svc.UpdatedAt
+
+	time.Sleep(2 * time.Millisecond)
+	svc.Active = false
+	require.NoError(t, s.UpdateServiceAccount(ctx, svc))
+	assert.True(t, svc.UpdatedAt.After(before),
+		"UpdateServiceAccount must write the new UpdatedAt back onto the caller's struct")
+
+	got, err := s.GetServiceAccount(ctx, svc.ID)
+	require.NoError(t, err)
+	assert.WithinDuration(t, svc.UpdatedAt, got.UpdatedAt, time.Second,
+		"the timestamp written back onto the caller must match what was persisted")
 }

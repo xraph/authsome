@@ -136,8 +136,9 @@ func (s *Store) GetUserByUsername(ctx context.Context, appID id.AppID, envID id.
 
 // UpdateUser modifies an existing user.
 func (s *Store) UpdateUser(ctx context.Context, u *user.User) error {
+	updatedAt := now()
 	m := toUserModel(u)
-	m.UpdatedAt = now()
+	m.UpdatedAt = updatedAt
 
 	res, err := s.mdb.NewUpdate(m).
 		Filter(bson.M{"_id": m.ID}).
@@ -156,6 +157,7 @@ func (s *Store) UpdateUser(ctx context.Context, u *user.User) error {
 		return store.ErrNotFound
 	}
 
+	u.UpdatedAt = updatedAt
 	return nil
 }
 
