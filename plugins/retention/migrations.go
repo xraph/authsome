@@ -115,6 +115,24 @@ DROP TABLE IF EXISTS authsome_retention_outbox;
 DROP TABLE IF EXISTS authsome_retention_contact_ref;
 `
 
+// purgeIndexSchema backs PurgeTerminal's `WHERE state = ? AND created_at <
+// ?` predicate. ix_retention_outbox_due (state, next_attempt_at) does not
+// serve that query: created_at is not a prefix or a covered column, so
+// Postgres and SQLite fall back to scanning every row in the matching
+// state and testing created_at row by row. That scan runs once per
+// terminal class, every PurgeInterval tick, for the life of the table --
+// not once while the backlog is large, because purge deletes what is due
+// and leaves everything not yet due sitting in the same state for the scan
+// to pass over again next hour.
+const purgeIndexSchema = `
+CREATE INDEX IF NOT EXISTS ix_retention_outbox_purge
+    ON authsome_retention_outbox (state, created_at);
+`
+
+const dropPurgeIndexSchema = `
+DROP INDEX IF EXISTS ix_retention_outbox_purge;
+`
+
 func init() {
 	PostgresMigrations.MustRegister(&migrate.Migration{
 		Name:    "create_retention_tables",
@@ -138,6 +156,32 @@ func init() {
 		},
 		Down: func(ctx context.Context, exec migrate.Executor) error {
 			_, err := exec.Exec(ctx, dropSchema)
+			return err
+		},
+	})
+
+	PostgresMigrations.MustRegister(&migrate.Migration{
+		Name:    "add_retention_outbox_purge_index",
+		Version: "20260903000002",
+		Up: func(ctx context.Context, exec migrate.Executor) error {
+			_, err := exec.Exec(ctx, purgeIndexSchema)
+			return err
+		},
+		Down: func(ctx context.Context, exec migrate.Executor) error {
+			_, err := exec.Exec(ctx, dropPurgeIndexSchema)
+			return err
+		},
+	})
+
+	SqliteMigrations.MustRegister(&migrate.Migration{
+		Name:    "add_retention_outbox_purge_index",
+		Version: "20260903000002",
+		Up: func(ctx context.Context, exec migrate.Executor) error {
+			_, err := exec.Exec(ctx, purgeIndexSchema)
+			return err
+		},
+		Down: func(ctx context.Context, exec migrate.Executor) error {
+			_, err := exec.Exec(ctx, dropPurgeIndexSchema)
 			return err
 		},
 	})
@@ -193,6 +237,38 @@ func init() {
 				return err
 			}
 			return dropIndexIfExists(ctx, mexec.DB().Collection(colOutbox), "idempotency_key_1")
+		},
+	})
+
+	// Mongo has no counterpart to ix_retention_outbox_due at all, so
+	// PurgeTerminal's {state, created_at} filter (store_mongo.go) runs as an
+	// unindexed COLLSCAN today: three full collection scans every
+	// PurgeInterval tick, for as long as the collection exists. Named to
+	// match the SQL side's ix_retention_outbox_purge rather than left on
+	// Mongo's default key-spec name, so Down (and a human reading the index
+	// list) does not have to reconstruct it from the key spec.
+	MongoMigrations.MustRegister(&migrate.Migration{
+		Name:    "add_retention_outbox_purge_index",
+		Version: "20260903000002",
+		Up: func(ctx context.Context, exec migrate.Executor) error {
+			mexec, ok := exec.(*mongomigrate.Executor)
+			if !ok {
+				return fmt.Errorf("retention: expected mongomigrate executor, got %T", exec)
+			}
+			return mexec.CreateIndexes(ctx, colOutbox, []mongo.IndexModel{
+				{
+					Keys: bson.D{{Key: "state", Value: 1}, {Key: "created_at", Value: 1}},
+					Options: options.Index().
+						SetName("ix_retention_outbox_purge"),
+				},
+			})
+		},
+		Down: func(ctx context.Context, exec migrate.Executor) error {
+			mexec, ok := exec.(*mongomigrate.Executor)
+			if !ok {
+				return fmt.Errorf("retention: expected mongomigrate executor, got %T", exec)
+			}
+			return dropIndexIfExists(ctx, mexec.DB().Collection(colOutbox), "ix_retention_outbox_purge")
 		},
 	})
 }
