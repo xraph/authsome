@@ -85,8 +85,9 @@ func (s *Store) GetDefaultEnvironment(ctx context.Context, appID id.AppID) (*env
 
 // UpdateEnvironment modifies an existing environment.
 func (s *Store) UpdateEnvironment(ctx context.Context, e *environment.Environment) error {
+	updatedAt := now()
 	m := toEnvironmentModel(e)
-	m.UpdatedAt = now()
+	m.UpdatedAt = updatedAt
 
 	res, err := s.mdb.NewUpdate(m).
 		Filter(bson.M{"_id": m.ID}).
@@ -99,6 +100,7 @@ func (s *Store) UpdateEnvironment(ctx context.Context, e *environment.Environmen
 		return store.ErrNotFound
 	}
 
+	e.UpdatedAt = updatedAt
 	return nil
 }
 

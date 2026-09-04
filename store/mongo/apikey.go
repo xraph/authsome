@@ -104,8 +104,9 @@ func (s *Store) GetAPIKeyByPublicKey(ctx context.Context, appID id.AppID, public
 
 // UpdateAPIKey modifies an existing API key.
 func (s *Store) UpdateAPIKey(ctx context.Context, k *apikey.APIKey) error {
+	updatedAt := now()
 	m := toAPIKeyModel(k)
-	m.UpdatedAt = now()
+	m.UpdatedAt = updatedAt
 
 	res, err := s.mdb.NewUpdate(m).
 		Filter(bson.M{"_id": m.ID}).
@@ -118,6 +119,7 @@ func (s *Store) UpdateAPIKey(ctx context.Context, k *apikey.APIKey) error {
 		return store.ErrNotFound
 	}
 
+	k.UpdatedAt = updatedAt
 	return nil
 }
 

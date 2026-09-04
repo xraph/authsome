@@ -99,8 +99,9 @@ func (s *Store) GetPlatformApp(ctx context.Context) (*app.App, error) {
 
 // UpdateApp modifies an existing app.
 func (s *Store) UpdateApp(ctx context.Context, a *app.App) error {
+	updatedAt := now()
 	m := toAppModel(a)
-	m.UpdatedAt = now()
+	m.UpdatedAt = updatedAt
 
 	res, err := s.mdb.NewUpdate(m).
 		Filter(bson.M{"_id": m.ID}).
@@ -113,6 +114,7 @@ func (s *Store) UpdateApp(ctx context.Context, a *app.App) error {
 		return store.ErrNotFound
 	}
 
+	a.UpdatedAt = updatedAt
 	return nil
 }
 
