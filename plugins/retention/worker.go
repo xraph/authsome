@@ -18,8 +18,13 @@ import (
 // for the three things that would otherwise drag the engine into this file,
 // which also makes all of them trivially fakeable in tests.
 type workerDeps struct {
-	Store     Store
-	Providers map[string]Provider
+	Store Store
+	// Providers is read through Load() on every delivery attempt rather than
+	// copied in once, so a provider RegisterProvider adds after the worker
+	// has started is visible to the very next claim. See providerRegistry in
+	// plugin.go and RegisterProvider's doc comment for why this is not a
+	// plain map.
+	Providers *providerRegistry
 	Logger    log.Logger
 
 	Interval    time.Duration
@@ -283,7 +288,7 @@ func (w *worker) deliverOne(ctx context.Context, j *Job) {
 		return
 	}
 
-	p, ok := w.deps.Providers[j.Provider]
+	p, ok := w.deps.Providers.Load()[j.Provider]
 	if !ok {
 		// Dead-letter rather than retry. A provider that is not configured
 		// will not appear because we waited, and a job that retries forever

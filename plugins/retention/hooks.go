@@ -124,11 +124,12 @@ func (p *Plugin) afterUserUpdateFor(ctx context.Context, appID id.AppID, envID i
 // and enqueue the work twice.
 func (p *Plugin) enqueueFor(ctx context.Context, appID id.AppID, envID id.EnvironmentID,
 	userID id.UserID, kind, activityType, eventID string) {
-	if p.store == nil || len(p.providers) == 0 {
+	providers := p.providers.Load()
+	if p.store == nil || len(providers) == 0 {
 		return
 	}
 	now := time.Now()
-	for name := range p.providers {
+	for name := range providers {
 		j := &Job{
 			ID: id.NewRetentionJobID(), AppID: appID, EnvID: envID, UserID: userID,
 			Provider: name, Kind: kind,

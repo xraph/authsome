@@ -32,7 +32,7 @@ func newHookPlugin(s Store) *Plugin {
 	// enqueueFor logs on a store error, and these tests exercise that path,
 	// so the logger must be set here rather than left to OnInit.
 	p.logger = log.NewNoopLogger()
-	p.providers = map[string]Provider{"fake": &fakeProvider{caps: CapContacts | CapActivities}}
+	p.providers = newProviderRegistry(map[string]Provider{"fake": &fakeProvider{caps: CapContacts | CapActivities}})
 	return p
 }
 
@@ -80,7 +80,7 @@ func TestHookNoOpWithoutProviders(t *testing.T) {
 	s := NewMemoryStore()
 	p := New()
 	p.store = s
-	p.providers = map[string]Provider{}
+	p.providers = newProviderRegistry(nil)
 
 	require.NoError(t, p.afterSignInFor(ctx, id.NewAppID(), id.EnvironmentID{}, id.NewUserID(), "ases_1"))
 	jobs, err := s.ClaimDue(ctx, 10, 0, timeNow())

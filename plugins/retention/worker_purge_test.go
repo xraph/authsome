@@ -59,7 +59,7 @@ func (s *purgeSpyStore) recorded() []purgeCall {
 func newPurgeWorker(s Store, doneRet, auditRet, purgeEvery time.Duration) *worker {
 	return newWorker(workerDeps{
 		Store:          s,
-		Providers:      map[string]Provider{},
+		Providers:      newProviderRegistry(nil),
 		Logger:         log.NewNoopLogger(),
 		Interval:       time.Second,
 		Lease:          time.Minute,
@@ -159,7 +159,7 @@ func TestWorkerSweepFailureDoesNotStopDelivery(t *testing.T) {
 	p := &fakeProvider{caps: CapContacts | CapActivities}
 	w := newWorker(workerDeps{
 		Store:         spy,
-		Providers:     map[string]Provider{"fake": p},
+		Providers:     newProviderRegistry(map[string]Provider{"fake": p}),
 		Logger:        log.NewNoopLogger(),
 		Interval:      time.Second,
 		Lease:         time.Minute,

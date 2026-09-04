@@ -65,7 +65,7 @@ func newTestWorker(t *testing.T, s Store, p Provider) *worker {
 	t.Helper()
 	return newWorker(workerDeps{
 		Store:       s,
-		Providers:   map[string]Provider{"fake": p},
+		Providers:   newProviderRegistry(map[string]Provider{"fake": p}),
 		Logger:      log.NewNoopLogger(),
 		Lease:       time.Minute,
 		BatchSize:   10,

@@ -3,6 +3,8 @@ package retention
 import (
 	"context"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
@@ -161,13 +163,85 @@ func (c *Config) defaults() {
 	}
 }
 
+// providerRegistry holds the configured providers behind an atomic pointer to
+// an immutable map, so a hot-path read never blocks on a write and never
+// blocks another read. enqueueFor (the login/signup path) and the delivery
+// worker both read through Load; there is exactly one map in play at any
+// instant, and both sides see the same one.
+//
+// Writes are rare (RegisterProvider calls, and the one merge OnInit does with
+// providers built from Config), so they pay for correctness with a mutex and
+// a full copy; reads pay nothing. mu serializes writers only -- Load never
+// touches it.
+type providerRegistry struct {
+	mu  sync.Mutex
+	ptr atomic.Pointer[map[string]Provider]
+}
+
+// newProviderRegistry builds a registry seeded with initial, copying it so
+// the caller's map can be mutated afterwards without reaching back into the
+// registry.
+func newProviderRegistry(initial map[string]Provider) *providerRegistry {
+	r := &providerRegistry{}
+	m := make(map[string]Provider, len(initial))
+	for k, v := range initial {
+		m[k] = v
+	}
+	r.ptr.Store(&m)
+	return r
+}
+
+// Load returns the current snapshot. Safe from any goroutine, no lock, no
+// blocking. A nil receiver (a zero-value Plugin that skipped New) reports no
+// providers rather than panicking.
+func (r *providerRegistry) Load() map[string]Provider {
+	if r == nil {
+		return nil
+	}
+	if m := r.ptr.Load(); m != nil {
+		return *m
+	}
+	return nil
+}
+
+// register copy-on-writes pr into the registry under its own name.
+func (r *providerRegistry) register(pr Provider) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	old := r.Load()
+	next := make(map[string]Provider, len(old)+1)
+	for k, v := range old {
+		next[k] = v
+	}
+	next[pr.Name()] = pr
+	r.ptr.Store(&next)
+}
+
+// merge copy-on-writes a batch of providers into the registry without
+// disturbing anything already there. OnInit uses this once, to fold in the
+// providers built from Config alongside whatever RegisterProvider already
+// added.
+func (r *providerRegistry) merge(built map[string]Provider) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	old := r.Load()
+	next := make(map[string]Provider, len(old)+len(built))
+	for k, v := range old {
+		next[k] = v
+	}
+	for k, v := range built {
+		next[k] = v
+	}
+	r.ptr.Store(&next)
+}
+
 // Plugin mirrors signup/login activity into a CRM. See the package doc in
 // provider.go for the outbox/worker shape.
 type Plugin struct {
 	config Config
 
 	store     Store
-	providers map[string]Provider
+	providers *providerRegistry
 
 	engine      plugin.Engine
 	logger      log.Logger
@@ -211,8 +285,9 @@ func New(cfg ...Config) *Plugin {
 	}
 	c.defaults()
 	return &Plugin{
-		config: c,
-		logger: log.NewNoopLogger(),
+		config:    c,
+		logger:    log.NewNoopLogger(),
+		providers: newProviderRegistry(nil),
 	}
 }
 
@@ -226,14 +301,18 @@ func (p *Plugin) SetStore(s Store) { p.store = s }
 // RegisterProvider adds or replaces a CRM provider by name. Tests use it to
 // inject fakes; production wiring builds providers from Config in OnInit.
 //
-// Call it before OnInit. OnInit takes a private snapshot of p.providers for
-// the delivery worker, so a call after OnInit has returned changes p.providers
-// itself but not a worker already running against the earlier snapshot.
+// Safe to call at any time, including after OnInit and including while the
+// delivery worker is running: enqueueFor and the worker both read providers
+// through the same providerRegistry, so a provider registered after OnInit
+// is enqueued for by the next hook and is deliverable by the worker's very
+// next claim, with no restart and no window where it is one but not the
+// other. Earlier this plugin handed the worker a private snapshot map taken
+// at OnInit, so a late RegisterProvider was invisible to it: every job
+// enqueued for that provider dead-lettered on first delivery attempt,
+// permanently, because nothing here re-enqueues a dead row. See
+// TestProviderRegisteredAfterOnInitReachesTheWorker.
 func (p *Plugin) RegisterProvider(pr Provider) {
-	if p.providers == nil {
-		p.providers = make(map[string]Provider)
-	}
-	p.providers[pr.Name()] = pr
+	p.providers.register(pr)
 }
 
 // OnInit captures engine references, picks a store for the driver in use,
@@ -284,11 +363,9 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		return fmt.Errorf("retention: %w", err)
 	}
 	if p.providers == nil {
-		p.providers = make(map[string]Provider, len(built))
+		p.providers = newProviderRegistry(nil)
 	}
-	for name, pr := range built {
-		p.providers[name] = pr
-	}
+	p.providers.merge(built)
 
 	if cp := engine.Plugin("consent"); cp != nil {
 		if checker, ok := cp.(consentChecker); ok {
@@ -304,22 +381,15 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		p.enabledPolicy = newEnabledPolicy(p.settingsMgr, p.logger)
 	}
 
-	// The worker's delivery goroutine reads Providers with no lock of its
-	// own, which is safe only because it never reads a field another
-	// goroutine can still write. p.providers keeps taking writes from
-	// RegisterProvider after OnInit returns (tests use it that way), so the
-	// worker gets its own copy here instead of the live map: a snapshot
-	// value that nothing but this goroutine ever touches again. A provider
-	// registered after this point will not reach an already-running worker;
-	// that is the accepted cost of not putting a mutex on the hot path.
-	providersSnapshot := make(map[string]Provider, len(p.providers))
-	for name, pr := range p.providers {
-		providersSnapshot[name] = pr
-	}
-
+	// The worker reads providers through the same *providerRegistry that
+	// RegisterProvider and enqueueFor use, not a copy: Load() is a single
+	// atomic pointer read with no lock, so handing over the registry itself
+	// costs the hot path nothing over handing over a snapshot map, and it
+	// means a provider registered after this point is visible to the very
+	// next thing either side does with it.
 	p.worker = newWorker(workerDeps{
 		Store:       p.store,
-		Providers:   providersSnapshot,
+		Providers:   p.providers,
 		Logger:      p.logger,
 		Interval:    p.config.TickInterval,
 		Lease:       p.config.Lease,
