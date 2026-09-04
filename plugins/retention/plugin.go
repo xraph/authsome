@@ -183,6 +183,10 @@ func (p *Plugin) SetStore(s Store) { p.store = s }
 
 // RegisterProvider adds or replaces a CRM provider by name. Tests use it to
 // inject fakes; production wiring builds providers from Config in OnInit.
+//
+// Call it before OnInit. OnInit takes a private snapshot of p.providers for
+// the delivery worker, so a call after OnInit has returned changes p.providers
+// itself but not a worker already running against the earlier snapshot.
 func (p *Plugin) RegisterProvider(pr Provider) {
 	if p.providers == nil {
 		p.providers = make(map[string]Provider)
@@ -258,9 +262,22 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		p.enabledPolicy = newEnabledPolicy(p.settingsMgr, p.logger)
 	}
 
+	// The worker's delivery goroutine reads Providers with no lock of its
+	// own, which is safe only because it never reads a field another
+	// goroutine can still write. p.providers keeps taking writes from
+	// RegisterProvider after OnInit returns (tests use it that way), so the
+	// worker gets its own copy here instead of the live map: a snapshot
+	// value that nothing but this goroutine ever touches again. A provider
+	// registered after this point will not reach an already-running worker;
+	// that is the accepted cost of not putting a mutex on the hot path.
+	providersSnapshot := make(map[string]Provider, len(p.providers))
+	for name, pr := range p.providers {
+		providersSnapshot[name] = pr
+	}
+
 	p.worker = newWorker(workerDeps{
 		Store:       p.store,
-		Providers:   p.providers,
+		Providers:   providersSnapshot,
 		Logger:      p.logger,
 		Interval:    p.config.TickInterval,
 		Lease:       p.config.Lease,
