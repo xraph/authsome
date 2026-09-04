@@ -336,15 +336,18 @@ func (p *Plugin) deliveryEnabled(ctx context.Context, j *Job) bool {
 // buildProviders maps each ProviderConfig onto an implementation by Type,
 // returning an error for an unknown type so a typo in config fails at
 // startup rather than dead-lettering every job later.
-//
-// Only "generic" is wired up so far (Task 9). "hubspot" and any other vendor
-// Type still errors until its task lands.
 func buildProviders(cfgs []ProviderConfig) (map[string]Provider, error) {
 	out := make(map[string]Provider, len(cfgs))
 	for _, c := range cfgs {
 		switch c.Type {
 		case "generic":
 			p, err := NewGenericProvider(c)
+			if err != nil {
+				return nil, err
+			}
+			out[c.Name] = p
+		case "hubspot":
+			p, err := NewHubSpotProvider(c)
 			if err != nil {
 				return nil, err
 			}
