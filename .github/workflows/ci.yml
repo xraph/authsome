@@ -123,6 +123,25 @@ jobs:
         run: go test -tags integration -p 1 -run '^TestConformance$|^TestStoreConformance_|^TestMigration_' -count=1 -timeout 15m ./store/... ./plugins/...
 
   # ─── Lint ───────────────────────────────────────────────────────────
+  # ─── Private Paths ──────────────────────────────────────────────────
+  # Fails if a path that must never ship is tracked in git.
+  #
+  # No `needs:` on purpose. This is a two-second check and it should report
+  # before the Go matrix finishes, because the thing it catches is cheap to
+  # fix now and impossible to fix later: Go's module proxy archives the whole
+  # module tree at every tagged version and serves it forever. cloud/ shipped
+  # that way in v0.0.1 through v0.0.16 and cannot be withdrawn.
+  private-paths:
+    name: Private Paths
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check no forbidden path is tracked
+        run: ./scripts/check-private-paths.sh
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
