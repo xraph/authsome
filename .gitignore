@@ -62,3 +62,13 @@ _project_files/
 # Superpowers working documents: design specs and implementation plans.
 # Kept on disk for whoever is mid-task against them, but not committed.
 docs/superpowers/
+
+# The cloud control plane. Private by policy, and this is enforced by
+# scripts/check-private-paths.sh rather than trusted to this file alone.
+#
+# Go's module proxy archives the whole module tree at every tagged version
+# and serves it forever, so anything committed here and tagged is public
+# permanently. cloud/ went out that way in v0.0.1 through v0.0.16 and
+# proxy.golang.org still serves those versions. Deleting a tag does not
+# take it back.
+cloud/
