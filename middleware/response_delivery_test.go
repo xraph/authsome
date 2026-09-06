@@ -38,7 +38,7 @@ import (
 
 // serveOverTheWire runs one authenticated GET against a real server and returns
 // the response as a client saw it.
-func serveOverTheWire(t *testing.T, router forge.Router) *http.Response {
+func serveOverTheWire(t *testing.T, router forge.Router) testResponse {
 	t.Helper()
 
 	srv := httptest.NewServer(router)
@@ -50,8 +50,13 @@ func serveOverTheWire(t *testing.T, router forge.Router) *http.Response {
 
 	resp, err := srv.Client().Do(req)
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = resp.Body.Close() })
-	return resp
+	defer func() { _ = resp.Body.Close() }()
+
+	return testResponse{
+		StatusCode: resp.StatusCode,
+		Header:     resp.Header.Clone(),
+		Cookies:    resp.Cookies(),
+	}
 }
 
 // deliveryCookieSetter is the CookieSetter both middlewares are given, standing
@@ -106,7 +111,7 @@ func TestAutoRefresh_DeliversRotatedCookieAndHeaders(t *testing.T) {
 		"the rotated access token must reach the client")
 	assert.NotEmpty(t, resp.Header.Get("X-Auth-Token-Expires-At"))
 
-	cookies := resp.Cookies()
+	cookies := resp.Cookies
 	require.Len(t, cookies, 1, "the rotated session cookie must reach the browser")
 	assert.Equal(t, "rotated-token", cookies[0].Value)
 }
@@ -143,7 +148,7 @@ func TestSessionActivity_DeliversExtendedCookie(t *testing.T) {
 	resp := serveOverTheWire(t, router)
 
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	cookies := resp.Cookies()
+	cookies := resp.Cookies
 	require.Len(t, cookies, 1, "the extended session cookie must reach the browser")
 	assert.Equal(t, "test-token", cookies[0].Value)
 	assert.Equal(t, int((7 * 24 * time.Hour).Seconds()), cookies[0].MaxAge,
