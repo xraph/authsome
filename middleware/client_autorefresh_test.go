@@ -129,15 +129,24 @@ func refreshRouter(stub *refreshStub, threshold time.Duration) forge.Router {
 	return router
 }
 
-// cookieRequest issues GET /test presenting token in the session cookie, the
-// way a browser does, over a real connection.
+// testResponse is the part of a response these tests assert on. The helpers
+// hand back one of these rather than the *http.Response itself so the body is
+// closed where it is read, instead of leaving every caller holding one open.
+type testResponse struct {
+	StatusCode int
+	Header     http.Header
+	Cookies    []*http.Cookie
+}
+
+// serveRequest issues GET /test against router over a real connection, letting
+// decorate attach whatever credential the caller is exercising.
 //
 // Deliberately not an httptest.ResponseRecorder: a recorder's Header() map goes
 // on accepting writes after WriteHeader has already snapshotted it, so a header
 // this middleware sets too late still reads back fine. Forge streams the
 // response straight to the connection, so only a real server can tell whether a
 // header was actually delivered.
-func cookieRequest(t *testing.T, router forge.Router, token string) *http.Response {
+func serveRequest(t *testing.T, router forge.Router, decorate func(*http.Request)) testResponse {
 	t.Helper()
 
 	srv := httptest.NewServer(router)
@@ -145,42 +154,41 @@ func cookieRequest(t *testing.T, router forge.Router, token string) *http.Respon
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/test", nil)
 	require.NoError(t, err)
-	req.AddCookie(&http.Cookie{Name: refreshCookieName, Value: token})
+	if decorate != nil {
+		decorate(req)
+	}
 
 	resp, err := srv.Client().Do(req)
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = resp.Body.Close() })
-	return resp
+	defer func() { _ = resp.Body.Close() }()
+
+	return testResponse{
+		StatusCode: resp.StatusCode,
+		Header:     resp.Header.Clone(),
+		Cookies:    resp.Cookies(),
+	}
+}
+
+// cookieRequest presents token in the session cookie, the way a browser does.
+func cookieRequest(t *testing.T, router forge.Router, token string) testResponse {
+	t.Helper()
+	return serveRequest(t, router, func(req *http.Request) {
+		req.AddCookie(&http.Cookie{Name: refreshCookieName, Value: token})
+	})
 }
 
 // bearerRequest is cookieRequest's Authorization-header counterpart.
-func bearerRequest(t *testing.T, router forge.Router, token string) *http.Response {
+func bearerRequest(t *testing.T, router forge.Router, token string) testResponse {
 	t.Helper()
-
-	srv := httptest.NewServer(router)
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/test", nil)
-	require.NoError(t, err)
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := srv.Client().Do(req)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = resp.Body.Close() })
-	return resp
+	return serveRequest(t, router, func(req *http.Request) {
+		req.Header.Set("Authorization", "Bearer "+token)
+	})
 }
 
 // anonRequest issues GET /test with no credential at all.
-func anonRequest(t *testing.T, router forge.Router) *http.Response {
+func anonRequest(t *testing.T, router forge.Router) testResponse {
 	t.Helper()
-
-	srv := httptest.NewServer(router)
-	t.Cleanup(srv.Close)
-
-	resp, err := srv.Client().Get(srv.URL + "/test")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = resp.Body.Close() })
-	return resp
+	return serveRequest(t, router, nil)
 }
 
 // TestClientAutoRefresh_RotatesNearExpiry is the fix this middleware exists
@@ -197,7 +205,7 @@ func TestClientAutoRefresh_RotatesNearExpiry(t *testing.T) {
 
 	// The rotated cookie is replayed verbatim, so its attributes are whatever
 	// the identity server chose rather than anything this service guessed.
-	cookies := resp.Cookies()
+	cookies := resp.Cookies
 	require.Len(t, cookies, 1, "rotated cookie must reach the browser")
 	assert.Equal(t, refreshCookieName, cookies[0].Name)
 	assert.Equal(t, "rotated-token", cookies[0].Value)
@@ -222,6 +230,18 @@ func TestClientAutoRefresh_SkipsWhenFarFromExpiry(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Zero(t, stub.refreshCalls.Load(), "no refresh expected far from expiry")
 	assert.Empty(t, resp.Header.Get("X-Auth-Token"))
+}
+
+// The window comes from the configured threshold rather than a constant baked
+// into the middleware: the same 50-minute session left alone above is rotated
+// once the threshold is widened past its expiry.
+func TestClientAutoRefresh_HonoursConfiguredThreshold(t *testing.T) {
+	stub := newRefreshStub(t, "fresh-token", 50*time.Minute)
+	resp := cookieRequest(t, refreshRouter(stub, 60*time.Minute), "fresh-token")
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, int32(1), stub.refreshCalls.Load(), "a wider threshold must bring this session into the window")
+	assert.Equal(t, "rotated-token", resp.Header.Get("X-Auth-Token"))
 }
 
 // An introspection response with no expiry gives no basis to decide, so the
@@ -255,7 +275,7 @@ func TestClientAutoRefresh_RefreshFailureIsNonFatal(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode, "refresh failure must not change the response")
 	assert.Equal(t, int32(1), stub.refreshCalls.Load())
 	assert.Empty(t, resp.Header.Get("X-Auth-Token"))
-	assert.Empty(t, resp.Cookies())
+	assert.Empty(t, resp.Cookies)
 }
 
 // An unauthenticated request has no session to rotate.
