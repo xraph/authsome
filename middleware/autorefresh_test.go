@@ -442,10 +442,19 @@ func TestAutoRefresh_BoundSessionRevalidatesTheSameProof(t *testing.T) {
 		}, nil
 	}
 
+	// Resolve against the token as it was before any rotation. Auto-refresh
+	// updates sess.Token in place once it rotates — mirroring the store, where
+	// the compare-and-swap leaves the old token resolving to nothing — and this
+	// test is about whether a reused proof reads as a replay, not about what
+	// rotation does to the previous token. Comparing to the live sess.Token
+	// would make the control request fail to authenticate at all and never
+	// reach the DPoP check it exists to exercise.
+	originalToken := sess.Token
+
 	router := forge.NewRouter()
 	router.Use(middleware.AuthMiddleware(
 		func(token string) (*session.Session, error) {
-			if token == sess.Token {
+			if token == originalToken {
 				return sess, nil
 			}
 			return nil, errors.New("invalid")

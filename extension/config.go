@@ -71,6 +71,23 @@ type Config struct {
 	// for service-to-service operations (e.g. org creation during bootstrap).
 	ServiceAPIKey string `json:"service_api_key" mapstructure:"service_api_key" yaml:"service_api_key"`
 
+	// ClientAutoRefreshDisabled turns off the client-mode session refresh that
+	// ClientAutoRefreshMiddleware performs. Refresh is ON by default, matching
+	// the session.auto_refresh_enabled default engine mode resolves from
+	// settings — a client-mode service has no settings cascade to read, so the
+	// default lives here instead.
+	//
+	// Turn it off only when something else owns refresh for this service (an
+	// edge proxy rotating the cookie, say). With it off and nothing else doing
+	// the work, cookie sessions expire at the access token's TTL no matter how
+	// active the user is.
+	ClientAutoRefreshDisabled bool `json:"client_auto_refresh_disabled" mapstructure:"client_auto_refresh_disabled" yaml:"client_auto_refresh_disabled"`
+
+	// ClientAutoRefreshThreshold is how long before expiry a client-mode
+	// session is rotated. Zero means five minutes, matching the
+	// session.auto_refresh_threshold_seconds default.
+	ClientAutoRefreshThreshold time.Duration `json:"client_auto_refresh_threshold" mapstructure:"client_auto_refresh_threshold" yaml:"client_auto_refresh_threshold"`
+
 	// ServiceAppID is the App ID the service binds to. Stamped as
 	// X-App-ID on every authclient request. Required by the API key
 	// auth strategy and App-scoped admin endpoints; without it,

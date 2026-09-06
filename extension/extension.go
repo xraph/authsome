@@ -652,23 +652,49 @@ func (e *Extension) Handler() http.Handler {
 // so Forge auto-applies them globally to all routes.
 func (e *Extension) Middlewares() []forge.Middleware {
 	if e.clientMode {
-		// Client mode: use remote token validation via introspect.
-		// No session activity or auto-refresh — those are Portal's responsibility.
+		// Client mode: remote token validation via introspect, then a
+		// cookie-forwarding session refresh.
+		//
+		// There is no sliding-window middleware here and cannot be: extending a
+		// session means writing the session row, and a client-mode service has
+		// no store. Refresh covers the same ground for a browser — rotating
+		// shortly before expiry keeps the cookie alive for as long as the user
+		// keeps using it — without this service ever holding a refresh token.
 		logger := e.Logger()
 		if logger == nil {
 			logger = log.NewNoopLogger()
 		}
-		return []forge.Middleware{
+		mws := []forge.Middleware{
 			middleware.ClientAuthMiddleware(e.client, logger, e.clientDPoPBinding()),
 		}
+		if !e.config.ClientAutoRefreshDisabled {
+			mws = append(mws, middleware.ClientAutoRefreshMiddleware(
+				middleware.NewClientSessionRefresher(e.client),
+				middleware.AutoRefreshConfig{
+					Enabled:   true,
+					Threshold: e.config.ClientAutoRefreshThreshold,
+				},
+				logger,
+			))
+		}
+		return mws
 	}
 	if e.engine == nil {
 		return nil
 	}
+	// Order is load-bearing. Both of the last two now do their work before the
+	// handler (forge streams responses, so a cookie set afterwards never
+	// reaches the browser), which puts them in the same pass rather than in
+	// opposite ones — and the sliding window rewrites sess.ExpiresAt to
+	// now+inactivity_timeout, which is the very field auto-refresh reads to
+	// decide whether the token is near expiry. Extending first would push every
+	// session permanently out of the refresh window and silently retire
+	// rotation. Auto-refresh therefore goes first, seeing the token's real
+	// expiry, and the sliding window extends after it.
 	return []forge.Middleware{
 		e.AuthMiddleware(),
-		e.sessionActivityMiddleware(),
 		e.autoRefreshMiddleware(),
+		e.sessionActivityMiddleware(),
 	}
 }
 

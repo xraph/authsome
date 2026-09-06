@@ -28,6 +28,34 @@ func RawTokenFrom(ctx context.Context) (string, bool) {
 	return token, ok && token != ""
 }
 
+type clientSessionHintKey struct{}
+
+// clientSessionHint is what ClientAutoRefreshMiddleware needs to decide whether
+// to rotate, recorded by ClientAuthMiddleware while it still has the
+// introspection response in hand.
+//
+// Client mode has no session store, so there is no *session.Session on context
+// the way engine mode has one — the token's expiry is only ever known from the
+// introspection response, and only at the moment it is read.
+type clientSessionHint struct {
+	token     string
+	expiresAt time.Time
+	// fromCookie records that the credential arrived in a cookie rather than
+	// an Authorization header. Only a browser needs this service to refresh on
+	// its behalf; an API client holding its own refresh token does not, and
+	// rotating underneath one would invalidate the token it is still using.
+	fromCookie bool
+}
+
+func withClientSessionHint(ctx context.Context, h clientSessionHint) context.Context {
+	return context.WithValue(ctx, clientSessionHintKey{}, h)
+}
+
+func clientSessionHintFrom(ctx context.Context) (clientSessionHint, bool) {
+	h, ok := ctx.Value(clientSessionHintKey{}).(clientSessionHint)
+	return h, ok
+}
+
 // introspectCacheEntry holds a cached introspection result.
 type introspectCacheEntry struct {
 	resp      *authclient.IntrospectResponse
@@ -138,10 +166,29 @@ func ClientAuthMiddleware(client *authclient.Client, logger log.Logger, bind ...
 			// Set context from introspect response
 			goCtx = setContextFromIntrospect(goCtx, resp)
 			goCtx = WithAuthMethod(goCtx, "session")
+			goCtx = withClientSessionHint(goCtx, clientSessionHint{
+				token:      token,
+				expiresAt:  parseIntrospectExpiry(resp.ExpiresAt),
+				fromCookie: scheme == schemeCookie,
+			})
 			ctx.WithContext(goCtx)
 			return next(ctx)
 		}
 	}
+}
+
+// parseIntrospectExpiry reads the expiry an introspection response reports.
+// A missing or unparseable value yields the zero time, which callers read as
+// "expiry unknown" and decline to act on rather than treating as expired.
+func parseIntrospectExpiry(raw string) time.Time {
+	if raw == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 // introspectJKT reads the confirmation thumbprint out of an introspection

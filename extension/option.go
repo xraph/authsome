@@ -1,6 +1,8 @@
 package extension
 
 import (
+	"time"
+
 	log "github.com/xraph/go-utils/log"
 
 	authsome "github.com/xraph/authsome"
@@ -96,6 +98,21 @@ func WithClientMode(portalURL string) ExtOption {
 	return func(e *Extension) {
 		e.config.ClientMode = true
 		e.config.PortalURL = portalURL
+	}
+}
+
+// WithClientAutoRefresh tunes the client-mode session refresh. Refresh is
+// already on by default; pass enabled=false to hand the job to something else,
+// or a non-zero threshold to rotate earlier or later than five minutes before
+// expiry.
+//
+// No effect outside client mode: engine mode resolves the same two knobs from
+// the settings cascade (session.auto_refresh_enabled and
+// session.auto_refresh_threshold_seconds).
+func WithClientAutoRefresh(enabled bool, threshold time.Duration) ExtOption {
+	return func(e *Extension) {
+		e.config.ClientAutoRefreshDisabled = !enabled
+		e.config.ClientAutoRefreshThreshold = threshold
 	}
 }
 

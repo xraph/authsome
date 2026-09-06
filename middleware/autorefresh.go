@@ -84,78 +84,104 @@ func AutoRefreshMiddleware(
 
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
-			// Run the actual handler first.
-			if err := next(ctx); err != nil {
-				return err
-			}
-
-			// Only attempt auto-refresh for authenticated sessions.
-			sess, ok := SessionFrom(ctx.Context())
-			if !ok || sess == nil {
-				return nil
-			}
-
-			// Resolve config (may be per-app).
-			cfg := configResolver(ctx.Context())
-			if !cfg.Enabled {
-				return nil
-			}
-
-			threshold := cfg.Threshold
-			if threshold == 0 {
-				threshold = 5 * time.Minute
-			}
-
-			// Check if the access token is within the refresh threshold.
-			timeUntilExpiry := time.Until(sess.ExpiresAt)
-			if timeUntilExpiry > threshold || timeUntilExpiry <= 0 {
-				return nil // not near expiry or already expired
-			}
-
-			// Perform the refresh.
-			// Auto-refresh rotates the session on an ordinary request, so the
-			// bindings are re-checked against that request rather than against
-			// a call to /v1/refresh that never happened.
-			httpReq := ctx.Request()
-			refreshed, err := refresher(ctx.Context(), RefreshRequest{
-				RefreshToken: sess.RefreshToken,
-				IPAddress:    ClientIP(httpReq),
-				UserAgent:    httpReq.UserAgent(),
-				DPoPProof:    httpReq.Header.Get("DPoP"),
-				Method:       httpReq.Method,
-				RequestURL:   RequestURL(httpReq),
-			})
-			if err != nil {
-				logRefreshFailure(logger, sess, err)
-				return nil // non-fatal: let the original response through
-			}
-
-			// Set new tokens in response headers.
-			ctx.Response().Header().Set("X-Auth-Token", refreshed.Token)
-			ctx.Response().Header().Set("X-Auth-Token-Expires-At", refreshed.ExpiresAt.Format(time.RFC3339))
-
-			// Only expose refresh token in headers when explicitly enabled.
-			if cfg.ExposeRefreshToken {
-				ctx.Response().Header().Set("X-Auth-Refresh-Token", refreshed.RefreshToken)
-			}
-
-			// Re-set the session cookie with the new access token so the
-			// browser cookie stays in sync after auto-refresh.
-			if setter != nil {
-				maxAge := int(time.Until(refreshed.ExpiresAt).Seconds())
-				if maxAge <= 0 {
-					maxAge = 3600
-				}
-				setter(ctx, refreshed.Token, maxAge)
-			}
-
-			logger.Debug("auto-refresh: refreshed near-expiry access token",
-				log.String("session_id", sess.ID.String()),
-			)
-
-			return nil
+			// Before the handler, not after. Forge hands middleware the raw
+			// http.ResponseWriter and streams straight to the connection, so
+			// once a handler has written its status line the headers below have
+			// already missed the wire. This ran after next() until 2026-08-31,
+			// which is why transparent refresh never actually reached a browser:
+			// the rotation happened and the Set-Cookie was dropped.
+			//
+			// An httptest.ResponseRecorder cannot show that — its Header() map
+			// keeps accepting writes after WriteHeader snapshotted it — so
+			// assert delivery against a real httptest.NewServer.
+			autoRefreshSession(ctx, refresher, configResolver, logger, setter)
+			return next(ctx)
 		}
 	}
+}
+
+// autoRefreshSession rotates the request's session when it is inside the
+// refresh threshold, and puts the new tokens on the response. A no-op for
+// unauthenticated requests, and non-fatal on failure: the request proceeds and
+// the session keeps its original expiry.
+func autoRefreshSession(
+	ctx forge.Context,
+	refresher SessionRefresher,
+	configResolver AutoRefreshConfigResolver,
+	logger log.Logger,
+	setter CookieSetter,
+) {
+	// Only attempt auto-refresh for authenticated sessions.
+	sess, ok := SessionFrom(ctx.Context())
+	if !ok || sess == nil {
+		return
+	}
+
+	// Resolve config (may be per-app).
+	cfg := configResolver(ctx.Context())
+	if !cfg.Enabled {
+		return
+	}
+
+	threshold := cfg.Threshold
+	if threshold == 0 {
+		threshold = 5 * time.Minute
+	}
+
+	// Check if the access token is within the refresh threshold.
+	timeUntilExpiry := time.Until(sess.ExpiresAt)
+	if timeUntilExpiry > threshold || timeUntilExpiry <= 0 {
+		return // not near expiry or already expired
+	}
+
+	// Perform the refresh.
+	// Auto-refresh rotates the session on an ordinary request, so the
+	// bindings are re-checked against that request rather than against
+	// a call to /v1/refresh that never happened.
+	httpReq := ctx.Request()
+	refreshed, err := refresher(ctx.Context(), RefreshRequest{
+		RefreshToken: sess.RefreshToken,
+		IPAddress:    ClientIP(httpReq),
+		UserAgent:    httpReq.UserAgent(),
+		DPoPProof:    httpReq.Header.Get("DPoP"),
+		Method:       httpReq.Method,
+		RequestURL:   RequestURL(httpReq),
+	})
+	if err != nil {
+		logRefreshFailure(logger, sess, err)
+		return // non-fatal: the request proceeds on the original expiry
+	}
+
+	// Set new tokens in response headers.
+	ctx.Response().Header().Set("X-Auth-Token", refreshed.Token)
+	ctx.Response().Header().Set("X-Auth-Token-Expires-At", refreshed.ExpiresAt.Format(time.RFC3339))
+
+	// Only expose refresh token in headers when explicitly enabled.
+	if cfg.ExposeRefreshToken {
+		ctx.Response().Header().Set("X-Auth-Refresh-Token", refreshed.RefreshToken)
+	}
+
+	// Re-set the session cookie with the new access token so the
+	// browser cookie stays in sync after auto-refresh.
+	if setter != nil {
+		maxAge := int(time.Until(refreshed.ExpiresAt).Seconds())
+		if maxAge <= 0 {
+			maxAge = 3600
+		}
+		setter(ctx, refreshed.Token, maxAge)
+	}
+
+	// Rotation swapped the stored token, so the copy on context is now stale.
+	// Update it in place (the same thing SessionActivityMiddleware does with
+	// ExpiresAt) so the handler and any middleware after this one see the
+	// session that actually exists.
+	sess.Token = refreshed.Token
+	sess.RefreshToken = refreshed.RefreshToken
+	sess.ExpiresAt = refreshed.ExpiresAt
+
+	logger.Debug("auto-refresh: refreshed near-expiry access token",
+		log.String("session_id", sess.ID.String()),
+	)
 }
 
 // logRefreshFailure reports an auto-refresh that did not happen.
