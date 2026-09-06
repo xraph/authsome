@@ -27,16 +27,12 @@ type GenericProvider struct {
 	client *http.Client
 }
 
-// classifierPolicyDecided marks that the retry-classification policy in
-// classifyHTTPError has been written and recorded in the spec (see
-// "Retry classification" in
-// docs/superpowers/specs/2026-09-03-crm-retention-delivery-design.md). It
-// used to gate construction while the policy was still an open decision; now
-// that it is decided, the constant just documents that the guard was here
-// and why: an unwritten policy that only surfaced at the first CRM error
-// would decide, by accident, whether a transient 503 permanently drops a
-// customer's sync.
-const classifierPolicyDecided = true
+// The retry-classification policy in classifyHTTPError is written down in the
+// spec, under "Retry classification" in
+// docs/superpowers/specs/2026-09-03-crm-retention-delivery-design.md. It
+// matters that it stays written down: an unwritten policy that only surfaced
+// at the first CRM error would decide, by accident, whether a transient 503
+// permanently drops a customer's sync.
 
 // NewGenericProvider builds a Provider from a ProviderConfig. ContactURL is
 // required: Capabilities always advertises CapContacts, so a provider that

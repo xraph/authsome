@@ -152,8 +152,8 @@ func (h *HubSpotProvider) UpsertContact(ctx context.Context, c *Contact) (Remote
 
 	if remoteID != "" {
 		path := hubspotContactsPath + "/" + remoteID
-		if _, err := h.request(ctx, http.MethodPatch, path, map[string]interface{}{"properties": props}); err != nil {
-			return RemoteRef{}, err
+		if _, patchErr := h.request(ctx, http.MethodPatch, path, map[string]interface{}{"properties": props}); patchErr != nil {
+			return RemoteRef{}, patchErr
 		}
 		return RemoteRef{Provider: h.name, ObjectType: "contact", ID: remoteID}, nil
 	}
