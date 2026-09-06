@@ -11,7 +11,12 @@ import (
 )
 
 // policy builds a fixed consentPolicy for tests.
-func policy(require bool, purpose string) func(context.Context, id.AppID) (bool, string) {
+// policy builds a consent policy for the tests. The purpose is fixed at
+// "marketing" because that is the only purpose these tests exercise; take a
+// parameter again if a test needs a second one.
+func policy(require bool) func(context.Context, id.AppID) (bool, string) {
+	const purpose = "marketing"
+
 	return func(context.Context, id.AppID) (bool, string) { return require, purpose }
 }
 
@@ -28,7 +33,7 @@ func (s *stubConsent) HasConsent(context.Context, id.UserID, id.AppID, string) (
 
 func TestAllowSendPassesWhenGateDisabled(t *testing.T) {
 	p := New()
-	p.consentPolicy = policy(false, "marketing")
+	p.consentPolicy = policy(false)
 	p.consent = &stubConsent{granted: false}
 
 	ok, _, err := p.allowSend(context.Background(), &Job{})
@@ -39,7 +44,7 @@ func TestAllowSendPassesWhenGateDisabled(t *testing.T) {
 
 func TestAllowSendBlocksWithoutGrant(t *testing.T) {
 	p := New()
-	p.consentPolicy = policy(true, "marketing")
+	p.consentPolicy = policy(true)
 	p.consent = &stubConsent{granted: false}
 
 	ok, reason, err := p.allowSend(context.Background(), &Job{})
@@ -50,7 +55,7 @@ func TestAllowSendBlocksWithoutGrant(t *testing.T) {
 
 func TestAllowSendPassesWithGrant(t *testing.T) {
 	p := New()
-	p.consentPolicy = policy(true, "marketing")
+	p.consentPolicy = policy(true)
 	p.consent = &stubConsent{granted: true}
 
 	ok, _, err := p.allowSend(context.Background(), &Job{})
@@ -60,7 +65,7 @@ func TestAllowSendPassesWithGrant(t *testing.T) {
 
 func TestAllowSendBlocksWhenGateOnButConsentUnavailable(t *testing.T) {
 	p := New()
-	p.consentPolicy = policy(true, "marketing")
+	p.consentPolicy = policy(true)
 	p.consent = nil // consent plugin not registered
 
 	ok, reason, err := p.allowSend(context.Background(), &Job{})
@@ -72,7 +77,7 @@ func TestAllowSendBlocksWhenGateOnButConsentUnavailable(t *testing.T) {
 
 func TestAllowSendReportsLookupFailureAsLocalError(t *testing.T) {
 	p := New()
-	p.consentPolicy = policy(true, "marketing")
+	p.consentPolicy = policy(true)
 	p.consent = &stubConsent{err: assert.AnError}
 
 	ok, reason, err := p.allowSend(context.Background(), &Job{})

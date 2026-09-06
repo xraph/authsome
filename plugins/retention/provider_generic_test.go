@@ -67,7 +67,7 @@ func TestGenericProviderName(t *testing.T) {
 }
 
 func TestGenericProviderUpsertContact_Success(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"id":"remote-501"}`))
@@ -170,7 +170,7 @@ func TestGenericProviderUpsertContact_FieldMapRenamesOutgoingFields(t *testing.T
 }
 
 func TestGenericProviderUpsertContact_RemoteIDDefaultsToID(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"id":"default-id-1","other":"ignored"}`))
 	}))
@@ -185,7 +185,7 @@ func TestGenericProviderUpsertContact_RemoteIDDefaultsToID(t *testing.T) {
 }
 
 func TestGenericProviderUpsertContact_RemoteIDFromConfiguredPath(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"result":{"contact_id":"nested-777"}}`))
 	}))

@@ -47,7 +47,10 @@ type jobModel struct {
 }
 
 func fromJob(j *Job) *jobModel {
-	payload, _ := json.Marshal(j.Payload)
+	// Payload is a map[string]string, which has no channel, func or cyclic
+	// value that could make Marshal fail, so there is no error path here to
+	// handle. Marshalling anything richer would need this revisited.
+	payload, _ := json.Marshal(j.Payload) //nolint:errcheck // cannot fail for map[string]string
 	m := &jobModel{
 		ID: j.ID.String(), AppID: j.AppID.String(), EnvID: j.EnvID.String(),
 		UserID: j.UserID.String(), Provider: j.Provider, Kind: j.Kind,
