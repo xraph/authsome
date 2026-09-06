@@ -46,7 +46,9 @@ import (
 )
 
 func main() {
-	logger := log.NewBeautifulLogger("authsome")
+	// Format is chosen automatically: a terminal gets aligned, coloured columns,
+	// anything else gets JSON. Override with FORGE_LOG_FORMAT=pretty|json.
+	logger := log.New(log.Config{Name: "authsome"})
 
 	// Create the in-memory store (swap with pgstore.New(db) for production).
 	store := memory.New()
