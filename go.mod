@@ -7,13 +7,13 @@ go 1.26.0
 require (
 	github.com/a-h/templ v0.3.1020
 	github.com/crewjam/saml v0.5.1
-	github.com/go-webauthn/webauthn v0.17.4
+	github.com/go-webauthn/webauthn v0.18.0
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/pquerna/otp v1.5.0
 	github.com/russellhaering/goxmldsig v1.6.1
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
-	github.com/xraph/chronicle v1.6.2
+	github.com/xraph/chronicle v1.6.4
 	github.com/xraph/forge v1.11.0
 	github.com/xraph/forge/extensions/auth v1.11.0
 	github.com/xraph/forgeui v1.4.1
@@ -21,14 +21,14 @@ require (
 	github.com/xraph/grove/drivers/mongodriver v1.6.3
 	github.com/xraph/grove/drivers/pgdriver v1.6.3
 	github.com/xraph/grove/drivers/sqlitedriver v1.6.3
-	github.com/xraph/herald v1.6.1
-	github.com/xraph/keysmith v1.6.2
-	github.com/xraph/relay v1.6.2
+	github.com/xraph/herald v1.6.2
+	github.com/xraph/keysmith v1.6.3
+	github.com/xraph/relay v1.6.3
 	github.com/xraph/vessel v1.0.4
-	github.com/xraph/warden v1.6.2
+	github.com/xraph/warden v1.6.4
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
-	go.mongodb.org/mongo-driver/v2 v2.8.0
-	golang.org/x/crypto v0.55.0
+	go.mongodb.org/mongo-driver/v2 v2.9.0
+	golang.org/x/crypto v0.56.0
 	golang.org/x/oauth2 v0.36.0
 )
 
@@ -113,7 +113,7 @@ require (
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
-	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
+	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -125,7 +125,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.30.3 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
-	github.com/go-webauthn/x v0.2.6 // indirect
+	github.com/go-webauthn/x v0.3.0 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.4.0 // indirect
@@ -148,7 +148,7 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.19.1 // indirect
+	github.com/klauspost/compress v1.19.2 // indirect
 	github.com/leodido/go-urn v1.5.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260330125221-c963978e514e // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
@@ -181,10 +181,10 @@ require (
 	github.com/uptrace/bunrouter v1.0.23 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xraph/confy v1.0.3 // indirect
-	github.com/xraph/dispatch v1.6.2
+	github.com/xraph/dispatch v1.6.5
 	github.com/xraph/go-utils v1.3.0
-	github.com/xraph/ledger v1.6.1
-	github.com/xraph/vault v1.6.1
+	github.com/xraph/ledger v1.6.4
+	github.com/xraph/vault v1.6.4
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.69.0 // indirect
