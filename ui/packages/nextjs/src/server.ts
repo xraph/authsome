@@ -95,7 +95,9 @@ export interface GetClientConfigOptions {
 export async function getClientConfig(
   opts: GetClientConfigOptions,
 ): Promise<ClientConfig | null> {
-  const url = new URL("/v1/client-config", opts.baseURL);
+  // Join, do not resolve: a leading-slash path drops the base URL's own path
+  // prefix, and a gateway-mounted API lives under one.
+  const url = new URL(`${opts.baseURL.replace(/\/+$/, "")}/v1/client-config`);
   if (opts.publishableKey) {
     url.searchParams.set("key", opts.publishableKey);
   }

@@ -229,7 +229,10 @@ export class AuthClient extends GeneratedClient {
   async fetchClientConfig(publishableKey?: string): Promise<ClientConfig> {
     const baseURL = (this as any).baseURL as string;
     const fetchFn = ((this as any).fetchFn as typeof globalThis.fetch) ?? globalThis.fetch;
-    const url = new URL("/v1/client-config", baseURL);
+    // Join onto the base rather than resolve against it: `new URL("/v1/…",
+    // base)` keeps only the origin, so an API mounted under a path prefix
+    // (a gateway at /identity/authsome) was asked at the gateway root.
+    const url = new URL(`${baseURL.replace(/\/+$/, "")}/v1/client-config`);
     if (publishableKey) {
       url.searchParams.set("key", publishableKey);
     }
