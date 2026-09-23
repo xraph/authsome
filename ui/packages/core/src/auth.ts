@@ -112,6 +112,25 @@ function isAuthRejection(err: unknown): boolean {
   return false;
 }
 
+// The browser lock covers tabs. The queue also covers managers sharing a
+// storage adapter in runtimes without Web Locks.
+const refreshQueues = new Map<string, Promise<void>>();
+
+async function withRefreshLock(key: string, operation: () => Promise<void>): Promise<void> {
+  if (typeof navigator !== "undefined" && navigator.locks) {
+    await navigator.locks.request(key, operation);
+    return;
+  }
+  const previous = refreshQueues.get(key) ?? Promise.resolve();
+  const next = previous.catch(() => {}).then(operation);
+  refreshQueues.set(key, next);
+  try {
+    await next;
+  } finally {
+    if (refreshQueues.get(key) === next) refreshQueues.delete(key);
+  }
+}
+
 /**
  * AuthManager is the core state machine that drives authentication.
  *
@@ -128,6 +147,10 @@ export class AuthManager {
   private storage: TokenStorage;
   private state: AuthState = { status: "idle" };
   private listeners = new Set<(state: AuthState) => void>();
+  private initializePromise: Promise<void> | null = null;
+  private refreshPromise: Promise<void> | null = null;
+  private refreshLockKey: string;
+  private active = true;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private onError?: (error: { error: string; code?: number; type?: string }) => void;
 
@@ -138,6 +161,7 @@ export class AuthManager {
 
   constructor(config: AuthConfig) {
     this.client = new AuthClient(config);
+    this.refreshLockKey = `authsome:refresh:${config.baseURL}:${config.publishableKey ?? ""}`;
     this.storage = config.storage ?? createMemoryStorage();
     this.onError = config.onError;
     this.publishableKey = config.publishableKey;
@@ -176,7 +200,18 @@ export class AuthManager {
    * When a publishableKey is set, also fetches client config in parallel.
    * Call this once on app start.
    */
-  async initialize(): Promise<void> {
+  initialize(): Promise<void> {
+    this.active = true;
+    if (!this.initializePromise) {
+      this.initializePromise = this.restoreSession().finally(() => {
+        this.initializePromise = null;
+      });
+    }
+    return this.initializePromise;
+  }
+
+  private async restoreSession(): Promise<void> {
+    let session: Session | undefined;
     // Kick off config fetch in parallel (non-blocking).
     if (this.publishableKey && !this.clientConfig) {
       void this.fetchClientConfig();
@@ -189,7 +224,7 @@ export class AuthManager {
         return;
       }
 
-      const session: Session = JSON.parse(raw);
+      session = JSON.parse(raw) as Session;
       const expiresAt = new Date(session.expires_at).getTime();
 
       if (Date.now() >= expiresAt) {
@@ -204,7 +239,11 @@ export class AuthManager {
       this.setState({ status: "authenticated", user, session });
       this.scheduleRefresh(session);
     } catch (err) {
-      await this.handleInitFailure(err);
+      if (session?.refresh_token && isAuthRejection(err)) {
+        await this.refreshSession(session.refresh_token);
+      } else {
+        await this.handleInitFailure(err);
+      }
     }
   }
 
@@ -245,7 +284,10 @@ export class AuthManager {
     }
 
     this.setState({ status: "unknown", session });
-    this.scheduleRefresh(session);
+    this.clearRefreshTimer();
+    if (this.active) {
+      this.refreshTimer = setTimeout(() => { void this.initialize(); }, REFRESH_RETRY_BASE_MS);
+    }
   }
 
   /** Sign in with email & password. */
@@ -447,9 +489,10 @@ export class AuthManager {
 
   /** Refresh the current session manually. */
   async refreshNow(): Promise<void> {
-    const state = this.state;
-    if (state.status !== "authenticated") return;
-    await this.refreshSession(state.session.refresh_token);
+    const raw = await this.storage.getItem(SESSION_KEY);
+    if (!raw) return;
+    const session = JSON.parse(raw) as Session;
+    if (session.refresh_token) await this.refreshSession(session.refresh_token);
   }
 
   /**
@@ -545,6 +588,7 @@ export class AuthManager {
 
   /** Tear down: clear timers and listeners. */
   destroy(): void {
+    this.active = false;
     this.clearRefreshTimer();
     this.listeners.clear();
     this.configListeners.clear();
@@ -558,62 +602,55 @@ export class AuthManager {
     this.scheduleRefresh(session);
   }
 
-  /**
-   * Exchanges the refresh token for a new session.
-   *
-   * On failure the two cases are separated, as they are in initialize: a
-   * rejected token means signed out, anything else means no verdict and is
-   * worth retrying.
-   *
-   * `attempt` was previously accepted and never read, and the retry path
-   * called back in without it — so a permanently-invalid token retried every
-   * 30s for as long as the tab stayed open, and the user was never signed out.
-   * It now bounds the retries and backs off between them.
-   */
-  private async refreshSession(refreshToken: string, attempt = 0): Promise<void> {
+  // Keep rotation and persistence in the same lock. Once the server rotates a
+  // token, every later operation must read its replacement from storage.
+  private refreshSession(refreshToken: string, attempt = 0): Promise<void> {
+    if (!this.refreshPromise) {
+      this.refreshPromise = withRefreshLock(this.refreshLockKey, () =>
+        this.exchangeSession(refreshToken, attempt),
+      ).finally(() => { this.refreshPromise = null; });
+    }
+    return this.refreshPromise;
+  }
+
+  private async exchangeSession(refreshToken: string, attempt: number): Promise<void> {
+    let current: Session | undefined;
+    let exchanged = false;
     try {
-      const newSession = await this.client.refresh(refreshToken);
-      const user = await this.client.getMe(newSession.session_token);
-      await this.persistSession(newSession);
-      this.setState({ status: "authenticated", user, session: newSession });
-      this.scheduleRefresh(newSession);
+      const raw = await this.storage.getItem(SESSION_KEY);
+      if (!raw) {
+        this.setState({ status: "unauthenticated" });
+        return;
+      }
+      current = JSON.parse(raw) as Session;
+      // A waiting tab or an old timer may hold the token another tab spent.
+      if (current.refresh_token === refreshToken || Date.now() >= Date.parse(current.expires_at)) {
+        current = await this.client.refresh(current.refresh_token);
+        exchanged = true;
+        await this.persistSession(current);
+      }
+      const user = await this.client.getMe(current.session_token);
+      this.setState({ status: "authenticated", user, session: current });
+      this.scheduleRefresh(current);
     } catch (err) {
-      // The server rejected the token: retrying cannot help.
-      if (isAuthRejection(err)) {
-        this.setState({ status: "unauthenticated" });
-        return;
-      }
-
-      if (attempt >= MAX_REFRESH_ATTEMPTS) {
-        // Out of retries without ever reaching the server. The session is
-        // retained — the token may still be good — but nothing has validated
-        // it, so we must not keep claiming authenticated.
-        const stored = await this.storage.getItem(SESSION_KEY);
-        if (stored) {
-          try {
-            this.setState({ status: "unknown", session: JSON.parse(stored) });
-            return;
-          } catch {
-            // Fall through to unauthenticated on unparseable storage.
-          }
-        }
-        this.setState({ status: "unauthenticated" });
-        return;
-      }
-
-      // No verdict — back off and try again.
       this.clearRefreshTimer();
-      this.refreshTimer = setTimeout(
-        () => {
-          void this.refreshSession(refreshToken, attempt + 1);
-        },
-        REFRESH_RETRY_BASE_MS * 2 ** attempt,
-      );
+      if (!exchanged && isAuthRejection(err) && current?.refresh_token === refreshToken) {
+        await this.clearSession();
+        this.setState({ status: "unauthenticated" });
+        return;
+      }
+      if (current) this.setState({ status: "unknown", session: current });
+      if (attempt >= MAX_REFRESH_ATTEMPTS || !this.active) return;
+      this.refreshTimer = setTimeout(() => {
+        // Re-read storage under the lock, including after a profile failure.
+        void this.refreshSession(refreshToken, attempt + 1);
+      }, REFRESH_RETRY_BASE_MS * 2 ** attempt);
     }
   }
 
   private scheduleRefresh(session: Session): void {
     this.clearRefreshTimer();
+    if (!this.active) return;
     const expiresAt = new Date(session.expires_at).getTime();
     const delay = expiresAt - Date.now() - REFRESH_BEFORE_MS;
 

@@ -16,5 +16,8 @@ describe("getClientConfig", () => {
 
     expect(config).toEqual({ methods: [] });
     expect(fetchFn.mock.calls[0]![0]).toBe("https://gw.test/identity/authsome/v1/client-config?key=pk_x");
+    expect(fetchFn.mock.calls[0]![1]?.headers).toMatchObject({
+      "X-Publishable-Key": "pk_x",
+    });
   });
 });

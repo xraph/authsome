@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http/httptest"
 	"reflect"
 	"sync/atomic"
 	"testing"
@@ -11,7 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/environment"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
+	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/store/memory"
 	"github.com/xraph/authsome/user"
@@ -133,4 +138,121 @@ func TestSetupStatusOmitsDefaultsAfterFirstUser(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.Equal(t, SetupStatusResponse{Pending: false}, got)
+}
+
+func completeSetupInput() SetupInput {
+	return SetupInput{
+		Email:    "owner@example.com",
+		Password: "SecureP@ss1",
+		Name:     "Ada Lovelace",
+		Platform: &SetupPlatformInput{
+			Name:     "TwinOS Office",
+			Slug:     "twinos-office",
+			Logo:     "https://example.test/forge.svg",
+			Metadata: map[string]string{"region": "us-central"},
+		},
+		Environment: &SetupEnvironmentInput{
+			Name:        "Local Development",
+			Slug:        "local-development",
+			Type:        "development",
+			Color:       "#2563eb",
+			Description: "Local plugin development",
+			Metadata:    map[string]string{"purpose": "plugins"},
+		},
+	}
+}
+
+func TestSetupHandlerAppliesPlatformEnvironmentAndOwner(t *testing.T) {
+	eng := newSetupEngine(t)
+	ctx := context.Background()
+
+	platform, err := eng.GetApp(ctx, eng.PlatformAppID())
+	require.NoError(t, err)
+	platform.Metadata = app.Metadata{"existing": "kept"}
+	require.NoError(t, eng.UpdateApp(ctx, platform))
+	defaultEnv, err := eng.GetDefaultEnvironment(ctx, eng.PlatformAppID())
+	require.NoError(t, err)
+	defaultEnv.Metadata = environment.Metadata{"seeded": "kept"}
+	require.NoError(t, eng.UpdateEnvironment(ctx, defaultEnv))
+
+	h := setupHandler(Deps{Engine: eng})
+	httpCtx, writer, _ := withHTTPCtx(t)
+	got, err := h(httpCtx, completeSetupInput(), dashcontract.Principal{})
+	require.NoError(t, err)
+	require.True(t, got.OK)
+	require.NotEmpty(t, got.Subject)
+
+	updatedApp, err := eng.GetApp(ctx, eng.PlatformAppID())
+	require.NoError(t, err)
+	require.Equal(t, "TwinOS Office", updatedApp.Name)
+	require.Equal(t, "twinos-office", updatedApp.Slug)
+	require.Equal(t, "https://example.test/forge.svg", updatedApp.Logo)
+	require.Equal(t, "kept", updatedApp.Metadata["existing"])
+	require.Equal(t, "us-central", updatedApp.Metadata["region"])
+
+	updatedEnv, err := eng.GetDefaultEnvironment(ctx, eng.PlatformAppID())
+	require.NoError(t, err)
+	require.Equal(t, defaultEnv.ID, updatedEnv.ID)
+	require.Equal(t, "Local Development", updatedEnv.Name)
+	require.Equal(t, "local-development", updatedEnv.Slug)
+	require.Equal(t, environment.TypeDevelopment, updatedEnv.Type)
+	require.Equal(t, "#2563eb", updatedEnv.Color)
+	require.Equal(t, "Local plugin development", updatedEnv.Description)
+	require.Equal(t, "kept", updatedEnv.Metadata["seeded"])
+	require.Equal(t, "plugins", updatedEnv.Metadata["purpose"])
+
+	cookies := writer.(*httptest.ResponseRecorder).Result().Cookies()
+	require.Condition(t, func() bool {
+		for _, cookie := range cookies {
+			if cookie.Name == dashboardCookieName && cookie.Value != "" {
+				return true
+			}
+		}
+		return false
+	}, "setup must write the dashboard session cookie")
+
+	userID, err := id.ParseUserID(got.Subject)
+	require.NoError(t, err)
+	roles, err := eng.ListUserRoles(ctx, userID)
+	require.NoError(t, err)
+	require.Condition(t, func() bool {
+		for _, role := range roles {
+			if role.Slug == rbac.PlatformOwnerSlug {
+				return true
+			}
+		}
+		return false
+	}, "first setup user must receive platform-owner")
+
+	httpCtx, _, _ = withHTTPCtx(t)
+	_, err = h(httpCtx, completeSetupInput(), dashcontract.Principal{})
+	var contractErr *dashcontract.Error
+	require.True(t, errors.As(err, &contractErr))
+	require.Equal(t, dashcontract.CodePermissionDenied, contractErr.Code)
+}
+
+func TestSetupHandlerLegacyPayloadPreservesBootstrapConfiguration(t *testing.T) {
+	eng := newSetupEngine(t)
+	ctx := context.Background()
+	beforeApp, err := eng.GetApp(ctx, eng.PlatformAppID())
+	require.NoError(t, err)
+	beforeEnv, err := eng.GetDefaultEnvironment(ctx, eng.PlatformAppID())
+	require.NoError(t, err)
+
+	httpCtx, _, _ := withHTTPCtx(t)
+	got, err := setupHandler(Deps{Engine: eng})(httpCtx, SetupInput{
+		Email: "legacy@example.com", Password: "SecureP@ss1",
+	}, dashcontract.Principal{})
+	require.NoError(t, err)
+	require.True(t, got.OK)
+
+	afterApp, err := eng.GetApp(ctx, eng.PlatformAppID())
+	require.NoError(t, err)
+	afterEnv, err := eng.GetDefaultEnvironment(ctx, eng.PlatformAppID())
+	require.NoError(t, err)
+	require.Equal(t, beforeApp.Name, afterApp.Name)
+	require.Equal(t, beforeApp.Slug, afterApp.Slug)
+	require.Equal(t, beforeEnv.ID, afterEnv.ID)
+	require.Equal(t, beforeEnv.Name, afterEnv.Name)
+	require.Equal(t, beforeEnv.Slug, afterEnv.Slug)
 }

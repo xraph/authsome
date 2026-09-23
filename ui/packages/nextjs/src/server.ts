@@ -95,21 +95,17 @@ export interface GetClientConfigOptions {
 export async function getClientConfig(
   opts: GetClientConfigOptions,
 ): Promise<ClientConfig | null> {
-  // Join, do not resolve: a leading-slash path drops the base URL's own path
-  // prefix, and a gateway-mounted API lives under one.
-  const url = new URL(`${opts.baseURL.replace(/\/+$/, "")}/v1/client-config`);
-  if (opts.publishableKey) {
-    url.searchParams.set("key", opts.publishableKey);
-  }
-
   try {
-    const fetchOpts: RequestInit & Record<string, unknown> = {
-      headers: { "Content-Type": "application/json" },
-      next: { revalidate: 300 },
-    };
-    const res = await fetch(url.toString(), fetchOpts as RequestInit);
-    if (!res.ok) return null;
-    return (await res.json()) as ClientConfig;
+    const client = new AuthClient({
+      baseURL: opts.baseURL,
+      publishableKey: opts.publishableKey,
+      fetch: (input, init) =>
+        fetch(input, {
+          ...init,
+          next: { revalidate: 300 },
+        } as RequestInit),
+    });
+    return await client.getClientConfig("", opts.publishableKey);
   } catch {
     return null;
   }
