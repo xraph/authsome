@@ -8,11 +8,15 @@ package contract
 import (
 	"context"
 	"errors"
+	"net/mail"
 	"strings"
 	"time"
 
+	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/store"
+	"github.com/xraph/authsome/user"
 
 	"github.com/xraph/forge/extensions/dashboard/contract"
 
@@ -53,6 +57,24 @@ type MembersListResponse struct {
 	Members []MemberSummary `json:"members"`
 }
 
+type InvitationSummary struct {
+	ID        string `json:"id"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"createdAt"`
+	ExpiresAt string `json:"expiresAt"`
+}
+
+type InvitationsListResponse struct {
+	Invitations []InvitationSummary `json:"invitations"`
+}
+
+type CreateInvitationResponse struct {
+	InvitationSummary
+	Token string `json:"token"`
+}
+
 type GetOrgInput struct {
 	ID string `json:"id"`
 }
@@ -75,6 +97,23 @@ type DeleteOrgInput struct {
 
 type ListMembersInput struct {
 	OrgID string `json:"orgId"`
+}
+
+type AddMemberInput struct {
+	OrgID  string `json:"orgId"`
+	UserID string `json:"userId"`
+	Email  string `json:"email,omitempty"`
+	Role   string `json:"role,omitempty"`
+}
+
+type ListInvitationsInput struct {
+	OrgID string `json:"orgId"`
+}
+
+type CreateInvitationInput struct {
+	OrgID string `json:"orgId"`
+	Email string `json:"email"`
+	Role  string `json:"role,omitempty"`
 }
 
 type RemoveMemberInput struct {
@@ -216,6 +255,126 @@ func orgsMembersListHandler(deps Deps) func(ctx context.Context, in ListMembersI
 	}
 }
 
+func orgsAddMemberHandler(deps Deps) func(context.Context, AddMemberInput, contract.Principal) (ackResponse, error) {
+	return func(ctx context.Context, in AddMemberInput, p contract.Principal) (ackResponse, error) {
+		if deps.Engine == nil || deps.Plugin == nil {
+			return ackResponse{}, unavailable()
+		}
+		org, err := scopedOrg(ctx, deps, in.OrgID, p)
+		if err != nil {
+			return ackResponse{}, err
+		}
+		role, err := memberRole(in.Role)
+		if err != nil {
+			return ackResponse{}, err
+		}
+		var u *user.User
+		if rawID := strings.TrimSpace(in.UserID); rawID != "" {
+			uid, parseErr := id.ParseUserID(rawID)
+			if parseErr != nil {
+				return ackResponse{}, badReq("valid userId is required")
+			}
+			u, err = deps.Engine.GetUser(ctx, uid)
+		} else if email := strings.ToLower(strings.TrimSpace(in.Email)); email != "" {
+			address, parseErr := mail.ParseAddress(email)
+			if parseErr != nil || address.Address != email {
+				return ackResponse{}, badReq("valid email is required")
+			}
+			u, err = deps.Engine.GetUserByEmail(ctx, org.AppID, email)
+		} else {
+			return ackResponse{}, badReq("userId or email is required")
+		}
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return ackResponse{}, &contract.Error{Code: contract.CodeNotFound, Message: "user not found in this app"}
+			}
+			return ackResponse{}, mapErr(err)
+		}
+		if u == nil || u.AppID != org.AppID {
+			return ackResponse{}, &contract.Error{Code: contract.CodeNotFound, Message: "user not found in this app"}
+		}
+		uid := u.ID
+		members, err := deps.Plugin.ListMembers(ctx, org.ID)
+		if err != nil {
+			return ackResponse{}, mapErr(err)
+		}
+		for _, member := range members {
+			if member.UserID == uid {
+				return ackResponse{}, &contract.Error{Code: contract.CodeConflict, Message: "user is already a member"}
+			}
+		}
+		member := &organization.Member{ID: id.NewMemberID(), OrgID: org.ID, UserID: uid, Role: role}
+		if err := deps.Plugin.AddMember(ctx, member); err != nil {
+			return ackResponse{}, mapErr(err)
+		}
+		return ackResponse{OK: true, ID: member.ID.String()}, nil
+	}
+}
+
+func orgsInvitationsHandler(deps Deps) func(context.Context, ListInvitationsInput, contract.Principal) (InvitationsListResponse, error) {
+	return func(ctx context.Context, in ListInvitationsInput, p contract.Principal) (InvitationsListResponse, error) {
+		if deps.Engine == nil || deps.Plugin == nil {
+			return InvitationsListResponse{}, unavailable()
+		}
+		org, err := scopedOrg(ctx, deps, in.OrgID, p)
+		if err != nil {
+			return InvitationsListResponse{}, err
+		}
+		list, err := deps.Plugin.ListInvitations(ctx, org.ID)
+		if err != nil {
+			return InvitationsListResponse{}, mapErr(err)
+		}
+		out := InvitationsListResponse{Invitations: make([]InvitationSummary, 0, len(list))}
+		for _, inv := range list {
+			out.Invitations = append(out.Invitations, projectInvitation(inv))
+		}
+		return out, nil
+	}
+}
+
+func orgsCreateInvitationHandler(deps Deps) func(context.Context, CreateInvitationInput, contract.Principal) (CreateInvitationResponse, error) {
+	return func(ctx context.Context, in CreateInvitationInput, p contract.Principal) (CreateInvitationResponse, error) {
+		if deps.Engine == nil || deps.Plugin == nil {
+			return CreateInvitationResponse{}, unavailable()
+		}
+		org, err := scopedOrg(ctx, deps, in.OrgID, p)
+		if err != nil {
+			return CreateInvitationResponse{}, err
+		}
+		inviterID, err := principalUserID(p)
+		if err != nil {
+			return CreateInvitationResponse{}, err
+		}
+		email := strings.ToLower(strings.TrimSpace(in.Email))
+		address, err := mail.ParseAddress(email)
+		if err != nil || address.Address != email {
+			return CreateInvitationResponse{}, badReq("valid email is required")
+		}
+		role, err := memberRole(in.Role)
+		if err != nil {
+			return CreateInvitationResponse{}, err
+		}
+		list, err := deps.Plugin.ListInvitations(ctx, org.ID)
+		if err != nil {
+			return CreateInvitationResponse{}, mapErr(err)
+		}
+		for _, existing := range list {
+			if strings.EqualFold(existing.Email, email) && existing.Status == organization.InvitationPending && (existing.ExpiresAt.IsZero() || time.Now().Before(existing.ExpiresAt)) {
+				return CreateInvitationResponse{}, &contract.Error{Code: contract.CodeConflict, Message: "a pending invitation already exists for this email"}
+			}
+		}
+		token, err := account.GenerateVerificationToken()
+		if err != nil {
+			return CreateInvitationResponse{}, mapErr(err)
+		}
+		inv := &organization.Invitation{ID: id.NewInvitationID(), OrgID: org.ID, Email: email, Role: role, InviterID: inviterID, Status: organization.InvitationPending, Token: token, ExpiresAt: time.Now().Add(72 * time.Hour)}
+		if err := deps.Plugin.CreateInvitation(ctx, inv); err != nil {
+			return CreateInvitationResponse{}, mapErr(err)
+		}
+		return CreateInvitationResponse{InvitationSummary: projectInvitation(inv), Token: token}, nil
+	}
+}
+
 func orgsRemoveMemberHandler(deps Deps) func(ctx context.Context, in RemoveMemberInput, _ contract.Principal) (ackResponse, error) {
 	return func(ctx context.Context, in RemoveMemberInput, _ contract.Principal) (ackResponse, error) {
 		if deps.Engine == nil || deps.Plugin == nil {
@@ -256,6 +415,44 @@ func projectOrgDetail(o *organization.Organization) OrgDetail {
 		Logo:       o.Logo,
 		Metadata:   o.Metadata,
 		UpdatedAt:  o.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func projectInvitation(inv *organization.Invitation) InvitationSummary {
+	return InvitationSummary{
+		ID: inv.ID.String(), Email: inv.Email, Role: string(inv.Role), Status: string(inv.Status),
+		CreatedAt: inv.CreatedAt.UTC().Format(time.RFC3339), ExpiresAt: inv.ExpiresAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func scopedOrg(ctx context.Context, deps Deps, rawID string, p contract.Principal) (*organization.Organization, error) {
+	oid, err := parseOrgID(rawID)
+	if err != nil {
+		return nil, err
+	}
+	org, err := deps.Plugin.GetOrganization(ctx, oid)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, &contract.Error{Code: contract.CodeNotFound, Message: "organization not found in this app"}
+		}
+		return nil, mapErr(err)
+	}
+	if org == nil || org.AppID != authcontract.AppIDFromPrincipal(p, deps.Engine) {
+		return nil, &contract.Error{Code: contract.CodeNotFound, Message: "organization not found in this app"}
+	}
+	return org, nil
+}
+
+func memberRole(raw string) (organization.MemberRole, error) {
+	if raw == "" {
+		return organization.RoleMember, nil
+	}
+	role := organization.MemberRole(raw)
+	switch role {
+	case organization.RoleMember, organization.RoleAdmin, organization.RoleOwner:
+		return role, nil
+	default:
+		return "", badReq("role must be member, admin, or owner")
 	}
 }
 

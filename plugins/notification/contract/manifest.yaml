@@ -4,9 +4,21 @@ contributor:
   envelope:
     supports: [v1]
     preferred: v1
-  capabilities: [auth.read]
+  capabilities: [auth.read, auth.write]
 
-intents: []
+intents:
+  - { name: notification.templates.list, kind: query, version: 1, capability: read }
+  - { name: notification.templates.detail, kind: query, version: 1, capability: read }
+  - { name: notification.templates.preview, kind: query, version: 1, capability: read }
+  - { name: notification.templates.create, kind: command, version: 1, capability: write, invalidates: [notification.templates.list] }
+  - { name: notification.templates.update, kind: command, version: 1, capability: write, invalidates: [notification.templates.list, notification.templates.detail] }
+  - { name: notification.templates.delete, kind: command, version: 1, capability: write, invalidates: [notification.templates.list, notification.templates.detail] }
+  - { name: notification.versions.create, kind: command, version: 1, capability: write, invalidates: [notification.templates.detail, notification.templates.preview] }
+  - { name: notification.versions.update, kind: command, version: 1, capability: write, invalidates: [notification.templates.detail, notification.templates.preview] }
+  - { name: notification.versions.delete, kind: command, version: 1, capability: write, invalidates: [notification.templates.detail, notification.templates.preview] }
+  - { name: notification.send, kind: command, version: 1, capability: write }
+  - { name: notification.templates.resetDefaults, kind: command, version: 1, capability: write, invalidates: [notification.templates.list] }
+  - { name: notification.mappings.list, kind: query, version: 1, capability: read }
 
 graph:
   - route: /notifications

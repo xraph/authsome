@@ -3,6 +3,7 @@
 package subscription
 
 import (
+	"context"
 	"fmt"
 
 	authsome "github.com/xraph/authsome"
@@ -29,5 +30,15 @@ func (p *Plugin) RegisterContract(
 	if svc == nil {
 		return fmt.Errorf("subscription: Service not initialised")
 	}
-	return subcontract.Register(d, reg, wreg, subcontract.Deps{Engine: eng, Service: svc})
+	return subcontract.Register(d, reg, wreg, subcontract.Deps{Engine: eng, Service: svc, Usage: func(ctx context.Context, tenantID, appID string) ([]subcontract.UsageSummary, error) {
+		rows, err := svc.GetUsageSummary(ctx, tenantID, appID)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]subcontract.UsageSummary, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, subcontract.UsageSummary{FeatureKey: row.FeatureKey, FeatureName: row.FeatureName, FeatureType: row.FeatureType, Used: row.Used, Limit: row.Limit, Remaining: row.Remaining, Period: row.Period})
+		}
+		return out, nil
+	}})
 }
