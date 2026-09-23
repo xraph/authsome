@@ -13,7 +13,7 @@ import (
 )
 
 func fetchContractCatalog(ctx context.Context, baseURL, apiKey string) ([]*contract.ContractManifest, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+remote.DefaultManifestPath, nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+remote.DefaultManifestPath, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("build manifest request: %w", err)
 	}

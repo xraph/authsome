@@ -31,6 +31,7 @@ import (
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/formconfig"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/user"
 
 	dashauth "github.com/xraph/forge/extensions/dashboard/auth"
@@ -381,7 +382,7 @@ func normalizeSetupMetadata(field string, metadata map[string]string) (map[strin
 	return normalized, nil
 }
 
-func validateSetupNameAndSlug(prefix, name, slug string) (string, string, error) {
+func validateSetupNameAndSlug(prefix, name, slug string) (trimmedName, trimmedSlug string, err error) {
 	name = strings.TrimSpace(name)
 	slug = strings.TrimSpace(slug)
 	if name == "" {
@@ -473,6 +474,42 @@ func mergeSetupMetadata[T ~map[string]string](existing T, incoming map[string]st
 	return merged
 }
 
+// applySetupPlatform writes the validated platform block onto the
+// bootstrapped platform app. A nil block leaves the app untouched.
+func applySetupPlatform(ctx context.Context, eng *authsome.Engine, appID id.AppID, in *SetupPlatformInput) error {
+	if in == nil {
+		return nil
+	}
+	current, err := eng.GetApp(ctx, appID)
+	if err != nil {
+		return err
+	}
+	current.Name = in.Name
+	current.Slug = in.Slug
+	current.Logo = in.Logo
+	current.Metadata = mergeSetupMetadata[app.Metadata](current.Metadata, in.Metadata)
+	return eng.UpdateApp(ctx, current)
+}
+
+// applySetupEnvironment writes the validated environment block onto the
+// app's default environment. Setup never creates or removes environments.
+func applySetupEnvironment(ctx context.Context, eng *authsome.Engine, appID id.AppID, in *SetupEnvironmentInput) error {
+	if in == nil {
+		return nil
+	}
+	current, err := eng.GetDefaultEnvironment(ctx, appID)
+	if err != nil {
+		return err
+	}
+	current.Name = in.Name
+	current.Slug = in.Slug
+	current.Type = environment.Type(in.Type)
+	current.Color = in.Color
+	current.Description = in.Description
+	current.Metadata = mergeSetupMetadata[environment.Metadata](current.Metadata, in.Metadata)
+	return eng.UpdateEnvironment(ctx, current)
+}
+
 func setupHandler(deps Deps) func(ctx context.Context, in SetupInput, _ contract.Principal) (SetupResponse, error) {
 	var setupMu sync.Mutex
 	return func(ctx context.Context, in SetupInput, _ contract.Principal) (SetupResponse, error) {
@@ -504,34 +541,11 @@ func setupHandler(deps Deps) func(ctx context.Context, in SetupInput, _ contract
 			return SetupResponse{}, &contract.Error{Code: contract.CodeInternal, Message: "no http context (forge >= dashauth.WithHTTP required)"}
 		}
 
-		if normalized.Platform != nil {
-			current, err := eng.GetApp(ctx, appID)
-			if err != nil {
-				return SetupResponse{}, mapEngineError(err)
-			}
-			current.Name = normalized.Platform.Name
-			current.Slug = normalized.Platform.Slug
-			current.Logo = normalized.Platform.Logo
-			current.Metadata = mergeSetupMetadata[app.Metadata](current.Metadata, normalized.Platform.Metadata)
-			if err := eng.UpdateApp(ctx, current); err != nil {
-				return SetupResponse{}, mapEngineError(err)
-			}
+		if err = applySetupPlatform(ctx, eng, appID, normalized.Platform); err != nil {
+			return SetupResponse{}, mapEngineError(err)
 		}
-
-		if normalized.Environment != nil {
-			current, err := eng.GetDefaultEnvironment(ctx, appID)
-			if err != nil {
-				return SetupResponse{}, mapEngineError(err)
-			}
-			current.Name = normalized.Environment.Name
-			current.Slug = normalized.Environment.Slug
-			current.Type = environment.Type(normalized.Environment.Type)
-			current.Color = normalized.Environment.Color
-			current.Description = normalized.Environment.Description
-			current.Metadata = mergeSetupMetadata[environment.Metadata](current.Metadata, normalized.Environment.Metadata)
-			if err := eng.UpdateEnvironment(ctx, current); err != nil {
-				return SetupResponse{}, mapEngineError(err)
-			}
+		if err = applySetupEnvironment(ctx, eng, appID, normalized.Environment); err != nil {
+			return SetupResponse{}, mapEngineError(err)
 		}
 
 		first, last := splitName(normalized.Name)

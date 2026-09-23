@@ -7,14 +7,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	authsome "github.com/xraph/authsome"
-	"github.com/xraph/authsome/plugins/apikey"
-	"github.com/xraph/authsome/store/memory"
 	"github.com/xraph/forge"
 	contract "github.com/xraph/forge/extensions/dashboard/contract"
 	"github.com/xraph/forge/extensions/dashboard/contract/dispatcher"
 	"github.com/xraph/warden"
 	wardenmem "github.com/xraph/warden/store/memory"
+
+	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/plugins/apikey"
+	"github.com/xraph/authsome/store/memory"
 )
 
 func TestContractServerExportsInstalledPlugins(t *testing.T) {
