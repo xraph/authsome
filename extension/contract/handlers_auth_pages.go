@@ -21,10 +21,15 @@ package contract
 import (
 	"context"
 	"errors"
+	"net/url"
+	"regexp"
 	"strings"
+	"sync"
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/user"
 
@@ -239,10 +244,28 @@ type SetupEnvironmentDefaults struct {
 // SetupInput is the wire shape for auth.setup. Mirrors the
 // auth.setup-form renderer's fields.
 type SetupInput struct {
-	Email            string `json:"email"`
-	Password         string `json:"password"`
-	Name             string `json:"name,omitempty"`
-	OrganizationName string `json:"organizationName,omitempty"`
+	Email            string                 `json:"email"`
+	Password         string                 `json:"password"`
+	Name             string                 `json:"name,omitempty"`
+	OrganizationName string                 `json:"organizationName,omitempty"`
+	Platform         *SetupPlatformInput    `json:"platform,omitempty"`
+	Environment      *SetupEnvironmentInput `json:"environment,omitempty"`
+}
+
+type SetupPlatformInput struct {
+	Name     string            `json:"name"`
+	Slug     string            `json:"slug"`
+	Logo     string            `json:"logo,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
+}
+
+type SetupEnvironmentInput struct {
+	Name        string            `json:"name"`
+	Slug        string            `json:"slug"`
+	Type        string            `json:"type"`
+	Color       string            `json:"color,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Metadata    map[string]string `json:"metadata,omitempty"`
 }
 
 // SetupResponse is the auth.setup reply.
@@ -311,19 +334,163 @@ func setupStatusHandler(deps Deps) func(ctx context.Context, _ struct{}, _ contr
 // to create the org alongside the user. Failure to create the org
 // doesn't roll back the user — admins can create their org manually
 // post-setup.
+const (
+	setupNameMax        = 80
+	setupSlugMax        = 63
+	setupDescriptionMax = 240
+	setupMetadataMax    = 20
+	setupMetadataKeyMax = 64
+	setupMetadataValMax = 512
+)
+
+var setupSlugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+
+func setupBadRequest(field, message string) error {
+	return &contract.Error{
+		Code:    contract.CodeBadRequest,
+		Message: message,
+		Details: map[string]any{"field": field},
+	}
+}
+
+func normalizeSetupMetadata(field string, metadata map[string]string) (map[string]string, error) {
+	if metadata == nil {
+		return nil, nil
+	}
+	if len(metadata) > setupMetadataMax {
+		return nil, setupBadRequest(field, "metadata may contain at most 20 entries")
+	}
+	normalized := make(map[string]string, len(metadata))
+	for rawKey, rawValue := range metadata {
+		key := strings.TrimSpace(rawKey)
+		value := strings.TrimSpace(rawValue)
+		if key == "" || value == "" {
+			return nil, setupBadRequest(field, "metadata keys and values are required")
+		}
+		if len(key) > setupMetadataKeyMax {
+			return nil, setupBadRequest(field, "metadata keys may contain at most 64 characters")
+		}
+		if len(value) > setupMetadataValMax {
+			return nil, setupBadRequest(field, "metadata values may contain at most 512 characters")
+		}
+		if _, exists := normalized[key]; exists {
+			return nil, setupBadRequest(field, "metadata keys must be unique")
+		}
+		normalized[key] = value
+	}
+	return normalized, nil
+}
+
+func validateSetupNameAndSlug(prefix, name, slug string) (string, string, error) {
+	name = strings.TrimSpace(name)
+	slug = strings.TrimSpace(slug)
+	if name == "" {
+		return "", "", setupBadRequest(prefix+".name", "name is required")
+	}
+	if len(name) > setupNameMax {
+		return "", "", setupBadRequest(prefix+".name", "name may contain at most 80 characters")
+	}
+	if slug == "" {
+		return "", "", setupBadRequest(prefix+".slug", "slug is required")
+	}
+	if len(slug) > setupSlugMax || !setupSlugPattern.MatchString(slug) {
+		return "", "", setupBadRequest(prefix+".slug", "slug must use lowercase letters, numbers, and single hyphens")
+	}
+	return name, slug, nil
+}
+
+func validSetupLogo(value string) bool {
+	if value == "" || (strings.HasPrefix(value, "/") && !strings.HasPrefix(value, "//")) {
+		return true
+	}
+	parsed, err := url.Parse(value)
+	return err == nil && parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https")
+}
+
+func validateSetupInput(in SetupInput) (SetupInput, error) {
+	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
+	in.Name = strings.TrimSpace(in.Name)
+	in.OrganizationName = strings.TrimSpace(in.OrganizationName)
+	if in.Email == "" || in.Password == "" {
+		return SetupInput{}, setupBadRequest("administrator.email", "email and password are required")
+	}
+
+	if in.Platform != nil {
+		platform := *in.Platform
+		var err error
+		platform.Name, platform.Slug, err = validateSetupNameAndSlug("platform", platform.Name, platform.Slug)
+		if err != nil {
+			return SetupInput{}, err
+		}
+		platform.Logo = strings.TrimSpace(platform.Logo)
+		if !validSetupLogo(platform.Logo) {
+			return SetupInput{}, setupBadRequest("platform.logo", "logo must be an HTTP URL or a root-relative path")
+		}
+		platform.Metadata, err = normalizeSetupMetadata("platform.metadata", platform.Metadata)
+		if err != nil {
+			return SetupInput{}, err
+		}
+		in.Platform = &platform
+	}
+
+	if in.Environment != nil {
+		env := *in.Environment
+		var err error
+		env.Name, env.Slug, err = validateSetupNameAndSlug("environment", env.Name, env.Slug)
+		if err != nil {
+			return SetupInput{}, err
+		}
+		env.Type = strings.TrimSpace(env.Type)
+		if !environment.Type(env.Type).IsValid() {
+			return SetupInput{}, setupBadRequest("environment.type", "environment type is invalid")
+		}
+		env.Color = strings.TrimSpace(env.Color)
+		env.Description = strings.TrimSpace(env.Description)
+		if len(env.Description) > setupDescriptionMax {
+			return SetupInput{}, setupBadRequest("environment.description", "description may contain at most 240 characters")
+		}
+		env.Metadata, err = normalizeSetupMetadata("environment.metadata", env.Metadata)
+		if err != nil {
+			return SetupInput{}, err
+		}
+		in.Environment = &env
+	}
+
+	return in, nil
+}
+
+func mergeSetupMetadata[T ~map[string]string](existing T, incoming map[string]string) T {
+	if incoming == nil {
+		return existing
+	}
+	merged := make(T, len(existing)+len(incoming))
+	for key, value := range existing {
+		merged[key] = value
+	}
+	for key, value := range incoming {
+		merged[key] = value
+	}
+	return merged
+}
+
 func setupHandler(deps Deps) func(ctx context.Context, in SetupInput, _ contract.Principal) (SetupResponse, error) {
+	var setupMu sync.Mutex
 	return func(ctx context.Context, in SetupInput, _ contract.Principal) (SetupResponse, error) {
 		eng := deps.Engine
 		if eng == nil {
 			return SetupResponse{}, &contract.Error{Code: contract.CodeUnavailable, Message: "auth engine not configured"}
 		}
-		email := strings.ToLower(strings.TrimSpace(in.Email))
-		if email == "" || in.Password == "" {
-			return SetupResponse{}, &contract.Error{Code: contract.CodeBadRequest, Message: "email and password are required"}
+		normalized, err := validateSetupInput(in)
+		if err != nil {
+			return SetupResponse{}, err
 		}
 
+		setupMu.Lock()
+		defer setupMu.Unlock()
+
 		// Refuse to bootstrap a populated deployment.
-		list, err := eng.AdminListUsers(ctx, &user.Query{AppID: defaultAppID(eng), Limit: 1})
+		appID := defaultAppID(eng)
+		list, err := eng.AdminListUsers(ctx, &user.Query{AppID: appID, Limit: 1})
 		if err != nil {
 			return SetupResponse{}, mapEngineError(err)
 		}
@@ -337,11 +504,41 @@ func setupHandler(deps Deps) func(ctx context.Context, in SetupInput, _ contract
 			return SetupResponse{}, &contract.Error{Code: contract.CodeInternal, Message: "no http context (forge >= dashauth.WithHTTP required)"}
 		}
 
-		first, last := splitName(in.Name)
+		if normalized.Platform != nil {
+			current, err := eng.GetApp(ctx, appID)
+			if err != nil {
+				return SetupResponse{}, mapEngineError(err)
+			}
+			current.Name = normalized.Platform.Name
+			current.Slug = normalized.Platform.Slug
+			current.Logo = normalized.Platform.Logo
+			current.Metadata = mergeSetupMetadata[app.Metadata](current.Metadata, normalized.Platform.Metadata)
+			if err := eng.UpdateApp(ctx, current); err != nil {
+				return SetupResponse{}, mapEngineError(err)
+			}
+		}
+
+		if normalized.Environment != nil {
+			current, err := eng.GetDefaultEnvironment(ctx, appID)
+			if err != nil {
+				return SetupResponse{}, mapEngineError(err)
+			}
+			current.Name = normalized.Environment.Name
+			current.Slug = normalized.Environment.Slug
+			current.Type = environment.Type(normalized.Environment.Type)
+			current.Color = normalized.Environment.Color
+			current.Description = normalized.Environment.Description
+			current.Metadata = mergeSetupMetadata[environment.Metadata](current.Metadata, normalized.Environment.Metadata)
+			if err := eng.UpdateEnvironment(ctx, current); err != nil {
+				return SetupResponse{}, mapEngineError(err)
+			}
+		}
+
+		first, last := splitName(normalized.Name)
 		req := &account.SignUpRequest{
-			AppID:     defaultAppID(eng),
-			Email:     email,
-			Password:  in.Password,
+			AppID:     appID,
+			Email:     normalized.Email,
+			Password:  normalized.Password,
 			FirstName: first,
 			LastName:  last,
 			IPAddress: clientIP(httpReq),
@@ -359,7 +556,7 @@ func setupHandler(deps Deps) func(ctx context.Context, in SetupInput, _ contract
 		// surface — we don't know at compile time whether the org
 		// plugin is loaded. Skip it for now and let admins create their
 		// org through the dashboard's /organizations page post-setup.
-		_ = in.OrganizationName
+		_ = normalized.OrganizationName
 
 		subject := ""
 		if u != nil {

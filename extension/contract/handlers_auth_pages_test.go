@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -39,6 +40,18 @@ func (s *failingUserListStore) ListUsers(ctx context.Context, q *user.Query) (*u
 	return s.Store.ListUsers(ctx, q)
 }
 
+type failingEnvironmentUpdateStore struct {
+	store.Store
+	fail atomic.Bool
+}
+
+func (s *failingEnvironmentUpdateStore) UpdateEnvironment(ctx context.Context, env *environment.Environment) error {
+	if s.fail.Swap(false) {
+		return fmt.Errorf("forced environment-update failure")
+	}
+	return s.Store.UpdateEnvironment(ctx, env)
+}
+
 func newSetupEngine(t *testing.T) *authsome.Engine {
 	t.Helper()
 	cfg := authsome.DefaultConfig()
@@ -52,12 +65,18 @@ func newSetupEngine(t *testing.T) *authsome.Engine {
 func newSetupEngineWithFailingUserList(t *testing.T) (*authsome.Engine, *failingUserListStore) {
 	t.Helper()
 	wrapped := &failingUserListStore{Store: memory.New()}
+	eng := startSetupEngineWithStore(t, wrapped)
+	return eng, wrapped
+}
+
+func startSetupEngineWithStore(t *testing.T, setupStore store.Store) *authsome.Engine {
+	t.Helper()
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
 	cfg := authsome.DefaultConfig()
 	cfg.Password.BcryptCost = bcrypt.MinCost
 	eng, err := authsome.NewEngine(
-		authsome.WithStore(wrapped),
+		authsome.WithStore(setupStore),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
 		authsome.WithConfig(cfg),
@@ -67,7 +86,7 @@ func newSetupEngineWithFailingUserList(t *testing.T) (*authsome.Engine, *failing
 	require.NoError(t, eng.Start(context.Background()))
 	t.Cleanup(func() { _ = eng.Stop(context.Background()) })
 	secutil.RelaxAuthDefaults(t, eng)
-	return eng, wrapped
+	return eng
 }
 
 func TestSetupStatusReturnsSafeBootstrapDefaults(t *testing.T) {
@@ -255,4 +274,138 @@ func TestSetupHandlerLegacyPayloadPreservesBootstrapConfiguration(t *testing.T) 
 	require.Equal(t, beforeEnv.ID, afterEnv.ID)
 	require.Equal(t, beforeEnv.Name, afterEnv.Name)
 	require.Equal(t, beforeEnv.Slug, afterEnv.Slug)
+}
+
+func TestSetupHandlerRejectsInvalidConfigurationBeforeWriting(t *testing.T) {
+	metadataOverLimit := make(map[string]string, 21)
+	for i := 0; i < 21; i++ {
+		metadataOverLimit[fmt.Sprintf("key-%d", i)] = "value"
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*SetupInput)
+		field  string
+	}{
+		{name: "blank platform name", field: "platform.name", mutate: func(in *SetupInput) { in.Platform.Name = " " }},
+		{name: "malformed platform slug", field: "platform.slug", mutate: func(in *SetupInput) { in.Platform.Slug = "TwinOS Office" }},
+		{name: "unsupported environment type", field: "environment.type", mutate: func(in *SetupInput) { in.Environment.Type = "preview" }},
+		{name: "too many metadata entries", field: "platform.metadata", mutate: func(in *SetupInput) { in.Platform.Metadata = metadataOverLimit }},
+		{name: "blank metadata key", field: "platform.metadata", mutate: func(in *SetupInput) { in.Platform.Metadata = map[string]string{" ": "value"} }},
+		{name: "blank metadata value", field: "environment.metadata", mutate: func(in *SetupInput) { in.Environment.Metadata = map[string]string{"key": " "} }},
+		{name: "duplicate trimmed metadata key", field: "platform.metadata", mutate: func(in *SetupInput) { in.Platform.Metadata = map[string]string{" key": "one", "key ": "two"} }},
+		{name: "oversized metadata key", field: "platform.metadata", mutate: func(in *SetupInput) { in.Platform.Metadata = map[string]string{strings.Repeat("k", 65): "value"} }},
+		{name: "oversized metadata value", field: "environment.metadata", mutate: func(in *SetupInput) { in.Environment.Metadata = map[string]string{"key": strings.Repeat("v", 513)} }},
+		{name: "invalid logo scheme", field: "platform.logo", mutate: func(in *SetupInput) { in.Platform.Logo = "javascript:alert(1)" }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			eng := newSetupEngine(t)
+			ctx := context.Background()
+			beforeApp, err := eng.GetApp(ctx, eng.PlatformAppID())
+			require.NoError(t, err)
+			beforeEnv, err := eng.GetDefaultEnvironment(ctx, eng.PlatformAppID())
+			require.NoError(t, err)
+
+			in := completeSetupInput()
+			tc.mutate(&in)
+			httpCtx, _, _ := withHTTPCtx(t)
+			_, err = setupHandler(Deps{Engine: eng})(httpCtx, in, dashcontract.Principal{})
+			var contractErr *dashcontract.Error
+			require.True(t, errors.As(err, &contractErr))
+			require.Equal(t, dashcontract.CodeBadRequest, contractErr.Code)
+			require.Equal(t, tc.field, contractErr.Details["field"])
+
+			afterApp, appErr := eng.GetApp(ctx, eng.PlatformAppID())
+			require.NoError(t, appErr)
+			afterEnv, envErr := eng.GetDefaultEnvironment(ctx, eng.PlatformAppID())
+			require.NoError(t, envErr)
+			require.Equal(t, beforeApp.Name, afterApp.Name)
+			require.Equal(t, beforeApp.Slug, afterApp.Slug)
+			require.Equal(t, beforeEnv.ID, afterEnv.ID)
+			require.Equal(t, beforeEnv.Name, afterEnv.Name)
+			users, listErr := eng.AdminListUsers(ctx, &user.Query{AppID: eng.PlatformAppID(), Limit: 1})
+			require.NoError(t, listErr)
+			require.Zero(t, users.Total)
+		})
+	}
+}
+
+func TestSetupHandlerRetriesAfterEnvironmentUpdateFailure(t *testing.T) {
+	baseStore := memory.New()
+	wrapped := &failingEnvironmentUpdateStore{Store: baseStore}
+	eng := startSetupEngineWithStore(t, wrapped)
+	ctx := context.Background()
+	beforeEnv, err := eng.GetDefaultEnvironment(ctx, eng.PlatformAppID())
+	require.NoError(t, err)
+	h := setupHandler(Deps{Engine: eng})
+
+	wrapped.fail.Store(true)
+	httpCtx, _, _ := withHTTPCtx(t)
+	_, err = h(httpCtx, completeSetupInput(), dashcontract.Principal{})
+	require.Error(t, err)
+
+	updatedApp, err := eng.GetApp(ctx, eng.PlatformAppID())
+	require.NoError(t, err)
+	require.Equal(t, "TwinOS Office", updatedApp.Name)
+	users, err := eng.AdminListUsers(ctx, &user.Query{AppID: eng.PlatformAppID(), Limit: 1})
+	require.NoError(t, err)
+	require.Zero(t, users.Total)
+
+	httpCtx, _, _ = withHTTPCtx(t)
+	got, err := h(httpCtx, completeSetupInput(), dashcontract.Principal{})
+	require.NoError(t, err)
+	require.True(t, got.OK)
+	afterEnv, err := eng.GetDefaultEnvironment(ctx, eng.PlatformAppID())
+	require.NoError(t, err)
+	require.Equal(t, beforeEnv.ID, afterEnv.ID)
+	apps, err := eng.ListApps(ctx)
+	require.NoError(t, err)
+	require.Len(t, apps, 1)
+	users, err = eng.AdminListUsers(ctx, &user.Query{AppID: eng.PlatformAppID(), Limit: 2})
+	require.NoError(t, err)
+	require.Equal(t, 1, users.Total)
+}
+
+func TestSetupHandlerConcurrentCreatesOneOwner(t *testing.T) {
+	eng := newSetupEngine(t)
+	h := setupHandler(Deps{Engine: eng})
+	start := make(chan struct{})
+	type result struct {
+		response SetupResponse
+		err      error
+	}
+	results := make(chan result, 2)
+
+	for i := 0; i < 2; i++ {
+		in := completeSetupInput()
+		in.Email = fmt.Sprintf("owner-%d@example.com", i)
+		go func() {
+			<-start
+			httpCtx, _, _ := withHTTPCtx(t)
+			response, err := h(httpCtx, in, dashcontract.Principal{})
+			results <- result{response: response, err: err}
+		}()
+	}
+	close(start)
+
+	successes := 0
+	permissionDenied := 0
+	for i := 0; i < 2; i++ {
+		got := <-results
+		if got.err == nil && got.response.OK {
+			successes++
+			continue
+		}
+		var contractErr *dashcontract.Error
+		if errors.As(got.err, &contractErr) && contractErr.Code == dashcontract.CodePermissionDenied {
+			permissionDenied++
+		}
+	}
+	require.Equal(t, 1, successes)
+	require.Equal(t, 1, permissionDenied)
+	users, err := eng.AdminListUsers(context.Background(), &user.Query{AppID: eng.PlatformAppID(), Limit: 2})
+	require.NoError(t, err)
+	require.Equal(t, 1, users.Total)
 }
