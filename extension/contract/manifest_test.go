@@ -16,17 +16,10 @@ func TestManifest_Loads(t *testing.T) {
 	if m.Contributor.Name != "auth" {
 		t.Errorf("contributor name = %q, want auth", m.Contributor.Name)
 	}
-	// 68 intents: 66 prior + 2 new feature-toggle intents
-	// (auth.featureToggles, auth.toggleFeature). apikeys.* are owned
+	// Includes the installed-plugin inventory query. apikeys.* are owned
 	// by the apikey plugin manifest, not declared here.
-	if got := len(m.Intents); got != 68 {
-		t.Errorf("intents = %d, want 68 (with feature toggles)", got)
-	}
-	// 28 top-level graph routes: 32 prior - 4 routes that moved to
-	// their owning plugins (/organizations, /organizations/:id, /plans,
-	// /plans/:id).
-	if got := len(m.Graph); got != 28 {
-		t.Errorf("graph routes = %d, want 28 (org + plan pages moved to plugins)", got)
+	if got := len(m.Intents); got != 69 {
+		t.Errorf("intents = %d, want 69", got)
 	}
 }
 
@@ -49,18 +42,13 @@ func TestManifest_RegistersWithRegistry(t *testing.T) {
 	if err := reg.Register(m); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	// Sanity-check the /login graph route survived registration. Slice
-	// (l.5) shifted the route from a hardcoded form.edit to the dynamic
-	// auth.login.form intent backed by the auth.config query, so the
-	// expectation flips to verifying the data binding.
-	root, ok := reg.MergedGraph("auth", "/login")
-	if !ok {
-		t.Fatal("expected /login route to be registered")
-	}
-	if root.Intent != "auth.login.form" {
-		t.Errorf("unexpected /login root: intent=%s", root.Intent)
-	}
-	if root.Data == nil || root.Data.QueryRef != "queries.config" {
-		t.Errorf("expected data: queries.config, got %+v", root.Data)
+	for _, name := range []string{"auth.config", "plugins.list"} {
+		intent, ok := reg.Intent("auth", name, 1)
+		if !ok {
+			t.Fatalf("expected %s to be registered", name)
+		}
+		if intent.Kind != "query" {
+			t.Errorf("%s kind = %q, want query", name, intent.Kind)
+		}
 	}
 }

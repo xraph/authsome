@@ -949,7 +949,7 @@ func (e *Extension) registerRemoteContractContributor(
 	// tries them, which is no worse than the pre-slice-(m) baseline.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	m, err := contractremote.FetchManifest(ctx, remoteBaseURL, e.config.ServiceAPIKey, nil)
+	manifests, err := fetchContractCatalog(ctx, remoteBaseURL, e.config.ServiceAPIKey)
 	if err != nil {
 		// Error (not Warn) because this is the only signal that auth.* will
 		// 404 at request time; operators need to see it in default log
@@ -961,14 +961,18 @@ func (e *Extension) registerRemoteContractContributor(
 		)
 		return nil //nolint:nilerr // non-fatal; surfaced via log
 	}
-	if err := contractloader.Validate(m, wreg); err != nil {
-		return fmt.Errorf("authsome: validate remote manifest: %w", err)
+	for _, manifest := range manifests {
+		if err := contractloader.Validate(manifest, wreg); err != nil {
+			return fmt.Errorf("authsome: validate remote manifest %s: %w", manifest.Contributor.Name, err)
+		}
 	}
-	if err := reg.RegisterRemote(m, dashcontract.RemoteEndpoint{
-		BaseURL: remoteBaseURL,
-		APIKey:  e.config.ServiceAPIKey,
-	}); err != nil {
-		return fmt.Errorf("authsome: register remote contributor: %w", err)
+	for _, manifest := range manifests {
+		if err := reg.RegisterRemote(manifest, dashcontract.RemoteEndpoint{
+			BaseURL: remoteBaseURL,
+			APIKey:  e.config.ServiceAPIKey,
+		}); err != nil {
+			return fmt.Errorf("authsome: register remote contributor %s: %w", manifest.Contributor.Name, err)
+		}
 	}
 	// Install the forwarding dispatcher. The dispatcher reads endpoints
 	// from the registry per request, so this single install routes ALL
@@ -977,7 +981,7 @@ func (e *Extension) registerRemoteContractContributor(
 	// repeated calls just replace the field with an equivalent value.
 	disp.SetRemoteDispatcher(contractremote.NewForwardingDispatcher(reg))
 	e.Logger().Info("authsome: registered upstream as remote contract contributor",
-		log.String("contributor", m.Contributor.Name),
+		log.Int("contributors", len(manifests)),
 		log.String("remote_base", remoteBaseURL),
 	)
 	return nil
@@ -1001,18 +1005,7 @@ func (e *Extension) registerContractServer(router forge.Router) error {
 	e.contractReg = dashcontract.NewRegistry()
 	e.contractWreg = dashcontract.NewWardenRegistry()
 	e.contractDisp = dispatcher.New(dispatcher.NoopMetricsEmitter{})
-	deps := authcontract.Deps{
-		Engine:         e.engine,
-		SocialBasePath: e.config.Dashboard.SocialBasePath,
-		Brand:          e.config.Dashboard.Brand,
-		BrandLogoURL:   e.config.Dashboard.BrandLogoURL,
-		SignupURL:      e.config.Dashboard.SignupURL,
-		SignupLabel:    e.config.Dashboard.SignupLabel,
-		TermsURL:       e.config.Dashboard.TermsURL,
-		PrivacyURL:     e.config.Dashboard.PrivacyURL,
-		RequiredRoles:  append([]string(nil), e.config.Dashboard.RequiredRoles...),
-	}
-	if err := authcontract.Register(e.contractDisp, e.contractReg, e.contractWreg, deps); err != nil {
+	if err := e.RegisterContractContributor(e.contractDisp, e.contractReg, e.contractWreg); err != nil {
 		return fmt.Errorf("authsome: stand up contract server: %w", err)
 	}
 	srv := contractserver.New(e.contractReg, e.contractWreg, e.contractDisp, dashcontract.NoopAuditEmitter{})

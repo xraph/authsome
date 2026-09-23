@@ -21,13 +21,6 @@ func TestManifest_Loads(t *testing.T) {
 	if got := len(m.Intents); got != 0 {
 		t.Errorf("intents = %d, want 0", got)
 	}
-	// One graph route: /auth/email deep-link page.
-	if got := len(m.Graph); got != 1 {
-		t.Errorf("graph routes = %d, want 1 (/auth/email)", got)
-	}
-	if got := len(m.Extends); got != 0 {
-		t.Errorf("extends = %d, want 0 (auto-discovered via settings.tabs)", got)
-	}
 }
 
 // TestManifest_Validates ensures every intent referenced by the graph

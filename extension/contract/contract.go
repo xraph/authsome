@@ -333,6 +333,9 @@ func Register(
 	if err := dispatcher.RegisterQuery(d, c, "auth.featureToggles", 1, featureTogglesHandler(deps)); err != nil {
 		return fmt.Errorf("authsome/contract: register auth.featureToggles: %w", err)
 	}
+	if err := dispatcher.RegisterQuery(d, c, "plugins.list", 1, pluginsListHandler(deps)); err != nil {
+		return fmt.Errorf("authsome/contract: register plugins.list: %w", err)
+	}
 	if err := dispatcher.RegisterCommand(d, c, "auth.toggleFeature", 1, toggleFeatureHandler(deps)); err != nil {
 		return fmt.Errorf("authsome/contract: register auth.toggleFeature: %w", err)
 	}

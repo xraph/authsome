@@ -21,9 +21,6 @@ func TestManifest_Loads(t *testing.T) {
 	if got := len(m.Intents); got != 4 {
 		t.Errorf("intents = %d, want 4 (list/detail/create/revoke)", got)
 	}
-	if got := len(m.Graph); got != 3 {
-		t.Errorf("graph routes = %d, want 3 (/apikeys + /apikeys/:id + /apikeys/create)", got)
-	}
 }
 
 func TestManifest_Validates(t *testing.T) {

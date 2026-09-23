@@ -129,10 +129,11 @@ intents:
   - { name: auth.forgotPassword,   kind: command, version: 1, capability: write }
   - { name: auth.resetPassword,    kind: command, version: 1, capability: write }
   - { name: auth.setupStatus,      kind: query,   version: 1, capability: read  }
-  - { name: auth.setup,            kind: command, version: 1, capability: write }
+  - { name: auth.setup,            kind: command, version: 1, capability: write, invalidates: [auth.config, auth.setupStatus, apps.context, apps.list, environments.list] }
   - { name: auth.dynamicConfig,    kind: query,   version: 1, capability: read  }
   - { name: auth.dynamicRegister,  kind: command, version: 1, capability: write }
   - { name: auth.featureToggles,   kind: query,   version: 1, capability: read  }
+  - { name: plugins.list,          kind: query,   version: 1, capability: read  }
   - { name: auth.toggleFeature,    kind: command, version: 1, capability: write, invalidates: [auth.featureToggles] }
 
   # Phase C.17 — App + environment switcher. apps.context drives the

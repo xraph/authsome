@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/bridge"
 
 	"github.com/xraph/forge/extensions/dashboard/contract"
 	"github.com/xraph/forge/extensions/dashboard/contract/dispatcher"
@@ -18,7 +19,10 @@ import (
 var manifestYAML []byte
 
 type Deps struct {
-	Engine *authsome.Engine
+	Engine   *authsome.Engine
+	Manager  func() bridge.HeraldTemplateManager
+	Sender   func() bridge.Herald
+	Mappings func() []MappingSummary
 }
 
 func Register(
@@ -40,6 +44,42 @@ func Register(
 	if err := reg.Register(m); err != nil {
 		return fmt.Errorf("notification/contract: register manifest: %w", err)
 	}
-	_ = d
+	const c = "notification"
+	if err := dispatcher.RegisterQuery(d, c, "notification.templates.list", 1, templatesList(deps)); err != nil {
+		return err
+	}
+	if err := dispatcher.RegisterQuery(d, c, "notification.templates.detail", 1, templateDetail(deps)); err != nil {
+		return err
+	}
+	if err := dispatcher.RegisterQuery(d, c, "notification.templates.preview", 1, templatePreview(deps)); err != nil {
+		return err
+	}
+	if err := dispatcher.RegisterCommand(d, c, "notification.templates.create", 1, templateCreate(deps)); err != nil {
+		return err
+	}
+	if err := dispatcher.RegisterCommand(d, c, "notification.templates.update", 1, templateUpdate(deps)); err != nil {
+		return err
+	}
+	if err := dispatcher.RegisterCommand(d, c, "notification.templates.delete", 1, templateDelete(deps)); err != nil {
+		return err
+	}
+	if err := dispatcher.RegisterCommand(d, c, "notification.versions.create", 1, versionCreate(deps)); err != nil {
+		return err
+	}
+	if err := dispatcher.RegisterCommand(d, c, "notification.versions.update", 1, versionUpdate(deps)); err != nil {
+		return err
+	}
+	if err := dispatcher.RegisterCommand(d, c, "notification.versions.delete", 1, versionDelete(deps)); err != nil {
+		return err
+	}
+	if err := dispatcher.RegisterCommand(d, c, "notification.send", 1, sendNotification(deps)); err != nil {
+		return err
+	}
+	if err := dispatcher.RegisterCommand(d, c, "notification.templates.resetDefaults", 1, resetDefaultTemplates(deps)); err != nil {
+		return err
+	}
+	if err := dispatcher.RegisterQuery(d, c, "notification.mappings.list", 1, mappingsList(deps)); err != nil {
+		return err
+	}
 	return nil
 }
