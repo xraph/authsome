@@ -211,7 +211,29 @@ func mapResetError(err error) error {
 // when no users exist yet — the dashboard's AuthGate uses this to
 // redirect to /setup before /login.
 type SetupStatusResponse struct {
-	Pending bool `json:"pending"`
+	Pending     bool                      `json:"pending"`
+	Platform    *SetupPlatformDefaults    `json:"platform,omitempty"`
+	Environment *SetupEnvironmentDefaults `json:"environment,omitempty"`
+}
+
+// SetupPlatformDefaults contains the public platform fields the anonymous
+// setup form may edit. Keep this deliberately smaller than AppDetail: stored
+// metadata and the publishable key must never cross this public boundary.
+type SetupPlatformDefaults struct {
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+	Logo string `json:"logo,omitempty"`
+}
+
+// SetupEnvironmentDefaults contains only the public default-environment
+// fields needed to initialize first-run setup.
+type SetupEnvironmentDefaults struct {
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Type        string `json:"type"`
+	IsDefault   bool   `json:"isDefault"`
+	Color       string `json:"color,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 // SetupInput is the wire shape for auth.setup. Mirrors the
@@ -247,7 +269,36 @@ func setupStatusHandler(deps Deps) func(ctx context.Context, _ struct{}, _ contr
 			// already-bootstrapped deployment whose count query just hiccupped.
 			return SetupStatusResponse{Pending: false}, nil
 		}
-		return SetupStatusResponse{Pending: list.Total == 0}, nil
+		if list.Total > 0 {
+			return SetupStatusResponse{Pending: false}, nil
+		}
+
+		appID := defaultAppID(eng)
+		platform, err := eng.GetApp(ctx, appID)
+		if err != nil {
+			return SetupStatusResponse{}, mapEngineError(err)
+		}
+		defaultEnv, err := eng.GetDefaultEnvironment(ctx, appID)
+		if err != nil {
+			return SetupStatusResponse{}, mapEngineError(err)
+		}
+
+		return SetupStatusResponse{
+			Pending: true,
+			Platform: &SetupPlatformDefaults{
+				Name: platform.Name,
+				Slug: platform.Slug,
+				Logo: platform.Logo,
+			},
+			Environment: &SetupEnvironmentDefaults{
+				Name:        defaultEnv.Name,
+				Slug:        defaultEnv.Slug,
+				Type:        string(defaultEnv.Type),
+				IsDefault:   defaultEnv.IsDefault,
+				Color:       defaultEnv.Color,
+				Description: defaultEnv.Description,
+			},
+		}, nil
 	}
 }
 
