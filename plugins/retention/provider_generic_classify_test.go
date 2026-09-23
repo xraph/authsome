@@ -21,6 +21,11 @@ import (
 
 // fakeResp builds a *http.Response carrying just what classifyHTTPError and
 // retryAfter look at: status, status code, and headers. No network involved.
+// fakeResp builds a response for classifyHTTPError to inspect. It has no
+// Body: classification reads only the status and headers, and nothing here
+// came from a real transport, so there is no reader to drain. bodyclose
+// still flags the call sites because the function returns *http.Response,
+// hence the directives there. Closing a nil Body would panic.
 func fakeResp(status int, header http.Header) *http.Response {
 	if header == nil {
 		header = http.Header{}
@@ -57,105 +62,105 @@ func TestClassifyHTTPError_Table(t *testing.T) {
 		},
 		{
 			name:       "429 with Retry-After delta-seconds",
-			resp:       fakeResp(http.StatusTooManyRequests, headerWithRetryAfter("120")),
+			resp:       fakeResp(http.StatusTooManyRequests, headerWithRetryAfter("120")), //nolint:bodyclose // synthetic response, Body is nil
 			retryable:  true,
 			retryAfter: 2 * time.Minute,
 		},
 		{
 			name:       "429 with Retry-After clamped to 30m ceiling",
-			resp:       fakeResp(http.StatusTooManyRequests, headerWithRetryAfter("99999")),
+			resp:       fakeResp(http.StatusTooManyRequests, headerWithRetryAfter("99999")), //nolint:bodyclose // synthetic response, Body is nil
 			retryable:  true,
 			retryAfter: 30 * time.Minute,
 		},
 		{
 			name:       "429 with Retry-After floored to 1s",
-			resp:       fakeResp(http.StatusTooManyRequests, headerWithRetryAfter("0")),
+			resp:       fakeResp(http.StatusTooManyRequests, headerWithRetryAfter("0")), //nolint:bodyclose // synthetic response, Body is nil
 			retryable:  true,
 			retryAfter: time.Second,
 		},
 		{
 			name:       "429 with garbage Retry-After falls back to backoff",
-			resp:       fakeResp(http.StatusTooManyRequests, headerWithRetryAfter("banana")),
+			resp:       fakeResp(http.StatusTooManyRequests, headerWithRetryAfter("banana")), //nolint:bodyclose // synthetic response, Body is nil
 			retryable:  true,
 			retryAfter: 0,
 		},
 		{
 			name:       "429 with no Retry-After header",
-			resp:       fakeResp(http.StatusTooManyRequests, nil),
+			resp:       fakeResp(http.StatusTooManyRequests, nil), //nolint:bodyclose // synthetic response, Body is nil
 			retryable:  true,
 			retryAfter: 0,
 		},
 		{
 			name:       "401 unauthorized",
-			resp:       fakeResp(http.StatusUnauthorized, nil),
+			resp:       fakeResp(http.StatusUnauthorized, nil), //nolint:bodyclose // synthetic response, Body is nil
 			retryable:  true,
 			retryAfter: 2 * time.Minute,
 		},
 		{
 			name:       "403 forbidden",
-			resp:       fakeResp(http.StatusForbidden, nil),
+			resp:       fakeResp(http.StatusForbidden, nil), //nolint:bodyclose // synthetic response, Body is nil
 			retryable:  true,
 			retryAfter: 2 * time.Minute,
 		},
 		{
 			name:      "404 drops the ref",
-			resp:      fakeResp(http.StatusNotFound, nil),
+			resp:      fakeResp(http.StatusNotFound, nil), //nolint:bodyclose // synthetic response, Body is nil
 			retryable: true,
 			dropRef:   true,
 		},
 		{
 			name:      "500 internal server error",
-			resp:      fakeResp(http.StatusInternalServerError, nil),
+			resp:      fakeResp(http.StatusInternalServerError, nil), //nolint:bodyclose // synthetic response, Body is nil
 			retryable: true,
 		},
 		{
 			name:      "502 bad gateway",
-			resp:      fakeResp(http.StatusBadGateway, nil),
+			resp:      fakeResp(http.StatusBadGateway, nil), //nolint:bodyclose // synthetic response, Body is nil
 			retryable: true,
 		},
 		{
 			name:      "503 service unavailable",
-			resp:      fakeResp(http.StatusServiceUnavailable, nil),
+			resp:      fakeResp(http.StatusServiceUnavailable, nil), //nolint:bodyclose // synthetic response, Body is nil
 			retryable: true,
 		},
 		{
 			name:      "504 gateway timeout",
-			resp:      fakeResp(http.StatusGatewayTimeout, nil),
+			resp:      fakeResp(http.StatusGatewayTimeout, nil), //nolint:bodyclose // synthetic response, Body is nil
 			retryable: true,
 		},
 		{
 			name:      "501 not implemented is terminal",
-			resp:      fakeResp(http.StatusNotImplemented, nil),
+			resp:      fakeResp(http.StatusNotImplemented, nil), //nolint:bodyclose // synthetic response, Body is nil
 			retryable: false,
 		},
 		{
 			name:      "400 bad request is terminal",
-			resp:      fakeResp(http.StatusBadRequest, nil),
+			resp:      fakeResp(http.StatusBadRequest, nil), //nolint:bodyclose // synthetic response, Body is nil
 			retryable: false,
 		},
 		{
 			name:      "422 unprocessable entity is terminal",
-			resp:      fakeResp(http.StatusUnprocessableEntity, nil),
+			resp:      fakeResp(http.StatusUnprocessableEntity, nil), //nolint:bodyclose // synthetic response, Body is nil
 			retryable: false,
 		},
 		{
 			name:      "413 payload too large is terminal",
-			resp:      fakeResp(http.StatusRequestEntityTooLarge, nil),
+			resp:      fakeResp(http.StatusRequestEntityTooLarge, nil), //nolint:bodyclose // synthetic response, Body is nil
 			retryable: false,
 		},
 		{
 			name:      "408 request timeout",
-			resp:      fakeResp(http.StatusRequestTimeout, nil),
+			resp:      fakeResp(http.StatusRequestTimeout, nil), //nolint:bodyclose // synthetic response, Body is nil
 			retryable: true,
 		},
 		{
 			name:      "409 conflict",
-			resp:      fakeResp(http.StatusConflict, nil),
+			resp:      fakeResp(http.StatusConflict, nil), //nolint:bodyclose // synthetic response, Body is nil
 			retryable: true,
 		},
 		{
 			name:      "418 unrecognised status is terminal",
-			resp:      fakeResp(http.StatusTeapot, nil),
+			resp:      fakeResp(http.StatusTeapot, nil), //nolint:bodyclose // synthetic response, Body is nil
 			retryable: false,
 		},
 	}
@@ -180,7 +185,7 @@ func TestClassifyHTTPError_NilResponsePreservesTransportError(t *testing.T) {
 
 func TestRetryAfter_HTTPDateForm(t *testing.T) {
 	when := time.Now().Add(90 * time.Second).UTC()
-	resp := fakeResp(http.StatusTooManyRequests, headerWithRetryAfter(when.Format(http.TimeFormat)))
+	resp := fakeResp(http.StatusTooManyRequests, headerWithRetryAfter(when.Format(http.TimeFormat))) //nolint:bodyclose // synthetic response, Body is nil
 
 	got := retryAfter(resp)
 	assert.InDelta(t, 90*time.Second, got, float64(5*time.Second),
@@ -189,7 +194,7 @@ func TestRetryAfter_HTTPDateForm(t *testing.T) {
 
 func TestClassifyHTTPError_429HTTPDateRetryAfter(t *testing.T) {
 	when := time.Now().Add(90 * time.Second).UTC()
-	resp := fakeResp(http.StatusTooManyRequests, headerWithRetryAfter(when.Format(http.TimeFormat)))
+	resp := fakeResp(http.StatusTooManyRequests, headerWithRetryAfter(when.Format(http.TimeFormat))) //nolint:bodyclose // synthetic response, Body is nil
 
 	pe := classifyHTTPError(resp, nil, nil)
 	require.NotNil(t, pe)
@@ -214,7 +219,7 @@ func TestTruncate(t *testing.T) {
 // ──────────────────────────────────────────────────
 
 func TestGenericProvider_UpsertContact_404EndToEnd(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"error":"contact not found"}`))
 	}))
@@ -234,7 +239,7 @@ func TestGenericProvider_UpsertContact_404EndToEnd(t *testing.T) {
 }
 
 func TestGenericProvider_UpsertContact_429WithRetryAfterEndToEnd(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Retry-After", "45")
 		w.WriteHeader(http.StatusTooManyRequests)
 		_, _ = w.Write([]byte(`slow down`))
@@ -255,7 +260,7 @@ func TestGenericProvider_UpsertContact_429WithRetryAfterEndToEnd(t *testing.T) {
 }
 
 func TestGenericProvider_UpsertContact_400IsTerminalEndToEnd(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"error":"invalid email"}`))
 	}))

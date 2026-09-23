@@ -105,7 +105,7 @@ func (c *Client) RefreshTokensWithCookies(ctx context.Context, cookieHeader stri
 		}
 		msg := ""
 		if len(raw) > 0 {
-			_ = json.Unmarshal(raw, &env) // best-effort
+			_ = json.Unmarshal(raw, &env) //nolint:errcheck // best-effort: a non-JSON error body just leaves msg empty, and RawBody still carries it
 			msg = firstNonEmptyClientErrorMessage(env.Error, env.Message, env.Details)
 		}
 		return nil, &ClientError{
