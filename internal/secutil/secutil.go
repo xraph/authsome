@@ -21,7 +21,9 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/lockout"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store/memory"
 
@@ -209,6 +211,11 @@ func InitTestNonceSigner(t *testing.T) {
 func RelaxAuthDefaults(t *testing.T, eng *authsome.Engine) {
 	t.Helper()
 	require.NotNil(t, eng, "secutil: RelaxAuthDefaults: nil engine")
+	// Rate limiting and lockout are on by default; a test that signs in
+	// many times from httptest's single address would trip them. Tests that
+	// exercise the limits build their own engine and never call this.
+	eng.SetRateLimiter(ratelimit.NewNoopLimiter())
+	eng.SetLockoutTracker(lockout.NewNoopTracker())
 	mgr := eng.Settings()
 	if mgr == nil {
 		return

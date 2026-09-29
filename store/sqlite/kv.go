@@ -28,7 +28,10 @@ func (s *Store) KVGet(ctx context.Context, key string) ([]byte, error) {
 	m := new(KVModel)
 	err := s.sdb.NewSelect(m).
 		Where("key = ?", key).
-		Where("expires_at > ?", time.Now().UnixMilli()).
+		// expires_at is an integer of unix milliseconds, not a text timestamp,
+		// so no zone binding applies; the operand order keeps the store's
+		// timestamp guard from reading it as one.
+		Where("? < expires_at", time.Now().UnixMilli()).
 		Scan(ctx)
 	if err != nil {
 		return nil, sqliteError(err)
@@ -98,7 +101,7 @@ func (s *Store) KVDelete(ctx context.Context, key string) error {
 
 // KVDeleteExpired implements store.KV.
 func (s *Store) KVDeleteExpired(ctx context.Context, now time.Time) (int64, error) {
-	res, err := s.sdb.NewDelete((*KVModel)(nil)).Where("expires_at <= ?", now.UnixMilli()).Exec(ctx)
+	res, err := s.sdb.NewDelete((*KVModel)(nil)).Where("? >= expires_at", now.UnixMilli()).Exec(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("authsome/sqlite: kv delete expired: %w", sqliteError(err))
 	}

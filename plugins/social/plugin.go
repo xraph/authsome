@@ -27,7 +27,6 @@ import (
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
-	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
@@ -572,24 +571,12 @@ func (p *Plugin) rateLimitOpts(target rateLimitTarget) []forge.RouteOption {
 	if !ok || eng == nil {
 		return nil
 	}
-	rl := eng.RateLimiter()
 	cfg := eng.Config().RateLimit
-	if rl == nil || !cfg.Enabled {
-		return nil
-	}
 	limit := cfg.SignUpLimit
 	if target == rateLimitForCallback {
 		limit = cfg.SignInLimit
 	}
-	if limit <= 0 {
-		return nil
-	}
-	return []forge.RouteOption{
-		forge.WithMiddleware(middleware.RateLimit(rl, middleware.RateLimitConfig{
-			Limit:  limit,
-			Window: cfg.Window(),
-		})),
-	}
+	return eng.RateLimitOptions(limit)
 }
 
 // ──────────────────────────────────────────────────

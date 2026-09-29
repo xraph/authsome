@@ -183,11 +183,22 @@ func NewEngine(opts ...Option) (*Engine, error) {
 	// place that covers every one of them. See engine_session_roles.go.
 	e.store = newRoleStampingStore(e.store, e.sessionRoleSlugs, e.logger)
 
-	// Eagerly allocate the MFA ceremony store when none was configured, so it
-	// is never lazily created on a request goroutine (which would be a data
-	// race between concurrent MFA-gated logins and could drop tickets).
+	// Shared abuse state lives in the store's KV table unless the caller
+	// wired something else, so limits, locks and ceremonies hold across every
+	// replica that shares the database. Allocated here, never lazily on a
+	// request goroutine.
 	if e.ceremonyStore == nil {
-		e.ceremonyStore = ceremony.NewMemory()
+		e.ceremonyStore = ceremony.NewKV(e.store)
+	}
+	if e.rateLimiter == nil && e.config.RateLimit.Enabled {
+		e.rateLimiter = ratelimit.NewKVLimiter(e.store)
+	}
+	if e.lockout == nil && e.config.Lockout.Enabled {
+		e.lockout = lockout.NewKVTracker(e.store,
+			lockout.WithMaxAttempts(e.config.Lockout.MaxAttempts),
+			lockout.WithLockoutDuration(e.config.Lockout.LockoutDuration()),
+			lockout.WithResetAfter(e.config.Lockout.ResetAfter()),
+		)
 	}
 
 	// Initialize subsystems
@@ -893,6 +904,24 @@ func (e *Engine) SetChronicle(ch bridge.Chronicle) {
 		panic("authsome: SetChronicle is only available in tests")
 	}
 	e.chronicle = ch
+}
+
+// SetRateLimiter replaces the rate limiter. A test seam only, like
+// SetChronicle: tests relax the on-by-default limits without rebuilding the
+// engine's configuration.
+func (e *Engine) SetRateLimiter(rl ratelimit.Limiter) {
+	if !testing.Testing() {
+		panic("authsome: SetRateLimiter is only available in tests")
+	}
+	e.rateLimiter = rl
+}
+
+// SetLockoutTracker replaces the lockout tracker. A test seam only.
+func (e *Engine) SetLockoutTracker(t lockout.Tracker) {
+	if !testing.Testing() {
+		panic("authsome: SetLockoutTracker is only available in tests")
+	}
+	e.lockout = t
 }
 
 // Authorizer returns the authorization bridge (may be nil).

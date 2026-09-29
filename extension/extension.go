@@ -42,10 +42,8 @@ import (
 	"github.com/xraph/authsome/environment"
 	authcontract "github.com/xraph/authsome/extension/contract"
 	"github.com/xraph/authsome/id"
-	"github.com/xraph/authsome/lockout"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
-	"github.com/xraph/authsome/ratelimit"
 	authclient "github.com/xraph/authsome/sdk/go"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
@@ -424,23 +422,10 @@ func (e *Extension) init(fapp forge.App) error {
 		opts = append(opts, authsome.WithMailer(bridge.NewNoopMailer(logger)))
 	}
 
-	// ── Auto-configure rate limiter (in-memory fallback) ──
-	if e.config.RateLimit.Enabled {
-		opts = append(opts, authsome.WithRateLimiter(ratelimit.NewMemoryLimiter()))
-		e.Logger().Info("authsome: rate limiting enabled (in-memory)")
-	}
-
-	// ── Auto-configure account lockout (in-memory fallback) ──
-	if e.config.Lockout.Enabled {
-		opts = append(opts, authsome.WithLockoutTracker(
-			lockout.NewMemoryTracker(
-				lockout.WithMaxAttempts(e.config.Lockout.MaxAttempts),
-				lockout.WithLockoutDuration(e.config.Lockout.LockoutDuration()),
-				lockout.WithResetAfter(e.config.Lockout.ResetAfter()),
-			),
-		))
-		e.Logger().Info("authsome: account lockout enabled (in-memory)")
-	}
+	// Rate limiting, lockout and ceremony state are wired by the engine on
+	// the store's shared KV table (engine.go, NewEngine), so they hold across
+	// replicas without any wiring here. A host that wants something else
+	// passes WithRateLimiter, WithLockoutTracker or WithCeremonyStore.
 
 	// ── Per-app session configuration from YAML ──
 	for appIDStr, appCfg := range e.config.Apps {
@@ -1414,9 +1399,29 @@ func (e *Extension) buildEngineConfig() authsome.Config {
 		cfg.Password.Argon2.KeyLength = e.config.Password.Argon2.KeyLength
 	}
 
-	// Rate limit
-	if e.config.RateLimit.Enabled {
-		cfg.RateLimit.Enabled = true
+	// Rate limit. The engine default is on; only an explicit false turns
+	// it off.
+	if e.config.RateLimit.Enabled != nil {
+		cfg.RateLimit.Enabled = *e.config.RateLimit.Enabled
+	}
+	cfg.RateLimit.FailOpen = e.config.RateLimit.FailOpen
+	for _, pair := range []struct {
+		src int
+		dst *int
+	}{
+		{e.config.RateLimit.ResetPasswordLimit, &cfg.RateLimit.ResetPasswordLimit},
+		{e.config.RateLimit.ChangePasswordLimit, &cfg.RateLimit.ChangePasswordLimit},
+		{e.config.RateLimit.OAuthTokenLimit, &cfg.RateLimit.OAuthTokenLimit},
+		{e.config.RateLimit.OAuthAuthorizeLimit, &cfg.RateLimit.OAuthAuthorizeLimit},
+		{e.config.RateLimit.PasskeyLimit, &cfg.RateLimit.PasskeyLimit},
+		{e.config.RateLimit.SSOLimit, &cfg.RateLimit.SSOLimit},
+		{e.config.RateLimit.SCIMLimit, &cfg.RateLimit.SCIMLimit},
+		{e.config.RateLimit.WaitlistJoinLimit, &cfg.RateLimit.WaitlistJoinLimit},
+		{e.config.RateLimit.APIKeyFailureLimit, &cfg.RateLimit.APIKeyFailureLimit},
+	} {
+		if pair.src != 0 {
+			*pair.dst = pair.src
+		}
 	}
 	if e.config.RateLimit.SignInLimit != 0 {
 		cfg.RateLimit.SignInLimit = e.config.RateLimit.SignInLimit
@@ -1434,9 +1439,9 @@ func (e *Extension) buildEngineConfig() authsome.Config {
 		cfg.RateLimit.WindowSeconds = e.config.RateLimit.WindowSeconds
 	}
 
-	// Lockout
-	if e.config.Lockout.Enabled {
-		cfg.Lockout.Enabled = true
+	// Lockout. On by default; only an explicit false turns it off.
+	if e.config.Lockout.Enabled != nil {
+		cfg.Lockout.Enabled = *e.config.Lockout.Enabled
 	}
 	if e.config.Lockout.MaxAttempts != 0 {
 		cfg.Lockout.MaxAttempts = e.config.Lockout.MaxAttempts

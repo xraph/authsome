@@ -287,8 +287,40 @@ type Argon2Config struct {
 
 // RateLimitConfig configures per-endpoint rate limits.
 type RateLimitConfig struct {
-	// Enabled enables rate limiting.
-	Enabled bool `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
+	// Enabled turns rate limiting on or off. Unset means on: an explicit
+	// false is the only way to switch the limits off.
+	Enabled *bool `json:"enabled,omitempty" mapstructure:"enabled" yaml:"enabled,omitempty"`
+
+	// FailOpen lets requests through when the limiter itself fails. Off by
+	// default: a limiter outage answers 503.
+	FailOpen bool `json:"fail_open" mapstructure:"fail_open" yaml:"fail_open"`
+
+	// ResetPasswordLimit caps reset-password submissions per window (default: 5).
+	ResetPasswordLimit int `json:"reset_password_limit" mapstructure:"reset_password_limit" yaml:"reset_password_limit"`
+
+	// ChangePasswordLimit caps change-password submissions per window (default: 5).
+	ChangePasswordLimit int `json:"change_password_limit" mapstructure:"change_password_limit" yaml:"change_password_limit"`
+
+	// OAuthTokenLimit caps OAuth2 token, revoke and device requests per window (default: 30).
+	OAuthTokenLimit int `json:"oauth_token_limit" mapstructure:"oauth_token_limit" yaml:"oauth_token_limit"`
+
+	// OAuthAuthorizeLimit caps OAuth2 authorize requests per window (default: 30).
+	OAuthAuthorizeLimit int `json:"oauth_authorize_limit" mapstructure:"oauth_authorize_limit" yaml:"oauth_authorize_limit"`
+
+	// PasskeyLimit caps passkey ceremonies per window (default: 10).
+	PasskeyLimit int `json:"passkey_limit" mapstructure:"passkey_limit" yaml:"passkey_limit"`
+
+	// SSOLimit caps public SSO requests per window (default: 20).
+	SSOLimit int `json:"sso_limit" mapstructure:"sso_limit" yaml:"sso_limit"`
+
+	// SCIMLimit caps SCIM requests per window (default: 60).
+	SCIMLimit int `json:"scim_limit" mapstructure:"scim_limit" yaml:"scim_limit"`
+
+	// WaitlistJoinLimit caps waitlist joins per window (default: 5).
+	WaitlistJoinLimit int `json:"waitlist_join_limit" mapstructure:"waitlist_join_limit" yaml:"waitlist_join_limit"`
+
+	// APIKeyFailureLimit caps failed API-key authentications per address per window (default: 20).
+	APIKeyFailureLimit int `json:"api_key_failure_limit" mapstructure:"api_key_failure_limit" yaml:"api_key_failure_limit"`
 
 	// SignInLimit is the max sign-in attempts per window (default: 5).
 	SignInLimit int `json:"signin_limit" mapstructure:"signin_limit" yaml:"signin_limit"`
@@ -316,8 +348,9 @@ func (c RateLimitConfig) Window() time.Duration {
 
 // LockoutConfig configures account lockout after failed authentication attempts.
 type LockoutConfig struct {
-	// Enabled enables account lockout.
-	Enabled bool `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
+	// Enabled turns account lockout on or off. Unset means on: an explicit
+	// false is the only way to switch lockout off.
+	Enabled *bool `json:"enabled,omitempty" mapstructure:"enabled" yaml:"enabled,omitempty"`
 
 	// MaxAttempts is the number of failed attempts before lockout (default: 5).
 	MaxAttempts int `json:"max_attempts" mapstructure:"max_attempts" yaml:"max_attempts"`

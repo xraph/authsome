@@ -23,17 +23,7 @@ import (
 // rateLimitOpt returns a forge.WithMiddleware option for rate limiting the given endpoint,
 // or nil if rate limiting is not enabled.
 func (a *API) rateLimitOpt(limit int) []forge.RouteOption {
-	rl := a.engine.RateLimiter()
-	cfg := a.engine.Config().RateLimit
-	if rl == nil || !cfg.Enabled {
-		return nil
-	}
-	return []forge.RouteOption{
-		forge.WithMiddleware(middleware.RateLimit(rl, middleware.RateLimitConfig{
-			Limit:  limit,
-			Window: cfg.Window(),
-		})),
-	}
+	return a.engine.RateLimitOptions(limit)
 }
 
 // captchaOpt returns a forge.WithMiddleware option that gates the route on

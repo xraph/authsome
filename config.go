@@ -165,11 +165,45 @@ type RateLimitConfig struct {
 	// circuit breaker.
 	SSFPushLimit int `json:"ssf_push_limit"`
 
+	// ResetPasswordLimit caps reset-password submissions per window (default: 5).
+	ResetPasswordLimit int `json:"reset_password_limit"`
+
+	// ChangePasswordLimit caps change-password submissions per window (default: 5).
+	ChangePasswordLimit int `json:"change_password_limit"`
+
+	// OAuthTokenLimit caps OAuth2 token, revoke and device-authorize
+	// requests per window (default: 30).
+	OAuthTokenLimit int `json:"oauth_token_limit"`
+
+	// OAuthAuthorizeLimit caps OAuth2 authorize requests per window (default: 30).
+	OAuthAuthorizeLimit int `json:"oauth_authorize_limit"`
+
+	// PasskeyLimit caps passkey login and registration ceremonies per window (default: 10).
+	PasskeyLimit int `json:"passkey_limit"`
+
+	// SSOLimit caps public SSO requests per window (default: 20).
+	SSOLimit int `json:"sso_limit"`
+
+	// SCIMLimit caps SCIM requests per window (default: 60).
+	SCIMLimit int `json:"scim_limit"`
+
+	// WaitlistJoinLimit caps waitlist joins per window (default: 5).
+	WaitlistJoinLimit int `json:"waitlist_join_limit"`
+
+	// APIKeyFailureLimit caps failed API-key authentications per client
+	// address per window (default: 20).
+	APIKeyFailureLimit int `json:"api_key_failure_limit"`
+
 	// WindowSeconds is the sliding window duration in seconds (default: 60).
 	WindowSeconds int `json:"window_seconds"`
 
-	// Enabled enables rate limiting (default: false).
+	// Enabled enables rate limiting (default: true).
 	Enabled bool `json:"enabled"`
+
+	// FailOpen lets requests through when the limiter itself fails
+	// (default: false). Off, a limiter outage answers 503: an attacker who
+	// can break the limiter must not get an unlimited window out of it.
+	FailOpen bool `json:"fail_open"`
 }
 
 // Window returns the rate limit window as a time.Duration.
@@ -191,7 +225,7 @@ type LockoutConfig struct {
 	// ResetAfterSeconds resets the failure count after this many seconds of no failures (default: 3600 = 1h).
 	ResetAfterSeconds int `json:"reset_after_seconds"`
 
-	// Enabled enables account lockout (default: false).
+	// Enabled enables account lockout (default: true).
 	Enabled bool `json:"enabled"`
 }
 
@@ -227,6 +261,7 @@ func DefaultConfig() Config {
 			BcryptCost:       12,
 		},
 		RateLimit: RateLimitConfig{
+			Enabled:                 true,
 			SignInLimit:             5,
 			SignUpLimit:             3,
 			RefreshLimit:            10,
@@ -236,9 +271,19 @@ func DefaultConfig() Config {
 			VerifyEmailLimit:        10,
 			ResendVerificationLimit: 3,
 			SSFPushLimit:            60,
+			ResetPasswordLimit:      5,
+			ChangePasswordLimit:     5,
+			OAuthTokenLimit:         30,
+			OAuthAuthorizeLimit:     30,
+			PasskeyLimit:            10,
+			SSOLimit:                20,
+			SCIMLimit:               60,
+			WaitlistJoinLimit:       5,
+			APIKeyFailureLimit:      20,
 			WindowSeconds:           60,
 		},
 		Lockout: LockoutConfig{
+			Enabled:                true,
 			MaxAttempts:            5,
 			LockoutDurationSeconds: 900,  // 15 minutes
 			ResetAfterSeconds:      3600, // 1 hour

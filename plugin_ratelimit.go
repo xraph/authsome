@@ -1,47 +1,74 @@
 package authsome
 
 import (
+	log "github.com/xraph/go-utils/log"
+
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/ratelimit"
 )
 
-// PluginRateLimit builds rate-limit route options from the engine's shared
-// limiter, letting a plugin cap a code- or token-submission endpoint the same
-// way the core API caps its own.
+// RateLimitOptions returns the route options that throttle an endpoint to
+// limit requests per window, keyed by client address, or nil when rate
+// limiting is off or the limit is zero. Every route in the tree that carries
+// a limit builds it here, so the fail-closed behaviour and the error metric
+// are the same everywhere.
+func (e *Engine) RateLimitOptions(limit int) []forge.RouteOption {
+	rl := e.RateLimiter()
+	cfg := e.Config().RateLimit
+	if rl == nil || !cfg.Enabled || limit <= 0 {
+		return nil
+	}
+	return []forge.RouteOption{
+		forge.WithMiddleware(middleware.RateLimit(rl, e.RateLimitMiddlewareConfig(limit))),
+	}
+}
+
+// RateLimitMiddlewareConfig builds the middleware configuration for limit
+// requests per window: the configured window, the fail-open switch and a
+// counter for limiter errors.
+func (e *Engine) RateLimitMiddlewareConfig(limit int) middleware.RateLimitConfig {
+	cfg := e.Config().RateLimit
+	return middleware.RateLimitConfig{
+		Limit:    limit,
+		Window:   cfg.Window(),
+		FailOpen: cfg.FailOpen,
+		OnError: func(err error) {
+			if e.metrics != nil {
+				e.metrics.IncrementCounter("ratelimit.error", "")
+			}
+			e.logger.Warn("authsome: rate limiter error", log.String("error", err.Error()))
+		},
+	}
+}
+
+// PluginLimiter hands a plugin the engine's limiter and rate-limit config.
+// ok is false when the engine is not the concrete *Engine, the limiter is
+// absent or rate limiting is off.
+func PluginLimiter(engine any) (rl ratelimit.Limiter, cfg RateLimitConfig, ok bool) {
+	eng, isEngine := engine.(*Engine)
+	if !isEngine || eng == nil {
+		return nil, RateLimitConfig{}, false
+	}
+	rl = eng.RateLimiter()
+	cfg = eng.Config().RateLimit
+	if rl == nil || !cfg.Enabled {
+		return nil, cfg, false
+	}
+	return rl, cfg, true
+}
+
+// PluginRateLimit returns forge route options that rate-limit an endpoint
+// using the engine's limiter, or nil when rate limiting is off. Plugins use
+// it so their routes share the engine's window and behaviour.
 //
-// Plugins own their route registration, so anything that accepts a guessable
-// secret — a 6-digit OTP, an emailed code — has to opt into this explicitly or
-// it ships unthrottled. `pick` selects which per-endpoint cap applies, e.g.
-//
-//	authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int {
-//	    return c.VerifyEmailLimit
-//	})
-//
-// Returns nil — meaning no middleware, not a closed door — when the host isn't
-// the concrete *Engine (minimal test wiring), when rate limiting is disabled,
-// or when the chosen cap is non-positive. Callers must therefore treat this as
-// defence in depth and still bound attempts on the credential itself; a
-// limiter that silently no-ops is the whole reason a per-challenge attempt
-// counter is not optional.
+// pick selects the limit from the engine's rate-limit config; a zero limit
+// disables limiting for that route.
 func PluginRateLimit(engine any, pick func(RateLimitConfig) int) []forge.RouteOption {
 	eng, ok := engine.(*Engine)
 	if !ok || eng == nil {
 		return nil
 	}
-	rl := eng.RateLimiter()
-	cfg := eng.Config().RateLimit
-	if rl == nil || !cfg.Enabled {
-		return nil
-	}
-	limit := pick(cfg)
-	if limit <= 0 {
-		return nil
-	}
-	return []forge.RouteOption{
-		forge.WithMiddleware(middleware.RateLimit(rl, middleware.RateLimitConfig{
-			Limit:  limit,
-			Window: cfg.Window(),
-		})),
-	}
+	return eng.RateLimitOptions(pick(eng.Config().RateLimit))
 }

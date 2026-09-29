@@ -644,6 +644,9 @@ func TestSignIn_AccountLockout_LocksAfterMaxAttempts(t *testing.T) {
 	)
 	ctx := context.Background()
 	appID := testAppID(t)
+	// The fixture relaxes lockout for the bulk of the suite; this test is
+	// about lockout, so it puts its tracker back.
+	eng.SetLockoutTracker(tracker)
 
 	signUpTestUser(t, eng, "lockout@example.com", "SecureP@ss1")
 
@@ -681,6 +684,7 @@ func TestSignIn_AccountLockout_ResetOnSuccess(t *testing.T) {
 	)
 	ctx := context.Background()
 	appID := testAppID(t)
+	eng.SetLockoutTracker(tracker)
 
 	signUpTestUser(t, eng, "reset@example.com", "SecureP@ss1")
 

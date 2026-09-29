@@ -20,6 +20,14 @@ type RateLimitConfig struct {
 
 	// KeyFunc extracts the rate limit key from the request (default: client IP).
 	KeyFunc func(ctx forge.Context) string
+
+	// FailOpen lets the request through when the limiter returns an error.
+	// Off by default: a limiter that cannot answer refuses with 503, so an
+	// outage of the shared store does not become an unlimited window.
+	FailOpen bool
+
+	// OnError is called with the limiter's error, for a metric or a log.
+	OnError func(err error)
 }
 
 // RateLimit returns a middleware that enforces rate limits using the given limiter.
@@ -39,8 +47,15 @@ func RateLimit(limiter ratelimit.Limiter, cfg RateLimitConfig) forge.Middleware 
 
 			allowed, err := limiter.Allow(ctx.Context(), key, cfg.Limit, cfg.Window)
 			if err != nil {
-				// On error, allow the request through (fail open)
-				return next(ctx)
+				if cfg.OnError != nil {
+					cfg.OnError(err)
+				}
+				if cfg.FailOpen {
+					return next(ctx)
+				}
+				ctx.Response().Header().Set("Retry-After", "5")
+				return forge.NewHTTPError(http.StatusServiceUnavailable,
+					"rate limiting is temporarily unavailable, try again shortly")
 			}
 
 			if !allowed {
