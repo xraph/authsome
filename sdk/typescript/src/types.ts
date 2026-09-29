@@ -912,6 +912,7 @@ export interface Invitation {
 
 export interface InvitationListResponse {
   invitations: Invitation[];
+  next_cursor?: string;
 }
 
 export interface InvoiceResponse {
@@ -1052,6 +1053,7 @@ export interface Member {
 
 export interface MemberListResponse {
   members: Member[];
+  next_cursor?: string;
 }
 
 export interface MemberRef {
@@ -1132,6 +1134,7 @@ export interface ObjectFieldDef {
 }
 
 export interface OrgListResponse {
+  next_cursor?: string;
   organizations: Organization[];
 }
 
@@ -1402,6 +1405,7 @@ export interface ServiceProviderConfig {
 }
 
 export interface SessionListResponse {
+  next_cursor?: string;
   sessions: Record<string, unknown>[];
 }
 
@@ -1538,6 +1542,7 @@ export interface Team {
 }
 
 export interface TeamListResponse {
+  next_cursor?: string;
   teams: Team[];
 }
 

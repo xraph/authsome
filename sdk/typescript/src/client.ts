@@ -2409,8 +2409,12 @@ export class AuthClient {
    * List organizations
    * GET /v1/orgs
    */
-  async listOrganizations(): Promise<OrgListResponse> {
-    const path = "/v1/orgs";
+  async listOrganizations(limit?: number, cursor?: string): Promise<OrgListResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', String(limit));
+    if (cursor !== undefined) params.set('cursor', String(cursor));
+    const qs = params.toString();
+    const path = "/v1/orgs" + (qs ? `?${qs}` : '');
     return this.request<OrgListResponse>(
       'GET',
       path,
@@ -2517,8 +2521,12 @@ export class AuthClient {
    * List invitations
    * GET /v1/orgs/{orgId}/invitations
    */
-  async listInvitations(orgId: string): Promise<InvitationListResponse> {
-    const path = `/v1/orgs/${orgId}/invitations`;
+  async listInvitations(orgId: string, limit?: number, cursor?: string): Promise<InvitationListResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', String(limit));
+    if (cursor !== undefined) params.set('cursor', String(cursor));
+    const qs = params.toString();
+    const path = `/v1/orgs/${orgId}/invitations` + (qs ? `?${qs}` : '');
     return this.request<InvitationListResponse>(
       'GET',
       path,
@@ -2543,8 +2551,12 @@ export class AuthClient {
    * List members
    * GET /v1/orgs/{orgId}/members
    */
-  async listMembers(orgId: string): Promise<MemberListResponse> {
-    const path = `/v1/orgs/${orgId}/members`;
+  async listMembers(orgId: string, limit?: number, cursor?: string): Promise<MemberListResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', String(limit));
+    if (cursor !== undefined) params.set('cursor', String(cursor));
+    const qs = params.toString();
+    const path = `/v1/orgs/${orgId}/members` + (qs ? `?${qs}` : '');
     return this.request<MemberListResponse>(
       'GET',
       path,
@@ -2595,8 +2607,12 @@ export class AuthClient {
    * List teams
    * GET /v1/orgs/{orgId}/teams
    */
-  async listTeams(orgId: string): Promise<TeamListResponse> {
-    const path = `/v1/orgs/${orgId}/teams`;
+  async listTeams(orgId: string, limit?: number, cursor?: string): Promise<TeamListResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', String(limit));
+    if (cursor !== undefined) params.set('cursor', String(cursor));
+    const qs = params.toString();
+    const path = `/v1/orgs/${orgId}/teams` + (qs ? `?${qs}` : '');
     return this.request<TeamListResponse>(
       'GET',
       path,
@@ -2949,8 +2965,12 @@ export class AuthClient {
    * List sessions
    * GET /v1/sessions
    */
-  async listSessions(): Promise<SessionListResponse> {
-    const path = "/v1/sessions";
+  async listSessions(limit?: number, cursor?: string): Promise<SessionListResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', String(limit));
+    if (cursor !== undefined) params.set('cursor', String(cursor));
+    const qs = params.toString();
+    const path = "/v1/sessions" + (qs ? `?${qs}` : '');
     return this.request<SessionListResponse>(
       'GET',
       path,

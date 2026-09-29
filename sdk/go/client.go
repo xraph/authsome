@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Client is an HTTP client for the AuthSome API.
@@ -143,8 +144,9 @@ func WithSessionCookies() Option {
 // NewClient creates a new AuthSome API client.
 func NewClient(baseURL string, opts ...Option) *Client {
 	c := &Client{
-		baseURL:    baseURL,
-		httpClient: &http.Client{},
+		baseURL: baseURL,
+		// A deadline by default; WithHTTPClient replaces it.
+		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -2328,8 +2330,21 @@ func (c *Client) Oauth2UserInfo(ctx context.Context) (*UserInfo, error) {
 }
 
 // ListOrganizations — List organizations
-func (c *Client) ListOrganizations(ctx context.Context) (*OrgListResponse, error) {
+func (c *Client) ListOrganizations(ctx context.Context, params *ListOrganizationsParams) (*OrgListResponse, error) {
 	path := "/v1/orgs"
+	if params != nil {
+		q := url.Values{}
+		var zeroLimit int64
+		if params.Limit != zeroLimit {
+			q.Set("limit", fmt.Sprint(params.Limit))
+		}
+		if params.Cursor != "" {
+			q.Set("cursor", params.Cursor)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result OrgListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -2439,9 +2454,22 @@ func (c *Client) DeleteOrganization(ctx context.Context, orgId string) (*Organiz
 }
 
 // ListInvitations — List invitations
-func (c *Client) ListInvitations(ctx context.Context, orgId string) (*InvitationListResponse, error) {
+func (c *Client) ListInvitations(ctx context.Context, orgId string, params *ListInvitationsParams) (*InvitationListResponse, error) {
 	path := "/v1/orgs/{orgId}/invitations"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
+	if params != nil {
+		q := url.Values{}
+		var zeroLimit int64
+		if params.Limit != zeroLimit {
+			q.Set("limit", fmt.Sprint(params.Limit))
+		}
+		if params.Cursor != "" {
+			q.Set("cursor", params.Cursor)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result InvitationListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -2465,9 +2493,22 @@ func (c *Client) CreateInvitation(ctx context.Context, orgId string, req *Create
 }
 
 // ListMembers — List members
-func (c *Client) ListMembers(ctx context.Context, orgId string) (*MemberListResponse, error) {
+func (c *Client) ListMembers(ctx context.Context, orgId string, params *ListMembersParams) (*MemberListResponse, error) {
 	path := "/v1/orgs/{orgId}/members"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
+	if params != nil {
+		q := url.Values{}
+		var zeroLimit int64
+		if params.Limit != zeroLimit {
+			q.Set("limit", fmt.Sprint(params.Limit))
+		}
+		if params.Cursor != "" {
+			q.Set("cursor", params.Cursor)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result MemberListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -2519,9 +2560,22 @@ func (c *Client) RemoveMember(ctx context.Context, orgId string, memberId string
 }
 
 // ListTeams — List teams
-func (c *Client) ListTeams(ctx context.Context, orgId string) (*TeamListResponse, error) {
+func (c *Client) ListTeams(ctx context.Context, orgId string, params *ListTeamsParams) (*TeamListResponse, error) {
 	path := "/v1/orgs/{orgId}/teams"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
+	if params != nil {
+		q := url.Values{}
+		var zeroLimit int64
+		if params.Limit != zeroLimit {
+			q.Set("limit", fmt.Sprint(params.Limit))
+		}
+		if params.Cursor != "" {
+			q.Set("cursor", params.Cursor)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result TeamListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -2877,8 +2931,21 @@ func (c *Client) AuthsomeUnassignRole(ctx context.Context, roleId string, req *A
 }
 
 // ListSessions — List sessions
-func (c *Client) ListSessions(ctx context.Context) (*SessionListResponse, error) {
+func (c *Client) ListSessions(ctx context.Context, params *ListSessionsParams) (*SessionListResponse, error) {
 	path := "/v1/sessions"
+	if params != nil {
+		q := url.Values{}
+		var zeroLimit int64
+		if params.Limit != zeroLimit {
+			q.Set("limit", fmt.Sprint(params.Limit))
+		}
+		if params.Cursor != "" {
+			q.Set("cursor", params.Cursor)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result SessionListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -3395,15 +3462,45 @@ type Oauth2AuthorizeParams struct {
 	Resource            []string `json:"resource,omitempty"`
 }
 
+// ListOrganizationsParams holds optional query parameters for ListOrganizations.
+type ListOrganizationsParams struct {
+	Limit  int64  `json:"limit,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
+}
+
 // CheckOrgSlugParams holds optional query parameters for CheckOrgSlug.
 type CheckOrgSlugParams struct {
 	AppID string `json:"app_id,omitempty"`
 	Slug  string `json:"slug,omitempty"`
 }
 
+// ListInvitationsParams holds optional query parameters for ListInvitations.
+type ListInvitationsParams struct {
+	Limit  int64  `json:"limit,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
+}
+
+// ListMembersParams holds optional query parameters for ListMembers.
+type ListMembersParams struct {
+	Limit  int64  `json:"limit,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
+}
+
+// ListTeamsParams holds optional query parameters for ListTeams.
+type ListTeamsParams struct {
+	Limit  int64  `json:"limit,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
+}
+
 // AuthsomeListRolesParams holds optional query parameters for AuthsomeListRoles.
 type AuthsomeListRolesParams struct {
 	AppID string `json:"app_id,omitempty"`
+}
+
+// ListSessionsParams holds optional query parameters for ListSessions.
+type ListSessionsParams struct {
+	Limit  int64  `json:"limit,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
 }
 
 // StartOAuthParams holds optional query parameters for StartOAuth.

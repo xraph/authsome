@@ -85,6 +85,20 @@ type Plugin struct {
 	logger    log.Logger
 	mappings  map[string]*Mapping
 	engine    plugin.Engine
+	// dispatcher is the engine's job queue when it has one; its presence
+	// is what decides that the welcome notification goes out asynchronously.
+	dispatcher bridge.Dispatcher
+}
+
+// welcomeSendTimeout bounds an inline welcome notification, so a slow
+// provider cannot hold a sign-up open.
+const welcomeSendTimeout = 10 * time.Second
+
+// sendAsync decides how the welcome notification is sent: through the
+// queue when the operator asked for it or the engine has a dispatcher to
+// back it, inline under a deadline otherwise.
+func sendAsync(configured bool, dispatcher bridge.Dispatcher) bool {
+	return configured || dispatcher != nil
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -149,6 +163,9 @@ func (p *Plugin) Name() string { return "notification" }
 // initialization.
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.engine = engine
+	if dp, ok := engine.(plugin.DispatcherProvider); ok {
+		p.dispatcher = dp.Dispatcher()
+	}
 
 	// Discover Herald bridge (required).
 	p.herald = engine.Herald()
@@ -227,13 +244,20 @@ func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, _ *session.Ses
 		name = u.Email
 	}
 
-	if err := p.herald.Notify(ctx, &bridge.HeraldNotifyRequest{
+	async := sendAsync(p.config.Async, p.dispatcher)
+	sendCtx := ctx
+	if !async {
+		var cancel context.CancelFunc
+		sendCtx, cancel = context.WithTimeout(ctx, welcomeSendTimeout)
+		defer cancel()
+	}
+	if err := p.herald.Notify(sendCtx, &bridge.HeraldNotifyRequest{
 		Template: m.Template,
 		Channels: m.Channels,
 		To:       []string{u.Email},
 		UserID:   u.ID.String(),
 		Locale:   p.config.DefaultLocale,
-		Async:    p.config.Async,
+		Async:    async,
 		Data: map[string]any{
 			"user_name": name,
 			"app_name":  p.config.AppName,

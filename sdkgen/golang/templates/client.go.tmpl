@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 	"net/http/cookiejar"
 	"net/url"
 	"strings"
@@ -144,7 +145,8 @@ func WithSessionCookies() Option {
 func NewClient(baseURL string, opts ...Option) *Client {
 	c := &Client{
 		baseURL:    baseURL,
-		httpClient: &http.Client{},
+		// A deadline by default; WithHTTPClient replaces it.
+		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
 	for _, opt := range opts {
 		opt(c)

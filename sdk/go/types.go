@@ -1034,6 +1034,7 @@ type Invitation struct {
 // InvitationListResponse represents the InvitationListResponse schema.
 type InvitationListResponse struct {
 	Invitations []*Invitation `json:"invitations"`
+	NextCursor  string        `json:"next_cursor,omitempty"`
 }
 
 // InvoiceResponse represents the InvoiceResponse schema.
@@ -1194,7 +1195,8 @@ type Member struct {
 
 // MemberListResponse represents the MemberListResponse schema.
 type MemberListResponse struct {
-	Members []*Member `json:"members"`
+	Members    []*Member `json:"members"`
+	NextCursor string    `json:"next_cursor,omitempty"`
 }
 
 // MemberRef represents the MemberRef schema.
@@ -1284,6 +1286,7 @@ type ObjectFieldDef struct {
 
 // OrgListResponse represents the OrgListResponse schema.
 type OrgListResponse struct {
+	NextCursor    string          `json:"next_cursor,omitempty"`
 	Organizations []*Organization `json:"organizations"`
 }
 
@@ -1596,7 +1599,8 @@ type ServiceProviderConfig struct {
 
 // SessionListResponse represents the SessionListResponse schema.
 type SessionListResponse struct {
-	Sessions []map[string]any `json:"sessions"`
+	NextCursor string           `json:"next_cursor,omitempty"`
+	Sessions   []map[string]any `json:"sessions"`
 }
 
 // SetAppClientConfigRequest represents the SetAppClientConfigRequest schema.
@@ -1748,7 +1752,8 @@ type Team struct {
 
 // TeamListResponse represents the TeamListResponse schema.
 type TeamListResponse struct {
-	Teams []*Team `json:"teams"`
+	NextCursor string  `json:"next_cursor,omitempty"`
+	Teams      []*Team `json:"teams"`
 }
 
 // TokenExchangeRequest represents the TokenExchangeRequest schema.

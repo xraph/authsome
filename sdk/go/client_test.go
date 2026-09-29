@@ -251,7 +251,7 @@ func TestClient_ListSessions(t *testing.T) {
 
 	client := ts.CreateUserClient(t, "sessions@example.com", "SecureP@ss123")
 
-	resp, err := client.ListSessions(ctx)
+	resp, err := client.ListSessions(ctx, nil)
 	require.NoError(t, err)
 	assert.NotNil(t, resp.Sessions)
 	assert.GreaterOrEqual(t, len(resp.Sessions), 1)
@@ -263,7 +263,7 @@ func TestClient_RevokeSession(t *testing.T) {
 
 	client := ts.CreateUserClient(t, "revoke@example.com", "SecureP@ss123")
 
-	sessions, err := client.ListSessions(ctx)
+	sessions, err := client.ListSessions(ctx, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, sessions.Sessions)
 
@@ -311,7 +311,7 @@ func TestClient_ListOrganizations(t *testing.T) {
 	org := ts.CreateOrg(t, auth.User.ID, "ListOrg", "list-org")
 	ts.AddMember(t, org.ID.String(), auth.User.ID, organization.RoleOwner)
 
-	resp, err := client.ListOrganizations(ctx)
+	resp, err := client.ListOrganizations(ctx, nil)
 	require.NoError(t, err)
 	assert.NotNil(t, resp.Organizations)
 }
@@ -420,7 +420,7 @@ func TestClient_ListMembers(t *testing.T) {
 	org := ts.CreateOrg(t, ownerAuth.User.ID, "ListMemberOrg", "list-member-org")
 	ts.AddMember(t, org.ID.String(), ownerAuth.User.ID, organization.RoleOwner)
 
-	resp, err := ownerClient.ListMembers(ctx, org.ID.String())
+	resp, err := ownerClient.ListMembers(ctx, org.ID.String(), nil)
 	require.NoError(t, err)
 	assert.NotNil(t, resp.Members)
 	assert.GreaterOrEqual(t, len(resp.Members), 1)
@@ -518,7 +518,7 @@ func TestClient_ListInvitations(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resp, err := ownerClient.ListInvitations(ctx, org.ID.String())
+	resp, err := ownerClient.ListInvitations(ctx, org.ID.String(), nil)
 	require.NoError(t, err)
 	assert.NotNil(t, resp.Invitations)
 	assert.GreaterOrEqual(t, len(resp.Invitations), 1)

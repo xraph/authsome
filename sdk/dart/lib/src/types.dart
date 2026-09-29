@@ -4476,20 +4476,24 @@ class Invitation {
 
 class InvitationListResponse {
   final List<Invitation> invitations;
+  final String? nextCursor;
 
   const InvitationListResponse({
     required this.invitations,
+    this.nextCursor,
   });
 
   factory InvitationListResponse.fromJson(Map<String, dynamic> json) {
     return InvitationListResponse(
       invitations: (json['invitations'] as List).map((e) => Invitation.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      nextCursor: json['next_cursor'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'invitations': invitations.map((e) => e.toJson()).toList(),
+      if (nextCursor != null) 'next_cursor': nextCursor,
     };
   }
 
@@ -5183,20 +5187,24 @@ class Member {
 
 class MemberListResponse {
   final List<Member> members;
+  final String? nextCursor;
 
   const MemberListResponse({
     required this.members,
+    this.nextCursor,
   });
 
   factory MemberListResponse.fromJson(Map<String, dynamic> json) {
     return MemberListResponse(
       members: (json['members'] as List).map((e) => Member.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      nextCursor: json['next_cursor'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'members': members.map((e) => e.toJson()).toList(),
+      if (nextCursor != null) 'next_cursor': nextCursor,
     };
   }
 
@@ -5569,20 +5577,24 @@ class ObjectFieldDef {
 }
 
 class OrgListResponse {
+  final String? nextCursor;
   final List<Organization> organizations;
 
   const OrgListResponse({
+    this.nextCursor,
     required this.organizations,
   });
 
   factory OrgListResponse.fromJson(Map<String, dynamic> json) {
     return OrgListResponse(
+      nextCursor: json['next_cursor'] as String?,
       organizations: (json['organizations'] as List).map((e) => Organization.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      if (nextCursor != null) 'next_cursor': nextCursor,
       'organizations': organizations.map((e) => e.toJson()).toList(),
     };
   }
@@ -6940,20 +6952,24 @@ class ServiceProviderConfig {
 }
 
 class SessionListResponse {
+  final String? nextCursor;
   final List<Map<String, dynamic>> sessions;
 
   const SessionListResponse({
+    this.nextCursor,
     required this.sessions,
   });
 
   factory SessionListResponse.fromJson(Map<String, dynamic> json) {
     return SessionListResponse(
+      nextCursor: json['next_cursor'] as String?,
       sessions: (json['sessions'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      if (nextCursor != null) 'next_cursor': nextCursor,
       'sessions': sessions,
     };
   }
@@ -7596,20 +7612,24 @@ class Team {
 }
 
 class TeamListResponse {
+  final String? nextCursor;
   final List<Team> teams;
 
   const TeamListResponse({
+    this.nextCursor,
     required this.teams,
   });
 
   factory TeamListResponse.fromJson(Map<String, dynamic> json) {
     return TeamListResponse(
+      nextCursor: json['next_cursor'] as String?,
       teams: (json['teams'] as List).map((e) => Team.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      if (nextCursor != null) 'next_cursor': nextCursor,
       'teams': teams.map((e) => e.toJson()).toList(),
     };
   }

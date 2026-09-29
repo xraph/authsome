@@ -3296,6 +3296,10 @@
               "$ref": "#/components/schemas/Invitation"
             },
             "type": "array"
+          },
+          "next_cursor": {
+            "description": "Cursor for the next page, absent on the last",
+            "type": "string"
           }
         },
         "required": [
@@ -3779,6 +3783,10 @@
               "$ref": "#/components/schemas/Member"
             },
             "type": "array"
+          },
+          "next_cursor": {
+            "description": "Cursor for the next page, absent on the last",
+            "type": "string"
           }
         },
         "required": [
@@ -4063,6 +4071,10 @@
       },
       "OrgListResponse": {
         "properties": {
+          "next_cursor": {
+            "description": "Cursor for the next page, absent on the last",
+            "type": "string"
+          },
           "organizations": {
             "items": {
               "$ref": "#/components/schemas/Organization"
@@ -4936,6 +4948,10 @@
       },
       "SessionListResponse": {
         "properties": {
+          "next_cursor": {
+            "description": "Cursor for the next page, absent on the last",
+            "type": "string"
+          },
           "sessions": {
             "items": {
               "type": "object"
@@ -5399,6 +5415,10 @@
       },
       "TeamListResponse": {
         "properties": {
+          "next_cursor": {
+            "description": "Cursor for the next page, absent on the last",
+            "type": "string"
+          },
           "teams": {
             "items": {
               "$ref": "#/components/schemas/Team"
@@ -30093,6 +30113,26 @@
       "get": {
         "description": "Returns all organizations the authenticated user belongs to.",
         "operationId": "listOrganizations",
+        "parameters": [
+          {
+            "description": "Page size (default 50, max 200)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "Page size (default 50, max 200)",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Cursor from the previous page's next_cursor",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "description": "Cursor from the previous page's next_cursor",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -31535,6 +31575,24 @@
               "description": "Organization identifier",
               "type": "string"
             }
+          },
+          {
+            "description": "Page size (default 50, max 200)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "Page size (default 50, max 200)",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Cursor from the previous page's next_cursor",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "description": "Cursor from the previous page's next_cursor",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -31900,6 +31958,24 @@
             "required": true,
             "schema": {
               "description": "Organization identifier",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page size (default 50, max 200)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "Page size (default 50, max 200)",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Cursor from the previous page's next_cursor",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "description": "Cursor from the previous page's next_cursor",
               "type": "string"
             }
           }
@@ -32654,6 +32730,24 @@
             "required": true,
             "schema": {
               "description": "Organization identifier",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page size (default 50, max 200)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "Page size (default 50, max 200)",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Cursor from the previous page's next_cursor",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "description": "Cursor from the previous page's next_cursor",
               "type": "string"
             }
           }
@@ -37723,6 +37817,26 @@
       "get": {
         "description": "Returns all active sessions for the authenticated user.",
         "operationId": "listSessions",
+        "parameters": [
+          {
+            "description": "Page size (default 50, max 200)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "Page size (default 50, max 200)",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Cursor from the previous page's next_cursor",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "description": "Cursor from the previous page's next_cursor",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
