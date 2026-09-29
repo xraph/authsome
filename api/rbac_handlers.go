@@ -171,7 +171,7 @@ func (a *API) roleInCallerApp(ctx forge.Context, roleID id.RoleID) (*rbac.Role, 
 	}
 	r, err := a.engine.GetRole(ctx.Context(), roleID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	if r.AppID != appID.String() {
 		return nil, forge.NotFound("role not found")
@@ -188,7 +188,7 @@ var ownerSlugs = map[string]bool{"owner": true, rbac.PlatformOwnerSlug: true}
 func (a *API) callerHoldsOwnership(ctx forge.Context, callerID id.UserID) (bool, error) {
 	roles, err := a.engine.ListUserRoles(ctx.Context(), callerID)
 	if err != nil {
-		return false, mapError(err)
+		return false, mapErrorCtx(ctx, err)
 	}
 	for _, r := range roles {
 		if ownerSlugs[r.Slug] {
@@ -208,7 +208,7 @@ func (a *API) requireCallerHolds(ctx forge.Context, perms []*rbac.Permission) er
 	for _, p := range perms {
 		held, err := a.engine.HasPermission(ctx.Context(), callerID, p.Action, p.Resource)
 		if err != nil {
-			return mapError(err)
+			return mapErrorCtx(ctx, err)
 		}
 		if !held {
 			return forge.Forbidden(fmt.Sprintf("cannot grant %s:%s: the caller does not hold it", p.Resource, p.Action))
@@ -231,7 +231,7 @@ func (a *API) effectivePermissions(ctx forge.Context, role *rbac.Role) ([]*rbac.
 		}
 		perms, err := a.engine.ListRolePermissions(ctx.Context(), rid)
 		if err != nil {
-			return nil, mapError(err)
+			return nil, mapErrorCtx(ctx, err)
 		}
 		out = append(out, perms...)
 		if current.ParentID == "" {
@@ -306,7 +306,7 @@ func (a *API) handleCreateRole(ctx forge.Context, req *CreateRoleRequest) (*rbac
 	}
 
 	if err := a.engine.CreateRole(ctx.Context(), r); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusCreated, r)
@@ -333,7 +333,7 @@ func (a *API) handleListRoles(ctx forge.Context, req *ListRolesRequest) (*RoleLi
 
 	roles, err := a.engine.ListRoles(ctx.Context(), appID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	if roles == nil {
@@ -385,7 +385,7 @@ func (a *API) handleUpdateRole(ctx forge.Context, req *UpdateRoleRequest) (*rbac
 	}
 
 	if err := a.engine.UpdateRole(ctx.Context(), r); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return r, nil
@@ -402,7 +402,7 @@ func (a *API) handleDeleteRole(ctx forge.Context, _ *DeleteRoleRequest) (*Status
 	}
 
 	if err := a.engine.DeleteRole(ctx.Context(), roleID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "deleted"}
@@ -441,7 +441,7 @@ func (a *API) handleAddPermission(ctx forge.Context, req *AddPermissionRequest) 
 	}
 
 	if err := a.engine.AddPermission(ctx.Context(), perm); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusCreated, perm)
@@ -459,7 +459,7 @@ func (a *API) handleListRolePermissions(ctx forge.Context, _ *ListRolePermission
 
 	perms, err := a.engine.ListRolePermissions(ctx.Context(), roleID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	if perms == nil {
@@ -487,7 +487,7 @@ func (a *API) handleRemovePermission(ctx forge.Context, _ *RemovePermissionReque
 	// they do.
 	perms, err := a.engine.ListRolePermissions(ctx.Context(), roleID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	found := false
 	for _, p := range perms {
@@ -501,7 +501,7 @@ func (a *API) handleRemovePermission(ctx forge.Context, _ *RemovePermissionReque
 	}
 
 	if err := a.engine.RemovePermission(ctx.Context(), permID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "removed"}
@@ -537,7 +537,7 @@ func (a *API) handleAssignRole(ctx forge.Context, req *AssignRoleRequest) (*Stat
 	}
 
 	if err := a.engine.AssignUserRole(ctx.Context(), ur); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "assigned"}
@@ -560,7 +560,7 @@ func (a *API) handleUnassignRole(ctx forge.Context, req *UnassignRoleRequest) (*
 	}
 
 	if err := a.engine.UnassignUserRole(ctx.Context(), userID, roleID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "unassigned"}
@@ -585,7 +585,7 @@ func (a *API) handleListUserRoles(ctx forge.Context, req *ListUserRolesRequest) 
 	}
 	roles, err := a.engine.ListUserRolesInApp(ctx.Context(), appID, userID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	if roles == nil {

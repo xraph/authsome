@@ -214,6 +214,8 @@ func NewEngine(opts ...Option) (*Engine, error) {
 	if e.chronicle == nil {
 		return nil, ErrChronicleRequired
 	}
+	// Causes of generic 500s are logged here, keyed by request id.
+	middleware.SetInternalErrorLogger(e.logger)
 	if e.wardenEng == nil {
 		return nil, errors.New("authsome: warden engine is required (use WithWarden option)")
 	}

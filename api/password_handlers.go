@@ -107,7 +107,7 @@ func (a *API) handleForgotPassword(ctx forge.Context, req *ForgotPasswordRequest
 	// enumeration). The one error that does surface is the per-address
 	// budget, which says nothing about whether the address exists.
 	if _, err := a.engine.ForgotPassword(ctx.Context(), appID, req.Email); errors.Is(err, account.ErrRateLimited) {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	// Always return success regardless of whether the email exists.
@@ -121,7 +121,7 @@ func (a *API) handleResetPassword(ctx forge.Context, req *ResetPasswordRequest) 
 	}
 
 	if err := a.engine.ResetPassword(ctx.Context(), req.Token, req.NewPassword); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "password reset"}
@@ -139,7 +139,7 @@ func (a *API) handleChangePassword(ctx forge.Context, req *ChangePasswordRequest
 	}
 
 	if err := a.engine.ChangePassword(ctx.Context(), userID, req.CurrentPassword, req.NewPassword); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "password changed"}
@@ -180,7 +180,7 @@ func (a *API) handleVerifyEmail(ctx forge.Context, req *VerifyEmailRequest) (*St
 		}
 		if ok {
 			if err := a.engine.VerifyEmailCode(ctx.Context(), userID, candidate); err != nil {
-				return nil, mapError(err)
+				return nil, mapErrorCtx(ctx, err)
 			}
 			// Auto-login: signup withholds a client session until the email is
 			// verified, so on success we mint a fresh session and return the
@@ -201,13 +201,13 @@ func (a *API) handleVerifyEmail(ctx forge.Context, req *VerifyEmailRequest) (*St
 		// there is brute-forceable across the entire user pool with no per-user
 		// attempt limiting. Return the same generic error a wrong code yields so
 		// this isn't an email-existence oracle either.
-		return nil, mapError(account.ErrInvalidCredentials)
+		return nil, mapErrorCtx(ctx, account.ErrInvalidCredentials)
 	}
 
 	// Token path: high-entropy verification tokens only (link flows, e.g. magic
 	// link). 6-digit OTP codes never reach here (handled + returned above).
 	if err := a.engine.VerifyEmail(ctx.Context(), candidate); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "email verified"})
 }

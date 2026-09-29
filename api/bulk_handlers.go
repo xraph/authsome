@@ -88,7 +88,7 @@ func (a *API) handleBulkImportUsers(ctx forge.Context, req *BulkImportUsersReque
 
 	result, err := a.engine.AdminBulkImportUsers(ctx.Context(), adminID, users)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusOK, result)
@@ -114,7 +114,7 @@ func (a *API) handleBulkRevokeSessions(ctx forge.Context, req *BulkRevokeSession
 
 	count, err := a.engine.AdminBulkRevokeSessions(ctx.Context(), adminID, userID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &BulkRevokeSessionsResponse{

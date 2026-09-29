@@ -293,7 +293,7 @@ func (a *API) handleAdminListUsers(ctx forge.Context, req *AdminListUsersRequest
 		Limit:  limit,
 	})
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &AdminUserListResponse{
@@ -315,7 +315,7 @@ func (a *API) userInCallerApp(ctx forge.Context, userID id.UserID) (*user.User, 
 	}
 	u, err := a.engine.AdminGetUser(ctx.Context(), userID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	if u.AppID.String() != appID.String() {
 		return nil, forge.NotFound("user not found")
@@ -367,7 +367,7 @@ func (a *API) handleAdminBanUser(ctx forge.Context, req *AdminBanUserRequest) (*
 	}
 
 	if err := a.engine.AdminBanUser(ctx.Context(), adminID, userID, req.Reason, expiresAt); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "banned"}
@@ -390,7 +390,7 @@ func (a *API) handleAdminUnbanUser(ctx forge.Context, req *AdminUnbanUserRequest
 	}
 
 	if err := a.engine.AdminUnbanUser(ctx.Context(), adminID, userID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "unbanned"}
@@ -415,7 +415,7 @@ func (a *API) handleAdminUnlockUser(ctx forge.Context, req *AdminUnlockUserReque
 	}
 
 	if err := a.engine.AdminUnlockUser(ctx.Context(), adminID, userID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "unlocked"})
@@ -442,7 +442,7 @@ func (a *API) handleAdminDeleteUser(ctx forge.Context, req *AdminDeleteUserReque
 	}
 
 	if err := a.engine.AdminDeleteUser(ctx.Context(), adminID, userID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "deleted"}
@@ -460,7 +460,7 @@ func (a *API) handleAdminStats(ctx forge.Context, req *AdminStatsRequest) (*Admi
 		Limit: 1,
 	})
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &AdminStatsResponse{
@@ -500,7 +500,7 @@ func (a *API) handleAdminImpersonate(ctx forge.Context, req *AdminImpersonateReq
 	u, sess, err := a.engine.Impersonate(ctx.Context(), adminID, targetID,
 		authsome.WithImpersonationDPoPBinding(dpopJKT))
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusOK, authResponse(u, sess))
@@ -513,7 +513,7 @@ func (a *API) handleAdminStopImpersonation(ctx forge.Context, _ *AdminStopImpers
 	}
 
 	if err := a.engine.StopImpersonation(ctx.Context(), sessID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "impersonation stopped"}
@@ -543,12 +543,12 @@ func (a *API) handleAdminUpdateUser(ctx forge.Context, req *AdminUpdateUserReque
 	}
 
 	if err2 := a.engine.AdminUpdateUser(ctx.Context(), adminID, userID, updates); err2 != nil {
-		return nil, mapError(err2)
+		return nil, mapErrorCtx(ctx, err2)
 	}
 
 	u, err := a.engine.AdminGetUser(ctx.Context(), userID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return u, nil
@@ -567,7 +567,7 @@ func (a *API) handleAdminCreateUser(ctx forge.Context, req *AdminCreateUserReque
 
 	u, err := a.engine.AdminCreateUser(ctx.Context(), adminID, appID, id.EnvironmentID{}, req.Email, req.Password, req.FirstName, req.LastName, req.Username)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusOK, u)
@@ -610,7 +610,7 @@ func (a *API) handleAdminCopyUser(ctx forge.Context, req *AdminCopyUserRequest) 
 
 	dup, err := a.engine.AdminCopyUserToApp(ctx.Context(), adminID, sourceUserID, targetAppID, envID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusOK, dup)
@@ -638,7 +638,7 @@ func (a *API) handleAdminCreateApp(ctx forge.Context, req *AdminCreateAppRequest
 		IsPlatform: false, // platform App is bootstrapped once at startup
 	}
 	if err := a.engine.CreateApp(ctx.Context(), newApp); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return &AdminAppResponse{
@@ -666,7 +666,7 @@ func (a *API) handleAdminDeleteApp(ctx forge.Context, req *AdminDeleteAppRequest
 		return nil, forge.BadRequest("invalid app_id")
 	}
 	if err := a.engine.DeleteApp(ctx.Context(), parsed); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	return &StatusResponse{Status: "ok"}, nil
 }
@@ -684,7 +684,7 @@ func (a *API) requirePlatformOwner(ctx forge.Context) (id.UserID, error) {
 	}
 	roles, err := a.engine.ListUserRoles(ctx.Context(), callerID)
 	if err != nil {
-		return id.UserID{}, mapError(err)
+		return id.UserID{}, mapErrorCtx(ctx, err)
 	}
 	for _, r := range roles {
 		if r.Slug == rbac.PlatformOwnerSlug {
@@ -718,14 +718,14 @@ func (a *API) handleGrantPlatformOwner(ctx forge.Context, req *AdminGrantPlatfor
 		// Look up by any of the user's emails within the platform app.
 		u, lookupErr := a.engine.Store().GetUserByAnyEmail(ctx.Context(), appID, id.Nil, strings.ToLower(strings.TrimSpace(req.Email)))
 		if lookupErr != nil {
-			return nil, mapError(lookupErr)
+			return nil, mapErrorCtx(ctx, lookupErr)
 		}
 		targetUserID = u.ID
 	}
 
 	ownerRole, err := a.engine.GetRoleBySlug(ctx.Context(), appID, rbac.PlatformOwnerSlug)
 	if err != nil || ownerRole == nil {
-		return nil, forge.InternalError(fmt.Errorf("platform-owner role not found"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("platform-owner role not found"))
 	}
 
 	// Granting platform ownership is the widest privilege change there is;
@@ -743,14 +743,14 @@ func (a *API) handleGrantPlatformOwner(ctx forge.Context, req *AdminGrantPlatfor
 			"target_user_id": targetUserID.String(),
 		},
 	}); auditErr != nil {
-		return nil, forge.InternalError(fmt.Errorf("audit trail unavailable: %w", auditErr))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("audit trail unavailable: %w", auditErr))
 	}
 
 	if err := a.engine.AssignUserRole(ctx.Context(), &rbac.UserRole{
 		UserID: targetUserID.String(),
 		RoleID: ownerRole.ID,
 	}); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusOK, &AdminPlatformOwnerResponse{
@@ -771,7 +771,7 @@ func (a *API) handleRevokePlatformOwner(ctx forge.Context, req *AdminRevokePlatf
 	// C1: only platform-owners may call this endpoint.
 	roles, err := a.engine.ListUserRoles(ctx.Context(), callerID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	isPlatformOwner := false
 	for _, r := range roles {
@@ -793,19 +793,19 @@ func (a *API) handleRevokePlatformOwner(ctx forge.Context, req *AdminRevokePlatf
 
 	ownerRole, err := a.engine.GetRoleBySlug(ctx.Context(), appID, rbac.PlatformOwnerSlug)
 	if err != nil || ownerRole == nil {
-		return nil, forge.InternalError(fmt.Errorf("platform-owner role not found"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("platform-owner role not found"))
 	}
 
 	// Guard: do not allow removing the last platform owner.
 	// List all users with the platform-owner role for this app.
 	owners, err := a.engine.ListUsersWithRole(ctx.Context(), appID, rbac.PlatformOwnerSlug)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	// I2: treat a zero-length result as a data-inconsistency error rather
 	// than silently skipping the guard.
 	if len(owners) == 0 {
-		return nil, forge.InternalError(fmt.Errorf("no platform owners found"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("no platform owners found"))
 	}
 	// Check if removing this user would leave zero owners.
 	matchesTarget := false
@@ -821,11 +821,11 @@ func (a *API) handleRevokePlatformOwner(ctx forge.Context, req *AdminRevokePlatf
 
 	roleID, err := id.Parse(ownerRole.ID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("invalid platform-owner role ID"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("invalid platform-owner role ID"))
 	}
 
 	if err := a.engine.UnassignUserRole(ctx.Context(), targetUserID, roleID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusOK, &AdminPlatformOwnerResponse{
@@ -896,7 +896,7 @@ func (a *API) handleAdminCreateServiceAccount(ctx forge.Context, req *AdminCreat
 
 	svc, err := a.engine.CreateServiceAccount(ctx.Context(), appID, req.Name, req.Description, req.Scopes)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusCreated, toServiceAccountResponse(svc))
@@ -918,7 +918,7 @@ func (a *API) handleAdminListServiceAccounts(ctx forge.Context, req *AdminListSe
 
 	list, err := a.engine.ListServiceAccounts(ctx.Context(), appID, limit)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	items := make([]*AdminServiceAccountResponse, 0, len(list.ServiceAccounts))
@@ -954,7 +954,7 @@ func (a *API) handleAdminGetServiceAccount(ctx forge.Context, req *AdminGetServi
 func (a *API) serviceAccountInCallerApp(ctx forge.Context, svcID id.ServiceAccountID) (*serviceaccount.ServiceAccount, error) {
 	svc, err := a.engine.GetServiceAccount(ctx.Context(), svcID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	if err := a.assertAppScope(ctx, svc.AppID); err != nil {
 		return nil, err
@@ -975,7 +975,7 @@ func (a *API) handleAdminDeleteServiceAccount(ctx forge.Context, req *AdminDelet
 	}
 
 	if err := a.engine.DeleteServiceAccount(ctx.Context(), svcID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "deleted"})
@@ -1005,7 +1005,7 @@ func (a *API) handleAdminCreateServiceAccountAPIKey(ctx forge.Context, req *Admi
 
 	k, secret, err := a.engine.CreateServiceAccountAPIKey(ctx.Context(), svcID, req.Name, req.Scopes, expiresAt)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &AdminServiceAccountAPIKeyResponse{

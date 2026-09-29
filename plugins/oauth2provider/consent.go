@@ -79,17 +79,17 @@ func (p *Plugin) needsConsent(ctx context.Context, client *OAuth2Client, userID 
 func (p *Plugin) redirectToConsent(ctx forge.Context, pc pendingConsent) error {
 	cid, err := generateSecureToken(24)
 	if err != nil {
-		return forge.InternalError(fmt.Errorf("oauth2: consent id: %w", err))
+		return middleware.InternalError(ctx, fmt.Errorf("oauth2: consent id: %w", err))
 	}
 	if pc.CSRF, err = generateSecureToken(24); err != nil {
-		return forge.InternalError(fmt.Errorf("oauth2: consent csrf: %w", err))
+		return middleware.InternalError(ctx, fmt.Errorf("oauth2: consent csrf: %w", err))
 	}
 	raw, err := json.Marshal(pc)
 	if err != nil {
-		return forge.InternalError(fmt.Errorf("oauth2: encode consent: %w", err))
+		return middleware.InternalError(ctx, fmt.Errorf("oauth2: encode consent: %w", err))
 	}
 	if err := p.ceremonyStore().Set(ctx.Context(), consentKey(cid), raw, consentTTL); err != nil {
-		return forge.InternalError(fmt.Errorf("oauth2: park consent: %w", err))
+		return middleware.InternalError(ctx, fmt.Errorf("oauth2: park consent: %w", err))
 	}
 	// The page lives beside the authorization endpoint, whatever prefix the
 	// router mounted the plugin under.
@@ -126,15 +126,15 @@ func (p *Plugin) loadConsent(ctx forge.Context, cid string) (*pendingConsent, er
 func (p *Plugin) issueAuthorizationCode(ctx context.Context, pc pendingConsent) (string, error) {
 	userID, err := id.ParseUserID(pc.UserID)
 	if err != nil {
-		return "", forge.InternalError(fmt.Errorf("oauth2: consent user: %w", err))
+		return "", middleware.InternalErrorCtx(ctx, fmt.Errorf("oauth2: consent user: %w", err))
 	}
 	appID, err := id.ParseAppID(pc.AppID)
 	if err != nil {
-		return "", forge.InternalError(fmt.Errorf("oauth2: consent app: %w", err))
+		return "", middleware.InternalErrorCtx(ctx, fmt.Errorf("oauth2: consent app: %w", err))
 	}
 	codeStr, err := generateSecureToken(32)
 	if err != nil {
-		return "", forge.InternalError(fmt.Errorf("oauth2: generate auth code: %w", err))
+		return "", middleware.InternalErrorCtx(ctx, fmt.Errorf("oauth2: generate auth code: %w", err))
 	}
 	authCode := &AuthorizationCode{
 		ID:                  id.NewAuthCodeID(),
@@ -151,7 +151,7 @@ func (p *Plugin) issueAuthorizationCode(ctx context.Context, pc pendingConsent) 
 		CreatedAt:           time.Now(),
 	}
 	if createErr := p.oauth2Store.CreateAuthCode(ctx, authCode); createErr != nil {
-		return "", forge.InternalError(fmt.Errorf("oauth2: store auth code: %w", createErr))
+		return "", middleware.InternalErrorCtx(ctx, fmt.Errorf("oauth2: store auth code: %w", createErr))
 	}
 	return buildRedirect(pc.RedirectURI, codeStr, pc.State)
 }
@@ -288,14 +288,14 @@ func (p *Plugin) handleConsentDecision(ctx forge.Context) error {
 	case "approve":
 		userID, perr := id.ParseUserID(pc.UserID)
 		if perr != nil {
-			return forge.InternalError(fmt.Errorf("oauth2: consent user: %w", perr))
+			return middleware.InternalError(ctx, fmt.Errorf("oauth2: consent user: %w", perr))
 		}
 		appID, perr := id.ParseAppID(pc.AppID)
 		if perr != nil {
-			return forge.InternalError(fmt.Errorf("oauth2: consent app: %w", perr))
+			return middleware.InternalError(ctx, fmt.Errorf("oauth2: consent app: %w", perr))
 		}
 		if grantErr := p.recordGrant(ctx.Context(), appID, userID, pc.ClientID, pc.Scopes); grantErr != nil {
-			return forge.InternalError(fmt.Errorf("oauth2: record grant: %w", grantErr))
+			return middleware.InternalError(ctx, fmt.Errorf("oauth2: record grant: %w", grantErr))
 		}
 		target, err = p.issueAuthorizationCode(ctx.Context(), *pc)
 	case "deny":
@@ -380,7 +380,7 @@ func (p *Plugin) handleListMyGrants(ctx forge.Context, _ *ListGrantsRequest) (*L
 	}
 	grants, err := p.oauth2Store.ListGrantsByUser(ctx.Context(), appID, userID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: list grants: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: list grants: %w", err))
 	}
 	out := &ListGrantsResponse{Grants: make([]GrantView, 0, len(grants))}
 	for _, g := range grants {
@@ -405,7 +405,7 @@ func (p *Plugin) handleRevokeMyGrant(ctx forge.Context, req *GrantPathRequest) (
 		if errors.Is(err, ErrGrantNotFound) {
 			return nil, forge.NotFound("no grant for this client")
 		}
-		return nil, forge.InternalError(fmt.Errorf("oauth2: revoke grant: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: revoke grant: %w", err))
 	}
 	return nil, ctx.NoContent(http.StatusNoContent)
 }

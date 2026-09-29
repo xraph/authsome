@@ -20,6 +20,7 @@ import (
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/mfa"
 	"github.com/xraph/authsome/session"
@@ -255,7 +256,7 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		return nil, forge.BadRequest("phone number must be in E.164 format (e.g. +14155551234)")
 	}
 	if p.sms == nil {
-		return nil, forge.InternalError(fmt.Errorf("phone auth: SMS sender not configured"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("phone auth: SMS sender not configured"))
 	}
 
 	appIDStr := req.AppID
@@ -282,7 +283,7 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 			log.String("phone", req.Phone),
 			log.String("error", err.Error()),
 		)
-		return nil, forge.InternalError(fmt.Errorf("phone auth: failed to send OTP: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("phone auth: failed to send OTP: %w", err))
 	}
 
 	// Store challenge in ceremony store keyed by phone+app.
@@ -294,10 +295,10 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		ExpiresAt: challenge.ExpiresAt,
 	})
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("phone auth: marshal challenge: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("phone auth: marshal challenge: %w", err))
 	}
 	if err := p.ceremonies.Set(ctx.Context(), ceremonyKey, data, p.config.CodeTTL); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("phone auth: store challenge: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("phone auth: store challenge: %w", err))
 	}
 
 	return &StartResponse{
@@ -373,7 +374,7 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 
 	var challenge phoneChallenge
 	if unmarshalErr := json.Unmarshal(data, &challenge); unmarshalErr != nil {
-		return nil, forge.InternalError(fmt.Errorf("phone auth: unmarshal challenge: %w", unmarshalErr))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("phone auth: unmarshal challenge: %w", unmarshalErr))
 	}
 
 	// Validate using the MFA helper.
@@ -440,10 +441,10 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 		var newErr error
 		sess, newErr = account.NewSession(appID, u.ID, sessCfg)
 		if newErr != nil {
-			return nil, forge.InternalError(fmt.Errorf("phone auth: create session: %w", newErr))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("phone auth: create session: %w", newErr))
 		}
 		if storeErr := p.store.CreateSession(ctx.Context(), sess); storeErr != nil {
-			return nil, forge.InternalError(fmt.Errorf("phone auth: save session: %w", storeErr))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("phone auth: save session: %w", storeErr))
 		}
 	}
 
@@ -489,7 +490,7 @@ func (p *Plugin) resolveOrCreateUser(ctx context.Context, appID id.AppID, phone 
 		UpdatedAt:     time.Now(),
 	}
 	if err := p.store.CreateUser(ctx, newUser); err != nil {
-		return nil, false, forge.InternalError(fmt.Errorf("phone auth: create user: %w", err))
+		return nil, false, middleware.InternalErrorCtx(ctx, fmt.Errorf("phone auth: create user: %w", err))
 	}
 	if p.engine != nil {
 		p.engine.EnsureDefaultRole(ctx, appID, newUser.ID)

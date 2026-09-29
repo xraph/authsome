@@ -13,6 +13,7 @@ import (
 	"github.com/xraph/authsome"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 )
@@ -70,7 +71,7 @@ func (p *Plugin) resolveExchangeToken(ctx context.Context, token, tokenType stri
 		return nil, errUnsupportedTokenType
 	}
 	if p.engine == nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: no engine"))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("oauth2: no engine"))
 	}
 	sess, err := p.engine.ResolveSessionByToken(ctx, token)
 	if err != nil || sess == nil {
@@ -255,7 +256,7 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 
 	exchanger, ok := p.engine.(tokenExchanger)
 	if !ok {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: engine does not support token exchange"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: engine does not support token exchange"))
 	}
 
 	// 8. The engine owns the grant lookup, the grant's own scope filter, the

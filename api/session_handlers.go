@@ -58,7 +58,7 @@ func (a *API) handleRevokeOtherSessions(ctx forge.Context, _ *RevokeOtherSession
 	}
 	keep, _ := middleware.SessionIDFrom(ctx.Context())
 	if err := a.engine.RevokeOtherUserSessions(ctx.Context(), userID, keep); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "revoked"})
 }
@@ -75,7 +75,7 @@ func (a *API) handleListSessions(ctx forge.Context, req *ListSessionsRequest) (*
 
 	pg, err := a.engine.ListSessionsPage(ctx.Context(), userID, page.Opts{Limit: req.Limit, Cursor: req.Cursor})
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &SessionListResponse{Sessions: safeSessionSlice(pg.Items), NextCursor: pg.NextCursor}
@@ -103,7 +103,7 @@ func (a *API) handleRevokeSession(ctx forge.Context, _ *RevokeSessionRequest) (*
 	}
 
 	if err := a.engine.RevokeSession(ctx.Context(), sessID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "revoked"}

@@ -167,7 +167,7 @@ func (a *API) handleResolveSettings(ctx forge.Context, req *ResolveSettingsReque
 	if req.Namespace != "" {
 		resolved, err := mgr.ResolveAllForNamespace(ctx.Context(), req.Namespace, opts)
 		if err != nil {
-			return nil, mapSettingsError(err)
+			return nil, mapSettingsError(ctx, err)
 		}
 		return &ResolvedSettingsResponse{Settings: resolved}, nil
 	}
@@ -177,7 +177,7 @@ func (a *API) handleResolveSettings(ctx forge.Context, req *ResolveSettingsReque
 	for _, ns := range mgr.Namespaces() {
 		resolved, err := mgr.ResolveAllForNamespace(ctx.Context(), ns, opts)
 		if err != nil {
-			return nil, mapSettingsError(err)
+			return nil, mapSettingsError(ctx, err)
 		}
 		allResolved = append(allResolved, resolved...)
 	}
@@ -199,7 +199,7 @@ func (a *API) handleResolveSetting(ctx forge.Context, req *ResolveSettingRequest
 
 	rs, err := mgr.ResolveWithDetails(ctx.Context(), req.Key, opts)
 	if err != nil {
-		return nil, mapSettingsError(err)
+		return nil, mapSettingsError(ctx, err)
 	}
 
 	return &ResolvedSettingResponse{Setting: rs}, nil
@@ -230,7 +230,7 @@ func (a *API) handleSetSetting(ctx forge.Context, req *SetSettingRequest) (*Sett
 		return nil, err
 	}
 	if err := mgr.Set(ctx.Context(), req.Key, req.Value, scope, req.ScopeID, req.AppID, req.OrgID, updatedBy); err != nil {
-		return nil, mapSettingsError(err)
+		return nil, mapSettingsError(ctx, err)
 	}
 
 	return &SettingValueResponse{
@@ -333,7 +333,7 @@ func (a *API) auditSettingsWrite(ctx forge.Context, action, key string, scope se
 	if scope == settings.ScopeGlobal {
 		ev.Severity = hook.SeverityCritical
 		if err := a.engine.Hooks().EmitCritical(ctx.Context(), ev); err != nil {
-			return forge.InternalError(fmt.Errorf("audit trail unavailable: %w", err))
+			return middleware.InternalError(ctx, fmt.Errorf("audit trail unavailable: %w", err))
 		}
 		return nil
 	}
@@ -365,7 +365,7 @@ func (a *API) handleEnforceSetting(ctx forge.Context, req *EnforceSettingRequest
 		return nil, err
 	}
 	if err := mgr.Enforce(ctx.Context(), req.Key, req.Value, scope, req.ScopeID, req.AppID, req.OrgID, updatedBy); err != nil {
-		return nil, mapSettingsError(err)
+		return nil, mapSettingsError(ctx, err)
 	}
 
 	return &SettingValueResponse{
@@ -396,7 +396,7 @@ func (a *API) handleUnenforceSetting(ctx forge.Context, req *UnenforceSettingReq
 		return nil, err
 	}
 	if err := mgr.Unenforce(ctx.Context(), req.Key, scope, req.ScopeID); err != nil {
-		return nil, mapSettingsError(err)
+		return nil, mapSettingsError(ctx, err)
 	}
 
 	return &StatusResponse{Status: "unenforced"}, nil
@@ -421,7 +421,7 @@ func (a *API) handleDeleteSetting(ctx forge.Context, req *DeleteSettingRequest) 
 		return nil, err
 	}
 	if err := mgr.Delete(ctx.Context(), req.Key, scope, req.ScopeID); err != nil {
-		return nil, mapSettingsError(err)
+		return nil, mapSettingsError(ctx, err)
 	}
 
 	return &StatusResponse{Status: "deleted"}, nil
@@ -432,7 +432,7 @@ func (a *API) handleDeleteSetting(ctx forge.Context, req *DeleteSettingRequest) 
 // ──────────────────────────────────────────────────
 
 // mapSettingsError converts settings package errors into Forge HTTP errors.
-func mapSettingsError(err error) error {
+func mapSettingsError(ctx forge.Context, err error) error {
 	if err == nil {
 		return nil
 	}
@@ -454,7 +454,7 @@ func mapSettingsError(err error) error {
 	if errors.Is(err, settings.ErrValidation) {
 		return forge.BadRequest(err.Error())
 	}
-	return forge.InternalError(err)
+	return middleware.InternalError(ctx, err)
 }
 
 // buildDefinitionGroupsResponse groups definitions by namespace+category.

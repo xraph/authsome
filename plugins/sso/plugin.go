@@ -643,11 +643,11 @@ type CallbackResponse struct {
 func (p *Plugin) handleLogin(ctx forge.Context, req *LoginRequest) (*LoginResponse, error) {
 	appID, err := p.requestAppID(ctx)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("invalid app_id configuration: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("invalid app_id configuration: %w", err))
 	}
 	provider, conn, err := p.resolveProvider(ctx.Context(), appID, req.Provider)
 	if err != nil {
-		return nil, providerResolveError(req.Provider, err)
+		return nil, providerResolveError(ctx, req.Provider, err)
 	}
 	var connID string
 	if conn != nil {
@@ -671,7 +671,7 @@ func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provid
 
 	state, err := generateState()
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to generate state: %w", err))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to generate state: %w", err))
 	}
 
 	// Build the IdP login URL. SAML providers also return the AuthnRequest ID so
@@ -690,7 +690,7 @@ func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provid
 		loginURL, err = provider.LoginURL(state)
 	}
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to get login URL: %w", err))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to get login URL: %w", err))
 	}
 
 	fromBrowser := w != nil && browserbind.IsBrowser(r)
@@ -711,11 +711,11 @@ func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provid
 
 // providerResolveError maps a resolveProvider failure to the right HTTP status:
 // 400 for an unknown provider, 500 for a build/config failure.
-func providerResolveError(name string, err error) error {
+func providerResolveError(ctx forge.Context, name string, err error) error {
 	if errors.Is(err, errProviderNotFound) {
 		return forge.BadRequest(fmt.Sprintf("unsupported SSO provider: %s", name))
 	}
-	return forge.InternalError(fmt.Errorf("sso: resolve provider %q: %w", name, err))
+	return middleware.InternalError(ctx, fmt.Errorf("sso: resolve provider %q: %w", name, err))
 }
 
 // LoginByDomainRequest carries an email whose domain selects the IdP connection.
@@ -743,7 +743,7 @@ func (p *Plugin) handleLoginByDomain(ctx forge.Context, req *LoginByDomainReques
 	}
 	appID, err := p.requestAppID(ctx)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("invalid app_id configuration: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("invalid app_id configuration: %w", err))
 	}
 	domain := email[at+1:]
 	var conn *Connection
@@ -763,7 +763,7 @@ func (p *Plugin) handleLoginByDomain(ctx forge.Context, req *LoginByDomainReques
 	}
 	provider, err := p.connectionToProvider(conn)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: build provider: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso: build provider: %w", err))
 	}
 	return p.startLogin(ctx.Context(), appID, provider, conn.Provider, conn.ID.String(), req.ReturnURL, ctx.Response(), ctx.Request())
 }
@@ -779,18 +779,18 @@ func (p *Plugin) handleSPMetadata(ctx forge.Context) error {
 	if connID := ctx.Request().URL.Query().Get("connection"); connID != "" {
 		conn, err := p.connectionByID(ctx.Context(), connID)
 		if err != nil {
-			return providerResolveError(name, err)
+			return providerResolveError(ctx, name, err)
 		}
 		if provider, err = p.connectionToProvider(conn); err != nil {
-			return forge.InternalError(fmt.Errorf("sso: build provider: %w", err))
+			return middleware.InternalError(ctx, fmt.Errorf("sso: build provider: %w", err))
 		}
 	} else {
 		appID, err := p.requestAppID(ctx)
 		if err != nil {
-			return forge.InternalError(fmt.Errorf("invalid app_id configuration: %w", err))
+			return middleware.InternalError(ctx, fmt.Errorf("invalid app_id configuration: %w", err))
 		}
 		if provider, _, err = p.resolveProvider(ctx.Context(), appID, name); err != nil {
-			return providerResolveError(name, err)
+			return providerResolveError(ctx, name, err)
 		}
 	}
 	mp, ok := provider.(SAMLMetadataProvider)
@@ -799,7 +799,7 @@ func (p *Plugin) handleSPMetadata(ctx forge.Context) error {
 	}
 	xmlBytes, contentType, err := mp.Metadata()
 	if err != nil {
-		return forge.InternalError(fmt.Errorf("sso: metadata: %w", err))
+		return middleware.InternalError(ctx, fmt.Errorf("sso: metadata: %w", err))
 	}
 	ctx.Response().Header().Set("Content-Type", contentType)
 	ctx.Response().WriteHeader(http.StatusOK)
@@ -821,7 +821,7 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	}
 	appID, err := p.appIDFromState(st)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("invalid app_id configuration: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("invalid app_id configuration: %w", err))
 	}
 
 	// Prefer the exact connection pinned in the login state (multi-tenant safe);
@@ -836,7 +836,7 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		provider, conn, err = p.resolveProvider(ctx.Context(), appID, req.Provider)
 	}
 	if err != nil {
-		return nil, providerResolveError(req.Provider, err)
+		return nil, providerResolveError(ctx, req.Provider, err)
 	}
 
 	if req.Error != "" {
@@ -1068,7 +1068,7 @@ func (p *Plugin) resolveIdentity(ctx context.Context, appID id.AppID, envID id.E
 			"an account with this email already exists but is not verified; verify it before signing in with SSO")
 	}
 	if err != nil {
-		return nil, false, forge.InternalError(fmt.Errorf("sso: resolve existing user: %w", err))
+		return nil, false, middleware.InternalErrorCtx(ctx, fmt.Errorf("sso: resolve existing user: %w", err))
 	}
 	isNew := false
 	if u == nil {
@@ -1090,7 +1090,7 @@ func (p *Plugin) resolveIdentity(ctx context.Context, appID id.AppID, envID id.E
 			UpdatedAt:     time.Now(),
 		}
 		if createErr := p.store.CreateUserWithPrimaryEmail(ctx, u, user.NewPrimaryEmail(u, "sso")); createErr != nil {
-			return nil, false, forge.InternalError(fmt.Errorf("failed to create user: %w", createErr))
+			return nil, false, middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to create user: %w", createErr))
 		}
 		if p.engine != nil {
 			p.engine.EnsureDefaultRole(ctx, appID, u.ID)
@@ -1238,10 +1238,10 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 
 	ssoUser, err := provider.HandleCallback(ctx.Context(), params)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: callback failed: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso: callback failed: %w", err))
 	}
 	if ssoUser == nil {
-		return nil, forge.InternalError(errors.New("sso: provider returned no user"))
+		return nil, middleware.InternalError(ctx, errors.New("sso: provider returned no user"))
 	}
 
 	goCtx := ctx.Context()
@@ -1311,10 +1311,10 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 		var newErr error
 		sess, newErr = account.NewSession(appID, u.ID, sessCfg)
 		if newErr != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", newErr))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create session: %w", newErr))
 		}
 		if storeErr := p.store.CreateSession(goCtx, sess); storeErr != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to store session: %w", storeErr))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to store session: %w", storeErr))
 		}
 	}
 
@@ -1489,7 +1489,7 @@ func (p *Plugin) handleExchange(ctx forge.Context, req *ExchangeRequest) (*Callb
 	}
 	eng, ok := p.engine.(*authsome.Engine)
 	if !ok || eng == nil {
-		return nil, forge.InternalError(errors.New("sso: exchange needs the authsome engine"))
+		return nil, middleware.InternalError(ctx, errors.New("sso: exchange needs the authsome engine"))
 	}
 	r := ctx.Request()
 	sess, err := eng.RefreshBySessionID(ctx.Context(), sessionID, authsome.RefreshOpts{
@@ -1666,7 +1666,7 @@ type CreateConnectionInput struct {
 // authorization instead of the platform-admin HTTP route.
 func (p *Plugin) CreateConnection(ctx context.Context, in CreateConnectionInput) (*Connection, error) {
 	if p.ssoStore == nil {
-		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("sso plugin: store not wired"))
 	}
 	if in.AppID.IsNil() {
 		return nil, forge.BadRequest("app_id is required")
@@ -1683,7 +1683,7 @@ func (p *Plugin) CreateConnection(ctx context.Context, in CreateConnectionInput)
 	// authsome_environments, so a connection must carry a valid env.
 	env, err := p.store.GetDefaultEnvironment(ctx, in.AppID)
 	if err != nil || env == nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: resolve default environment for app: %w", err))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("sso: resolve default environment for app: %w", err))
 	}
 
 	now := time.Now()
@@ -1724,14 +1724,14 @@ func (p *Plugin) CreateConnection(ctx context.Context, in CreateConnectionInput)
 		// signed AuthnRequests and SP metadata work out of the box.
 		certPEM, keyPEM, kerr := generateSPKeypair(conn.EntityID)
 		if kerr != nil {
-			return nil, forge.InternalError(fmt.Errorf("sso: generate SP keypair: %w", kerr))
+			return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("sso: generate SP keypair: %w", kerr))
 		}
 		conn.SPCertificate = certPEM
 		conn.SPPrivateKey = keyPEM
 	}
 
 	if err := p.ssoStore.CreateConnection(ctx, conn); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: create connection: %w", err))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("sso: create connection: %w", err))
 	}
 	return conn, nil
 }
@@ -1910,7 +1910,7 @@ type AdminDeleteConnectionResponse struct {
 // safe to surface to authenticated workspace admins.
 func (p *Plugin) handleAdminListConnections(ctx forge.Context, req *AdminListConnectionsRequest) (*AdminListConnectionsResponse, error) {
 	if p.ssoStore == nil {
-		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso plugin: store not wired"))
 	}
 	appID, err := plugin.ScopedAppID(ctx, strings.TrimSpace(req.AppID))
 	if err != nil {
@@ -1918,7 +1918,7 @@ func (p *Plugin) handleAdminListConnections(ctx forge.Context, req *AdminListCon
 	}
 	conns, err := p.ssoStore.ListConnections(ctx.Context(), appID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: list connections: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso: list connections: %w", err))
 	}
 	if conns == nil {
 		conns = []*Connection{}
@@ -1929,7 +1929,7 @@ func (p *Plugin) handleAdminListConnections(ctx forge.Context, req *AdminListCon
 // handleAdminGetConnection returns a single connection by ID.
 func (p *Plugin) handleAdminGetConnection(ctx forge.Context, req *AdminConnectionPathRequest) (*Connection, error) {
 	if p.ssoStore == nil {
-		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso plugin: store not wired"))
 	}
 	connID, err := id.ParseSSOConnectionID(req.ConnectionID)
 	if err != nil {
@@ -1951,7 +1951,7 @@ func (p *Plugin) handleAdminGetConnection(ctx forge.Context, req *AdminConnectio
 // protocols would orphan the OIDC vs SAML field set.
 func (p *Plugin) handleAdminUpdateConnection(ctx forge.Context, req *AdminUpdateConnectionRequest) (*Connection, error) {
 	if p.ssoStore == nil {
-		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso plugin: store not wired"))
 	}
 	connID, err := id.ParseSSOConnectionID(req.ConnectionID)
 	if err != nil {
@@ -2016,7 +2016,7 @@ func (p *Plugin) handleAdminUpdateConnection(ctx forge.Context, req *AdminUpdate
 	conn.UpdatedAt = time.Now()
 
 	if err := p.ssoStore.UpdateConnection(ctx.Context(), conn); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: update connection: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso: update connection: %w", err))
 	}
 	return conn, nil
 }
@@ -2025,7 +2025,7 @@ func (p *Plugin) handleAdminUpdateConnection(ctx forge.Context, req *AdminUpdate
 // PUT endpoint with `active=false` if a soft-disable is preferred.
 func (p *Plugin) handleAdminDeleteConnection(ctx forge.Context, req *AdminConnectionPathRequest) (*AdminDeleteConnectionResponse, error) {
 	if p.ssoStore == nil {
-		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso plugin: store not wired"))
 	}
 	connID, err := id.ParseSSOConnectionID(req.ConnectionID)
 	if err != nil {
@@ -2039,7 +2039,7 @@ func (p *Plugin) handleAdminDeleteConnection(ctx forge.Context, req *AdminConnec
 		return nil, err
 	}
 	if err := p.ssoStore.DeleteConnection(ctx.Context(), connID); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: delete connection: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso: delete connection: %w", err))
 	}
 	return &AdminDeleteConnectionResponse{Status: "deleted"}, nil
 }

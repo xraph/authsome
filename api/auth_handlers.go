@@ -172,7 +172,7 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 			a.consumeDummyHashBudget(req.Password)
 			return nil, ctx.JSON(http.StatusCreated, a.syntheticSignupResponse(req.Email, appID))
 		}
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	a.setSessionCookie(ctx, sess.Token, a.sessionTokenMaxAge())
@@ -284,7 +284,7 @@ func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse
 		if errors.As(err, &locked) {
 			ctx.Response().Header().Set("Retry-After", strconv.Itoa(locked.RetryAfter(time.Now())))
 		}
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	a.setSessionCookie(ctx, sess.Token, a.sessionTokenMaxAge())
@@ -298,7 +298,7 @@ func (a *API) handleSignOut(ctx forge.Context, _ *SignOutRequest) (*StatusRespon
 	}
 
 	if err := a.engine.SignOut(ctx.Context(), sessID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	a.deleteSessionCookie(ctx)
@@ -346,7 +346,7 @@ func (a *API) handleRefresh(ctx forge.Context, req *RefreshRequest) (*TokenRespo
 	sess, err := a.engine.Refresh(ctx.Context(), req.RefreshToken, opts)
 	if err != nil {
 		a.deleteSessionCookie(ctx)
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	return a.respondWithTokens(ctx, sess)
 }

@@ -72,7 +72,7 @@ func (a *API) handleListDevices(ctx forge.Context, _ *ListDevicesRequest) (*Devi
 
 	devices, err := a.engine.ListUserDevices(ctx.Context(), userID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	if devices == nil {
@@ -97,7 +97,7 @@ func (a *API) handleDeleteDevice(ctx forge.Context, _ *DeleteDeviceRequest) (*St
 	}
 
 	if err := a.engine.DeleteDevice(ctx.Context(), d.ID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "deleted"}
@@ -112,7 +112,7 @@ func (a *API) handleTrustDevice(ctx forge.Context, _ *TrustDeviceRequest) (*devi
 
 	trusted, err := a.engine.TrustDevice(ctx.Context(), d.ID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return trusted, nil

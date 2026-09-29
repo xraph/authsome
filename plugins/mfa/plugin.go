@@ -420,7 +420,7 @@ func (p *Plugin) handleEnroll(ctx forge.Context, req *EnrollRequest) (*EnrollRes
 		AccountName: accountName,
 	})
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to generate TOTP key: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to generate TOTP key: %w", err))
 	}
 
 	now := time.Now()
@@ -440,7 +440,7 @@ func (p *Plugin) handleEnroll(ctx forge.Context, req *EnrollRequest) (*EnrollRes
 	}
 
 	if err := p.store.CreateEnrollment(ctx.Context(), enrollment); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to create enrollment: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create enrollment: %w", err))
 	}
 
 	p.audit(ctx.Context(), hook.ActionMFAEnroll, "mfa", enrollment.ID.String(), userID.String(), "", bridge.OutcomeSuccess)
@@ -504,19 +504,19 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyMFARequest) (*Verify
 		enrollment.Verified = true
 		enrollment.UpdatedAt = time.Now()
 		if err := p.store.UpdateEnrollment(ctx.Context(), enrollment); err != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to verify enrollment: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to verify enrollment: %w", err))
 		}
 
 		// Generate recovery codes on first successful verification
 		codes, plaintexts, err := GenerateRecoveryCodes(userID, DefaultRecoveryCodeCount)
 		if err != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to generate recovery codes: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to generate recovery codes: %w", err))
 		}
 
 		// Delete any old codes for this user, then store new ones
 		_ = p.store.DeleteRecoveryCodes(ctx.Context(), userID) //nolint:errcheck // best-effort cleanup
 		if err := p.store.CreateRecoveryCodes(ctx.Context(), codes); err != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to store recovery codes: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to store recovery codes: %w", err))
 		}
 
 		p.audit(ctx.Context(), hook.ActionMFAEnroll, "mfa", enrollment.ID.String(), userID.String(), "", bridge.OutcomeSuccess)
@@ -627,12 +627,12 @@ func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*Cha
 			log.String("ticket_prefix", safePrefix(req.Ticket)),
 			log.Error(consumeErr),
 		)
-		return nil, forge.InternalError(consumeErr)
+		return nil, middleware.InternalError(ctx, consumeErr)
 	}
 
 	u, err := eng.GetUser(ctx.Context(), userID)
 	if err != nil || u == nil {
-		return nil, forge.InternalError(fmt.Errorf("mfa: load user %s after challenge: %w", userID, err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("mfa: load user %s after challenge: %w", userID, err))
 	}
 
 	result, issueErr := eng.IssueSession(ctx.Context(), &authsome.IssueSessionRequest{
@@ -658,7 +658,7 @@ func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*Cha
 		if errors.Is(issueErr, authsome.ErrDPoPBindingRequired) {
 			return nil, issueErr
 		}
-		return nil, forge.InternalError(fmt.Errorf("mfa: issue session: %w", issueErr))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("mfa: issue session: %w", issueErr))
 	}
 
 	appIDStr := payload.AppID.String()
@@ -758,7 +758,7 @@ func (p *Plugin) verifyStepUp(ctx context.Context, userID id.UserID, enrollment 
 func (p *Plugin) consumeRecoveryCode(ctx context.Context, userID id.UserID, plaintext string) (bool, error) {
 	codes, err := p.store.GetRecoveryCodes(ctx, userID)
 	if err != nil {
-		return false, forge.InternalError(fmt.Errorf("mfa: get recovery codes: %w", err))
+		return false, middleware.InternalErrorCtx(ctx, fmt.Errorf("mfa: get recovery codes: %w", err))
 	}
 
 	var matched *RecoveryCode
@@ -775,7 +775,7 @@ func (p *Plugin) consumeRecoveryCode(ctx context.Context, userID id.UserID, plai
 	}
 
 	if consumeErr := p.store.ConsumeRecoveryCode(ctx, matched.ID); consumeErr != nil {
-		return false, forge.InternalError(fmt.Errorf("mfa: consume recovery code: %w", consumeErr))
+		return false, middleware.InternalErrorCtx(ctx, fmt.Errorf("mfa: consume recovery code: %w", consumeErr))
 	}
 	p.audit(ctx, hook.ActionMFARecoveryUsed, "mfa", matched.ID.String(), userID.String(), "", bridge.OutcomeSuccess)
 	p.emitHook(ctx, hook.ActionMFARecoveryUsed, "mfa", matched.ID.String(), userID.String(), "")
@@ -817,7 +817,7 @@ func (p *Plugin) handleDisable(ctx forge.Context, req *DisableRequest) (*Disable
 	}
 
 	if err := p.store.DeleteEnrollment(ctx.Context(), enrollment.ID); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to remove enrollment: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to remove enrollment: %w", err))
 	}
 
 	p.audit(ctx.Context(), hook.ActionMFADisable, "mfa", enrollment.ID.String(), userID.String(), "", bridge.OutcomeSuccess)
@@ -852,7 +852,7 @@ func (p *Plugin) handleRecoveryVerify(ctx forge.Context, req *RecoveryVerifyRequ
 	// Fetch all unused recovery codes
 	codes, err := p.store.GetRecoveryCodes(ctx.Context(), userID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to get recovery codes: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to get recovery codes: %w", err))
 	}
 
 	// Try to match the provided code
@@ -874,7 +874,7 @@ func (p *Plugin) handleRecoveryVerify(ctx forge.Context, req *RecoveryVerifyRequ
 
 	// Consume the matched code (one-time use)
 	if err := p.store.ConsumeRecoveryCode(ctx.Context(), matched.ID); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to consume recovery code: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to consume recovery code: %w", err))
 	}
 
 	p.audit(ctx.Context(), hook.ActionMFARecoveryUsed, "mfa", matched.ID.String(), userID.String(), "", bridge.OutcomeSuccess)
@@ -902,13 +902,13 @@ func (p *Plugin) handleRecoveryRegenerate(ctx forge.Context, _ *RecoveryRegenera
 	// Generate new codes
 	codes, plaintexts, err := GenerateRecoveryCodes(userID, DefaultRecoveryCodeCount)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to generate recovery codes: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to generate recovery codes: %w", err))
 	}
 
 	// Delete old codes, store new ones
 	_ = p.store.DeleteRecoveryCodes(ctx.Context(), userID) //nolint:errcheck // best-effort cleanup
 	if err := p.store.CreateRecoveryCodes(ctx.Context(), codes); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to store recovery codes: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to store recovery codes: %w", err))
 	}
 
 	p.audit(ctx.Context(), hook.ActionMFARecoveryRegenerated, "mfa", "", userID.String(), "", bridge.OutcomeSuccess)
@@ -975,13 +975,13 @@ func (p *Plugin) enrollSMS(ctx forge.Context, userID id.UserID, req *EnrollReque
 	}
 
 	if err := p.store.CreateEnrollment(ctx.Context(), enrollment); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to create SMS enrollment: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create SMS enrollment: %w", err))
 	}
 
 	// Send initial verification code
 	challenge, err := SendSMSChallenge(ctx.Context(), p.sms, req.Phone)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to send SMS code: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to send SMS code: %w", err))
 	}
 
 	challengeData, _ := json.Marshal(challenge)                                                //nolint:errcheck // marshaling known types
@@ -1020,7 +1020,7 @@ func (p *Plugin) handleSMSSend(ctx forge.Context, req *SMSSendRequest) (*SMSSend
 
 	challenge, err := SendSMSChallenge(ctx.Context(), p.sms, phone)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to send SMS code: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to send SMS code: %w", err))
 	}
 
 	challengeData, _ := json.Marshal(challenge)                                                //nolint:errcheck // marshaling known types
@@ -1054,7 +1054,7 @@ func (p *Plugin) handleSMSVerify(ctx forge.Context, req *SMSVerifyRequest) (*SMS
 
 	var challenge SMSChallenge
 	if unmarshalErr := json.Unmarshal(challengeData, &challenge); unmarshalErr != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to parse challenge: %w", unmarshalErr))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to parse challenge: %w", unmarshalErr))
 	}
 
 	if !ValidateSMSCode(req.Code, &challenge) {

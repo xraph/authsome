@@ -9,6 +9,7 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugins/oauth2provider"
 )
 
@@ -38,7 +39,7 @@ func (p *Plugin) Evaluate(ctx context.Context, clientID string, _ id.UserID, org
 	if err != nil {
 		// A genuine store failure denies. It must never collapse into the
 		// not-found branch above and allow the request through.
-		return forge.InternalError(fmt.Errorf("agentauth: load agent: %w", err))
+		return middleware.InternalErrorCtx(ctx, fmt.Errorf("agentauth: load agent: %w", err))
 	}
 
 	// GetAgentByClientID resolves globally, and client_id uniqueness is only
@@ -92,7 +93,7 @@ func (p *Plugin) CreateGrant(ctx context.Context, in CreateGrantInput) (*AgentGr
 		return nil, forge.BadRequest("unknown agent")
 	}
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("agentauth: load agent: %w", err))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("agentauth: load agent: %w", err))
 	}
 	if agent.Status == StatusBlocked {
 		return nil, forge.Forbidden("agent is blocked")
@@ -147,7 +148,7 @@ func (p *Plugin) CreateGrant(ctx context.Context, in CreateGrantInput) (*AgentGr
 			return nil, revokeErr
 		}
 	} else if !errors.Is(err, ErrNotFound) {
-		return nil, forge.InternalError(fmt.Errorf("agentauth: load active grant: %w", err))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("agentauth: load active grant: %w", err))
 	}
 
 	now := time.Now()
@@ -164,7 +165,7 @@ func (p *Plugin) CreateGrant(ctx context.Context, in CreateGrantInput) (*AgentGr
 		UpdatedAt: now,
 	}
 	if err := p.store.CreateAgentGrant(ctx, g); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("agentauth: create grant: %w", err))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("agentauth: create grant: %w", err))
 	}
 	return g, nil
 }
@@ -192,7 +193,7 @@ func (p *Plugin) RevokeGrant(ctx context.Context, grantID id.AgentGrantID) error
 		return forge.NotFound("agent grant not found")
 	}
 	if err != nil {
-		return forge.InternalError(fmt.Errorf("agentauth: revoke grant: %w", err))
+		return middleware.InternalErrorCtx(ctx, fmt.Errorf("agentauth: revoke grant: %w", err))
 	}
 	return p.sweepSessions(ctx, []id.AgentGrantID{grantID})
 }
@@ -214,7 +215,7 @@ func (p *Plugin) sweepSessions(ctx context.Context, grantIDs []id.AgentGrantID) 
 	sessions := p.engine.Store()
 	for _, gid := range grantIDs {
 		if err := sessions.DeleteSessionsByGrant(ctx, gid); err != nil {
-			return forge.InternalError(fmt.Errorf("agentauth: delete grant sessions: %w", err))
+			return middleware.InternalErrorCtx(ctx, fmt.Errorf("agentauth: delete grant sessions: %w", err))
 		}
 	}
 	return nil
@@ -320,7 +321,7 @@ func (p *Plugin) policyFor(ctx context.Context, orgID id.OrgID) (*OrgAgentPolicy
 		return &OrgAgentPolicy{OrgID: orgID, Mode: ModeOpen}, nil
 	}
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("agentauth: load org policy: %w", err))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("agentauth: load org policy: %w", err))
 	}
 	return policy, nil
 }

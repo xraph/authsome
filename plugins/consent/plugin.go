@@ -196,7 +196,7 @@ func (p *Plugin) handleGrant(ctx forge.Context, req *GrantConsentRequest) (*Cons
 	}
 
 	if err := p.store.GrantConsent(ctx.Context(), c); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to record consent"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to record consent"))
 	}
 
 	p.audit(ctx.Context(), "consent.grant", "consent", c.ID.String(), userID.String(), appID.String(), map[string]string{
@@ -238,7 +238,7 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeConsentRequest) (*St
 		if errors.Is(err, ErrNotFound) {
 			return nil, forge.NotFound("consent record not found")
 		}
-		return nil, forge.InternalError(fmt.Errorf("failed to revoke consent"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to revoke consent"))
 	}
 
 	p.audit(ctx.Context(), "consent.revoke", "consent", "", userID.String(), appID.String(), map[string]string{
@@ -278,7 +278,7 @@ func (p *Plugin) handleList(ctx forge.Context, req *ListConsentsRequest) (*ListR
 
 	consents, cursor, err := p.store.ListConsents(ctx.Context(), q)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to list consents"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list consents"))
 	}
 
 	resp := &ListResponse{

@@ -103,7 +103,7 @@ func (a *API) handleGetMe(ctx forge.Context, _ *GetMeRequest) (*MeResponse, erro
 
 	u, err := a.engine.GetMe(ctx.Context(), userID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &MeResponse{User: u}
@@ -134,7 +134,7 @@ func (a *API) handleUpdateMe(ctx forge.Context, req *UpdateMeRequest) (*user.Use
 
 	u, err := a.engine.GetMe(ctx.Context(), userID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	if req.FirstName != nil {
@@ -151,7 +151,7 @@ func (a *API) handleUpdateMe(ctx forge.Context, req *UpdateMeRequest) (*user.Use
 	}
 
 	if err := a.engine.UpdateMe(ctx.Context(), u); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return u, nil
@@ -174,7 +174,7 @@ func (a *API) handleSwitchOrg(ctx forge.Context, req *SwitchOrgRequest) (*Switch
 
 	updated, err := a.engine.SwitchActiveOrg(ctx.Context(), sessionID, newOrgID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &SwitchOrgResponse{
@@ -193,7 +193,7 @@ func (a *API) handleDeleteAccount(ctx forge.Context, _ *DeleteAccountRequest) (*
 	}
 
 	if err := a.engine.DeleteAccount(ctx.Context(), userID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "account deleted"}
@@ -208,7 +208,7 @@ func (a *API) handleExportData(ctx forge.Context, _ *ExportDataRequest) (*UserDa
 
 	export, err := a.engine.ExportUserData(ctx.Context(), userID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusOK, export)

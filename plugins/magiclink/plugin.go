@@ -13,6 +13,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
@@ -290,17 +291,17 @@ func (p *Plugin) handleSend(ctx forge.Context, req *SendRequest) (*SendResponse,
 	tokenTTL := p.resolveTTL(ctx.Context(), appID, SettingTokenTTLSeconds, p.config.TokenTTL)
 	v, err := account.NewVerification(ctx.Context(), appID, u.ID, VerificationTypeMagicLink, tokenTTL)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to create magic link token: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create magic link token: %w", err))
 	}
 
 	if err := p.store.CreateVerification(ctx.Context(), v); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to create magic link: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create magic link: %w", err))
 	}
 
 	// Send email
 	if p.config.Mailer != nil {
 		if err := p.config.Mailer.SendMagicLink(ctx.Context(), req.Email, v.Token); err != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to send magic link email: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to send magic link email: %w", err))
 		}
 	}
 
@@ -346,13 +347,13 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 		if errors.Is(consumeErr, store.ErrNotFound) {
 			return nil, forge.Unauthorized("magic link already used")
 		}
-		return nil, forge.InternalError(fmt.Errorf("failed to verify magic link: %w", consumeErr))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to verify magic link: %w", consumeErr))
 	}
 
 	// Look up user
 	u, err := p.store.GetUser(ctx.Context(), v.UserID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to resolve user: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to resolve user: %w", err))
 	}
 
 	// Clicking a magic link proves email ownership — mark as verified.
@@ -401,10 +402,10 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 		var newErr error
 		sess, newErr = account.NewSession(v.AppID, u.ID, sessCfg)
 		if newErr != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", newErr))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create session: %w", newErr))
 		}
 		if storeErr := p.store.CreateSession(ctx.Context(), sess); storeErr != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", storeErr))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create session: %w", storeErr))
 		}
 	}
 

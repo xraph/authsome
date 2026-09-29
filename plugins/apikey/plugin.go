@@ -426,7 +426,7 @@ func (p *Plugin) handleCreate(ctx forge.Context, req *CreateKeyRequest) (*Create
 	if p.config.MaxKeysPerUser > 0 {
 		existing, listErr := p.store.ListAPIKeysByUser(ctx.Context(), appID, userID)
 		if listErr != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to check existing keys: %w", listErr))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to check existing keys: %w", listErr))
 		}
 		activeCount := 0
 		for _, k := range existing {
@@ -442,7 +442,7 @@ func (p *Plugin) handleCreate(ctx forge.Context, req *CreateKeyRequest) (*Create
 	// Generate key pair (public + secret).
 	publicKey, secretKey, secretHash, publicPrefix, secretPrefix, err := apikey.GenerateKeyPair()
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to generate key pair: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to generate key pair: %w", err))
 	}
 
 	now := time.Now()
@@ -466,7 +466,7 @@ func (p *Plugin) handleCreate(ctx forge.Context, req *CreateKeyRequest) (*Create
 	}
 
 	if err := p.store.CreateAPIKey(ctx.Context(), key); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to create key: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create key: %w", err))
 	}
 
 	p.audit(ctx.Context(), hook.ActionAPIKeyCreate, hook.ResourceAPIKey, key.ID.String(), userID.String(), "", bridge.OutcomeSuccess)
@@ -512,7 +512,7 @@ func (p *Plugin) handleList(ctx forge.Context, req *ListKeysRequest) (*ListKeysR
 	if req.UserID == "" && p.callerIsKeyAdmin(ctx.Context(), caller) {
 		keys, err = p.store.ListAPIKeysByApp(ctx.Context(), appID)
 		if err != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to list keys: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list keys: %w", err))
 		}
 	} else {
 		userID, authErr := p.authorizeSubject(ctx, req.UserID)
@@ -521,7 +521,7 @@ func (p *Plugin) handleList(ctx forge.Context, req *ListKeysRequest) (*ListKeysR
 		}
 		keys, err = p.store.ListAPIKeysByUser(ctx.Context(), appID, userID)
 		if err != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to list keys: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list keys: %w", err))
 		}
 	}
 
@@ -566,7 +566,7 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeKeyRequest) (*apityp
 		if errors.Is(err, store.ErrNotFound) || errors.Is(err, apikey.ErrNotFound) {
 			return nil, forge.NotFound("key not found")
 		}
-		return nil, forge.InternalError(fmt.Errorf("failed to get key: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to get key: %w", err))
 	}
 
 	// Only the key's owner (or an apikey admin) may revoke it. Report a
@@ -582,7 +582,7 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeKeyRequest) (*apityp
 	key.Revoked = true
 	key.UpdatedAt = time.Now()
 	if err := p.store.UpdateAPIKey(ctx.Context(), key); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to revoke key: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to revoke key: %w", err))
 	}
 
 	principalID := key.UserID.String()

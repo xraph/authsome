@@ -1168,7 +1168,7 @@ func (p *Plugin) handleRefreshTokenGrant(ctx forge.Context, req *TokenRequest) (
 	}
 	eng, ok := p.engine.(*authsome.Engine)
 	if !ok || eng == nil {
-		return nil, forge.InternalError(errors.New("oauth2: refresh grant needs the authsome engine"))
+		return nil, middleware.InternalError(ctx, errors.New("oauth2: refresh grant needs the authsome engine"))
 	}
 	r := ctx.Request()
 	sess, err := eng.RefreshForClient(ctx.Context(), req.RefreshToken, client.ClientID, authsome.RefreshOpts{
@@ -1292,7 +1292,7 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 	// tokens from one code.
 	consumed, err := p.oauth2Store.ConsumeAuthCode(ctx.Context(), req.Code)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: consume auth code: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: consume auth code: %w", err))
 	}
 	if !consumed {
 		return nil, forge.BadRequest("authorization code already used")
@@ -1444,7 +1444,7 @@ func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInf
 
 	u, err := p.store.GetUser(ctx.Context(), userID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: get user: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: get user: %w", err))
 	}
 
 	// An OAuth2 token sees only the claims its scopes cover (OpenID Connect
@@ -1530,7 +1530,7 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 	// Generate client credentials.
 	clientIDStr, err := generateSecureToken(16)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: generate client_id: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate client_id: %w", err))
 	}
 
 	var rawSecret string
@@ -1538,11 +1538,11 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 	if !req.Public {
 		rawSecret, err = generateSecureToken(32)
 		if err != nil {
-			return nil, forge.InternalError(fmt.Errorf("oauth2: generate client_secret: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate client_secret: %w", err))
 		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(rawSecret), bcrypt.DefaultCost)
 		if err != nil {
-			return nil, forge.InternalError(fmt.Errorf("oauth2: hash client_secret: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: hash client_secret: %w", err))
 		}
 		hashedSecret = string(hash)
 	}
@@ -1593,7 +1593,7 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 	}
 
 	if err := p.oauth2Store.CreateClient(ctx.Context(), client); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: create client: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: create client: %w", err))
 	}
 
 	resp := &CreateClientResponse{
@@ -1626,7 +1626,7 @@ func (p *Plugin) handleListClients(ctx forge.Context, req *ListClientsRequest) (
 
 	clients, err := p.oauth2Store.ListClients(ctx.Context(), appID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: list clients: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: list clients: %w", err))
 	}
 	if clients == nil {
 		clients = []*OAuth2Client{}
@@ -1654,14 +1654,14 @@ func (p *Plugin) handleDeleteClient(ctx forge.Context, req *DeleteClientRequest)
 		if errors.Is(err, ErrClientNotFound) {
 			return nil, forge.NotFound("oauth2 client not found")
 		}
-		return nil, forge.InternalError(fmt.Errorf("oauth2: load client: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: load client: %w", err))
 	}
 	if err := plugin.AssertAppScope(ctx, client.AppID); err != nil {
 		return nil, err
 	}
 
 	if err := p.oauth2Store.DeleteClient(ctx.Context(), clientID); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: delete client: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: delete client: %w", err))
 	}
 
 	return &DeleteClientResponse{Status: "deleted"}, nil
@@ -1747,7 +1747,7 @@ func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.
 
 	sess, err := account.NewSession(appID, userID, sessCfg)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: create session: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: create session: %w", err))
 	}
 	sess.DPoPJKT = jkt
 	// The token belongs to this client: the auth middleware parks the
@@ -1788,14 +1788,14 @@ func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.
 				ExpiresAt: sess.ExpiresAt,
 			})
 			if err != nil {
-				return nil, forge.InternalError(fmt.Errorf("oauth2: generate JWT: %w", err))
+				return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate JWT: %w", err))
 			}
 			sess.Token = jwtToken
 		}
 	}
 
 	if err := p.store.CreateSession(ctx.Context(), sess); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: save session: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: save session: %w", err))
 	}
 
 	tokenType := "Bearer"
@@ -1827,7 +1827,7 @@ func (p *Plugin) issueClientToken(ctx forge.Context, client *OAuth2Client, resou
 	// Use an empty user ID for machine-to-machine tokens.
 	sess, err := account.NewSession(client.AppID, id.Nil, sessCfg)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: create client session: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: create client session: %w", err))
 	}
 	sess.DPoPJKT = jkt
 
@@ -1843,7 +1843,7 @@ func (p *Plugin) issueClientToken(ctx forge.Context, client *OAuth2Client, resou
 	sess.Audience = resources
 
 	if err := p.store.CreateSession(ctx.Context(), sess); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: save client session: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: save client session: %w", err))
 	}
 
 	tokenType := "Bearer"
@@ -1885,13 +1885,13 @@ func (p *Plugin) handleDeviceAuthorize(ctx forge.Context, req *DeviceAuthRequest
 	// Generate device code (256-bit, hex-encoded).
 	deviceCodeStr, err := generateSecureToken(32)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: generate device_code: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate device_code: %w", err))
 	}
 
 	// Generate human-readable user code (XXXX-XXXX format).
 	userCodeStr, err := generateUserCode()
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: generate user_code: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate user_code: %w", err))
 	}
 
 	// Compute verification URI.
@@ -1931,7 +1931,7 @@ func (p *Plugin) handleDeviceAuthorize(ctx forge.Context, req *DeviceAuthRequest
 	}
 
 	if err := p.oauth2Store.CreateDeviceCode(ctx.Context(), dc); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: store device code: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: store device code: %w", err))
 	}
 
 	resp := &DeviceAuthResponse{
@@ -2037,7 +2037,7 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 		// If this update fails, do NOT issue tokens to prevent double-use.
 		dc.Status = DeviceCodeStatusConsumed
 		if err := p.oauth2Store.UpdateDeviceCode(ctx.Context(), dc); err != nil {
-			return nil, forge.InternalError(fmt.Errorf("oauth2: consume device code: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: consume device code: %w", err))
 		}
 
 		resources, resErr := narrowResources(dc.Resources, req.Resource)
@@ -2107,7 +2107,7 @@ func (p *Plugin) handleDeviceComplete(ctx forge.Context, req *DeviceCompleteRequ
 	}
 
 	if err := p.oauth2Store.UpdateDeviceCode(ctx.Context(), dc); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: update device code: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: update device code: %w", err))
 	}
 
 	return &DeviceCompleteResponse{Status: dc.Status}, nil

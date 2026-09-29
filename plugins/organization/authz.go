@@ -54,7 +54,7 @@ func (p *Plugin) requireRemovable(ctx forge.Context, caller *organization.Member
 		if errors.Is(err, store.ErrNotFound) {
 			return forge.NotFound("member not found")
 		}
-		return p.mapError(err)
+		return p.mapError(ctx, err)
 	}
 	if orgRoleRank(target.Role) > orgRoleRank(caller.Role) {
 		return forge.Forbidden("cannot remove a member with a higher role than your own")
@@ -67,7 +67,7 @@ func (p *Plugin) requireRemovable(ctx forge.Context, caller *organization.Member
 	}
 	members, err := p.store.ListMembers(ctx.Context(), orgID)
 	if err != nil {
-		return p.mapError(err)
+		return p.mapError(ctx, err)
 	}
 	owners := 0
 	for _, m := range members {
@@ -97,7 +97,7 @@ func (p *Plugin) requireOrgRole(ctx forge.Context, orgID id.OrgID, minRole organ
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, forge.NotFound("organization not found")
 		}
-		return nil, p.mapError(err)
+		return nil, p.mapError(ctx, err)
 	}
 	if orgRoleRank(member.Role) < orgRoleRank(minRole) {
 		return nil, forge.Forbidden("insufficient organization role")
@@ -114,7 +114,7 @@ func (p *Plugin) assertMemberInOrg(ctx forge.Context, memberID id.MemberID, orgI
 		if errors.Is(err, store.ErrNotFound) {
 			return forge.NotFound("member not found")
 		}
-		return p.mapError(err)
+		return p.mapError(ctx, err)
 	}
 	if m.OrgID.String() != orgID.String() {
 		return forge.NotFound("member not found")
@@ -130,7 +130,7 @@ func (p *Plugin) assertTeamInOrg(ctx forge.Context, teamID id.TeamID, orgID id.O
 		if errors.Is(err, store.ErrNotFound) {
 			return forge.NotFound("team not found")
 		}
-		return p.mapError(err)
+		return p.mapError(ctx, err)
 	}
 	if tm.OrgID.String() != orgID.String() {
 		return forge.NotFound("team not found")

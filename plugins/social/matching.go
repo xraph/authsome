@@ -10,6 +10,7 @@ import (
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/user"
 
 	"golang.org/x/oauth2"
@@ -35,14 +36,14 @@ func (p *Plugin) resolveUserForCallback(ctx context.Context, appID id.AppID, env
 		if connErr == nil {
 			u, err := p.store.GetUser(ctx, conn.UserID)
 			if err != nil {
-				return nil, forge.InternalError(fmt.Errorf("failed to resolve user: %w", err))
+				return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to resolve user: %w", err))
 			}
 			conn.AccessToken = token.AccessToken
 			conn.RefreshToken = token.RefreshToken
 			conn.ExpiresAt = token.Expiry
 			conn.Email = pu.Email
 			if updErr := p.oauthStore.UpdateOAuthConnection(ctx, conn); updErr != nil {
-				return nil, forge.InternalError(fmt.Errorf("failed to update oauth connection: %w", updErr))
+				return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to update oauth connection: %w", updErr))
 			}
 			p.reconcileProviderEmails(ctx, u, appID, envID, provider, pu)
 			return u, nil
@@ -114,7 +115,7 @@ func (p *Plugin) createUserFromProvider(ctx context.Context, appID id.AppID, env
 	if primary == nil {
 		// No claimable email — create a user without an email row.
 		if err := p.store.CreateUser(ctx, u); err != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", err))
+			return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to create user: %w", err))
 		}
 	} else {
 		u.Email = primary.Email
@@ -129,7 +130,7 @@ func (p *Plugin) createUserFromProvider(ctx context.Context, appID id.AppID, env
 			IsPrimary: true,
 			Source:    source,
 		}); err != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", err))
+			return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to create user: %w", err))
 		}
 		for _, pe := range claimable {
 			if pe.Email == primary.Email {
@@ -183,7 +184,7 @@ func (p *Plugin) createConnection(ctx context.Context, u *user.User, appID id.Ap
 		UpdatedAt:      now,
 	}
 	if err := p.oauthStore.CreateOAuthConnection(ctx, conn); err != nil {
-		return forge.InternalError(fmt.Errorf("failed to store oauth connection: %w", err))
+		return middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to store oauth connection: %w", err))
 	}
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/store"
 )
 
@@ -64,8 +65,10 @@ func newCodedErrorWithExtras(status int, typeStr, message string, extras map[str
 	return &codedHTTPError{status: status, typeStr: typeStr, message: message, extras: extras}
 }
 
-// mapError converts domain errors into Forge HTTP errors.
-func mapError(err error) error {
+// mapErrorCtx converts domain errors into Forge HTTP errors. An error that
+// is not one of the known kinds is ours: it is logged with the request id
+// and the client sees a generic 500 carrying that id.
+func mapErrorCtx(ctx forge.Context, err error) error {
 	if err == nil {
 		return nil
 	}
@@ -153,5 +156,5 @@ func mapError(err error) error {
 	if errors.Is(err, authsome.ErrScopeEscalation) {
 		return forge.BadRequest("requested scopes exceed the service account's scopes")
 	}
-	return forge.InternalError(err)
+	return middleware.InternalError(ctx, err)
 }
