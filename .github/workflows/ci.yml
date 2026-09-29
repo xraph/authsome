@@ -164,6 +164,28 @@ jobs:
           version: latest
           args: --timeout 10m
 
+  # ─── Vulnerability Check ───────────────────────────────────────────
+  # govulncheck reports only vulnerabilities in code paths this module
+  # actually reaches, so a finding here is one to act on, not to triage.
+  vuln:
+    name: Vulnerability check
+    runs-on: ubuntu-latest
+    needs: ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
   # ─── Format Check ──────────────────────────────────────────────────
   format:
     name: Format

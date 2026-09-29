@@ -472,6 +472,15 @@ func (e *Extension) init(fapp forge.App) error {
 		e.Logger().Info("authsome: bootstrap enabled")
 	}
 
+	// The built-in trusted-proxy set is every private range. That is right
+	// for a load balancer on the same network and wrong for one on a public
+	// address or a network shared with workloads you do not control: a
+	// forged X-Forwarded-For then rewrites the client address that lockout,
+	// rate limiting and the audit trail see. Say so once at start.
+	if middleware.TrustedProxiesAreDefault() {
+		logger.Warn("authsome: trusted proxies are the built-in private ranges; set AUTHSOME_TRUSTED_PROXIES to the proxies that actually front this service")
+	}
+
 	eng, err := authsome.NewEngine(opts...)
 	if err != nil {
 		return fmt.Errorf("authsome: create engine: %w", err)

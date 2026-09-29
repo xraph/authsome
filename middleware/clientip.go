@@ -21,7 +21,22 @@ import (
 var (
 	trustedProxyMu   sync.RWMutex
 	trustedProxyNets = defaultTrustedProxyNets()
+	// trustedProxyConfigured is set once an operator names the proxies,
+	// through the environment or SetTrustedProxies; while it is false the
+	// built-in private-range set is in use, which trusts any peer on the
+	// same network to speak for the client.
+	trustedProxyConfigured bool
 )
+
+// TrustedProxiesAreDefault reports whether the built-in private-range set
+// is in use because nobody configured one. A deployment behind a load
+// balancer on a public address, or with untrusted workloads on the same
+// private network, should set AUTHSOME_TRUSTED_PROXIES.
+func TrustedProxiesAreDefault() bool {
+	trustedProxyMu.RLock()
+	defer trustedProxyMu.RUnlock()
+	return !trustedProxyConfigured
+}
 
 func defaultTrustedProxyNets() []*net.IPNet {
 	return parseCIDRs([]string{
@@ -50,9 +65,11 @@ func SetTrustedProxies(nets []*net.IPNet) {
 	defer trustedProxyMu.Unlock()
 	if nets == nil {
 		trustedProxyNets = defaultTrustedProxyNets()
+		trustedProxyConfigured = false
 		return
 	}
 	trustedProxyNets = nets
+	trustedProxyConfigured = true
 }
 
 func isTrustedProxy(ip net.IP) bool {

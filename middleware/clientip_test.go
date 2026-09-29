@@ -179,3 +179,13 @@ func TestIsHTTPS(t *testing.T) {
 	tlsReq := httptest.NewRequestWithContext(context.Background(), "GET", "https://api.test/", nil)
 	assert.True(t, middleware.IsHTTPS(tlsReq), "TLS on the socket")
 }
+
+func TestTrustedProxiesAreDefault(t *testing.T) {
+	middleware.SetTrustedProxies(nil)
+	assert.True(t, middleware.TrustedProxiesAreDefault(), "nothing configured means the built-in set")
+	_, one, err := net.ParseCIDR("203.0.113.0/24")
+	require.NoError(t, err)
+	middleware.SetTrustedProxies([]*net.IPNet{one})
+	t.Cleanup(func() { middleware.SetTrustedProxies(nil) })
+	assert.False(t, middleware.TrustedProxiesAreDefault())
+}

@@ -2,6 +2,8 @@ module github.com/xraph/authsome
 
 go 1.26.0
 
+toolchain go1.26.6
+
 // replace github.com/xraph/forge => ../../forge
 
 // Temporary until v1.7.0 is tagged: the request correlation fields live on
