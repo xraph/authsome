@@ -63,7 +63,8 @@ type AdminCreateAppRequest struct {
 // AdminCreateConnectionRequest represents the AdminCreateConnectionRequest schema.
 type AdminCreateConnectionRequest struct {
 	AcsURL            string         `json:"acs_url,omitempty"`
-	AppID             string         `json:"app_id"`
+	AllowedDomains    []string       `json:"allowed_domains,omitempty"`
+	AppID             string         `json:"app_id,omitempty"`
 	AttributeMappings map[string]any `json:"attribute_mappings,omitempty"`
 	ClientID          string         `json:"client_id,omitempty"`
 	ClientSecret      string         `json:"client_secret,omitempty"`
@@ -78,6 +79,7 @@ type AdminCreateConnectionRequest struct {
 	Protocol          string         `json:"protocol"`
 	Provider          string         `json:"provider"`
 	SignRequests      bool           `json:"sign_requests,omitempty"`
+	TrustedFederation bool           `json:"trusted_federation,omitempty"`
 }
 
 // AdminCreateConnectionResponse represents the AdminCreateConnectionResponse schema.
@@ -205,6 +207,7 @@ type AdminStatsResponse struct {
 type AdminUpdateConnectionRequest struct {
 	AcsURL            string         `json:"acs_url,omitempty"`
 	Active            bool           `json:"active,omitempty"`
+	AllowedDomains    []string       `json:"allowed_domains,omitempty"`
 	AttributeMappings map[string]any `json:"attribute_mappings,omitempty"`
 	ClientID          string         `json:"client_id,omitempty"`
 	ClientSecret      string         `json:"client_secret,omitempty"`
@@ -217,6 +220,7 @@ type AdminUpdateConnectionRequest struct {
 	MetadataURL       string         `json:"metadata_url,omitempty"`
 	Provider          string         `json:"provider,omitempty"`
 	SignRequests      bool           `json:"sign_requests,omitempty"`
+	TrustedFederation bool           `json:"trusted_federation,omitempty"`
 }
 
 // AdminUpdateUserRequest represents the AdminUpdateUserRequest schema.
@@ -512,6 +516,7 @@ type CloneEnvironmentResponse struct {
 type Connection struct {
 	AcsURL            string         `json:"acs_url,omitempty"`
 	Active            bool           `json:"active"`
+	AllowedDomains    []string       `json:"allowed_domains,omitempty"`
 	AppID             string         `json:"app_id"`
 	AttributeMappings map[string]any `json:"attribute_mappings,omitempty"`
 	ClientID          string         `json:"client_id,omitempty"`
@@ -532,6 +537,7 @@ type Connection struct {
 	Provider          string         `json:"provider"`
 	SignRequests      bool           `json:"sign_requests,omitempty"`
 	SpCertificate     string         `json:"sp_certificate,omitempty"`
+	TrustedFederation bool           `json:"trusted_federation,omitempty"`
 	UpdatedAt         string         `json:"updated_at"`
 }
 
@@ -581,6 +587,7 @@ type CouponResponse struct {
 type CreateClientRequest struct {
 	AppID        string   `json:"app_id"`
 	DpopMode     string   `json:"dpop_mode,omitempty"`
+	FirstParty   bool     `json:"first_party,omitempty"`
 	GrantTypes   []string `json:"grant_types,omitempty"`
 	Name         string   `json:"name"`
 	Public       bool     `json:"public,omitempty"`
@@ -704,6 +711,12 @@ type CreateWebhookRequest struct {
 	AppID  string   `json:"app_id,omitempty"`
 	Events []string `json:"events"`
 	URL    string   `json:"url"`
+}
+
+// CreateWebhookResponse represents the CreateWebhookResponse schema.
+type CreateWebhookResponse struct {
+	Secret  string `json:"secret"`
+	Webhook any    `json:"webhook"`
 }
 
 // CredentialInfo represents the CredentialInfo schema.
@@ -855,6 +868,7 @@ type EnforceSettingRequest struct {
 
 // EnrollRequest represents the EnrollRequest schema.
 type EnrollRequest struct {
+	Code   string `json:"code,omitempty"`
 	Method string `json:"method,omitempty"`
 	Phone  string `json:"phone,omitempty"`
 }
@@ -938,6 +952,15 @@ type GrantConsentRequest struct {
 	AppID   string `json:"app_id,omitempty"`
 	Purpose string `json:"purpose"`
 	Version string `json:"version,omitempty"`
+}
+
+// GrantView represents the GrantView schema.
+type GrantView struct {
+	ClientID   string   `json:"client_id"`
+	ClientName string   `json:"client_name"`
+	CreatedAt  string   `json:"created_at"`
+	Scopes     []string `json:"scopes"`
+	UpdatedAt  string   `json:"updated_at"`
 }
 
 // GroupRef represents the GroupRef schema.
@@ -1058,6 +1081,11 @@ type ListCouponsResponse struct {
 type ListDefinitionsResponse struct {
 	Groups []*DefinitionGroup `json:"groups"`
 	Total  int64              `json:"total"`
+}
+
+// ListGrantsResponse represents the ListGrantsResponse schema.
+type ListGrantsResponse struct {
+	Grants []*GrantView `json:"grants"`
 }
 
 // ListInvoicesResponse represents the ListInvoicesResponse schema.
@@ -1218,6 +1246,7 @@ type OAuth2Client struct {
 	CreatedAt               string         `json:"created_at"`
 	DpopMode                string         `json:"dpop_mode,omitempty"`
 	DynamicallyRegistered   bool           `json:"dynamically_registered"`
+	FirstParty              bool           `json:"first_party"`
 	GrantTypes              []string       `json:"grant_types"`
 	ID                      string         `json:"id"`
 	Metadata                map[string]any `json:"metadata,omitempty"`
@@ -1492,6 +1521,11 @@ type RotateClientSecretResponse struct {
 	ID           string `json:"id"`
 }
 
+// RotateWebhookSecretResponse represents the RotateWebhookSecretResponse schema.
+type RotateWebhookSecretResponse struct {
+	Secret string `json:"secret"`
+}
+
 // SMSSendRequest represents the SMSSendRequest schema.
 type SMSSendRequest struct {
 	Phone string `json:"phone,omitempty"`
@@ -1762,6 +1796,7 @@ type UnlinkAuthMethodResponse struct {
 type UpdateClientRequest struct {
 	AppID                   string   `json:"app_id,omitempty"`
 	ClientID                string   `json:"client_id,omitempty"`
+	FirstParty              bool     `json:"first_party,omitempty"`
 	GrantTypes              []string `json:"grant_types,omitempty"`
 	Name                    string   `json:"name,omitempty"`
 	Public                  bool     `json:"public,omitempty"`
@@ -1977,14 +2012,15 @@ type VoidInvoiceRequest struct {
 
 // Webhook represents the Webhook schema.
 type Webhook struct {
-	Active    bool     `json:"active"`
-	AppID     string   `json:"app_id"`
-	CreatedAt string   `json:"created_at"`
-	EnvID     string   `json:"env_id"`
-	Events    []string `json:"events"`
-	ID        string   `json:"id"`
-	UpdatedAt string   `json:"updated_at"`
-	URL       string   `json:"url"`
+	Active          bool     `json:"active"`
+	AppID           string   `json:"app_id"`
+	CreatedAt       string   `json:"created_at"`
+	EnvID           string   `json:"env_id"`
+	Events          []string `json:"events"`
+	ID              string   `json:"id"`
+	RelayEndpointID string   `json:"relay_endpoint_id,omitempty"`
+	UpdatedAt       string   `json:"updated_at"`
+	URL             string   `json:"url"`
 }
 
 // WebhookListResponse represents the WebhookListResponse schema.
@@ -2006,6 +2042,7 @@ type AdminBulkImportUsersRequest struct {
 type CreateOAuth2ClientRequest struct {
 	AppID        string   `json:"app_id"`
 	DpopMode     string   `json:"dpop_mode,omitempty"`
+	FirstParty   bool     `json:"first_party,omitempty"`
 	GrantTypes   []string `json:"grant_types,omitempty"`
 	Name         string   `json:"name"`
 	Public       bool     `json:"public,omitempty"`
@@ -2018,6 +2055,7 @@ type CreateOAuth2ClientRequest struct {
 type UpdateOAuth2ClientRequest struct {
 	AppID                   string   `json:"app_id,omitempty"`
 	ClientID                string   `json:"client_id,omitempty"`
+	FirstParty              bool     `json:"first_party,omitempty"`
 	GrantTypes              []string `json:"grant_types,omitempty"`
 	Name                    string   `json:"name,omitempty"`
 	Public                  bool     `json:"public,omitempty"`
@@ -2039,7 +2077,8 @@ type SocialAdminUpsertProviderRequest struct {
 // SsoAdminCreateConnectionRequest is the request body for SsoAdminCreateConnection.
 type SsoAdminCreateConnectionRequest struct {
 	AcsURL            string         `json:"acs_url,omitempty"`
-	AppID             string         `json:"app_id"`
+	AllowedDomains    []string       `json:"allowed_domains,omitempty"`
+	AppID             string         `json:"app_id,omitempty"`
 	AttributeMappings map[string]any `json:"attribute_mappings,omitempty"`
 	ClientID          string         `json:"client_id,omitempty"`
 	ClientSecret      string         `json:"client_secret,omitempty"`
@@ -2054,12 +2093,14 @@ type SsoAdminCreateConnectionRequest struct {
 	Protocol          string         `json:"protocol"`
 	Provider          string         `json:"provider"`
 	SignRequests      bool           `json:"sign_requests,omitempty"`
+	TrustedFederation bool           `json:"trusted_federation,omitempty"`
 }
 
 // SsoAdminUpdateConnectionRequest is the request body for SsoAdminUpdateConnection.
 type SsoAdminUpdateConnectionRequest struct {
 	AcsURL            string         `json:"acs_url,omitempty"`
 	Active            bool           `json:"active,omitempty"`
+	AllowedDomains    []string       `json:"allowed_domains,omitempty"`
 	AttributeMappings map[string]any `json:"attribute_mappings,omitempty"`
 	ClientID          string         `json:"client_id,omitempty"`
 	ClientSecret      string         `json:"client_secret,omitempty"`
@@ -2072,6 +2113,7 @@ type SsoAdminUpdateConnectionRequest struct {
 	MetadataURL       string         `json:"metadata_url,omitempty"`
 	Provider          string         `json:"provider,omitempty"`
 	SignRequests      bool           `json:"sign_requests,omitempty"`
+	TrustedFederation bool           `json:"trusted_federation,omitempty"`
 }
 
 // CreateBillingPlanRequest is the request body for CreateBillingPlan.
@@ -2127,6 +2169,7 @@ type ChallengeMFARequest struct {
 
 // EnrollMFARequest is the request body for EnrollMFA.
 type EnrollMFARequest struct {
+	Code   string `json:"code,omitempty"`
 	Method string `json:"method,omitempty"`
 	Phone  string `json:"phone,omitempty"`
 }
@@ -2219,6 +2262,7 @@ type Oauth2TokenRequest struct {
 	DeviceCode         string   `json:"device_code,omitempty"`
 	GrantType          string   `json:"grant_type"`
 	RedirectURI        string   `json:"redirect_uri,omitempty"`
+	RefreshToken       string   `json:"refresh_token,omitempty"`
 	RequestedTokenType string   `json:"requested_token_type,omitempty"`
 	Resource           []string `json:"resource,omitempty"`
 	Scope              string   `json:"scope,omitempty"`

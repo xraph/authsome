@@ -238,6 +238,9 @@ func Register(
 	if err := dispatcher.RegisterCommand(d, c, "webhooks.delete", 1, webhooksDeleteHandler(deps)); err != nil {
 		return fmt.Errorf("authsome/contract: register webhooks.delete: %w", err)
 	}
+	if err := dispatcher.RegisterCommand(d, c, "webhooks.rotateSecret", 1, webhooksRotateSecretHandler(deps)); err != nil {
+		return fmt.Errorf("authsome/contract: register webhooks.rotateSecret: %w", err)
+	}
 
 	// Phase C.9 — Form Configs
 	if err := dispatcher.RegisterQuery(d, c, "formConfigs.list", 1, formConfigsListHandler(deps)); err != nil {

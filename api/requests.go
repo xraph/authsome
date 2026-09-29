@@ -201,6 +201,26 @@ type CreateWebhookRequest struct {
 	Events []string `json:"events" description:"Event types to subscribe to"`
 }
 
+// CreateWebhookResponse is the answer to POST /webhooks: the webhook and
+// its signing secret, shown this once and never again. Store it with the
+// receiver; a lost secret is replaced through the rotate-secret route.
+type CreateWebhookResponse struct {
+	Webhook any    `json:"webhook" description:"The created webhook"`
+	Secret  string `json:"secret" description:"Signing secret, shown only in this response"`
+}
+
+// RotateWebhookSecretRequest binds the path for POST /webhooks/:webhookId/rotate-secret.
+type RotateWebhookSecretRequest struct {
+	WebhookID string `path:"webhookId" description:"Webhook identifier"`
+}
+
+// RotateWebhookSecretResponse carries the new signing secret, shown once.
+// Deliveries are signed with it from this moment; the old secret stops
+// verifying at once.
+type RotateWebhookSecretResponse struct {
+	Secret string `json:"secret" description:"New signing secret, shown only in this response"`
+}
+
 // ListWebhooksRequest binds query params for GET /webhooks.
 type ListWebhooksRequest struct {
 	AppID string `query:"app_id" description:"Application ID"`

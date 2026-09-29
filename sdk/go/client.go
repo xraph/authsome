@@ -1243,6 +1243,17 @@ func (c *Client) AdminUnbanUser(ctx context.Context, userId string) (*ApiStatusR
 	return &result, nil
 }
 
+// AdminUnlockUser — Unlock user (admin)
+func (c *Client) AdminUnlockUser(ctx context.Context, userId string) (*ApiStatusResponse, error) {
+	path := "/v1/admin/users/{userId}/unlock"
+	path = strings.Replace(path, "{userId}", userId, 1)
+	var result ApiStatusResponse
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // ListCoupons — List coupons
 func (c *Client) ListCoupons(ctx context.Context, params *ListCouponsParams) (*ListCouponsResponse, error) {
 	path := "/v1/billing/coupons"
@@ -1952,6 +1963,23 @@ func (c *Client) ExportUserData(ctx context.Context) (*map[string]any, error) {
 	return &result, nil
 }
 
+// Oauth2ListMyGrants — List my OAuth2 grants
+func (c *Client) Oauth2ListMyGrants(ctx context.Context) (*ListGrantsResponse, error) {
+	path := "/v1/me/oauth/grants"
+	var result ListGrantsResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Oauth2RevokeMyGrant — Revoke an OAuth2 grant
+func (c *Client) Oauth2RevokeMyGrant(ctx context.Context, clientId string) error {
+	path := "/v1/me/oauth/grants/{clientId}"
+	path = strings.Replace(path, "{clientId}", clientId, 1)
+	return c.do(ctx, "DELETE", path, nil, nil)
+}
+
 // SwitchOrg — Switch active organization
 func (c *Client) SwitchOrg(ctx context.Context, req *SwitchOrgRequest) (*SwitchOrgResponse, error) {
 	body, err := json.Marshal(req)
@@ -2100,6 +2128,9 @@ func (c *Client) Oauth2Authorize(ctx context.Context, params *Oauth2AuthorizePar
 		if params.CodeChallengeMethod != "" {
 			q.Set("code_challenge_method", params.CodeChallengeMethod)
 		}
+		if params.Prompt != "" {
+			q.Set("prompt", params.Prompt)
+		}
 		for _, v := range params.Resource {
 			q.Add("resource", v)
 		}
@@ -2108,6 +2139,18 @@ func (c *Client) Oauth2Authorize(ctx context.Context, params *Oauth2AuthorizePar
 		}
 	}
 	return c.do(ctx, "GET", path, nil, nil)
+}
+
+// Oauth2ConsentPage — OAuth2 consent
+func (c *Client) Oauth2ConsentPage(ctx context.Context) error {
+	path := "/v1/oauth/consent"
+	return c.do(ctx, "GET", path, nil, nil)
+}
+
+// Oauth2ConsentDecision — OAuth2 consent decision
+func (c *Client) Oauth2ConsentDecision(ctx context.Context) error {
+	path := "/v1/oauth/consent"
+	return c.do(ctx, "POST", path, nil, nil)
 }
 
 // Oauth2DeviceAuthorize — Device Authorization
@@ -2245,6 +2288,9 @@ func (c *Client) Oauth2Token(ctx context.Context, req *Oauth2TokenRequest) (*Oau
 		form.Set("grant_type", req.GrantType)
 		if req.RedirectURI != "" {
 			form.Set("redirect_uri", req.RedirectURI)
+		}
+		if req.RefreshToken != "" {
+			form.Set("refresh_token", req.RefreshToken)
 		}
 		if req.RequestedTokenType != "" {
 			form.Set("requested_token_type", req.RequestedTokenType)
@@ -2840,6 +2886,16 @@ func (c *Client) ListSessions(ctx context.Context) (*SessionListResponse, error)
 	return &result, nil
 }
 
+// RevokeOtherSessions — Revoke other sessions
+func (c *Client) RevokeOtherSessions(ctx context.Context) (*ApiStatusResponse, error) {
+	path := "/v1/sessions"
+	var result ApiStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // RevokeSession — Revoke session
 func (c *Client) RevokeSession(ctx context.Context, sessionId string) (*ApiStatusResponse, error) {
 	path := "/v1/sessions/{sessionId}"
@@ -3115,13 +3171,13 @@ func (c *Client) ListWebhooks(ctx context.Context, params *ListWebhooksParams) (
 }
 
 // CreateWebhook — Create webhook
-func (c *Client) CreateWebhook(ctx context.Context, req *CreateWebhookRequest) (*Webhook, error) {
+func (c *Client) CreateWebhook(ctx context.Context, req *CreateWebhookRequest) (*CreateWebhookResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/webhooks"
-	var result Webhook
+	var result CreateWebhookResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -3160,6 +3216,17 @@ func (c *Client) DeleteWebhook(ctx context.Context, webhookId string) (*ApiStatu
 	path = strings.Replace(path, "{webhookId}", webhookId, 1)
 	var result ApiStatusResponse
 	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RotateWebhookSecret — Rotate webhook secret
+func (c *Client) RotateWebhookSecret(ctx context.Context, webhookId string) (*RotateWebhookSecretResponse, error) {
+	path := "/v1/webhooks/{webhookId}/rotate-secret"
+	path = strings.Replace(path, "{webhookId}", webhookId, 1)
+	var result RotateWebhookSecretResponse
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -3324,6 +3391,7 @@ type Oauth2AuthorizeParams struct {
 	State               string   `json:"state,omitempty"`
 	CodeChallenge       string   `json:"code_challenge,omitempty"`
 	CodeChallengeMethod string   `json:"code_challenge_method,omitempty"`
+	Prompt              string   `json:"prompt,omitempty"`
 	Resource            []string `json:"resource,omitempty"`
 }
 

@@ -405,6 +405,10 @@ func mapEngineError(err error) error {
 		return &contract.Error{Code: contract.CodeBadRequest, Message: "Username is already in use"}
 	case errors.Is(err, account.ErrInvalidCredentials):
 		return &contract.Error{Code: contract.CodeBadRequest, Message: "Invalid credentials"}
+	case errors.Is(err, authsome.ErrWebhooksUnavailable):
+		return &contract.Error{Code: contract.CodeUnavailable, Message: "Webhooks are unavailable: no relay can manage delivery endpoints"}
+	case errors.Is(err, authsome.ErrWebhookURLRejected), errors.Is(err, authsome.ErrWebhookEvents):
+		return &contract.Error{Code: contract.CodeBadRequest, Message: err.Error()}
 	case errors.Is(err, authsome.ErrNotStarted):
 		return &contract.Error{Code: contract.CodeUnavailable, Message: "System is still initializing. Please try again in a moment."}
 	}

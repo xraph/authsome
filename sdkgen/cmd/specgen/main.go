@@ -137,6 +137,8 @@ func run(outPath, title, version string) error {
 		// Spec generation only walks routes; the trail is never written.
 		authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithDisableMigrate(),
+		// Nothing is stored either, so no encryption key is needed.
+		authsome.WithTokenEncryptor(bridge.NoopEncryptor{}),
 
 		// Core
 		authsome.WithPlugin(password.New()),

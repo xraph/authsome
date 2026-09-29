@@ -165,8 +165,15 @@
             "description": "SP ACS URL override; defaults to the canonical /acs route",
             "type": "string"
           },
+          "allowed_domains": {
+            "description": "Extra email domains this connection may assert besides domain; logins outside them are refused",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "app_id": {
-            "description": "Target Application ID",
+            "description": "Application ID; optional, must be the caller's own app",
             "type": "string"
           },
           "attribute_mappings": {
@@ -225,10 +232,13 @@
           "sign_requests": {
             "description": "Sign outbound AuthnRequests with the SP key",
             "type": "boolean"
+          },
+          "trusted_federation": {
+            "description": "Adopt the IdP subject as the local user id when creating users through this connection",
+            "type": "boolean"
           }
         },
         "required": [
-          "app_id",
           "provider",
           "protocol",
           "domain"
@@ -605,6 +615,13 @@
             "description": "Activate/deactivate the connection without deleting it",
             "type": "boolean"
           },
+          "allowed_domains": {
+            "description": "Replace the extra email domains this connection may assert",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "attribute_mappings": {
             "additionalProperties": true,
             "description": "Replace the SAML attribute → user field map",
@@ -652,6 +669,10 @@
           },
           "sign_requests": {
             "description": "Toggle signing outbound AuthnRequests",
+            "type": "boolean"
+          },
+          "trusted_federation": {
+            "description": "Adopt the IdP subject as the local user id for new users",
             "type": "boolean"
           }
         },
@@ -1583,6 +1604,12 @@
           "active": {
             "type": "boolean"
           },
+          "allowed_domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "app_id": {
             "type": "string"
           },
@@ -1644,6 +1671,9 @@
           },
           "sp_certificate": {
             "type": "string"
+          },
+          "trusted_federation": {
+            "type": "boolean"
           },
           "updated_at": {
             "format": "date-time",
@@ -1805,6 +1835,9 @@
           },
           "dpop_mode": {
             "type": "string"
+          },
+          "first_party": {
+            "type": "boolean"
           },
           "grant_types": {
             "items": {
@@ -2280,6 +2313,22 @@
         ],
         "type": "object"
       },
+      "CreateWebhookResponse": {
+        "properties": {
+          "secret": {
+            "description": "Signing secret, shown only in this response",
+            "type": "string"
+          },
+          "webhook": {
+            "description": "The created webhook"
+          }
+        },
+        "required": [
+          "webhook",
+          "secret"
+        ],
+        "type": "object"
+      },
       "CredentialInfo": {
         "properties": {
           "created_at": {
@@ -2751,6 +2800,9 @@
       },
       "EnrollRequest": {
         "properties": {
+          "code": {
+            "type": "string"
+          },
           "method": {
             "type": "string"
           },
@@ -2991,6 +3043,38 @@
         },
         "required": [
           "purpose"
+        ],
+        "type": "object"
+      },
+      "GrantView": {
+        "properties": {
+          "client_id": {
+            "type": "string"
+          },
+          "client_name": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "client_name",
+          "scopes",
+          "created_at",
+          "updated_at"
         ],
         "type": "object"
       },
@@ -3363,6 +3447,20 @@
         "required": [
           "groups",
           "total"
+        ],
+        "type": "object"
+      },
+      "ListGrantsResponse": {
+        "properties": {
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/GrantView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "grants"
         ],
         "type": "object"
       },
@@ -3830,6 +3928,9 @@
           "dynamically_registered": {
             "type": "boolean"
           },
+          "first_party": {
+            "type": "boolean"
+          },
           "grant_types": {
             "items": {
               "type": "string"
@@ -3888,6 +3989,7 @@
           "resources",
           "grant_types",
           "public",
+          "first_party",
           "dynamically_registered",
           "created_at",
           "updated_at"
@@ -4653,6 +4755,18 @@
           "id",
           "client_id",
           "client_secret"
+        ],
+        "type": "object"
+      },
+      "RotateWebhookSecretResponse": {
+        "properties": {
+          "secret": {
+            "description": "New signing secret, shown only in this response",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret"
         ],
         "type": "object"
       },
@@ -5436,6 +5550,9 @@
           "client_id": {
             "type": "string"
           },
+          "first_party": {
+            "type": "boolean"
+          },
           "grant_types": {
             "items": {
               "type": "string"
@@ -6087,6 +6204,9 @@
             "type": "array"
           },
           "id": {
+            "type": "string"
+          },
+          "relay_endpoint_id": {
             "type": "string"
           },
           "updated_at": {
@@ -13901,16 +14021,15 @@
     },
     "/v1/admin/sso/connections": {
       "get": {
-        "description": "Returns every SSO connection registered on the target App. Filter by ?app_id=app_...",
+        "description": "Returns every SSO connection registered on the caller's App. An optional ?app_id must name that same app.",
         "operationId": "ssoAdminListConnections",
         "parameters": [
           {
-            "description": "App identifier; required",
+            "description": "App identifier; optional, must be the caller's own app",
             "in": "query",
             "name": "app_id",
-            "required": true,
             "schema": {
-              "description": "App identifier; required",
+              "description": "App identifier; optional, must be the caller's own app",
               "type": "string"
             }
           }
@@ -16513,6 +16632,193 @@
           }
         ],
         "summary": "Unban user (admin)",
+        "tags": [
+          "admin"
+        ],
+        "x-forge-authz": {
+          "permissions": [
+            "manage:user"
+          ]
+        }
+      }
+    },
+    "/v1/admin/users/{userId}/unlock": {
+      "post": {
+        "description": "Clears the failed sign-in lockout for a user on every client network.",
+        "operationId": "adminUnlockUser",
+        "parameters": [
+          {
+            "description": "User identifier",
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "description": "User identifier",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiStatusResponse"
+                }
+              }
+            },
+            "description": "Unlocked"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "session-cookie": []
+          }
+        ],
+        "summary": "Unlock user (admin)",
         "tags": [
           "admin"
         ],
@@ -25951,6 +26257,340 @@
         ]
       }
     },
+    "/v1/me/oauth/grants": {
+      "get": {
+        "description": "Lists the clients the signed-in user has approved and the scopes each holds.",
+        "operationId": "oauth2ListMyGrants",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListGrantsResponse"
+                }
+              }
+            },
+            "description": "Grants"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "List my OAuth2 grants",
+        "tags": [
+          "OAuth2"
+        ]
+      }
+    },
+    "/v1/me/oauth/grants/{clientId}": {
+      "delete": {
+        "description": "Withdraws the signed-in user's approval of a client; its next authorization request shows the consent page again.",
+        "operationId": "oauth2RevokeMyGrant",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clientId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Revoke an OAuth2 grant",
+        "tags": [
+          "OAuth2"
+        ]
+      }
+    },
     "/v1/me/switch-org": {
       "post": {
         "description": "Sets the active organization on the caller's session. The user must be a member of the target org. An empty org_id clears the active org.",
@@ -27580,6 +28220,13 @@
           },
           {
             "in": "query",
+            "name": "prompt",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
             "name": "resource",
             "schema": {
               "items": {
@@ -27732,6 +28379,44 @@
           }
         },
         "summary": "OAuth2 Authorization",
+        "tags": [
+          "OAuth2"
+        ]
+      }
+    },
+    "/v1/oauth/consent": {
+      "get": {
+        "description": "Shows the pending authorization request for the signed-in user to approve or deny. Renders HTML, or JSON when Accept asks for it.",
+        "operationId": "oauth2ConsentPage",
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "OAuth2 consent",
+        "tags": [
+          "OAuth2"
+        ]
+      },
+      "post": {
+        "description": "Records the signed-in user's approval or denial of a pending authorization request and completes it.",
+        "operationId": "oauth2ConsentDecision",
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "OAuth2 consent decision",
         "tags": [
           "OAuth2"
         ]
@@ -29045,6 +29730,9 @@
                     "type": "string"
                   },
                   "redirect_uri": {
+                    "type": "string"
+                  },
+                  "refresh_token": {
                     "type": "string"
                   },
                   "requested_token_type": {
@@ -36867,6 +37555,171 @@
       }
     },
     "/v1/sessions": {
+      "delete": {
+        "description": "Revokes every session of the authenticated user except the one making the request.",
+        "operationId": "revokeOtherSessions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiStatusResponse"
+                }
+              }
+            },
+            "description": "Sessions revoked"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Revoke other sessions",
+        "tags": [
+          "sessions"
+        ]
+      },
       "get": {
         "description": "Returns all active sessions for the authenticated user.",
         "operationId": "listSessions",
@@ -39829,7 +40682,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Webhook"
+                  "$ref": "#/components/schemas/CreateWebhookResponse"
                 }
               }
             },
@@ -40526,6 +41379,185 @@
           }
         ],
         "summary": "Update webhook",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/v1/webhooks/{webhookId}/rotate-secret": {
+      "post": {
+        "description": "Replaces the webhook's signing secret and returns the new one, shown only once. The old secret stops verifying immediately.",
+        "operationId": "rotateWebhookSecret",
+        "parameters": [
+          {
+            "description": "Webhook identifier",
+            "in": "path",
+            "name": "webhookId",
+            "required": true,
+            "schema": {
+              "description": "Webhook identifier",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RotateWebhookSecretResponse"
+                }
+              }
+            },
+            "description": "New secret"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Rotate webhook secret",
         "tags": [
           "webhooks"
         ]

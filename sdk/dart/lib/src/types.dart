@@ -263,7 +263,8 @@ class AdminCreateAppRequest {
 
 class AdminCreateConnectionRequest {
   final String? acsUrl;
-  final String appId;
+  final List<String>? allowedDomains;
+  final String? appId;
   final Map<String, dynamic>? attributeMappings;
   final String? clientId;
   final String? clientSecret;
@@ -278,10 +279,12 @@ class AdminCreateConnectionRequest {
   final String protocol;
   final String provider;
   final bool? signRequests;
+  final bool? trustedFederation;
 
   const AdminCreateConnectionRequest({
     this.acsUrl,
-    required this.appId,
+    this.allowedDomains,
+    this.appId,
     this.attributeMappings,
     this.clientId,
     this.clientSecret,
@@ -296,12 +299,14 @@ class AdminCreateConnectionRequest {
     required this.protocol,
     required this.provider,
     this.signRequests,
+    this.trustedFederation,
   });
 
   factory AdminCreateConnectionRequest.fromJson(Map<String, dynamic> json) {
     return AdminCreateConnectionRequest(
       acsUrl: json['acs_url'] as String?,
-      appId: json['app_id'] as String,
+      allowedDomains: json['allowed_domains'] == null ? null : (json['allowed_domains'] as List).map((e) => e as String).toList(),
+      appId: json['app_id'] as String?,
       attributeMappings: json['attribute_mappings'] == null ? null : Map<String, dynamic>.from(json['attribute_mappings'] as Map),
       clientId: json['client_id'] as String?,
       clientSecret: json['client_secret'] as String?,
@@ -316,13 +321,15 @@ class AdminCreateConnectionRequest {
       protocol: json['protocol'] as String,
       provider: json['provider'] as String,
       signRequests: json['sign_requests'] as bool?,
+      trustedFederation: json['trusted_federation'] as bool?,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       if (acsUrl != null) 'acs_url': acsUrl,
-      'app_id': appId,
+      if (allowedDomains != null) 'allowed_domains': allowedDomains,
+      if (appId != null) 'app_id': appId,
       if (attributeMappings != null) 'attribute_mappings': attributeMappings,
       if (clientId != null) 'client_id': clientId,
       if (clientSecret != null) 'client_secret': clientSecret,
@@ -337,6 +344,7 @@ class AdminCreateConnectionRequest {
       'protocol': protocol,
       'provider': provider,
       if (signRequests != null) 'sign_requests': signRequests,
+      if (trustedFederation != null) 'trusted_federation': trustedFederation,
     };
   }
 
@@ -879,6 +887,7 @@ class AdminStatsResponse {
 class AdminUpdateConnectionRequest {
   final String? acsUrl;
   final bool? active;
+  final List<String>? allowedDomains;
   final Map<String, dynamic>? attributeMappings;
   final String? clientId;
   final String? clientSecret;
@@ -891,10 +900,12 @@ class AdminUpdateConnectionRequest {
   final String? metadataUrl;
   final String? provider;
   final bool? signRequests;
+  final bool? trustedFederation;
 
   const AdminUpdateConnectionRequest({
     this.acsUrl,
     this.active,
+    this.allowedDomains,
     this.attributeMappings,
     this.clientId,
     this.clientSecret,
@@ -907,12 +918,14 @@ class AdminUpdateConnectionRequest {
     this.metadataUrl,
     this.provider,
     this.signRequests,
+    this.trustedFederation,
   });
 
   factory AdminUpdateConnectionRequest.fromJson(Map<String, dynamic> json) {
     return AdminUpdateConnectionRequest(
       acsUrl: json['acs_url'] as String?,
       active: json['active'] as bool?,
+      allowedDomains: json['allowed_domains'] == null ? null : (json['allowed_domains'] as List).map((e) => e as String).toList(),
       attributeMappings: json['attribute_mappings'] == null ? null : Map<String, dynamic>.from(json['attribute_mappings'] as Map),
       clientId: json['client_id'] as String?,
       clientSecret: json['client_secret'] as String?,
@@ -925,6 +938,7 @@ class AdminUpdateConnectionRequest {
       metadataUrl: json['metadata_url'] as String?,
       provider: json['provider'] as String?,
       signRequests: json['sign_requests'] as bool?,
+      trustedFederation: json['trusted_federation'] as bool?,
     );
   }
 
@@ -932,6 +946,7 @@ class AdminUpdateConnectionRequest {
     return {
       if (acsUrl != null) 'acs_url': acsUrl,
       if (active != null) 'active': active,
+      if (allowedDomains != null) 'allowed_domains': allowedDomains,
       if (attributeMappings != null) 'attribute_mappings': attributeMappings,
       if (clientId != null) 'client_id': clientId,
       if (clientSecret != null) 'client_secret': clientSecret,
@@ -944,6 +959,7 @@ class AdminUpdateConnectionRequest {
       if (metadataUrl != null) 'metadata_url': metadataUrl,
       if (provider != null) 'provider': provider,
       if (signRequests != null) 'sign_requests': signRequests,
+      if (trustedFederation != null) 'trusted_federation': trustedFederation,
     };
   }
 
@@ -2218,6 +2234,7 @@ class CloneEnvironmentResponse {
 class Connection {
   final String? acsUrl;
   final bool active;
+  final List<String>? allowedDomains;
   final String appId;
   final Map<String, dynamic>? attributeMappings;
   final String? clientId;
@@ -2238,11 +2255,13 @@ class Connection {
   final String provider;
   final bool? signRequests;
   final String? spCertificate;
+  final bool? trustedFederation;
   final String updatedAt;
 
   const Connection({
     this.acsUrl,
     required this.active,
+    this.allowedDomains,
     required this.appId,
     this.attributeMappings,
     this.clientId,
@@ -2263,6 +2282,7 @@ class Connection {
     required this.provider,
     this.signRequests,
     this.spCertificate,
+    this.trustedFederation,
     required this.updatedAt,
   });
 
@@ -2270,6 +2290,7 @@ class Connection {
     return Connection(
       acsUrl: json['acs_url'] as String?,
       active: json['active'] as bool,
+      allowedDomains: json['allowed_domains'] == null ? null : (json['allowed_domains'] as List).map((e) => e as String).toList(),
       appId: json['app_id'] as String,
       attributeMappings: json['attribute_mappings'] == null ? null : Map<String, dynamic>.from(json['attribute_mappings'] as Map),
       clientId: json['client_id'] as String?,
@@ -2290,6 +2311,7 @@ class Connection {
       provider: json['provider'] as String,
       signRequests: json['sign_requests'] as bool?,
       spCertificate: json['sp_certificate'] as String?,
+      trustedFederation: json['trusted_federation'] as bool?,
       updatedAt: json['updated_at'] as String,
     );
   }
@@ -2298,6 +2320,7 @@ class Connection {
     return {
       if (acsUrl != null) 'acs_url': acsUrl,
       'active': active,
+      if (allowedDomains != null) 'allowed_domains': allowedDomains,
       'app_id': appId,
       if (attributeMappings != null) 'attribute_mappings': attributeMappings,
       if (clientId != null) 'client_id': clientId,
@@ -2318,6 +2341,7 @@ class Connection {
       'provider': provider,
       if (signRequests != null) 'sign_requests': signRequests,
       if (spCertificate != null) 'sp_certificate': spCertificate,
+      if (trustedFederation != null) 'trusted_federation': trustedFederation,
       'updated_at': updatedAt,
     };
   }
@@ -2509,6 +2533,7 @@ class CouponResponse {
 class CreateClientRequest {
   final String appId;
   final String? dpopMode;
+  final bool? firstParty;
   final List<String>? grantTypes;
   final String name;
   final bool? public;
@@ -2519,6 +2544,7 @@ class CreateClientRequest {
   const CreateClientRequest({
     required this.appId,
     this.dpopMode,
+    this.firstParty,
     this.grantTypes,
     required this.name,
     this.public,
@@ -2531,6 +2557,7 @@ class CreateClientRequest {
     return CreateClientRequest(
       appId: json['app_id'] as String,
       dpopMode: json['dpop_mode'] as String?,
+      firstParty: json['first_party'] as bool?,
       grantTypes: json['grant_types'] == null ? null : (json['grant_types'] as List).map((e) => e as String).toList(),
       name: json['name'] as String,
       public: json['public'] as bool?,
@@ -2544,6 +2571,7 @@ class CreateClientRequest {
     return {
       'app_id': appId,
       if (dpopMode != null) 'dpop_mode': dpopMode,
+      if (firstParty != null) 'first_party': firstParty,
       if (grantTypes != null) 'grant_types': grantTypes,
       'name': name,
       if (public != null) 'public': public,
@@ -3059,6 +3087,33 @@ class CreateWebhookRequest {
 
   @override
   String toString() => 'CreateWebhookRequest(${toJson()})';
+}
+
+class CreateWebhookResponse {
+  final String secret;
+  final dynamic webhook;
+
+  const CreateWebhookResponse({
+    required this.secret,
+    required this.webhook,
+  });
+
+  factory CreateWebhookResponse.fromJson(Map<String, dynamic> json) {
+    return CreateWebhookResponse(
+      secret: json['secret'] as String,
+      webhook: json['webhook'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'secret': secret,
+      'webhook': webhook,
+    };
+  }
+
+  @override
+  String toString() => 'CreateWebhookResponse(${toJson()})';
 }
 
 class CredentialInfo {
@@ -3700,16 +3755,19 @@ class EnforceSettingRequest {
 }
 
 class EnrollRequest {
+  final String? code;
   final String? method;
   final String? phone;
 
   const EnrollRequest({
+    this.code,
     this.method,
     this.phone,
   });
 
   factory EnrollRequest.fromJson(Map<String, dynamic> json) {
     return EnrollRequest(
+      code: json['code'] as String?,
       method: json['method'] as String?,
       phone: json['phone'] as String?,
     );
@@ -3717,6 +3775,7 @@ class EnrollRequest {
 
   Map<String, dynamic> toJson() {
     return {
+      if (code != null) 'code': code,
       if (method != null) 'method': method,
       if (phone != null) 'phone': phone,
     };
@@ -4078,6 +4137,45 @@ class GrantConsentRequest {
 
   @override
   String toString() => 'GrantConsentRequest(${toJson()})';
+}
+
+class GrantView {
+  final String clientId;
+  final String clientName;
+  final String createdAt;
+  final List<String> scopes;
+  final String updatedAt;
+
+  const GrantView({
+    required this.clientId,
+    required this.clientName,
+    required this.createdAt,
+    required this.scopes,
+    required this.updatedAt,
+  });
+
+  factory GrantView.fromJson(Map<String, dynamic> json) {
+    return GrantView(
+      clientId: json['client_id'] as String,
+      clientName: json['client_name'] as String,
+      createdAt: json['created_at'] as String,
+      scopes: (json['scopes'] as List).map((e) => e as String).toList(),
+      updatedAt: json['updated_at'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'client_id': clientId,
+      'client_name': clientName,
+      'created_at': createdAt,
+      'scopes': scopes,
+      'updated_at': updatedAt,
+    };
+  }
+
+  @override
+  String toString() => 'GrantView(${toJson()})';
 }
 
 class GroupRef {
@@ -4603,6 +4701,29 @@ class ListDefinitionsResponse {
 
   @override
   String toString() => 'ListDefinitionsResponse(${toJson()})';
+}
+
+class ListGrantsResponse {
+  final List<GrantView> grants;
+
+  const ListGrantsResponse({
+    required this.grants,
+  });
+
+  factory ListGrantsResponse.fromJson(Map<String, dynamic> json) {
+    return ListGrantsResponse(
+      grants: (json['grants'] as List).map((e) => GrantView.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'grants': grants.map((e) => e.toJson()).toList(),
+    };
+  }
+
+  @override
+  String toString() => 'ListGrantsResponse(${toJson()})';
 }
 
 class ListInvoicesResponse {
@@ -5269,6 +5390,7 @@ class OAuth2Client {
   final String createdAt;
   final String? dpopMode;
   final bool dynamicallyRegistered;
+  final bool firstParty;
   final List<String> grantTypes;
   final String id;
   final Map<String, dynamic>? metadata;
@@ -5288,6 +5410,7 @@ class OAuth2Client {
     required this.createdAt,
     this.dpopMode,
     required this.dynamicallyRegistered,
+    required this.firstParty,
     required this.grantTypes,
     required this.id,
     this.metadata,
@@ -5309,6 +5432,7 @@ class OAuth2Client {
       createdAt: json['created_at'] as String,
       dpopMode: json['dpop_mode'] as String?,
       dynamicallyRegistered: json['dynamically_registered'] as bool,
+      firstParty: json['first_party'] as bool,
       grantTypes: (json['grant_types'] as List).map((e) => e as String).toList(),
       id: json['id'] as String,
       metadata: json['metadata'] == null ? null : Map<String, dynamic>.from(json['metadata'] as Map),
@@ -5331,6 +5455,7 @@ class OAuth2Client {
       'created_at': createdAt,
       if (dpopMode != null) 'dpop_mode': dpopMode,
       'dynamically_registered': dynamicallyRegistered,
+      'first_party': firstParty,
       'grant_types': grantTypes,
       'id': id,
       if (metadata != null) 'metadata': metadata,
@@ -6486,6 +6611,29 @@ class RotateClientSecretResponse {
 
   @override
   String toString() => 'RotateClientSecretResponse(${toJson()})';
+}
+
+class RotateWebhookSecretResponse {
+  final String secret;
+
+  const RotateWebhookSecretResponse({
+    required this.secret,
+  });
+
+  factory RotateWebhookSecretResponse.fromJson(Map<String, dynamic> json) {
+    return RotateWebhookSecretResponse(
+      secret: json['secret'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'secret': secret,
+    };
+  }
+
+  @override
+  String toString() => 'RotateWebhookSecretResponse(${toJson()})';
 }
 
 class SMSSendRequest {
@@ -7652,6 +7800,7 @@ class UnlinkAuthMethodResponse {
 class UpdateClientRequest {
   final String? appId;
   final String? clientId;
+  final bool? firstParty;
   final List<String>? grantTypes;
   final String? name;
   final bool? public;
@@ -7663,6 +7812,7 @@ class UpdateClientRequest {
   const UpdateClientRequest({
     this.appId,
     this.clientId,
+    this.firstParty,
     this.grantTypes,
     this.name,
     this.public,
@@ -7676,6 +7826,7 @@ class UpdateClientRequest {
     return UpdateClientRequest(
       appId: json['app_id'] as String?,
       clientId: json['client_id'] as String?,
+      firstParty: json['first_party'] as bool?,
       grantTypes: json['grant_types'] == null ? null : (json['grant_types'] as List).map((e) => e as String).toList(),
       name: json['name'] as String?,
       public: json['public'] as bool?,
@@ -7690,6 +7841,7 @@ class UpdateClientRequest {
     return {
       if (appId != null) 'app_id': appId,
       if (clientId != null) 'client_id': clientId,
+      if (firstParty != null) 'first_party': firstParty,
       if (grantTypes != null) 'grant_types': grantTypes,
       if (name != null) 'name': name,
       if (public != null) 'public': public,
@@ -8593,6 +8745,7 @@ class Webhook {
   final String envId;
   final List<String> events;
   final String id;
+  final String? relayEndpointId;
   final String updatedAt;
   final String url;
 
@@ -8603,6 +8756,7 @@ class Webhook {
     required this.envId,
     required this.events,
     required this.id,
+    this.relayEndpointId,
     required this.updatedAt,
     required this.url,
   });
@@ -8615,6 +8769,7 @@ class Webhook {
       envId: json['env_id'] as String,
       events: (json['events'] as List).map((e) => e as String).toList(),
       id: json['id'] as String,
+      relayEndpointId: json['relay_endpoint_id'] as String?,
       updatedAt: json['updated_at'] as String,
       url: json['url'] as String,
     );
@@ -8628,6 +8783,7 @@ class Webhook {
       'env_id': envId,
       'events': events,
       'id': id,
+      if (relayEndpointId != null) 'relay_endpoint_id': relayEndpointId,
       'updated_at': updatedAt,
       'url': url,
     };
@@ -8764,6 +8920,7 @@ class Oauth2TokenRequest {
   final String? deviceCode;
   final String grantType;
   final String? redirectUri;
+  final String? refreshToken;
   final String? requestedTokenType;
   final List<String>? resource;
   final String? scope;
@@ -8781,6 +8938,7 @@ class Oauth2TokenRequest {
     this.deviceCode,
     required this.grantType,
     this.redirectUri,
+    this.refreshToken,
     this.requestedTokenType,
     this.resource,
     this.scope,
@@ -8800,6 +8958,7 @@ class Oauth2TokenRequest {
       deviceCode: json['device_code'] as String?,
       grantType: json['grant_type'] as String,
       redirectUri: json['redirect_uri'] as String?,
+      refreshToken: json['refresh_token'] as String?,
       requestedTokenType: json['requested_token_type'] as String?,
       resource: json['resource'] == null ? null : (json['resource'] as List).map((e) => e as String).toList(),
       scope: json['scope'] as String?,
@@ -8820,6 +8979,7 @@ class Oauth2TokenRequest {
       if (deviceCode != null) 'device_code': deviceCode,
       'grant_type': grantType,
       if (redirectUri != null) 'redirect_uri': redirectUri,
+      if (refreshToken != null) 'refresh_token': refreshToken,
       if (requestedTokenType != null) 'requested_token_type': requestedTokenType,
       if (resource != null) 'resource': resource,
       if (scope != null) 'scope': scope,

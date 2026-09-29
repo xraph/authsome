@@ -48,6 +48,25 @@ type DeleteWebhookInput struct {
 	ID string `json:"id"`
 }
 
+// WebhookCreatedResponse acknowledges a new webhook and carries its signing
+// secret, shown this once and never again.
+type WebhookCreatedResponse struct {
+	OK     bool   `json:"ok"`
+	ID     string `json:"id"`
+	Secret string `json:"secret"`
+}
+
+type RotateWebhookSecretInput struct {
+	ID string `json:"id"`
+}
+
+// WebhookSecretResponse carries a rotated signing secret, shown once.
+type WebhookSecretResponse struct {
+	OK     bool   `json:"ok"`
+	ID     string `json:"id"`
+	Secret string `json:"secret"`
+}
+
 func webhooksListHandler(deps Deps) func(ctx context.Context, _ struct{}, _ contract.Principal) (WebhookListResponse, error) {
 	return func(ctx context.Context, _ struct{}, _ contract.Principal) (WebhookListResponse, error) {
 		if deps.Engine == nil {
@@ -65,26 +84,43 @@ func webhooksListHandler(deps Deps) func(ctx context.Context, _ struct{}, _ cont
 	}
 }
 
-func webhooksCreateHandler(deps Deps) func(ctx context.Context, in CreateWebhookInput, _ contract.Principal) (AckResponse, error) {
-	return func(ctx context.Context, in CreateWebhookInput, _ contract.Principal) (AckResponse, error) {
+func webhooksCreateHandler(deps Deps) func(ctx context.Context, in CreateWebhookInput, _ contract.Principal) (WebhookCreatedResponse, error) {
+	return func(ctx context.Context, in CreateWebhookInput, _ contract.Principal) (WebhookCreatedResponse, error) {
 		if deps.Engine == nil {
-			return AckResponse{}, &contract.Error{Code: contract.CodeUnavailable, Message: "auth engine not configured"}
+			return WebhookCreatedResponse{}, &contract.Error{Code: contract.CodeUnavailable, Message: "auth engine not configured"}
 		}
 		url := strings.TrimSpace(in.URL)
 		if url == "" {
-			return AckResponse{}, &contract.Error{Code: contract.CodeBadRequest, Message: "url is required"}
+			return WebhookCreatedResponse{}, &contract.Error{Code: contract.CodeBadRequest, Message: "url is required"}
 		}
 		if len(in.Events) == 0 {
-			return AckResponse{}, &contract.Error{Code: contract.CodeBadRequest, Message: "at least one event is required"}
+			return WebhookCreatedResponse{}, &contract.Error{Code: contract.CodeBadRequest, Message: "at least one event is required"}
 		}
 		w := &webhook.Webhook{
 			AppID: defaultAppID(deps.Engine),
 			URL:   url, Events: in.Events, Active: true,
 		}
 		if err := deps.Engine.CreateWebhook(ctx, w); err != nil {
-			return AckResponse{}, mapEngineError(err)
+			return WebhookCreatedResponse{}, mapEngineError(err)
 		}
-		return AckResponse{OK: true, ID: w.ID.String()}, nil
+		return WebhookCreatedResponse{OK: true, ID: w.ID.String(), Secret: w.Secret}, nil
+	}
+}
+
+func webhooksRotateSecretHandler(deps Deps) func(ctx context.Context, in RotateWebhookSecretInput, _ contract.Principal) (WebhookSecretResponse, error) {
+	return func(ctx context.Context, in RotateWebhookSecretInput, _ contract.Principal) (WebhookSecretResponse, error) {
+		if deps.Engine == nil {
+			return WebhookSecretResponse{}, &contract.Error{Code: contract.CodeUnavailable, Message: "auth engine not configured"}
+		}
+		wid, err := parseWebhookID(in.ID)
+		if err != nil {
+			return WebhookSecretResponse{}, err
+		}
+		secret, err := deps.Engine.RotateWebhookSecret(ctx, wid)
+		if err != nil {
+			return WebhookSecretResponse{}, mapEngineError(err)
+		}
+		return WebhookSecretResponse{OK: true, ID: wid.String(), Secret: secret}, nil
 	}
 }
 

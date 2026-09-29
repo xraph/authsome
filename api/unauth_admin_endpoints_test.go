@@ -31,19 +31,20 @@ import (
 // promoted to platform-owner (with real manage:* grants). Permission-gated
 // route groups can only be exercised against a bootstrapped engine; the plain
 // newTestAPI helper does not seed roles.
-func newBootstrappedAPI(t *testing.T) (*api.API, *authsome.Engine) {
+func newBootstrappedAPI(t *testing.T, opts ...authsome.Option) (*api.API, *authsome.Engine) {
 	t.Helper()
 	s := memory.New()
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
+	eng, err := authsome.NewEngine(append([]authsome.Option{
+		authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
 		authsome.WithAppID(testAppIDStr),
 		authsome.WithBootstrap(),
-	)
+	}, opts...)...)
 	require.NoError(t, err)
 	require.NoError(t, eng.Start(context.Background()))
 	secutil.RelaxAuthDefaults(t, eng)
@@ -179,14 +180,30 @@ func TestWebhookDelete_RejectsCrossTenant(t *testing.T) {
 	assert.NoError(t, err, "another app's webhook must survive the delete attempt")
 }
 
+// webhookReceiver answers every delivery with 200 so a webhook can be
+// registered; it lives on loopback, which insecure mode permits.
+func webhookReceiver(t *testing.T) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func webhookTestOptions() []authsome.Option {
+	cfg := authsome.DefaultConfig()
+	cfg.Webhooks.AllowInsecureURLs = true
+	return []authsome.Option{authsome.WithConfig(cfg), authsome.WithEventRelay(bridge.NewMemoryRelay())}
+}
+
 func TestWebhookCreate_OwnerSucceeds(t *testing.T) {
-	a, eng := newBootstrappedAPI(t)
+	a, eng := newBootstrappedAPI(t, webhookTestOptions()...)
 	handler := withTestKey(a.Handler())
+	rcv := webhookReceiver(t)
 
 	_, ownerToken, _ := signUp(t, eng, "wh-create-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
-	body := []byte(`{"url":"https://good.example.com/hook","events":["user.created"]}`)
+	body := []byte(`{"url":"` + rcv.URL + `/hook","events":["user.created"]}`)
 	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/webhooks", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req = asAdmin(t, req, eng, ownerID)
@@ -195,9 +212,66 @@ func TestWebhookCreate_OwnerSucceeds(t *testing.T) {
 
 	require.Equal(t, http.StatusCreated, rec.Code, "body=%s", rec.Body.String())
 
-	var got webhook.Webhook
+	var got struct {
+		Webhook webhook.Webhook `json:"webhook"`
+		Secret  string          `json:"secret"`
+	}
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&got))
-	assert.Equal(t, testAppIDStr, got.AppID.String(), "created webhook must be bound to the caller's app")
+	assert.Equal(t, testAppIDStr, got.Webhook.AppID.String(), "created webhook must be bound to the caller's app")
+	assert.NotEmpty(t, got.Secret, "the secret is shown in the create response")
+	assert.Empty(t, got.Webhook.Secret)
+
+	// A later read never shows it again.
+	req = httptest.NewRequestWithContext(context.Background(), "GET", "/v1/webhooks/"+got.Webhook.ID.String(), nil)
+	req = asAdmin(t, req, eng, ownerID)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+	assert.NotContains(t, rec.Body.String(), got.Secret)
+	assert.NotContains(t, rec.Body.String(), `"secret"`)
+
+	// Rotation shows a new one, once.
+	req = httptest.NewRequestWithContext(context.Background(), "POST", "/v1/webhooks/"+got.Webhook.ID.String()+"/rotate-secret", nil)
+	req = asAdmin(t, req, eng, ownerID)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+	var rotated struct {
+		Secret string `json:"secret"`
+	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&rotated))
+	assert.NotEmpty(t, rotated.Secret)
+	assert.NotEqual(t, got.Secret, rotated.Secret)
+}
+
+func TestWebhookCreate_RefusesInternalURL(t *testing.T) {
+	a, eng := newBootstrappedAPI(t, authsome.WithEventRelay(bridge.NewMemoryRelay()))
+	handler := withTestKey(a.Handler())
+	_, ownerToken, _ := signUp(t, eng, "wh-internal-owner@test.com", "SecureP@ss123")
+	ownerID := userIDFor(t, eng, ownerToken)
+
+	body := []byte(`{"url":"https://169.254.169.254/latest/meta-data","events":["user.created"]}`)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/webhooks", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = asAdmin(t, req, eng, ownerID)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "body=%s", rec.Body.String())
+}
+
+func TestWebhookCreate_NotImplementedWithoutRelay(t *testing.T) {
+	a, eng := newBootstrappedAPI(t)
+	handler := withTestKey(a.Handler())
+	_, ownerToken, _ := signUp(t, eng, "wh-norelay-owner@test.com", "SecureP@ss123")
+	ownerID := userIDFor(t, eng, ownerToken)
+
+	body := []byte(`{"url":"https://good.example.com/hook","events":["user.created"]}`)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/webhooks", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = asAdmin(t, req, eng, ownerID)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotImplemented, rec.Code, "without a relay that manages endpoints, webhooks are not offered; body=%s", rec.Body.String())
 }
 
 func TestWebhookCreate_ForbiddenWithoutPermission(t *testing.T) {

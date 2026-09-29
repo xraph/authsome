@@ -72,6 +72,13 @@ func mapError(err error) error {
 	if errors.Is(err, store.ErrNotFound) {
 		return forge.NotFound(err.Error())
 	}
+	if errors.Is(err, authsome.ErrWebhooksUnavailable) {
+		// A webhook that cannot deliver is not registered at all.
+		return forge.NewHTTPError(http.StatusNotImplemented, "webhooks are unavailable: no relay can manage delivery endpoints")
+	}
+	if errors.Is(err, authsome.ErrWebhookURLRejected) || errors.Is(err, authsome.ErrWebhookEvents) {
+		return forge.BadRequest(err.Error())
+	}
 	if errors.Is(err, account.ErrInvalidCredentials) {
 		return forge.Unauthorized("invalid credentials")
 	}
