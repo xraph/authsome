@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -162,7 +163,37 @@ type Engine struct {
 	authRegistry auth.Registry
 
 	pluginsInitialized bool
-	started            bool
+	started            atomic.Bool
+
+	// background counts the goroutines the engine started (legacy token
+	// hashing, webhook adoption, the retention sweeper) so Stop can wait
+	// for them instead of leaving them writing to a store that is closing.
+	background sync.WaitGroup
+}
+
+// spawn runs fn on a goroutine Stop waits for.
+func (e *Engine) spawn(fn func()) {
+	e.background.Add(1)
+	go func() {
+		defer e.background.Done()
+		fn()
+	}()
+}
+
+// waitBackground blocks until every background goroutine has returned or
+// ctx is done, and reports whether they all returned.
+func (e *Engine) waitBackground(ctx context.Context) bool {
+	done := make(chan struct{})
+	go func() {
+		e.background.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 // NewEngine creates a new AuthSome engine with the given options.
@@ -315,7 +346,7 @@ func (e *Engine) EnsureMigrated(ctx context.Context) error {
 
 // requireStarted returns ErrNotStarted if the engine has not been started.
 func (e *Engine) requireStarted() error {
-	if !e.started {
+	if !e.started.Load() {
 		return ErrNotStarted
 	}
 	return nil
@@ -608,7 +639,7 @@ func (e *Engine) InitPlugins(ctx context.Context) error {
 
 // Start initializes the engine, runs migrations, and starts plugins.
 func (e *Engine) Start(ctx context.Context) error {
-	if e.started {
+	if e.started.Load() {
 		return nil
 	}
 
@@ -621,10 +652,11 @@ func (e *Engine) Start(ctx context.Context) error {
 	// waits on the sweep, and a large table must not hold up boot. The
 	// start context's values travel with the sweep but its cancellation
 	// does not, since Start returning is not a reason to stop converting.
-	go e.hashLegacyTokens(context.WithoutCancel(ctx))
+	sweepCtx := context.WithoutCancel(ctx)
+	e.spawn(func() { e.hashLegacyTokens(sweepCtx) })
 	// Webhook rows from before webhooks became Relay endpoints are given
 	// one in the background, for the same reasons.
-	go e.adoptLegacyWebhooks(context.WithoutCancel(ctx))
+	e.spawn(func() { e.adoptLegacyWebhooks(sweepCtx) })
 
 	// Register webhook event catalog with relay (before bootstrap so
 	// events emitted during bootstrap are recognized).
@@ -733,7 +765,7 @@ func (e *Engine) Start(ctx context.Context) error {
 	// context's cancellation is not a reason to stop.
 	e.startRetentionSweeper(context.WithoutCancel(ctx))
 
-	e.started = true
+	e.started.Store(true)
 	return nil
 }
 
@@ -767,12 +799,14 @@ func (e *Engine) Health(ctx context.Context) error {
 
 // Stop gracefully shuts down the engine and all plugins.
 func (e *Engine) Stop(ctx context.Context) error {
-	if !e.started {
+	if !e.started.Swap(false) {
 		return nil
 	}
 	e.stopRetentionSweeper()
+	if !e.waitBackground(ctx) {
+		e.logger.Warn("authsome: stop: background work still running at deadline")
+	}
 	e.plugins.EmitOnShutdown(ctx)
-	e.started = false
 	return nil
 }
 

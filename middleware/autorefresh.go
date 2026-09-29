@@ -54,6 +54,11 @@ type RefreshRequest struct {
 	// Method and RequestURL are this request's, for the proof's htm and htu.
 	Method     string
 	RequestURL string
+
+	// KeepRefreshToken asks for the access token alone to be rotated. Set
+	// when the refresh token is not exposed in the response: the client
+	// keeps the one it has, and it stays valid.
+	KeepRefreshToken bool
 }
 
 // SessionRefresher refreshes a session and returns the updated session with
@@ -153,6 +158,9 @@ func autoRefreshSession(
 		DPoPProof:    httpReq.Header.Get("DPoP"),
 		Method:       httpReq.Method,
 		RequestURL:   RequestURL(httpReq),
+		// A refresh token the client will not receive must not be rotated
+		// out from under the one it holds.
+		KeepRefreshToken: !cfg.ExposeRefreshToken,
 	})
 	if err != nil {
 		logRefreshFailure(logger, sess, err)

@@ -480,6 +480,12 @@ type RefreshOpts struct {
 	// Method and RequestURL describe the refresh request, for htm and htu.
 	Method     string
 	RequestURL string
+
+	// KeepRefreshToken rotates only the access token. Auto-refresh sets it
+	// when the refresh token is not exposed to the client: rotating a token
+	// the client will never receive would strand the one it holds, and its
+	// next explicit refresh would read as a replay.
+	KeepRefreshToken bool
 }
 
 // Refresh generates new tokens for an existing session using the refresh token.
@@ -745,6 +751,9 @@ func (e *Engine) rotateSession(ctx context.Context, sess *session.Session, opts 
 	// account.RefreshSession mutates sess in place; the new RefreshToken
 	// inherits the same FamilyID by virtue of leaving the field untouched.
 	cfg := e.sessionConfigForApp(ctx, sess.AppID, sess.EnvID)
+	if len(opts) > 0 && opts[0].KeepRefreshToken {
+		cfg.RotateRefreshToken = false
+	}
 	if err := account.RefreshSession(sess, cfg); err != nil {
 		return nil, fmt.Errorf("authsome: refresh session: %w", err)
 	}

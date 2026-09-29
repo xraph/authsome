@@ -305,7 +305,7 @@ func (e *Engine) bootstrapApp(ctx context.Context, appID id.AppID) error { //nol
 
 // HasUsers returns true if the platform app has at least one user.
 func (e *Engine) HasUsers(ctx context.Context) bool {
-	if !e.started {
+	if !e.started.Load() {
 		return false
 	}
 	appID := e.PlatformAppID()

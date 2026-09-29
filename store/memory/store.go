@@ -554,7 +554,12 @@ func (s *Store) RotateSession(_ context.Context, sess *session.Session, expected
 	// The caller's sess carries the rotated plaintext; drop stale hashes so
 	// atRest derives fresh ones from it.
 	sess.TokenHash = ""
-	sess.RefreshTokenHash = ""
+	// The refresh hash is dropped only when a new refresh token was minted;
+	// a rotation that keeps the refresh token (auto-refresh with the token
+	// hidden from the client) carries no plaintext and must keep the hash.
+	if sess.RefreshToken != "" {
+		sess.RefreshTokenHash = ""
+	}
 	sess.UpdatedAt = time.Now()
 	s.sessions[sess.ID.String()] = atRest(sess)
 	return true, nil

@@ -735,11 +735,12 @@ func (e *Extension) AuthMiddleware() forge.Middleware {
 func (e *Extension) autoRefreshMiddleware() forge.Middleware {
 	refresher := func(ctx context.Context, req middleware.RefreshRequest) (*session.Session, error) {
 		opts := authsome.RefreshOpts{
-			IPAddress:  req.IPAddress,
-			UserAgent:  req.UserAgent,
-			DPoPProof:  req.DPoPProof,
-			Method:     req.Method,
-			RequestURL: req.RequestURL,
+			IPAddress:        req.IPAddress,
+			UserAgent:        req.UserAgent,
+			DPoPProof:        req.DPoPProof,
+			Method:           req.Method,
+			RequestURL:       req.RequestURL,
+			KeepRefreshToken: req.KeepRefreshToken,
 		}
 		// A session the auth middleware loaded from the store carries no
 		// refresh plaintext, only the access token it authenticated with.

@@ -59,7 +59,7 @@ func (e *Engine) startRetentionSweeper(ctx context.Context) {
 	}
 	stop, done := make(chan struct{}), make(chan struct{})
 	e.retentionStop, e.retentionDone = stop, done
-	go func() {
+	e.spawn(func() {
 		defer close(done)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -73,7 +73,7 @@ func (e *Engine) startRetentionSweeper(ctx context.Context) {
 				}
 			}
 		}
-	}()
+	})
 }
 
 // stopRetentionSweeper ends the loop and waits for a sweep in progress to

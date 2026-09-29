@@ -75,6 +75,7 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"UpdateFormConfigWritesBackTimestamp", testUpdateFormConfigWritesBackTimestamp},
 		{"UpdateServiceAccountWritesBackTimestamp", testUpdateServiceAccountWritesBackTimestamp},
 		{"SessionCRUD", testSessionCRUD},
+		{"RotateSessionKeepsRefreshHashWithoutNewToken", testRotateSessionKeepsRefreshHashWithoutNewToken},
 		{"RetentionDeletesOnlyExpiredRows", testRetentionDeletesOnlyExpiredRows},
 		{"RetentionHonoursBatch", testRetentionHonoursBatch},
 		{"SessionLookupByTokenIsScoped", testSessionLookupByTokenIsScoped},
@@ -1947,4 +1948,29 @@ func testTouchAPIKeyWritesLastUsed(t *testing.T, s store.Store) {
 	assert.False(t, got.Revoked)
 
 	assert.ErrorIs(t, s.TouchAPIKey(ctx, id.NewAPIKeyID(), at), store.ErrNotFound)
+}
+
+// testRotateSessionKeepsRefreshHashWithoutNewToken proves a rotation that
+// mints only a new access token (auto-refresh with the refresh token hidden
+// from the client) leaves the stored refresh hash in place, so the refresh
+// token the client holds keeps working.
+func testRotateSessionKeepsRefreshHashWithoutNewToken(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "rotate-keep@test.com")
+	sfx := suffix(u.ID.String())
+	seeded := seedSession(t, s, tn, u.ID, "acc-"+sfx, "ref-"+sfx)
+
+	loaded, err := s.GetSession(ctx, seeded.ID)
+	require.NoError(t, err)
+	require.Empty(t, loaded.RefreshToken, "a session from the store carries no refresh plaintext")
+	loaded.Token = "acc2-" + sfx
+	rotated, err := s.RotateSession(ctx, loaded, store.HashToken("acc-"+sfx))
+	require.NoError(t, err)
+	require.True(t, rotated)
+
+	byRefresh, err := s.GetSessionByRefreshToken(ctx, "ref-"+sfx)
+	require.NoError(t, err, "the refresh token the client holds still resolves")
+	assert.Equal(t, seeded.ID.String(), byRefresh.ID.String())
+	assert.Equal(t, store.HashToken("acc2-"+sfx), byRefresh.TokenHash, "the access token did rotate")
 }

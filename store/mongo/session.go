@@ -104,7 +104,12 @@ func (s *Store) RotateSession(ctx context.Context, sess *session.Session, expect
 	// The caller's sess carries the rotated plaintext; drop the stale hashes
 	// so toSessionModel derives fresh ones from it.
 	sess.TokenHash = ""
-	sess.RefreshTokenHash = ""
+	// The refresh hash is dropped only when a new refresh token was minted;
+	// a rotation that keeps the refresh token (auto-refresh with the token
+	// hidden from the client) carries no plaintext and must keep the hash.
+	if sess.RefreshToken != "" {
+		sess.RefreshTokenHash = ""
+	}
 	m := toSessionModel(sess)
 	m.UpdatedAt = now()
 

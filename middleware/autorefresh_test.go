@@ -142,6 +142,7 @@ func TestAutoRefresh_NearExpiry_RefreshesAndSetsHeaders(t *testing.T) {
 }
 
 func TestAutoRefresh_RefreshTokenNotExposedByDefault(t *testing.T) {
+	var keepSeen bool
 	refreshedSess := &session.Session{
 		ID:           id.NewSessionID(),
 		Token:        "new-access-token",
@@ -150,7 +151,8 @@ func TestAutoRefresh_RefreshTokenNotExposedByDefault(t *testing.T) {
 	}
 
 	mw := middleware.AutoRefreshMiddleware(
-		func(_ context.Context, _ middleware.RefreshRequest) (*session.Session, error) {
+		func(_ context.Context, req middleware.RefreshRequest) (*session.Session, error) {
+			keepSeen = req.KeepRefreshToken
 			return refreshedSess, nil
 		},
 		func(_ context.Context) middleware.AutoRefreshConfig {
@@ -184,6 +186,7 @@ func TestAutoRefresh_RefreshTokenNotExposedByDefault(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "new-access-token", rec.Header().Get("X-Auth-Token"), "access token should be in header")
 	assert.Empty(t, rec.Header().Get("X-Auth-Refresh-Token"), "refresh token should NOT be in header")
+	assert.True(t, keepSeen, "a refresh token the client will not receive is kept, not rotated")
 }
 
 func TestAutoRefresh_CookieSetter_Called(t *testing.T) {
