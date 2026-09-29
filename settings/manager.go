@@ -24,17 +24,140 @@ type Manager struct {
 	namespaces  map[string][]string
 	listeners   map[string][]ChangeListener
 	enforcers   []EnforcementProvider
+
+	// cache holds the store's answer for a key under one scope chain for
+	// cacheTTL, so the hot path (every request resolves cookie, activity,
+	// audience and lifetime keys) costs one store read per key per window
+	// rather than one per request. Enforcement providers are not cached:
+	// they are code, and run on every read. A write through this manager
+	// drops the key's entries; another replica's write is seen when the
+	// window expires, so the TTL bounds staleness across a fleet.
+	cacheTTL time.Duration
+	cacheMu  sync.Mutex
+	cache    map[string]map[string]cacheEntry // key → scope chain → rows
+}
+
+type cacheEntry struct {
+	rows    []*Setting
+	expires time.Time
+}
+
+// DefaultCacheTTL is how long a resolved setting is served from memory.
+const DefaultCacheTTL = 30 * time.Second
+
+// ManagerOption tunes a Manager.
+type ManagerOption func(*Manager)
+
+// WithCacheTTL sets how long resolved rows are cached; zero or less
+// disables the cache.
+func WithCacheTTL(d time.Duration) ManagerOption {
+	return func(m *Manager) { m.cacheTTL = d }
 }
 
 // NewManager creates a new settings manager.
-func NewManager(store Store, logger log.Logger) *Manager {
-	return &Manager{
+func NewManager(store Store, logger log.Logger, opts ...ManagerOption) *Manager {
+	m := &Manager{
 		store:       store,
 		logger:      logger,
 		definitions: make(map[string]*Definition),
 		namespaces:  make(map[string][]string),
 		listeners:   make(map[string][]ChangeListener),
+		cacheTTL:    DefaultCacheTTL,
+		cache:       make(map[string]map[string]cacheEntry),
 	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+func scopeChainKey(opts ResolveOpts) string {
+	return opts.AppID + "|" + opts.OrgID + "|" + opts.UserID
+}
+
+// resolveRows returns the store's rows for key under opts, from the cache
+// when the entry is fresh.
+func (m *Manager) resolveRows(ctx context.Context, key string, opts ResolveOpts) ([]*Setting, error) {
+	if m.cacheTTL <= 0 {
+		return m.store.ResolveSettings(ctx, key, opts)
+	}
+	chain := scopeChainKey(opts)
+	now := time.Now()
+	m.cacheMu.Lock()
+	if e, ok := m.cache[key][chain]; ok && now.Before(e.expires) {
+		m.cacheMu.Unlock()
+		return e.rows, nil
+	}
+	m.cacheMu.Unlock()
+
+	rows, err := m.store.ResolveSettings(ctx, key, opts)
+	if err != nil {
+		return nil, err
+	}
+	m.remember(key, chain, rows, now)
+	return rows, nil
+}
+
+// resolveRowsBatch is resolveRows for several keys: cached keys are served
+// from memory and the rest fetched in one store call.
+func (m *Manager) resolveRowsBatch(ctx context.Context, keys []string, opts ResolveOpts) (map[string][]*Setting, error) {
+	if m.cacheTTL <= 0 {
+		return m.store.BatchResolve(ctx, keys, opts)
+	}
+	chain := scopeChainKey(opts)
+	now := time.Now()
+	out := make(map[string][]*Setting, len(keys))
+	var missing []string
+	m.cacheMu.Lock()
+	for _, key := range keys {
+		if e, ok := m.cache[key][chain]; ok && now.Before(e.expires) {
+			out[key] = e.rows
+			continue
+		}
+		missing = append(missing, key)
+	}
+	m.cacheMu.Unlock()
+	if len(missing) == 0 {
+		return out, nil
+	}
+	fetched, err := m.store.BatchResolve(ctx, missing, opts)
+	if err != nil {
+		return nil, err
+	}
+	for _, key := range missing {
+		rows := fetched[key]
+		out[key] = rows
+		m.remember(key, chain, rows, now)
+	}
+	return out, nil
+}
+
+func (m *Manager) remember(key, chain string, rows []*Setting, now time.Time) {
+	m.cacheMu.Lock()
+	defer m.cacheMu.Unlock()
+	byChain, ok := m.cache[key]
+	if !ok {
+		byChain = make(map[string]cacheEntry)
+		m.cache[key] = byChain
+	}
+	byChain[chain] = cacheEntry{rows: rows, expires: now.Add(m.cacheTTL)}
+}
+
+// forget drops every cached chain for key. A write at any scope can change
+// the answer for every chain that includes that scope, and telling them
+// apart is not worth the bookkeeping for a 30-second window.
+func (m *Manager) forget(key string) {
+	m.cacheMu.Lock()
+	delete(m.cache, key)
+	m.cacheMu.Unlock()
+}
+
+// InvalidateCache drops every cached row, for callers that changed the
+// store behind the manager's back.
+func (m *Manager) InvalidateCache() {
+	m.cacheMu.Lock()
+	m.cache = make(map[string]map[string]cacheEntry)
+	m.cacheMu.Unlock()
 }
 
 // Register adds a setting definition to the registry.
@@ -79,8 +202,8 @@ func (m *Manager) Resolve(ctx context.Context, key string, opts ResolveOpts) (js
 		return rule.Value, nil
 	}
 
-	// Fetch all scoped settings from store.
-	settings, err := m.store.ResolveSettings(ctx, key, opts)
+	// Fetch all scoped settings from store, or the cache.
+	settings, err := m.resolveRows(ctx, key, opts)
 	if err != nil {
 		return nil, fmt.Errorf("settings: resolve %q: %w", key, err)
 	}
@@ -210,6 +333,7 @@ func (m *Manager) Set(ctx context.Context, key string, value json.RawMessage, sc
 	if old != nil {
 		evt.OldValue = old.Value
 	}
+	m.forget(key)
 	m.emitChange(evt)
 
 	return nil
@@ -282,6 +406,7 @@ func (m *Manager) Enforce(ctx context.Context, key string, value json.RawMessage
 	if old != nil {
 		evt.OldValue = old.Value
 	}
+	m.forget(key)
 	m.emitChange(evt)
 
 	return nil
@@ -301,13 +426,17 @@ func (m *Manager) Unenforce(ctx context.Context, key string, scope Scope, scopeI
 	s.Enforced = false
 	s.Version++
 	s.UpdatedAt = timeNow()
-	return m.store.SetSetting(ctx, s)
+	if err := m.store.SetSetting(ctx, s); err != nil {
+		return err
+	}
+	m.forget(key)
+	return nil
 }
 
 // IsEnforced checks if a setting is enforced at any scope in the resolution
 // chain for the given context. Returns the enforcing setting if found.
 func (m *Manager) IsEnforced(ctx context.Context, key string, opts ResolveOpts) (bool, *Setting, error) {
-	settings, err := m.store.ResolveSettings(ctx, key, opts)
+	settings, err := m.resolveRows(ctx, key, opts)
 	if err != nil {
 		return false, nil, err
 	}
@@ -321,12 +450,16 @@ func (m *Manager) IsEnforced(ctx context.Context, key string, opts ResolveOpts) 
 
 // Delete removes a setting override at a specific scope.
 func (m *Manager) Delete(ctx context.Context, key string, scope Scope, scopeID string) error {
-	return m.store.DeleteSetting(ctx, key, scope, scopeID)
+	if err := m.store.DeleteSetting(ctx, key, scope, scopeID); err != nil {
+		return err
+	}
+	m.forget(key)
+	return nil
 }
 
 // BatchResolve resolves multiple settings in a single store call.
 func (m *Manager) BatchResolve(ctx context.Context, keys []string, opts ResolveOpts) (map[string]json.RawMessage, error) {
-	dbValues, err := m.store.BatchResolve(ctx, keys, opts)
+	dbValues, err := m.resolveRowsBatch(ctx, keys, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -431,8 +564,8 @@ func (m *Manager) ResolveWithDetails(ctx context.Context, key string, opts Resol
 		return result, nil
 	}
 
-	// Fetch all scoped settings from store.
-	settings, err := m.store.ResolveSettings(ctx, key, opts)
+	// Fetch all scoped settings from store, or the cache.
+	settings, err := m.resolveRows(ctx, key, opts)
 	if err != nil {
 		return nil, fmt.Errorf("settings: resolve details %q: %w", key, err)
 	}
