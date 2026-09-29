@@ -129,7 +129,7 @@ func (b *Bus) enrich(ctx context.Context, event *Event) {
 // logged and never propagated; use EmitCritical when a failed record must
 // stop the caller.
 func (b *Bus) Emit(ctx context.Context, event *Event) {
-	_ = b.dispatch(ctx, event)
+	_ = b.dispatch(ctx, event) //nolint:errcheck // Emit is the best-effort form; dispatch already logged the failure
 }
 
 // EmitCritical dispatches like Emit but returns the first handler error.
@@ -259,7 +259,7 @@ const (
 	ActionSettingsDelete    = "settings.delete"
 	// ActionAuditRead fires when the audit trail itself is queried through
 	// authsome.
-	ActionAuditRead = "audit.read"
+	ActionAuditRead       = "audit.read"
 	ActionAccountDeletion = "user.account_deletion"
 	ActionDataExport      = "user.data_export"
 

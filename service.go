@@ -1056,24 +1056,6 @@ func (e *Engine) bindSessionToDevice(ctx context.Context, sess *session.Session,
 	sess.DeviceID = dev.ID
 }
 
-func (e *Engine) audit(ctx context.Context, severity, outcome, action, resource, resourceID, actorID, tenant, category string, metadata map[string]string) {
-	// Records through the hook bus so the event is enriched and observed
-	// exactly like every other emitted event. Prefer emitting a hook.Event
-	// with a hook.Action constant directly; this wrapper remains for the
-	// older call sites.
-	e.hooks.Emit(ctx, &hook.Event{
-		Action:     action,
-		Resource:   resource,
-		ResourceID: resourceID,
-		ActorID:    actorID,
-		Tenant:     tenant,
-		Outcome:    outcome,
-		Severity:   severity,
-		Category:   category,
-		Metadata:   metadata,
-	})
-}
-
 // hashIdentifier makes a login identifier searchable in the audit trail
 // without storing the address itself.
 func hashIdentifier(identifier string) string {

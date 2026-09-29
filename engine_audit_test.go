@@ -67,17 +67,17 @@ func TestSignInRecordsExactlyOnceWithActorAndTenant(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	var signins int
+	var signInCount int
 	for _, ev := range mem.Events() {
 		require.NotEmpty(t, ev.Tenant, "every event needs a tenant: %+v", ev)
 		if ev.Action == hook.ActionSignIn {
-			signins++
+			signInCount++
 			assert.Equal(t, u.ID.String(), ev.ActorID)
 			assert.Equal(t, "password", ev.Metadata["auth_method"])
 			assert.NotEmpty(t, ev.SessionID)
 		}
 	}
-	assert.Equal(t, 1, signins, "sign-in must be recorded once, not once per legacy audit call")
+	assert.Equal(t, 1, signInCount, "sign-in must be recorded once, not once per legacy audit call")
 }
 
 func TestFailedSignInDoesNotPersistTheIdentifier(t *testing.T) {

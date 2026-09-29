@@ -532,18 +532,6 @@ func (p *Plugin) canDeleteOrg(ctx context.Context, actor id.UserID, org *organiz
 	return err == nil && ok
 }
 
-// chronicleOrNil returns the cached chronicle, falling back to the engine's
-// current chronicle (so tests that swap the chronicle via Engine.SetChronicle
-// after OnInit are still observed).
-func (p *Plugin) chronicleOrNil() bridge.Chronicle {
-	if p.engine != nil {
-		if ch := bridge.NewBusChronicle(p.engine.Hooks()); ch != nil {
-			return ch
-		}
-	}
-	return p.chronicle
-}
-
 // ──────────────────────────────────────────────────
 // Internal helpers
 // ──────────────────────────────────────────────────
