@@ -78,6 +78,10 @@ type Store struct {
 	// presented token has already been rotated — replay detected.
 	revokedRefreshTokens map[string]*session.RevokedRefreshToken
 
+	// kv backs store.KV: rate-limit windows, lockout counters and ceremony
+	// state, keyed by caller-chosen strings with millisecond expiry.
+	kv map[string]*kvEntry
+
 	// faults is a TEST-ONLY one-shot fault map. Keys are method names
 	// (e.g. "DeleteTeam"); the named method consumes and returns the
 	// stored error on its next call. Production code MUST NOT depend on
@@ -112,6 +116,7 @@ func New() *Store {
 		userEmails:           make(map[string]*user.UserEmail),
 		revokedRefreshTokens: make(map[string]*session.RevokedRefreshToken),
 		faults:               make(map[string]error),
+		kv:                   make(map[string]*kvEntry),
 	}
 }
 

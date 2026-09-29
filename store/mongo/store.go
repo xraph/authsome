@@ -43,6 +43,7 @@ const (
 	colBrandingConfigs      = "authsome_branding_configs"
 	colAppSessionConfigs    = "authsome_app_session_configs"
 	colRevokedRefreshTokens = "authsome_revoked_refresh_tokens"
+	colKV                   = "authsome_kv"
 	colServiceAccounts      = "authsome_service_accounts"
 	colDelegations          = "authsome_delegations"
 	colUserEmails           = "authsome_user_emails"
@@ -543,6 +544,9 @@ func migrationIndexes() map[string][]mongo.IndexModel {
 		},
 		colRevokedRefreshTokens: {
 			{Keys: bson.D{{Key: "family_id", Value: 1}}},
+		},
+		colKV: {
+			{Keys: bson.D{{Key: "expires_at", Value: 1}}},
 		},
 		colVerifications: {
 			{

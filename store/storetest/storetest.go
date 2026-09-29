@@ -94,6 +94,10 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"ServiceAccountKindDefaultsToService", testServiceAccountKindDefaultsToService},
 		{"SessionDPoPJKTRoundTrip", testSessionDPoPJKTRoundTrip},
 		{"ExpiredEmailVerificationIsNotActive", testExpiredEmailVerificationIsNotActive},
+		{"KVRoundTrip", testKVRoundTrip},
+		{"KVSetNXHonoursExpiry", testKVSetNXHonoursExpiry},
+		{"KVIncrementWindow", testKVIncrementWindow},
+		{"KVDeleteExpired", testKVDeleteExpired},
 	}
 	for _, tc := range cases {
 		tc := tc
