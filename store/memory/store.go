@@ -1484,7 +1484,9 @@ func (s *Store) CreateWebhook(_ context.Context, w *webhook.Webhook) error {
 		w.CreatedAt = time.Now()
 	}
 	w.UpdatedAt = w.CreatedAt
-	s.webhooks[w.ID.String()] = w
+	stored := *w
+	stored.Secret = webhook.StoredSecret(w)
+	s.webhooks[w.ID.String()] = &stored
 	return nil
 }
 
@@ -1505,7 +1507,9 @@ func (s *Store) UpdateWebhook(_ context.Context, w *webhook.Webhook) error {
 		return store.ErrNotFound
 	}
 	w.UpdatedAt = time.Now()
-	s.webhooks[w.ID.String()] = w
+	stored := *w
+	stored.Secret = webhook.StoredSecret(w)
+	s.webhooks[w.ID.String()] = &stored
 	return nil
 }
 

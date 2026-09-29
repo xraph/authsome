@@ -68,6 +68,7 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"UpdateTeamWritesBackTimestamp", testUpdateTeamWritesBackTimestamp},
 		{"UpdateDeviceWritesBackTimestamp", testUpdateDeviceWritesBackTimestamp},
 		{"UpdateWebhookWritesBackTimestamp", testUpdateWebhookWritesBackTimestamp},
+		{"WebhookSecretNotStored", testWebhookSecretNotStored},
 		{"UpdateAPIKeyWritesBackTimestamp", testUpdateAPIKeyWritesBackTimestamp},
 		{"UpdateEnvironmentWritesBackTimestamp", testUpdateEnvironmentWritesBackTimestamp},
 		{"UpdateFormConfigWritesBackTimestamp", testUpdateFormConfigWritesBackTimestamp},
@@ -1873,4 +1874,48 @@ func testUpdateServiceAccountWritesBackTimestamp(t *testing.T, s store.Store) {
 	require.NoError(t, err)
 	assert.WithinDuration(t, svc.UpdatedAt, got.UpdatedAt, time.Second,
 		"the timestamp written back onto the caller must match what was persisted")
+}
+
+// testWebhookSecretNotStored proves a webhook that delivers through a relay
+// endpoint never has its secret at rest: the row keeps the endpoint id and
+// a hash, and reads back with an empty secret. A row without an endpoint,
+// the shape releases before this wrote, keeps its plaintext readable so
+// the adoption sweep can hand that same secret to the relay.
+func testWebhookSecretNotStored(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	wh := &webhook.Webhook{
+		ID: id.NewWebhookID(), AppID: tn.AppID, EnvID: tn.EnvID, URL: "https://example.test/hook",
+		Events: []string{"user.created"}, Active: true, CreatedAt: now(), UpdatedAt: now(),
+		Secret: "whsec_plain", SecretHash: store.HashToken("whsec_plain"), RelayEndpointID: "ep_1",
+	}
+	require.NoError(t, s.CreateWebhook(ctx, wh))
+	assert.Equal(t, "whsec_plain", wh.Secret, "the caller's copy keeps the plaintext for the one-time reveal")
+
+	got, err := s.GetWebhook(ctx, wh.ID)
+	require.NoError(t, err)
+	assert.Empty(t, got.Secret, "no secret at rest")
+	assert.Equal(t, store.HashToken("whsec_plain"), got.SecretHash)
+	assert.Equal(t, "ep_1", got.RelayEndpointID)
+
+	got.Active = false
+	got.Secret = "whsec_rotated"
+	got.SecretHash = store.HashToken("whsec_rotated")
+	require.NoError(t, s.UpdateWebhook(ctx, got))
+	again, err := s.GetWebhook(ctx, wh.ID)
+	require.NoError(t, err)
+	assert.Empty(t, again.Secret, "an update never writes the secret either")
+	assert.Equal(t, store.HashToken("whsec_rotated"), again.SecretHash)
+	assert.Equal(t, "ep_1", again.RelayEndpointID)
+	assert.False(t, again.Active)
+
+	legacy := &webhook.Webhook{ //nolint:gosec // G101: a fixture, not a credential
+		ID: id.NewWebhookID(), AppID: tn.AppID, EnvID: tn.EnvID, URL: "https://example.test/legacy",
+		Events: []string{"user.created"}, Active: true, CreatedAt: now(), UpdatedAt: now(), Secret: "whsec_legacy",
+	}
+	require.NoError(t, s.CreateWebhook(ctx, legacy))
+	gotLegacy, err := s.GetWebhook(ctx, legacy.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "whsec_legacy", gotLegacy.Secret, "a row with no endpoint keeps its plaintext for adoption")
+	assert.Empty(t, gotLegacy.RelayEndpointID)
 }

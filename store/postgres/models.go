@@ -885,15 +885,18 @@ func fromDevice(d *device.Device) *DeviceModel {
 type WebhookModel struct {
 	grove.BaseModel `grove:"table:authsome_webhooks,alias:wh"`
 
-	ID        string          `grove:"id,pk"`
-	AppID     string          `grove:"app_id,notnull"`
-	EnvID     string          `grove:"env_id,notnull"`
-	URL       string          `grove:"url,notnull"`
-	Events    json.RawMessage `grove:"events,type:jsonb"`
-	Secret    string          `grove:"secret"`
-	Active    bool            `grove:"active"`
-	CreatedAt time.Time       `grove:"created_at,notnull,default:now()"`
-	UpdatedAt time.Time       `grove:"updated_at,notnull,default:now()"`
+	ID     string          `grove:"id,pk"`
+	AppID  string          `grove:"app_id,notnull"`
+	EnvID  string          `grove:"env_id,notnull"`
+	URL    string          `grove:"url,notnull"`
+	Events json.RawMessage `grove:"events,type:jsonb"`
+	// Secret is empty once the row has a relay endpoint; see webhook.Webhook.
+	Secret          string    `grove:"secret"`
+	SecretHash      string    `grove:"secret_hash"`
+	RelayEndpointID string    `grove:"relay_endpoint_id"`
+	Active          bool      `grove:"active"`
+	CreatedAt       time.Time `grove:"created_at,notnull,default:now()"`
+	UpdatedAt       time.Time `grove:"updated_at,notnull,default:now()"`
 }
 
 func toWebhook(m *WebhookModel) (*webhook.Webhook, error) {
@@ -914,30 +917,34 @@ func toWebhook(m *WebhookModel) (*webhook.Webhook, error) {
 		_ = json.Unmarshal(m.Events, &events) //nolint:errcheck // best-effort decode
 	}
 	return &webhook.Webhook{
-		ID:        whID,
-		AppID:     appID,
-		EnvID:     envID,
-		URL:       m.URL,
-		Events:    events,
-		Secret:    m.Secret,
-		Active:    m.Active,
-		CreatedAt: m.CreatedAt,
-		UpdatedAt: m.UpdatedAt,
+		ID:              whID,
+		AppID:           appID,
+		EnvID:           envID,
+		URL:             m.URL,
+		Events:          events,
+		Secret:          m.Secret,
+		SecretHash:      m.SecretHash,
+		RelayEndpointID: m.RelayEndpointID,
+		Active:          m.Active,
+		CreatedAt:       m.CreatedAt,
+		UpdatedAt:       m.UpdatedAt,
 	}, nil
 }
 
 func fromWebhook(w *webhook.Webhook) *WebhookModel {
 	events, _ := json.Marshal(w.Events) //nolint:errcheck // best-effort encode
 	return &WebhookModel{
-		ID:        w.ID.String(),
-		AppID:     w.AppID.String(),
-		EnvID:     w.EnvID.String(),
-		URL:       w.URL,
-		Events:    events,
-		Secret:    w.Secret,
-		Active:    w.Active,
-		CreatedAt: w.CreatedAt,
-		UpdatedAt: w.UpdatedAt,
+		ID:              w.ID.String(),
+		AppID:           w.AppID.String(),
+		EnvID:           w.EnvID.String(),
+		URL:             w.URL,
+		Events:          events,
+		Secret:          webhook.StoredSecret(w),
+		SecretHash:      w.SecretHash,
+		RelayEndpointID: w.RelayEndpointID,
+		Active:          w.Active,
+		CreatedAt:       w.CreatedAt,
+		UpdatedAt:       w.UpdatedAt,
 	}
 }
 
