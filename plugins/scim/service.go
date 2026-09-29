@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
@@ -151,12 +153,13 @@ func (s *Service) GenerateToken(ctx context.Context, configID id.SCIMConfigID, n
 	}
 
 	token := &Token{
-		ID:        id.NewSCIMTokenID(),
-		ConfigID:  configID,
-		Name:      name,
-		TokenHash: string(hash),
-		ExpiresAt: expiresAt,
-		CreatedAt: time.Now(),
+		ID:          id.NewSCIMTokenID(),
+		ConfigID:    configID,
+		Name:        name,
+		TokenHash:   string(hash),
+		TokenLookup: authStore.HashToken(plaintext),
+		ExpiresAt:   expiresAt,
+		CreatedAt:   time.Now(),
 	}
 
 	if err := s.store.CreateToken(ctx, token); err != nil {
@@ -243,6 +246,11 @@ func (s *Service) ValidateToken(ctx context.Context, plaintext string) (*Token, 
 	// Record last use. Best-effort: a failed write must not fail the request.
 	now := time.Now()
 	t.LastUsedAt = &now
+	// A token from before the lookup column gets its digest on first use, so
+	// the next presentation is an indexed lookup rather than a scan.
+	if t.TokenLookup == "" {
+		t.TokenLookup = authStore.HashToken(plaintext)
+	}
 	_ = s.store.UpdateToken(ctx, t) //nolint:errcheck // best-effort usage tracking
 
 	return t, cfg, nil
@@ -340,6 +348,11 @@ func (s *Service) ReplaceUser(ctx context.Context, cfg *SCIMConfig, target *user
 	target.FirstName = scimUser.Name.GivenName
 	target.LastName = scimUser.Name.FamilyName
 	target.Banned = !scimUser.Active
+	if email := scimUser.PrimaryEmail(); email != "" {
+		if err := s.ChangeUserName(ctx, cfg, target, email); err != nil {
+			return err
+		}
+	}
 	target.UpdatedAt = time.Now()
 	if err := s.authStore.UpdateUser(ctx, target); err != nil {
 		return err
@@ -576,4 +589,53 @@ func (s *Service) CountLogsByStatus(ctx context.Context, configID id.SCIMConfigI
 // CountAllLogsByStatus returns log counts across all configs for an app.
 func (s *Service) CountAllLogsByStatus(ctx context.Context, appID string) (success, failed, skipped int, err error) {
 	return s.store.CountAllLogsByStatus(ctx, appID)
+}
+
+// ChangeUserName moves a provisioned user to a new primary address through
+// the email-record API rather than by overwriting the user's email field:
+// the address becomes a verified email record owned by the user and is then
+// made primary, so uniqueness inside the environment holds and every place
+// that reads email records sees the change. An address another account
+// owns is refused as out of scope; the user's own current address is a
+// no-op.
+func (s *Service) ChangeUserName(ctx context.Context, cfg *SCIMConfig, u *user.User, email string) error {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" || strings.EqualFold(email, u.Email) {
+		return nil
+	}
+	if s.authStore == nil {
+		return fmt.Errorf("scim: auth store not available")
+	}
+	var envID id.EnvironmentID
+	if env, _ := s.authStore.GetDefaultEnvironment(ctx, cfg.AppID); env != nil { //nolint:errcheck // best-effort env lookup
+		envID = env.ID
+	}
+	if !u.EnvID.IsNil() {
+		envID = u.EnvID
+	}
+	owner, err := s.authStore.GetUserByAnyEmail(ctx, cfg.AppID, envID, email)
+	switch {
+	case err == nil && owner != nil && owner.ID != u.ID:
+		return ErrOutOfScope
+	case err == nil && owner != nil:
+		// Already one of this user's addresses; make sure it counts as
+		// verified before it becomes primary.
+		if verr := s.authStore.MarkUserEmailVerified(ctx, u.ID, email); verr != nil && !errors.Is(verr, authStore.ErrNotFound) {
+			return verr
+		}
+	default:
+		now := time.Now()
+		rec := &user.UserEmail{
+			ID: id.NewUserEmailID(), UserID: u.ID, AppID: cfg.AppID, EnvID: envID, Email: email,
+			Verified: true, Source: "scim", CreatedAt: now, UpdatedAt: now,
+		}
+		if aerr := s.authStore.AddUserEmail(ctx, rec); aerr != nil && !errors.Is(aerr, account.ErrEmailTaken) {
+			return aerr
+		}
+	}
+	if perr := s.authStore.SetPrimaryEmail(ctx, u.ID, email); perr != nil {
+		return perr
+	}
+	u.Email = email
+	return nil
 }

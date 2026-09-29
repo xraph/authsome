@@ -72,7 +72,23 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.defaultAppID = engine.DefaultAppID()
 
 	// Initialize in-memory store.
-	p.scimStore = NewMemoryStore()
+	// The SCIM store lives in the engine's database, like every other
+	// plugin store; memory is for tests and deployments without a database.
+	if p.scimStore == nil {
+		if db := engine.DB(); db != nil {
+			switch db.Driver().Name() {
+			case "pg":
+				p.scimStore = NewPostgresStore(db)
+			case "sqlite":
+				p.scimStore = NewSqliteStore(db)
+			case "mongo":
+				p.scimStore = NewMongoStore(db)
+			}
+		}
+	}
+	if p.scimStore == nil {
+		p.scimStore = NewMemoryStore()
+	}
 
 	// Initialize the service layer.
 	p.service = &Service{
@@ -88,6 +104,9 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 
 	return nil
 }
+
+// SetSCIMStore overrides the store the plugin uses; call it before OnInit.
+func (p *Plugin) SetSCIMStore(s Store) { p.scimStore = s }
 
 // MigrationGroups returns SCIM-specific database migrations.
 func (p *Plugin) MigrationGroups(driverName string) []*migrate.Group {

@@ -167,3 +167,52 @@ DROP TABLE IF EXISTS authsome_scim_configs;
 		},
 	)
 }
+
+func init() {
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "scim_token_lookup",
+			Version: "20260922000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				// The lookup digest lets a presented token be resolved by one
+				// indexed equality; the bcrypt digest is then compared on that
+				// row alone. NULL on rows written before, which are scanned and
+				// upgraded on their next use.
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_scim_tokens ADD COLUMN IF NOT EXISTS token_lookup TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_scim_tokens_lookup
+    ON authsome_scim_tokens (token_lookup);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_scim_tokens_lookup;
+ALTER TABLE authsome_scim_tokens DROP COLUMN IF EXISTS token_lookup;
+`)
+				return err
+			},
+		},
+	)
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "scim_token_lookup",
+			Version: "20260922000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				for _, stmt := range []string{
+					`ALTER TABLE authsome_scim_tokens ADD COLUMN token_lookup TEXT`,
+					`CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_scim_tokens_lookup ON authsome_scim_tokens (token_lookup)`,
+				} {
+					if _, err := exec.Exec(ctx, stmt); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `DROP INDEX IF EXISTS idx_authsome_scim_tokens_lookup`)
+				return err
+			},
+		},
+	)
+}

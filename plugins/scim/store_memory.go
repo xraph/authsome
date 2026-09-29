@@ -9,6 +9,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/store"
 )
 
 // MemoryStore is a thread-safe in-memory implementation of the SCIM Store.
@@ -49,7 +50,7 @@ func (s *MemoryStore) GetConfig(_ context.Context, configID id.SCIMConfigID) (*S
 	defer s.mu.RUnlock()
 	c, ok := s.configs[configID.String()]
 	if !ok {
-		return nil, fmt.Errorf("scim: config %s not found", configID)
+		return nil, fmt.Errorf("%w: %s", ErrConfigNotFound, configID)
 	}
 	cp := *c
 	return &cp, nil
@@ -60,7 +61,7 @@ func (s *MemoryStore) UpdateConfig(_ context.Context, c *SCIMConfig) error {
 	defer s.mu.Unlock()
 	key := c.ID.String()
 	if _, exists := s.configs[key]; !exists {
-		return fmt.Errorf("scim: config %s not found", key)
+		return fmt.Errorf("%w: %s", ErrConfigNotFound, key)
 	}
 	cp := *c
 	s.configs[key] = &cp
@@ -123,7 +124,7 @@ func (s *MemoryStore) GetToken(_ context.Context, tokenID id.SCIMTokenID) (*Toke
 	defer s.mu.RUnlock()
 	t, ok := s.tokens[tokenID.String()]
 	if !ok {
-		return nil, fmt.Errorf("scim: token %s not found", tokenID)
+		return nil, fmt.Errorf("%w: %s", ErrTokenNotFound, tokenID)
 	}
 	cp := *t
 	return &cp, nil
@@ -170,21 +171,33 @@ func (s *MemoryStore) DeleteToken(_ context.Context, tokenID id.SCIMTokenID) err
 // lookup is not possible; a production store would want a lookup key (for
 // example a token prefix column) to narrow the scan first.
 func (s *MemoryStore) FindTokenByPlaintext(_ context.Context, plaintext string) (*Token, *SCIMConfig, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	lookup := store.HashToken(plaintext)
+	match := func(t *Token) bool {
+		if t.TokenLookup != "" {
+			return t.TokenLookup == lookup && bcrypt.CompareHashAndPassword([]byte(t.TokenHash), []byte(plaintext)) == nil
+		}
+		// A row written before the lookup column: the only way to find it
+		// is to compare.
+		return bcrypt.CompareHashAndPassword([]byte(t.TokenHash), []byte(plaintext)) == nil
+	}
 	for _, t := range s.tokens {
-		if bcrypt.CompareHashAndPassword([]byte(t.TokenHash), []byte(plaintext)) != nil {
+		if !match(t) {
 			continue
 		}
+		// A legacy row is upgraded on its first use, as the database
+		// stores do.
+		t.TokenLookup = lookup
 		cp := *t
 		cfg, ok := s.configs[t.ConfigID.String()]
 		if !ok {
-			return nil, nil, fmt.Errorf("scim: config for token not found")
+			return nil, nil, fmt.Errorf("%w: config for token", ErrConfigNotFound)
 		}
 		cfgCp := *cfg
 		return &cp, &cfgCp, nil
 	}
-	return nil, nil, fmt.Errorf("scim: token not found")
+	return nil, nil, ErrTokenNotFound
 }
 
 // ──────────────────────────────────────────────────

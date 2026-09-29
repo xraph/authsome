@@ -254,9 +254,20 @@ func (p *Plugin) handlePatchUser(ctx forge.Context, req *scimUserPathParam) (*Us
 
 	// Apply SCIM PATCH operations.
 	wasBanned := u.Banned
+	newUserName := ""
 	for _, op := range patch.Operations {
 		if strings.EqualFold(op.Op, "replace") {
-			p.applyUserPatchReplace(u, op)
+			if name := p.applyUserPatchReplace(u, op); name != "" {
+				newUserName = name
+			}
+		}
+	}
+	// userName is the primary email and goes through the email-record API,
+	// not through the user's email field.
+	if newUserName != "" {
+		if err := p.service.ChangeUserName(ctx.Context(), cfg, u, newUserName); err != nil {
+			p.service.RecordLog(ctx.Context(), cfg.ID, ActionUpdateUser, "User", "", req.UserID, LogStatusError, err.Error())
+			return nil, scimError(err, "user not found")
 		}
 	}
 
@@ -505,7 +516,10 @@ func (p *Plugin) authenticateSCIM(ctx forge.Context) (*SCIMConfig, error) {
 }
 
 // applyUserPatchReplace handles SCIM PATCH replace operations for a user.
-func (p *Plugin) applyUserPatchReplace(u *user.User, op Operation) {
+// applyUserPatchReplace applies one replace operation to u and returns the
+// userName it named, if any, for the caller to change through the
+// email-record API rather than by writing the user's email field.
+func (p *Plugin) applyUserPatchReplace(u *user.User, op Operation) (userName string) {
 	switch op.Path {
 	case "active":
 		if active, ok := op.Value.(bool); ok {
@@ -521,13 +535,16 @@ func (p *Plugin) applyUserPatchReplace(u *user.User, op Operation) {
 		}
 	case "userName":
 		if v, ok := op.Value.(string); ok {
-			u.Email = v
+			userName = v
 		}
 	case "":
 		// Bulk replace: value is a map of attributes.
 		if m, ok := op.Value.(map[string]any); ok {
 			if active, ok := m["active"].(bool); ok {
 				u.Banned = !active
+			}
+			if v, ok := m["userName"].(string); ok {
+				userName = v
 			}
 			if name, ok := m["name"].(map[string]any); ok {
 				if gn, ok := name["givenName"].(string); ok {
@@ -539,4 +556,5 @@ func (p *Plugin) applyUserPatchReplace(u *user.User, op Operation) {
 			}
 		}
 	}
+	return userName
 }
