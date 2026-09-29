@@ -82,7 +82,7 @@ func ClearStateCookie(w http.ResponseWriter, r *http.Request) {
 		name = CookieName
 		secure = true
 	}
-	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: secure})
+	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode}) // #nosec G124 -- expiring the cookie; Secure mirrors the cookie being cleared
 }
 
 // Matches reports whether r carries the binding cookie for state.

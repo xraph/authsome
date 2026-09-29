@@ -90,7 +90,7 @@ func TestResolve_VerifiedEmailMatch_LinksExistingAccount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, existing.ID.String(), got.ID.String(), "must link to the existing account, not duplicate")
 
-	conn, err := p.oauthStore.GetOAuthConnection(ctx, "github", "gh-2")
+	conn, err := p.oauthStore.GetOAuthConnection(ctx, appID, "github", "gh-2")
 	require.NoError(t, err)
 	assert.Equal(t, existing.ID.String(), conn.UserID.String())
 
@@ -143,7 +143,7 @@ func TestResolve_AmbiguousMatch_Refuses(t *testing.T) {
 	require.Error(t, err, "ambiguous match must be refused")
 
 	// No connection was created for the refused identity.
-	_, connErr := p.oauthStore.GetOAuthConnection(ctx, "github", "gh-4")
+	_, connErr := p.oauthStore.GetOAuthConnection(ctx, appID, "github", "gh-4")
 	assert.Error(t, connErr)
 }
 
@@ -169,7 +169,7 @@ func TestResolve_NewUser_SeedsAllVerifiedEmails(t *testing.T) {
 		assert.Equal(t, got.ID.String(), owner.ID.String())
 	}
 
-	conn, err := p.oauthStore.GetOAuthConnection(ctx, "github", "gh-5")
+	conn, err := p.oauthStore.GetOAuthConnection(ctx, appID, "github", "gh-5")
 	require.NoError(t, err)
 	assert.Equal(t, got.ID.String(), conn.UserID.String())
 }

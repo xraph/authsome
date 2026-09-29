@@ -31,7 +31,7 @@ import (
 func (p *Plugin) resolveUserForCallback(ctx context.Context, appID id.AppID, envID id.EnvironmentID, provider string, pu *ProviderUser, token *oauth2.Token) (*user.User, error) {
 	// STEP 1 — provider-account-id match (authoritative).
 	if p.oauthStore != nil {
-		conn, connErr := p.oauthStore.GetOAuthConnection(ctx, provider, pu.ProviderUserID)
+		conn, connErr := p.oauthStore.GetOAuthConnection(ctx, appID, provider, pu.ProviderUserID)
 		if connErr == nil {
 			u, err := p.store.GetUser(ctx, conn.UserID)
 			if err != nil {

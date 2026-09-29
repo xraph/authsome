@@ -39,7 +39,7 @@ func TestOIDCRedirect_BrowserStartRequiresTheStateCookie(t *testing.T) {
 	require.NoError(t, p.ssoStore.CreateConnection(context.Background(), conn))
 
 	browserStart := func() (*LoginResponse, []*http.Cookie) {
-		req := httptest.NewRequest(http.MethodPost, "https://api.example.com/v1/sso/login", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "https://api.example.com/v1/sso/login", nil)
 		req.Header.Set("Origin", "https://app.example.com")
 		req.Header.Set("X-Forwarded-Proto", "https")
 		rec := httptest.NewRecorder()
@@ -51,7 +51,7 @@ func TestOIDCRedirect_BrowserStartRequiresTheStateCookie(t *testing.T) {
 	router := forge.NewRouter()
 	require.NoError(t, router.GET("/redirect/:provider", p.handleOIDCRedirect))
 	land := func(state string, cookies []*http.Cookie) string {
-		req := httptest.NewRequest(http.MethodGet, "https://api.example.com/redirect/stub?code=c&state="+state, nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.example.com/redirect/stub?code=c&state="+state, nil)
 		req.Header.Set("X-Forwarded-Proto", "https")
 		for _, c := range cookies {
 			req.AddCookie(c)
@@ -73,7 +73,7 @@ func TestOIDCRedirect_BrowserStartRequiresTheStateCookie(t *testing.T) {
 	assert.Contains(t, loc, "sso_error=auth_failed")
 
 	// A start from a native client sets no cookie and its landing needs none.
-	nativeReq := httptest.NewRequest(http.MethodPost, "https://api.example.com/v1/sso/login", nil)
+	nativeReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "https://api.example.com/v1/sso/login", nil)
 	nativeRec := httptest.NewRecorder()
 	resp, err := p.startLogin(context.Background(), appID, failingProvider{}, "stub", conn.ID.String(), "", nativeRec, nativeReq)
 	require.NoError(t, err)

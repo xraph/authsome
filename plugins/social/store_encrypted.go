@@ -51,8 +51,8 @@ func (s *EncryptedStore) CreateOAuthConnection(ctx context.Context, c *OAuthConn
 }
 
 // GetOAuthConnection decrypts tokens before returning the connection.
-func (s *EncryptedStore) GetOAuthConnection(ctx context.Context, provider, providerUserID string) (*OAuthConnection, error) {
-	conn, err := s.inner.GetOAuthConnection(ctx, provider, providerUserID)
+func (s *EncryptedStore) GetOAuthConnection(ctx context.Context, appID id.AppID, provider, providerUserID string) (*OAuthConnection, error) {
+	conn, err := s.inner.GetOAuthConnection(ctx, appID, provider, providerUserID)
 	if err != nil {
 		return nil, err
 	}

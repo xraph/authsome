@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,7 +33,9 @@ func TestHandleCallback_BrowserStartRequiresTheStateCookie(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 		var resp map[string]string
 		require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-		return extractQueryParam(t, resp["auth_url"], "state"), rec.Result().Cookies()
+		u, err := url.Parse(resp["auth_url"])
+		require.NoError(t, err)
+		return u.Query().Get("state"), rec.Result().Cookies()
 	}
 	callback := func(state string, cookies []*http.Cookie) (int, string) {
 		req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/social/google/callback?code=abc&state="+state, nil)

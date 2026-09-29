@@ -46,9 +46,10 @@ func (s *PostgresStore) CreateOAuthConnection(ctx context.Context, c *OAuthConne
 	return socialPgError(err)
 }
 
-func (s *PostgresStore) GetOAuthConnection(ctx context.Context, provider, providerUserID string) (*OAuthConnection, error) {
+func (s *PostgresStore) GetOAuthConnection(ctx context.Context, appID id.AppID, provider, providerUserID string) (*OAuthConnection, error) {
 	m := new(oauthConnectionModel)
 	err := s.pg.NewSelect(m).
+		Where("app_id = ?", appID.String()).
 		Where("provider = ?", provider).
 		Where("provider_user_id = ?", providerUserID).
 		Scan(ctx)
