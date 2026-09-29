@@ -2,6 +2,7 @@ package scim
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -158,20 +159,24 @@ func (p *Plugin) handleListUsers(ctx forge.Context, _ *apitypes.Empty) (*ListRes
 	}, nil
 }
 
+// scimError maps a service failure to the SCIM response. A row outside the
+// configuration's scope is answered exactly like a missing one.
+func scimError(err error, notFound string) error {
+	if errors.Is(err, ErrOutOfScope) {
+		return forge.NotFound(notFound)
+	}
+	return forge.InternalError(err)
+}
+
 func (p *Plugin) handleGetUser(ctx forge.Context, req *scimUserPathParam) (*UserResource, error) {
-	_, err := p.authenticateSCIM(ctx)
+	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	userID, err := id.ParseUserID(req.UserID)
+	u, err := p.service.LoadUser(ctx.Context(), cfg, req.UserID)
 	if err != nil {
-		return nil, forge.NotFound("user not found")
-	}
-
-	u, err := p.authStore.GetUser(ctx.Context(), userID)
-	if err != nil {
-		return nil, forge.NotFound("user not found")
+		return nil, scimError(err, "user not found")
 	}
 
 	return UserToSCIM(u, p.config.BasePath), nil
@@ -193,7 +198,7 @@ func (p *Plugin) handleCreateUser(ctx forge.Context, _ *apitypes.Empty) (*UserRe
 	u, action, err := p.service.ProvisionUser(ctx.Context(), cfg, &scimUser)
 	if err != nil {
 		p.service.RecordLog(ctx.Context(), cfg.ID, action, "User", scimUser.ExternalID, "", LogStatusError, err.Error())
-		return nil, forge.InternalError(err)
+		return nil, scimError(err, "user not found")
 	}
 
 	p.service.RecordLog(ctx.Context(), cfg.ID, action, "User", scimUser.ExternalID, u.ID.String(), LogStatusSuccess, "")
@@ -216,13 +221,18 @@ func (p *Plugin) handleReplaceUser(ctx forge.Context, req *scimUserPathParam) (*
 
 	scimUser.ID = req.UserID
 
-	u, action, err := p.service.ProvisionUser(ctx.Context(), cfg, &scimUser)
+	// PUT targets the path id, never whichever account the body's email
+	// happens to resolve to.
+	u, err := p.service.LoadUser(ctx.Context(), cfg, req.UserID)
 	if err != nil {
+		return nil, scimError(err, "user not found")
+	}
+	if err := p.service.ReplaceUser(ctx.Context(), cfg, u, &scimUser); err != nil {
 		p.service.RecordLog(ctx.Context(), cfg.ID, ActionUpdateUser, "User", scimUser.ExternalID, req.UserID, LogStatusError, err.Error())
-		return nil, forge.InternalError(err)
+		return nil, scimError(err, "user not found")
 	}
 
-	p.service.RecordLog(ctx.Context(), cfg.ID, action, "User", scimUser.ExternalID, u.ID.String(), LogStatusSuccess, "")
+	p.service.RecordLog(ctx.Context(), cfg.ID, ActionUpdateUser, "User", scimUser.ExternalID, u.ID.String(), LogStatusSuccess, "")
 	return UserToSCIM(u, p.config.BasePath), nil
 }
 
@@ -237,14 +247,9 @@ func (p *Plugin) handlePatchUser(ctx forge.Context, req *scimUserPathParam) (*Us
 		return nil, forge.BadRequest("invalid SCIM patch payload")
 	}
 
-	userID, err := id.ParseUserID(req.UserID)
+	u, err := p.service.LoadUser(ctx.Context(), cfg, req.UserID)
 	if err != nil {
-		return nil, forge.NotFound("user not found")
-	}
-
-	u, err := p.authStore.GetUser(ctx.Context(), userID)
-	if err != nil {
-		return nil, forge.NotFound("user not found")
+		return nil, scimError(err, "user not found")
 	}
 
 	// Apply SCIM PATCH operations.
@@ -292,7 +297,7 @@ func (p *Plugin) handleDeleteUser(ctx forge.Context, req *scimUserPathParam) (*a
 
 	if err := p.service.DeactivateUser(ctx.Context(), cfg, userID); err != nil {
 		p.service.RecordLog(ctx.Context(), cfg.ID, ActionSuspendUser, "User", "", req.UserID, LogStatusError, err.Error())
-		return nil, forge.InternalError(err)
+		return nil, scimError(err, "user not found")
 	}
 
 	p.service.RecordLog(ctx.Context(), cfg.ID, ActionSuspendUser, "User", "", req.UserID, LogStatusSuccess, "")
@@ -342,19 +347,14 @@ func (p *Plugin) handleListGroups(ctx forge.Context, _ *apitypes.Empty) (*ListRe
 }
 
 func (p *Plugin) handleGetGroup(ctx forge.Context, req *scimGroupPathParam) (*GroupResource, error) {
-	_, err := p.authenticateSCIM(ctx)
+	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	teamID, err := id.ParseTeamID(req.GroupID)
+	team, err := p.service.LoadTeam(ctx.Context(), cfg, req.GroupID)
 	if err != nil {
-		return nil, forge.NotFound("group not found")
-	}
-
-	team, err := p.authStore.GetTeam(ctx.Context(), teamID)
-	if err != nil {
-		return nil, forge.NotFound("group not found")
+		return nil, scimError(err, "group not found")
 	}
 
 	return TeamToSCIMGroup(team, nil, p.config.BasePath), nil
@@ -396,13 +396,21 @@ func (p *Plugin) handleReplaceGroup(ctx forge.Context, req *scimGroupPathParam) 
 	}
 	scimGroup.ID = req.GroupID
 
-	team, action, err := p.service.ProvisionGroup(ctx.Context(), cfg, &scimGroup)
+	// PUT targets the path id inside the configuration's organization.
+	team, err := p.service.LoadTeam(ctx.Context(), cfg, req.GroupID)
 	if err != nil {
+		return nil, scimError(err, "group not found")
+	}
+	if name := strings.TrimSpace(scimGroup.DisplayName); name != "" {
+		team.Name = name
+	}
+	team.UpdatedAt = time.Now()
+	if err := p.authStore.UpdateTeam(ctx.Context(), team); err != nil {
 		p.service.RecordLog(ctx.Context(), cfg.ID, ActionUpdateGroup, "Group", scimGroup.ExternalID, req.GroupID, LogStatusError, err.Error())
 		return nil, forge.InternalError(err)
 	}
 
-	p.service.RecordLog(ctx.Context(), cfg.ID, action, "Group", scimGroup.ExternalID, team.ID.String(), LogStatusSuccess, "")
+	p.service.RecordLog(ctx.Context(), cfg.ID, ActionUpdateGroup, "Group", scimGroup.ExternalID, team.ID.String(), LogStatusSuccess, "")
 	return TeamToSCIMGroup(team, nil, p.config.BasePath), nil
 }
 
@@ -417,14 +425,9 @@ func (p *Plugin) handlePatchGroup(ctx forge.Context, req *scimGroupPathParam) (*
 		return nil, forge.BadRequest("invalid SCIM patch payload")
 	}
 
-	teamID, err := id.ParseTeamID(req.GroupID)
+	team, err := p.service.LoadTeam(ctx.Context(), cfg, req.GroupID)
 	if err != nil {
-		return nil, forge.NotFound("group not found")
-	}
-
-	team, err := p.authStore.GetTeam(ctx.Context(), teamID)
-	if err != nil {
-		return nil, forge.NotFound("group not found")
+		return nil, scimError(err, "group not found")
 	}
 
 	// Apply PATCH operations (simplified: handle displayName changes).
@@ -454,12 +457,12 @@ func (p *Plugin) handleDeleteGroup(ctx forge.Context, req *scimGroupPathParam) (
 		return nil, err
 	}
 
-	teamID, err := id.ParseTeamID(req.GroupID)
+	team, err := p.service.LoadTeam(ctx.Context(), cfg, req.GroupID)
 	if err != nil {
-		return nil, forge.NotFound("group not found")
+		return nil, scimError(err, "group not found")
 	}
 
-	if err := p.authStore.DeleteTeam(ctx.Context(), teamID); err != nil {
+	if err := p.authStore.DeleteTeam(ctx.Context(), team.ID); err != nil {
 		p.service.RecordLog(ctx.Context(), cfg.ID, ActionDeleteGroup, "Group", "", req.GroupID, LogStatusError, err.Error())
 		return nil, forge.InternalError(err)
 	}

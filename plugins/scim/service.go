@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -194,6 +195,105 @@ func (s *Service) ValidateToken(ctx context.Context, plaintext string) (*Token, 
 // Provisioning operations
 // ──────────────────────────────────────────────────
 
+// ErrOutOfScope marks a row that exists but lies outside the SCIM
+// configuration's app or organization. Handlers answer 404 so a token for
+// one tenant cannot probe another.
+var ErrOutOfScope = errors.New("scim: resource outside configuration scope")
+
+// userInScope reports whether u belongs to cfg's app and, for an org-scoped
+// configuration, to that organization.
+func (s *Service) userInScope(ctx context.Context, cfg *SCIMConfig, u *user.User) error {
+	if u == nil || u.AppID != cfg.AppID {
+		return ErrOutOfScope
+	}
+	if cfg.OrgID.IsNil() {
+		return nil
+	}
+	if _, err := s.authStore.GetMemberByUserAndOrg(ctx, u.ID, cfg.OrgID); err != nil {
+		return ErrOutOfScope
+	}
+	return nil
+}
+
+func teamInScope(cfg *SCIMConfig, t *organization.Team) error {
+	if t == nil || cfg.OrgID.IsNil() || t.OrgID != cfg.OrgID {
+		return ErrOutOfScope
+	}
+	return nil
+}
+
+// LoadUser resolves a SCIM user id to a user inside cfg's scope. Any miss,
+// including a well-formed id in another tenant, is ErrOutOfScope.
+func (s *Service) LoadUser(ctx context.Context, cfg *SCIMConfig, raw string) (*user.User, error) {
+	if s.authStore == nil {
+		return nil, fmt.Errorf("scim: auth store not available")
+	}
+	userID, err := id.ParseUserID(raw)
+	if err != nil {
+		return nil, ErrOutOfScope
+	}
+	u, err := s.authStore.GetUser(ctx, userID)
+	if err != nil {
+		return nil, ErrOutOfScope
+	}
+	if err := s.userInScope(ctx, cfg, u); err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+// LoadTeam resolves a SCIM group id to a team inside cfg's organization.
+func (s *Service) LoadTeam(ctx context.Context, cfg *SCIMConfig, raw string) (*organization.Team, error) {
+	if s.authStore == nil {
+		return nil, fmt.Errorf("scim: auth store not available")
+	}
+	teamID, err := id.ParseTeamID(raw)
+	if err != nil {
+		return nil, ErrOutOfScope
+	}
+	t, err := s.authStore.GetTeam(ctx, teamID)
+	if err != nil {
+		return nil, ErrOutOfScope
+	}
+	if err := teamInScope(cfg, t); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+// ReplaceUser applies a SCIM PUT to target, which the caller resolved by
+// path id. The body's email must be the target's own address: an address
+// that resolves to another account is out of scope, so a PUT can never
+// re-point one user's record at another.
+func (s *Service) ReplaceUser(ctx context.Context, cfg *SCIMConfig, target *user.User, scimUser *UserResource) error {
+	if s.authStore == nil {
+		return fmt.Errorf("scim: auth store not available")
+	}
+	if email := scimUser.PrimaryEmail(); email != "" {
+		var envID id.EnvironmentID
+		if env, _ := s.authStore.GetDefaultEnvironment(ctx, cfg.AppID); env != nil { //nolint:errcheck // best-effort env lookup
+			envID = env.ID
+		}
+		other, err := s.authStore.GetUserByAnyEmail(ctx, cfg.AppID, envID, email)
+		if err == nil && other != nil && other.ID != target.ID {
+			return ErrOutOfScope
+		}
+	}
+	target.FirstName = scimUser.Name.GivenName
+	target.LastName = scimUser.Name.FamilyName
+	target.Banned = !scimUser.Active
+	target.UpdatedAt = time.Now()
+	if err := s.authStore.UpdateUser(ctx, target); err != nil {
+		return err
+	}
+	// PUT can flip Banned, and plugins watching AfterUserUpdate (agent grant
+	// revocation among them) must see every path that does.
+	if s.plugins != nil {
+		s.plugins.EmitAfterUserUpdate(ctx, target)
+	}
+	return nil
+}
+
 // ProvisionUser creates or updates a user from SCIM data.
 func (s *Service) ProvisionUser(ctx context.Context, cfg *SCIMConfig, scimUser *UserResource) (*user.User, string, error) {
 	if s.authStore == nil {
@@ -210,6 +310,11 @@ func (s *Service) ProvisionUser(ctx context.Context, cfg *SCIMConfig, scimUser *
 	// Try to find an existing user by any of their emails.
 	existing, err := s.authStore.GetUserByAnyEmail(ctx, cfg.AppID, envID, scimUser.PrimaryEmail())
 	if err == nil && existing != nil {
+		// An org-scoped configuration may update only its own members; an
+		// app user outside the org is invisible to it.
+		if scopeErr := s.userInScope(ctx, cfg, existing); scopeErr != nil {
+			return nil, ActionUpdateUser, scopeErr
+		}
 		// Update existing user.
 		existing.FirstName = scimUser.Name.GivenName
 		existing.LastName = scimUser.Name.FamilyName
@@ -294,6 +399,9 @@ func (s *Service) DeactivateUser(ctx context.Context, cfg *SCIMConfig, userID id
 
 	u, err := s.authStore.GetUser(ctx, userID)
 	if err != nil {
+		return ErrOutOfScope
+	}
+	if err := s.userInScope(ctx, cfg, u); err != nil {
 		return err
 	}
 
@@ -394,11 +502,11 @@ func (s *Service) ListAllLogs(ctx context.Context, appID string, limit int) ([]*
 }
 
 // CountLogsByStatus returns log counts grouped by status for a config.
-func (s *Service) CountLogsByStatus(ctx context.Context, configID id.SCIMConfigID) (success, errors, skipped int, err error) {
+func (s *Service) CountLogsByStatus(ctx context.Context, configID id.SCIMConfigID) (success, failed, skipped int, err error) {
 	return s.store.CountLogsByStatus(ctx, configID)
 }
 
 // CountAllLogsByStatus returns log counts across all configs for an app.
-func (s *Service) CountAllLogsByStatus(ctx context.Context, appID string) (success, errors, skipped int, err error) {
+func (s *Service) CountAllLogsByStatus(ctx context.Context, appID string) (success, failed, skipped int, err error) {
 	return s.store.CountAllLogsByStatus(ctx, appID)
 }

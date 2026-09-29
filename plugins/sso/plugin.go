@@ -493,7 +493,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	if err := admin.GET("/connections", p.handleAdminListConnections,
 		forge.WithSummary("List SSO connections for an app (admin)"),
-		forge.WithDescription("Returns every SSO connection registered on the target App. Filter by ?app_id=app_..."),
+		forge.WithDescription("Returns every SSO connection registered on the caller's App. An optional ?app_id must name that same app."),
 		forge.WithOperationID("ssoAdminListConnections"),
 		forge.WithRequestSchema(AdminListConnectionsRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Connections", AdminListConnectionsResponse{}),
@@ -1639,7 +1639,7 @@ func (p *Plugin) CreateConnection(ctx context.Context, in CreateConnectionInput)
 // the App so the dispatch path (`/v1/sso/:provider/login`) can
 // resolve the right connection.
 type AdminCreateConnectionRequest struct {
-	AppID        string `json:"app_id" description:"Target Application ID"`
+	AppID        string `json:"app_id,omitempty" description:"Application ID; optional, must be the caller's own app"`
 	OrgID        string `json:"org_id,omitempty" description:"Optional Org scope inside the App"`
 	Provider     string `json:"provider" description:"Stable name for this IdP (e.g. 'studio', 'okta')"`
 	Protocol     string `json:"protocol" description:"oidc or saml"`
@@ -1675,12 +1675,11 @@ type AdminCreateConnectionResponse struct {
 // target App. Mirrors the dashboard's connection-creation flow so
 // the same store-level invariants apply.
 func (p *Plugin) handleAdminCreateConnection(ctx forge.Context, req *AdminCreateConnectionRequest) (*AdminCreateConnectionResponse, error) {
-	if strings.TrimSpace(req.AppID) == "" {
-		return nil, forge.BadRequest("app_id is required")
-	}
-	appID, err := id.ParseAppID(req.AppID)
+	// The connection lands in the caller's own app. A body app_id is
+	// accepted only when it names that same app.
+	appID, err := plugin.ScopedAppID(ctx, strings.TrimSpace(req.AppID))
 	if err != nil {
-		return nil, forge.BadRequest(fmt.Sprintf("invalid app_id: %v", err))
+		return nil, err
 	}
 	var orgID id.OrgID
 	if strings.TrimSpace(req.OrgID) != "" {
@@ -1744,7 +1743,7 @@ func applySAMLCreate(conn *Connection, in CreateConnectionInput) error {
 
 // AdminListConnectionsRequest binds the query for GET /v1/admin/sso/connections.
 type AdminListConnectionsRequest struct {
-	AppID string `query:"app_id" description:"App identifier; required"`
+	AppID string `query:"app_id,omitempty" description:"App identifier; optional, must be the caller's own app"`
 }
 
 // AdminListConnectionsResponse is the listing response. Returns []
@@ -1800,12 +1799,9 @@ func (p *Plugin) handleAdminListConnections(ctx forge.Context, req *AdminListCon
 	if p.ssoStore == nil {
 		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
 	}
-	if strings.TrimSpace(req.AppID) == "" {
-		return nil, forge.BadRequest("app_id is required")
-	}
-	appID, err := id.ParseAppID(req.AppID)
+	appID, err := plugin.ScopedAppID(ctx, strings.TrimSpace(req.AppID))
 	if err != nil {
-		return nil, forge.BadRequest(fmt.Sprintf("invalid app_id: %v", err))
+		return nil, err
 	}
 	conns, err := p.ssoStore.ListConnections(ctx.Context(), appID)
 	if err != nil {
@@ -1830,6 +1826,9 @@ func (p *Plugin) handleAdminGetConnection(ctx forge.Context, req *AdminConnectio
 	if err != nil {
 		return nil, forge.NotFound("sso connection not found")
 	}
+	if err := plugin.AssertAppScope(ctx, conn.AppID); err != nil {
+		return nil, err
+	}
 	return conn, nil
 }
 
@@ -1848,6 +1847,9 @@ func (p *Plugin) handleAdminUpdateConnection(ctx forge.Context, req *AdminUpdate
 	conn, err := p.ssoStore.GetConnection(ctx.Context(), connID)
 	if err != nil {
 		return nil, forge.NotFound("sso connection not found")
+	}
+	if err := plugin.AssertAppScope(ctx, conn.AppID); err != nil {
+		return nil, err
 	}
 
 	if v := strings.TrimSpace(req.Provider); v != "" {
@@ -1909,6 +1911,13 @@ func (p *Plugin) handleAdminDeleteConnection(ctx forge.Context, req *AdminConnec
 	connID, err := id.ParseSSOConnectionID(req.ConnectionID)
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid connection_id: %v", err))
+	}
+	conn, err := p.ssoStore.GetConnection(ctx.Context(), connID)
+	if err != nil {
+		return nil, forge.NotFound("sso connection not found")
+	}
+	if err := plugin.AssertAppScope(ctx, conn.AppID); err != nil {
+		return nil, err
 	}
 	if err := p.ssoStore.DeleteConnection(ctx.Context(), connID); err != nil {
 		return nil, forge.InternalError(fmt.Errorf("sso: delete connection: %w", err))
