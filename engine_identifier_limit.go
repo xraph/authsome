@@ -34,11 +34,13 @@ func (e *Engine) AllowIdentifier(ctx context.Context, scope string, appID id.App
 			e.metrics.IncrementCounter("ratelimit.error", appID.String())
 		}
 		if e.config.RateLimit.FailOpen {
+			e.count("control.degraded", appID.String())
 			return nil
 		}
 		return account.ErrRateLimited
 	}
 	if !allowed {
+		e.count("identifier_limit.rejected", appID.String())
 		return account.ErrRateLimited
 	}
 	return nil

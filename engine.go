@@ -534,7 +534,11 @@ func (e *Engine) resolveExpectedAudience(ctx context.Context, appID string) []st
 	}
 	opts := settings.ResolveOpts{AppID: appID}
 	identifier, err := settings.Get(ctx, mgr, SettingResourceIdentifier, opts)
-	if err != nil || identifier == "" {
+	if err != nil {
+		e.count("control.degraded", appID)
+		return nil
+	}
+	if identifier == "" {
 		return nil
 	}
 	return []string{identifier}
@@ -1745,6 +1749,13 @@ func hkdfLike(base []byte, info string) []byte {
 	h := hmac.New(sha256.New, base)
 	h.Write([]byte(info))
 	return h.Sum(nil)
+}
+
+// count adds one to a named counter when a collector is configured.
+func (e *Engine) count(name, tenant string) {
+	if e.metrics != nil {
+		e.metrics.IncrementCounter(name, tenant)
+	}
 }
 
 // Metrics returns the current engine metrics.

@@ -81,7 +81,13 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 
 	// Breach check (fail-open on network errors)
 	if policy.CheckBreached {
-		if breached, _ := account.NewBreachChecker().IsBreached(req.Password); breached { //nolint:errcheck // best-effort check
+		breached, breachErr := account.NewBreachChecker().IsBreached(req.Password)
+		if breachErr != nil {
+			// Fail open, and say so: a breach check that could not run is a
+			// control that did not run.
+			e.count("control.degraded", req.AppID.String())
+		}
+		if breached {
 			return nil, nil, account.ErrPasswordBreached
 		}
 	}
@@ -235,6 +241,7 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 			e.logger.Warn("authsome: lockout check failed", log.String("error", err.Error()))
 		}
 		if locked {
+			e.count("auth.lockout", req.AppID.String())
 			e.hooks.Emit(ctx, &hook.Event{
 				Action:   hook.ActionSignIn,
 				Resource: hook.ResourceSession,
@@ -509,6 +516,7 @@ func (e *Engine) refuseReplayedRefresh(ctx context.Context, presentedHash string
 			// Already handled — refuse without re-alerting to avoid a storm.
 			return account.ErrInvalidCredentials
 		}
+		e.count("refresh.replay_detected", "")
 
 		var ipAddr, userAgent string
 		if len(opts) > 0 {
@@ -1254,6 +1262,7 @@ func (e *Engine) checkPasswordHistory(ctx context.Context, userID id.UserID, new
 	entries, err := e.passwordHistory.GetPasswordHistory(ctx, userID, e.config.Password.HistoryCount)
 	if err != nil {
 		e.logger.Warn("authsome: password history lookup failed", log.String("error", err.Error()))
+		e.count("control.degraded", "")
 		return nil // fail open — don't block the user
 	}
 	for _, entry := range entries {

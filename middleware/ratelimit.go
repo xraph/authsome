@@ -28,6 +28,12 @@ type RateLimitConfig struct {
 
 	// OnError is called with the limiter's error, for a metric or a log.
 	OnError func(err error)
+
+	// OnReject is called when a request is refused for exceeding the limit,
+	// and OnFailOpen when a limiter error let one through. Both are for
+	// metrics.
+	OnReject   func()
+	OnFailOpen func()
 }
 
 // RateLimit returns a middleware that enforces rate limits using the given limiter.
@@ -51,6 +57,9 @@ func RateLimit(limiter ratelimit.Limiter, cfg RateLimitConfig) forge.Middleware 
 					cfg.OnError(err)
 				}
 				if cfg.FailOpen {
+					if cfg.OnFailOpen != nil {
+						cfg.OnFailOpen()
+					}
 					return next(ctx)
 				}
 				ctx.Response().Header().Set("Retry-After", "5")
@@ -59,6 +68,9 @@ func RateLimit(limiter ratelimit.Limiter, cfg RateLimitConfig) forge.Middleware 
 			}
 
 			if !allowed {
+				if cfg.OnReject != nil {
+					cfg.OnReject()
+				}
 				remaining, _ := limiter.Remaining(ctx.Context(), key, cfg.Limit, cfg.Window) //nolint:errcheck // best-effort rate check
 				retryAfter := int(cfg.Window.Seconds())
 

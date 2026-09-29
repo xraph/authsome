@@ -58,11 +58,11 @@ func (e *Engine) RateLimitMiddlewareConfig(limit int) middleware.RateLimitConfig
 		Window:   cfg.Window(),
 		FailOpen: cfg.FailOpen,
 		OnError: func(err error) {
-			if e.metrics != nil {
-				e.metrics.IncrementCounter("ratelimit.error", "")
-			}
+			e.count("ratelimit.error", "")
 			e.logger.Warn("authsome: rate limiter error", log.String("error", err.Error()))
 		},
+		OnReject:   func() { e.count("ratelimit.rejected", "") },
+		OnFailOpen: func() { e.count("control.degraded", "") },
 	}
 }
 

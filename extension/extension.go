@@ -36,6 +36,7 @@ import (
 	"github.com/xraph/authsome/bridge/dispatchadapter"
 	"github.com/xraph/authsome/bridge/heraldadapter"
 	"github.com/xraph/authsome/bridge/maileradapter"
+	"github.com/xraph/authsome/bridge/metricsadapter"
 	"github.com/xraph/authsome/bridge/relayadapter"
 	authdash "github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/dpop"
@@ -359,6 +360,11 @@ func (e *Extension) init(fapp forge.App) error {
 		e.Logger().Info("authsome: auto-discovered keysmith engine (first-class)")
 	}
 
+	// ── Metrics: record into the app's registry ──
+	if m := fapp.Metrics(); m != nil {
+		opts = append(opts, authsome.WithMetrics(metricsadapter.New(m)))
+	}
+
 	// ── Auto-discover Relay (optional) ──
 	if relayInst, relayErr := vessel.Inject[*relay.Relay](fapp.Container()); relayErr == nil {
 		opts = append(opts, authsome.WithEventRelay(relayadapter.New(relayInst)))
@@ -509,7 +515,8 @@ func (e *Extension) init(fapp forge.App) error {
 
 		router := fapp.Router()
 		if router != nil {
-			groupedRouter := router.Group(basePath)
+			// Every authsome route reports its latency and outcome.
+			groupedRouter := router.Group(basePath, forge.WithGroupMiddleware(middleware.Metrics(eng.MetricsCollector())))
 
 			// Origin-root routes first. Well-known discovery documents must
 			// answer at the host root, so they cannot go on groupedRouter.
