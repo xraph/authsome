@@ -1,6 +1,10 @@
 package authsome
 
-import "time"
+import (
+	"time"
+
+	"github.com/xraph/authsome/store"
+)
 
 // Config holds all configuration for the AuthSome engine.
 type Config struct {
@@ -90,32 +94,45 @@ type RetentionConfig struct {
 	BatchSize int `json:"batch_size"`
 }
 
-// Days returns the retention window for one kind, by the field name used in
-// RetentionConfig, as a duration. An unknown kind gets the default of 30 days.
+// Days returns the retention window for one kind (a store.Retention* name)
+// as a duration. Zero takes the kind's default; a negative value returns
+// zero, meaning that kind is never swept.
 func (c RetentionConfig) Days(kind string) time.Duration {
-	days := map[string]int{
-		RetentionSessions:             c.SessionsDays,
-		RetentionVerifications:        c.VerificationsDays,
-		RetentionPasswordResets:       c.PasswordResetsDays,
-		RetentionRevokedRefreshTokens: c.RevokedRefreshTokensDays,
-		RetentionDeviceCodes:          c.DeviceCodesDays,
-		RetentionAuthCodes:            c.AuthCodesDays,
-	}[kind]
+	configured := map[string]int{
+		store.RetentionSessions:             c.SessionsDays,
+		store.RetentionVerifications:        c.VerificationsDays,
+		store.RetentionPasswordResets:       c.PasswordResetsDays,
+		store.RetentionRevokedRefreshTokens: c.RevokedRefreshTokensDays,
+		store.RetentionDeviceCodes:          c.DeviceCodesDays,
+		store.RetentionAuthCodes:            c.AuthCodesDays,
+	}
+	defaults := map[string]int{
+		store.RetentionSessions:             30,
+		store.RetentionVerifications:        7,
+		store.RetentionPasswordResets:       7,
+		store.RetentionRevokedRefreshTokens: 90,
+		store.RetentionDeviceCodes:          1,
+		store.RetentionAuthCodes:            1,
+	}
+	days := configured[kind]
 	if days == 0 {
-		days = 30
+		days = defaults[kind]
+	}
+	if days <= 0 {
+		return 0
 	}
 	return time.Duration(days) * 24 * time.Hour
 }
 
-// Retention kinds, the names plugins use to ask the sweeper for a cutoff.
-const (
-	RetentionSessions             = "sessions"
-	RetentionVerifications        = "verifications"
-	RetentionPasswordResets       = "password_resets"
-	RetentionRevokedRefreshTokens = "revoked_refresh_tokens"
-	RetentionDeviceCodes          = "device_codes"
-	RetentionAuthCodes            = "auth_codes"
-)
+// Cutoff returns the instant before which rows of kind are removed, or the
+// zero time when that kind is never swept.
+func (c RetentionConfig) Cutoff(kind string, now time.Time) time.Time {
+	window := c.Days(kind)
+	if window <= 0 {
+		return time.Time{}
+	}
+	return now.Add(-window)
+}
 
 // SessionConfig configures session behavior.
 type SessionConfig struct {

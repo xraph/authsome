@@ -68,6 +68,11 @@ type Engine struct {
 	store  store.Store
 	logger log.Logger
 
+	// retentionStop ends the retention sweeper; retentionDone closes once
+	// it has. Both are nil while no sweeper runs.
+	retentionStop chan struct{}
+	retentionDone chan struct{}
+
 	// Plugin system
 	plugins            *plugin.Registry
 	hooks              *hook.Bus
@@ -716,6 +721,11 @@ func (e *Engine) Start(ctx context.Context) error {
 		})
 	}
 
+	// Expired rows are swept on a timer for as long as the engine runs;
+	// see engine_retention.go. As with the token sweep above, the start
+	// context's cancellation is not a reason to stop.
+	e.startRetentionSweeper(context.WithoutCancel(ctx))
+
 	e.started = true
 	return nil
 }
@@ -753,6 +763,7 @@ func (e *Engine) Stop(ctx context.Context) error {
 	if !e.started {
 		return nil
 	}
+	e.stopRetentionSweeper()
 	e.plugins.EmitOnShutdown(ctx)
 	e.started = false
 	return nil

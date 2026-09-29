@@ -8,6 +8,7 @@ package plugin
 
 import (
 	"context"
+	"time"
 
 	log "github.com/xraph/go-utils/log"
 	"github.com/xraph/grove"
@@ -249,6 +250,16 @@ type OnInit interface {
 // OnShutdown is called during engine shutdown.
 type OnShutdown interface {
 	OnShutdown(ctx context.Context) error
+}
+
+// RetentionSweeper is implemented by a plugin that keeps rows with a
+// lifetime of their own. The engine's retention sweeper calls it on every
+// run: cutoff returns the instant before which rows of a kind (a
+// store.Retention* name, or the plugin's own) may go, or the zero time when
+// that kind is kept forever; batch is how many rows one delete may remove.
+// The plugin loops until a batch comes back short and reports the total.
+type RetentionSweeper interface {
+	SweepRetention(ctx context.Context, cutoff func(kind string) time.Time, batch int) (int64, error)
 }
 
 // ──────────────────────────────────────────────────
