@@ -99,6 +99,14 @@ The plugin supports both `S256` and `plain` challenge methods. `S256` is the rec
 - Sends `code_verifier` in the token request
 - The server verifies that `BASE64URL(SHA256(code_verifier)) == code_challenge`
 
+## Consent
+
+A client the operator does not own only gets an authorization code once the signed-in user has approved every scope it asks for. When no covering grant exists, or the request carries `prompt=consent`, the authorization endpoint parks the request and redirects the browser to `GET /v1/oauth/consent?cid=…`, a server-rendered page naming the client and its scopes with Allow and Deny buttons. `POST /v1/oauth/consent` takes the form (`cid`, `csrf`, `decision`), records the approval as a grant keyed by app, user and client, and redirects to the client with the code, or with `error=access_denied` on a denial. A front end that renders its own page can request the same data with `Accept: application/json` and post the decision as JSON; the response then carries the redirect URL.
+
+Grants accumulate: approving a wider scope set widens the grant rather than replacing it. `GET /v1/me/oauth/grants` lists the signed-in user's grants with the client name and scopes, and `DELETE /v1/me/oauth/grants/{clientId}` revokes one, after which the client's next request shows the page again.
+
+A client marked `first_party` on the admin API skips the page, since the user already trusts the application they are signing in to. Dynamic registration cannot set the flag.
+
 ## Client Credentials Grant
 
 Machine-to-machine authentication for confidential clients:

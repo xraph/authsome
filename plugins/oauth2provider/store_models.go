@@ -35,6 +35,7 @@ type oauth2ClientModel struct {
 	Metadata                json.RawMessage `grove:"metadata,type:jsonb"`
 	DPoPMode                string          `grove:"dpop_mode,notnull"`
 	PrincipalID             string          `grove:"principal_id,notnull"`
+	FirstParty              bool            `grove:"first_party,notnull"`
 
 	CreatedAt time.Time `grove:"created_at,notnull,default:now()"`
 	UpdatedAt time.Time `grove:"updated_at,notnull,default:now()"`
@@ -161,6 +162,7 @@ func toOAuth2Client(m *oauth2ClientModel) (*OAuth2Client, error) {
 		Metadata:                metadata,
 		DPoPMode:                m.DPoPMode,
 		PrincipalID:             parsePrincipalID(m.PrincipalID),
+		FirstParty:              m.FirstParty,
 		CreatedAt:               m.CreatedAt,
 		UpdatedAt:               m.UpdatedAt,
 	}, nil
@@ -207,6 +209,7 @@ func fromOAuth2Client(c *OAuth2Client) *oauth2ClientModel {
 		Metadata:                metadata,
 		DPoPMode:                c.DPoPMode,
 		PrincipalID:             principalIDString(c.PrincipalID),
+		FirstParty:              c.FirstParty,
 		CreatedAt:               c.CreatedAt,
 		UpdatedAt:               c.UpdatedAt,
 	}
@@ -394,3 +397,58 @@ func parsePrincipalID(s string) id.ServiceAccountID {
 // on time, east of UTC live rows are swept early. Normalizing on the way in
 // keeps every stored timestamp on one clock.
 func utc(t time.Time) time.Time { return t.UTC() }
+
+// ──────────────────────────────────────────────────
+// Grant model (shared across SQL stores)
+// ──────────────────────────────────────────────────
+
+type grantModel struct {
+	grove.BaseModel `grove:"table:authsome_oauth2_grants,alias:og"`
+
+	ID        string          `grove:"id,pk"`
+	AppID     string          `grove:"app_id,notnull"`
+	UserID    string          `grove:"user_id,notnull"`
+	ClientID  string          `grove:"client_id,notnull"`
+	Scopes    json.RawMessage `grove:"scopes,type:jsonb"`
+	CreatedAt time.Time       `grove:"created_at,notnull,default:now()"`
+	UpdatedAt time.Time       `grove:"updated_at,notnull,default:now()"`
+}
+
+func fromGrant(g *Grant) *grantModel {
+	scopes, _ := json.Marshal(g.Scopes) //nolint:errcheck // marshaling known types
+	if len(g.Scopes) == 0 {
+		scopes = []byte("[]")
+	}
+	return &grantModel{
+		ID:        g.ID.String(),
+		AppID:     g.AppID.String(),
+		UserID:    g.UserID.String(),
+		ClientID:  g.ClientID,
+		Scopes:    scopes,
+		CreatedAt: g.CreatedAt,
+		UpdatedAt: g.UpdatedAt,
+	}
+}
+
+func toGrant(m *grantModel) (*Grant, error) {
+	grantID, err := id.ParseOAuth2GrantID(m.ID)
+	if err != nil {
+		return nil, err
+	}
+	appID, err := id.ParseAppID(m.AppID)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := id.ParseUserID(m.UserID)
+	if err != nil {
+		return nil, err
+	}
+	var scopes []string
+	if len(m.Scopes) > 0 {
+		_ = json.Unmarshal(m.Scopes, &scopes) //nolint:errcheck // best-effort decode
+	}
+	if scopes == nil {
+		scopes = []string{}
+	}
+	return &Grant{ID: grantID, AppID: appID, UserID: userID, ClientID: m.ClientID, Scopes: scopes, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}, nil
+}

@@ -107,6 +107,7 @@ func newDPoPFixtureOpts(t *testing.T, opts dpopFixtureOpts) (*authsome.Engine, f
 		ID:           id.NewOAuth2ClientID(),
 		AppID:        appID,
 		ClientID:     dpopIssuanceClientID,
+		FirstParty:   true,
 		ClientSecret: string(hashed),
 		Name:         "DPoP issuance client",
 		RedirectURIs: []string{dpopIssuanceRedirectURI},

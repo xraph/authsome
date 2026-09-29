@@ -17,6 +17,7 @@ import (
 
 	"github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
@@ -80,6 +81,9 @@ func (e *exchangeEngine) Hooks() *hook.Bus   { return e.events.bus }
 // Nil is a valid answer here: OnInit reads it and falls back to a
 // process-local limiter, which is what a test wants anyway.
 func (e *exchangeEngine) RateLimiter() ratelimit.Limiter { return nil }
+
+// CeremonyStore backs the consent flow the plugin wires at init.
+func (e *exchangeEngine) CeremonyStore() ceremony.Store { return ceremony.NewMemory() }
 
 // Nil registry means SessionGuard and AdminGuard attach no middleware, which
 // is how the other fixtures in this package register routes without standing
@@ -151,6 +155,7 @@ func newExchangeFixture(t *testing.T) *xchgFixture {
 		ID:           id.NewOAuth2ClientID(),
 		AppID:        appID,
 		ClientID:     xchgClientID,
+		FirstParty:   true,
 		ClientSecret: string(hashed),
 		Name:         "Exchange client",
 		Scopes:       []string{"a", "b"},

@@ -246,3 +246,93 @@ func oauth2SqliteError(err error) error {
 	}
 	return err
 }
+
+// ──────────────────────────────────────────────────
+// Grants
+// ──────────────────────────────────────────────────
+
+func (s *SqliteStore) UpsertGrant(ctx context.Context, g *Grant) error {
+	now := time.Now()
+	existing, err := s.GetGrant(ctx, g.AppID, g.UserID, g.ClientID)
+	switch {
+	case err == nil:
+		g.ID = existing.ID
+		g.CreatedAt = existing.CreatedAt
+		g.UpdatedAt = now
+		m := fromGrant(g)
+		_, err = s.sdb.NewUpdate((*grantModel)(nil)).
+			Set("scopes = ?", m.Scopes).
+			Set("updated_at = ?", m.UpdatedAt).
+			Where("id = ?", m.ID).
+			Exec(ctx)
+		return oauth2SqliteError(err)
+	case errors.Is(err, ErrGrantNotFound):
+		if g.ID.IsNil() {
+			g.ID = id.NewOAuth2GrantID()
+		}
+		if g.CreatedAt.IsZero() {
+			g.CreatedAt = now
+		}
+		g.UpdatedAt = now
+		_, err = s.sdb.NewInsert(fromGrant(g)).Exec(ctx)
+		return oauth2SqliteError(err)
+	default:
+		return err
+	}
+}
+
+func (s *SqliteStore) GetGrant(ctx context.Context, appID id.AppID, userID id.UserID, clientID string) (*Grant, error) {
+	m := new(grantModel)
+	err := s.sdb.NewSelect(m).
+		Where("app_id = ?", appID.String()).
+		Where("user_id = ?", userID.String()).
+		Where("client_id = ?", clientID).
+		Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGrantNotFound
+		}
+		return nil, oauth2SqliteError(err)
+	}
+	return toGrant(m)
+}
+
+func (s *SqliteStore) ListGrantsByUser(ctx context.Context, appID id.AppID, userID id.UserID) ([]*Grant, error) {
+	var models []grantModel
+	err := s.sdb.NewSelect(&models).
+		Where("app_id = ?", appID.String()).
+		Where("user_id = ?", userID.String()).
+		OrderExpr("created_at DESC").
+		Scan(ctx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, oauth2SqliteError(err)
+	}
+	out := make([]*Grant, 0, len(models))
+	for i := range models {
+		g, convErr := toGrant(&models[i])
+		if convErr != nil {
+			return nil, convErr
+		}
+		out = append(out, g)
+	}
+	return out, nil
+}
+
+func (s *SqliteStore) DeleteGrant(ctx context.Context, appID id.AppID, userID id.UserID, clientID string) error {
+	res, err := s.sdb.NewDelete((*grantModel)(nil)).
+		Where("app_id = ?", appID.String()).
+		Where("user_id = ?", userID.String()).
+		Where("client_id = ?", clientID).
+		Exec(ctx)
+	if err != nil {
+		return oauth2SqliteError(err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return oauth2SqliteError(err)
+	}
+	if n == 0 {
+		return ErrGrantNotFound
+	}
+	return nil
+}

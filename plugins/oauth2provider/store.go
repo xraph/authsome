@@ -12,6 +12,7 @@ var (
 	ErrClientNotFound     = errors.New("oauth2: client not found")
 	ErrCodeNotFound       = errors.New("oauth2: authorization code not found")
 	ErrDeviceCodeNotFound = errors.New("oauth2: device code not found")
+	ErrGrantNotFound      = errors.New("oauth2: grant not found")
 )
 
 // Store persists OAuth2 clients, authorization codes, and device codes.
@@ -41,4 +42,12 @@ type Store interface {
 	GetDeviceCodeByUserCode(ctx context.Context, userCode string) (*DeviceCode, error)
 	UpdateDeviceCode(ctx context.Context, dc *DeviceCode) error
 	DeleteExpiredDeviceCodes(ctx context.Context) error
+
+	// Grants are keyed by (app, user, client). UpsertGrant creates the grant
+	// or replaces its scopes; GetGrant returns ErrGrantNotFound when the user
+	// never approved the client; DeleteGrant revokes it.
+	UpsertGrant(ctx context.Context, g *Grant) error
+	GetGrant(ctx context.Context, appID id.AppID, userID id.UserID, clientID string) (*Grant, error)
+	ListGrantsByUser(ctx context.Context, appID id.AppID, userID id.UserID) ([]*Grant, error)
+	DeleteGrant(ctx context.Context, appID id.AppID, userID id.UserID, clientID string) error
 }

@@ -29,6 +29,7 @@ func newDashboardClientFixture(t *testing.T) (*Plugin, Store, context.Context, i
 		AppID:        appID,
 		Name:         "Before",
 		ClientID:     "dash-client",
+		FirstParty:   true,
 		RedirectURIs: []string{"https://app.example.com/cb"},
 		Scopes:       []string{"openid"},
 		GrantTypes:   []string{"authorization_code"},

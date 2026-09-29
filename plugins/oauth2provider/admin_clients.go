@@ -57,6 +57,10 @@ type UpdateClientRequest struct {
 	// field on its own would let the two disagree, which is the bug that
 	// comment exists to prevent.
 	BodyTokenEndpointAuthMethod *string `json:"token_endpoint_auth_method,omitempty"`
+
+	// FirstParty marks a client the operator owns; authorization skips the
+	// consent page for it.
+	FirstParty *bool `json:"first_party,omitempty"`
 }
 
 // UpdateClientResponse echoes the client as it stands after the edit. It
@@ -230,6 +234,9 @@ func (p *Plugin) handleUpdateClient(ctx forge.Context, req *UpdateClientRequest)
 	// explicitly-sent empty slice is what makes "clear this" expressible.
 	if req.Name != nil {
 		client.Name = *req.Name
+	}
+	if req.FirstParty != nil {
+		client.FirstParty = *req.FirstParty
 	}
 	if req.RedirectURIs != nil {
 		uris := *req.RedirectURIs

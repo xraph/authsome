@@ -21,10 +21,11 @@ func TestHandleDashboardDeleteClient_AppScope(t *testing.T) {
 	seed := func(t *testing.T, st Store, appID id.AppID) *OAuth2Client {
 		t.Helper()
 		c := &OAuth2Client{
-			ID:       id.NewOAuth2ClientID(),
-			AppID:    appID,
-			ClientID: "seeded",
-			Name:     "Seeded",
+			ID:         id.NewOAuth2ClientID(),
+			AppID:      appID,
+			ClientID:   "seeded",
+			FirstParty: true,
+			Name:       "Seeded",
 		}
 		if err := st.CreateClient(context.Background(), c); err != nil {
 			t.Fatalf("seed client: %v", err)

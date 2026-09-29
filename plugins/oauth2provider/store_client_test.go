@@ -23,6 +23,7 @@ func TestMemoryStore_ClientRoundTripsRegistrationFields(t *testing.T) {
 		AppID:                   id.NewAppID(),
 		Name:                    "Dynamic Client",
 		ClientID:                "dyn-1",
+		FirstParty:              true,
 		RedirectURIs:            []string{"http://127.0.0.1:9000/cb"},
 		Scopes:                  []string{"openid"},
 		GrantTypes:              []string{"authorization_code"},
@@ -62,6 +63,7 @@ func TestOAuth2Client_OmitsUnsetSecretExpiry(t *testing.T) {
 func TestOAuth2Client_RegistrationTokenHashIsNotSerialised(t *testing.T) {
 	c := &oauth2provider.OAuth2Client{
 		ClientID:              "dyn-1",
+		FirstParty:            true,
 		RegistrationTokenHash: "$2a$04$secret",
 	}
 	b, err := json.Marshal(c)
@@ -82,6 +84,7 @@ func TestMemoryStore_UpdateClient(t *testing.T) {
 		AppID:        id.NewAppID(),
 		Name:         "Before",
 		ClientID:     "dyn-2",
+		FirstParty:   true,
 		RedirectURIs: []string{"http://127.0.0.1:9000/cb"},
 		Scopes:       []string{"openid"},
 		GrantTypes:   []string{"authorization_code"},
@@ -111,8 +114,9 @@ func TestMemoryStore_UpdateClient(t *testing.T) {
 func TestMemoryStore_UpdateClientMissing(t *testing.T) {
 	st := oauth2provider.NewMemoryStore()
 	err := st.UpdateClient(context.Background(), &oauth2provider.OAuth2Client{
-		ID:       id.NewOAuth2ClientID(),
-		ClientID: "nope",
+		ID:         id.NewOAuth2ClientID(),
+		ClientID:   "nope",
+		FirstParty: true,
 	})
 	assert.ErrorIs(t, err, oauth2provider.ErrClientNotFound)
 }

@@ -145,6 +145,7 @@ func TestConsentGate_RefusalBlocksDeviceApproval(t *testing.T) {
 		ID:         id.NewOAuth2ClientID(),
 		AppID:      id.NewAppID(),
 		ClientID:   deviceClientID,
+		FirstParty: true,
 		Name:       "Device Client",
 		Scopes:     []string{"openid"},
 		GrantTypes: []string{"device_code"},

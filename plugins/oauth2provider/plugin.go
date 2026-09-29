@@ -24,6 +24,7 @@ import (
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apitypes"
+	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
@@ -127,6 +128,9 @@ type Plugin struct {
 	oauth2Store Store
 	logger      log.Logger
 	engine      plugin.Engine
+	// ceremonies holds pending consent requests between the authorization
+	// request and the user's decision.
+	ceremonies ceremony.Store
 
 	// regLimiter is a process-local fallback used for POST /register when
 	// the engine has no rate limiter configured (extension.Config.RateLimit
@@ -173,6 +177,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.engine = engine
 	p.store = engine.Store()
 	p.logger = engine.Logger()
+	p.ceremonies = engine.CeremonyStore()
 	if p.logger == nil {
 		p.logger = log.NewNoopLogger()
 	}
@@ -418,6 +423,44 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
 	)
 
+	if err := authG.GET("/consent", p.handleConsentPage,
+		forge.WithSummary("OAuth2 consent"),
+		forge.WithDescription("Shows the pending authorization request for the signed-in user to approve or deny. Renders HTML, or JSON when Accept asks for it."),
+		forge.WithOperationID("oauth2ConsentPage"),
+	); err != nil {
+		return err
+	}
+	if err := authG.POST("/consent", p.handleConsentDecision,
+		forge.WithSummary("OAuth2 consent decision"),
+		forge.WithDescription("Records the signed-in user's approval or denial of a pending authorization request and completes it."),
+		forge.WithOperationID("oauth2ConsentDecision"),
+	); err != nil {
+		return err
+	}
+
+	me := router.Group("/v1/me/oauth",
+		forge.WithGroupTags("OAuth2"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
+	)
+	if err := me.GET("/grants", p.handleListMyGrants,
+		forge.WithSummary("List my OAuth2 grants"),
+		forge.WithDescription("Lists the clients the signed-in user has approved and the scopes each holds."),
+		forge.WithOperationID("oauth2ListMyGrants"),
+		forge.WithResponseSchema(http.StatusOK, "Grants", ListGrantsResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+	if err := me.DELETE("/grants/:clientId", p.handleRevokeMyGrant,
+		forge.WithSummary("Revoke an OAuth2 grant"),
+		forge.WithDescription("Withdraws the signed-in user's approval of a client; its next authorization request shows the consent page again."),
+		forge.WithOperationID("oauth2RevokeMyGrant"),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
 	if err := authG.POST("/device/complete", p.handleDeviceComplete,
 		forge.WithSummary("Complete device authorization"),
 		forge.WithDescription("Approve or deny a device authorization request. Requires authenticated user. Used by external verification UIs (e.g. authsome-ui)."),
@@ -558,6 +601,9 @@ type AuthorizeRequest struct {
 	State               string `query:"state,omitempty"`
 	CodeChallenge       string `query:"code_challenge,omitempty"`
 	CodeChallengeMethod string `query:"code_challenge_method,omitempty"`
+	// Prompt=consent forces the consent page even when a grant covers the
+	// request (OpenID Connect Core 3.1.2.1).
+	Prompt string `query:"prompt,omitempty"`
 	// RFC 8707, repeatable. A field rather than a raw-request read, because
 	// only a declared field reaches the OpenAPI document, and only a described
 	// parameter reaches the generated clients.
@@ -643,6 +689,9 @@ type CreateClientRequest struct {
 	GrantTypes   []string `json:"grant_types,omitempty"`
 	Public       bool     `json:"public,omitempty"`
 	DPoPMode     string   `json:"dpop_mode,omitempty"`
+	// FirstParty marks a client the operator owns; authorization skips the
+	// consent page for it.
+	FirstParty bool `json:"first_party,omitempty"`
 }
 
 // CreateClientResponse is returned when an OAuth2 client is created.
@@ -832,32 +881,23 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		return nil, gateErr
 	}
 
+	// A third-party client needs the user's recorded approval for every
+	// scope it asks for; otherwise the user decides on the consent page and
+	// the code is issued from there.
+	if p.needsConsent(ctx.Context(), client, userID, scopes, req.Prompt) {
+		return nil, p.redirectToConsent(ctx, pendingConsent{
+			ClientID: req.ClientID, UserID: userID.String(), AppID: client.AppID.String(), OrgID: orgID.String(),
+			RedirectURI: redirectURI, Scopes: scopes, Resources: resources, State: req.State,
+			CodeChallenge: req.CodeChallenge, CodeChallengeMethod: req.CodeChallengeMethod,
+		})
+	}
+
 	// Generate authorization code.
-	codeStr, err := generateSecureToken(32)
-	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: generate auth code: %w", err))
-	}
-
-	authCode := &AuthorizationCode{
-		ID:                  id.NewAuthCodeID(),
-		Code:                codeStr,
-		ClientID:            req.ClientID,
-		UserID:              userID,
-		AppID:               client.AppID,
-		RedirectURI:         redirectURI,
-		Scopes:              scopes,
-		Resources:           resources,
-		CodeChallenge:       req.CodeChallenge,
-		CodeChallengeMethod: req.CodeChallengeMethod,
-		ExpiresAt:           time.Now().Add(p.config.AuthCodeTTL),
-		CreatedAt:           time.Now(),
-	}
-
-	if createErr := p.oauth2Store.CreateAuthCode(ctx.Context(), authCode); createErr != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: store auth code: %w", createErr))
-	}
-
-	redirectURL, err := buildRedirect(redirectURI, codeStr, req.State)
+	redirectURL, err := p.issueAuthorizationCode(ctx.Context(), pendingConsent{
+		ClientID: req.ClientID, UserID: userID.String(), AppID: client.AppID.String(),
+		RedirectURI: redirectURI, Scopes: scopes, Resources: resources, State: req.State,
+		CodeChallenge: req.CodeChallenge, CodeChallengeMethod: req.CodeChallengeMethod,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1454,6 +1494,7 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 		Resources:               req.Resources,
 		GrantTypes:              grantTypes,
 		Public:                  req.Public,
+		FirstParty:              req.FirstParty,
 		TokenEndpointAuthMethod: authMethodForPublic(req.Public),
 		DPoPMode:                dpopMode,
 		CreatedAt:               time.Now(),

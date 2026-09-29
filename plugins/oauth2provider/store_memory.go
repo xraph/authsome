@@ -15,6 +15,11 @@ type MemoryStore struct {
 	clients     map[string]*OAuth2Client      // keyed by ClientID (the OAuth2 client_id string)
 	codes       map[string]*AuthorizationCode // keyed by store.HashToken(Code)
 	deviceCodes map[string]*DeviceCode        // keyed by ID; codes are held hashed
+	grants      map[string]*Grant             // keyed by grantKey
+}
+
+func grantKey(appID id.AppID, userID id.UserID, clientID string) string {
+	return appID.String() + "|" + userID.String() + "|" + clientID
 }
 
 // NewMemoryStore creates a new in-memory OAuth2 store.
@@ -23,6 +28,7 @@ func NewMemoryStore() *MemoryStore {
 		clients:     make(map[string]*OAuth2Client),
 		codes:       make(map[string]*AuthorizationCode),
 		deviceCodes: make(map[string]*DeviceCode),
+		grants:      make(map[string]*Grant),
 	}
 }
 
@@ -207,6 +213,70 @@ func (s *MemoryStore) DeleteExpiredDeviceCodes(_ context.Context) error {
 			delete(s.deviceCodes, key)
 		}
 	}
+	return nil
+}
+
+// ──────────────────────────────────────────────────
+// Grants
+// ──────────────────────────────────────────────────
+
+func (s *MemoryStore) UpsertGrant(_ context.Context, g *Grant) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := grantKey(g.AppID, g.UserID, g.ClientID)
+	now := time.Now()
+	if existing, ok := s.grants[key]; ok {
+		g.ID = existing.ID
+		g.CreatedAt = existing.CreatedAt
+	} else {
+		if g.ID.IsNil() {
+			g.ID = id.NewOAuth2GrantID()
+		}
+		if g.CreatedAt.IsZero() {
+			g.CreatedAt = now
+		}
+	}
+	g.UpdatedAt = now
+	cp := *g
+	cp.Scopes = append([]string(nil), g.Scopes...)
+	s.grants[key] = &cp
+	return nil
+}
+
+func (s *MemoryStore) GetGrant(_ context.Context, appID id.AppID, userID id.UserID, clientID string) (*Grant, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	g, ok := s.grants[grantKey(appID, userID, clientID)]
+	if !ok {
+		return nil, ErrGrantNotFound
+	}
+	cp := *g
+	cp.Scopes = append([]string(nil), g.Scopes...)
+	return &cp, nil
+}
+
+func (s *MemoryStore) ListGrantsByUser(_ context.Context, appID id.AppID, userID id.UserID) ([]*Grant, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*Grant, 0)
+	for _, g := range s.grants {
+		if g.AppID == appID && g.UserID == userID {
+			cp := *g
+			cp.Scopes = append([]string(nil), g.Scopes...)
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
+}
+
+func (s *MemoryStore) DeleteGrant(_ context.Context, appID id.AppID, userID id.UserID, clientID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := grantKey(appID, userID, clientID)
+	if _, ok := s.grants[key]; !ok {
+		return ErrGrantNotFound
+	}
+	delete(s.grants, key)
 	return nil
 }
 

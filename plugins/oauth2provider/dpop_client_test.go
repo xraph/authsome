@@ -16,6 +16,7 @@ func TestClientDPoPModeRoundTrip(t *testing.T) {
 
 	client := &oauth2provider.OAuth2Client{
 		ClientID:   "client-dpop",
+		FirstParty: true,
 		Name:       "DPoP client",
 		DPoPMode:   "required",
 		GrantTypes: []string{"authorization_code"},
@@ -33,6 +34,7 @@ func TestClientDPoPModeDefaultsToInherit(t *testing.T) {
 
 	require.NoError(t, s.CreateClient(ctx, &oauth2provider.OAuth2Client{
 		ClientID: "client-plain", Name: "Plain", GrantTypes: []string{"authorization_code"},
+		FirstParty: true,
 	}))
 
 	got, err := s.GetClient(ctx, "client-plain")

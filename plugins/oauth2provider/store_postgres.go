@@ -243,3 +243,93 @@ func oauth2PgError(err error) error {
 	}
 	return err
 }
+
+// ──────────────────────────────────────────────────
+// Grants
+// ──────────────────────────────────────────────────
+
+func (s *PostgresStore) UpsertGrant(ctx context.Context, g *Grant) error {
+	now := time.Now()
+	existing, err := s.GetGrant(ctx, g.AppID, g.UserID, g.ClientID)
+	switch {
+	case err == nil:
+		g.ID = existing.ID
+		g.CreatedAt = existing.CreatedAt
+		g.UpdatedAt = now
+		m := fromGrant(g)
+		_, err = s.pg.NewUpdate((*grantModel)(nil)).
+			Set("scopes = ?", m.Scopes).
+			Set("updated_at = ?", m.UpdatedAt).
+			Where("id = ?", m.ID).
+			Exec(ctx)
+		return oauth2PgError(err)
+	case errors.Is(err, ErrGrantNotFound):
+		if g.ID.IsNil() {
+			g.ID = id.NewOAuth2GrantID()
+		}
+		if g.CreatedAt.IsZero() {
+			g.CreatedAt = now
+		}
+		g.UpdatedAt = now
+		_, err = s.pg.NewInsert(fromGrant(g)).Exec(ctx)
+		return oauth2PgError(err)
+	default:
+		return err
+	}
+}
+
+func (s *PostgresStore) GetGrant(ctx context.Context, appID id.AppID, userID id.UserID, clientID string) (*Grant, error) {
+	m := new(grantModel)
+	err := s.pg.NewSelect(m).
+		Where("app_id = ?", appID.String()).
+		Where("user_id = ?", userID.String()).
+		Where("client_id = ?", clientID).
+		Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGrantNotFound
+		}
+		return nil, oauth2PgError(err)
+	}
+	return toGrant(m)
+}
+
+func (s *PostgresStore) ListGrantsByUser(ctx context.Context, appID id.AppID, userID id.UserID) ([]*Grant, error) {
+	var models []grantModel
+	err := s.pg.NewSelect(&models).
+		Where("app_id = ?", appID.String()).
+		Where("user_id = ?", userID.String()).
+		OrderExpr("created_at DESC").
+		Scan(ctx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, oauth2PgError(err)
+	}
+	out := make([]*Grant, 0, len(models))
+	for i := range models {
+		g, convErr := toGrant(&models[i])
+		if convErr != nil {
+			return nil, convErr
+		}
+		out = append(out, g)
+	}
+	return out, nil
+}
+
+func (s *PostgresStore) DeleteGrant(ctx context.Context, appID id.AppID, userID id.UserID, clientID string) error {
+	res, err := s.pg.NewDelete((*grantModel)(nil)).
+		Where("app_id = ?", appID.String()).
+		Where("user_id = ?", userID.String()).
+		Where("client_id = ?", clientID).
+		Exec(ctx)
+	if err != nil {
+		return oauth2PgError(err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return oauth2PgError(err)
+	}
+	if n == 0 {
+		return ErrGrantNotFound
+	}
+	return nil
+}

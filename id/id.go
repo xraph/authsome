@@ -50,6 +50,7 @@ const (
 	PrefixBrandingConfig  Prefix = "abrd"
 	PrefixAppSessionCfg   Prefix = "ascf"
 	PrefixOAuth2Client    Prefix = "aoac"
+	PrefixOAuth2Grant     Prefix = "aoag"
 	PrefixAuthCode        Prefix = "aaco"
 	PrefixSetting         Prefix = "aset"
 	PrefixAppClientConfig Prefix = "aacf"
@@ -175,6 +176,9 @@ type AppSessionConfigID = ID
 
 // OAuth2ClientID is a type-safe identifier for OAuth2 clients (prefix: "aoac").
 type OAuth2ClientID = ID
+
+// OAuth2GrantID is a type-safe identifier for OAuth2 consent grants (prefix: "aoag").
+type OAuth2GrantID = ID
 
 // AuthCodeID is a type-safe identifier for authorization codes (prefix: "aaco").
 type AuthCodeID = ID
@@ -390,6 +394,9 @@ func NewAppSessionConfigID() ID { return New(PrefixAppSessionCfg) }
 // NewOAuth2ClientID generates a new unique OAuth2 client ID.
 func NewOAuth2ClientID() ID { return New(PrefixOAuth2Client) }
 
+// NewOAuth2GrantID generates a new unique OAuth2 consent grant ID.
+func NewOAuth2GrantID() ID { return New(PrefixOAuth2Grant) }
+
 // NewAuthCodeID generates a new unique authorization code ID.
 func NewAuthCodeID() ID { return New(PrefixAuthCode) }
 
@@ -536,6 +543,9 @@ func ParseAppSessionConfigID(s string) (ID, error) { return ParseWithPrefix(s, P
 
 // ParseOAuth2ClientID parses a string and validates the "aoac" prefix.
 func ParseOAuth2ClientID(s string) (ID, error) { return ParseWithPrefix(s, PrefixOAuth2Client) }
+
+// ParseOAuth2GrantID parses a string and validates the "aoag" prefix.
+func ParseOAuth2GrantID(s string) (ID, error) { return ParseWithPrefix(s, PrefixOAuth2Grant) }
 
 // ParseAuthCodeID parses a string and validates the "aaco" prefix.
 func ParseAuthCodeID(s string) (ID, error) { return ParseWithPrefix(s, PrefixAuthCode) }

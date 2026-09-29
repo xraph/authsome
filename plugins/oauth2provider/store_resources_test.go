@@ -24,14 +24,15 @@ func TestMemoryStore_ResourcesRoundTrip(t *testing.T) {
 	want := []string{"https://api.example.com", "https://files.example.com"}
 
 	client := &OAuth2Client{
-		ID:        id.NewOAuth2ClientID(),
-		AppID:     appID,
-		Name:      "test",
-		ClientID:  "client-abc",
-		Scopes:    []string{"openid"},
-		Resources: want,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:         id.NewOAuth2ClientID(),
+		AppID:      appID,
+		Name:       "test",
+		ClientID:   "client-abc",
+		FirstParty: true,
+		Scopes:     []string{"openid"},
+		Resources:  want,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
 	}
 	require.NoError(t, s.CreateClient(ctx, client))
 
@@ -107,14 +108,15 @@ func TestOAuth2ClientSQLConverters_ResourcesRoundTrip(t *testing.T) {
 	for _, tt := range resourcesCases {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &OAuth2Client{
-				ID:        id.NewOAuth2ClientID(),
-				AppID:     id.NewAppID(),
-				Name:      "test",
-				ClientID:  "client-abc",
-				Scopes:    []string{"openid"},
-				Resources: tt.resources,
-				CreatedAt: time.Now(),
-				UpdatedAt: time.Now(),
+				ID:         id.NewOAuth2ClientID(),
+				AppID:      id.NewAppID(),
+				Name:       "test",
+				ClientID:   "client-abc",
+				FirstParty: true,
+				Scopes:     []string{"openid"},
+				Resources:  tt.resources,
+				CreatedAt:  time.Now(),
+				UpdatedAt:  time.Now(),
 			}
 
 			got, err := toOAuth2Client(fromOAuth2Client(client))
@@ -183,14 +185,15 @@ func TestOAuth2ClientMongoConverters_ResourcesRoundTrip(t *testing.T) {
 	for _, tt := range resourcesCases {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &OAuth2Client{
-				ID:        id.NewOAuth2ClientID(),
-				AppID:     id.NewAppID(),
-				Name:      "test",
-				ClientID:  "client-abc",
-				Scopes:    []string{"openid"},
-				Resources: tt.resources,
-				CreatedAt: time.Now(),
-				UpdatedAt: time.Now(),
+				ID:         id.NewOAuth2ClientID(),
+				AppID:      id.NewAppID(),
+				Name:       "test",
+				ClientID:   "client-abc",
+				FirstParty: true,
+				Scopes:     []string{"openid"},
+				Resources:  tt.resources,
+				CreatedAt:  time.Now(),
+				UpdatedAt:  time.Now(),
 			}
 
 			got, err := oauth2ClientDocToModel(oauth2ClientToDoc(client))
