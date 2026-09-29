@@ -123,8 +123,11 @@ type SwitchOrgResponse struct {
 // Session requests
 // ---------------------------------------------------------------------------
 
-// ListSessionsRequest is an empty request for GET /sessions (user from context).
-type ListSessionsRequest struct{}
+// ListSessionsRequest binds the paging query params for GET /sessions (user from context).
+type ListSessionsRequest struct {
+	Limit  int    `query:"limit" description:"Page size (default 50, max 200)" optional:"true"`
+	Cursor string `query:"cursor" description:"Cursor from the previous page's next_cursor" optional:"true"`
+}
 
 // RevokeOtherSessionsRequest binds DELETE /sessions, which takes no input.
 type RevokeOtherSessionsRequest struct{}
@@ -183,6 +186,8 @@ type StatusResponse struct {
 // SessionListResponse wraps a list of sessions.
 type SessionListResponse struct {
 	Sessions any `json:"sessions" description:"List of sessions"`
+	// NextCursor is set when more remain; pass it as cursor to continue.
+	NextCursor string `json:"next_cursor,omitempty" description:"Cursor for the next page, absent on the last"`
 }
 
 // DeviceListResponse wraps a list of devices.

@@ -30,6 +30,7 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/page"
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/session"
@@ -923,6 +924,11 @@ func (e *Engine) UpdateMe(ctx context.Context, u *user.User) error {
 // ListSessions returns all sessions for a user.
 func (e *Engine) ListSessions(ctx context.Context, userID id.UserID) ([]*session.Session, error) {
 	return e.store.ListUserSessions(ctx, userID)
+}
+
+// ListSessionsPage is the bounded twin of ListSessions for the request path.
+func (e *Engine) ListSessionsPage(ctx context.Context, userID id.UserID, opts page.Opts) (page.Page[*session.Session], error) {
+	return e.store.ListUserSessionsPage(ctx, userID, opts)
 }
 
 // ListAllSessions returns the most recent sessions across all users, up to limit.

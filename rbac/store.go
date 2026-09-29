@@ -20,6 +20,9 @@ type Store interface {
 	// Role CRUD
 	CreateRole(ctx context.Context, r *Role) error
 	GetRole(ctx context.Context, roleID string) (*Role, error)
+	// GetRoles loads several roles in one call; ids that do not resolve
+	// are left out rather than failing the whole call.
+	GetRoles(ctx context.Context, roleIDs []string) ([]*Role, error)
 	GetRoleBySlug(ctx context.Context, appID string, slug string) (*Role, error)
 	UpdateRole(ctx context.Context, r *Role) error
 	DeleteRole(ctx context.Context, roleID string) error

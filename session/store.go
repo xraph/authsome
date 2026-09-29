@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/xraph/authsome/page"
+
 	"github.com/xraph/authsome/id"
 )
 
@@ -52,6 +54,8 @@ type Store interface {
 	// expires.
 	DeleteSessionsByGrant(ctx context.Context, grantID id.AgentGrantID) error
 	ListUserSessions(ctx context.Context, userID id.UserID) ([]*Session, error)
+	// ListUserSessionsPage is the bounded twin for the request path.
+	ListUserSessionsPage(ctx context.Context, userID id.UserID, opts page.Opts) (page.Page[*Session], error)
 	// ListSessions returns the most recent sessions across all users, up to limit.
 	ListSessions(ctx context.Context, limit int) ([]*Session, error)
 

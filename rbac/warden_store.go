@@ -268,11 +268,25 @@ func (s *WardenStore) listUserRolesWithTenant(ctx context.Context, tenantID, use
 		return nil, mapWardenError(err)
 	}
 
+	ids := make([]string, 0, len(roleIDs))
+	for _, rid := range roleIDs {
+		ids = append(ids, rid.String())
+	}
+	return s.GetRoles(ctx, ids)
+}
+
+// GetRoles implements Store. Warden's store has no batch fetch, so this is
+// one pass over the ids behind one authsome call; a role that cannot be
+// loaded (deleted concurrently, etc.) is skipped.
+func (s *WardenStore) GetRoles(ctx context.Context, roleIDs []string) ([]*Role, error) {
 	roles := make([]*Role, 0, len(roleIDs))
 	for _, rid := range roleIDs {
-		wr, err := s.engine.Store().GetRole(ctx, rid)
+		wid, err := convertToWardenRoleID(rid)
 		if err != nil {
-			// Skip roles that cannot be loaded (deleted concurrently, etc.).
+			continue
+		}
+		wr, err := s.engine.Store().GetRole(ctx, wid)
+		if err != nil {
 			continue
 		}
 		roles = append(roles, FromWardenRole(wr))

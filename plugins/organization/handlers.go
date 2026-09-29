@@ -12,6 +12,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/page"
 	"github.com/xraph/authsome/plugin"
 )
 
@@ -322,21 +323,17 @@ func (p *Plugin) handleCreateOrg(ctx forge.Context, req *CreateOrgRequest) (*org
 	return o, ctx.JSON(http.StatusCreated, o)
 }
 
-func (p *Plugin) handleListOrgs(ctx forge.Context, _ *ListOrgsRequest) (*OrgListResponse, error) {
+func (p *Plugin) handleListOrgs(ctx forge.Context, req *ListOrgsRequest) (*OrgListResponse, error) {
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
 		return nil, forge.Unauthorized("authentication required")
 	}
 
-	orgs, err := p.ListUserOrganizations(ctx.Context(), userID)
+	pg, err := p.ListUserOrganizationsPage(ctx.Context(), userID, page.Opts{Limit: req.Limit, Cursor: req.Cursor})
 	if err != nil {
 		return nil, mapError(err)
 	}
-
-	if orgs == nil {
-		orgs = []*organization.Organization{}
-	}
-	resp := &OrgListResponse{Organizations: orgs}
+	resp := &OrgListResponse{Organizations: pg.Items, NextCursor: pg.NextCursor}
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
@@ -409,25 +406,19 @@ func (p *Plugin) handleDeleteOrg(ctx forge.Context, _ *DeleteOrgRequest) (*Statu
 // Member handlers
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) handleListMembers(ctx forge.Context, _ *ListMembersRequest) (*MemberListResponse, error) {
+func (p *Plugin) handleListMembers(ctx forge.Context, req *ListMembersRequest) (*MemberListResponse, error) {
 	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
-
 	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
 		return nil, err
 	}
-
-	members, err := p.ListMembers(ctx.Context(), orgID)
+	pg, err := p.ListMembersPage(ctx.Context(), orgID, page.Opts{Limit: req.Limit, Cursor: req.Cursor})
 	if err != nil {
 		return nil, mapError(err)
 	}
-
-	if members == nil {
-		members = []*organization.Member{}
-	}
-	resp := &MemberListResponse{Members: members}
+	resp := &MemberListResponse{Members: pg.Items, NextCursor: pg.NextCursor}
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
@@ -577,25 +568,19 @@ func (p *Plugin) handleCreateInvitation(ctx forge.Context, req *CreateInvitation
 	return inv, ctx.JSON(http.StatusCreated, inv)
 }
 
-func (p *Plugin) handleListInvitations(ctx forge.Context, _ *ListInvitationsRequest) (*InvitationListResponse, error) {
+func (p *Plugin) handleListInvitations(ctx forge.Context, req *ListInvitationsRequest) (*InvitationListResponse, error) {
 	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
-
 	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
 		return nil, err
 	}
-
-	invitations, err := p.ListInvitations(ctx.Context(), orgID)
+	pg, err := p.ListInvitationsPage(ctx.Context(), orgID, page.Opts{Limit: req.Limit, Cursor: req.Cursor})
 	if err != nil {
 		return nil, mapError(err)
 	}
-
-	if invitations == nil {
-		invitations = []*organization.Invitation{}
-	}
-	resp := &InvitationListResponse{Invitations: invitations}
+	resp := &InvitationListResponse{Invitations: pg.Items, NextCursor: pg.NextCursor}
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
@@ -657,25 +642,19 @@ func (p *Plugin) handleCreateTeam(ctx forge.Context, req *CreateTeamRequest) (*o
 	return t, ctx.JSON(http.StatusCreated, t)
 }
 
-func (p *Plugin) handleListTeams(ctx forge.Context, _ *ListTeamsRequest) (*TeamListResponse, error) {
+func (p *Plugin) handleListTeams(ctx forge.Context, req *ListTeamsRequest) (*TeamListResponse, error) {
 	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
-
 	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
 		return nil, err
 	}
-
-	teams, err := p.ListTeams(ctx.Context(), orgID)
+	pg, err := p.ListTeamsPage(ctx.Context(), orgID, page.Opts{Limit: req.Limit, Cursor: req.Cursor})
 	if err != nil {
 		return nil, mapError(err)
 	}
-
-	if teams == nil {
-		teams = []*organization.Team{}
-	}
-	resp := &TeamListResponse{Teams: teams}
+	resp := &TeamListResponse{Teams: pg.Items, NextCursor: pg.NextCursor}
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
 

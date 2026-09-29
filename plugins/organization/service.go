@@ -13,6 +13,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/page"
 	"github.com/xraph/authsome/store"
 )
 
@@ -152,6 +153,11 @@ func (p *Plugin) ListUserOrganizations(ctx context.Context, userID id.UserID) ([
 	return p.store.ListUserOrganizations(ctx, userID)
 }
 
+// ListUserOrganizationsPage is the bounded twin for the request path.
+func (p *Plugin) ListUserOrganizationsPage(ctx context.Context, userID id.UserID, opts page.Opts) (page.Page[*organization.Organization], error) {
+	return p.store.ListUserOrganizationsPage(ctx, userID, opts)
+}
+
 // AdminListOrganizations returns all organizations for the given app.
 func (p *Plugin) AdminListOrganizations(ctx context.Context, appID id.AppID) ([]*organization.Organization, error) {
 	return p.store.ListOrganizations(ctx, appID)
@@ -250,6 +256,11 @@ func (p *Plugin) ListMembers(ctx context.Context, orgID id.OrgID) ([]*organizati
 	return p.store.ListMembers(ctx, orgID)
 }
 
+// ListMembersPage is the bounded twin for the request path.
+func (p *Plugin) ListMembersPage(ctx context.Context, orgID id.OrgID, opts page.Opts) (page.Page[*organization.Member], error) {
+	return p.store.ListMembersPage(ctx, orgID, opts)
+}
+
 // UpdateMemberRole updates a member's role within an organization.
 func (p *Plugin) UpdateMemberRole(ctx context.Context, memberID id.MemberID, role organization.MemberRole) (*organization.Member, error) {
 	member, err := p.store.GetMember(ctx, memberID)
@@ -319,6 +330,11 @@ func (p *Plugin) CreateInvitation(ctx context.Context, inv *organization.Invitat
 // ListInvitations lists invitations for an organization.
 func (p *Plugin) ListInvitations(ctx context.Context, orgID id.OrgID) ([]*organization.Invitation, error) {
 	return p.store.ListInvitations(ctx, orgID)
+}
+
+// ListInvitationsPage is the bounded twin for the request path.
+func (p *Plugin) ListInvitationsPage(ctx context.Context, orgID id.OrgID, opts page.Opts) (page.Page[*organization.Invitation], error) {
+	return p.store.ListInvitationsPage(ctx, orgID, opts)
 }
 
 // AcceptInvitation accepts a pending invitation by token and creates a member.
@@ -487,6 +503,11 @@ func (p *Plugin) DeleteTeam(ctx context.Context, teamID id.TeamID) error {
 // ListTeams returns all teams in an organization.
 func (p *Plugin) ListTeams(ctx context.Context, orgID id.OrgID) ([]*organization.Team, error) {
 	return p.store.ListTeams(ctx, orgID)
+}
+
+// ListTeamsPage is the bounded twin for the request path.
+func (p *Plugin) ListTeamsPage(ctx context.Context, orgID id.OrgID, opts page.Opts) (page.Page[*organization.Team], error) {
+	return p.store.ListTeamsPage(ctx, orgID, opts)
 }
 
 // IsOrgSlugAvailable checks whether a slug is available for an app.

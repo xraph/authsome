@@ -65,6 +65,7 @@ type Store interface {
 	KV
 	LegacyTokenHasher
 	Retention
+	Paged
 
 	// Migrate runs all schema migrations. Extra migration groups (e.g. from
 	// plugins) are appended to the core group and orchestrated together.

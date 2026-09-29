@@ -8,6 +8,7 @@ import (
 
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/page"
 	"github.com/xraph/authsome/session"
 )
 
@@ -66,18 +67,18 @@ func (a *API) handleRevokeOtherSessions(ctx forge.Context, _ *RevokeOtherSession
 // Session handlers
 // ──────────────────────────────────────────────────
 
-func (a *API) handleListSessions(ctx forge.Context, _ *ListSessionsRequest) (*SessionListResponse, error) {
+func (a *API) handleListSessions(ctx forge.Context, req *ListSessionsRequest) (*SessionListResponse, error) {
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
 		return nil, forge.Unauthorized("authentication required")
 	}
 
-	sessions, err := a.engine.ListSessions(ctx.Context(), userID)
+	pg, err := a.engine.ListSessionsPage(ctx.Context(), userID, page.Opts{Limit: req.Limit, Cursor: req.Cursor})
 	if err != nil {
 		return nil, mapError(err)
 	}
 
-	resp := &SessionListResponse{Sessions: safeSessionSlice(sessions)}
+	resp := &SessionListResponse{Sessions: safeSessionSlice(pg.Items), NextCursor: pg.NextCursor}
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
