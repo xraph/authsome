@@ -165,11 +165,10 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 		}
 	}
 
-	// Assign default Warden role to the new user.
+	// Assign default Warden role to the new user. Platform ownership is not
+	// granted here: an unverified sign-up must never hold it. The claim
+	// happens in promoteVerifiedOwner once the email is proven.
 	e.EnsureDefaultRole(ctx, req.AppID, u.ID)
-
-	// If this is the first user for the platform app, promote to platform_owner.
-	e.promoteFirstUserToOwner(ctx, req.AppID, u.ID)
 
 	// Create session (using per-app + per-env config; JWT if configured)
 	sess, err := e.newSession(req.AppID, u.ID, e.sessionConfigForApp(ctx, req.AppID, req.EnvID), req.DPoPJKT)
@@ -1551,6 +1550,7 @@ func (e *Engine) VerifyEmail(ctx context.Context, token string) error {
 	if updateErr := e.store.UpdateUser(ctx, u); updateErr != nil {
 		return fmt.Errorf("authsome: update user: %w", updateErr)
 	}
+	e.promoteVerifiedOwner(ctx, u)
 
 	e.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionEmailVerify,
@@ -1674,6 +1674,7 @@ func (e *Engine) VerifyEmailCode(ctx context.Context, userID id.UserID, code str
 	if updateErr := e.store.UpdateUser(ctx, u); updateErr != nil {
 		return fmt.Errorf("authsome: update user: %w", updateErr)
 	}
+	e.promoteVerifiedOwner(ctx, u)
 
 	e.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionEmailVerify,
@@ -2207,50 +2208,58 @@ func (e *Engine) EnsureDefaultRole(ctx context.Context, appID id.AppID, userID i
 	})
 }
 
-// promoteFirstUserToOwner assigns the platform_owner role to the signing-up
-// user when either:
-//   - this is the very first user in the platform app (original behaviour), or
-//   - the user's email is listed in bootstrapCfg.InitialOwners (case-insensitive).
+// promoteVerifiedOwner grants the platform-owner role to a user whose email
+// has just been verified, when either:
+//   - fewer than bootstrapCfg.InitialOwnerCount owners exist on the platform
+//     app (the slot-based bootstrap), or
+//   - the user's email is listed in bootstrapCfg.InitialOwners
+//     (case-insensitive).
 //
-// This must live in the engine so it works regardless of entry point (API
-// handler, dashboard, SDK, etc.).
-func (e *Engine) promoteFirstUserToOwner(ctx context.Context, appID id.AppID, userID id.UserID) {
-	if !e.hasRBACStore() {
+// Ownership is only ever claimed through this path, so an unverified
+// sign-up never holds it. The promotion is serialised by ownerMu so two
+// concurrent verifications cannot both take the last slot. Callers pass the
+// user after EmailVerified has been persisted.
+func (e *Engine) promoteVerifiedOwner(ctx context.Context, u *user.User) {
+	if u == nil || !u.EmailVerified || !e.hasRBACStore() || e.bootstrapCfg == nil {
 		return
 	}
 
+	appID := u.AppID
 	platformID := e.PlatformAppID()
-	if appID.IsNil() || platformID.IsNil() {
+	if appID.IsNil() || platformID.IsNil() || appID != platformID {
 		return
 	}
 
-	// Only promote for the platform app.
-	if appID != platformID {
-		return
-	}
+	e.ownerMu.Lock()
+	defer e.ownerMu.Unlock()
 
-	// Determine whether this user should be promoted.
 	shouldPromote := false
 
-	// Case 1: one of the first N users in the platform app (N = InitialOwnerCount).
-	ownerCount := e.bootstrapCfg.InitialOwnerCount
-	if ownerCount > 0 {
-		list, err := e.store.ListUsers(ctx, &user.Query{AppID: appID, Limit: ownerCount + 1})
-		if err == nil && list != nil && len(list.Users) <= ownerCount {
+	// Case 1: an owner slot is still open (N = InitialOwnerCount).
+	if slots := e.bootstrapCfg.InitialOwnerCount; slots > 0 {
+		owners, err := e.ListUsersWithRole(ctx, appID, rbac.PlatformOwnerSlug)
+		if err != nil {
+			e.logger.Warn("authsome: could not count platform owners",
+				log.String("app_id", appID.String()),
+				log.String("error", err.Error()),
+			)
+		} else if len(owners) < slots {
 			shouldPromote = true
+		}
+		for _, existing := range owners {
+			if existing == u.ID {
+				return // already an owner
+			}
 		}
 	}
 
 	// Case 2: email is in the InitialOwners list (case-insensitive).
 	if !shouldPromote && len(e.bootstrapCfg.InitialOwners) > 0 {
-		u, lookupErr := e.store.GetUser(ctx, userID)
-		if lookupErr == nil && u != nil {
-			email := strings.ToLower(strings.TrimSpace(u.Email))
-			for _, owner := range e.bootstrapCfg.InitialOwners {
-				if strings.ToLower(strings.TrimSpace(owner)) == email {
-					shouldPromote = true
-					break
-				}
+		email := strings.ToLower(strings.TrimSpace(u.Email))
+		for _, owner := range e.bootstrapCfg.InitialOwners {
+			if strings.ToLower(strings.TrimSpace(owner)) == email {
+				shouldPromote = true
+				break
 			}
 		}
 	}
@@ -2261,7 +2270,7 @@ func (e *Engine) promoteFirstUserToOwner(ctx context.Context, appID id.AppID, us
 
 	ownerRole, err := e.GetRoleBySlug(ctx, appID, rbac.PlatformOwnerSlug)
 	if err != nil || ownerRole == nil {
-		e.logger.Warn("authsome: could not find platform_owner role for first-user promotion",
+		e.logger.Warn("authsome: could not find platform_owner role for owner promotion",
 			log.String("app_id", appID.String()),
 			log.String("error", fmt.Sprintf("%v", err)),
 		)
@@ -2269,18 +2278,32 @@ func (e *Engine) promoteFirstUserToOwner(ctx context.Context, appID id.AppID, us
 	}
 
 	if err := e.AssignUserRole(ctx, &rbac.UserRole{
-		UserID: userID.String(),
+		UserID: u.ID.String(),
 		RoleID: ownerRole.ID,
 	}); err != nil {
 		e.logger.Warn("authsome: failed to promote user to platform_owner",
-			log.String("user_id", userID.String()),
+			log.String("user_id", u.ID.String()),
 			log.String("error", err.Error()),
 		)
 		return
 	}
 
-	e.logger.Info("authsome: promoted user to platform_owner",
-		log.String("user_id", userID.String()),
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionRoleAssign,
+		Resource:   hook.ResourceUser,
+		ResourceID: u.ID.String(),
+		ActorID:    u.ID.String(),
+		Tenant:     appID.String(),
+		Category:   "access",
+		Severity:   hook.SeverityCritical,
+		Reason:     "platform owner claimed on email verification",
+		Metadata: map[string]string{
+			"role": rbac.PlatformOwnerSlug,
+		},
+	})
+
+	e.logger.Info("authsome: promoted verified user to platform_owner",
+		log.String("user_id", u.ID.String()),
 		log.String("app_id", appID.String()),
 	)
 }

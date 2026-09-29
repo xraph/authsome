@@ -14,6 +14,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -136,6 +137,9 @@ type Engine struct {
 	// Bootstrap configuration (nil = disabled).
 	bootstrapCfg  *BootstrapConfig
 	platformAppID id.AppID
+	// ownerMu serialises platform-owner promotion so two users verifying at
+	// the same instant cannot both claim the last owner slot.
+	ownerMu sync.Mutex
 
 	// Database reference for plugins that need direct database access
 	// to create their own persistent stores.

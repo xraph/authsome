@@ -52,6 +52,8 @@ func signUpOnPlatform(t *testing.T, eng *authsome.Engine, email string) id.UserI
 		FirstName: "Test",
 	})
 	require.NoError(t, err)
+	// Ownership is claimed on verification, so verify every sign-up.
+	secutil.VerifyEmail(t, eng, u.ID)
 	return u.ID
 }
 
@@ -241,9 +243,10 @@ func TestHasPermission_NoWarden_ReturnsError(t *testing.T) {
 // ──────────────────────────────────────────────────
 
 // TestHasPermission_AllFirstNUsersHavePermission exercises the InitialOwnerCount
-// path: all three first users should pass the app:manage check, the fourth should not.
+// path: with three slots the first three verified users pass the app:manage
+// check, the fourth does not.
 func TestHasPermission_AllFirstNUsersHavePermission(t *testing.T) {
-	eng, _ := newBootstrapEngine(t) // default count=3
+	eng, _ := newBootstrapEngine(t, authsome.WithInitialOwnerCount(3))
 	ctx := context.Background()
 
 	users := make([]id.UserID, 4)
@@ -342,9 +345,10 @@ func TestHasPermission_WardenMemoryStore_NamespaceFilter(t *testing.T) {
 		FirstName: "NS",
 	})
 	require.NoError(t, err)
+	secutil.VerifyEmail(t, eng, u.ID)
 
 	require.True(t, hasRole(t, eng, u.ID, rbac.PlatformOwnerSlug),
-		"first user must be promoted to platform-owner")
+		"first verified user must be promoted to platform-owner")
 
 	// This is the exact check that was failing in production.
 	allowed, err := eng.HasPermission(ctx, u.ID, "manage", "app")

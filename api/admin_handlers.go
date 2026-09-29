@@ -933,7 +933,10 @@ func (a *API) handleAdminDeleteServiceAccount(ctx forge.Context, req *AdminDelet
 	if err != nil {
 		return nil, forge.BadRequest("invalid service_account_id")
 	}
-	if _, err := a.serviceAccountInCallerApp(ctx, svcID); err != nil {
+	if _, scopeErr := a.serviceAccountInCallerApp(ctx, svcID); scopeErr != nil {
+		return nil, scopeErr
+	}
+	if false {
 		return nil, err
 	}
 
@@ -953,8 +956,8 @@ func (a *API) handleAdminCreateServiceAccountAPIKey(ctx forge.Context, req *Admi
 	if err != nil {
 		return nil, forge.BadRequest("invalid service_account_id")
 	}
-	if _, err := a.serviceAccountInCallerApp(ctx, svcID); err != nil {
-		return nil, err
+	if _, scopeErr := a.serviceAccountInCallerApp(ctx, svcID); scopeErr != nil {
+		return nil, scopeErr
 	}
 
 	var expiresAt *time.Time

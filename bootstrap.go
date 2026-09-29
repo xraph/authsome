@@ -40,16 +40,16 @@ type BootstrapConfig struct {
 	// shipped via cfg.WardenDir, or a custom fs.FS).
 	SeedOptions wardenseed.ApplyOptions
 
-	// InitialOwners is a list of email addresses that should automatically
-	// receive the platform-owner role when they sign up, regardless of whether
-	// they are the first user. Comparison is case-insensitive.
+	// InitialOwners is a list of email addresses that receive the
+	// platform-owner role once they verify that address, regardless of how
+	// many owners already exist. Comparison is case-insensitive.
 	InitialOwners []string
 
-	// InitialOwnerCount controls how many of the first N users to sign up on
-	// the platform app are automatically promoted to platform-owner. Defaults
-	// to 3. Set to 1 for the original single-owner behaviour; set to 0 to
-	// disable the count-based promotion entirely (only InitialOwners emails
-	// will be used).
+	// InitialOwnerCount is the number of platform-owner slots claimed by
+	// bootstrap. While fewer owners than this exist on the platform app, the
+	// next user to verify their email is promoted. Defaults to 1. Set to 0
+	// to disable slot-based promotion entirely (only InitialOwners emails
+	// are promoted).
 	InitialOwnerCount int
 
 	// Callback for custom post-bootstrap logic.
@@ -72,8 +72,8 @@ type BootstrapOption func(*BootstrapConfig)
 // not from this struct.
 func DefaultBootstrapConfig() *BootstrapConfig {
 	return &BootstrapConfig{
-		AppName:           "Platform",
-		AppSlug:           "platform",
+		AppName: "Platform",
+		AppSlug: "platform",
 		// One owner slot. Ownership is claimed by the first verified sign-up
 		// on the platform app; further owners are granted explicitly.
 		InitialOwnerCount: 1,
@@ -140,18 +140,17 @@ func WithBootstrapWardenSources(shared, platform *wardenseed.Source) BootstrapOp
 	}
 }
 
-// WithInitialOwners registers email addresses that should receive the
-// platform-owner role on sign-up, regardless of whether they are the first
-// user. Comparison is case-insensitive. The option is additive — calling it
+// WithInitialOwners registers email addresses that receive the
+// platform-owner role once verified, regardless of how many owners already
+// exist. Comparison is case-insensitive. The option is additive: calling it
 // multiple times appends to the existing list.
 func WithInitialOwners(emails ...string) BootstrapOption {
 	return func(cfg *BootstrapConfig) { cfg.InitialOwners = append(cfg.InitialOwners, emails...) }
 }
 
-// WithInitialOwnerCount sets how many of the first N users to register on the
-// platform app are automatically promoted to platform-owner. The default is 3.
-// Pass 1 to restore the original single-owner behaviour; pass 0 to disable
-// count-based promotion entirely.
+// WithInitialOwnerCount sets how many platform-owner slots bootstrap fills
+// from verified sign-ups on the platform app. The default is 1. Pass 0 to
+// disable slot-based promotion entirely.
 func WithInitialOwnerCount(n int) BootstrapOption {
 	return func(cfg *BootstrapConfig) { cfg.InitialOwnerCount = n }
 }

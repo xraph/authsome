@@ -221,6 +221,18 @@ func RelaxAuthDefaults(t *testing.T, eng *authsome.Engine) {
 		"secutil: relax auth.require_email_verification")
 }
 
+// VerifyEmail proves the user's email through the real OTP path: it reads
+// the verification that sign-up issued and submits it to the engine. Use it
+// wherever a test needs a verified user, including the first platform user,
+// whose ownership is only granted on verification.
+func VerifyEmail(t *testing.T, eng *authsome.Engine, userID id.UserID) {
+	t.Helper()
+	ctx := context.Background()
+	v, err := eng.Store().GetActiveEmailVerification(ctx, userID)
+	require.NoError(t, err, "secutil: VerifyEmail: no active verification for %s", userID)
+	require.NoError(t, eng.VerifyEmailCode(ctx, userID, v.Token), "secutil: VerifyEmail")
+}
+
 // InjectStoreFault makes the named store method return err on its next
 // call against the underlying memory store. Test-only.
 func InjectStoreFault(t *testing.T, eng *authsome.Engine, method string, err error) {

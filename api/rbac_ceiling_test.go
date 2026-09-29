@@ -17,14 +17,12 @@ import (
 )
 
 // appAdmin signs up a user who is NOT a platform owner (the bootstrap
-// promotes only the first sign-ups) and grants them the app's admin role, so
-// tests can exercise the ceilings a tenant admin runs into.
+// promotes only the first verified sign-up) and grants them the app's admin
+// role, so tests can exercise the ceilings a tenant admin runs into.
 func appAdmin(t *testing.T, eng *authsome.Engine, email string) id.UserID {
 	t.Helper()
-	// Burn the platform-owner slots first so this user is a plain admin.
-	for i := 0; i < 3; i++ {
-		signUp(t, eng, "owner-slot-"+string(rune('a'+i))+"-"+email, "SecureP@ss1")
-	}
+	// Burn the platform-owner slot first so this user is a plain admin.
+	signUp(t, eng, "owner-slot-"+email, "SecureP@ss1")
 	_, token, _ := signUp(t, eng, email, "SecureP@ss1")
 	uid := userIDFor(t, eng, token)
 

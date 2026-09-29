@@ -114,8 +114,8 @@ func (e *Engine) CreateServiceAccountAPIKey(ctx context.Context, svcAcctID id.Se
 
 	// A key can carry at most the scopes its account holds; otherwise a
 	// caller who may mint keys could mint one wider than the account.
-	if err := requireScopeSubset(scopes, svc.Scopes); err != nil {
-		return nil, "", fmt.Errorf("%w: %w", ErrScopeEscalation, err)
+	if scopeErr := requireScopeSubset(scopes, svc.Scopes); scopeErr != nil {
+		return nil, "", fmt.Errorf("%w: %w", ErrScopeEscalation, scopeErr)
 	}
 
 	// Generate a key pair.

@@ -143,6 +143,10 @@ func signUp(t *testing.T, eng *authsome.Engine, email, password string) (*json.R
 		FirstName: "Test User",
 	})
 	require.NoError(t, err)
+	// Ownership of the platform app is claimed on verification, so the
+	// helper verifies every sign-up: the first one becomes the owner.
+	secutil.VerifyEmail(t, eng, u.ID)
+	u.EmailVerified = true
 
 	raw, _ := json.Marshal(u)
 	rm := json.RawMessage(raw)

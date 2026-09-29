@@ -108,8 +108,8 @@ func (a *API) handleBulkRevokeSessions(ctx forge.Context, req *BulkRevokeSession
 	if err != nil {
 		return nil, forge.BadRequest("invalid user_id")
 	}
-	if _, err := a.userInCallerApp(ctx, userID); err != nil {
-		return nil, err
+	if _, scopeErr := a.userInCallerApp(ctx, userID); scopeErr != nil {
+		return nil, scopeErr
 	}
 
 	count, err := a.engine.AdminBulkRevokeSessions(ctx.Context(), adminID, userID)
