@@ -394,7 +394,7 @@ func TestAuthMiddleware_UserResolveFails(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.False(t, hasUser, "user should not be set when resolve fails")
-	assert.True(t, hasSessID, "session ID should still be set")
+	assert.False(t, hasSessID, "a session whose user does not resolve authenticates nobody")
 }
 
 // ──────────────────────────────────────────────────

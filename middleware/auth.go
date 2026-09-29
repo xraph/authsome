@@ -302,16 +302,19 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 				goCtx = forge.WithScope(goCtx, forge.NewAppScope(sess.AppID.String()))
 			}
 
-			u, err := resolveUser(sess.UserID.String())
-			if err != nil {
-				logger.Warn("auth middleware: failed to resolve user",
-					log.String("user_id", sess.UserID.String()),
-					log.String("error", err.Error()),
-				)
-				ctx.WithContext(goCtx)
-				return next(ctx)
+			if sess.IsHumanPrincipal() {
+				u, err := resolveUser(sess.UserID.String())
+				if err != nil {
+					// A session whose user no longer resolves (deleted or
+					// banned) authenticates nobody.
+					logger.Warn("auth middleware: refusing session, user does not resolve",
+						log.String("user_id", sess.UserID.String()),
+						log.String("error", err.Error()),
+					)
+					return next(ctx)
+				}
+				goCtx = WithUser(goCtx, u)
 			}
-			goCtx = WithUser(goCtx, u)
 
 			ctx.WithContext(goCtx)
 			return next(ctx)
@@ -657,15 +660,16 @@ func tryJWTAuth(
 		return jwtAuthAuthenticated, nil
 	}
 
-	// Resolve user from claims.
+	// Resolve user from claims. A signature proves who minted the token,
+	// not that its subject may still act: a deleted or banned user is
+	// refused here even though the token verifies.
 	u, err := resolveUser(claims.UserID)
 	if err != nil {
-		logger.Debug("auth middleware: JWT user resolution failed",
+		logger.Warn("auth middleware: refusing JWT, user does not resolve",
 			log.String("user_id", claims.UserID),
 			log.String("error", err.Error()),
 		)
-		ctx.WithContext(goCtx)
-		return jwtAuthAuthenticated, nil // Authenticated via JWT even if user lookup fails
+		return jwtAuthRefused, nil
 	}
 	goCtx = WithUser(goCtx, u)
 
@@ -748,7 +752,9 @@ func trySessionAuth(
 		return false, dpopErr
 	}
 
-	setSessionContext(ctx, sess, resolveUser, bindCfg.PrincipalResolver, logger)
+	if !setSessionContext(ctx, sess, resolveUser, bindCfg.PrincipalResolver, logger) {
+		return false, nil
+	}
 	return true, nil
 }
 
@@ -896,9 +902,11 @@ func setPrincipalContext(
 }
 
 // setSessionContext populates the forge context with session and user data.
+// It reports false, leaving the context untouched, when the session belongs
+// to a user who no longer resolves (deleted or banned).
 func setSessionContext(
 	ctx forge.Context, sess *session.Session, resolveUser UserResolver, resolvePrincipal PrincipalResolver, logger log.Logger,
-) {
+) bool {
 	goCtx := ctx.Context()
 	goCtx = WithSession(goCtx, sess)
 	goCtx = WithSessionID(goCtx, sess.ID)
@@ -920,20 +928,21 @@ func setSessionContext(
 		goCtx = forge.WithScope(goCtx, forge.NewAppScope(sess.AppID.String()))
 	}
 
-	u, err := resolveUser(sess.UserID.String())
-	if err != nil {
-		logger.Warn("auth middleware: failed to resolve user",
-			log.String("user_id", sess.UserID.String()),
-			log.String("error", err.Error()),
-		)
-		goCtx = WithAuthMethod(goCtx, "session")
-		ctx.WithContext(goCtx)
-		return
+	if sess.IsHumanPrincipal() {
+		u, err := resolveUser(sess.UserID.String())
+		if err != nil {
+			logger.Warn("auth middleware: refusing session, user does not resolve",
+				log.String("user_id", sess.UserID.String()),
+				log.String("error", err.Error()),
+			)
+			return false
+		}
+		goCtx = WithUser(goCtx, u)
 	}
-	goCtx = WithUser(goCtx, u)
 	goCtx = WithAuthMethod(goCtx, "session")
 
 	ctx.WithContext(goCtx)
+	return true
 }
 
 // RequireAuth returns a forge middleware that rejects unauthenticated requests.

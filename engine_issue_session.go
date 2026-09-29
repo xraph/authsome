@@ -164,6 +164,11 @@ func (e *Engine) IssueSession(ctx context.Context, req *IssueSessionRequest) (*I
 	if req == nil || req.User == nil {
 		return nil, fmt.Errorf("authsome: IssueSession: nil request or user")
 	}
+	// Every sign-in path mints here, so this is the one place a ban has to
+	// hold for passkeys, magic links, SSO and social alike.
+	if req.User.IsBanned(time.Now()) {
+		return nil, account.ErrUserBanned
+	}
 	if req.AppID.IsNil() {
 		req.AppID = req.User.AppID
 	}

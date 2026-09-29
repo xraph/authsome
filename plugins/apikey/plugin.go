@@ -603,17 +603,31 @@ type apikeyStrategy struct {
 // one read against the principal store, on a path that already does one for
 // the key itself.
 func (s *apikeyStrategy) serviceAccountKind(ctx context.Context, saID id.ServiceAccountID) principal.Kind {
+	kind, _ := s.serviceAccountState(ctx, saID, time.Now())
+	return kind
+}
+
+// serviceAccountState returns the service account's registered kind and
+// whether it may authenticate at now. Without a principal resolver the kind
+// falls back to KindService and the account is taken as active, which is
+// what minimal test wiring expects; with one, a resolved principal that
+// reports inactive (disabled or expired) refuses the key.
+func (s *apikeyStrategy) serviceAccountState(ctx context.Context, saID id.ServiceAccountID, now time.Time) (principal.Kind, bool) {
 	if s.resolvePrincipal == nil {
-		return principal.KindService
+		return principal.KindService, true
 	}
 	// The store resolves any non-user ref by ID and ignores the kind on the
 	// way in, so seeding the lookup with KindService is not an assumption
 	// about the answer.
 	p, err := s.resolvePrincipal(ctx, principal.Ref{Kind: principal.KindService, ID: saID.String()})
-	if err != nil || p == nil || p.Kind == "" {
-		return principal.KindService
+	if err != nil || p == nil {
+		return principal.KindService, true
 	}
-	return p.Kind
+	kind := p.Kind
+	if kind == "" {
+		kind = principal.KindService
+	}
+	return kind, p.IsActive(now)
 }
 
 var _ strategy.Strategy = (*apikeyStrategy)(nil)
@@ -691,7 +705,12 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 	subject := principal.Ref{Kind: principal.KindUser, ID: key.UserID.String()}
 	subjectKind := principal.KindUser
 	if !key.ServiceAccountID.IsNil() {
-		subjectKind = s.serviceAccountKind(ctx, key.ServiceAccountID)
+		var active bool
+		subjectKind, active = s.serviceAccountState(ctx, key.ServiceAccountID, now)
+		if !active {
+			// A disabled or expired service account keeps no working keys.
+			return nil, fmt.Errorf("apikey: service account is not active")
+		}
 		subject = principal.Ref{Kind: subjectKind, ID: key.ServiceAccountID.String()}
 	}
 	att := &principal.AuthAttempt{
@@ -743,6 +762,9 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 	u, err := s.resolveUser(key.UserID.String())
 	if err != nil {
 		return nil, fmt.Errorf("apikey: resolve user: %w", err)
+	}
+	if u.IsBanned(now) {
+		return nil, fmt.Errorf("apikey: user is banned")
 	}
 
 	// Create a synthetic (non-persisted) session for context propagation.

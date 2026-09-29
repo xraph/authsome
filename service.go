@@ -282,11 +282,9 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	}
 
 	// Check banned
-	if u.Banned {
-		if u.BanExpires == nil || u.BanExpires.After(time.Now()) {
-			e.recordFailedSignin(ctx, req, lockoutKey)
-			return nil, nil, account.ErrUserBanned
-		}
+	if u.IsBanned(time.Now()) {
+		e.recordFailedSignin(ctx, req, lockoutKey)
+		return nil, nil, account.ErrUserBanned
 	}
 
 	// Verify password
@@ -559,6 +557,18 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 	// this path.
 	if sess.PrincipalKind == session.PrincipalKindAgent {
 		return nil, account.ErrInvalidCredentials
+	}
+
+	// A banned user must not be able to trade a refresh token for a fresh
+	// access token: the ban is checked here, not only at sign-in.
+	if sess.IsHumanPrincipal() {
+		u, userErr := e.store.GetUser(ctx, sess.UserID)
+		if userErr != nil {
+			return nil, account.ErrInvalidCredentials
+		}
+		if u.IsBanned(time.Now()) {
+			return nil, account.ErrUserBanned
+		}
 	}
 
 	// Capture the pre-rotation access token. The rotation below is committed
@@ -857,14 +867,24 @@ func (e *Engine) ResolveSessionByToken(token string) (*session.Session, error) {
 	return sess, nil
 }
 
-// ResolveUser resolves a user by ID string (for middleware).
+// ResolveUser resolves a user by ID string (for middleware). A banned user
+// does not resolve: every credential path that turns an id into a user runs
+// through here, so a ban takes effect on the next request, not the next
+// sign-in.
 func (e *Engine) ResolveUser(userIDStr string) (*user.User, error) {
 	ctx := context.Background()
 	userID, err := id.ParseUserID(userIDStr)
 	if err != nil {
 		return nil, err
 	}
-	return e.store.GetUser(ctx, userID)
+	u, err := e.store.GetUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if u.IsBanned(time.Now()) {
+		return nil, account.ErrUserBanned
+	}
+	return u, nil
 }
 
 // ResolvePrincipalByRef adapts Engine.ResolvePrincipal to
