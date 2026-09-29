@@ -179,6 +179,102 @@ func (a *API) roleInCallerApp(ctx forge.Context, roleID id.RoleID) (*rbac.Role, 
 	return r, nil
 }
 
+// ownerSlugs are the roles that confer ownership. Only a caller holding one
+// may grant one, and only such a caller may change their own roles.
+var ownerSlugs = map[string]bool{"owner": true, rbac.PlatformOwnerSlug: true}
+
+// callerHoldsOwnership reports whether the caller holds an owner role in
+// their app or is a platform owner.
+func (a *API) callerHoldsOwnership(ctx forge.Context, callerID id.UserID) (bool, error) {
+	roles, err := a.engine.ListUserRoles(ctx.Context(), callerID)
+	if err != nil {
+		return false, mapError(err)
+	}
+	for _, r := range roles {
+		if ownerSlugs[r.Slug] {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// requireCallerHolds refuses unless the caller holds every listed
+// permission. It is what keeps a grant from exceeding the granter.
+func (a *API) requireCallerHolds(ctx forge.Context, perms []*rbac.Permission) error {
+	callerID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
+		return forge.Unauthorized("authentication required")
+	}
+	for _, p := range perms {
+		held, err := a.engine.HasPermission(ctx.Context(), callerID, p.Action, p.Resource)
+		if err != nil {
+			return mapError(err)
+		}
+		if !held {
+			return forge.Forbidden(fmt.Sprintf("cannot grant %s:%s: the caller does not hold it", p.Resource, p.Action))
+		}
+	}
+	return nil
+}
+
+// effectivePermissions collects a role's own permissions plus every
+// ancestor's, since assignment confers all of them.
+func (a *API) effectivePermissions(ctx forge.Context, role *rbac.Role) ([]*rbac.Permission, error) {
+	var out []*rbac.Permission
+	seen := map[string]bool{}
+	current := role
+	for current != nil && !seen[current.ID] {
+		seen[current.ID] = true
+		rid, err := id.ParseRoleID(current.ID)
+		if err != nil {
+			break
+		}
+		perms, err := a.engine.ListRolePermissions(ctx.Context(), rid)
+		if err != nil {
+			return nil, mapError(err)
+		}
+		out = append(out, perms...)
+		if current.ParentID == "" {
+			break
+		}
+		pid, err := id.ParseRoleID(current.ParentID)
+		if err != nil {
+			break
+		}
+		parent, err := a.engine.GetRole(ctx.Context(), pid)
+		if err != nil {
+			break
+		}
+		current = parent
+	}
+	return out, nil
+}
+
+// requireAssignable applies the grant ceilings: the caller must hold every
+// permission the role confers, ownership may only be granted by an owner,
+// and a caller may not change their own roles unless they are an owner.
+func (a *API) requireAssignable(ctx forge.Context, role *rbac.Role, target id.UserID) error {
+	callerID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
+		return forge.Unauthorized("authentication required")
+	}
+	isOwner, err := a.callerHoldsOwnership(ctx, callerID)
+	if err != nil {
+		return err
+	}
+	if ownerSlugs[role.Slug] && !isOwner {
+		return forge.Forbidden("only an owner may grant ownership")
+	}
+	if target.String() == callerID.String() && !isOwner {
+		return forge.Forbidden("a caller may not change their own roles")
+	}
+	perms, err := a.effectivePermissions(ctx, role)
+	if err != nil {
+		return err
+	}
+	return a.requireCallerHolds(ctx, perms)
+}
+
 func (a *API) handleCreateRole(ctx forge.Context, req *CreateRoleRequest) (*rbac.Role, error) {
 	if req.Name == "" {
 		return nil, forge.BadRequest("name is required")
@@ -330,6 +426,13 @@ func (a *API) handleAddPermission(ctx forge.Context, req *AddPermissionRequest) 
 		return nil, forge.BadRequest("resource is required")
 	}
 
+	// A caller may only hand out what they hold. Without this, an admin
+	// whose role grants permission:* could add settings:manage to their own
+	// role and reach every tenant's configuration.
+	if err := a.requireCallerHolds(ctx, []*rbac.Permission{{Action: req.Action, Resource: req.Resource}}); err != nil {
+		return nil, err
+	}
+
 	perm := &rbac.Permission{
 		ID:       id.NewPermissionID().String(),
 		RoleID:   roleID.String(),
@@ -411,13 +514,20 @@ func (a *API) handleAssignRole(ctx forge.Context, req *AssignRoleRequest) (*Stat
 		return nil, forge.BadRequest(fmt.Sprintf("invalid role id: %v", err))
 	}
 
-	if _, err = a.roleInCallerApp(ctx, roleID); err != nil {
+	role, err := a.roleInCallerApp(ctx, roleID)
+	if err != nil {
 		return nil, err
 	}
 
 	userID, err := id.ParseUserID(req.UserID)
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid user_id: %v", err))
+	}
+	if _, err := a.userInCallerApp(ctx, userID); err != nil {
+		return nil, err
+	}
+	if err := a.requireAssignable(ctx, role, userID); err != nil {
+		return nil, err
 	}
 
 	ur := &rbac.UserRole{

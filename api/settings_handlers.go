@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,7 +10,9 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/hook"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/settings"
 )
 
@@ -219,6 +222,9 @@ func (a *API) handleSetSetting(ctx forge.Context, req *SetSettingRequest) (*Sett
 		updatedBy = uid.String()
 	}
 
+	if err := a.checkSettingsScope(ctx, scope, req.ScopeID, req.AppID, req.OrgID); err != nil {
+		return nil, err
+	}
 	old := a.settingBefore(ctx, mgr, req.Key, req.AppID, req.OrgID)
 	if err := a.auditSettingsWrite(ctx, hook.ActionSettingsUpdate, req.Key, scope, req.ScopeID, req.AppID, req.OrgID, old, string(req.Value)); err != nil {
 		return nil, err
@@ -234,6 +240,53 @@ func (a *API) handleSetSetting(ctx forge.Context, req *SetSettingRequest) (*Sett
 		ScopeID: req.ScopeID,
 		Status:  "updated",
 	}, nil
+}
+
+// orgLookup is the slice of the organization plugin the settings scope check
+// needs. The core store does not hold organizations, so the API asks the
+// plugin by name.
+type orgLookup interface {
+	GetOrganization(ctx context.Context, orgID id.OrgID) (*organization.Organization, error)
+}
+
+// checkSettingsScope refuses a settings write the caller's tenant does not
+// cover: global scope is reserved to platform owners, app scope must be the
+// caller's own app, and org scope must name an organization inside it.
+func (a *API) checkSettingsScope(ctx forge.Context, scope settings.Scope, scopeID, appID, orgID string) error {
+	switch scope {
+	case settings.ScopeGlobal:
+		_, err := a.requirePlatformOwner(ctx)
+		return err
+	case settings.ScopeApp:
+		target := scopeID
+		if target == "" {
+			target = appID
+		}
+		if _, err := a.scopedAppID(ctx, target); err != nil {
+			return err
+		}
+		return nil
+	case settings.ScopeOrg:
+		target := scopeID
+		if target == "" {
+			target = orgID
+		}
+		parsed, err := id.ParseOrgID(target)
+		if err != nil {
+			return forge.BadRequest("invalid org id")
+		}
+		lookup, ok := a.engine.Plugin("organization").(orgLookup)
+		if !ok || lookup == nil {
+			return forge.Forbidden("organization settings require the organization plugin")
+		}
+		org, err := lookup.GetOrganization(ctx.Context(), parsed)
+		if err != nil || org == nil {
+			return forge.NotFound("organization not found")
+		}
+		return a.assertAppScope(ctx, org.AppID)
+	default:
+		return nil
+	}
 }
 
 // settingBefore returns the effective value of a key before a write so the
@@ -304,6 +357,9 @@ func (a *API) handleEnforceSetting(ctx forge.Context, req *EnforceSettingRequest
 		updatedBy = uid.String()
 	}
 
+	if err := a.checkSettingsScope(ctx, scope, req.ScopeID, req.AppID, req.OrgID); err != nil {
+		return nil, err
+	}
 	old := a.settingBefore(ctx, mgr, req.Key, req.AppID, req.OrgID)
 	if err := a.auditSettingsWrite(ctx, hook.ActionSettingsEnforce, req.Key, scope, req.ScopeID, req.AppID, req.OrgID, old, string(req.Value)); err != nil {
 		return nil, err
@@ -332,6 +388,9 @@ func (a *API) handleUnenforceSetting(ctx forge.Context, req *UnenforceSettingReq
 		return nil, forge.BadRequest("scope is required")
 	}
 
+	if err := a.checkSettingsScope(ctx, scope, req.ScopeID, "", ""); err != nil {
+		return nil, err
+	}
 	old := a.settingBefore(ctx, mgr, req.Key, "", "")
 	if err := a.auditSettingsWrite(ctx, hook.ActionSettingsUnenforce, req.Key, scope, req.ScopeID, "", "", old, ""); err != nil {
 		return nil, err
@@ -354,6 +413,9 @@ func (a *API) handleDeleteSetting(ctx forge.Context, req *DeleteSettingRequest) 
 		return nil, forge.BadRequest("scope is required")
 	}
 
+	if err := a.checkSettingsScope(ctx, scope, req.ScopeID, "", ""); err != nil {
+		return nil, err
+	}
 	old := a.settingBefore(ctx, mgr, req.Key, "", "")
 	if err := a.auditSettingsWrite(ctx, hook.ActionSettingsDelete, req.Key, scope, req.ScopeID, "", "", old, ""); err != nil {
 		return nil, err

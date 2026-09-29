@@ -437,7 +437,8 @@ func (p *Plugin) handleAddMember(ctx forge.Context, req *AddMemberRequest) (*org
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
-	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+	caller, err := p.requireOrgRole(ctx, orgID, organization.RoleAdmin)
+	if err != nil {
 		return nil, err
 	}
 
@@ -450,9 +451,9 @@ func (p *Plugin) handleAddMember(ctx forge.Context, req *AddMemberRequest) (*org
 		return nil, forge.BadRequest(fmt.Sprintf("invalid user_id: %v", err))
 	}
 
-	role := organization.RoleMember
-	if req.Role != "" {
-		role = organization.MemberRole(req.Role)
+	role, err := grantableOrgRole(caller.Role, req.Role)
+	if err != nil {
+		return nil, err
 	}
 
 	m := &organization.Member{
@@ -479,11 +480,15 @@ func (p *Plugin) handleRemoveMember(ctx forge.Context, _ *RemoveMemberRequest) (
 		return nil, forge.BadRequest(fmt.Sprintf("invalid member id: %v", err))
 	}
 
-	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+	caller, err := p.requireOrgRole(ctx, orgID, organization.RoleAdmin)
+	if err != nil {
 		return nil, err
 	}
 	if merr := p.assertMemberInOrg(ctx, memberID, orgID); merr != nil {
 		return nil, merr
+	}
+	if err := p.requireRemovable(ctx, caller, memberID, orgID); err != nil {
+		return nil, err
 	}
 
 	if err := p.RemoveMember(ctx.Context(), memberID); err != nil {
@@ -545,9 +550,9 @@ func (p *Plugin) handleCreateInvitation(ctx forge.Context, req *CreateInvitation
 		return nil, forge.BadRequest("email is required")
 	}
 
-	role := organization.RoleMember
-	if req.Role != "" {
-		role = organization.MemberRole(req.Role)
+	role, err := grantableOrgRole(inviter.Role, req.Role)
+	if err != nil {
+		return nil, err
 	}
 
 	token, err := account.GenerateVerificationToken()

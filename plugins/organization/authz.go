@@ -2,6 +2,7 @@ package organization
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/xraph/forge"
 
@@ -24,6 +25,60 @@ func orgRoleRank(r organization.MemberRole) int {
 	default:
 		return 0
 	}
+}
+
+// grantableOrgRole parses a requested membership role and checks the caller
+// may grant it: the role must be one of the three known roles, and the
+// caller's rank must be at least the requested rank. An admin can therefore
+// add admins and members, never owners.
+func grantableOrgRole(callerRole organization.MemberRole, requested string) (organization.MemberRole, error) {
+	role := organization.RoleMember
+	if requested != "" {
+		role = organization.MemberRole(requested)
+	}
+	if orgRoleRank(role) == 0 {
+		return "", forge.BadRequest("role must be one of owner, admin or member")
+	}
+	if orgRoleRank(callerRole) < orgRoleRank(role) {
+		return "", forge.Forbidden("cannot grant a role above your own")
+	}
+	return role, nil
+}
+
+// requireRemovable applies the removal ceilings: the target's rank may not
+// exceed the caller's, only an owner may remove an owner, and the last owner
+// of an org cannot be removed.
+func (p *Plugin) requireRemovable(ctx forge.Context, caller *organization.Member, memberID id.MemberID, orgID id.OrgID) error {
+	target, err := p.store.GetMember(ctx.Context(), memberID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return forge.NotFound("member not found")
+		}
+		return p.mapError(err)
+	}
+	if orgRoleRank(target.Role) > orgRoleRank(caller.Role) {
+		return forge.Forbidden("cannot remove a member with a higher role than your own")
+	}
+	if target.Role != organization.RoleOwner {
+		return nil
+	}
+	if caller.Role != organization.RoleOwner {
+		return forge.Forbidden("only an owner may remove an owner")
+	}
+	members, err := p.store.ListMembers(ctx.Context(), orgID)
+	if err != nil {
+		return p.mapError(err)
+	}
+	owners := 0
+	for _, m := range members {
+		if m.Role == organization.RoleOwner {
+			owners++
+		}
+	}
+	if owners <= 1 {
+		return forge.NewHTTPError(http.StatusConflict, "an organization must keep at least one owner")
+	}
+	return nil
 }
 
 // requireOrgRole verifies the authenticated caller is a member of orgID holding

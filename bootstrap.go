@@ -74,7 +74,9 @@ func DefaultBootstrapConfig() *BootstrapConfig {
 	return &BootstrapConfig{
 		AppName:           "Platform",
 		AppSlug:           "platform",
-		InitialOwnerCount: 3,
+		// One owner slot. Ownership is claimed by the first verified sign-up
+		// on the platform app; further owners are granted explicitly.
+		InitialOwnerCount: 1,
 		Environments: []BootstrapEnv{
 			{Name: "Development", Slug: "development", Type: environment.TypeDevelopment, IsDefault: true},
 			{Name: "Staging", Slug: "staging", Type: environment.TypeStaging},

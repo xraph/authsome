@@ -85,11 +85,12 @@ func (s *WardenStore) GetRole(ctx context.Context, roleID string) (*Role, error)
 
 func (s *WardenStore) GetRoleBySlug(ctx context.Context, appID, slug string) (*Role, error) {
 	// Warden now requires an explicit namespace path. Authsome roles can live
-	// in the root namespace ("") or in the "platform" namespace (DSL-seeded
-	// platform roles). Try root first for backward compat, then fall back to
-	// "platform" so DSL-created roles are always resolvable without the caller
-	// needing to know the namespace.
-	for _, ns := range []string{"", "platform"} {
+	// in the root namespace (""), in the "app" namespace (the per-app
+	// user/admin/owner roles seeded from app.warden) or in the "platform"
+	// namespace (DSL-seeded platform roles). Try root first for backward
+	// compat, then the two seeded namespaces, so DSL-created roles are always
+	// resolvable without the caller needing to know the namespace.
+	for _, ns := range []string{"", "app", "platform"} {
 		wr, err := s.engine.Store().GetRoleBySlug(ctx, appID, ns, slug)
 		if err == nil {
 			return FromWardenRole(wr), nil
