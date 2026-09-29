@@ -266,6 +266,15 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		return nil, forge.BadRequest("app_id required")
 	}
 
+	// One number may receive only so many codes per window, from however
+	// many client addresses the requests come; each code is a billed SMS.
+	if limitAppID, parseErr := id.ParseAppID(appIDStr); parseErr == nil {
+		if limitErr := authsome.PluginIdentifierLimit(ctx.Context(), p.engine, "phone", limitAppID, req.Phone,
+			func(c authsome.RateLimitConfig) int { return c.ResendVerificationLimit }); limitErr != nil {
+			return nil, forge.NewHTTPError(http.StatusTooManyRequests, "too many codes requested for this number, try again later")
+		}
+	}
+
 	// Generate and send OTP using the MFA SMS helper.
 	challenge, err := mfa.SendSMSChallenge(ctx.Context(), p.sms, req.Phone)
 	if err != nil {

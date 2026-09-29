@@ -267,6 +267,13 @@ func (p *Plugin) handleSend(ctx forge.Context, req *SendRequest) (*SendResponse,
 	// password sign-in do. A magic link grants a session, so resolving an
 	// address app-wide would let one environment mint a session for an
 	// account that lives in another.
+	// One address may receive only so many links per window, from however
+	// many client addresses the requests come.
+	if limitErr := authsome.PluginIdentifierLimit(ctx.Context(), p.engine, "magiclink", appID, req.Email,
+		func(c authsome.RateLimitConfig) int { return c.ResendVerificationLimit }); limitErr != nil {
+		return nil, forge.NewHTTPError(http.StatusTooManyRequests, "too many links requested for this address, try again later")
+	}
+
 	var envID id.EnvironmentID
 	if env, _ := p.store.GetDefaultEnvironment(ctx.Context(), appID); env != nil { //nolint:errcheck // best-effort env lookup
 		envID = env.ID

@@ -220,6 +220,12 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	// Build lockout key from identifier + appID
 	lockoutKey := e.lockoutKey(req)
 
+	// Per-identifier budget: a distributed guess against one account is
+	// refused here even though every request arrives from a fresh address.
+	if err := e.AllowIdentifier(ctx, "signin", req.AppID, firstNonEmpty(req.Email, req.Username), e.config.RateLimit.SignInLimit); err != nil {
+		return nil, nil, err
+	}
+
 	// Check account lockout before proceeding
 	if e.lockout != nil {
 		locked, until, err := e.lockout.IsLocked(ctx, lockoutKey)
@@ -1284,6 +1290,12 @@ func (e *Engine) ForgotPassword(ctx context.Context, appID id.AppID, email strin
 	}
 
 	email = strings.ToLower(strings.TrimSpace(email))
+
+	// Reset mail for one address is capped whatever address it is asked
+	// from; the route limiter alone lets a rotating attacker flood a victim.
+	if err := e.AllowIdentifier(ctx, "forgot-password", appID, email, e.config.RateLimit.ForgotPasswordLimit); err != nil {
+		return nil, err
+	}
 
 	u, err := e.store.GetUserByAnyEmail(ctx, appID, id.Nil, email)
 	if err != nil {

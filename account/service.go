@@ -31,6 +31,7 @@ var (
 	ErrPasswordReused     = errors.New("account: password was recently used and cannot be reused")
 	ErrEmailNotVerified   = errors.New("account: email address must be verified before signing in")
 	ErrTooManyAttempts    = errors.New("account: too many verification attempts; request a new code")
+	ErrRateLimited        = errors.New("account: too many attempts for this identifier; try again later")
 	ErrMFARequired        = errors.New("account: MFA challenge required to complete sign-in")
 )
 

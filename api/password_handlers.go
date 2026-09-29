@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/xraph/forge"
@@ -102,8 +103,12 @@ func (a *API) handleForgotPassword(ctx forge.Context, req *ForgotPasswordRequest
 		return nil, err
 	}
 
-	// ForgotPassword returns nil, nil for unknown emails (avoids email enumeration).
-	_, _ = a.engine.ForgotPassword(ctx.Context(), appID, req.Email) //nolint:errcheck // best-effort lookup
+	// ForgotPassword returns nil, nil for unknown emails (avoids email
+	// enumeration). The one error that does surface is the per-address
+	// budget, which says nothing about whether the address exists.
+	if _, err := a.engine.ForgotPassword(ctx.Context(), appID, req.Email); errors.Is(err, account.ErrRateLimited) {
+		return nil, mapError(err)
+	}
 
 	// Always return success regardless of whether the email exists.
 	resp := &ForgotPasswordResponse{Status: "ok"}

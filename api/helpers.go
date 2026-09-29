@@ -123,6 +123,10 @@ func mapError(err error) error {
 	if errors.Is(err, account.ErrSessionExpired) {
 		return forge.Unauthorized("session expired")
 	}
+	if errors.Is(err, account.ErrRateLimited) {
+		return newCodedError(http.StatusTooManyRequests, "rate_limited",
+			"too many attempts for this account, try again later")
+	}
 	if errors.Is(err, account.ErrWeakPassword) {
 		return forge.BadRequest(err.Error())
 	}
