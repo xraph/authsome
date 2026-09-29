@@ -21,7 +21,10 @@ import (
 type kvModel struct {
 	grove.BaseModel `grove:"table:authsome_kv"`
 
-	Key       string `grove:"key,pk"    bson:"_id"`
+	// Key is the collection's _id. The grove column is named _id as well so
+	// the generated $jsonSchema requires the field mongo actually stores
+	// rather than a "key" property no document carries.
+	Key       string `grove:"_id,pk"    bson:"_id"`
 	Value     []byte `grove:"value"     bson:"value"`
 	Counter   int64  `grove:"counter"   bson:"counter"`
 	ExpiresAt int64  `grove:"expires_at" bson:"expires_at"`
