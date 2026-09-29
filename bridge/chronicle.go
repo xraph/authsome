@@ -20,11 +20,19 @@ type AuditEvent struct {
 	ResourceID string            `json:"resource_id,omitempty"`
 	ActorID    string            `json:"actor_id,omitempty"`
 	Tenant     string            `json:"tenant,omitempty"`
+	OrgID      string            `json:"org_id,omitempty"`
 	Outcome    string            `json:"outcome"`
 	Severity   string            `json:"severity"`
 	Category   string            `json:"category,omitempty"`
 	Metadata   map[string]string `json:"metadata,omitempty"`
 	Reason     string            `json:"reason,omitempty"`
+
+	// Request correlation. Populated by the hook bus from the request
+	// context; an event recorded outside a request leaves them empty.
+	IP        string `json:"ip,omitempty"`
+	UserAgent string `json:"user_agent,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+	SessionID string `json:"session_id,omitempty"`
 }
 
 // Severity constants.
