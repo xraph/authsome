@@ -21,6 +21,10 @@ type SessionActivityConfig struct {
 	// On each authenticated request, ExpiresAt is reset to now + InactivityTimeout.
 	// Default: 30 minutes.
 	InactivityTimeout time.Duration
+
+	// AbsoluteLifetime caps the sliding window: ExpiresAt is never moved
+	// past CreatedAt + AbsoluteLifetime. Zero means no cap.
+	AbsoluteLifetime time.Duration
 }
 
 // SessionActivityConfigResolver returns the activity extension configuration
@@ -129,6 +133,10 @@ func touchSessionActivity(
 	}
 
 	newExpiresAt := now.Add(timeout)
+	// The window slides, but never past the absolute lifetime.
+	if deadline := sess.AbsoluteDeadline(cfg.AbsoluteLifetime); !deadline.IsZero() && newExpiresAt.After(deadline) {
+		newExpiresAt = deadline
+	}
 	if err := toucher(ctx.Context(), sess.ID, now, newExpiresAt); err != nil {
 		logger.Debug("session-activity: failed to touch session",
 			log.String("session_id", sess.ID.String()),

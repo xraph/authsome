@@ -582,6 +582,12 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 		_ = e.store.DeleteSession(ctx, sess.ID) //nolint:errcheck // best-effort cleanup
 		return nil, account.ErrSessionExpired
 	}
+	// A refresh cannot carry a session past its absolute lifetime.
+	absoluteLifetime := e.AbsoluteLifetimeFor(ctx, sess.AppID)
+	if sess.PastAbsoluteDeadline(absoluteLifetime, time.Now()) {
+		_ = e.store.DeleteSession(ctx, sess.ID) //nolint:errcheck // best-effort cleanup
+		return nil, account.ErrSessionExpired
+	}
 
 	// Session binding: validate client IP and/or device match during refresh.
 	if len(opts) > 0 {
@@ -637,6 +643,8 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 	if err = account.RefreshSession(sess, cfg); err != nil {
 		return nil, fmt.Errorf("authsome: refresh session: %w", err)
 	}
+	// The rotated tokens stop at the absolute deadline too.
+	sess.ClampToAbsoluteDeadline(absoluteLifetime)
 
 	// account.RefreshSession always mints an opaque access token. If the app is
 	// configured for JWT access tokens, re-derive a JWT here (mirroring
@@ -861,10 +869,36 @@ func (e *Engine) ResolveSessionByToken(token string) (*session.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	if time.Now().After(sess.ExpiresAt) {
+	now := time.Now()
+	if now.After(sess.ExpiresAt) {
+		return nil, account.ErrSessionExpired
+	}
+	// A session that has slid past its absolute lifetime is expired
+	// whatever its ExpiresAt says.
+	if sess.PastAbsoluteDeadline(e.AbsoluteLifetimeFor(ctx, sess.AppID), now) {
 		return nil, account.ErrSessionExpired
 	}
 	return sess, nil
+}
+
+// AbsoluteLifetimeFor resolves session.absolute_lifetime_seconds for an app.
+// Zero means no absolute deadline, which only an explicit setting of zero
+// produces; the default is thirty days.
+func (e *Engine) AbsoluteLifetimeFor(ctx context.Context, appID id.AppID) time.Duration {
+	secs := 2592000
+	if mgr := e.Settings(); mgr != nil {
+		opts := settings.ResolveOpts{}
+		if !appID.IsNil() {
+			opts.AppID = appID.String()
+		}
+		if v, err := settings.Get(ctx, mgr, SettingAbsoluteLifetimeSeconds, opts); err == nil {
+			secs = v
+		}
+	}
+	if secs < 0 {
+		secs = 0
+	}
+	return time.Duration(secs) * time.Second
 }
 
 // ResolveUser resolves a user by ID string (for middleware). A banned user

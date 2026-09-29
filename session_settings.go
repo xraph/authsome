@@ -249,6 +249,21 @@ var (
 		settings.WithOrder(106),
 		settings.WithVisibleWhen("session.extend_on_activity", true),
 	)
+
+	// SettingAbsoluteLifetimeSeconds bounds how long a session may live from
+	// the moment it was issued, however active it is. The sliding window and
+	// refresh both stop at this deadline.
+	SettingAbsoluteLifetimeSeconds = settings.Define("session.absolute_lifetime_seconds", 2592000,
+		settings.WithDisplayName("Absolute Session Lifetime (seconds)"),
+		settings.WithDescription("A session ends this many seconds after it was issued, no matter how active it is"),
+		settings.WithCategory("Session Extension"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: new(3600), Max: new(31536000)}),
+		settings.WithHelpText("Activity extension and refresh never move a session past created_at + this value. Default: 2592000 (30 days)"),
+		settings.WithOrder(107),
+	)
 )
 
 // Category: Cookie Configuration
@@ -402,6 +417,9 @@ func registerCoreSessionSettings(m *settings.Manager) error {
 		return err
 	}
 	if err := settings.RegisterTyped(m, "session", SettingInactivityTimeoutSeconds); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingAbsoluteLifetimeSeconds); err != nil {
 		return err
 	}
 	if err := settings.RegisterTyped(m, "session", SettingCookieName); err != nil {

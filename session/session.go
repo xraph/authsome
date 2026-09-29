@@ -144,6 +144,37 @@ func (s *Session) IsHumanPrincipal() bool {
 	return s.PrincipalKind == "" || s.PrincipalKind == principal.KindUser
 }
 
+// AbsoluteDeadline is the instant after which the session must not be
+// honoured however active it has been: CreatedAt plus lifetime. A zero
+// lifetime or an unset CreatedAt yields the zero time, meaning no deadline.
+func (s *Session) AbsoluteDeadline(lifetime time.Duration) time.Time {
+	if lifetime <= 0 || s.CreatedAt.IsZero() {
+		return time.Time{}
+	}
+	return s.CreatedAt.Add(lifetime)
+}
+
+// PastAbsoluteDeadline reports whether now is after AbsoluteDeadline.
+func (s *Session) PastAbsoluteDeadline(lifetime time.Duration, now time.Time) bool {
+	d := s.AbsoluteDeadline(lifetime)
+	return !d.IsZero() && now.After(d)
+}
+
+// ClampToAbsoluteDeadline pulls ExpiresAt and RefreshTokenExpiresAt back to
+// the absolute deadline when they were set past it.
+func (s *Session) ClampToAbsoluteDeadline(lifetime time.Duration) {
+	d := s.AbsoluteDeadline(lifetime)
+	if d.IsZero() {
+		return
+	}
+	if s.ExpiresAt.After(d) {
+		s.ExpiresAt = d
+	}
+	if s.RefreshTokenExpiresAt.After(d) {
+		s.RefreshTokenExpiresAt = d
+	}
+}
+
 // AuthzActors returns the actors Warden must independently authorize.
 //
 // Empty for an impersonation, and that is the point. Impersonating somebody is

@@ -812,9 +812,14 @@ func (e *Extension) sessionActivityMiddleware() forge.Middleware {
 				timeoutSec = 1800
 			}
 
+			var appID id.AppID
+			if resolved, ok := middleware.AppIDFrom(ctx); ok {
+				appID = resolved
+			}
 			return middleware.SessionActivityConfig{
 				Enabled:           true,
 				InactivityTimeout: time.Duration(timeoutSec) * time.Second,
+				AbsoluteLifetime:  e.engine.AbsoluteLifetimeFor(ctx, appID),
 			}
 		},
 		e.Logger(),
