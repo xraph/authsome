@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
@@ -124,6 +125,21 @@ func (s *Store) UpdateAPIKey(ctx context.Context, k *apikey.APIKey) error {
 }
 
 // DeleteAPIKey removes an API key.
+// TouchAPIKey writes last_used_at alone.
+func (s *Store) TouchAPIKey(ctx context.Context, keyID id.APIKeyID, at time.Time) error {
+	res, err := s.mdb.NewUpdate((*apiKeyModel)(nil)).
+		Filter(bson.M{"_id": keyID.String()}).
+		Set("last_used_at", at).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("authsome/mongo: touch api key: %w", err)
+	}
+	if res.MatchedCount() == 0 {
+		return store.ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) DeleteAPIKey(ctx context.Context, keyID id.APIKeyID) error {
 	res, err := s.mdb.NewDelete((*apiKeyModel)(nil)).
 		Filter(bson.M{"_id": keyID.String()}).

@@ -1161,6 +1161,21 @@ func (s *Store) UpdateAPIKey(ctx context.Context, k *apikey.APIKey) error {
 	return nil
 }
 
+// TouchAPIKey writes last_used_at alone.
+func (s *Store) TouchAPIKey(ctx context.Context, keyID id.APIKeyID, at time.Time) error {
+	res, err := s.sdb.NewUpdate((*APIKeyModel)(nil)).
+		Set("last_used_at = ?", at.UTC()).
+		Where("id = ?", keyID.String()).
+		Exec(ctx)
+	if err != nil {
+		return sqliteError(err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 { //nolint:errcheck // the driver always reports rows affected
+		return store.ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) DeleteAPIKey(ctx context.Context, keyID id.APIKeyID) error {
 	_, err := s.sdb.NewDelete((*APIKeyModel)(nil)).Where("id = ?", keyID.String()).Exec(ctx)
 	return sqliteError(err)

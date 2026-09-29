@@ -88,6 +88,9 @@ type Config struct {
 	DefaultExpiry time.Duration
 }
 
+// apiKeyTouchInterval is how often a key's last use is written.
+const apiKeyTouchInterval = time.Minute
+
 // UserResolver resolves a user by ID string.
 type UserResolver func(ctx context.Context, userID string) (*user.User, error)
 
@@ -726,15 +729,20 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 		return s.refuse(ctx, r, fmt.Errorf("apikey: key is revoked or expired"))
 	}
 
-	// Update last used timestamp (best-effort, don't fail auth). A key
-	// hashed before the pepper was set is rewritten under it here, so the
-	// legacy digest disappears with use.
+	// Record the use (best-effort, never failing auth): a single-column
+	// touch, and only when the last one is more than a minute old, so a
+	// busy key is one small write a minute rather than a row rewrite per
+	// request. A key hashed before the pepper was set is rewritten under
+	// it, once, so the legacy digest disappears with use.
 	now := time.Now()
-	key.LastUsedAt = &now
+	if key.LastUsedAt == nil || now.Sub(*key.LastUsedAt) >= apiKeyTouchInterval {
+		_ = s.store.TouchAPIKey(ctx, key.ID, now) //nolint:errcheck // best-effort update
+		key.LastUsedAt = &now
+	}
 	if apikey.NeedsRehash(rawKey, key.KeyHash) {
 		key.KeyHash = apikey.HashKey(rawKey)
+		_ = s.store.UpdateAPIKey(ctx, key) //nolint:errcheck // best-effort rehash
 	}
-	_ = s.store.UpdateAPIKey(ctx, key) //nolint:errcheck // best-effort update
 
 	// Score this machine caller through the principal-auth hooks before
 	// minting a session. Static API key traffic used to reach here and fire

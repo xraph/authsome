@@ -7,7 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/ceremony"
@@ -236,6 +239,7 @@ func (e *Engine) IssueSession(ctx context.Context, req *IssueSessionRequest) (*I
 	if hookErr := e.plugins.EmitBeforeSessionCreate(ctx, sess); hookErr != nil {
 		return nil, fmt.Errorf("authsome: before session create: %w", hookErr)
 	}
+	e.enforceSessionCap(ctx, req.User.ID, sessCfg.MaxActiveSessions)
 	if storeErr := e.store.CreateSession(ctx, sess); storeErr != nil {
 		return nil, fmt.Errorf("authsome: persist session: %w", storeErr)
 	}
@@ -456,4 +460,50 @@ func IsMFATicketNotFound(err error) bool {
 // MFA-gated logins).
 func (e *Engine) ceremonyStoreOrFallback() ceremony.Store {
 	return e.ceremonyStore
+}
+
+// enforceSessionCap makes room for one more session under maxActive by
+// revoking the user's oldest sessions, so a cap of N is N, not N plus
+// however many sign-ins nobody counted. Each eviction is audited like any
+// other revocation, with the cap as the reason. A zero or negative cap is
+// no cap. Failures are logged and do not block the sign-in: the cap is a
+// hygiene control, and a listing error must not lock a user out.
+func (e *Engine) enforceSessionCap(ctx context.Context, userID id.UserID, maxActive int) {
+	if maxActive <= 0 {
+		return
+	}
+	sessions, err := e.store.ListUserSessions(ctx, userID)
+	if err != nil {
+		e.logger.Warn("authsome: session cap: list sessions", log.String("error", err.Error()))
+		return
+	}
+	now := time.Now()
+	live := sessions[:0]
+	for _, s := range sessions {
+		if now.Before(s.ExpiresAt) || now.Before(s.RefreshTokenExpiresAt) {
+			live = append(live, s)
+		}
+	}
+	if len(live) < maxActive {
+		return
+	}
+	sort.Slice(live, func(i, j int) bool { return live[i].CreatedAt.Before(live[j].CreatedAt) })
+	for _, s := range live[:len(live)-maxActive+1] {
+		if delErr := e.store.DeleteSession(ctx, s.ID); delErr != nil {
+			e.logger.Warn("authsome: session cap: revoke oldest", log.String("session_id", s.ID.String()), log.String("error", delErr.Error()))
+			continue
+		}
+		e.plugins.EmitAfterSessionRevoke(ctx, s.ID)
+		e.hooks.Emit(ctx, &hook.Event{
+			Action:     hook.ActionSessionRevoke,
+			Resource:   hook.ResourceSession,
+			ResourceID: s.ID.String(),
+			ActorID:    userID.String(),
+			Tenant:     s.AppID.String(),
+			Metadata:   map[string]string{"reason": "max_active_sessions"},
+		})
+		e.relayEvent(ctx, "session.revoked", s.AppID.String(), map[string]string{
+			"user_id": userID.String(), "session_id": s.ID.String(), "reason": "max_active_sessions",
+		})
+	}
 }

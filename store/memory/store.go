@@ -1650,6 +1650,17 @@ func (s *Store) UpdateAPIKey(_ context.Context, k *apikey.APIKey) error {
 	return nil
 }
 
+func (s *Store) TouchAPIKey(_ context.Context, keyID id.APIKeyID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k, ok := s.apikeys[keyID.String()]
+	if !ok {
+		return store.ErrNotFound
+	}
+	k.LastUsedAt = &at
+	return nil
+}
+
 func (s *Store) DeleteAPIKey(_ context.Context, keyID id.APIKeyID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

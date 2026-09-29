@@ -70,6 +70,7 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"UpdateWebhookWritesBackTimestamp", testUpdateWebhookWritesBackTimestamp},
 		{"WebhookSecretNotStored", testWebhookSecretNotStored},
 		{"UpdateAPIKeyWritesBackTimestamp", testUpdateAPIKeyWritesBackTimestamp},
+		{"TouchAPIKeyWritesLastUsed", testTouchAPIKeyWritesLastUsed},
 		{"UpdateEnvironmentWritesBackTimestamp", testUpdateEnvironmentWritesBackTimestamp},
 		{"UpdateFormConfigWritesBackTimestamp", testUpdateFormConfigWritesBackTimestamp},
 		{"UpdateServiceAccountWritesBackTimestamp", testUpdateServiceAccountWritesBackTimestamp},
@@ -1918,4 +1919,26 @@ func testWebhookSecretNotStored(t *testing.T, s store.Store) {
 	require.NoError(t, err)
 	assert.Equal(t, "whsec_legacy", gotLegacy.Secret, "a row with no endpoint keeps its plaintext for adoption")
 	assert.Empty(t, gotLegacy.RelayEndpointID)
+}
+
+// testTouchAPIKeyWritesLastUsed proves the single-column touch records the
+// instant and leaves the rest of the row alone.
+func testTouchAPIKeyWritesLastUsed(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "apikey-touch@test.com")
+	sfx := suffix(id.NewAPIKeyID().String())
+	k := &apikey.APIKey{ID: id.NewAPIKeyID(), AppID: tn.AppID, EnvID: tn.EnvID, UserID: u.ID, Name: "Touch", KeyHash: "hash-" + sfx, KeyPrefix: "pfx_" + sfx, CreatedAt: now(), UpdatedAt: now()}
+	require.NoError(t, s.CreateAPIKey(ctx, k))
+
+	at := now().Add(time.Minute)
+	require.NoError(t, s.TouchAPIKey(ctx, k.ID, at))
+	got, err := s.GetAPIKey(ctx, k.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got.LastUsedAt)
+	assert.WithinDuration(t, at, *got.LastUsedAt, time.Second)
+	assert.Equal(t, "hash-"+sfx, got.KeyHash, "the touch writes nothing else")
+	assert.False(t, got.Revoked)
+
+	assert.ErrorIs(t, s.TouchAPIKey(ctx, id.NewAPIKeyID(), at), store.ErrNotFound)
 }
