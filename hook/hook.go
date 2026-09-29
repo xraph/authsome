@@ -5,21 +5,57 @@ package hook
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
 )
 
+// Severity levels an event can carry. They mirror the audit sink's levels so
+// a call site states how alarming an action is once, at the point it happens.
+const (
+	SeverityInfo     = "info"
+	SeverityWarning  = "warning"
+	SeverityCritical = "critical"
+)
+
+// Outcome values. Emit derives Outcome from Err when the call site leaves it
+// empty.
+const (
+	OutcomeSuccess = "success"
+	OutcomeFailure = "failure"
+)
+
 // Event represents a global hook event emitted on every engine action.
+//
+// Metadata is written to the audit trail verbatim, so it must never hold a
+// credential. Anything a downstream handler needs but the trail must not keep
+// (a reset token, an OTP code) goes in Private, which is dropped before
+// recording and excluded from JSON.
 type Event struct {
 	Action     string            `json:"action"`
 	Resource   string            `json:"resource"`
 	ResourceID string            `json:"resource_id,omitempty"`
 	ActorID    string            `json:"actor_id,omitempty"`
 	Tenant     string            `json:"tenant,omitempty"`
+	OrgID      string            `json:"org_id,omitempty"`
 	Timestamp  time.Time         `json:"timestamp"`
 	Metadata   map[string]string `json:"metadata,omitempty"`
+	Private    map[string]string `json:"-"`
 	Err        error             `json:"-"`
+
+	// Audit shape. Severity defaults to info and Outcome is derived from Err
+	// when left empty. Category groups events for reporting ("auth", "admin").
+	Severity string `json:"severity,omitempty"`
+	Category string `json:"category,omitempty"`
+	Outcome  string `json:"outcome,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+
+	// Request correlation, filled by Emit from the context when empty.
+	IP        string `json:"ip,omitempty"`
+	UserAgent string `json:"user_agent,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+	SessionID string `json:"session_id,omitempty"`
 }
 
 // Handler is a function that handles a global hook event.
@@ -46,21 +82,81 @@ func (b *Bus) On(name string, handler Handler) {
 	b.handlers = append(b.handlers, namedHandler{name, handler})
 }
 
-// Emit dispatches an event to all registered handlers.
-// Errors from handlers are logged but never propagated.
-func (b *Bus) Emit(ctx context.Context, event *Event) {
+// enrich fills the defaults every event carries: timestamp, outcome from Err,
+// info severity, and the request correlation fields from the context. It
+// also warns about an event with no tenant, because such an event cannot be
+// found again by the tenant it concerns.
+func (b *Bus) enrich(ctx context.Context, event *Event) {
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now()
 	}
-	for _, h := range b.handlers {
-		if err := h.handler(ctx, event); err != nil {
-			b.logger.Warn("global hook error",
-				log.String("hook", h.name),
-				log.String("action", event.Action),
-				log.String("error", err.Error()),
-			)
+	if event.Outcome == "" {
+		if event.Err != nil {
+			event.Outcome = OutcomeFailure
+		} else {
+			event.Outcome = OutcomeSuccess
 		}
 	}
+	if event.Severity == "" {
+		event.Severity = SeverityInfo
+	}
+	if event.Reason == "" && event.Err != nil {
+		event.Reason = event.Err.Error()
+	}
+	if info, ok := RequestInfoFrom(ctx); ok {
+		if event.IP == "" {
+			event.IP = info.IP
+		}
+		if event.UserAgent == "" {
+			event.UserAgent = info.UserAgent
+		}
+		if event.RequestID == "" {
+			event.RequestID = info.RequestID
+		}
+		if event.SessionID == "" {
+			event.SessionID = info.SessionID
+		}
+	}
+	if event.Tenant == "" && b.logger != nil {
+		b.logger.Warn("global hook event without a tenant",
+			log.String("action", event.Action),
+			log.String("resource", event.Resource),
+		)
+	}
+}
+
+// Emit dispatches an event to all registered handlers. Handler errors are
+// logged and never propagated; use EmitCritical when a failed record must
+// stop the caller.
+func (b *Bus) Emit(ctx context.Context, event *Event) {
+	_ = b.dispatch(ctx, event)
+}
+
+// EmitCritical dispatches like Emit but returns the first handler error.
+// Every handler still runs, so metrics and notifications observe the event
+// even when the audit sink refused it.
+func (b *Bus) EmitCritical(ctx context.Context, event *Event) error {
+	return b.dispatch(ctx, event)
+}
+
+func (b *Bus) dispatch(ctx context.Context, event *Event) error {
+	b.enrich(ctx, event)
+	var first error
+	for _, h := range b.handlers {
+		if err := h.handler(ctx, event); err != nil {
+			if first == nil {
+				first = fmt.Errorf("hook %q: %w", h.name, err)
+			}
+			if b.logger != nil {
+				b.logger.Warn("global hook error",
+					log.String("hook", h.name),
+					log.String("action", event.Action),
+					log.String("error", err.Error()),
+				)
+			}
+		}
+	}
+	return first
 }
 
 // ──────────────────────────────────────────────────
