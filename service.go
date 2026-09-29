@@ -564,6 +564,27 @@ func (e *Engine) RefreshBySessionToken(ctx context.Context, sessionToken string,
 	return e.rotateSession(ctx, sess, opts...)
 }
 
+// RefreshBySessionID rotates the session with the given id into fresh tokens
+// without the caller presenting either of its credentials.
+//
+// This exists for hand-offs that already proved who is asking by other
+// means: the SSO one-time code, which the browser redeems after the identity
+// provider delivered it, names the session it stands for and nothing more.
+// The store keeps only hashes, so the tokens minted at callback time cannot
+// be read back; rotating the session gives the redeemer live tokens and
+// retires the ones nobody ever received. Everything Refresh enforces after
+// the lookup applies here too.
+func (e *Engine) RefreshBySessionID(ctx context.Context, sessionID id.SessionID, opts ...RefreshOpts) (*session.Session, error) {
+	sess, err := e.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return nil, account.ErrInvalidCredentials
+	}
+	if sess.RefreshTokenHash == "" {
+		return nil, account.ErrInvalidCredentials
+	}
+	return e.rotateSession(ctx, sess, opts...)
+}
+
 // rotateSession is the half of Refresh that runs after the session is in
 // hand: every refusal, the token mint, the compare-and-swap and the
 // revocation of the refresh token that was just spent. sess must have come

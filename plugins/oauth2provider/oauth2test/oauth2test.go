@@ -61,6 +61,8 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"DeviceCodeRoundTrip", testDeviceCodeRoundTrip},
 		{"DeviceCodeUpdate", testDeviceCodeUpdate},
 		{"DeleteExpiredDeviceCodes", testDeleteExpiredDeviceCodes},
+		{"AuthCodeStoredAsHash", testAuthCodeStoredAsHash},
+		{"DeviceCodeStoredAsHash", testDeviceCodeStoredAsHash},
 	}
 	for _, tc := range cases {
 		if skipSet[tc.name] {

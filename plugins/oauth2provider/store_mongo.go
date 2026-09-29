@@ -13,6 +13,7 @@ import (
 	"github.com/xraph/grove/drivers/mongodriver"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/store"
 )
 
 // MongoStore implements oauth2provider.Store using the Grove MongoDB driver.
@@ -233,7 +234,7 @@ func authCodeToDoc(c *AuthorizationCode) *authCodeDoc {
 
 	return &authCodeDoc{
 		ID:                  c.ID.String(),
-		Code:                c.Code,
+		Code:                store.HashToken(c.Code),
 		ClientID:            c.ClientID,
 		UserID:              c.UserID.String(),
 		AppID:               c.AppID.String(),
@@ -326,8 +327,8 @@ func deviceCodeToDoc(dc *DeviceCode) *deviceCodeDoc {
 
 	return &deviceCodeDoc{
 		ID:              dc.ID.String(),
-		DeviceCode:      dc.DeviceCode,
-		UserCode:        dc.UserCode,
+		DeviceCode:      store.HashToken(dc.DeviceCode),
+		UserCode:        store.HashToken(dc.UserCode),
 		ClientID:        dc.ClientID,
 		AppID:           dc.AppID.String(),
 		Scopes:          scopes,
@@ -454,17 +455,22 @@ func (s *MongoStore) CreateAuthCode(ctx context.Context, code *AuthorizationCode
 func (s *MongoStore) GetAuthCode(ctx context.Context, code string) (*AuthorizationCode, error) {
 	doc := new(authCodeDoc)
 	err := s.mdb.Collection(oauth2AuthCodesColl).FindOne(ctx, bson.M{
-		"code": code,
+		"code": store.HashToken(code),
 	}).Decode(doc)
 	if err != nil {
 		return nil, oauth2MongoError(err)
 	}
-	return authCodeDocToModel(doc)
+	ac, err := authCodeDocToModel(doc)
+	if err != nil {
+		return nil, err
+	}
+	ac.Code = code
+	return ac, nil
 }
 
 func (s *MongoStore) ConsumeAuthCode(ctx context.Context, code string) (bool, error) {
 	res, err := s.mdb.Collection(oauth2AuthCodesColl).UpdateOne(ctx,
-		bson.M{"code": code, "consumed": false},
+		bson.M{"code": store.HashToken(code), "consumed": false},
 		bson.M{"$set": bson.M{"consumed": true}},
 	)
 	if err != nil {
@@ -489,7 +495,7 @@ func (s *MongoStore) CreateDeviceCode(ctx context.Context, dc *DeviceCode) error
 func (s *MongoStore) GetDeviceCodeByDeviceCode(ctx context.Context, deviceCode string) (*DeviceCode, error) {
 	doc := new(deviceCodeDoc)
 	err := s.mdb.Collection(oauth2DeviceCodesColl).FindOne(ctx, bson.M{
-		"device_code": deviceCode,
+		"device_code": store.HashToken(deviceCode),
 	}).Decode(doc)
 	if err != nil {
 		if oauth2IsNoDocuments(err) {
@@ -497,13 +503,18 @@ func (s *MongoStore) GetDeviceCodeByDeviceCode(ctx context.Context, deviceCode s
 		}
 		return nil, oauth2MongoError(err)
 	}
-	return deviceCodeDocToModel(doc)
+	dc, err := deviceCodeDocToModel(doc)
+	if err != nil {
+		return nil, err
+	}
+	dc.DeviceCode, dc.UserCode = deviceCode, ""
+	return dc, nil
 }
 
 func (s *MongoStore) GetDeviceCodeByUserCode(ctx context.Context, userCode string) (*DeviceCode, error) {
 	doc := new(deviceCodeDoc)
 	err := s.mdb.Collection(oauth2DeviceCodesColl).FindOne(ctx, bson.M{
-		"user_code": userCode,
+		"user_code": store.HashToken(userCode),
 	}).Decode(doc)
 	if err != nil {
 		if oauth2IsNoDocuments(err) {
@@ -511,7 +522,12 @@ func (s *MongoStore) GetDeviceCodeByUserCode(ctx context.Context, userCode strin
 		}
 		return nil, oauth2MongoError(err)
 	}
-	return deviceCodeDocToModel(doc)
+	dc, err := deviceCodeDocToModel(doc)
+	if err != nil {
+		return nil, err
+	}
+	dc.UserCode, dc.DeviceCode = userCode, ""
+	return dc, nil
 }
 
 func (s *MongoStore) UpdateDeviceCode(ctx context.Context, dc *DeviceCode) error {

@@ -579,15 +579,15 @@ type ExchangeRequest struct {
 }
 
 // otcPayload is the session handoff stashed under a one-time code by ACS and
-// redeemed once (app-bound) at /v1/sso/exchange.
+// redeemed once (app-bound) at /v1/sso/exchange. It names the session and
+// carries no credential: the exchange rotates that session into fresh tokens,
+// so a copy of the ceremony store yields nothing a browser could present.
 type otcPayload struct {
-	User         json.RawMessage `json:"user,omitempty"`
-	SessionToken string          `json:"session_token"`
-	RefreshToken string          `json:"refresh_token"`
-	ExpiresAt    string          `json:"expires_at,omitempty"`
-	Provider     string          `json:"provider,omitempty"`
-	IsNewUser    bool            `json:"is_new_user,omitempty"`
-	AppID        string          `json:"app_id"`
+	User      json.RawMessage `json:"user,omitempty"`
+	SessionID string          `json:"session_id"`
+	Provider  string          `json:"provider,omitempty"`
+	IsNewUser bool            `json:"is_new_user,omitempty"`
+	AppID     string          `json:"app_id"`
 }
 
 // LoginResponse is returned when the SSO flow is initiated.
@@ -612,6 +612,11 @@ type CallbackResponse struct {
 	ExpiresAt    any    `json:"expires_at"`
 	Provider     string `json:"provider"`
 	IsNewUser    bool   `json:"is_new_user"`
+
+	// sessionID names the session the tokens belong to, for the browser
+	// landing paths that hand the session over by one-time code instead of
+	// returning these tokens in a response body.
+	sessionID id.SessionID
 }
 
 // ──────────────────────────────────────────────────
@@ -1258,6 +1263,7 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 		ExpiresAt:    sess.ExpiresAt,
 		Provider:     provider.Name(),
 		IsNewUser:    isNew,
+		sessionID:    sess.ID,
 	}, nil
 }
 
@@ -1351,30 +1357,27 @@ func (p *Plugin) appIDFromState(s *ssoState) (id.AppID, error) {
 	return id.ParseAppID(p.appID)
 }
 
-// mintOTC stashes the freshly-issued session under a single-use one-time code
-// (short TTL, app-bound) for the frontend to redeem at /v1/sso/exchange.
+// mintOTC stashes a reference to the freshly-issued session under a
+// single-use one-time code (short TTL, app-bound) for the frontend to redeem
+// at /v1/sso/exchange. The code names the session; it carries no token.
 func (p *Plugin) mintOTC(ctx context.Context, appID id.AppID, r *CallbackResponse) (string, error) {
+	if r == nil || r.sessionID.IsNil() {
+		return "", errors.New("sso: one-time code needs a session to hand over")
+	}
 	code, err := generateState()
 	if err != nil {
 		return "", err
-	}
-	expires := ""
-	if t, ok := r.ExpiresAt.(time.Time); ok {
-		expires = t.Format(time.RFC3339)
 	}
 	var userJSON json.RawMessage
 	if b, merr := json.Marshal(r.User); merr == nil {
 		userJSON = b
 	}
-	// #nosec G117 G101 -- SessionToken/RefreshToken carry freshly-minted runtime session values, not hardcoded credentials. The payload is stashed single-use under a 60s app-bound OTC (mintOTC) so the browser redeems it at /v1/sso/exchange instead of receiving tokens in a redirect URL.
 	payload, err := json.Marshal(otcPayload{
-		User:         userJSON,
-		SessionToken: r.SessionToken,
-		RefreshToken: r.RefreshToken,
-		ExpiresAt:    expires,
-		Provider:     r.Provider,
-		IsNewUser:    r.IsNewUser,
-		AppID:        appID.String(),
+		User:      userJSON,
+		SessionID: r.sessionID.String(),
+		Provider:  r.Provider,
+		IsNewUser: r.IsNewUser,
+		AppID:     appID.String(),
 	})
 	if err != nil {
 		return "", err
@@ -1385,9 +1388,12 @@ func (p *Plugin) mintOTC(ctx context.Context, appID id.AppID, r *CallbackRespons
 	return code, nil
 }
 
-// handleExchange redeems a one-time code (single-use) for the session tokens.
-// The caller presents its publishable key; the code is bound to the app it was
-// minted for, so it can't be redeemed against a different app.
+// handleExchange redeems a one-time code (single-use) for session tokens. The
+// caller presents its publishable key; the code is bound to the app it was
+// minted for, so it can't be redeemed against a different app. The tokens
+// minted at the identity provider callback were never handed to anyone, so
+// the exchange rotates the session and returns the rotated pair; the callback
+// pair is retired in the same step.
 func (p *Plugin) handleExchange(ctx forge.Context, req *ExchangeRequest) (*CallbackResponse, error) {
 	code := strings.TrimSpace(req.Code)
 	if code == "" {
@@ -1399,12 +1405,28 @@ func (p *Plugin) handleExchange(ctx forge.Context, req *ExchangeRequest) (*Callb
 	}
 	_ = p.ceremonies.Delete(ctx.Context(), "sso:otc:"+code) //nolint:errcheck // single-use
 	var pl otcPayload
-	if err := json.Unmarshal(raw, &pl); err != nil {
+	if unmarshalErr := json.Unmarshal(raw, &pl); unmarshalErr != nil {
 		return nil, forge.BadRequest("invalid code")
 	}
 	// App-bind: reject redemption under a different app's publishable key.
 	if appID, ok := middleware.AppIDFrom(ctx.Context()); ok && appID.String() != pl.AppID {
 		return nil, forge.BadRequest("code is not valid for this app")
+	}
+	sessionID, err := id.ParseSessionID(pl.SessionID)
+	if err != nil {
+		return nil, forge.BadRequest("invalid code")
+	}
+	eng, ok := p.engine.(*authsome.Engine)
+	if !ok || eng == nil {
+		return nil, forge.InternalError(errors.New("sso: exchange needs the authsome engine"))
+	}
+	r := ctx.Request()
+	sess, err := eng.RefreshBySessionID(ctx.Context(), sessionID, authsome.RefreshOpts{
+		IPAddress: middleware.ClientIP(r),
+		UserAgent: r.UserAgent(),
+	})
+	if err != nil {
+		return nil, forge.BadRequest("invalid or expired code")
 	}
 	var u any
 	if len(pl.User) > 0 {
@@ -1412,11 +1434,12 @@ func (p *Plugin) handleExchange(ctx forge.Context, req *ExchangeRequest) (*Callb
 	}
 	return &CallbackResponse{
 		User:         u,
-		SessionToken: pl.SessionToken,
-		RefreshToken: pl.RefreshToken,
-		ExpiresAt:    pl.ExpiresAt,
+		SessionToken: sess.Token,
+		RefreshToken: sess.RefreshToken,
+		ExpiresAt:    sess.ExpiresAt,
 		Provider:     pl.Provider,
 		IsNewUser:    pl.IsNewUser,
+		sessionID:    sess.ID,
 	}, nil
 }
 

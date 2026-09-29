@@ -6,14 +6,15 @@ import (
 	"time"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/store"
 )
 
 // MemoryStore is an in-memory implementation of the OAuth2 Store for testing.
 type MemoryStore struct {
 	mu          sync.RWMutex
 	clients     map[string]*OAuth2Client      // keyed by ClientID (the OAuth2 client_id string)
-	codes       map[string]*AuthorizationCode // keyed by Code
-	deviceCodes map[string]*DeviceCode        // keyed by DeviceCode
+	codes       map[string]*AuthorizationCode // keyed by store.HashToken(Code)
+	deviceCodes map[string]*DeviceCode        // keyed by ID; codes are held hashed
 }
 
 // NewMemoryStore creates a new in-memory OAuth2 store.
@@ -108,24 +109,28 @@ func (s *MemoryStore) DeleteClient(_ context.Context, clientID id.OAuth2ClientID
 func (s *MemoryStore) CreateAuthCode(_ context.Context, code *AuthorizationCode) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.codes[code.Code] = code
+	stored := *code
+	stored.Code = store.HashToken(code.Code)
+	s.codes[stored.Code] = &stored
 	return nil
 }
 
 func (s *MemoryStore) GetAuthCode(_ context.Context, code string) (*AuthorizationCode, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	c, ok := s.codes[code]
+	c, ok := s.codes[store.HashToken(code)]
 	if !ok {
 		return nil, ErrCodeNotFound
 	}
-	return c, nil
+	copied := *c
+	copied.Code = code
+	return &copied, nil
 }
 
 func (s *MemoryStore) ConsumeAuthCode(_ context.Context, code string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	c, ok := s.codes[code]
+	c, ok := s.codes[store.HashToken(code)]
 	if !ok {
 		return false, ErrCodeNotFound
 	}
@@ -143,26 +148,36 @@ func (s *MemoryStore) ConsumeAuthCode(_ context.Context, code string) (bool, err
 func (s *MemoryStore) CreateDeviceCode(_ context.Context, dc *DeviceCode) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.deviceCodes[dc.DeviceCode] = dc
+	stored := *dc
+	stored.DeviceCode = store.HashToken(dc.DeviceCode)
+	stored.UserCode = store.HashToken(dc.UserCode)
+	s.deviceCodes[dc.ID.String()] = &stored
 	return nil
 }
 
 func (s *MemoryStore) GetDeviceCodeByDeviceCode(_ context.Context, deviceCode string) (*DeviceCode, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	dc, ok := s.deviceCodes[deviceCode]
-	if !ok {
-		return nil, ErrDeviceCodeNotFound
+	h := store.HashToken(deviceCode)
+	for _, dc := range s.deviceCodes {
+		if dc.DeviceCode == h {
+			copied := *dc
+			copied.DeviceCode, copied.UserCode = deviceCode, ""
+			return &copied, nil
+		}
 	}
-	return dc, nil
+	return nil, ErrDeviceCodeNotFound
 }
 
 func (s *MemoryStore) GetDeviceCodeByUserCode(_ context.Context, userCode string) (*DeviceCode, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	h := store.HashToken(userCode)
 	for _, dc := range s.deviceCodes {
-		if dc.UserCode == userCode {
-			return dc, nil
+		if dc.UserCode == h {
+			copied := *dc
+			copied.UserCode, copied.DeviceCode = userCode, ""
+			return &copied, nil
 		}
 	}
 	return nil, ErrDeviceCodeNotFound
@@ -171,10 +186,15 @@ func (s *MemoryStore) GetDeviceCodeByUserCode(_ context.Context, userCode string
 func (s *MemoryStore) UpdateDeviceCode(_ context.Context, dc *DeviceCode) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.deviceCodes[dc.DeviceCode]; !ok {
+	stored, ok := s.deviceCodes[dc.ID.String()]
+	if !ok {
 		return ErrDeviceCodeNotFound
 	}
-	s.deviceCodes[dc.DeviceCode] = dc
+	// Only the fields the flow mutates; dc carries whichever plaintext code
+	// the lookup that found it presented, never both hashes.
+	stored.Status = dc.Status
+	stored.UserID = dc.UserID
+	stored.LastPolledAt = dc.LastPolledAt
 	return nil
 }
 

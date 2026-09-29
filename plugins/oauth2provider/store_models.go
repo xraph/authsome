@@ -7,6 +7,7 @@ import (
 	"github.com/xraph/grove"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/store"
 )
 
 // ──────────────────────────────────────────────────
@@ -46,7 +47,11 @@ type oauth2ClientModel struct {
 type authCodeModel struct {
 	grove.BaseModel `grove:"table:authsome_oauth2_auth_codes,alias:ac"`
 
-	ID                  string          `grove:"id,pk"`
+	ID string `grove:"id,pk"`
+	// Code holds store.HashToken of the authorization code. Codes live for
+	// minutes, so there is no legacy plaintext path: a code minted by a
+	// release before hashing simply fails to redeem once that release is
+	// gone, and the client re-runs the authorization request.
 	Code                string          `grove:"code,notnull"`
 	ClientID            string          `grove:"client_id,notnull"`
 	UserID              string          `grove:"user_id,notnull"`
@@ -68,7 +73,9 @@ type authCodeModel struct {
 type deviceCodeModel struct {
 	grove.BaseModel `grove:"table:authsome_oauth2_device_codes,alias:dc"`
 
-	ID              string          `grove:"id,pk"`
+	ID string `grove:"id,pk"`
+	// DeviceCode and UserCode hold store.HashToken of the codes the device
+	// and the human present; see authCodeModel.Code.
 	DeviceCode      string          `grove:"device_code,notnull"`
 	UserCode        string          `grove:"user_code,notnull"`
 	ClientID        string          `grove:"client_id,notnull"`
@@ -261,7 +268,7 @@ func fromAuthCode(c *AuthorizationCode) *authCodeModel {
 
 	return &authCodeModel{
 		ID:                  c.ID.String(),
-		Code:                c.Code,
+		Code:                store.HashToken(c.Code),
 		ClientID:            c.ClientID,
 		UserID:              c.UserID.String(),
 		AppID:               c.AppID.String(),
@@ -337,8 +344,8 @@ func fromDeviceCode(dc *DeviceCode) *deviceCodeModel {
 
 	return &deviceCodeModel{
 		ID:              dc.ID.String(),
-		DeviceCode:      dc.DeviceCode,
-		UserCode:        dc.UserCode,
+		DeviceCode:      store.HashToken(dc.DeviceCode),
+		UserCode:        store.HashToken(dc.UserCode),
 		ClientID:        dc.ClientID,
 		AppID:           dc.AppID.String(),
 		Scopes:          scopes,

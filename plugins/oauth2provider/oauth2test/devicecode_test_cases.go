@@ -11,6 +11,7 @@ import (
 
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugins/oauth2provider"
+	"github.com/xraph/authsome/store"
 )
 
 func newDeviceCode(f Fixture, clientID string) *oauth2provider.DeviceCode {
@@ -49,7 +50,7 @@ func testDeviceCodeRoundTrip(t *testing.T, f Fixture) {
 	byDevice, err := f.Store.GetDeviceCodeByDeviceCode(ctx, dc.DeviceCode)
 	require.NoError(t, err)
 	assert.Equal(t, dc.ID, byDevice.ID)
-	assert.Equal(t, dc.UserCode, byDevice.UserCode)
+	assert.Empty(t, byDevice.UserCode, "the store keeps only a digest of the user code, so a device-code lookup cannot hand it back")
 	assert.Equal(t, dc.ClientID, byDevice.ClientID)
 	assert.Equal(t, dc.AppID, byDevice.AppID)
 	assert.Equal(t, dc.Scopes, byDevice.Scopes)
@@ -60,6 +61,7 @@ func testDeviceCodeRoundTrip(t *testing.T, f Fixture) {
 	byUser, err := f.Store.GetDeviceCodeByUserCode(ctx, dc.UserCode)
 	require.NoError(t, err)
 	assert.Equal(t, dc.ID, byUser.ID, "both lookups must resolve to the same record")
+	assert.Empty(t, byUser.DeviceCode, "the polling credential stays hidden from the user-code path")
 
 	_, err = f.Store.GetDeviceCodeByDeviceCode(ctx, unique("absent"))
 	require.Error(t, err)
@@ -121,4 +123,36 @@ func testDeleteExpiredDeviceCodes(t *testing.T, f Fixture) {
 
 	_, err = f.Store.GetDeviceCodeByDeviceCode(ctx, live.DeviceCode)
 	assert.NoError(t, err, "the sweep must not delete a device code that is still valid")
+}
+
+// testDeviceCodeStoredAsHash proves both device codes are kept as digests,
+// that each lookup hands back the plaintext it was given, and that the update
+// a poll performs never disturbs either digest.
+func testDeviceCodeStoredAsHash(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	dc := seedDeviceCode(t, f)
+
+	_, err := f.Store.GetDeviceCodeByDeviceCode(ctx, store.HashToken(dc.DeviceCode))
+	require.ErrorIs(t, err, oauth2provider.ErrDeviceCodeNotFound, "the stored digest must not act as the device code")
+	_, err = f.Store.GetDeviceCodeByUserCode(ctx, store.HashToken(dc.UserCode))
+	require.ErrorIs(t, err, oauth2provider.ErrDeviceCodeNotFound, "the stored digest must not act as the user code")
+
+	byDevice, err := f.Store.GetDeviceCodeByDeviceCode(ctx, dc.DeviceCode)
+	require.NoError(t, err)
+	assert.Equal(t, dc.DeviceCode, byDevice.DeviceCode, "the presented device code rides back")
+
+	// The poll path: look up by device code, record the poll, then the human
+	// authorizes by user code. Both lookups must still resolve afterwards.
+	byDevice.LastPolledAt = now()
+	require.NoError(t, f.Store.UpdateDeviceCode(ctx, byDevice))
+	byUser, err := f.Store.GetDeviceCodeByUserCode(ctx, dc.UserCode)
+	require.NoError(t, err, "an update after a device-code lookup must not disturb the user-code digest")
+	assert.Equal(t, dc.UserCode, byUser.UserCode, "the presented user code rides back")
+	byUser.Status = oauth2provider.DeviceCodeStatusAuthorized
+	byUser.UserID = f.UserID
+	require.NoError(t, f.Store.UpdateDeviceCode(ctx, byUser))
+	again, err := f.Store.GetDeviceCodeByDeviceCode(ctx, dc.DeviceCode)
+	require.NoError(t, err, "an update after a user-code lookup must not disturb the device-code digest")
+	assert.Equal(t, oauth2provider.DeviceCodeStatusAuthorized, again.Status)
+	assert.Equal(t, f.UserID, again.UserID)
 }
