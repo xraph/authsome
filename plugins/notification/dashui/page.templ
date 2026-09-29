@@ -686,9 +686,17 @@ templ TemplateDetailPage(data TemplateDetailData) {
 							<div>
 								<span class="text-xs font-medium text-muted-foreground uppercase tracking-wide">HTML</span>
 								<div class="mt-1 rounded-md border bg-muted/30 p-4">
-									<div class="prose prose-sm max-w-none dark:prose-invert">
-										@templ.Raw(data.Preview.HTML)
-									</div>
+									<!-- The template is operator-authored HTML rendered with sample
+									     data. It is shown in a sandboxed frame with no scripts, no
+									     same-origin access and no forms, so nothing in it can reach
+									     the dashboard's session or DOM. -->
+									<iframe
+										sandbox=""
+										referrerpolicy="no-referrer"
+										title="Template preview"
+										class="w-full min-h-96 rounded border-0 bg-white"
+										srcdoc={ data.Preview.HTML }
+									></iframe>
 								</div>
 							</div>
 						}

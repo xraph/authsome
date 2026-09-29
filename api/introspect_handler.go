@@ -16,14 +16,16 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerIntrospectRoutes(router forge.Router) error {
-	g := router.Group("/v1", forge.WithGroupTags("introspection"))
+	// A resource server introspects with its own credential (a secret key
+	// or a session); nobody probes tokens anonymously.
+	g := router.Group("/v1", forge.WithGroupTags("introspection"), forge.WithGroupMiddleware(middleware.RequireAuth()))
 	rlCfg := a.engine.Config().RateLimit
 
 	introspectOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
 	introspectOpts = append(introspectOpts,
 		forge.WithMiddleware(middleware.RequireScope()),
 		forge.WithSummary("Introspect token"),
-		forge.WithDescription("Validates a token and returns the associated identity. Follows RFC 7662 semantics: invalid tokens return {active: false} with 200 status."),
+		forge.WithDescription("Validates a token. Follows RFC 7662 semantics: invalid tokens return {active: false} with 200 status. Requires a secret API key or a session; callers without manage on app see only active, expires_at, user_id, scope, aud and cnf."),
 		forge.WithOperationID("introspectToken"),
 		forge.WithRequestSchema(IntrospectRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Token introspection result", IntrospectResponse{}),
@@ -66,6 +68,7 @@ func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*Intr
 			SessionID: claims.SessionID,
 			ExpiresAt: claims.ExpiresAt.Format(time.RFC3339),
 			Audience:  claims.Audience,
+			Scope:     strings.Join(claims.Scopes, " "),
 		}
 		resp.Confirmation = confirmationFor(claims.DPoPJKT)
 
@@ -82,7 +85,7 @@ func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*Intr
 			}
 		}
 
-		return resp, nil
+		return a.introspectionFor(ctx, resp), nil
 	}
 
 	// Opaque session token
@@ -98,6 +101,7 @@ func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*Intr
 		SessionID: sess.ID.String(),
 		ExpiresAt: sess.ExpiresAt.Format(time.RFC3339),
 		Audience:  sess.Audience,
+		Scope:     strings.Join(sess.Scopes, " "),
 	}
 	resp.Confirmation = confirmationFor(sess.DPoPJKT)
 
@@ -119,7 +123,38 @@ func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*Intr
 		}
 	}
 
-	return resp, nil
+	return a.introspectionFor(ctx, resp), nil
+}
+
+// introspectionFor trims a full introspection to what the caller may see.
+// A caller that manages the app (the entitlement every admin surface
+// checks; "read on user" is held by every user of an app under the warden
+// schema and gates nothing) gets everything; anyone else gets what a
+// resource server needs to enforce the token (active, expiry, subject,
+// scope, audience, and the cnf binding) and nothing about the person.
+func (a *API) introspectionFor(ctx forge.Context, full *IntrospectResponse) *IntrospectResponse {
+	if !full.Active || a.callerManagesApp(ctx) {
+		return full
+	}
+	return &IntrospectResponse{
+		Active:       full.Active,
+		UserID:       full.UserID,
+		ExpiresAt:    full.ExpiresAt,
+		Scope:        full.Scope,
+		Audience:     full.Audience,
+		Confirmation: full.Confirmation,
+	}
+}
+
+// callerManagesApp reports whether the authenticated caller holds manage on
+// app.
+func (a *API) callerManagesApp(ctx forge.Context) bool {
+	userID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
+		return false
+	}
+	allowed, err := a.engine.HasPermission(ctx.Context(), userID, "manage", "app")
+	return err == nil && allowed
 }
 
 // confirmationFor builds the cnf claim for a bound token, or nil when the
@@ -197,7 +232,7 @@ func (a *API) introspectAPIKey(ctx forge.Context, token string, inactive *Intros
 		}
 	}
 
-	return resp, nil
+	return a.introspectionFor(ctx, resp), nil
 }
 
 // extractAPIKeyPrefix returns the lookup prefix for a raw API key. Mirrors

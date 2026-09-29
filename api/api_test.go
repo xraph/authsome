@@ -1137,7 +1137,10 @@ func TestWriteAccountError_EmailTaken_NoLeak(t *testing.T) {
 
 func TestIntrospect_APIKey_ValidSecretKey(t *testing.T) {
 	t.Parallel()
-	_, eng := newTestAPI(t)
+	// The caller is the bootstrapped owner: manage on app shows the whole answer.
+	_, eng := newBootstrappedAPI(t)
+	_, ownerToken, _ := signUp(t, eng, "introspect-owner@test.com", "SecureP@ss123")
+	ownerID := userIDFor(t, eng, ownerToken)
 	router := newAPIWithRouter(t, eng)
 	ctx := context.Background()
 
@@ -1165,6 +1168,7 @@ func TestIntrospect_APIKey_ValidSecretKey(t *testing.T) {
 	body, _ := json.Marshal(map[string]string{"token": secretKey})
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/introspect", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req = asAdmin(t, req, eng, ownerID)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -1187,6 +1191,7 @@ func TestIntrospect_APIKey_PublicKeyRejected(t *testing.T) {
 	body, _ := json.Marshal(map[string]string{"token": publicKey})
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/introspect", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req = asCaller(t, req, eng)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -1222,6 +1227,7 @@ func TestIntrospect_APIKey_RevokedReturnsInactive(t *testing.T) {
 	body, _ := json.Marshal(map[string]string{"token": secretKey})
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/introspect", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req = asCaller(t, req, eng)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

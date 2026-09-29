@@ -710,7 +710,8 @@ type IntrospectResponse struct {
 	SessionID string          `json:"session_id,omitempty" description:"Session ID"`
 	ExpiresAt string          `json:"expires_at,omitempty" description:"Token expiration time (RFC 3339)"`
 	Audience  []string        `json:"aud,omitempty" description:"Resource identifiers this token is valid for (RFC 8707)"`
-	User      *IntrospectUser `json:"user,omitempty" description:"Resolved user details"`
+	Scope     string          `json:"scope,omitempty" description:"Space-separated scopes the token was issued with"`
+	User      *IntrospectUser `json:"user,omitempty" description:"Resolved user details (callers with manage on app only)"`
 
 	// Confirmation carries the RFC 7800 cnf claim for a DPoP-bound token
 	// (RFC 9449 section 7.3). A resource server that validates tokens by

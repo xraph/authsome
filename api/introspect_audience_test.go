@@ -71,13 +71,14 @@ func newHMACJWTFormat(t *testing.T) *tokenformat.JWT {
 	return j
 }
 
-func postIntrospect(t *testing.T, router http.Handler, token string) *httptest.ResponseRecorder {
+func postIntrospect(t *testing.T, router http.Handler, eng *authsome.Engine, token string) *httptest.ResponseRecorder {
 	t.Helper()
 	body, err := json.Marshal(map[string]string{"token": token})
 	require.NoError(t, err)
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost,
 		"/v1/introspect", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req = asCaller(t, req, eng)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	return rec
@@ -122,7 +123,7 @@ func TestIntrospectAudience(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		rec := postIntrospect(t, router, token)
+		rec := postIntrospect(t, router, eng, token)
 		require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 		var resp api.IntrospectResponse
@@ -142,7 +143,7 @@ func TestIntrospectAudience(t *testing.T) {
 		sess.Audience = []string{audResAPI, audResFiles}
 		require.NoError(t, eng.Store().UpdateSession(context.Background(), sess))
 
-		rec := postIntrospect(t, router, token)
+		rec := postIntrospect(t, router, eng, token)
 		require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 		var resp api.IntrospectResponse
@@ -157,7 +158,7 @@ func TestIntrospectAudience(t *testing.T) {
 
 		token := signUpForAudience(t, eng, "aud-none@example.com")
 
-		rec := postIntrospect(t, router, token)
+		rec := postIntrospect(t, router, eng, token)
 		require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 		// A struct unmarshal can't distinguish an absent key from a present
