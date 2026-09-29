@@ -141,6 +141,9 @@ type Engine struct {
 	// the same instant cannot both claim the last owner slot.
 	ownerMu sync.Mutex
 
+	// dummyHashObserver is a test seam; see SetDummyHashObserver.
+	dummyHashObserver func(account.PasswordPolicy)
+
 	// Database reference for plugins that need direct database access
 	// to create their own persistent stores.
 	db *grove.DB

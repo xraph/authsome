@@ -467,13 +467,14 @@ func TestSignup_DuplicateRunsDummyHash(t *testing.T) {
 
 	// The hash has to cost what a real signup costs. Hashing with, say,
 	// bcrypt cost 4 on the duplicate path would still leave a usable oracle.
-	require.Equal(t, enginePasswordPolicy(eng), calls[0],
+	require.Equal(t, enginePasswordPolicy(eng), hashCost(calls[0]),
 		"duplicate-path hash must use the engine's configured password policy")
 }
 
-// enginePasswordPolicy mirrors the policy handleSignUp derives from engine
-// config, so the dummy-hash assertion compares against the same cost
-// parameters a real signup pays rather than a hardcoded guess.
+// enginePasswordPolicy mirrors the cost parameters a real signup pays, so
+// the dummy-hash assertion compares against them rather than a hardcoded
+// guess. The engine now hashes with its full policy; only the cost
+// parameters decide the timing, so only those are compared.
 func enginePasswordPolicy(eng *authsome.Engine) account.PasswordPolicy {
 	cfg := eng.Config().Password
 	return account.PasswordPolicy{
@@ -487,6 +488,11 @@ func enginePasswordPolicy(eng *authsome.Engine) account.PasswordPolicy {
 			KeyLength:   cfg.Argon2.KeyLength,
 		},
 	}
+}
+
+// hashCost keeps only the fields of a policy that set the hash's cost.
+func hashCost(p account.PasswordPolicy) account.PasswordPolicy {
+	return account.PasswordPolicy{BcryptCost: p.BcryptCost, Algorithm: p.Algorithm, Argon2Params: p.Argon2Params}
 }
 
 // TestSignup_DuplicateReturnsPlausibleTokenShape verifies that the duplicate

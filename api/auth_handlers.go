@@ -186,24 +186,9 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 // error from the hash function is intentionally ignored — this is purely a
 // time-budget consumer.
 func (a *API) consumeDummyHashBudget(password string) {
-	if password == "" {
-		// Match the synthetic case where we still want to spend the
-		// time budget. Hash a fixed sentinel.
-		password = "x"
-	}
-	cfg := a.engine.Config().Password
-	policy := account.PasswordPolicy{
-		BcryptCost: cfg.BcryptCost,
-		Algorithm:  cfg.Algorithm,
-		Argon2Params: account.Argon2Params{
-			Memory:      cfg.Argon2.Memory,
-			Iterations:  cfg.Argon2.Iterations,
-			Parallelism: cfg.Argon2.Parallelism,
-			SaltLength:  cfg.Argon2.SaltLength,
-			KeyLength:   cfg.Argon2.KeyLength,
-		},
-	}
-	_, _ = account.HashPasswordWithPolicy(password, policy) //nolint:errcheck // dummy hash for timing budget
+	// The engine owns the hash and its policy; sign-in's unknown-identifier
+	// path spends the same budget through the same method.
+	policy := a.engine.ConsumeDummyHash(password)
 
 	// Test-only observation point (nil in production). Reports the policy
 	// actually used so a test can assert the duplicate path hashes with the

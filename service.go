@@ -284,6 +284,17 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	}
 
 	if err != nil {
+		// An unknown identifier pays the same hash a known one would, so
+		// the response time does not say which identifiers exist.
+		e.ConsumeDummyHash(req.Password)
+		e.recordFailedSignin(ctx, req, lockoutKey)
+		return nil, nil, account.ErrInvalidCredentials
+	}
+
+	// Verify the password before the ban: a wrong password on a banned
+	// account gets the generic answer, so probing a ban costs the right
+	// password.
+	if checkErr := account.CheckPassword(u.PasswordHash, req.Password); checkErr != nil {
 		e.recordFailedSignin(ctx, req, lockoutKey)
 		return nil, nil, account.ErrInvalidCredentials
 	}
@@ -292,12 +303,6 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	if u.IsBanned(time.Now()) {
 		e.recordFailedSignin(ctx, req, lockoutKey)
 		return nil, nil, account.ErrUserBanned
-	}
-
-	// Verify password
-	if checkErr := account.CheckPassword(u.PasswordHash, req.Password); checkErr != nil {
-		e.recordFailedSignin(ctx, req, lockoutKey)
-		return nil, nil, account.ErrInvalidCredentials
 	}
 
 	// Reset lockout on successful authentication
