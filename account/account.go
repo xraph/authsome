@@ -14,16 +14,20 @@ import (
 // failed entry attempts so callers can enforce a maximum before requiring a
 // resend.
 type Verification struct {
-	ID        id.VerificationID `json:"id"`
-	AppID     id.AppID          `json:"app_id"`
-	EnvID     id.EnvironmentID  `json:"env_id"`
-	UserID    id.UserID         `json:"user_id"`
-	Token     string            `json:"-"`
-	Type      VerificationType  `json:"type"`
-	Attempts  int               `json:"attempts"`
-	ExpiresAt time.Time         `json:"expires_at"`
-	Consumed  bool              `json:"consumed"`
-	CreatedAt time.Time         `json:"created_at"`
+	ID     id.VerificationID `json:"id"`
+	AppID  id.AppID          `json:"app_id"`
+	EnvID  id.EnvironmentID  `json:"env_id"`
+	UserID id.UserID         `json:"user_id"`
+	// Token is the plaintext, present on the way into the store and on a
+	// verification looked up by that plaintext. TokenHash is what the store
+	// keeps; a verification read back by user carries only the hash.
+	Token     string           `json:"-"`
+	TokenHash string           `json:"-"`
+	Type      VerificationType `json:"type"`
+	Attempts  int              `json:"attempts"`
+	ExpiresAt time.Time        `json:"expires_at"`
+	Consumed  bool             `json:"consumed"`
+	CreatedAt time.Time        `json:"created_at"`
 }
 
 // VerificationType identifies the kind of verification.
@@ -41,6 +45,7 @@ type PasswordReset struct {
 	EnvID     id.EnvironmentID   `json:"env_id"`
 	UserID    id.UserID          `json:"user_id"`
 	Token     string             `json:"-"`
+	TokenHash string             `json:"-"`
 	ExpiresAt time.Time          `json:"expires_at"`
 	Consumed  bool               `json:"consumed"`
 	CreatedAt time.Time          `json:"created_at"`

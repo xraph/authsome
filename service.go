@@ -1771,6 +1771,20 @@ func (e *Engine) issueEmailVerificationForUser(ctx context.Context, u *user.User
 	} else {
 		e.logger.Warn("authsome: no default environment resolved for verification env_id", log.String("app_id", u.AppID.String()))
 	}
+	// Only the newest code is ever checked (VerifyEmailCode reads the latest
+	// active verification), so retire the ones this code replaces. That
+	// keeps a resend from leaving live-looking codes behind and makes the
+	// latest one unambiguous when two are issued within one clock tick.
+	for range maxEmailVerificationAttempts {
+		prior, priorErr := e.store.GetActiveEmailVerification(ctx, u.ID)
+		if priorErr != nil {
+			break
+		}
+		prior.Consumed = true
+		if updErr := e.store.UpdateVerification(ctx, prior); updErr != nil {
+			break
+		}
+	}
 	if createErr := e.store.CreateVerification(ctx, v); createErr != nil {
 		return "", fmt.Errorf("authsome: create verification: %w", createErr)
 	}
@@ -1815,7 +1829,10 @@ func (e *Engine) VerifyEmailCode(ctx context.Context, userID id.UserID, code str
 		return account.ErrTooManyAttempts
 	}
 
-	if subtle.ConstantTimeCompare([]byte(v.Token), []byte(code)) != 1 {
+	// The store keeps only the hash of the code, so the comparison is between
+	// digests. Constant time still matters: it keeps the compare's timing
+	// independent of how many leading bytes happen to match.
+	if subtle.ConstantTimeCompare([]byte(v.TokenHash), []byte(store.HashToken(code))) != 1 {
 		v.Attempts++
 		_ = e.store.UpdateVerification(ctx, v) //nolint:errcheck // best-effort attempt tracking
 		return account.ErrInvalidCredentials

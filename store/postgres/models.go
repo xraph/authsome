@@ -451,16 +451,19 @@ func fromSession(s *session.Session) *SessionModel {
 type VerificationModel struct {
 	grove.BaseModel `grove:"table:authsome_verifications,alias:v"`
 
-	ID        string    `grove:"id,pk"`
-	AppID     string    `grove:"app_id,notnull"`
-	EnvID     string    `grove:"env_id,notnull"`
-	UserID    string    `grove:"user_id,notnull"`
-	Token     string    `grove:"token,notnull"`
-	Type      string    `grove:"type,notnull"`
-	Attempts  int       `grove:"attempts,notnull,default:0"`
-	ExpiresAt time.Time `grove:"expires_at,notnull"`
-	Consumed  bool      `grove:"consumed"`
-	CreatedAt time.Time `grove:"created_at,notnull,default:now()"`
+	ID     string `grove:"id,pk"`
+	AppID  string `grove:"app_id,notnull"`
+	EnvID  string `grove:"env_id,notnull"`
+	UserID string `grove:"user_id,notnull"`
+	Token  string `grove:"token,notnull"`
+	// TokenHash is store.HashToken of the code; Token is empty on rows
+	// written since hash_credential_tokens and NULL here marks a legacy row.
+	TokenHash sql.NullString `grove:"token_hash"`
+	Type      string         `grove:"type,notnull"`
+	Attempts  int            `grove:"attempts,notnull,default:0"`
+	ExpiresAt time.Time      `grove:"expires_at,notnull"`
+	Consumed  bool           `grove:"consumed"`
+	CreatedAt time.Time      `grove:"created_at,notnull,default:now()"`
 }
 
 func toVerification(m *VerificationModel) (*account.Verification, error) {
@@ -486,6 +489,7 @@ func toVerification(m *VerificationModel) (*account.Verification, error) {
 		EnvID:     envID,
 		UserID:    userID,
 		Token:     m.Token,
+		TokenHash: hashOrDerive(m.TokenHash.String, m.Token).String,
 		Type:      account.VerificationType(m.Type),
 		Attempts:  m.Attempts,
 		ExpiresAt: m.ExpiresAt,
@@ -500,7 +504,7 @@ func fromVerification(v *account.Verification) *VerificationModel {
 		AppID:     v.AppID.String(),
 		EnvID:     v.EnvID.String(),
 		UserID:    v.UserID.String(),
-		Token:     v.Token,
+		TokenHash: hashOrDerive(v.TokenHash, v.Token),
 		Type:      string(v.Type),
 		Attempts:  v.Attempts,
 		ExpiresAt: v.ExpiresAt,
@@ -516,14 +520,15 @@ func fromVerification(v *account.Verification) *VerificationModel {
 type PasswordResetModel struct {
 	grove.BaseModel `grove:"table:authsome_password_resets,alias:pr"`
 
-	ID        string    `grove:"id,pk"`
-	AppID     string    `grove:"app_id,notnull"`
-	EnvID     string    `grove:"env_id,notnull"`
-	UserID    string    `grove:"user_id,notnull"`
-	Token     string    `grove:"token,notnull"`
-	ExpiresAt time.Time `grove:"expires_at,notnull"`
-	Consumed  bool      `grove:"consumed"`
-	CreatedAt time.Time `grove:"created_at,notnull,default:now()"`
+	ID        string         `grove:"id,pk"`
+	AppID     string         `grove:"app_id,notnull"`
+	EnvID     string         `grove:"env_id,notnull"`
+	UserID    string         `grove:"user_id,notnull"`
+	Token     string         `grove:"token,notnull"`
+	TokenHash sql.NullString `grove:"token_hash"`
+	ExpiresAt time.Time      `grove:"expires_at,notnull"`
+	Consumed  bool           `grove:"consumed"`
+	CreatedAt time.Time      `grove:"created_at,notnull,default:now()"`
 }
 
 func toPasswordReset(m *PasswordResetModel) (*account.PasswordReset, error) {
@@ -549,6 +554,7 @@ func toPasswordReset(m *PasswordResetModel) (*account.PasswordReset, error) {
 		EnvID:     envID,
 		UserID:    userID,
 		Token:     m.Token,
+		TokenHash: hashOrDerive(m.TokenHash.String, m.Token).String,
 		ExpiresAt: m.ExpiresAt,
 		Consumed:  m.Consumed,
 		CreatedAt: m.CreatedAt,
@@ -561,7 +567,7 @@ func fromPasswordReset(pr *account.PasswordReset) *PasswordResetModel {
 		AppID:     pr.AppID.String(),
 		EnvID:     pr.EnvID.String(),
 		UserID:    pr.UserID.String(),
-		Token:     pr.Token,
+		TokenHash: hashOrDerive(pr.TokenHash, pr.Token),
 		ExpiresAt: pr.ExpiresAt,
 		Consumed:  pr.Consumed,
 		CreatedAt: pr.CreatedAt,
@@ -694,15 +700,16 @@ func fromMember(mem *organization.Member) *MemberModel {
 type InvitationModel struct {
 	grove.BaseModel `grove:"table:authsome_invitations,alias:inv"`
 
-	ID        string    `grove:"id,pk"`
-	OrgID     string    `grove:"org_id,notnull"`
-	Email     string    `grove:"email,notnull"`
-	Role      string    `grove:"role,notnull"`
-	InviterID string    `grove:"inviter_id,notnull"`
-	Status    string    `grove:"status,notnull"`
-	Token     string    `grove:"token,notnull"`
-	ExpiresAt time.Time `grove:"expires_at,notnull"`
-	CreatedAt time.Time `grove:"created_at,notnull,default:now()"`
+	ID        string         `grove:"id,pk"`
+	OrgID     string         `grove:"org_id,notnull"`
+	Email     string         `grove:"email,notnull"`
+	Role      string         `grove:"role,notnull"`
+	InviterID string         `grove:"inviter_id,notnull"`
+	Status    string         `grove:"status,notnull"`
+	Token     string         `grove:"token,notnull"`
+	TokenHash sql.NullString `grove:"token_hash"`
+	ExpiresAt time.Time      `grove:"expires_at,notnull"`
+	CreatedAt time.Time      `grove:"created_at,notnull,default:now()"`
 }
 
 func toInvitation(m *InvitationModel) (*organization.Invitation, error) {
@@ -726,6 +733,7 @@ func toInvitation(m *InvitationModel) (*organization.Invitation, error) {
 		InviterID: inviterID,
 		Status:    organization.InvitationStatus(m.Status),
 		Token:     m.Token,
+		TokenHash: hashOrDerive(m.TokenHash.String, m.Token).String,
 		ExpiresAt: m.ExpiresAt,
 		CreatedAt: m.CreatedAt,
 	}, nil
@@ -739,7 +747,7 @@ func fromInvitation(inv *organization.Invitation) *InvitationModel {
 		Role:      string(inv.Role),
 		InviterID: inv.InviterID.String(),
 		Status:    string(inv.Status),
-		Token:     inv.Token,
+		TokenHash: hashOrDerive(inv.TokenHash, inv.Token),
 		ExpiresAt: inv.ExpiresAt,
 		CreatedAt: inv.CreatedAt,
 	}

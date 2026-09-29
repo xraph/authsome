@@ -300,6 +300,7 @@ func (s *Store) CreateInvitation(ctx context.Context, inv *organization.Invitati
 	if err != nil {
 		return fmt.Errorf("authsome/mongo: create invitation: %w", err)
 	}
+	inv.TokenHash = m.TokenHash
 
 	return nil
 }
@@ -325,19 +326,22 @@ func (s *Store) GetInvitation(ctx context.Context, invID id.InvitationID) (*orga
 // GetInvitationByToken returns an invitation by its token.
 func (s *Store) GetInvitationByToken(ctx context.Context, token string) (*organization.Invitation, error) {
 	var m invitationModel
-
-	err := s.mdb.NewFind(&m).
-		Filter(bson.M{"token": token}).
-		Scan(ctx)
+	legacy, err := s.findByToken(ctx, &m, "invitation", token)
 	if err != nil {
-		if isNoDocuments(err) {
-			return nil, store.ErrNotFound
-		}
-
-		return nil, fmt.Errorf("authsome/mongo: get invitation by token: %w", err)
+		return nil, err
 	}
-
-	return fromInvitationModel(&m)
+	if legacy {
+		if upErr := s.upgradeLegacyToken(ctx, (*invitationModel)(nil), m.ID, token); upErr != nil {
+			return nil, upErr
+		}
+		m.Token = ""
+	}
+	inv, err := fromInvitationModel(&m)
+	if err != nil {
+		return nil, err
+	}
+	inv.Token, inv.TokenHash = token, store.HashToken(token)
+	return inv, nil
 }
 
 // UpdateInvitation modifies an existing invitation.

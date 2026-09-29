@@ -514,36 +514,42 @@ func (s *Store) ListSessions(ctx context.Context, limit int) ([]*session.Session
 
 func (s *Store) CreateVerification(ctx context.Context, v *account.Verification) error {
 	m := fromVerification(v)
-	_, err := s.pg.NewInsert(m).Exec(ctx)
-	return pgError(err)
+	if _, err := s.pg.NewInsert(m).Exec(ctx); err != nil {
+		return pgError(err)
+	}
+	v.TokenHash = m.TokenHash.String
+	return nil
 }
 
 func (s *Store) GetVerification(ctx context.Context, token string) (*account.Verification, error) {
 	m := new(VerificationModel)
-	err := s.pg.NewSelect(m).Where("token = ?", token).Scan(ctx)
+	legacy, err := s.selectByToken(ctx, m, token)
 	if err != nil {
-		return nil, pgError(err)
+		return nil, err
 	}
-	return toVerification(m)
+	if legacy {
+		if upErr := s.upgradeLegacyToken(ctx, (*VerificationModel)(nil), m.ID, token); upErr != nil {
+			return nil, upErr
+		}
+		m.Token = ""
+	}
+	v, err := toVerification(m)
+	if err != nil {
+		return nil, err
+	}
+	v.Token, v.TokenHash = token, store.HashToken(token)
+	return v, nil
 }
 
 func (s *Store) ConsumeVerification(ctx context.Context, token string) error {
-	res, err := s.pg.NewUpdate((*VerificationModel)(nil)).
-		Set("consumed = TRUE").
-		Where("token = ?", token).
-		Where("consumed = FALSE").
-		Exec(ctx)
-	if err != nil {
-		return pgError(err)
-	}
 	// Zero rows means the token was missing or already consumed. Reporting
 	// that as success let two concurrent redemptions of one token both
 	// proceed; callers rely on ErrNotFound to reject the replay.
-	n, err := res.RowsAffected()
+	consumed, err := s.consumeByToken(ctx, (*VerificationModel)(nil), token)
 	if err != nil {
-		return pgError(err)
+		return err
 	}
-	if n == 0 {
+	if !consumed {
 		return store.ErrNotFound
 	}
 	return nil
@@ -576,26 +582,36 @@ func (s *Store) UpdateVerification(ctx context.Context, v *account.Verification)
 
 func (s *Store) CreatePasswordReset(ctx context.Context, pr *account.PasswordReset) error {
 	m := fromPasswordReset(pr)
-	_, err := s.pg.NewInsert(m).Exec(ctx)
-	return pgError(err)
+	if _, err := s.pg.NewInsert(m).Exec(ctx); err != nil {
+		return pgError(err)
+	}
+	pr.TokenHash = m.TokenHash.String
+	return nil
 }
 
 func (s *Store) GetPasswordReset(ctx context.Context, token string) (*account.PasswordReset, error) {
 	m := new(PasswordResetModel)
-	err := s.pg.NewSelect(m).Where("token = ?", token).Scan(ctx)
+	legacy, err := s.selectByToken(ctx, m, token)
 	if err != nil {
-		return nil, pgError(err)
+		return nil, err
 	}
-	return toPasswordReset(m)
+	if legacy {
+		if upErr := s.upgradeLegacyToken(ctx, (*PasswordResetModel)(nil), m.ID, token); upErr != nil {
+			return nil, upErr
+		}
+		m.Token = ""
+	}
+	pr, err := toPasswordReset(m)
+	if err != nil {
+		return nil, err
+	}
+	pr.Token, pr.TokenHash = token, store.HashToken(token)
+	return pr, nil
 }
 
 func (s *Store) ConsumePasswordReset(ctx context.Context, token string) error {
-	_, err := s.pg.NewUpdate((*PasswordResetModel)(nil)).
-		Set("consumed = TRUE").
-		Where("token = ?", token).
-		Where("consumed = FALSE").
-		Exec(ctx)
-	return pgError(err)
+	_, err := s.consumeByToken(ctx, (*PasswordResetModel)(nil), token)
+	return err
 }
 
 // ──────────────────────────────────────────────────
@@ -755,8 +771,11 @@ func (s *Store) ListMembers(ctx context.Context, orgID id.OrgID) ([]*organizatio
 
 func (s *Store) CreateInvitation(ctx context.Context, inv *organization.Invitation) error {
 	m := fromInvitation(inv)
-	_, err := s.pg.NewInsert(m).Exec(ctx)
-	return pgError(err)
+	if _, err := s.pg.NewInsert(m).Exec(ctx); err != nil {
+		return pgError(err)
+	}
+	inv.TokenHash = m.TokenHash.String
+	return nil
 }
 
 func (s *Store) GetInvitation(ctx context.Context, invID id.InvitationID) (*organization.Invitation, error) {
@@ -770,11 +789,22 @@ func (s *Store) GetInvitation(ctx context.Context, invID id.InvitationID) (*orga
 
 func (s *Store) GetInvitationByToken(ctx context.Context, token string) (*organization.Invitation, error) {
 	m := new(InvitationModel)
-	err := s.pg.NewSelect(m).Where("token = ?", token).Scan(ctx)
+	legacy, err := s.selectByToken(ctx, m, token)
 	if err != nil {
-		return nil, pgError(err)
+		return nil, err
 	}
-	return toInvitation(m)
+	if legacy {
+		if upErr := s.upgradeLegacyToken(ctx, (*InvitationModel)(nil), m.ID, token); upErr != nil {
+			return nil, upErr
+		}
+		m.Token = ""
+	}
+	inv, err := toInvitation(m)
+	if err != nil {
+		return nil, err
+	}
+	inv.Token, inv.TokenHash = token, store.HashToken(token)
+	return inv, nil
 }
 
 func (s *Store) UpdateInvitation(ctx context.Context, inv *organization.Invitation) error {

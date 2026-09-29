@@ -540,18 +540,8 @@ func migrationIndexes() map[string][]mongo.IndexModel {
 		colKV: {
 			{Keys: bson.D{{Key: "expires_at", Value: 1}}},
 		},
-		colVerifications: {
-			{
-				Keys:    bson.D{{Key: "token", Value: 1}},
-				Options: options.Index().SetUnique(true),
-			},
-		},
-		colPasswordResets: {
-			{
-				Keys:    bson.D{{Key: "token", Value: 1}},
-				Options: options.Index().SetUnique(true),
-			},
-		},
+		colVerifications:  credentialTokenIndexes(false),
+		colPasswordResets: credentialTokenIndexes(true),
 		colOrganizations: {
 			{
 				Keys:    bson.D{{Key: "app_id", Value: 1}, {Key: "slug", Value: 1}},
@@ -566,13 +556,9 @@ func migrationIndexes() map[string][]mongo.IndexModel {
 			},
 			{Keys: bson.D{{Key: "org_id", Value: 1}}},
 		},
-		colInvitations: {
-			{
-				Keys:    bson.D{{Key: "token", Value: 1}},
-				Options: options.Index().SetUnique(true),
-			},
-			{Keys: bson.D{{Key: "org_id", Value: 1}, {Key: "status", Value: 1}}},
-		},
+		colInvitations: append(credentialTokenIndexes(true),
+			mongo.IndexModel{Keys: bson.D{{Key: "org_id", Value: 1}, {Key: "status", Value: 1}}},
+		),
 		colTeams: {
 			{
 				Keys:    bson.D{{Key: "org_id", Value: 1}, {Key: "slug", Value: 1}},

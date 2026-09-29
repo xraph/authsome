@@ -471,11 +471,15 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 type verificationModel struct {
 	grove.BaseModel `grove:"table:authsome_verifications"`
 
-	ID        string    `grove:"id,pk"       bson:"_id"`
-	AppID     string    `grove:"app_id"      bson:"app_id"`
-	EnvID     string    `grove:"env_id"      bson:"env_id"`
-	UserID    string    `grove:"user_id"     bson:"user_id"`
-	Token     string    `grove:"token"       bson:"token"`
+	ID     string `grove:"id,pk"       bson:"_id"`
+	AppID  string `grove:"app_id"      bson:"app_id"`
+	EnvID  string `grove:"env_id"      bson:"env_id"`
+	UserID string `grove:"user_id"     bson:"user_id"`
+	Token  string `grove:"token"       bson:"token"`
+	// TokenHash is store.HashToken of the code; Token is empty on documents
+	// written since hash_credential_tokens and an absent hash marks a legacy
+	// document.
+	TokenHash string    `grove:"token_hash"  bson:"token_hash,omitempty"`
 	Type      string    `grove:"type"        bson:"type"`
 	Attempts  int       `grove:"attempts"    bson:"attempts"`
 	ExpiresAt time.Time `grove:"expires_at"  bson:"expires_at"`
@@ -489,7 +493,7 @@ func toVerificationModel(v *account.Verification) *verificationModel {
 		AppID:     v.AppID.String(),
 		EnvID:     v.EnvID.String(),
 		UserID:    v.UserID.String(),
-		Token:     v.Token,
+		TokenHash: hashOrDerive(v.TokenHash, v.Token),
 		Type:      string(v.Type),
 		Attempts:  v.Attempts,
 		ExpiresAt: v.ExpiresAt,
@@ -518,6 +522,7 @@ func fromVerificationModel(m *verificationModel) (*account.Verification, error) 
 		EnvID:     envID,
 		UserID:    userID,
 		Token:     m.Token,
+		TokenHash: hashOrDerive(m.TokenHash, m.Token),
 		Type:      account.VerificationType(m.Type),
 		Attempts:  m.Attempts,
 		ExpiresAt: m.ExpiresAt,
@@ -538,6 +543,7 @@ type passwordResetModel struct {
 	EnvID     string    `grove:"env_id"      bson:"env_id"`
 	UserID    string    `grove:"user_id"     bson:"user_id"`
 	Token     string    `grove:"token"       bson:"token"`
+	TokenHash string    `grove:"token_hash"  bson:"token_hash,omitempty"`
 	ExpiresAt time.Time `grove:"expires_at"  bson:"expires_at"`
 	Consumed  bool      `grove:"consumed"    bson:"consumed"`
 	CreatedAt time.Time `grove:"created_at"  bson:"created_at"`
@@ -549,7 +555,7 @@ func toPasswordResetModel(pr *account.PasswordReset) *passwordResetModel {
 		AppID:     pr.AppID.String(),
 		EnvID:     pr.EnvID.String(),
 		UserID:    pr.UserID.String(),
-		Token:     pr.Token,
+		TokenHash: hashOrDerive(pr.TokenHash, pr.Token),
 		ExpiresAt: pr.ExpiresAt,
 		Consumed:  pr.Consumed,
 		CreatedAt: pr.CreatedAt,
@@ -576,6 +582,7 @@ func fromPasswordResetModel(m *passwordResetModel) (*account.PasswordReset, erro
 		EnvID:     envID,
 		UserID:    userID,
 		Token:     m.Token,
+		TokenHash: hashOrDerive(m.TokenHash, m.Token),
 		ExpiresAt: m.ExpiresAt,
 		Consumed:  m.Consumed,
 		CreatedAt: m.CreatedAt,
@@ -712,6 +719,7 @@ type invitationModel struct {
 	InviterID string    `grove:"inviter_id"   bson:"inviter_id"`
 	Status    string    `grove:"status"       bson:"status"`
 	Token     string    `grove:"token"        bson:"token"`
+	TokenHash string    `grove:"token_hash"   bson:"token_hash,omitempty"`
 	ExpiresAt time.Time `grove:"expires_at"   bson:"expires_at"`
 	CreatedAt time.Time `grove:"created_at"   bson:"created_at"`
 }
@@ -724,7 +732,7 @@ func toInvitationModel(inv *organization.Invitation) *invitationModel {
 		Role:      string(inv.Role),
 		InviterID: inv.InviterID.String(),
 		Status:    string(inv.Status),
-		Token:     inv.Token,
+		TokenHash: hashOrDerive(inv.TokenHash, inv.Token),
 		ExpiresAt: inv.ExpiresAt,
 		CreatedAt: inv.CreatedAt,
 	}
@@ -751,6 +759,7 @@ func fromInvitationModel(m *invitationModel) (*organization.Invitation, error) {
 		InviterID: inviterID,
 		Status:    organization.InvitationStatus(m.Status),
 		Token:     m.Token,
+		TokenHash: hashOrDerive(m.TokenHash, m.Token),
 		ExpiresAt: m.ExpiresAt,
 		CreatedAt: m.CreatedAt,
 	}, nil
