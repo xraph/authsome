@@ -271,3 +271,91 @@ ALTER TABLE authsome_invitations DROP COLUMN IF EXISTS token_hash;
 		},
 	})
 }
+
+// HashLegacyTokens implements store.LegacyTokenHasher. Each table is swept
+// with a bounded select of rows whose hash is NULL and whose plaintext is
+// present, then rewritten row by row: the digest is computed here, not in
+// SQL, so the two SQL backends and mongo convert identically. A row with
+// neither plaintext nor hash is unusable and left alone.
+func (s *Store) HashLegacyTokens(ctx context.Context, batch int) (int64, error) {
+	if batch <= 0 {
+		batch = 500
+	}
+	var n int64
+
+	var sessions []SessionModel
+	if err := s.pg.NewSelect(&sessions).
+		Where("(token_hash IS NULL AND token <> '') OR (refresh_token_hash IS NULL AND refresh_token <> '')").
+		Limit(batch).Scan(ctx); err != nil && !errors.Is(pgError(err), store.ErrNotFound) {
+		return n, fmt.Errorf("authsome/postgres: list legacy sessions: %w", pgError(err))
+	}
+	for i := range sessions {
+		m := &sessions[i]
+		_, err := s.pg.NewUpdate((*SessionModel)(nil)).
+			Set("token_hash = ?", hashOrDerive(m.TokenHash.String, m.Token)).
+			Set("refresh_token_hash = ?", hashOrDerive(m.RefreshTokenHash.String, m.RefreshToken)).
+			Set("token = ?", "").
+			Set("refresh_token = ?", "").
+			Where("id = ?", m.ID).
+			Exec(ctx)
+		if err != nil {
+			return n, fmt.Errorf("authsome/postgres: hash legacy session: %w", pgError(err))
+		}
+		n++
+	}
+
+	for _, t := range []struct {
+		name  string
+		rows  func() ([]legacyRow, error)
+		model any
+	}{
+		{"verification", func() ([]legacyRow, error) {
+			var ms []VerificationModel
+			err := s.pg.NewSelect(&ms).Where("token_hash IS NULL").Where("token <> ''").Limit(batch - int(n)).Scan(ctx)
+			rows := make([]legacyRow, 0, len(ms))
+			for i := range ms {
+				rows = append(rows, legacyRow{ms[i].ID, ms[i].Token})
+			}
+			return rows, err
+		}, (*VerificationModel)(nil)},
+		{"password reset", func() ([]legacyRow, error) {
+			var ms []PasswordResetModel
+			err := s.pg.NewSelect(&ms).Where("token_hash IS NULL").Where("token <> ''").Limit(batch - int(n)).Scan(ctx)
+			rows := make([]legacyRow, 0, len(ms))
+			for i := range ms {
+				rows = append(rows, legacyRow{ms[i].ID, ms[i].Token})
+			}
+			return rows, err
+		}, (*PasswordResetModel)(nil)},
+		{"invitation", func() ([]legacyRow, error) {
+			var ms []InvitationModel
+			err := s.pg.NewSelect(&ms).Where("token_hash IS NULL").Where("token <> ''").Limit(batch - int(n)).Scan(ctx)
+			rows := make([]legacyRow, 0, len(ms))
+			for i := range ms {
+				rows = append(rows, legacyRow{ms[i].ID, ms[i].Token})
+			}
+			return rows, err
+		}, (*InvitationModel)(nil)},
+	} {
+		if int(n) >= batch {
+			return n, nil
+		}
+		rows, err := t.rows()
+		if err != nil && !errors.Is(pgError(err), store.ErrNotFound) {
+			return n, fmt.Errorf("authsome/postgres: list legacy %ss: %w", t.name, pgError(err))
+		}
+		for _, r := range rows {
+			if err := s.upgradeLegacyToken(ctx, t.model, r.id, r.token); err != nil {
+				return n, err
+			}
+			n++
+		}
+	}
+	return n, nil
+}
+
+// legacyRow is one plaintext credential row awaiting conversion.
+type legacyRow struct {
+	id    string
+	token string
+}

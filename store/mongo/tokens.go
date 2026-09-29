@@ -335,3 +335,95 @@ func init() {
 		},
 	})
 }
+
+// HashLegacyTokens implements store.LegacyTokenHasher. Each collection is
+// swept with a bounded find of documents whose hash is absent or empty and
+// whose plaintext is present, then rewritten one by one. A document with
+// neither plaintext nor hash is unusable and left alone.
+func (s *Store) HashLegacyTokens(ctx context.Context, batch int) (int64, error) {
+	if batch <= 0 {
+		batch = 500
+	}
+	noHash := bson.M{"$in": bson.A{nil, ""}}
+	var n int64
+
+	var sessions []sessionModel
+	if err := s.mdb.NewFind(&sessions).
+		Filter(bson.M{"$or": bson.A{
+			bson.M{"token_hash": noHash, "token": bson.M{"$gt": ""}},
+			bson.M{"refresh_token_hash": noHash, "refresh_token": bson.M{"$gt": ""}},
+		}}).
+		Limit(int64(batch)).Scan(ctx); err != nil && !isNoDocuments(err) {
+		return n, fmt.Errorf("authsome/mongo: list legacy sessions: %w", err)
+	}
+	for i := range sessions {
+		m := &sessions[i]
+		_, err := s.mdb.NewUpdate((*sessionModel)(nil)).
+			Filter(bson.M{"_id": m.ID}).
+			Set("token_hash", hashOrDerive(m.TokenHash, m.Token)).
+			Set("refresh_token_hash", hashOrDerive(m.RefreshTokenHash, m.RefreshToken)).
+			Set("token", "").
+			Set("refresh_token", "").
+			Exec(ctx)
+		if err != nil {
+			return n, fmt.Errorf("authsome/mongo: hash legacy session: %w", err)
+		}
+		n++
+	}
+
+	legacyFilter := bson.M{"token_hash": noHash, "token": bson.M{"$gt": ""}}
+	for _, t := range []struct {
+		name  string
+		rows  func() ([]legacyRow, error)
+		model any
+	}{
+		{"verification", func() ([]legacyRow, error) {
+			var ms []verificationModel
+			err := s.mdb.NewFind(&ms).Filter(legacyFilter).Limit(int64(batch) - n).Scan(ctx)
+			rows := make([]legacyRow, 0, len(ms))
+			for i := range ms {
+				rows = append(rows, legacyRow{ms[i].ID, ms[i].Token})
+			}
+			return rows, err
+		}, (*verificationModel)(nil)},
+		{"password reset", func() ([]legacyRow, error) {
+			var ms []passwordResetModel
+			err := s.mdb.NewFind(&ms).Filter(legacyFilter).Limit(int64(batch) - n).Scan(ctx)
+			rows := make([]legacyRow, 0, len(ms))
+			for i := range ms {
+				rows = append(rows, legacyRow{ms[i].ID, ms[i].Token})
+			}
+			return rows, err
+		}, (*passwordResetModel)(nil)},
+		{"invitation", func() ([]legacyRow, error) {
+			var ms []invitationModel
+			err := s.mdb.NewFind(&ms).Filter(legacyFilter).Limit(int64(batch) - n).Scan(ctx)
+			rows := make([]legacyRow, 0, len(ms))
+			for i := range ms {
+				rows = append(rows, legacyRow{ms[i].ID, ms[i].Token})
+			}
+			return rows, err
+		}, (*invitationModel)(nil)},
+	} {
+		if n >= int64(batch) {
+			return n, nil
+		}
+		rows, err := t.rows()
+		if err != nil && !isNoDocuments(err) {
+			return n, fmt.Errorf("authsome/mongo: list legacy %ss: %w", t.name, err)
+		}
+		for _, r := range rows {
+			if err := s.upgradeLegacyToken(ctx, t.model, r.id, r.token); err != nil {
+				return n, err
+			}
+			n++
+		}
+	}
+	return n, nil
+}
+
+// legacyRow is one plaintext credential document awaiting conversion.
+type legacyRow struct {
+	id    string
+	token string
+}

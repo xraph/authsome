@@ -594,6 +594,12 @@ func (e *Engine) Start(ctx context.Context) error {
 	if err := e.EnsureMigrated(ctx); err != nil {
 		return err
 	}
+	// Credentials written before token hashing are converted in the
+	// background: lookups already upgrade a row on first use, so nothing
+	// waits on the sweep, and a large table must not hold up boot. The
+	// start context's values travel with the sweep but its cancellation
+	// does not, since Start returning is not a reason to stop converting.
+	go e.hashLegacyTokens(context.WithoutCancel(ctx))
 
 	// Register webhook event catalog with relay (before bootstrap so
 	// events emitted during bootstrap are recognized).
@@ -1711,5 +1717,31 @@ func (e *Engine) Metrics() Metrics {
 	return Metrics{
 		PluginsLoaded: len(e.plugins.Plugins()),
 		Strategies:    len(e.strategies.Strategies()),
+	}
+}
+
+// hashLegacyTokens sweeps plaintext credential rows into hashes in batches
+// until the store reports none left, logging the total. It stops on the
+// first error; the next start resumes where it left off, and lookups keep
+// upgrading rows one at a time in the meantime.
+func (e *Engine) hashLegacyTokens(ctx context.Context) {
+	const batch = 500
+	var total int64
+	for {
+		n, err := e.store.HashLegacyTokens(ctx, batch)
+		total += n
+		if err != nil {
+			e.logger.Warn("authsome: hashing legacy credential rows stopped",
+				log.Int64("converted", total),
+				log.String("error", err.Error()),
+			)
+			return
+		}
+		if n == 0 {
+			break
+		}
+	}
+	if total > 0 {
+		e.logger.Info("authsome: hashed legacy credential rows", log.Int64("converted", total))
 	}
 }

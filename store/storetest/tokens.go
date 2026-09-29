@@ -292,3 +292,77 @@ func testLegacyPlaintextCredentialsUpgrade(t *testing.T, s store.Store) {
 	assert.Empty(t, byID.Token, "the first lookup rewrites the row without plaintext")
 	assert.Equal(t, store.HashToken("legacy-invite"), byID.TokenHash)
 }
+
+// testHashLegacyTokensConverts proves the start-up sweep rewrites every kind
+// of plaintext credential row and reports when nothing is left.
+func testHashLegacyTokensConverts(t *testing.T, s store.Store) {
+	sessSeeder, ok := s.(legacySessionSeeder)
+	require.True(t, ok)
+	credSeeder, ok := s.(legacyCredentialSeeder)
+	require.True(t, ok)
+	ctx := context.Background()
+
+	// Drain anything an earlier case left behind so the counts below are exact.
+	for range 100 {
+		n, err := s.HashLegacyTokens(ctx, 100)
+		require.NoError(t, err)
+		if n == 0 {
+			break
+		}
+	}
+
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "sweep@test.com")
+	sess := seedSession(t, s, tn, u.ID, "sweep-access", "sweep-refresh")
+	require.NoError(t, s.DeleteSession(ctx, sess.ID))
+	sess.TokenHash, sess.RefreshTokenHash = "", ""
+	require.NoError(t, sessSeeder.SeedLegacySession(ctx, sess))
+	v := &account.Verification{
+		ID: id.NewVerificationID(), AppID: tn.AppID, EnvID: tn.EnvID, UserID: u.ID,
+		Token: "sweep-verify", Type: account.VerificationEmail, ExpiresAt: now().Add(time.Hour), CreatedAt: now(),
+	}
+	require.NoError(t, credSeeder.SeedLegacyVerification(ctx, v))
+	pr := &account.PasswordReset{
+		ID: id.NewPasswordResetID(), AppID: tn.AppID, EnvID: tn.EnvID, UserID: u.ID,
+		Token: "sweep-reset", ExpiresAt: now().Add(time.Hour), CreatedAt: now(),
+	}
+	require.NoError(t, credSeeder.SeedLegacyPasswordReset(ctx, pr))
+	org := &organization.Organization{ID: id.NewOrgID(), AppID: tn.AppID, EnvID: tn.EnvID, Name: "Sweep", Slug: "sweep-" + suffix(tn.AppID.String()), CreatedBy: u.ID, CreatedAt: now(), UpdatedAt: now()}
+	require.NoError(t, s.CreateOrganization(ctx, org))
+	inv := &organization.Invitation{
+		ID: id.NewInvitationID(), OrgID: org.ID, Email: "sweep@invite.test", Role: organization.RoleMember,
+		InviterID: u.ID, Status: organization.InvitationPending, Token: "sweep-invite",
+		ExpiresAt: now().Add(time.Hour), CreatedAt: now(),
+	}
+	require.NoError(t, credSeeder.SeedLegacyInvitation(ctx, inv))
+
+	// A batch smaller than the backlog converts exactly that many.
+	n, err := s.HashLegacyTokens(ctx, 1)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, n, "the batch bound is honoured")
+	n, err = s.HashLegacyTokens(ctx, 100)
+	require.NoError(t, err)
+	assert.EqualValues(t, 3, n, "the rest of the backlog converts in one call")
+	n, err = s.HashLegacyTokens(ctx, 100)
+	require.NoError(t, err)
+	assert.Zero(t, n, "a complete sweep reports nothing left")
+
+	got, err := s.GetSession(ctx, sess.ID)
+	require.NoError(t, err)
+	assert.Empty(t, got.Token)
+	assert.Equal(t, store.HashToken("sweep-access"), got.TokenHash)
+	assert.Equal(t, store.HashToken("sweep-refresh"), got.RefreshTokenHash)
+	_, err = s.GetSessionByRefreshToken(ctx, "sweep-refresh")
+	require.NoError(t, err, "a converted session answers to its plaintext by hash")
+	byUser, err := s.GetActiveEmailVerification(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Empty(t, byUser.Token)
+	assert.Equal(t, store.HashToken("sweep-verify"), byUser.TokenHash)
+	gotPR, err := s.GetPasswordReset(ctx, "sweep-reset")
+	require.NoError(t, err)
+	assert.Equal(t, store.HashToken("sweep-reset"), gotPR.TokenHash)
+	byID, err := s.GetInvitation(ctx, inv.ID)
+	require.NoError(t, err)
+	assert.Empty(t, byID.Token)
+	assert.Equal(t, store.HashToken("sweep-invite"), byID.TokenHash)
+}

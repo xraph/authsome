@@ -103,6 +103,7 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"RevokeFamilyUsesStoredHashes", testRevokeFamilyUsesStoredHashes},
 		{"CredentialTokensStoredAsHashes", testCredentialTokensStoredAsHashes},
 		{"LegacyPlaintextCredentialsUpgrade", testLegacyPlaintextCredentialsUpgrade},
+		{"HashLegacyTokensConverts", testHashLegacyTokensConverts},
 	}
 	for _, tc := range cases {
 		tc := tc

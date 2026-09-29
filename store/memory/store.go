@@ -420,6 +420,51 @@ func (s *Store) SeedLegacySession(_ context.Context, sess *session.Session) erro
 	return nil
 }
 
+// HashLegacyTokens implements store.LegacyTokenHasher.
+func (s *Store) HashLegacyTokens(_ context.Context, batch int) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var n int64
+	room := func() bool { return batch <= 0 || n < int64(batch) }
+	for _, sess := range s.sessions {
+		if !room() {
+			return n, nil
+		}
+		if (sess.TokenHash == "" && sess.Token != "") || (sess.RefreshTokenHash == "" && sess.RefreshToken != "") {
+			upgradeLegacy(sess)
+			n++
+		}
+	}
+	for _, v := range s.verifications {
+		if !room() {
+			return n, nil
+		}
+		if v.TokenHash == "" && v.Token != "" {
+			v.TokenHash, v.Token = store.HashToken(v.Token), ""
+			n++
+		}
+	}
+	for _, pr := range s.passwordResets {
+		if !room() {
+			return n, nil
+		}
+		if pr.TokenHash == "" && pr.Token != "" {
+			pr.TokenHash, pr.Token = store.HashToken(pr.Token), ""
+			n++
+		}
+	}
+	for _, inv := range s.invitations {
+		if !room() {
+			return n, nil
+		}
+		if inv.TokenHash == "" && inv.Token != "" {
+			inv.TokenHash, inv.Token = store.HashToken(inv.Token), ""
+			n++
+		}
+	}
+	return n, nil
+}
+
 // upgradeLegacy hashes a stored session's plaintext tokens in place. Callers
 // hold the write lock.
 func upgradeLegacy(sess *session.Session) {

@@ -63,6 +63,7 @@ type Store interface {
 	serviceaccount.Store
 	principal.Store
 	KV
+	LegacyTokenHasher
 
 	// Migrate runs all schema migrations. Extra migration groups (e.g. from
 	// plugins) are appended to the core group and orchestrated together.
