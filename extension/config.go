@@ -144,6 +144,15 @@ type DashboardIntegrationConfig struct {
 	// endpoint returns 403 PERMISSION_DENIED for anyone without them and
 	// the React shell renders an "access denied" panel.
 	RequiredRoles []string `json:"required_roles" mapstructure:"required_roles" yaml:"required_roles"`
+
+	// RoleScopes grants dashboard scopes to operators holding a role, on
+	// top of the admin rule. Keys are role slugs, values are scope
+	// strings an extension can name in a `requires` predicate as
+	// "scope:<value>". Use it for roles that are not admins but should
+	// still reach one extension's gated intents, for example
+	// {"auditor": ["chronicle.admin"]}. See dashboard_identity.go for the
+	// whole mapping.
+	RoleScopes map[string][]string `json:"role_scopes" mapstructure:"role_scopes" yaml:"role_scopes"`
 }
 
 // BootstrapYAMLConfig holds bootstrap settings loadable from YAML.

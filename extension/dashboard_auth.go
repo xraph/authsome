@@ -22,6 +22,10 @@ const dashboardCookieName = "auth_token"
 // authChecker implements dashauth.AuthChecker for the authsome extension.
 type authChecker struct {
 	engine *authsome.Engine
+
+	// scopes derives UserInfo.Scopes from the session's roles. The zero
+	// value grants none. See dashboard_identity.go.
+	scopes dashboardScopes
 }
 
 // Ensure authChecker implements AuthChecker at compile time.
@@ -35,6 +39,11 @@ var _ dashauth.AuthChecker = (*authChecker)(nil)
 // product. It has no way to write an RFC 9449 challenge, so a binding it
 // cannot satisfy resolves to no identity at all, the same answer
 // authprovider.SessionProvider gives for the same reason.
+//
+// A resolved identity carries the app, environment and org claims, the
+// session's roles and the scopes they confer (dashboardIdentity). Every
+// failure above still answers nil: no session means no identity, whatever
+// switcher cookies the request carries.
 func (c *authChecker) CheckAuth(ctx context.Context, r *http.Request) (*dashauth.UserInfo, error) {
 	scheme, token := middleware.ExtractCredentialFromContext(ctx, r, dashboardCookieName)
 	if token == "" {
@@ -68,7 +77,7 @@ func (c *authChecker) CheckAuth(ctx context.Context, r *http.Request) (*dashauth
 		return nil, nil
 	}
 
-	return userToUserInfo(u), nil
+	return c.dashboardIdentity(ctx, r, sess, u), nil
 }
 
 func userToUserInfo(u *user.User) *dashauth.UserInfo {
@@ -141,7 +150,32 @@ func (c *clientAuthChecker) CheckAuth(ctx context.Context, r *http.Request) (*da
 		Subject:     resp.User.ID,
 		DisplayName: display,
 		Email:       resp.User.Email,
+		Claims:      introspectionClaims(resp),
 	}, nil
+}
+
+// introspectionClaims projects the introspected session onto the same claim
+// keys the engine-mode checker sets (see dashboard_identity.go).
+//
+// Two things the engine-mode checker does are missing here, both on purpose.
+// The authsome_app and authsome_env cookies are ignored: this service cannot
+// check the session's roles, so it cannot tell whether a switch is allowed,
+// and an unverified cookie must never widen scope. And Roles and Scopes stay
+// empty because the introspection response does not carry roles, so an
+// intent that declares a `requires` predicate is denied in client mode until
+// it does.
+func introspectionClaims(resp *authclient.IntrospectResponse) map[string]any {
+	claims := make(map[string]any, 3)
+	if resp.AppID != "" {
+		claims[claimAppID] = resp.AppID
+	}
+	if resp.EnvID != "" {
+		claims[claimEnvID] = resp.EnvID
+	}
+	if resp.OrgID != "" {
+		claims[claimOrgID] = resp.OrgID
+	}
+	return claims
 }
 
 // extractToken reads a bearer token from the Authorization header, falling

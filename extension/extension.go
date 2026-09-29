@@ -105,6 +105,11 @@ type Extension struct {
 	contractReg  dashcontract.Registry
 	contractDisp *dispatcher.Dispatcher
 	contractWreg dashcontract.WardenRegistry
+
+	// dashContributors is the colocated dashboard's contract registry,
+	// captured in RegisterContractContributor. The dashboard auth checker
+	// reads contributor names from it to grant "<contributor>.admin".
+	dashContributors contributorSource
 }
 
 // New creates an AuthSome Forge extension with the given options.
@@ -855,7 +860,13 @@ func (e *Extension) RegisterDashboardAuth(dashExt *dashboard.Extension) {
 			e.Logger().Warn("authsome: engine not initialised; skipping dashboard auth registration")
 			return
 		}
-		dashExt.SetAuthChecker(&authChecker{engine: e.engine})
+		dashExt.SetAuthChecker(&authChecker{
+			engine: e.engine,
+			scopes: dashboardScopes{
+				contributors: e.dashContributors.names,
+				roleScopes:   e.config.Dashboard.RoleScopes,
+			},
+		})
 		// The dashboard's sign-in writes auth_token, and its pages call the
 		// API with that cookie alone.
 		e.engine.AcceptAuthTokenCookie()
@@ -1022,6 +1033,7 @@ func (e *Extension) RegisterContractContributor(
 	reg dashcontract.Registry,
 	wreg dashcontract.WardenRegistry,
 ) error {
+	e.dashContributors.set(reg)
 	if e.clientMode {
 		// Slice (m): the upstream authsome service exposes the auth contract
 		// contributor at <PortalURL>/<authsome-base>/_forge/contract. Fetch
