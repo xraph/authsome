@@ -618,6 +618,9 @@ func (e *Engine) Start(ctx context.Context) error {
 	// start context's values travel with the sweep but its cancellation
 	// does not, since Start returning is not a reason to stop converting.
 	go e.hashLegacyTokens(context.WithoutCancel(ctx))
+	// Webhook rows from before webhooks became Relay endpoints are given
+	// one in the background, for the same reasons.
+	go e.adoptLegacyWebhooks(context.WithoutCancel(ctx))
 
 	// Register webhook event catalog with relay (before bootstrap so
 	// events emitted during bootstrap are recognized).

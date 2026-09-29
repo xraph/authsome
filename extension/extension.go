@@ -1367,6 +1367,11 @@ func (e *Extension) buildEngineConfig() authsome.Config {
 		cfg.Session.CleanupInterval = e.config.Session.CleanupInterval
 	}
 
+	cfg.Webhooks.AllowInsecureURLs = e.config.Webhooks.AllowInsecureURLs
+	if e.config.Webhooks.VerifyTimeout != 0 {
+		cfg.Webhooks.VerifyTimeout = e.config.Webhooks.VerifyTimeout
+	}
+
 	// Retention: a set value replaces the default, a negative one disables
 	// that kind, zero keeps the default.
 	for _, f := range []struct {

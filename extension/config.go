@@ -42,6 +42,9 @@ type Config struct {
 	// removes them. Zero values take the engine defaults.
 	Retention RetentionConfig `json:"retention" mapstructure:"retention" yaml:"retention"`
 
+	// Webhooks governs webhook URL checks; see authsome.WebhookConfig.
+	Webhooks WebhookConfig `json:"webhooks" mapstructure:"webhooks" yaml:"webhooks"`
+
 	// Mailer configuration for transactional email delivery.
 	Mailer MailerConfig `json:"mailer" mapstructure:"mailer" yaml:"mailer"`
 
@@ -381,6 +384,12 @@ type RetentionConfig struct {
 	DeviceCodesDays          int `json:"device_codes_days" mapstructure:"device_codes_days" yaml:"device_codes_days"`
 	AuthCodesDays            int `json:"auth_codes_days" mapstructure:"auth_codes_days" yaml:"auth_codes_days"`
 	BatchSize                int `json:"batch_size" mapstructure:"batch_size" yaml:"batch_size"`
+}
+
+// WebhookConfig mirrors authsome.WebhookConfig.
+type WebhookConfig struct {
+	AllowInsecureURLs bool          `json:"allow_insecure_urls" mapstructure:"allow_insecure_urls" yaml:"allow_insecure_urls"`
+	VerifyTimeout     time.Duration `json:"verify_timeout" mapstructure:"verify_timeout" yaml:"verify_timeout"`
 }
 
 // LockoutDuration returns the lockout duration as a time.Duration.

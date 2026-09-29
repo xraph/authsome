@@ -57,6 +57,23 @@ type Config struct {
 	// Retention sets how long expired rows are kept before the sweeper that
 	// runs every Session.CleanupInterval removes them.
 	Retention RetentionConfig `json:"retention"`
+
+	// Webhooks governs how webhook URLs are checked before a Relay endpoint
+	// is created for them.
+	Webhooks WebhookConfig `json:"webhooks"`
+}
+
+// WebhookConfig governs webhook registration.
+type WebhookConfig struct {
+	// AllowInsecureURLs permits http URLs and non-public addresses, for
+	// development against a receiver on the same machine. Never set it in
+	// production: it is the only thing standing between a webhook URL and
+	// the network the service runs in.
+	AllowInsecureURLs bool `json:"allow_insecure_urls"`
+
+	// VerifyTimeout bounds the test delivery made when a webhook is
+	// created or its URL changes (default: 10s).
+	VerifyTimeout time.Duration `json:"verify_timeout"`
 }
 
 // RetentionConfig sets how long rows that have outlived their purpose are
@@ -348,6 +365,7 @@ func DefaultConfig() Config {
 			RefreshTokenTTL: 30 * 24 * time.Hour,
 			CleanupInterval: time.Hour,
 		},
+		Webhooks: WebhookConfig{VerifyTimeout: 10 * time.Second},
 		Retention: RetentionConfig{
 			SessionsDays:             30,
 			VerificationsDays:        7,

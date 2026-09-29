@@ -70,6 +70,15 @@ const (
 	RelayTimestampHeader = "X-Relay-Timestamp"
 )
 
+// SignRelay produces the X-Relay-Signature value Relay would put on a
+// delivery of body at ts: "v1=<hex hmac-sha256 over "<ts>.<body>">". The
+// engine uses it for the test delivery it makes before registering a
+// webhook, so the receiver sees exactly what Relay will send.
+func SignRelay(secret string, ts time.Time, body []byte) string {
+	full := SignBody([]byte(secret), ts, body)
+	return full[strings.Index(full, ",")+1:]
+}
+
 // VerifyRelay checks a delivery from Relay: timestamp is the value of
 // X-Relay-Timestamp, sig the value of X-Relay-Signature, secret the
 // webhook's secret as shown when it was created or last rotated. A zero

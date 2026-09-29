@@ -2039,96 +2039,6 @@ func (e *Engine) RegisterDevice(ctx context.Context, d *device.Device) (*device.
 // Webhook Management
 // ──────────────────────────────────────────────────
 
-// CreateWebhook creates a new webhook endpoint registration.
-func (e *Engine) CreateWebhook(ctx context.Context, w *webhook.Webhook) error {
-	// Generate a signing secret if not provided
-	if w.Secret == "" {
-		secret, err := generateWebhookSecret()
-		if err != nil {
-			return fmt.Errorf("authsome: create webhook: generate secret: %w", err)
-		}
-		w.Secret = secret
-	}
-
-	if w.ID.String() == "" {
-		w.ID = id.NewWebhookID()
-	}
-	now := time.Now()
-	if w.CreatedAt.IsZero() {
-		w.CreatedAt = now
-		w.UpdatedAt = now
-	}
-	w.Active = true
-
-	if err := e.store.CreateWebhook(ctx, w); err != nil {
-		return fmt.Errorf("authsome: create webhook: %w", err)
-	}
-
-	e.hooks.Emit(ctx, &hook.Event{
-		Action:     hook.ActionWebhookCreate,
-		Resource:   hook.ResourceWebhook,
-		ResourceID: w.ID.String(),
-		Tenant:     w.AppID.String(),
-	})
-	e.relayEvent(ctx, "webhook.created", w.AppID.String(), map[string]string{
-		"webhook_id": w.ID.String(),
-		"url":        w.URL,
-	})
-
-	return nil
-}
-
-// GetWebhook returns a webhook by ID.
-func (e *Engine) GetWebhook(ctx context.Context, webhookID id.WebhookID) (*webhook.Webhook, error) {
-	return e.store.GetWebhook(ctx, webhookID)
-}
-
-// UpdateWebhook updates an existing webhook.
-func (e *Engine) UpdateWebhook(ctx context.Context, w *webhook.Webhook) error {
-	w.UpdatedAt = time.Now()
-	if err := e.store.UpdateWebhook(ctx, w); err != nil {
-		return fmt.Errorf("authsome: update webhook: %w", err)
-	}
-
-	e.hooks.Emit(ctx, &hook.Event{
-		Action:     hook.ActionWebhookUpdate,
-		Resource:   hook.ResourceWebhook,
-		ResourceID: w.ID.String(),
-		Tenant:     w.AppID.String(),
-	})
-
-	return nil
-}
-
-// DeleteWebhook deletes a webhook.
-func (e *Engine) DeleteWebhook(ctx context.Context, webhookID id.WebhookID) error {
-	if err := e.store.DeleteWebhook(ctx, webhookID); err != nil {
-		return fmt.Errorf("authsome: delete webhook: %w", err)
-	}
-
-	e.hooks.Emit(ctx, &hook.Event{
-		Action:     hook.ActionWebhookDelete,
-		Resource:   hook.ResourceWebhook,
-		ResourceID: webhookID.String(),
-	})
-
-	return nil
-}
-
-// ListWebhooks returns all webhooks for an app.
-func (e *Engine) ListWebhooks(ctx context.Context, appID id.AppID) ([]*webhook.Webhook, error) {
-	return e.store.ListWebhooks(ctx, appID)
-}
-
-// generateWebhookSecret generates a random hex secret for webhook signing.
-func generateWebhookSecret() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return "whsec_" + hex.EncodeToString(b), nil
-}
-
 // rbacStore returns the RBAC store backed by Warden. Warden is required for
 // all RBAC operations. Callers should guard with hasRBACStore() first.
 func (e *Engine) rbacStore() rbac.Store {
@@ -3643,7 +3553,7 @@ func (e *Engine) SetDefaultEnvironment(ctx context.Context, appID id.AppID, envI
 // CloneEnvironment clones an environment's config and structure (roles,
 // permissions, webhooks) into a new environment. User data is NOT cloned.
 func (e *Engine) CloneEnvironment(ctx context.Context, req environment.CloneRequest) (*environment.CloneResult, error) {
-	adapter := &storeCloneAdapter{store: e.store, rbacStore: e.rbacStore()}
+	adapter := &storeCloneAdapter{store: e.store, rbacStore: e.rbacStore(), engine: e}
 	cloner := environment.NewCloner(e.store, adapter, adapter)
 
 	result, err := cloner.Clone(ctx, req)
@@ -3678,6 +3588,7 @@ func (e *Engine) CloneEnvironment(ctx context.Context, req environment.CloneRequ
 type storeCloneAdapter struct {
 	store     store.Store
 	rbacStore rbac.Store
+	engine    *Engine
 }
 
 func (a *storeCloneAdapter) ListRolesForClone(ctx context.Context, appID id.AppID, envID id.EnvironmentID) ([]*environment.RoleForClone, error) {
@@ -3767,19 +3678,32 @@ func (a *storeCloneAdapter) CreateClonedPermission(ctx context.Context, p *envir
 	})
 }
 
+// CreateClonedWebhook registers the clone as a Relay endpoint of its own.
+// A secret can only be shown once and a clone has nowhere to show it, so
+// the clone gets a fresh secret and starts disabled: an operator rotates
+// the secret, hands it to the receiver, and enables the webhook. Without an
+// endpoint relay, or when the receiver refuses the test delivery, the
+// webhook is skipped with a warning rather than failing the whole clone.
 func (a *storeCloneAdapter) CreateClonedWebhook(ctx context.Context, w *environment.WebhookForClone) error {
 	now := time.Now()
-	return a.store.CreateWebhook(ctx, &webhook.Webhook{
+	clone := &webhook.Webhook{
 		ID:        id.MustParse(w.ID),
 		AppID:     id.MustParse(w.AppID),
 		EnvID:     id.MustParse(w.EnvID),
 		URL:       w.URL,
 		Events:    w.Events,
-		Secret:    w.Secret,
-		Active:    w.Active,
+		Active:    false,
 		CreatedAt: now,
 		UpdatedAt: now,
-	})
+	}
+	if err := a.engine.CreateWebhook(ctx, clone); err != nil {
+		a.engine.logger.Warn("authsome: cloned webhook skipped",
+			log.String("url", w.URL),
+			log.String("error", err.Error()),
+		)
+		return nil
+	}
+	return nil
 }
 
 // Verify storeCloneAdapter implements both interfaces.

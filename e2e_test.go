@@ -2,6 +2,7 @@ package authsome_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -38,7 +39,7 @@ func e2eAppID(t *testing.T) id.AppID {
 	return appID
 }
 
-func e2eEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *memory.Store) { //nolint:unparam // test helper returns store for assertions
+func e2eEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *memory.Store) {
 	t.Helper()
 	s := memory.New()
 
@@ -331,20 +332,27 @@ func TestE2E_DeviceTracking(t *testing.T) {
 // ──────────────────────────────────────────────────
 
 func TestE2E_WebhookManagement(t *testing.T) {
-	eng, _ := e2eEngine(t)
+	// Webhooks are relay endpoints, so the engine needs a relay that manages
+	// endpoints and a receiver that answers the test delivery; the receiver
+	// lives on loopback, which insecure mode permits.
+	cfg := testEngineConfig()
+	cfg.Webhooks.AllowInsecureURLs = true
+	eng, _ := e2eEngine(t, authsome.WithConfig(cfg), authsome.WithEventRelay(bridge.NewMemoryRelay()))
 	ctx := context.Background()
 	appID := e2eAppID(t)
+	_, rcv := newReceiver(t, http.StatusOK)
 
 	// Step 1: Create webhook
 	w := &webhook.Webhook{
 		AppID:  appID,
-		URL:    "https://example.com/webhook",
+		URL:    rcv.URL + "/webhook",
 		Events: []string{"user.created", "auth.signin"},
+		Active: true,
 	}
 	err := eng.CreateWebhook(ctx, w)
 	require.NoError(t, err)
 	assert.NotEmpty(t, w.ID.String())
-	assert.NotEmpty(t, w.Secret) // auto-generated
+	assert.NotEmpty(t, w.Secret) // shown once
 	assert.True(t, w.Active)
 
 	// Step 2: List webhooks
@@ -356,18 +364,19 @@ func TestE2E_WebhookManagement(t *testing.T) {
 	// Step 3: Get webhook
 	got, err := eng.GetWebhook(ctx, w.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "https://example.com/webhook", got.URL)
+	assert.Equal(t, rcv.URL+"/webhook", got.URL)
 	assert.Equal(t, []string{"user.created", "auth.signin"}, got.Events)
+	assert.Empty(t, got.Secret, "the secret is never read back")
 
 	// Step 4: Update webhook
-	w.URL = "https://example.com/webhook-v2"
+	w.URL = rcv.URL + "/webhook-v2"
 	w.Events = []string{"user.created"}
 	err = eng.UpdateWebhook(ctx, w)
 	require.NoError(t, err)
 
 	got, err = eng.GetWebhook(ctx, w.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "https://example.com/webhook-v2", got.URL)
+	assert.Equal(t, rcv.URL+"/webhook-v2", got.URL)
 	assert.Equal(t, []string{"user.created"}, got.Events)
 
 	// Step 5: Delete webhook
@@ -955,7 +964,7 @@ func TestE2E_EnvironmentLifecycle(t *testing.T) {
 // ──────────────────────────────────────────────────
 
 func TestE2E_EnvironmentClone(t *testing.T) {
-	eng, _ := e2eEngine(t)
+	eng, _ := e2eEngine(t, authsome.WithConfig(cloneWebhookConfig()), authsome.WithEventRelay(bridge.NewMemoryRelay()))
 	ctx := context.Background()
 	appID := e2eAppID(t)
 
@@ -1001,11 +1010,13 @@ func TestE2E_EnvironmentClone(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Step 4: Create webhook with EnvID
+	// Step 4: Create webhook with EnvID. It is a relay endpoint, so a
+	// receiver must answer the test delivery.
+	_, rcv := newReceiver(t, http.StatusOK)
 	w := &webhook.Webhook{
 		AppID:  appID,
 		EnvID:  prod.ID,
-		URL:    "https://prod.example.com/hook",
+		URL:    rcv.URL + "/hook",
 		Events: []string{"user.created"},
 		Active: true,
 	}
@@ -1120,4 +1131,11 @@ func TestE2E_SignIn_DefaultEnvResolution(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, sess)
 	assert.Equal(t, defaultEnv.ID, sess.EnvID, "session should have the default environment ID")
+}
+
+// cloneWebhookConfig lets the clone test register a receiver on loopback.
+func cloneWebhookConfig() authsome.Config {
+	cfg := testEngineConfig()
+	cfg.Webhooks.AllowInsecureURLs = true
+	return cfg
 }
