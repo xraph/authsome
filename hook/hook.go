@@ -236,6 +236,7 @@ const (
 
 	ActionAdminBanUser    = "admin.user.ban"
 	ActionAdminUnbanUser  = "admin.user.unban"
+	ActionAdminUnlockUser = "admin.user.unlock"
 	ActionAdminDeleteUser = "admin.user.delete"
 	ActionImpersonate     = "admin.impersonate"
 	// ActionImpersonateStop fires when an impersonation session is ended.

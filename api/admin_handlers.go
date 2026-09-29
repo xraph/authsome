@@ -78,6 +78,16 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 		return err
 	}
 
+	if err := g.POST("/users/:userId/unlock", a.handleAdminUnlockUser,
+		forge.WithSummary("Unlock user (admin)"),
+		forge.WithDescription("Clears the failed sign-in lockout for a user on every client network."),
+		forge.WithOperationID("adminUnlockUser"),
+		forge.WithResponseSchema(http.StatusOK, "Unlocked", StatusResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
 	if err := g.DELETE("/users/:userId", a.handleAdminDeleteUser,
 		forge.WithSummary("Delete user (admin)"),
 		forge.WithDescription("Permanently deletes a user and all associated data."),
@@ -385,6 +395,30 @@ func (a *API) handleAdminUnbanUser(ctx forge.Context, req *AdminUnbanUserRequest
 
 	resp := &StatusResponse{Status: "unbanned"}
 	return nil, ctx.JSON(http.StatusOK, resp)
+}
+
+// handleAdminUnlockUser clears a lockout the failed-sign-in tracker put on
+// the user, for every client network it was recorded on.
+func (a *API) handleAdminUnlockUser(ctx forge.Context, req *AdminUnlockUserRequest) (*StatusResponse, error) {
+	adminID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+
+	userID, err := id.ParseUserID(req.UserID)
+	if err != nil {
+		return nil, forge.BadRequest("invalid user_id")
+	}
+
+	if _, err = a.userInCallerApp(ctx, userID); err != nil {
+		return nil, err
+	}
+
+	if err := a.engine.AdminUnlockUser(ctx.Context(), adminID, userID); err != nil {
+		return nil, mapError(err)
+	}
+
+	return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "unlocked"})
 }
 
 func (a *API) handleAdminDeleteUser(ctx forge.Context, req *AdminDeleteUserRequest) (*StatusResponse, error) {

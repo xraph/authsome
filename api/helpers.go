@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/xraph/forge"
 
@@ -126,6 +127,15 @@ func mapError(err error) error {
 	if errors.Is(err, account.ErrRateLimited) {
 		return newCodedError(http.StatusTooManyRequests, "rate_limited",
 			"too many attempts for this account, try again later")
+	}
+	if errors.Is(err, account.ErrAccountLocked) {
+		extras := map[string]any{}
+		var locked *account.LockedError
+		if errors.As(err, &locked) {
+			extras["retry_after"] = locked.RetryAfter(time.Now())
+		}
+		return newCodedErrorWithExtras(http.StatusLocked, "account_locked",
+			"account temporarily locked after too many failed attempts", extras)
 	}
 	if errors.Is(err, account.ErrWeakPassword) {
 		return forge.BadRequest(err.Error())

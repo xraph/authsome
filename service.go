@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -246,7 +247,7 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 					"locked_until":    until.Format(time.RFC3339),
 				},
 			})
-			return nil, nil, account.ErrAccountLocked
+			return nil, nil, &account.LockedError{Until: until}
 		}
 	}
 
@@ -1186,11 +1187,65 @@ func (e *Engine) savePasswordHistory(ctx context.Context, userID id.UserID, oldH
 
 // lockoutKey builds a scoped lockout key from a sign-in request.
 func (e *Engine) lockoutKey(req *account.SignInRequest) string {
-	identifier := req.Email
-	if identifier == "" {
-		identifier = req.Username
+	return lockoutPrefix(req.AppID, firstNonEmpty(req.Email, req.Username)) + networkPrefix(req.IPAddress)
+}
+
+// lockoutPrefix is the part of a lockout key an operator can name: the app
+// and the identifier, with the client network appended by lockoutKey. An
+// admin unlock resets every key under it.
+func lockoutPrefix(appID id.AppID, identifier string) string {
+	return appID.String() + ":" + strings.ToLower(strings.TrimSpace(identifier)) + ":"
+}
+
+// networkPrefix reduces a client address to its /24 (IPv4) or /64 (IPv6)
+// so a lockout counts one attacker's network, not the whole internet: an
+// attacker who fails five times must not be able to lock the account's
+// owner out from home. An empty or unparsable address maps to "-".
+func networkPrefix(ip string) string {
+	addr, err := netip.ParseAddr(strings.TrimSpace(ip))
+	if err != nil {
+		return "-"
 	}
-	return req.AppID.String() + ":" + identifier
+	bits := 64
+	if addr.Is4() || addr.Is4In6() {
+		addr = addr.Unmap()
+		bits = 24
+	}
+	return netip.PrefixFrom(addr, bits).Masked().String()
+}
+
+// AdminUnlockUser clears the lockout counters and locks recorded against
+// the user's email and username, on every client network, and records the
+// action on the trail.
+func (e *Engine) AdminUnlockUser(ctx context.Context, adminID, userID id.UserID) error {
+	u, err := e.store.GetUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("authsome: admin unlock user: %w", err)
+	}
+	if e.lockout != nil {
+		for _, identifier := range []string{u.Email, u.Username} {
+			if identifier == "" {
+				continue
+			}
+			if err := e.lockout.ResetPrefix(ctx, lockoutPrefix(u.AppID, identifier)); err != nil {
+				return fmt.Errorf("authsome: admin unlock user: %w", err)
+			}
+		}
+	}
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionAdminUnlockUser,
+		Resource:   hook.ResourceUser,
+		ResourceID: userID.String(),
+		ActorID:    adminID.String(),
+		Tenant:     u.AppID.String(),
+		Category:   "admin",
+		Private: map[string]string{
+			"email":     u.Email,
+			"user_name": u.Name(),
+		},
+	})
+	return nil
 }
 
 // recordFailedSignin audits, emits hooks, records lockout failure, and fires

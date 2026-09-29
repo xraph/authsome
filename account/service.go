@@ -18,6 +18,27 @@ import (
 	"github.com/xraph/authsome/user"
 )
 
+// LockedError is ErrAccountLocked carrying when the lock lifts, so a
+// handler can answer 423 with a Retry-After. errors.Is(err,
+// ErrAccountLocked) holds for it.
+type LockedError struct {
+	Until time.Time
+}
+
+func (e *LockedError) Error() string { return ErrAccountLocked.Error() }
+
+// Is lets errors.Is match the sentinel.
+func (e *LockedError) Is(target error) bool { return target == ErrAccountLocked }
+
+// RetryAfter is the whole seconds until the lock lifts, at least one.
+func (e *LockedError) RetryAfter(now time.Time) int {
+	secs := int(e.Until.Sub(now).Seconds())
+	if secs < 1 {
+		return 1
+	}
+	return secs
+}
+
 // Sentinel errors for account operations.
 var (
 	ErrInvalidCredentials = errors.New("account: invalid credentials")

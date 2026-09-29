@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -295,6 +296,10 @@ func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse
 		DPoPJKT:   dpopJKT,
 	})
 	if err != nil {
+		var locked *account.LockedError
+		if errors.As(err, &locked) {
+			ctx.Response().Header().Set("Retry-After", strconv.Itoa(locked.RetryAfter(time.Now())))
+		}
 		return nil, mapError(err)
 	}
 

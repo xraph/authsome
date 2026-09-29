@@ -381,6 +381,11 @@ type AdminUnbanUserRequest struct {
 	UserID string `path:"userId" description:"User identifier"`
 }
 
+// AdminUnlockUserRequest binds the path for POST /admin/users/:userId/unlock.
+type AdminUnlockUserRequest struct {
+	UserID string `path:"userId" description:"User identifier"`
+}
+
 // AdminDeleteUserRequest binds the path for DELETE /admin/users/:userId.
 type AdminDeleteUserRequest struct {
 	UserID string `path:"userId" description:"User identifier"`
