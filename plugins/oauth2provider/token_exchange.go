@@ -11,9 +11,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/xraph/authsome"
+	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/principal"
-	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 )
 
@@ -297,10 +297,8 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 
 // recordExchange writes one security event per exchange attempt.
 //
-// Written straight to the store rather than emitted on the hook bus: the bus
-// bridge builds its event from Action, Outcome, Metadata and CreatedAt only
-// and never sets AppID, and securityevent.Query filters on AppID, so anything
-// recorded that way is written and then unreadable.
+// Emitted on the hook bus like every other audit record: the bus fills in the
+// request correlation and the engine's subscriber writes it to Chronicle.
 func (p *Plugin) recordExchange(
 	ctx forge.Context,
 	client *OAuth2Client,
@@ -311,17 +309,8 @@ func (p *Plugin) recordExchange(
 	denialReason string,
 	cause error,
 ) {
-	if p.engine == nil {
+	if p.engine == nil || p.engine.Hooks() == nil {
 		return
-	}
-	events := p.engine.SecurityEvents()
-	if events == nil {
-		return
-	}
-
-	outcome := "success"
-	if denialReason != "" || cause != nil {
-		outcome = "failure"
 	}
 
 	meta := map[string]string{"client_id": client.ClientID}
@@ -351,15 +340,24 @@ func (p *Plugin) recordExchange(
 		meta["chain_depth"] = fmt.Sprintf("%d", len(subject.Actors)+1)
 	}
 
-	//nolint:errcheck // audit is best-effort and must never fail the exchange
-	_ = events.RecordSecurityEvent(ctx.Context(), &securityevent.Event{
-		AppID:     client.AppID,
-		UserID:    userID,
-		Action:    "oauth2.token_exchange",
-		Outcome:   outcome,
-		Metadata:  meta,
-		IPAddress: ctx.Request().RemoteAddr,
-		UserAgent: ctx.Request().UserAgent(),
-		CreatedAt: time.Now(),
-	})
+	// Recorded through the hook bus so the event carries the request's
+	// correlation data and reaches the audit trail like every engine event.
+	ev := &hook.Event{
+		Action:     "oauth2.token_exchange",
+		Resource:   hook.ResourceSession,
+		ResourceID: issuedSessionID,
+		Tenant:     client.AppID.String(),
+		Category:   "oauth2",
+		Metadata:   meta,
+	}
+	if !userID.IsNil() {
+		ev.ActorID = userID.String()
+	}
+	if denialReason != "" || cause != nil {
+		ev.Outcome = hook.OutcomeFailure
+		ev.Severity = hook.SeverityWarning
+		ev.Reason = denialReason
+		ev.Err = cause
+	}
+	p.engine.Hooks().Emit(ctx.Context(), ev)
 }

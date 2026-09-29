@@ -43,7 +43,6 @@ import (
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/rbac"
-	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -130,7 +129,6 @@ type Engine struct {
 	rateLimiter     ratelimit.Limiter
 	lockout         lockout.Tracker
 	passwordHistory account.PasswordHistoryStore
-	securityEvents  securityevent.Store
 
 	// Dynamic settings manager (optional).
 	settingsMgr *settings.Manager
@@ -676,18 +674,6 @@ func (e *Engine) Start(ctx context.Context) error {
 		})
 	}
 
-	// Register security event recorder as a hook handler
-	if e.securityEvents != nil {
-		e.hooks.On("security_events", func(ctx context.Context, event *hook.Event) error {
-			return e.securityEvents.RecordSecurityEvent(ctx, &securityevent.Event{
-				Action:    event.Action,
-				Outcome:   event.Outcome,
-				Metadata:  event.Metadata,
-				CreatedAt: event.Timestamp,
-			})
-		})
-	}
-
 	e.started = true
 	return nil
 }
@@ -1018,9 +1004,6 @@ func (e *Engine) Lockout() lockout.Tracker { return e.lockout }
 
 // PasswordHistory returns the password history store (may be nil).
 func (e *Engine) PasswordHistory() account.PasswordHistoryStore { return e.passwordHistory }
-
-// SecurityEvents returns the security event store (may be nil).
-func (e *Engine) SecurityEvents() securityevent.Store { return e.securityEvents }
 
 // Warden returns the first-class authorization engine (may be nil).
 func (e *Engine) Warden() *warden.Engine { return e.wardenEng }

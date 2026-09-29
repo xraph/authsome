@@ -156,7 +156,6 @@ func (a *API) RegisterRoutes(router forge.Router) error {
 		a.registerClientConfigRoutes,
 		a.registerAuthMethodRoutes,
 		a.registerBulkRoutes,
-		a.registerSecurityEventRoutes,
 		a.registerHealthRoutes,
 		a.registerSettingsRoutes,
 		a.registerIntrospectRoutes,

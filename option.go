@@ -16,7 +16,6 @@ import (
 	"github.com/xraph/authsome/lockout"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/ratelimit"
-	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/strategy"
 	"github.com/xraph/authsome/tokenformat"
@@ -308,14 +307,6 @@ func WithDPoPReplayCache(c dpop.ReplayCache) Option {
 func WithPasswordHistory(s account.PasswordHistoryStore) Option {
 	return func(e *Engine) {
 		e.passwordHistory = s
-	}
-}
-
-// WithSecurityEvents sets the security event store for persisting and
-// querying security-relevant events (failed logins, lockouts, etc.).
-func WithSecurityEvents(s securityevent.Store) Option {
-	return func(e *Engine) {
-		e.securityEvents = s
 	}
 }
 
