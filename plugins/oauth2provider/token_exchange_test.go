@@ -23,7 +23,6 @@ import (
 	"github.com/xraph/authsome/plugins/oauth2provider"
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/ratelimit"
-	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/store/memory"
@@ -74,10 +73,9 @@ type exchangeEngine struct {
 	exchangeErr  error
 }
 
-func (e *exchangeEngine) Store() store.Store                  { return e.core }
-func (e *exchangeEngine) Logger() log.Logger                  { return log.NewNoopLogger() }
-func (e *exchangeEngine) Hooks() *hook.Bus                    { return e.events.bus }
-func (e *exchangeEngine) SecurityEvents() securityevent.Store { return e.events }
+func (e *exchangeEngine) Store() store.Store { return e.core }
+func (e *exchangeEngine) Logger() log.Logger { return log.NewNoopLogger() }
+func (e *exchangeEngine) Hooks() *hook.Bus   { return e.events.bus }
 
 // Nil is a valid answer here: OnInit reads it and falls back to a
 // process-local limiter, which is what a test wants anyway.

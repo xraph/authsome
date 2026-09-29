@@ -22,7 +22,6 @@ import (
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/ratelimit"
-	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -70,7 +69,6 @@ func (*registryEngine) Ledger() bridge.Ledger                                  {
 func (*registryEngine) TokenEncryptor() bridge.Encryptor                       { return nil }
 func (*registryEngine) CeremonyStore() ceremony.Store                          { return nil }
 func (*registryEngine) APIKeyStore() apikey.Store                              { return nil }
-func (*registryEngine) SecurityEvents() securityevent.Store                    { return nil }
 func (*registryEngine) AuthMiddleware() forge.Middleware                       { return nil }
 func (*registryEngine) AuthRegistry() auth.Registry                            { return nil }
 func (*registryEngine) PlatformAppID() id.AppID                                { return id.Nil }

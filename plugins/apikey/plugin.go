@@ -593,20 +593,6 @@ type apikeyStrategy struct {
 	gate PrincipalAuthGate
 }
 
-// serviceAccountKind returns the kind the service account was registered
-// with, falling back to KindService.
-//
-// The fallback is not a silent one in spirit: KindService is what an
-// unclassified machine caller has always been, and it is also the kind the
-// serviceaccount store itself defaults to, so a resolution failure lands on
-// the same value the row would most likely have carried anyway. The lookup is
-// one read against the principal store, on a path that already does one for
-// the key itself.
-func (s *apikeyStrategy) serviceAccountKind(ctx context.Context, saID id.ServiceAccountID) principal.Kind {
-	kind, _ := s.serviceAccountState(ctx, saID, time.Now())
-	return kind
-}
-
 // serviceAccountState returns the service account's registered kind and
 // whether it may authenticate at now. Without a principal resolver the kind
 // falls back to KindService and the account is taken as active, which is

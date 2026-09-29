@@ -431,3 +431,13 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 // its detached context. Generous enough to absorb a slow provider response
 // without inheriting the originating request's (possibly tiny) remaining budget.
 const notifyDeliveryTimeout = 30 * time.Second
+
+// deliveryValue returns a delivery-only value (address, token, code) from the
+// event's Private map, falling back to Metadata for events emitted by code
+// that predates the split between audit data and delivery data.
+func deliveryValue(event *hook.Event, key string) string {
+	if v := event.Private[key]; v != "" {
+		return v
+	}
+	return event.Metadata[key]
+}

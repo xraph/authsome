@@ -26,7 +26,6 @@ import (
 	"github.com/xraph/authsome/plugins/agentauth"
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/ratelimit"
-	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -99,7 +98,6 @@ func (*stubEngine) DPoPModeForApp(context.Context, id.AppID) dpop.Mode     { ret
 func (*stubEngine) DPoPNonceRequiredForApp(context.Context, id.AppID) bool { return false }
 func (*stubEngine) PrincipalStore() principal.Store                        { return nil }
 func (*stubEngine) RateLimiter() ratelimit.Limiter                         { return nil }
-func (*stubEngine) SecurityEvents() securityevent.Store                    { return nil }
 func (*stubEngine) ResolvePrincipal(context.Context, principal.Ref) (*principal.Principal, error) {
 	return nil, nil
 }

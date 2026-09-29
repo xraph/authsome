@@ -309,3 +309,14 @@ func testEngineConfig() authsome.Config {
 
 	return cfg
 }
+
+func TestNewEngineRequiresChronicle(t *testing.T) {
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+	_, err = authsome.NewEngine(
+		authsome.WithStore(memory.New()),
+		authsome.WithWarden(w),
+		authsome.WithDisableMigrate(),
+	)
+	require.ErrorIs(t, err, authsome.ErrChronicleRequired)
+}

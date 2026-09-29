@@ -5,8 +5,8 @@ go 1.26.0
 // replace github.com/xraph/forge => ../../forge
 
 // Temporary until v1.7.0 is tagged: the request correlation fields live on
-// the soc2/request-fields branch of forgery/chronicle.
-replace github.com/xraph/chronicle => ../../forgery/chronicle
+// the soc2/request-fields branch of the sibling chronicle checkout.
+replace github.com/xraph/chronicle => ../chronicle
 
 require (
 	github.com/a-h/templ v0.3.1020
