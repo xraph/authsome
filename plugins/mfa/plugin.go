@@ -464,11 +464,15 @@ const totpReplayTTL = 120 * time.Second
 // ephemeral ceremony store (TTL-bounded), so no persistent schema is required.
 func (p *Plugin) totpStepUsed(ctx context.Context, enrollmentID id.MFAID, step int64) bool {
 	key := fmt.Sprintf("mfa:totp:used:%s:%d", enrollmentID.String(), step)
-	if _, err := p.ceremonies.Get(ctx, key); err == nil {
+	// One atomic claim: two submissions of the same code racing on two
+	// replicas cannot both pass, which a read followed by a write allowed.
+	claimed, err := p.ceremonies.SetNX(ctx, key, []byte{1}, totpReplayTTL)
+	if err != nil {
+		// The marker could not be written, so the step cannot be proven
+		// unused. Refuse rather than accept a possible replay.
 		return true
 	}
-	_ = p.ceremonies.Set(ctx, key, []byte{1}, totpReplayTTL) //nolint:errcheck // best-effort replay marker
-	return false
+	return !claimed
 }
 
 // handleVerify verifies a TOTP code against the user's enrollment.

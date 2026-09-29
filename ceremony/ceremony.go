@@ -29,4 +29,15 @@ type Store interface {
 	// Delete removes data by key. It is idempotent — deleting a
 	// non-existent key returns nil.
 	Delete(ctx context.Context, key string) error
+
+	// SetNX stores data under key only when the key is absent or expired
+	// and reports whether it did. A replay marker set this way is claimed
+	// by exactly one caller, whichever replica it runs on.
+	SetNX(ctx context.Context, key string, data []byte, ttl time.Duration) (bool, error)
+
+	// Increment adds one to the counter under key and returns the new
+	// count. An absent or expired key starts at one with ttl; an existing
+	// key keeps its expiry, so a window of attempts cannot be extended by
+	// making more of them.
+	Increment(ctx context.Context, key string, ttl time.Duration) (int64, error)
 }

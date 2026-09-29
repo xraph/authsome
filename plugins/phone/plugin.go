@@ -310,23 +310,27 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 // wrong-code response into a 500, which would itself leak that the code was
 // wrong via a distinguishable status.
 func (p *Plugin) recordFailedAttempt(ctx context.Context, key string, challenge *phoneChallenge) {
-	challenge.Attempts++
-
 	remaining := time.Until(challenge.ExpiresAt)
-	if challenge.Attempts >= maxPhoneCodeAttempts || remaining <= 0 {
+	if remaining <= 0 {
 		_ = p.ceremonies.Delete(ctx, key) //nolint:errcheck // best-effort
 		return
 	}
 
-	data, err := json.Marshal(challenge)
+	// One atomic increment per wrong guess, bounded by the challenge's own
+	// deadline. A read-modify-write of the challenge let two replicas each
+	// count one attempt as one, and let a guess arrive between the read and
+	// the write uncounted.
+	attempts, err := p.ceremonies.Increment(ctx, key+":attempts", remaining)
 	if err != nil {
-		// Can't persist the count — drop the challenge rather than leave it
-		// standing with the attempt uncounted.
+		// Can't count the attempt — drop the challenge rather than leave it
+		// standing with the guess uncounted.
 		_ = p.ceremonies.Delete(ctx, key) //nolint:errcheck // best-effort
 		return
 	}
-	if setErr := p.ceremonies.Set(ctx, key, data, remaining); setErr != nil {
-		_ = p.ceremonies.Delete(ctx, key) //nolint:errcheck // best-effort
+	challenge.Attempts = int(attempts)
+	if attempts >= maxPhoneCodeAttempts {
+		_ = p.ceremonies.Delete(ctx, key)             //nolint:errcheck // best-effort
+		_ = p.ceremonies.Delete(ctx, key+":attempts") //nolint:errcheck // best-effort
 	}
 }
 

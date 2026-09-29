@@ -121,8 +121,9 @@ type mfaTicketPayload struct {
 	// construction (it is a hash of a public key), so it needs no more
 	// protection here than the ticket itself already has.
 	DPoPJKT string `json:"dpop_jkt,omitempty"`
-	// Attempts counts wrong codes submitted against this ticket.
-	Attempts int `json:"attempts"`
+	// Attempts is kept for tickets written before the counter moved to its
+	// own ceremony key; it is no longer read.
+	Attempts int `json:"attempts,omitempty"`
 }
 
 // MaxMFATicketAttempts caps wrong codes against a single ticket before it is
@@ -418,22 +419,25 @@ func (e *Engine) FailMFATicket(ctx context.Context, ticket string) (exhausted bo
 		return true, fmt.Errorf("authsome: decode mfa ticket: %w", decodeErr)
 	}
 
-	pl.Attempts++
 	remaining := time.Until(pl.IssuedAt.Add(MFATicketTTL))
-	if pl.Attempts >= MaxMFATicketAttempts || remaining <= 0 {
+	if remaining <= 0 {
 		return true, store.Delete(ctx, key)
 	}
 
-	encoded, err := json.Marshal(pl)
-	if err != nil {
+	// One atomic increment per wrong code, bounded by the ticket's own
+	// deadline. Rewriting the ticket with a bumped count let two replicas
+	// each count one guess as one and let a guess slip in uncounted between
+	// the read and the write.
+	attempts, incErr := store.Increment(ctx, key+":attempts", remaining)
+	if incErr != nil {
+		// Can't count the attempt — drop the ticket rather than leave it
+		// standing with the guess uncounted.
 		_ = store.Delete(ctx, key) //nolint:errcheck // best-effort
-		return true, err
+		return true, incErr
 	}
-	if setErr := store.Set(ctx, key, encoded, remaining); setErr != nil {
-		// Can't persist the count — drop the ticket rather than leave it
-		// standing with the attempt uncounted.
-		_ = store.Delete(ctx, key) //nolint:errcheck // best-effort
-		return true, setErr
+	if attempts >= MaxMFATicketAttempts {
+		_ = store.Delete(ctx, key+":attempts") //nolint:errcheck // best-effort
+		return true, store.Delete(ctx, key)
 	}
 	return false, nil
 }

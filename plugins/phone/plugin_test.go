@@ -59,6 +59,15 @@ func (s *ttlSpy) Set(ctx context.Context, key string, data []byte, ttl time.Dura
 	return s.Store.Set(ctx, key, data, ttl)
 }
 
+// Increment is the attempt counter's write; its TTL is recorded too, since
+// that is the window a wrong guess must not be able to extend.
+func (s *ttlSpy) Increment(ctx context.Context, key string, ttl time.Duration) (int64, error) {
+	s.mu.Lock()
+	s.ttls = append(s.ttls, ttl)
+	s.mu.Unlock()
+	return s.Store.Increment(ctx, key, ttl)
+}
+
 func (s *ttlSpy) recorded() []time.Duration {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -173,10 +182,10 @@ func TestVerify_CorrectCodeStillWorksBelowCap(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "session_token")
 }
 
-// Re-storing the challenge on a failed attempt must preserve its original
-// deadline. Writing back a full CodeTTL would let an attacker hold a challenge
-// open indefinitely by guessing — turning the attempt counter into a way to
-// extend the very window it exists to bound.
+// Counting a failed attempt must stay inside the challenge's original
+// deadline. A counter written with a full CodeTTL would let an attacker hold
+// a challenge open indefinitely by guessing, turning the attempt counter into
+// a way to extend the very window it exists to bound.
 func TestVerify_FailedAttemptDoesNotExtendDeadline(t *testing.T) {
 	p, sms, spy := newTestPlugin(t)
 	mux := forge.NewRouter()
@@ -189,9 +198,9 @@ func TestVerify_FailedAttemptDoesNotExtendDeadline(t *testing.T) {
 	submitCode(t, mux, wrongCode(code))
 
 	ttls := spy.recorded()
-	require.Len(t, ttls, 2, "a failed attempt should rewrite the challenge")
+	require.Len(t, ttls, 2, "a failed attempt should write the counter once")
 	assert.Less(t, ttls[1], ttls[0],
-		"rewritten TTL must be the remaining time, not a fresh full TTL")
+		"the counter's TTL must be the remaining time, not a fresh full TTL")
 	assert.Positive(t, ttls[1])
 }
 
