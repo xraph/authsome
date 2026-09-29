@@ -12,6 +12,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/plugin"
 )
 
 // RegisterRoutes registers organization management routes on a forge.Router.
@@ -269,9 +270,10 @@ func (p *Plugin) handleCreateOrg(ctx forge.Context, req *CreateOrgRequest) (*org
 		return nil, forge.BadRequest("name and slug are required")
 	}
 
-	appID, err := p.resolveAppID(req.AppID)
+	// The org lives in the caller's app. A body app_id may only restate it.
+	appID, err := plugin.ScopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	// Resolve the env to stamp on the new org. Order:
@@ -790,9 +792,9 @@ func (p *Plugin) handleCheckSlug(ctx forge.Context, req *CheckSlugRequest) (*Slu
 // ──────────────────────────────────────────────────
 
 func (p *Plugin) handleAdminListOrgs(ctx forge.Context, req *AdminListOrgsRequest) (*OrgListResponse, error) {
-	appID, err := p.resolveAppID(req.AppID)
+	appID, err := plugin.ScopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	orgs, err := p.AdminListOrganizations(ctx.Context(), appID)

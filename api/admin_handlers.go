@@ -263,9 +263,9 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 // ──────────────────────────────────────────────────
 
 func (a *API) handleAdminListUsers(ctx forge.Context, req *AdminListUsersRequest) (*AdminUserListResponse, error) {
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	limit := req.Limit
@@ -416,9 +416,9 @@ func (a *API) handleAdminDeleteUser(ctx forge.Context, req *AdminDeleteUserReque
 }
 
 func (a *API) handleAdminStats(ctx forge.Context, req *AdminStatsRequest) (*AdminStatsResponse, error) {
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	users, err := a.engine.AdminListUsers(ctx.Context(), &user.Query{
@@ -526,9 +526,9 @@ func (a *API) handleAdminCreateUser(ctx forge.Context, req *AdminCreateUserReque
 		return nil, forge.Unauthorized("authentication required")
 	}
 
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	u, err := a.engine.AdminCreateUser(ctx.Context(), adminID, appID, id.EnvironmentID{}, req.Email, req.Password, req.FirstName, req.LastName, req.Username)
@@ -546,9 +546,11 @@ func (a *API) handleAdminCreateUser(ctx forge.Context, req *AdminCreateUserReque
 // their credentials. ErrEmailTaken on the target maps to 409 via
 // mapError so callers can treat it as idempotent.
 func (a *API) handleAdminCopyUser(ctx forge.Context, req *AdminCopyUserRequest) (*user.User, error) {
-	adminID, ok := middleware.UserIDFrom(ctx.Context())
-	if !ok {
-		return nil, forge.Unauthorized("authentication required")
+	// Copying a credential between apps is a cross-tenant operation by
+	// definition, so only a platform owner may do it.
+	adminID, err := a.requirePlatformOwner(ctx)
+	if err != nil {
+		return nil, err
 	}
 	if strings.TrimSpace(req.SourceUserID) == "" || strings.TrimSpace(req.TargetAppID) == "" {
 		return nil, forge.BadRequest("source_user_id and target_app_id are required")
@@ -586,8 +588,10 @@ func (a *API) handleAdminCopyUser(ctx forge.Context, req *AdminCopyUserRequest) 
 // workspace architecture so per-workspace device tokens / sessions
 // / OAuth clients are fully isolated.
 func (a *API) handleAdminCreateApp(ctx forge.Context, req *AdminCreateAppRequest) (*AdminAppResponse, error) {
-	if _, ok := middleware.UserIDFrom(ctx.Context()); !ok {
-		return nil, forge.Unauthorized("authentication required")
+	// Creating a tenant is a platform concern; a tenant admin's manage:user
+	// grant says nothing about the platform.
+	if _, err := a.requirePlatformOwner(ctx); err != nil {
+		return nil, err
 	}
 	if req.Name == "" || req.Slug == "" {
 		return nil, forge.BadRequest("name and slug are required")
@@ -618,8 +622,10 @@ func (a *API) handleAdminCreateApp(ctx forge.Context, req *AdminCreateAppRequest
 // device tokens). The saga's compensating action when downstream
 // workspace-creation steps fail.
 func (a *API) handleAdminDeleteApp(ctx forge.Context, req *AdminDeleteAppRequest) (*StatusResponse, error) {
-	if _, ok := middleware.UserIDFrom(ctx.Context()); !ok {
-		return nil, forge.Unauthorized("authentication required")
+	// Deleting a tenant cascades to every user, session and client it owns.
+	// Only a platform owner may do that, and never to the platform app.
+	if _, err := a.requirePlatformOwner(ctx); err != nil {
+		return nil, err
 	}
 	parsed, err := id.ParseAppID(req.AppID)
 	if err != nil {
@@ -633,26 +639,31 @@ func (a *API) handleAdminDeleteApp(ctx forge.Context, req *AdminDeleteAppRequest
 
 // handleGrantPlatformOwner grants the platform-owner role to a user identified
 // by user_id or email. The caller must themselves be a platform owner.
-func (a *API) handleGrantPlatformOwner(ctx forge.Context, req *AdminGrantPlatformOwnerRequest) (*AdminPlatformOwnerResponse, error) {
+// requirePlatformOwner returns the caller's id when they hold the
+// platform-owner role, and a 401 or 403 otherwise. Every endpoint that acts
+// across tenants (app lifecycle, cross-app service accounts, copying users
+// between apps, granting platform ownership) sits behind it.
+func (a *API) requirePlatformOwner(ctx forge.Context) (id.UserID, error) {
 	callerID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
-		return nil, forge.Unauthorized("authentication required")
+		return id.UserID{}, forge.Unauthorized("authentication required")
 	}
-
-	// C1: only platform-owners may call this endpoint.
 	roles, err := a.engine.ListUserRoles(ctx.Context(), callerID)
 	if err != nil {
-		return nil, mapError(err)
+		return id.UserID{}, mapError(err)
 	}
-	isPlatformOwner := false
 	for _, r := range roles {
 		if r.Slug == rbac.PlatformOwnerSlug {
-			isPlatformOwner = true
-			break
+			return callerID, nil
 		}
 	}
-	if !isPlatformOwner {
-		return nil, forge.Forbidden("platform-owner role required")
+	return id.UserID{}, forge.Forbidden("platform-owner role required")
+}
+
+func (a *API) handleGrantPlatformOwner(ctx forge.Context, req *AdminGrantPlatformOwnerRequest) (*AdminPlatformOwnerResponse, error) {
+	callerID, err := a.requirePlatformOwner(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	if req.UserID == "" && req.Email == "" {
@@ -844,9 +855,9 @@ func (a *API) handleAdminCreateServiceAccount(ctx forge.Context, req *AdminCreat
 		return nil, forge.BadRequest("name is required")
 	}
 
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	svc, err := a.engine.CreateServiceAccount(ctx.Context(), appID, req.Name, req.Description, req.Scopes)
@@ -858,9 +869,9 @@ func (a *API) handleAdminCreateServiceAccount(ctx forge.Context, req *AdminCreat
 }
 
 func (a *API) handleAdminListServiceAccounts(ctx forge.Context, req *AdminListServiceAccountsRequest) (*AdminServiceAccountListResponse, error) {
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	limit := req.Limit
@@ -894,18 +905,36 @@ func (a *API) handleAdminGetServiceAccount(ctx forge.Context, req *AdminGetServi
 		return nil, forge.BadRequest("invalid service_account_id")
 	}
 
+	svc, err := a.serviceAccountInCallerApp(ctx, svcID)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, ctx.JSON(http.StatusOK, toServiceAccountResponse(svc))
+}
+
+// serviceAccountInCallerApp loads a service account and verifies it belongs
+// to the caller's app. A missing account and one in another app both answer
+// 404, so a tenant admin cannot enumerate or act on other tenants' machine
+// identities.
+func (a *API) serviceAccountInCallerApp(ctx forge.Context, svcID id.ServiceAccountID) (*serviceaccount.ServiceAccount, error) {
 	svc, err := a.engine.GetServiceAccount(ctx.Context(), svcID)
 	if err != nil {
 		return nil, mapError(err)
 	}
-
-	return nil, ctx.JSON(http.StatusOK, toServiceAccountResponse(svc))
+	if err := a.assertAppScope(ctx, svc.AppID); err != nil {
+		return nil, err
+	}
+	return svc, nil
 }
 
 func (a *API) handleAdminDeleteServiceAccount(ctx forge.Context, req *AdminDeleteServiceAccountRequest) (*StatusResponse, error) {
 	svcID, err := id.ParseServiceAccountID(req.ServiceAccountID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid service_account_id")
+	}
+	if _, err := a.serviceAccountInCallerApp(ctx, svcID); err != nil {
+		return nil, err
 	}
 
 	if err := a.engine.DeleteServiceAccount(ctx.Context(), svcID); err != nil {
@@ -923,6 +952,9 @@ func (a *API) handleAdminCreateServiceAccountAPIKey(ctx forge.Context, req *Admi
 	svcID, err := id.ParseServiceAccountID(req.ServiceAccountID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid service_account_id")
+	}
+	if _, err := a.serviceAccountInCallerApp(ctx, svcID); err != nil {
+		return nil, err
 	}
 
 	var expiresAt *time.Time

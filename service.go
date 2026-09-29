@@ -3180,8 +3180,17 @@ func (e *Engine) UpdateApp(ctx context.Context, a *app.App) error {
 	return nil
 }
 
+// ErrPlatformAppProtected is returned when a caller tries to delete the
+// platform app. That app hosts the platform owners themselves; removing it
+// would cascade to every administrator and cannot be recovered from.
+var ErrPlatformAppProtected = errors.New("authsome: the platform app cannot be deleted")
+
 // DeleteApp removes an application.
 func (e *Engine) DeleteApp(ctx context.Context, appID id.AppID) error {
+	if platform := e.PlatformAppID(); !platform.IsNil() && platform.String() == appID.String() {
+		return ErrPlatformAppProtected
+	}
+
 	// Removing a tenant cascades to every user and session it owns, so the
 	// record must exist before the cascade starts.
 	actor := ""

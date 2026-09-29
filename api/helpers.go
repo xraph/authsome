@@ -126,5 +126,11 @@ func mapError(err error) error {
 	if errors.Is(err, account.ErrWeakPassword) {
 		return forge.BadRequest(err.Error())
 	}
+	if errors.Is(err, authsome.ErrPlatformAppProtected) {
+		return forge.Forbidden("the platform app cannot be deleted")
+	}
+	if errors.Is(err, authsome.ErrScopeEscalation) {
+		return forge.BadRequest("requested scopes exceed the service account's scopes")
+	}
 	return forge.InternalError(err)
 }

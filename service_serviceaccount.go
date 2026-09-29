@@ -95,6 +95,10 @@ func (e *Engine) DeleteServiceAccount(ctx context.Context, svcID id.ServiceAccou
 	return nil
 }
 
+// ErrScopeEscalation is returned when a credential would be minted with
+// scopes wider than the identity it belongs to.
+var ErrScopeEscalation = errors.New("authsome: requested scopes exceed the service account's scopes")
+
 // CreateServiceAccountAPIKey mints an API key bound to a service account (not a user).
 // Returns the persisted APIKey and the plaintext secret (only returned once — not stored).
 func (e *Engine) CreateServiceAccountAPIKey(ctx context.Context, svcAcctID id.ServiceAccountID, name string, scopes []string, expiresAt *time.Time) (*apikey.APIKey, string, error) {
@@ -106,6 +110,12 @@ func (e *Engine) CreateServiceAccountAPIKey(ctx context.Context, svcAcctID id.Se
 	svc, err := e.store.GetServiceAccount(ctx, svcAcctID)
 	if err != nil {
 		return nil, "", fmt.Errorf("authsome: get service account: %w", err)
+	}
+
+	// A key can carry at most the scopes its account holds; otherwise a
+	// caller who may mint keys could mint one wider than the account.
+	if err := requireScopeSubset(scopes, svc.Scopes); err != nil {
+		return nil, "", fmt.Errorf("%w: %w", ErrScopeEscalation, err)
 	}
 
 	// Generate a key pair.

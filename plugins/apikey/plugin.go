@@ -269,6 +269,26 @@ func (p *Plugin) callerIsKeyAdmin(ctx context.Context, caller id.UserID) bool {
 // authorizeSubject resolves whose keys a request may act on. An empty subject
 // means "my own". Naming another user requires manage/apikey — otherwise any
 // authenticated user could mint a key that authenticates as somebody else.
+// ownerAppID resolves the app a new key belongs to from the key owner's
+// identity: the authenticated user on the context when the owner is the
+// caller, the engine's user record otherwise, then the session's app. It
+// returns the nil id only when none of those exist (a bare test router).
+func (p *Plugin) ownerAppID(ctx forge.Context, ownerID id.UserID) id.AppID {
+	goCtx := ctx.Context()
+	if u, ok := middleware.UserFrom(goCtx); ok && u != nil && u.ID.String() == ownerID.String() && !u.AppID.IsNil() {
+		return u.AppID
+	}
+	if p.engine != nil {
+		if u, err := p.engine.GetUser(goCtx, ownerID); err == nil && u != nil && !u.AppID.IsNil() {
+			return u.AppID
+		}
+	}
+	if sess, ok := middleware.SessionFrom(goCtx); ok && sess != nil && !sess.AppID.IsNil() {
+		return sess.AppID
+	}
+	return id.AppID{}
+}
+
 func (p *Plugin) authorizeSubject(ctx forge.Context, subject string) (id.UserID, error) {
 	caller, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok || caller.IsNil() {
@@ -352,19 +372,33 @@ type RevokeKeyRequest struct {
 // ──────────────────────────────────────────────────
 
 func (p *Plugin) handleCreate(ctx forge.Context, req *CreateKeyRequest) (*CreateKeyResponse, error) {
-	if req.AppID == "" || req.Name == "" {
-		return nil, forge.BadRequest("app_id and name are required")
+	if req.Name == "" {
+		return nil, forge.BadRequest("name is required")
 	}
 
-	appID, err := id.ParseAppID(req.AppID)
-	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
-	}
 	// user_id is optional and defaults to the caller. Minting a key for
 	// another user requires manage/apikey.
 	userID, err := p.authorizeSubject(ctx, req.UserID)
 	if err != nil {
 		return nil, err
+	}
+
+	// The key is stamped with the owner's app, never a body-supplied one:
+	// a key's app decides which tenant every request made with it runs in.
+	// A body app_id may only restate the resolved app.
+	appID := p.ownerAppID(ctx, userID)
+	if req.AppID != "" {
+		requested, parseErr := id.ParseAppID(req.AppID)
+		if parseErr != nil {
+			return nil, forge.BadRequest("invalid app_id")
+		}
+		if !appID.IsNil() && requested.String() != appID.String() {
+			return nil, forge.BadRequest("app_id must match the key owner's app")
+		}
+		appID = requested
+	}
+	if appID.IsNil() {
+		return nil, forge.BadRequest("app_id is required")
 	}
 
 	// Check max keys limit

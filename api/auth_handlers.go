@@ -486,13 +486,6 @@ func (a *API) sessionTokenMaxAge() int {
 // Helpers
 // ──────────────────────────────────────────────────
 
-func (a *API) resolveAppID(raw string) (id.AppID, error) {
-	if raw != "" {
-		return id.ParseAppID(raw)
-	}
-	return id.ParseAppID(a.engine.Config().AppID)
-}
-
 // resolvePublicAppID resolves the app for an unauthenticated public-auth
 // request (signup, signin, forgot-password, resend verification).
 //
