@@ -238,6 +238,28 @@ const (
 	ActionAdminUnbanUser  = "admin.user.unban"
 	ActionAdminDeleteUser = "admin.user.delete"
 	ActionImpersonate     = "admin.impersonate"
+	// ActionImpersonateStop fires when an impersonation session is ended.
+	ActionImpersonateStop = "admin.impersonate.stop"
+	// ActionAdminCopyUser fires when an admin clones a user into another app.
+	ActionAdminCopyUser = "admin.user.copy"
+	// ActionAdminBulkImport fires once per bulk user import.
+	ActionAdminBulkImport = "admin.user.bulk_import"
+	// ActionAdminBulkRevokeSessions fires when an admin revokes every session
+	// of one user.
+	ActionAdminBulkRevokeSessions = "admin.session.bulk_revoke"
+	// ActionPasswordResetRequested fires when a reset link is issued. Distinct
+	// from ActionPasswordReset, which delivers the link, so the trail can tell
+	// a request from a completed reset.
+	ActionPasswordResetRequested = "auth.password_reset_requested"
+	// Settings changes are recorded with the key, scope and both values so
+	// an auditor can see who weakened what.
+	ActionSettingsUpdate    = "settings.update"
+	ActionSettingsEnforce   = "settings.enforce"
+	ActionSettingsUnenforce = "settings.unenforce"
+	ActionSettingsDelete    = "settings.delete"
+	// ActionAuditRead fires when the audit trail itself is queried through
+	// authsome.
+	ActionAuditRead = "audit.read"
 	ActionAccountDeletion = "user.account_deletion"
 	ActionDataExport      = "user.data_export"
 

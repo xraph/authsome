@@ -10,6 +10,7 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	authsomeapp "github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/rbac"
@@ -680,6 +681,24 @@ func (a *API) handleGrantPlatformOwner(ctx forge.Context, req *AdminGrantPlatfor
 	ownerRole, err := a.engine.GetRoleBySlug(ctx.Context(), appID, rbac.PlatformOwnerSlug)
 	if err != nil || ownerRole == nil {
 		return nil, forge.InternalError(fmt.Errorf("platform-owner role not found"))
+	}
+
+	// Granting platform ownership is the widest privilege change there is;
+	// the trail must hold the record before the grant exists.
+	if auditErr := a.engine.Hooks().EmitCritical(ctx.Context(), &hook.Event{
+		Action:     hook.ActionRoleAssign,
+		Resource:   hook.ResourceRole,
+		ResourceID: ownerRole.ID,
+		ActorID:    callerID.String(),
+		Tenant:     appID.String(),
+		Severity:   hook.SeverityCritical,
+		Category:   "admin",
+		Metadata: map[string]string{
+			"role":           rbac.PlatformOwnerSlug,
+			"target_user_id": targetUserID.String(),
+		},
+	}); auditErr != nil {
+		return nil, forge.InternalError(fmt.Errorf("audit trail unavailable: %w", auditErr))
 	}
 
 	if err := a.engine.AssignUserRole(ctx.Context(), &rbac.UserRole{

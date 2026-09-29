@@ -11,6 +11,7 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/store"
 )
@@ -87,7 +88,25 @@ func (p *Plugin) UpdateOrganization(ctx context.Context, o *organization.Organiz
 		return fmt.Errorf("organization: update organization: %w", err)
 	}
 	p.plugins.EmitAfterOrgUpdate(ctx, o)
+	p.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionOrgUpdate,
+		Resource:   hook.ResourceOrganization,
+		ResourceID: o.ID.String(),
+		ActorID:    actorFromContext(ctx),
+		Tenant:     o.AppID.String(),
+		OrgID:      o.ID.String(),
+		Category:   "org",
+	})
 	return nil
+}
+
+// actorFromContext returns the authenticated user acting on the request, or
+// "" when the call runs outside a request (a system job, a test).
+func actorFromContext(ctx context.Context) string {
+	if uid, ok := middleware.UserIDFrom(ctx); ok {
+		return uid.String()
+	}
+	return ""
 }
 
 // DeleteOrganization deletes an organization and all of its dependent records
@@ -100,6 +119,27 @@ func (p *Plugin) UpdateOrganization(ctx context.Context, o *organization.Organiz
 // fires once the cascade returns nil, so downstream plugins never see an event
 // for an org that wasn't actually deleted.
 func (p *Plugin) DeleteOrganization(ctx context.Context, orgID id.OrgID) error {
+	// The cascade is irreversible, so the trail must hold the record first.
+	tenant := ""
+	meta := map[string]string{}
+	if org, err := p.store.GetOrganization(ctx, orgID); err == nil && org != nil {
+		tenant = org.AppID.String()
+		meta["slug"] = org.Slug
+		meta["app_id"] = org.AppID.String()
+	}
+	if err := p.hooks.EmitCritical(ctx, &hook.Event{
+		Action:     hook.ActionOrgDelete,
+		Resource:   hook.ResourceOrganization,
+		ResourceID: orgID.String(),
+		ActorID:    actorFromContext(ctx),
+		Tenant:     tenant,
+		OrgID:      orgID.String(),
+		Severity:   hook.SeverityCritical,
+		Category:   "org",
+		Metadata:   meta,
+	}); err != nil {
+		return fmt.Errorf("organization: delete organization: audit trail unavailable: %w", err)
+	}
 	if err := p.store.DeleteOrganizationCascade(ctx, orgID); err != nil {
 		return fmt.Errorf("organization: delete organization: %w", err)
 	}
@@ -132,7 +172,30 @@ func (p *Plugin) AddMember(ctx context.Context, m *organization.Member) error {
 		return fmt.Errorf("organization: add member: %w", err)
 	}
 	p.plugins.EmitAfterMemberAdd(ctx, m)
+	p.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionMemberAdd,
+		Resource:   hook.ResourceMember,
+		ResourceID: m.ID.String(),
+		ActorID:    actorFromContext(ctx),
+		Tenant:     p.tenantForOrg(ctx, m.OrgID),
+		OrgID:      m.OrgID.String(),
+		Category:   "org",
+		Metadata: map[string]string{
+			"member_user_id": m.UserID.String(),
+			"role":           string(m.Role),
+		},
+	})
 	return nil
+}
+
+// tenantForOrg resolves the app an organization belongs to for events that
+// only have the org id in hand.
+func (p *Plugin) tenantForOrg(ctx context.Context, orgID id.OrgID) string {
+	org, err := p.store.GetOrganization(ctx, orgID)
+	if err != nil || org == nil {
+		return ""
+	}
+	return org.AppID.String()
 }
 
 // RemoveMember removes a member from an organization.
@@ -166,6 +229,19 @@ func (p *Plugin) RemoveMember(ctx context.Context, memberID id.MemberID) error {
 		return fmt.Errorf("organization: remove member: %w", err)
 	}
 	p.plugins.EmitAfterMemberRemove(ctx, memberID)
+	p.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionMemberRemove,
+		Resource:   hook.ResourceMember,
+		ResourceID: memberID.String(),
+		ActorID:    actorFromContext(ctx),
+		Tenant:     p.tenantForOrg(ctx, member.OrgID),
+		OrgID:      member.OrgID.String(),
+		Category:   "org",
+		Metadata: map[string]string{
+			"member_user_id": member.UserID.String(),
+			"role":           string(member.Role),
+		},
+	})
 	return nil
 }
 
@@ -189,25 +265,33 @@ func (p *Plugin) UpdateMemberRole(ctx context.Context, memberID id.MemberID, rol
 
 	p.plugins.EmitAfterMemberRoleChange(ctx, member)
 
-	// Resolve names for notification template variables (best-effort).
+	// Resolve names for notification template variables (best-effort). The
+	// address and name are delivery data and stay out of the trail.
 	hookMeta := map[string]string{
-		"new_role": string(role),
+		"new_role":       string(role),
+		"member_user_id": member.UserID.String(),
 	}
+	private := map[string]string{}
 	if u, err := p.store.GetUser(ctx, member.UserID); err == nil {
-		hookMeta["user_name"] = u.Name()
-		hookMeta["email"] = u.Email
+		private["user_name"] = u.Name()
+		private["email"] = u.Email
 	}
+	tenant := ""
 	if org, err := p.store.GetOrganization(ctx, member.OrgID); err == nil {
 		hookMeta["org_name"] = org.Name
+		tenant = org.AppID.String()
 	}
 
 	p.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionMemberRoleChange,
 		Resource:   hook.ResourceMember,
 		ResourceID: member.ID.String(),
-		ActorID:    member.UserID.String(),
-		Tenant:     member.OrgID.String(),
+		ActorID:    actorFromContext(ctx),
+		Tenant:     tenant,
+		OrgID:      member.OrgID.String(),
+		Category:   "org",
 		Metadata:   hookMeta,
+		Private:    private,
 	})
 	p.relayEvent(ctx, "org.member.role_changed", member.OrgID.String(), map[string]string{
 		"member_id": member.ID.String(),

@@ -2,11 +2,13 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 
 	"github.com/xraph/forge"
 
+	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/settings"
 )
@@ -217,6 +219,10 @@ func (a *API) handleSetSetting(ctx forge.Context, req *SetSettingRequest) (*Sett
 		updatedBy = uid.String()
 	}
 
+	old := a.settingBefore(ctx, mgr, req.Key, req.AppID, req.OrgID)
+	if err := a.auditSettingsWrite(ctx, hook.ActionSettingsUpdate, req.Key, scope, req.ScopeID, req.AppID, req.OrgID, old, string(req.Value)); err != nil {
+		return nil, err
+	}
 	if err := mgr.Set(ctx.Context(), req.Key, req.Value, scope, req.ScopeID, req.AppID, req.OrgID, updatedBy); err != nil {
 		return nil, mapSettingsError(err)
 	}
@@ -228,6 +234,58 @@ func (a *API) handleSetSetting(ctx forge.Context, req *SetSettingRequest) (*Sett
 		ScopeID: req.ScopeID,
 		Status:  "updated",
 	}, nil
+}
+
+// settingBefore returns the effective value of a key before a write so the
+// audit record can show what changed. A missing value is reported as "".
+func (a *API) settingBefore(ctx forge.Context, mgr *settings.Manager, key, appID, orgID string) string {
+	raw, err := mgr.Resolve(ctx.Context(), key, settings.ResolveOpts{AppID: appID, OrgID: orgID})
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
+
+// auditSettingsWrite records a settings change on the audit trail. A change
+// at global scope affects every tenant, so it is recorded before the write
+// and refused when the trail is unavailable; narrower scopes are recorded
+// best-effort so a logging blip cannot block a tenant's own configuration.
+func (a *API) auditSettingsWrite(ctx forge.Context, action, key string, scope settings.Scope, scopeID, appID, orgID, oldValue, newValue string) error {
+	actor := ""
+	if uid, ok := middleware.UserIDFrom(ctx.Context()); ok {
+		actor = uid.String()
+	}
+	tenant := appID
+	if tenant == "" {
+		if callerApp, ok := a.callerAppID(ctx); ok {
+			tenant = callerApp.String()
+		}
+	}
+	ev := &hook.Event{
+		Action:     action,
+		Resource:   "setting",
+		ResourceID: key,
+		ActorID:    actor,
+		Tenant:     tenant,
+		OrgID:      orgID,
+		Category:   "settings",
+		Metadata: map[string]string{
+			"key":      key,
+			"scope":    string(scope),
+			"scope_id": scopeID,
+			"old":      oldValue,
+			"new":      newValue,
+		},
+	}
+	if scope == settings.ScopeGlobal {
+		ev.Severity = hook.SeverityCritical
+		if err := a.engine.Hooks().EmitCritical(ctx.Context(), ev); err != nil {
+			return forge.InternalError(fmt.Errorf("audit trail unavailable: %w", err))
+		}
+		return nil
+	}
+	a.engine.Hooks().Emit(ctx.Context(), ev)
+	return nil
 }
 
 func (a *API) handleEnforceSetting(ctx forge.Context, req *EnforceSettingRequest) (*SettingValueResponse, error) {
@@ -246,6 +304,10 @@ func (a *API) handleEnforceSetting(ctx forge.Context, req *EnforceSettingRequest
 		updatedBy = uid.String()
 	}
 
+	old := a.settingBefore(ctx, mgr, req.Key, req.AppID, req.OrgID)
+	if err := a.auditSettingsWrite(ctx, hook.ActionSettingsEnforce, req.Key, scope, req.ScopeID, req.AppID, req.OrgID, old, string(req.Value)); err != nil {
+		return nil, err
+	}
 	if err := mgr.Enforce(ctx.Context(), req.Key, req.Value, scope, req.ScopeID, req.AppID, req.OrgID, updatedBy); err != nil {
 		return nil, mapSettingsError(err)
 	}
@@ -270,6 +332,10 @@ func (a *API) handleUnenforceSetting(ctx forge.Context, req *UnenforceSettingReq
 		return nil, forge.BadRequest("scope is required")
 	}
 
+	old := a.settingBefore(ctx, mgr, req.Key, "", "")
+	if err := a.auditSettingsWrite(ctx, hook.ActionSettingsUnenforce, req.Key, scope, req.ScopeID, "", "", old, ""); err != nil {
+		return nil, err
+	}
 	if err := mgr.Unenforce(ctx.Context(), req.Key, scope, req.ScopeID); err != nil {
 		return nil, mapSettingsError(err)
 	}
@@ -288,6 +354,10 @@ func (a *API) handleDeleteSetting(ctx forge.Context, req *DeleteSettingRequest) 
 		return nil, forge.BadRequest("scope is required")
 	}
 
+	old := a.settingBefore(ctx, mgr, req.Key, "", "")
+	if err := a.auditSettingsWrite(ctx, hook.ActionSettingsDelete, req.Key, scope, req.ScopeID, "", "", old, ""); err != nil {
+		return nil, err
+	}
 	if err := mgr.Delete(ctx.Context(), req.Key, scope, req.ScopeID); err != nil {
 		return nil, mapSettingsError(err)
 	}

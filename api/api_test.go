@@ -1293,7 +1293,15 @@ func TestResendVerification_CreatesTokenForExistingUnverifiedUser(t *testing.T) 
 	var captured map[string]string
 	eng.Hooks().On("test", func(_ context.Context, ev *hook.Event) error {
 		if ev.Action == hook.ActionEmailVerificationRequested {
-			captured = ev.Metadata
+			// Delivery data (address, code) travels in Private; the trail
+			// keeps only Metadata.
+			captured = map[string]string{}
+			for k, v := range ev.Metadata {
+				captured[k] = v
+			}
+			for k, v := range ev.Private {
+				captured[k] = v
+			}
 		}
 		return nil
 	})
@@ -1334,7 +1342,15 @@ func TestForgotPassword_EmitsResetHookWithToken(t *testing.T) {
 	var captured map[string]string
 	eng.Hooks().On("test", func(_ context.Context, ev *hook.Event) error {
 		if ev.Action == hook.ActionPasswordReset {
-			captured = ev.Metadata
+			// Delivery data (address, token) travels in Private; the trail
+			// keeps only Metadata.
+			captured = map[string]string{}
+			for k, v := range ev.Metadata {
+				captured[k] = v
+			}
+			for k, v := range ev.Private {
+				captured[k] = v
+			}
 		}
 		return nil
 	})

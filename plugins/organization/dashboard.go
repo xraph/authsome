@@ -11,7 +11,6 @@ import (
 
 	"github.com/xraph/forge/extensions/dashboard/contributor"
 
-	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
@@ -231,21 +230,8 @@ func (p *Plugin) renderOrgDetail(ctx context.Context, params contributor.Params)
 		case !p.canDeleteOrg(ctx, actorID, org):
 			actionError = "You don't have permission to delete this organization."
 		default:
-			// Audit BEFORE delete so the attempt is recorded even if the
-			// cascade fails partway through.
-			if ch := p.chronicleOrNil(); ch != nil {
-				_ = ch.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // audit best-effort
-					Action:     "org.delete",
-					Severity:   bridge.SeverityCritical,
-					ActorID:    actorID.String(),
-					ResourceID: org.ID.String(),
-					Outcome:    bridge.OutcomeSuccess,
-					Metadata: map[string]string{
-						"slug":   org.Slug,
-						"app_id": org.AppID.String(),
-					},
-				})
-			}
+			// DeleteOrganization records org.delete on the trail before the
+			// cascade runs and refuses to proceed when the trail is down.
 			if delErr := p.DeleteOrganization(ctx, orgID); delErr != nil {
 				actionError = "Failed to delete organization: " + delErr.Error()
 			} else {

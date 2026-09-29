@@ -17,7 +17,6 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/app"
-	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/dashboard/auth"
 	"github.com/xraph/authsome/dashboard/components"
 	"github.com/xraph/authsome/dashboard/pages"
@@ -25,6 +24,7 @@ import (
 	"github.com/xraph/authsome/dashboard/widgets"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/formconfig"
+	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
@@ -68,7 +68,7 @@ func New(manifest *contributor.Manifest, engine *authsome.Engine, plugins []plug
 	}
 	c.pageRoutes = c.buildPageRoutes()
 	if engine != nil {
-		c.audit = NewAuditor(engine.Chronicle())
+		c.audit = NewAuditor(engine.Hooks())
 	} else {
 		c.audit = NewAuditor(nil)
 	}
@@ -464,27 +464,31 @@ func (c *Contributor) renderUserDetail(ctx context.Context, appID id.AppID, para
 			switch action {
 			case "ban":
 				reason := params.FormData["reason"]
-				c.audit.Record(ctx, "user.ban", bridge.SeverityWarning,
+				banErr := c.engine.AdminBanUser(ctx, adminID, userID, reason, nil)
+				c.audit.RecordWithOutcome(ctx, "dashboard.user.ban", hook.SeverityWarning, outcomeOf(banErr),
 					actorID.String(), userID.String(),
-					map[string]string{"reason": reason})
-				if banErr := c.engine.AdminBanUser(ctx, adminID, userID, reason, nil); banErr != nil {
+					withError(map[string]string{"reason": reason, "app_id": appID.String()}, banErr))
+				if banErr != nil {
 					actionError = "Failed to ban user: " + banErr.Error()
 				} else {
 					actionSuccess = "User has been banned."
 				}
 			case "unban":
-				c.audit.Record(ctx, "user.unban", bridge.SeverityInfo,
-					actorID.String(), userID.String(), nil)
-				if unbanErr := c.engine.AdminUnbanUser(ctx, adminID, userID); unbanErr != nil {
+				unbanErr := c.engine.AdminUnbanUser(ctx, adminID, userID)
+				c.audit.RecordWithOutcome(ctx, "dashboard.user.unban", hook.SeverityInfo, outcomeOf(unbanErr),
+					actorID.String(), userID.String(),
+					withError(map[string]string{"app_id": appID.String()}, unbanErr))
+				if unbanErr != nil {
 					actionError = "Failed to unban user: " + unbanErr.Error()
 				} else {
 					actionSuccess = "User has been unbanned."
 				}
 			case "delete":
-				c.audit.Record(ctx, "user.delete", bridge.SeverityCritical,
+				delErr := c.engine.AdminDeleteUser(ctx, adminID, userID)
+				c.audit.RecordWithOutcome(ctx, "dashboard.user.delete", hook.SeverityCritical, outcomeOf(delErr),
 					actorID.String(), userID.String(),
-					map[string]string{"app_id": appID.String()})
-				if delErr := c.engine.AdminDeleteUser(ctx, adminID, userID); delErr != nil {
+					withError(map[string]string{"app_id": appID.String()}, delErr))
+				if delErr != nil {
 					actionError = "Failed to delete user: " + delErr.Error()
 				} else {
 					// Redirect to users list after deletion.
@@ -495,9 +499,11 @@ func (c *Contributor) renderUserDetail(ctx context.Context, appID id.AppID, para
 					return pages.UsersPage(users, "", "../users"), nil
 				}
 			case "revoke-sessions":
-				c.audit.Record(ctx, "user.revoke-sessions", bridge.SeverityWarning,
-					actorID.String(), userID.String(), nil)
-				if count, revokeErr := c.engine.AdminBulkRevokeSessions(ctx, adminID, userID); revokeErr != nil {
+				count, revokeErr := c.engine.AdminBulkRevokeSessions(ctx, adminID, userID)
+				c.audit.RecordWithOutcome(ctx, "dashboard.user.revoke_sessions", hook.SeverityWarning, outcomeOf(revokeErr),
+					actorID.String(), userID.String(),
+					withError(map[string]string{"app_id": appID.String(), "count": fmt.Sprintf("%d", count)}, revokeErr))
+				if revokeErr != nil {
 					actionError = "Failed to revoke sessions: " + revokeErr.Error()
 				} else {
 					actionSuccess = fmt.Sprintf("Revoked %d session(s).", count)

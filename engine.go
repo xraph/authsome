@@ -308,12 +308,20 @@ func (e *Engine) DPoPBindingConfig() middleware.SessionBindingConfig {
 			return e.DPoPNonceRequiredForApp(ctx, parsed)
 		},
 		DPoPAudit: func(ctx context.Context, action string, md map[string]string) {
-			severity := bridge.SeverityInfo
+			severity := hook.SeverityInfo
 			if action == hook.ActionDPoPProofReplayed {
-				severity = bridge.SeverityWarning
+				severity = hook.SeverityWarning
 			}
-			e.audit(ctx, severity, bridge.OutcomeFailure, action, "session",
-				md["session_id"], "", md["app_id"], "auth", md)
+			e.hooks.Emit(ctx, &hook.Event{
+				Action:     action,
+				Resource:   hook.ResourceSession,
+				ResourceID: md["session_id"],
+				Tenant:     md["app_id"],
+				Severity:   severity,
+				Outcome:    hook.OutcomeFailure,
+				Category:   "auth",
+				Metadata:   md,
+			})
 		},
 	}
 }

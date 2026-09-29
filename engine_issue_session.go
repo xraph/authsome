@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/xraph/authsome/account"
-	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/hook"
@@ -236,25 +235,22 @@ func (e *Engine) IssueSession(ctx context.Context, req *IssueSessionRequest) (*I
 	}
 	e.plugins.EmitAfterSessionCreate(ctx, sess)
 
-	// Global hook bus parity with SignIn.
+	// Every sign-in path mints here, so this is the one sign-in record on
+	// the audit trail.
 	e.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionSignIn,
 		Resource:   hook.ResourceSession,
 		ResourceID: sess.ID.String(),
 		ActorID:    req.User.ID.String(),
 		Tenant:     req.AppID.String(),
+		Category:   "auth",
+		SessionID:  sess.ID.String(),
 		Metadata: map[string]string{
-			"auth_method": req.AuthMethod,
-			"session_id":  sess.ID.String(),
+			"auth_method":       req.AuthMethod,
+			"session_id":        sess.ID.String(),
+			"mfa_just_verified": fmt.Sprintf("%v", req.MFAJustVerified),
 		},
 	})
-
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "issue_session", "session",
-		sess.ID.String(), req.User.ID.String(), req.AppID.String(), "auth",
-		map[string]string{
-			"auth_method":       req.AuthMethod,
-			"mfa_just_verified": fmt.Sprintf("%v", req.MFAJustVerified),
-		})
 
 	return &IssueSessionResult{User: req.User, Session: sess}, nil
 }

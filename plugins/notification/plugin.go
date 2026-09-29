@@ -331,9 +331,13 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 		return nil
 	}
 
-	// Build recipient list from event metadata.
+	// Build recipient list from the event's delivery data. Addresses live in
+	// Private so they never reach the audit trail; Metadata is checked for
+	// events emitted by code that predates that split.
 	var to []string
-	if email, ok := event.Metadata["email"]; ok && email != "" {
+	if email := event.Private["email"]; email != "" {
+		to = []string{email}
+	} else if email, ok := event.Metadata["email"]; ok && email != "" {
 		to = []string{email}
 	}
 
@@ -354,9 +358,13 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 		return nil
 	}
 
-	// Build template data from event metadata.
-	data := make(map[string]any, len(event.Metadata)+2)
+	// Build template data from event metadata plus the delivery-only values
+	// (address, name, token, code) that travel in Private.
+	data := make(map[string]any, len(event.Metadata)+len(event.Private)+2)
 	for k, v := range event.Metadata {
+		data[k] = v
+	}
+	for k, v := range event.Private {
 		data[k] = v
 	}
 	data["app_name"] = p.config.AppName
@@ -376,7 +384,7 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 	if event.Action == hook.ActionEmailVerificationRequested {
 		if existing, ok := data["verify_url"].(string); !ok || existing == "" {
 			verifyURL := strings.TrimRight(p.config.BaseURL, "/") + p.config.EmailVerifyPath
-			if email := event.Metadata["email"]; email != "" {
+			if email := deliveryValue(event, "email"); email != "" {
 				verifyURL += "?email=" + url.QueryEscape(email)
 			}
 			data["verify_url"] = verifyURL
@@ -389,7 +397,7 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 	if event.Action == hook.ActionPasswordReset {
 		if existing, ok := data["reset_url"].(string); !ok || existing == "" {
 			resetURL := strings.TrimRight(p.config.BaseURL, "/") + p.config.PasswordResetPath
-			if token := event.Metadata["token"]; token != "" {
+			if token := deliveryValue(event, "token"); token != "" {
 				resetURL += "?token=" + url.QueryEscape(token)
 			}
 			data["reset_url"] = resetURL
