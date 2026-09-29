@@ -47,9 +47,12 @@ type User struct {
 	LastName       string            `json:"last_name"`
 	Groups         []string          `json:"groups,omitempty"`
 	Attributes     map[string]string `json:"attributes,omitempty"`
+	// EmailVerified is the provider's own statement about the address, when
+	// it made one: OIDC's email_verified claim. Nil means the provider said
+	// nothing; an explicit false refuses the login.
+	EmailVerified *bool `json:"email_verified,omitempty"`
 }
 
-// Connection represents a stored SSO connection for a tenant.
 type Connection struct {
 	ID       id.SSOConnectionID `json:"id"`
 	AppID    id.AppID           `json:"app_id"`
@@ -71,6 +74,15 @@ type Connection struct {
 	// password login is blocked for them (workspace owners/admins excepted). See
 	// the plugin's OnBeforeSignIn.
 	Enforced bool `json:"enforced"`
+
+	// AllowedDomains lists email domains, besides Domain, that this
+	// connection may assert. A login whose email is outside Domain and this
+	// list is refused before any account is touched.
+	AllowedDomains []string `json:"allowed_domains,omitempty"`
+	// TrustedFederation adopts the identity provider's subject as the local
+	// user id when a user is first created through this connection. Off by
+	// default: an IdP that can pick subjects can otherwise pick local ids.
+	TrustedFederation bool `json:"trusted_federation,omitempty"`
 
 	// SAML-specific configuration. Populated only for SAML connections.
 	IDPMetadataXML    string            `json:"idp_metadata_xml,omitempty"`
@@ -100,4 +112,10 @@ type Store interface {
 	ListConnections(ctx context.Context, appID id.AppID) ([]*Connection, error)
 	UpdateConnection(ctx context.Context, c *Connection) error
 	DeleteConnection(ctx context.Context, connID id.SSOConnectionID) error
+
+	// GetIdentity resolves the user bound to a provider subject on one
+	// connection. CreateIdentity records the binding and fails on a subject
+	// the connection already holds.
+	GetIdentity(ctx context.Context, connID id.SSOConnectionID, subject string) (*Identity, error)
+	CreateIdentity(ctx context.Context, ident *Identity) error
 }

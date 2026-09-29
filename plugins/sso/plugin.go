@@ -983,6 +983,88 @@ func (p *Plugin) handleACS(ctx forge.Context) error {
 // account-takeover vector, so the caller refuses.
 var errUnverifiedSSOLink = errors.New("sso: refusing to link to an unverified pre-existing account")
 
+// resolveIdentity turns an asserted identity into the local user it may
+// sign in as, creating one when none exists. The order is the contract:
+//
+//  1. The email must be present, not declared unverified by the provider,
+//     and inside the connection's domains. Nothing is looked up before that.
+//  2. A subject the connection has bound before wins, whatever email the
+//     provider asserts today.
+//  3. Otherwise a verified account holding the email is linked, and the
+//     binding is recorded so step 2 catches the next login.
+//  4. Otherwise a user is created. The IdP subject becomes the local id only
+//     for a connection flagged trusted_federation.
+func (p *Plugin) resolveIdentity(ctx context.Context, appID id.AppID, envID id.EnvironmentID, conn *Connection, ssoUser *User) (*user.User, bool, error) {
+	email := strings.ToLower(strings.TrimSpace(ssoUser.Email))
+	if email == "" {
+		return nil, false, forge.BadRequest("SSO provider did not return an email address")
+	}
+	if ssoUser.EmailVerified != nil && !*ssoUser.EmailVerified {
+		return nil, false, forge.NewHTTPError(http.StatusForbidden,
+			"the identity provider reports this email address as unverified")
+	}
+	if conn != nil && !conn.AllowsEmailDomain(email) {
+		return nil, false, forge.NewHTTPError(http.StatusForbidden,
+			"this email domain is not served by the SSO connection used to sign in")
+	}
+	subject := strings.TrimSpace(ssoUser.ProviderUserID)
+	bindable := conn != nil && subject != "" && p.ssoStore != nil
+
+	if bindable {
+		if ident, identErr := p.ssoStore.GetIdentity(ctx, conn.ID, subject); identErr == nil && ident != nil {
+			bound, getErr := p.store.GetUser(ctx, ident.UserID)
+			if getErr == nil && bound != nil && bound.AppID == appID {
+				return bound, false, nil
+			}
+		}
+	}
+
+	u, err := p.linkableExistingUser(ctx, appID, envID, email)
+	if errors.Is(err, errUnverifiedSSOLink) {
+		return nil, false, forge.NewHTTPError(http.StatusConflict,
+			"an account with this email already exists but is not verified; verify it before signing in with SSO")
+	}
+	if err != nil {
+		return nil, false, forge.InternalError(fmt.Errorf("sso: resolve existing user: %w", err))
+	}
+	isNew := false
+	if u == nil {
+		localID := id.NewUserID()
+		if conn != nil && conn.TrustedFederation && subject != "" {
+			if parsed, parseErr := id.ParseUserID(subject); parseErr == nil {
+				localID = parsed
+			}
+		}
+		u = &user.User{
+			ID:            localID,
+			AppID:         appID,
+			EnvID:         envID,
+			Email:         email,
+			EmailVerified: true, // SSO-authenticated emails are verified
+			FirstName:     ssoUser.FirstName,
+			LastName:      ssoUser.LastName,
+			CreatedAt:     time.Now(),
+			UpdatedAt:     time.Now(),
+		}
+		if createErr := p.store.CreateUserWithPrimaryEmail(ctx, u, user.NewPrimaryEmail(u, "sso")); createErr != nil {
+			return nil, false, forge.InternalError(fmt.Errorf("failed to create user: %w", createErr))
+		}
+		if p.engine != nil {
+			p.engine.EnsureDefaultRole(ctx, appID, u.ID)
+		}
+		isNew = true
+	}
+	if bindable {
+		bindErr := p.ssoStore.CreateIdentity(ctx, &Identity{ConnectionID: conn.ID, Subject: subject, UserID: u.ID, CreatedAt: time.Now()})
+		if bindErr != nil && !errors.Is(bindErr, ErrIdentityExists) && p.logger != nil {
+			p.logger.Warn("sso: record identity binding failed",
+				log.String("connection_id", conn.ID.String()),
+				log.String("error", bindErr.Error()))
+		}
+	}
+	return u, isNew, nil
+}
+
 // linkableExistingUser resolves an existing local account for an SSO email and
 // verifies it is safe to link to. It returns:
 //   - (user, nil) when a matching account exists and the matched email is verified
@@ -1127,66 +1209,9 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 
 	// Find or create user by email. Match across all of an account's emails so
 	// a verified SSO email links to the existing account instead of duplicating.
-	var u *user.User
-	isNew := false
-
-	if ssoUser.Email != "" {
-		email := strings.ToLower(ssoUser.Email)
-		u, err = p.linkableExistingUser(goCtx, appID, envID, email)
-		if errors.Is(err, errUnverifiedSSOLink) {
-			// A pre-existing account owns this email but has never verified it.
-			// Linking here would let an attacker who pre-registered the
-			// victim's email capture the victim's SSO login, so refuse.
-			return nil, forge.NewHTTPError(http.StatusConflict,
-				"an account with this email already exists but is not verified; verify it before signing in with SSO")
-		}
-		if err != nil {
-			return nil, forge.InternalError(fmt.Errorf("sso: resolve existing user: %w", err))
-		}
-		if u == nil {
-			// No existing user -- create one. Prefer the upstream
-			// IdP's user_id (sub claim) as the local user_id when
-			// it parses as a valid Authsome UserID. This makes the
-			// federated user's identity stable across Apps: if a
-			// user authenticates from upstream App `studio` (where
-			// they have user_id = ausr_X) into a workspace App via
-			// federation, the local user_id is also ausr_X.
-			//
-			// Stable-across-Apps identity is what makes Warden
-			// assignments + introspect lookups agree. Without this,
-			// the saga would assign roles by the upstream user_id
-			// while the workspace App's introspect returns a fresh
-			// local user_id — guaranteed mismatch on every request.
-			//
-			// Falls back to a fresh local id when the upstream sub
-			// doesn't parse (non-Authsome IdPs like Google / GitHub).
-			localID := id.NewUserID()
-			if ssoUser.ProviderUserID != "" {
-				if parsed, parseErr := id.ParseUserID(ssoUser.ProviderUserID); parseErr == nil {
-					localID = parsed
-				}
-			}
-			u = &user.User{
-				ID:            localID,
-				AppID:         appID,
-				EnvID:         envID,
-				Email:         strings.ToLower(ssoUser.Email),
-				EmailVerified: true, // SSO-authenticated emails are verified
-				FirstName:     ssoUser.FirstName,
-				LastName:      ssoUser.LastName,
-				CreatedAt:     time.Now(),
-				UpdatedAt:     time.Now(),
-			}
-			if createErr := p.store.CreateUserWithPrimaryEmail(goCtx, u, user.NewPrimaryEmail(u, "sso")); createErr != nil {
-				return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", createErr))
-			}
-			if p.engine != nil {
-				p.engine.EnsureDefaultRole(goCtx, appID, u.ID)
-			}
-			isNew = true
-		}
-	} else {
-		return nil, forge.BadRequest("SSO provider did not return an email address")
+	u, isNew, err := p.resolveIdentity(goCtx, appID, envID, conn, ssoUser)
+	if err != nil {
+		return nil, err
 	}
 
 	// Record the upstream (issuer, sub) pair so a later CAEP event naming it
@@ -1581,6 +1606,10 @@ type CreateConnectionInput struct {
 	Enforced bool
 	// DisplayName is an optional admin-set label for the connection (cosmetic).
 	DisplayName string
+	// AllowedDomains and TrustedFederation confine and shape the identities
+	// this connection may assert; see Connection.
+	AllowedDomains    []string
+	TrustedFederation bool
 }
 
 // CreateConnection provisions an SSO connection: it resolves the app's default
@@ -1613,18 +1642,21 @@ func (p *Plugin) CreateConnection(ctx context.Context, in CreateConnectionInput)
 
 	now := time.Now()
 	conn := &Connection{
-		ID:          id.NewSSOConnectionID(),
-		AppID:       in.AppID,
-		EnvID:       env.ID.String(),
-		OrgID:       in.OrgID,
-		Provider:    in.Provider,
-		Protocol:    in.Protocol,
-		Domain:      in.Domain,
-		Active:      true,
-		Enforced:    in.Enforced,
-		DisplayName: strings.TrimSpace(in.DisplayName),
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:       id.NewSSOConnectionID(),
+		AppID:    in.AppID,
+		EnvID:    env.ID.String(),
+		OrgID:    in.OrgID,
+		Provider: in.Provider,
+		Protocol: in.Protocol,
+		Domain:   in.Domain,
+		Active:   true,
+		Enforced: in.Enforced,
+
+		AllowedDomains:    in.AllowedDomains,
+		TrustedFederation: in.TrustedFederation,
+		DisplayName:       strings.TrimSpace(in.DisplayName),
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	switch in.Protocol {
 	case "oidc":
@@ -1687,6 +1719,8 @@ type AdminCreateConnectionRequest struct {
 	ACSURL            string            `json:"acs_url,omitempty" description:"SP ACS URL override; defaults to the canonical /acs route"`
 	SignRequests      bool              `json:"sign_requests,omitempty" description:"Sign outbound AuthnRequests with the SP key"`
 	AttributeMappings map[string]string `json:"attribute_mappings,omitempty" description:"SAML attribute name → user field (email|first_name|last_name|groups)"`
+	AllowedDomains    []string          `json:"allowed_domains,omitempty" description:"Extra email domains this connection may assert besides domain; logins outside them are refused"`
+	TrustedFederation bool              `json:"trusted_federation,omitempty" description:"Adopt the IdP subject as the local user id when creating users through this connection"`
 }
 
 // AdminCreateConnectionResponse is the response from
@@ -1735,6 +1769,8 @@ func (p *Plugin) handleAdminCreateConnection(ctx forge.Context, req *AdminCreate
 		ACSURL:            req.ACSURL,
 		SignRequests:      req.SignRequests,
 		AttributeMappings: req.AttributeMappings,
+		AllowedDomains:    req.AllowedDomains,
+		TrustedFederation: req.TrustedFederation,
 	})
 	if err != nil {
 		return nil, err
@@ -1809,6 +1845,8 @@ type AdminUpdateConnectionRequest struct {
 	ACSURL            string            `json:"acs_url,omitempty" description:"SP ACS URL override"`
 	SignRequests      *bool             `json:"sign_requests,omitempty" description:"Toggle signing outbound AuthnRequests"`
 	AttributeMappings map[string]string `json:"attribute_mappings,omitempty" description:"Replace the SAML attribute → user field map"`
+	AllowedDomains    []string          `json:"allowed_domains,omitempty" description:"Replace the extra email domains this connection may assert"`
+	TrustedFederation *bool             `json:"trusted_federation,omitempty" description:"Adopt the IdP subject as the local user id for new users"`
 
 	Active *bool `json:"active,omitempty" description:"Activate/deactivate the connection without deleting it"`
 }
@@ -1916,6 +1954,12 @@ func (p *Plugin) handleAdminUpdateConnection(ctx forge.Context, req *AdminUpdate
 	}
 	if req.SignRequests != nil {
 		conn.SignRequests = *req.SignRequests
+	}
+	if req.AllowedDomains != nil {
+		conn.AllowedDomains = req.AllowedDomains
+	}
+	if req.TrustedFederation != nil {
+		conn.TrustedFederation = *req.TrustedFederation
 	}
 	if req.AttributeMappings != nil {
 		conn.AttributeMappings = req.AttributeMappings

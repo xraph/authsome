@@ -319,3 +319,69 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_sso_connections_domain
 		},
 	)
 }
+
+func init() {
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "sso_identity_binding",
+			Version: "20260922000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sso_connections ADD COLUMN IF NOT EXISTS allowed_domains    TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_sso_connections ADD COLUMN IF NOT EXISTS trusted_federation BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE TABLE IF NOT EXISTS authsome_sso_identities (
+    id            TEXT PRIMARY KEY,
+    connection_id TEXT NOT NULL REFERENCES authsome_sso_connections(id) ON DELETE CASCADE,
+    subject       TEXT NOT NULL,
+    user_id       TEXT NOT NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_sso_identities_subject
+    ON authsome_sso_identities (connection_id, subject);
+CREATE INDEX IF NOT EXISTS idx_authsome_sso_identities_user
+    ON authsome_sso_identities (user_id);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP TABLE IF EXISTS authsome_sso_identities;
+ALTER TABLE authsome_sso_connections DROP COLUMN IF EXISTS allowed_domains;
+ALTER TABLE authsome_sso_connections DROP COLUMN IF EXISTS trusted_federation;
+`)
+				return err
+			},
+		},
+	)
+
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "sso_identity_binding",
+			Version: "20260922000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				for _, stmt := range []string{
+					`ALTER TABLE authsome_sso_connections ADD COLUMN allowed_domains TEXT NOT NULL DEFAULT ''`,
+					`ALTER TABLE authsome_sso_connections ADD COLUMN trusted_federation INTEGER NOT NULL DEFAULT 0`,
+					`CREATE TABLE IF NOT EXISTS authsome_sso_identities (
+    id            TEXT PRIMARY KEY,
+    connection_id TEXT NOT NULL REFERENCES authsome_sso_connections(id) ON DELETE CASCADE,
+    subject       TEXT NOT NULL,
+    user_id       TEXT NOT NULL,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+)`,
+					`CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_sso_identities_subject ON authsome_sso_identities (connection_id, subject)`,
+					`CREATE INDEX IF NOT EXISTS idx_authsome_sso_identities_user ON authsome_sso_identities (user_id)`,
+				} {
+					if _, err := exec.Exec(ctx, stmt); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_sso_identities;`)
+				return err
+			},
+		},
+	)
+}

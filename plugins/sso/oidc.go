@@ -140,6 +140,7 @@ func (p *oidcProvider) HandleCallback(ctx context.Context, params map[string]str
 		LastName:       claims.FamilyName,
 		Groups:         claims.Groups,
 		Attributes:     make(map[string]string),
+		EmailVerified:  parseEmailVerified(claims.EmailVerified),
 	}
 
 	// If given_name/family_name are empty, fall back to the full name claim.
@@ -158,6 +159,25 @@ type oidcClaims struct {
 	GivenName  string   `json:"given_name"`
 	FamilyName string   `json:"family_name"`
 	Groups     []string `json:"groups"`
+	// EmailVerified is a bool in the specification and a string at some
+	// providers, so it is decoded by hand.
+	EmailVerified json.RawMessage `json:"email_verified"`
+}
+
+// parseEmailVerified reads an email_verified claim as OIDC defines it (a
+// JSON boolean) and as some providers send it (the strings "true" and
+// "false"). Anything else, including absence, is nil: no statement.
+func parseEmailVerified(raw json.RawMessage) *bool {
+	t := strings.TrimSpace(string(raw))
+	switch t {
+	case "true", `"true"`:
+		v := true
+		return &v
+	case "false", `"false"`:
+		v := false
+		return &v
+	}
+	return nil
 }
 
 // oidcDiscovery represents the OIDC .well-known/openid-configuration response.
