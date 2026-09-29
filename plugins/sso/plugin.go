@@ -13,6 +13,7 @@ import (
 	"time"
 
 	log "github.com/xraph/go-utils/log"
+	"golang.org/x/oauth2"
 
 	"github.com/xraph/forge"
 
@@ -564,6 +565,17 @@ type ssoState struct {
 	// domain in several orgs resolves to distinct connections at login, and each
 	// login's state carries its own id.
 	ConnID string `json:"conn_id,omitempty"`
+	// Nonce and CodeVerifier bind an OIDC login to its callback: the
+	// id_token must echo the nonce and the token exchange must present the
+	// verifier. Empty for SAML.
+	Nonce        string `json:"nonce,omitempty"`
+	CodeVerifier string `json:"code_verifier,omitempty"`
+}
+
+// pkceProvider is implemented by providers that can carry a nonce and an
+// S256 PKCE challenge on the login URL. The OIDC provider does.
+type pkceProvider interface {
+	LoginURLWithPKCE(state, nonce, verifier string) (loginURL string, err error)
 }
 
 // requestIDProvider is implemented by SAML providers that expose the AuthnRequest
@@ -657,18 +669,27 @@ func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provid
 	// Build the IdP login URL. SAML providers also return the AuthnRequest ID so
 	// we can persist it in the state ceremony and match the assertion's
 	// InResponseTo at the ACS.
-	var loginURL, requestID string
-	if rp, ok := provider.(requestIDProvider); ok {
-		loginURL, requestID, err = rp.LoginURLWithRequestID(state)
-	} else {
+	var loginURL, requestID, nonce, verifier string
+	switch pr := provider.(type) {
+	case requestIDProvider:
+		loginURL, requestID, err = pr.LoginURLWithRequestID(state)
+	case pkceProvider:
+		if nonce, err = generateState(); err == nil {
+			verifier = oauth2.GenerateVerifier()
+			loginURL, err = pr.LoginURLWithPKCE(state, nonce, verifier)
+		}
+	default:
 		loginURL, err = provider.LoginURL(state)
 	}
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("failed to get login URL: %w", err))
 	}
 
-	stateData, _ := json.Marshal(ssoState{Provider: providerName, AppID: appID.String(), ReturnURL: returnURL, RequestID: requestID, ConnID: connID}) //nolint:errcheck // best-effort cache
-	_ = p.ceremonies.Set(ctx, "sso:state:"+state, stateData, 10*time.Minute)                                                                          //nolint:errcheck // best-effort cache
+	stateData, _ := json.Marshal(ssoState{ //nolint:errcheck // best-effort cache
+		Provider: providerName, AppID: appID.String(), ReturnURL: returnURL, RequestID: requestID, ConnID: connID,
+		Nonce: nonce, CodeVerifier: verifier,
+	})
+	_ = p.ceremonies.Set(ctx, "sso:state:"+state, stateData, 10*time.Minute) //nolint:errcheck // best-effort cache
 
 	return &LoginResponse{
 		LoginURL: loginURL,
@@ -815,8 +836,10 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	}
 
 	params := map[string]string{
-		"code":  req.Code,
-		"state": req.State,
+		"code":          req.Code,
+		"state":         req.State,
+		"nonce":         st.Nonce,
+		"code_verifier": st.CodeVerifier,
 	}
 
 	return p.authenticateUser(ctx, appID, provider, conn, params)
@@ -887,7 +910,7 @@ func (p *Plugin) handleOIDCRedirect(ctx forge.Context) error {
 		return fail("provider_error")
 	}
 
-	params := map[string]string{"code": code, "state": state}
+	params := map[string]string{"code": code, "state": state, "nonce": st.Nonce, "code_verifier": st.CodeVerifier}
 	result, aerr := p.authenticateUser(ctx, conn.AppID, provider, conn, params)
 	if aerr != nil {
 		if p.logger != nil {

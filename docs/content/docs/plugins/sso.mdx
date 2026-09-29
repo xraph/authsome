@@ -69,7 +69,9 @@ sso.NewOIDC(sso.OIDCConfig{
 })
 ```
 
-The plugin resolves the `.well-known/openid-configuration` endpoint from the issuer URL to discover authorization, token, and userinfo endpoints automatically.
+The plugin resolves the `.well-known/openid-configuration` endpoint from the issuer URL to discover authorization, token, and userinfo endpoints automatically. Discovery, the token exchange and userinfo all go through a hardened HTTP client: https only, no private or loopback addresses even after DNS resolution, same-host redirects only, a ten-second timeout and a one-megabyte cap. The discovery document is cached per issuer for an hour.
+
+Every OIDC login carries a `nonce` and an S256 PKCE challenge. The plugin keeps the nonce and the verifier server-side under the login's state; at the callback the token exchange presents the verifier and the `id_token` must echo the nonce, so a code injected from another session and an `id_token` minted for another login both fail. An `email_verified: false` claim refuses the login.
 
 ## SAML integration
 
@@ -147,13 +149,14 @@ The engine supports per-organization SSO connections stored in the database, all
 
 ## User provisioning
 
-When a user authenticates via SSO for the first time:
+When a user authenticates via SSO, the asserted identity is resolved in a fixed order:
 
-1. The plugin looks up the user by email
-2. If no user exists, a new user is created with `EmailVerified: true` (SSO-authenticated emails are trusted)
-3. A session is created and returned
+1. The email must be present, the provider must not have declared it unverified, and its domain must be the connection's `domain` or one of its `allowed_domains`. A login outside those domains is refused before any account is looked up, so an identity provider can only speak for the domains it was set up for.
+2. If the connection has bound the provider's subject before, that user signs in, whatever email the provider asserts today. Bindings live in `authsome_sso_identities`, one per connection and subject.
+3. Otherwise a verified account holding the email is linked and the subject is bound to it.
+4. Otherwise a new user is created with `EmailVerified: true` and bound. The identity provider's subject becomes the local user id only when the connection is flagged `trusted_federation`; by default the local id is minted here.
 
-SSO users are always treated as email-verified since the identity provider has already validated their identity.
+Both `allowed_domains` and `trusted_federation` are set through the admin connection API.
 
 ## API routes
 
