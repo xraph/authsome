@@ -60,6 +60,24 @@ func SignBody(secret []byte, ts time.Time, body []byte) string {
 	return "t=" + tsStr + "," + SignatureVersion + "=" + hex.EncodeToString(mac.Sum(nil))
 }
 
+// RelaySignatureHeader and RelayTimestampHeader are the headers Relay, the
+// delivery service behind authsome webhooks, sets on every delivery. The
+// signature is the same HMAC-SHA256 over "<unix-seconds>.<body>" as
+// X-Authsome-Signature, carried as "v1=<hex>" with the timestamp in its own
+// header.
+const (
+	RelaySignatureHeader = "X-Relay-Signature"
+	RelayTimestampHeader = "X-Relay-Timestamp"
+)
+
+// VerifyRelay checks a delivery from Relay: timestamp is the value of
+// X-Relay-Timestamp, sig the value of X-Relay-Signature, secret the
+// webhook's secret as shown when it was created or last rotated. A zero
+// tolerance means DefaultSignatureTolerance.
+func VerifyRelay(body []byte, secret, timestamp, sig string, tolerance time.Duration) error {
+	return verifySignatureAt([]byte(secret), body, "t="+timestamp+","+sig, tolerance, time.Now())
+}
+
 // VerifySignature returns nil when header was produced by SignBody
 // using the same secret over the same body within tolerance of now.
 // Pass tolerance=0 to use DefaultSignatureTolerance.
