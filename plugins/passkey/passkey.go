@@ -2,6 +2,7 @@ package passkey
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sync"
@@ -548,4 +549,22 @@ func (p *Plugin) emitHook(ctx context.Context, action, resource, resourceID, act
 		ActorID:    actorID,
 		Tenant:     tenant,
 	})
+}
+
+// OnBeforeUserDelete removes a deleted user's passkeys. A credential that
+// outlives its account is a way back in that nobody owns.
+func (p *Plugin) OnBeforeUserDelete(ctx context.Context, userID id.UserID) error {
+	if p.store == nil {
+		return nil
+	}
+	creds, err := p.store.ListUserCredentials(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("passkey: list credentials for erasure: %w", err)
+	}
+	for _, c := range creds {
+		if err := p.store.DeleteCredential(ctx, c.CredentialID); err != nil {
+			return fmt.Errorf("passkey: delete credential %s: %w", c.ID, err)
+		}
+	}
+	return nil
 }

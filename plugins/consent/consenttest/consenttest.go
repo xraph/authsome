@@ -56,6 +56,7 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"LookupIsScopedToApp", testLookupIsScopedToApp},
 		{"ListIsScopedToUserAndApp", testListIsScopedToUserAndApp},
 		{"ListFiltersByPurpose", testListFiltersByPurpose},
+		{"AnonymizeKeepsProofMasksIP", testAnonymizeKeepsProofMasksIP},
 	}
 	for _, tc := range cases {
 		if skipSet[tc.name] {

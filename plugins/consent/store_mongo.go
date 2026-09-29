@@ -14,6 +14,7 @@ import (
 	"github.com/xraph/grove/drivers/mongodriver"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/ipmask"
 )
 
 // MongoStore implements consent.Store using the Grove MongoDB driver.
@@ -262,4 +263,33 @@ func consentMongoError(err error) error {
 		return ErrNotFound
 	}
 	return err
+}
+
+func (s *MongoStore) AnonymizeUserConsents(ctx context.Context, userID id.UserID) (int64, error) {
+	cur, err := s.mdb.Collection(consentsColl).Find(ctx, bson.M{"user_id": userID.String()})
+	if err != nil {
+		return 0, consentMongoError(err)
+	}
+	defer cur.Close(ctx)
+	var n int64
+	now := time.Now()
+	for cur.Next(ctx) {
+		var d struct {
+			ID        string `bson:"_id"`
+			IPAddress string `bson:"ip_address"`
+		}
+		if derr := cur.Decode(&d); derr != nil {
+			return n, consentMongoError(derr)
+		}
+		masked := ipmask.Network(d.IPAddress)
+		if d.IPAddress == "" || masked == d.IPAddress {
+			continue
+		}
+		if _, uerr := s.mdb.Collection(consentsColl).UpdateOne(ctx, bson.M{"_id": d.ID},
+			bson.M{"$set": bson.M{"ip_address": masked, "updated_at": now}}); uerr != nil {
+			return n, consentMongoError(uerr)
+		}
+		n++
+	}
+	return n, cur.Err()
 }

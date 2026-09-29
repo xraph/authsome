@@ -199,3 +199,32 @@ func testListFiltersByPurpose(t *testing.T, f Fixture) {
 		assert.Equal(t, "analytics", c.Purpose, "the purpose filter returned a %q record", c.Purpose)
 	}
 }
+
+// testAnonymizeKeepsProofMasksIP proves erasure keeps the consent record,
+// its purpose, grant state and times, and replaces the address with its
+// network; other users' rows are untouched and a second run changes nothing.
+func testAnonymizeKeepsProofMasksIP(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	mine := newConsent(f.UserID, f.AppID, "marketing")
+	mine.IPAddress = "203.0.113.77"
+	require.NoError(t, f.Store.GrantConsent(ctx, mine))
+	theirs := newConsent(f.OtherUserID, f.AppID, "marketing")
+	theirs.IPAddress = "198.51.100.9"
+	require.NoError(t, f.Store.GrantConsent(ctx, theirs))
+
+	n, err := f.Store.AnonymizeUserConsents(ctx, f.UserID)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, n)
+	got, err := f.Store.GetConsent(ctx, f.UserID, f.AppID, "marketing")
+	require.NoError(t, err)
+	assert.Equal(t, "203.0.113.0/24", got.IPAddress, "the address is reduced to its network")
+	assert.True(t, got.Granted, "the proof of consent survives")
+	assert.Equal(t, mine.Version, got.Version)
+	other, err := f.Store.GetConsent(ctx, f.OtherUserID, f.AppID, "marketing")
+	require.NoError(t, err)
+	assert.Equal(t, "198.51.100.9", other.IPAddress, "another user's rows are untouched")
+
+	n, err = f.Store.AnonymizeUserConsents(ctx, f.UserID)
+	require.NoError(t, err)
+	assert.Zero(t, n, "already masked rows are left alone")
+}

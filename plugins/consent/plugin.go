@@ -377,3 +377,13 @@ func (p *Plugin) emitHook(ctx context.Context, action, resource, resourceID, act
 func clientIPFromRequest(ctx forge.Context) string {
 	return middleware.ClientIP(ctx.Request())
 }
+
+// OnBeforeUserDelete keeps the user's consent history as proof of what was
+// granted and when, with every recorded address reduced to its network.
+func (p *Plugin) OnBeforeUserDelete(ctx context.Context, userID id.UserID) error {
+	if p.store == nil {
+		return nil
+	}
+	_, err := p.store.AnonymizeUserConsents(ctx, userID)
+	return err
+}

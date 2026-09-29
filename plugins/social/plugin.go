@@ -1544,3 +1544,21 @@ func maskProvider(p ProviderSetting) AdminProvider {
 	}
 	return out
 }
+
+// OnBeforeUserDelete removes a deleted user's provider connections and the
+// provider tokens they carry.
+func (p *Plugin) OnBeforeUserDelete(ctx context.Context, userID id.UserID) error {
+	if p.oauthStore == nil {
+		return nil
+	}
+	conns, err := p.oauthStore.GetOAuthConnectionsByUserID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("social: list connections for erasure: %w", err)
+	}
+	for _, c := range conns {
+		if err := p.oauthStore.DeleteOAuthConnection(ctx, c.ID); err != nil {
+			return fmt.Errorf("social: delete connection %s: %w", c.ID, err)
+		}
+	}
+	return nil
+}

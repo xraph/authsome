@@ -1131,3 +1131,25 @@ func maskPhone(phone string) string {
 	}
 	return "***" + phone[len(phone)-4:]
 }
+
+// OnBeforeUserDelete removes a deleted user's MFA enrollments and recovery
+// codes: a second factor for an account that no longer exists is a secret
+// with no owner.
+func (p *Plugin) OnBeforeUserDelete(ctx context.Context, userID id.UserID) error {
+	if p.store == nil {
+		return nil
+	}
+	enrollments, err := p.store.ListEnrollments(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("mfa: list enrollments for erasure: %w", err)
+	}
+	for _, e := range enrollments {
+		if err := p.store.DeleteEnrollment(ctx, e.ID); err != nil {
+			return fmt.Errorf("mfa: delete enrollment %s: %w", e.ID, err)
+		}
+	}
+	if err := p.store.DeleteRecoveryCodes(ctx, userID); err != nil {
+		return fmt.Errorf("mfa: delete recovery codes: %w", err)
+	}
+	return nil
+}

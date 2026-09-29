@@ -46,4 +46,10 @@ type Store interface {
 
 	// ListConsents returns all consent records matching the query.
 	ListConsents(ctx context.Context, q *Query) ([]*Consent, string, error)
+
+	// AnonymizeUserConsents keeps a deleted user's consent rows as proof of
+	// what was granted and when, but replaces each recorded address with
+	// its network so the rows stop identifying a device. It reports how
+	// many rows changed.
+	AnonymizeUserConsents(ctx context.Context, userID id.UserID) (int64, error)
 }

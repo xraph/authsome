@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/ipmask"
 )
 
 // ErrNotFound is returned when a consent record is not found.
@@ -150,4 +151,21 @@ func cloneConsent(c *Consent) *Consent {
 	}
 	cp := *c
 	return &cp
+}
+
+func (s *MemoryStore) AnonymizeUserConsents(_ context.Context, userID id.UserID) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var n int64
+	for _, c := range s.consents {
+		if c.UserID != userID || c.IPAddress == "" {
+			continue
+		}
+		if masked := ipmask.Network(c.IPAddress); masked != c.IPAddress {
+			c.IPAddress = masked
+			c.UpdatedAt = time.Now()
+			n++
+		}
+	}
+	return n, nil
 }

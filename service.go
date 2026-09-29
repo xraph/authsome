@@ -2720,20 +2720,12 @@ func (e *Engine) AdminDeleteUser(ctx context.Context, adminID, userID id.UserID)
 	}
 
 	// Cascade delete via plugin hooks (MFA, Passkey, OAuth cleanup)
-	if err := e.plugins.EmitBeforeUserDelete(ctx, userID); err != nil {
-		return fmt.Errorf("authsome: admin delete user: before delete: %w", err)
-	}
-
-	// Revoke all sessions
-	_ = e.store.DeleteUserSessions(ctx, userID) //nolint:errcheck // best-effort cleanup
-
-	// Delete the user
-	if err := e.store.DeleteUser(ctx, userID); err != nil {
+	// An admin deletion erases the same way a self-service deletion does:
+	// the row stays, anonymised, so references from audit and organization
+	// records keep resolving to a tombstone rather than dangling.
+	if err := e.eraseUser(ctx, u); err != nil {
 		return fmt.Errorf("authsome: admin delete user: %w", err)
 	}
-
-	// Notify plugins of completion
-	e.plugins.EmitAfterUserDelete(ctx, userID)
 
 	e.relayEvent(ctx, "admin.user.deleted", appID.String(), map[string]string{
 		"user_id":  userID.String(),
@@ -3101,34 +3093,9 @@ func (e *Engine) DeleteAccount(ctx context.Context, userID id.UserID) error {
 	originalEmail := u.Email
 	originalName := u.Name()
 
-	// Cascade delete via plugin hooks (MFA, Passkey, OAuth cleanup)
-	if err := e.plugins.EmitBeforeUserDelete(ctx, userID); err != nil {
-		return fmt.Errorf("authsome: delete account: before delete: %w", err)
-	}
-
-	// Revoke all sessions
-	_ = e.store.DeleteUserSessions(ctx, userID) //nolint:errcheck // best-effort cleanup
-
-	// Soft-delete: set deleted_at timestamp
-	now := time.Now()
-	u.DeletedAt = &now
-	u.Email = "deleted_" + userID.String() + "@deleted.local" // anonymize
-	u.FirstName = ""
-	u.LastName = ""
-	u.Username = ""
-	u.DisplayUsername = ""
-	u.Image = ""
-	u.Phone = ""
-	u.PasswordHash = ""
-	u.Metadata = nil
-	u.UpdatedAt = now
-
-	if err := e.store.UpdateUser(ctx, u); err != nil {
+	if err := e.eraseUser(ctx, u); err != nil {
 		return fmt.Errorf("authsome: delete account: %w", err)
 	}
-
-	// Notify plugins of completion
-	e.plugins.EmitAfterUserDelete(ctx, userID)
 
 	e.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionAccountDeletion,
@@ -3148,6 +3115,64 @@ func (e *Engine) DeleteAccount(ctx context.Context, userID id.UserID) error {
 		"user_id": userID.String(),
 	})
 
+	return nil
+}
+
+// eraseUser is the one erasure path. It revokes every delegation the user
+// is party to, drops their devices, lets every plugin forget them, ends
+// their sessions and API keys, and leaves the user row as an anonymised
+// tombstone so references from audit and membership records keep resolving.
+func (e *Engine) eraseUser(ctx context.Context, u *user.User) error {
+	userID := u.ID
+	ref := principal.Ref{Kind: principal.KindUser, ID: userID.String()}
+	now := time.Now()
+	for _, q := range []*principal.DelegationQuery{
+		{AppID: u.AppID, Subject: &ref, ActiveOnly: true, ActiveAsOf: now},
+		{AppID: u.AppID, Actor: &ref, ActiveOnly: true, ActiveAsOf: now},
+	} {
+		delegations, err := e.store.ListDelegations(ctx, q)
+		if err != nil {
+			return fmt.Errorf("list delegations: %w", err)
+		}
+		for _, d := range delegations {
+			if err := e.store.RevokeDelegation(ctx, d.ID, now); err != nil {
+				return fmt.Errorf("revoke delegation %s: %w", d.ID, err)
+			}
+		}
+	}
+
+	if devices, err := e.store.ListUserDevices(ctx, userID); err == nil {
+		for _, d := range devices {
+			if err := e.store.DeleteDevice(ctx, d.ID); err != nil {
+				return fmt.Errorf("delete device %s: %w", d.ID, err)
+			}
+		}
+	}
+
+	if err := e.plugins.EmitBeforeUserDelete(ctx, userID); err != nil {
+		return fmt.Errorf("before delete: %w", err)
+	}
+
+	if err := e.RevokeUserAccess(ctx, userID); err != nil {
+		return fmt.Errorf("revoke access: %w", err)
+	}
+
+	u.DeletedAt = &now
+	u.Email = "deleted_" + userID.String() + "@deleted.local" // anonymize
+	u.FirstName = ""
+	u.LastName = ""
+	u.Username = ""
+	u.DisplayUsername = ""
+	u.Image = ""
+	u.Phone = ""
+	u.PasswordHash = ""
+	u.Metadata = nil
+	u.UpdatedAt = now
+	if err := e.store.UpdateUser(ctx, u); err != nil {
+		return fmt.Errorf("anonymise user: %w", err)
+	}
+
+	e.plugins.EmitAfterUserDelete(ctx, userID)
 	return nil
 }
 
