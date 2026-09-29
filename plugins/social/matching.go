@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/xraph/authsome/internal/mask"
+
 	"github.com/xraph/forge"
 	log "github.com/xraph/go-utils/log"
 
@@ -147,7 +149,7 @@ func (p *Plugin) createUserFromProvider(ctx context.Context, appID id.AppID, env
 				Source:   source,
 			}); err != nil && p.logger != nil {
 				p.logger.Debug("social: skip attaching provider email",
-					log.String("email", pe.Email),
+					log.String("email", mask.Email(pe.Email)),
 					log.String("error", err.Error()),
 				)
 			}
@@ -209,7 +211,7 @@ func (p *Plugin) reconcileProviderEmails(ctx context.Context, u *user.User, appI
 					Source:   source,
 				}); err != nil && p.logger != nil {
 					p.logger.Debug("social: skip attaching provider email",
-						log.String("email", pe.Email),
+						log.String("email", mask.Email(pe.Email)),
 						log.String("error", err.Error()),
 					)
 				}
@@ -219,7 +221,7 @@ func (p *Plugin) reconcileProviderEmails(ctx context.Context, u *user.User, appI
 		if rec.UserID.String() == u.ID.String() && !rec.Verified && pe.Verified {
 			if err := p.store.MarkUserEmailVerified(ctx, u.ID, pe.Email); err != nil && p.logger != nil {
 				p.logger.Debug("social: failed to upgrade email verification",
-					log.String("email", pe.Email),
+					log.String("email", mask.Email(pe.Email)),
 					log.String("error", err.Error()),
 				)
 			}

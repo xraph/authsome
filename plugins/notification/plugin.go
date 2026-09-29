@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xraph/authsome/internal/mask"
+
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/bridge"
@@ -265,7 +267,7 @@ func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, _ *session.Ses
 		},
 	}); err != nil {
 		p.logger.Warn("notification plugin: failed to send welcome notification",
-			log.String("email", u.Email),
+			log.String("email", mask.Email(u.Email)),
 			log.String("error", err.Error()),
 		)
 	}

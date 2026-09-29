@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/xraph/authsome/internal/mask"
+
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/forge"
@@ -1125,12 +1127,7 @@ func (p *Plugin) emitHook(ctx context.Context, action, resource, resourceID, act
 }
 
 // maskPhone masks all but the last 4 digits of a phone number.
-func maskPhone(phone string) string {
-	if len(phone) <= 4 {
-		return "****"
-	}
-	return "***" + phone[len(phone)-4:]
-}
+func maskPhone(phone string) string { return mask.Phone(phone) }
 
 // OnBeforeUserDelete removes a deleted user's MFA enrollments and recovery
 // codes: a second factor for an account that no longer exists is a secret

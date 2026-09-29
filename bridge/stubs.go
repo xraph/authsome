@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xraph/authsome/internal/mask"
+
 	log "github.com/xraph/go-utils/log"
 )
 
@@ -117,7 +119,7 @@ func NewNoopMailer(logger log.Logger) *NoopMailer {
 // SendEmail implements Mailer.
 func (m *NoopMailer) SendEmail(_ context.Context, msg *EmailMessage) error {
 	m.Logger.Debug("authsome mailer (noop)",
-		log.String("to", strings.Join(msg.To, ",")),
+		log.String("to", strings.Join(mask.Emails(msg.To), ",")),
 		log.String("subject", msg.Subject),
 	)
 	return nil

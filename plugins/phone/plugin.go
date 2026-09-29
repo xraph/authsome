@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/xraph/authsome/internal/mask"
+
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/forge"
@@ -280,7 +282,7 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 	challenge, err := mfa.SendSMSChallenge(ctx.Context(), p.sms, req.Phone)
 	if err != nil {
 		p.logger.Error("phone auth: failed to send OTP",
-			log.String("phone", req.Phone),
+			log.String("phone", mask.Phone(req.Phone)),
 			log.String("error", err.Error()),
 		)
 		return nil, middleware.InternalError(ctx, fmt.Errorf("phone auth: failed to send OTP: %w", err))
