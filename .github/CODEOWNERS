@@ -1,0 +1,19 @@
+# Every change is reviewed by a maintainer. Security-sensitive paths are
+# listed separately so a review there is never an accident.
+
+*                               @xraph/maintainers
+
+# Authentication core and credential handling
+/engine*.go                     @xraph/maintainers @xraph/security
+/service.go                     @xraph/maintainers @xraph/security
+/middleware/                    @xraph/maintainers @xraph/security
+/bridge/                        @xraph/maintainers @xraph/security
+/store/                         @xraph/maintainers @xraph/security
+/internal/safeurl/              @xraph/maintainers @xraph/security
+/internal/mask/                 @xraph/maintainers @xraph/security
+
+# Build, CI and release
+/.github/                       @xraph/maintainers @xraph/security
+/go.mod                         @xraph/maintainers
+/Makefile                       @xraph/maintainers
+/SECURITY.md                    @xraph/maintainers @xraph/security
