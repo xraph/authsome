@@ -104,6 +104,7 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"CredentialTokensStoredAsHashes", testCredentialTokensStoredAsHashes},
 		{"LegacyPlaintextCredentialsUpgrade", testLegacyPlaintextCredentialsUpgrade},
 		{"HashLegacyTokensConverts", testHashLegacyTokensConverts},
+		{"SessionClientIDRoundTrip", testSessionClientIDRoundTrip},
 	}
 	for _, tc := range cases {
 		tc := tc

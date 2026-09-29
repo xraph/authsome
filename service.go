@@ -483,9 +483,11 @@ type RefreshOpts struct {
 // presented again, the entire session family is revoked, an audit event is
 // recorded, and a generic ErrInvalidCredentials is returned (the caller must
 // not learn that replay was the reason).
-func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...RefreshOpts) (*session.Session, error) {
-	presentedHash := store.HashToken(refreshToken)
-
+// refuseReplayedRefresh is the replay check shared by every refresh path:
+// a presented hash that is already in the revoked set is either a leaked
+// token being replayed or a double spend, so the whole family is revoked
+// and the caller refused.
+func (e *Engine) refuseReplayedRefresh(ctx context.Context, presentedHash string, opts ...RefreshOpts) error {
 	// Replay check: if the presented token's hash is already in the
 	// revoked set, this is either a leaked token being replayed or a
 	// double-spend. Either way: cascade-revoke the family and refuse.
@@ -504,7 +506,7 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 		}
 		if !firstReplay {
 			// Already handled — refuse without re-alerting to avoid a storm.
-			return nil, account.ErrInvalidCredentials
+			return account.ErrInvalidCredentials
 		}
 
 		var ipAddr, userAgent string
@@ -534,11 +536,47 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 			Category: "auth",
 			Metadata: md,
 		})
-		return nil, account.ErrInvalidCredentials
+		return account.ErrInvalidCredentials
+	}
+
+	return nil
+}
+
+func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...RefreshOpts) (*session.Session, error) {
+	if err := e.refuseReplayedRefresh(ctx, store.HashToken(refreshToken), opts...); err != nil {
+		return nil, err
 	}
 
 	sess, err := e.store.GetSessionByRefreshToken(ctx, refreshToken)
 	if err != nil {
+		return nil, account.ErrInvalidCredentials
+	}
+	// A refresh token issued to an OAuth2 client is redeemed at the token
+	// endpoint with client authentication, never at the session refresh
+	// route where anyone holding it could rotate it.
+	if sess.ClientID != "" {
+		return nil, account.ErrInvalidCredentials
+	}
+	return e.rotateSession(ctx, sess, opts...)
+}
+
+// RefreshForClient rotates a session the OAuth2 provider issued to clientID.
+// It is the engine half of the token endpoint's refresh_token grant: the
+// caller has authenticated the client already; here the token is checked
+// for replay, matched to that client, and rotated with the same refusals as
+// any refresh, including the DPoP proof check for a bound session.
+func (e *Engine) RefreshForClient(ctx context.Context, refreshToken, clientID string, opts ...RefreshOpts) (*session.Session, error) {
+	if clientID == "" {
+		return nil, account.ErrInvalidCredentials
+	}
+	if err := e.refuseReplayedRefresh(ctx, store.HashToken(refreshToken), opts...); err != nil {
+		return nil, err
+	}
+	sess, err := e.store.GetSessionByRefreshToken(ctx, refreshToken)
+	if err != nil {
+		return nil, account.ErrInvalidCredentials
+	}
+	if sess.ClientID != clientID {
 		return nil, account.ErrInvalidCredentials
 	}
 	return e.rotateSession(ctx, sess, opts...)
@@ -735,6 +773,7 @@ func (e *Engine) rotateSession(ctx context.Context, sess *session.Session, opts 
 			// Without this the first refresh turns a token bound to one
 			// resource server into an unrestricted one, silently.
 			Audience:  sess.Audience,
+			Scopes:    sess.Scopes,
 			DPoPJKT:   sess.DPoPJKT,
 			IssuedAt:  sess.UpdatedAt,
 			ExpiresAt: sess.ExpiresAt,

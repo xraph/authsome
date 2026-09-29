@@ -318,6 +318,7 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 				goCtx = WithUser(goCtx, u)
 			}
 
+			goCtx = parkOAuthSession(ctx.Context(), goCtx)
 			ctx.WithContext(goCtx)
 			return next(ctx)
 		}
@@ -675,6 +676,7 @@ func tryJWTAuth(
 	}
 	goCtx = WithUser(goCtx, u)
 
+	goCtx = parkOAuthSession(ctx.Context(), goCtx)
 	ctx.WithContext(goCtx)
 	return jwtAuthAuthenticated, nil
 }
@@ -857,6 +859,7 @@ func tryStrategyAuth(
 	}
 	goCtx = WithAuthMethod(goCtx, "strategy")
 
+	goCtx = parkOAuthSession(ctx.Context(), goCtx)
 	ctx.WithContext(goCtx)
 	return true
 }
@@ -943,6 +946,7 @@ func setSessionContext(
 	}
 	goCtx = WithAuthMethod(goCtx, "session")
 
+	goCtx = parkOAuthSession(ctx.Context(), goCtx)
 	ctx.WithContext(goCtx)
 	return true
 }

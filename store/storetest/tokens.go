@@ -366,3 +366,31 @@ func testHashLegacyTokensConverts(t *testing.T, s store.Store) {
 	assert.Empty(t, byID.Token)
 	assert.Equal(t, store.HashToken("sweep-invite"), byID.TokenHash)
 }
+
+// testSessionClientIDRoundTrip proves the OAuth2 client a token was issued
+// to survives the store and comes back on every lookup path.
+func testSessionClientIDRoundTrip(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "client-bound@test.com")
+	sess := &session.Session{
+		ID: id.NewSessionID(), AppID: tn.AppID, EnvID: tn.EnvID, UserID: u.ID,
+		Token: "oauth-access", RefreshToken: "oauth-refresh", ClientID: "acme-cli", // #nosec G101 -- fixture values
+		Scopes: []string{"openid"}, ExpiresAt: now().Add(time.Hour), RefreshTokenExpiresAt: now().Add(24 * time.Hour),
+		CreatedAt: now(), UpdatedAt: now(),
+	}
+	require.NoError(t, s.CreateSession(ctx, sess))
+	for name, fn := range map[string]func() (*session.Session, error){
+		"GetSession":               func() (*session.Session, error) { return s.GetSession(ctx, sess.ID) },
+		"GetSessionByToken":        func() (*session.Session, error) { return s.GetSessionByToken(ctx, "oauth-access") },
+		"GetSessionByRefreshToken": func() (*session.Session, error) { return s.GetSessionByRefreshToken(ctx, "oauth-refresh") },
+	} {
+		got, err := fn()
+		require.NoError(t, err, name)
+		assert.Equal(t, "acme-cli", got.ClientID, name)
+	}
+	plain := seedSession(t, s, tn, u.ID, "plain-access-2", "plain-refresh-2")
+	got, err := s.GetSession(ctx, plain.ID)
+	require.NoError(t, err)
+	assert.Empty(t, got.ClientID, "a session that is not an OAuth2 token carries no client")
+}

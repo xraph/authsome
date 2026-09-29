@@ -107,6 +107,17 @@ Grants accumulate: approving a wider scope set widens the grant rather than repl
 
 A client marked `first_party` on the admin API skips the page, since the user already trusts the application they are signing in to. Dynamic registration cannot set the flag.
 
+## Tokens are bound to their client
+
+A session the provider mints carries the `client_id` it was issued to, and that binding is enforced everywhere the token can be used:
+
+- The auth middleware never installs such a session on a request by itself. A route admits it with `middleware.RequireScope(scopes...)`, which checks the token holds every named scope and answers `403 insufficient_scope` otherwise; a route nobody tagged sees no session at all. Userinfo (`openid`), introspection and revocation are tagged by default; tag your own resource routes the same way.
+- Refresh goes through the token endpoint's `grant_type=refresh_token` with client authentication. The refresh token must belong to that client, a DPoP-bound token must present a proof before anything rotates, a spent refresh token that is presented again revokes the whole family, and the session refresh route `/v1/auth/refresh` refuses OAuth2 refresh tokens outright.
+- Revocation by an authenticated client only touches tokens issued to that client; anything else is answered as revoked without effect.
+- Userinfo returns the claims the token's scopes cover: `profile` for the name, `email` for the address and its verification, `phone` for the number.
+- The signed-in session that authorizes a client, or approves a device, must belong to the client's app.
+- PKCE accepts `S256` only, for every client. Device authorization resolves its scopes against the client's registration like the authorization endpoint does. Token responses are sent with `Cache-Control: no-store`, and discovery advertises `refresh_token` among the grant types and `S256` alone among the challenge methods.
+
 ## Client Credentials Grant
 
 Machine-to-machine authentication for confidential clients:

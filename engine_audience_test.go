@@ -38,12 +38,15 @@ import (
 func audienceRouter(eng *authsome.Engine) forge.Router {
 	router := forge.NewRouter()
 	router.Use(eng.AuthMiddleware())
+	// A resource route declares that OAuth2-issued tokens may reach it;
+	// without the tag the auth middleware keeps such tokens parked and only
+	// ordinary sessions get through.
 	router.GET("/test", func(ctx forge.Context) error {
 		if _, ok := middleware.UserFrom(ctx.Context()); !ok {
 			return ctx.NoContent(http.StatusUnauthorized)
 		}
 		return ctx.NoContent(http.StatusOK)
-	})
+	}, forge.WithMiddleware(middleware.RequireScope()))
 	return router
 }
 

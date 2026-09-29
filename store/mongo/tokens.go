@@ -427,3 +427,22 @@ type legacyRow struct {
 	id    string
 	token string
 }
+
+func init() {
+	Migrations.MustRegister(&migrate.Migration{
+		Name:    "session_client_id",
+		Version: "20260922000004",
+		Up: func(ctx context.Context, exec migrate.Executor) error {
+			mexec, ok := exec.(*mongomigrate.Executor)
+			if !ok {
+				return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+			}
+			// The collection's validator is generated from the model, so the
+			// new field has to be admitted before any OAuth2 token is stored.
+			return mexec.RefreshValidator(ctx, (*sessionModel)(nil))
+		},
+		Down: func(_ context.Context, _ migrate.Executor) error {
+			return nil // forward-only on the validator, as the other field additions are
+		},
+	})
+}

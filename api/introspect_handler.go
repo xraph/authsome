@@ -8,6 +8,7 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/apikey"
+	"github.com/xraph/authsome/middleware"
 )
 
 // ──────────────────────────────────────────────────
@@ -20,6 +21,7 @@ func (a *API) registerIntrospectRoutes(router forge.Router) error {
 
 	introspectOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
 	introspectOpts = append(introspectOpts,
+		forge.WithMiddleware(middleware.RequireScope()),
 		forge.WithSummary("Introspect token"),
 		forge.WithDescription("Validates a token and returns the associated identity. Follows RFC 7662 semantics: invalid tokens return {active: false} with 200 status."),
 		forge.WithOperationID("introspectToken"),

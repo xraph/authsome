@@ -287,6 +287,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	if err := g.POST("/revoke", p.handleRevoke, append([]forge.RouteOption{
+		forge.WithMiddleware(middleware.RequireScope()),
 		forge.WithSummary("Revoke token"),
 		forge.WithDescription("Revokes an access or refresh token."),
 		forge.WithOperationID("oauth2Revoke"),
@@ -296,6 +297,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	if err := g.GET("/userinfo", p.handleUserInfo,
+		forge.WithMiddleware(middleware.RequireScope("openid")),
 		forge.WithSummary("OIDC UserInfo"),
 		forge.WithDescription("Returns claims about the authenticated user."),
 		forge.WithOperationID("oauth2UserInfo"),
@@ -619,6 +621,7 @@ type TokenRequest struct {
 	ClientSecret string `json:"client_secret,omitempty" form:"client_secret"`
 	CodeVerifier string `json:"code_verifier,omitempty" form:"code_verifier"`
 	DeviceCode   string `json:"device_code,omitempty" form:"device_code"`
+	RefreshToken string `json:"refresh_token,omitempty" form:"refresh_token"`
 	// RFC 8707, repeatable. RFC 6749 section 4.1.3 sends token-endpoint
 	// parameters as a form body, and a JSON body is accepted too, so the field
 	// carries both tags.
@@ -849,15 +852,13 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 	// custom-scheme hijack, a shared browser — can redeem it without one.
 	// Enforcing only when a challenge happens to be present lets a client opt
 	// out of its own protection by simply omitting it.
-	if client.Public {
-		if req.CodeChallenge == "" {
-			return nil, forge.BadRequest("code_challenge required (PKCE) for public clients")
-		}
-		// "plain" leaves the verifier recoverable anywhere the challenge is
-		// observable — the authorize URL lands in history, logs, and Referer.
-		if req.CodeChallengeMethod != "" && req.CodeChallengeMethod != "S256" {
-			return nil, forge.BadRequest("code_challenge_method must be S256 for public clients")
-		}
+	if client.Public && req.CodeChallenge == "" {
+		return nil, forge.BadRequest("code_challenge required (PKCE) for public clients")
+	}
+	// Only S256 is accepted from any client: a plain challenge is the
+	// verifier itself, recoverable wherever the authorization URL is logged.
+	if req.CodeChallenge != "" && req.CodeChallengeMethod != "" && req.CodeChallengeMethod != "S256" {
+		return nil, forge.BadRequest("code_challenge_method must be S256")
 	}
 
 	// Require authenticated user. No resource_metadata hint here, unlike
@@ -871,6 +872,9 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
 		return nil, forge.Unauthorized("authentication required to authorize")
+	}
+	if !p.callerAppMatches(ctx, client.AppID) {
+		return nil, forge.NewHTTPError(http.StatusForbidden, "this client belongs to a different app than the signed-in session")
 	}
 
 	// Give a registered gate (e.g. an agent-delegation policy) a chance to
@@ -1116,8 +1120,13 @@ func callerOwnsSession(caller, target *session.Session) bool {
 // next() call sees it, the same reason handleUserInfo below sets its own
 // header instead of relying on that middleware.
 func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
-	// Runs before the grant switch so all three grants authenticate the same
-	// way, and so a malformed header is answered once rather than three times.
+	// Token responses carry credentials and must never be cached by a
+	// browser or an intermediary (RFC 6749 section 5.1).
+	ctx.SetHeader("Cache-Control", "no-store")
+	ctx.SetHeader("Pragma", "no-cache")
+
+	// Runs before the grant switch so every grant authenticates the same
+	// way, and so a malformed header is answered once rather than per grant.
 	if err := applyBasicClientAuth(ctx.Request(), &req.ClientID, &req.ClientSecret); err != nil {
 		return nil, err
 	}
@@ -1125,6 +1134,8 @@ func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (*TokenRespon
 	switch req.GrantType {
 	case "authorization_code":
 		return p.handleAuthorizationCodeGrant(ctx, req)
+	case "refresh_token":
+		return p.handleRefreshTokenGrant(ctx, req)
 	case "client_credentials":
 		return p.handleClientCredentialsGrant(ctx, req)
 	case "urn:ietf:params:oauth:grant-type:device_code":
@@ -1134,6 +1145,70 @@ func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (*TokenRespon
 	default:
 		return nil, forge.BadRequest("unsupported grant_type")
 	}
+}
+
+// handleRefreshTokenGrant rotates a token the provider issued (RFC 6749
+// section 6). The client authenticates as it did to obtain the token, the
+// refresh token must belong to that client, and a DPoP-bound token must
+// present a proof for its key before anything is rotated. The engine
+// handles replay detection and the rotation itself.
+func (p *Plugin) handleRefreshTokenGrant(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
+	if req.RefreshToken == "" {
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_request", "refresh_token required")
+	}
+	client, err := p.authenticateClient(ctx.Context(), req.ClientID, req.ClientSecret)
+	if err != nil {
+		return nil, err
+	}
+	// Any client that can obtain a code can refresh what the code produced;
+	// a client registered only for other grants cannot.
+	if !clientAllowsGrant(client, "refresh_token") && !clientAllowsGrant(client, "authorization_code") &&
+		!p.clientSupportsGrant(client, deviceCodeGrantType) {
+		return nil, newOAuth2Error(http.StatusBadRequest, "unauthorized_client", "client is not authorized for the refresh_token grant")
+	}
+	eng, ok := p.engine.(*authsome.Engine)
+	if !ok || eng == nil {
+		return nil, forge.InternalError(errors.New("oauth2: refresh grant needs the authsome engine"))
+	}
+	r := ctx.Request()
+	sess, err := eng.RefreshForClient(ctx.Context(), req.RefreshToken, client.ClientID, authsome.RefreshOpts{
+		IPAddress:  middleware.ClientIP(r),
+		UserAgent:  r.UserAgent(),
+		DPoPProof:  r.Header.Get("DPoP"),
+		Method:     r.Method,
+		RequestURL: middleware.RequestURL(r),
+	})
+	if err != nil {
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "invalid refresh token")
+	}
+	tokenType := "Bearer"
+	if sess.DPoPJKT != "" {
+		tokenType = "DPoP"
+	}
+	return &TokenResponse{
+		AccessToken:  sess.Token,
+		TokenType:    tokenType,
+		ExpiresIn:    int(time.Until(sess.ExpiresAt).Seconds()),
+		RefreshToken: sess.RefreshToken,
+		Scope:        strings.Join(sess.Scopes, " "),
+	}, nil
+}
+
+// callerAppMatches reports whether the signed-in caller belongs to appID,
+// the client's app. A session from another app must not authorize a client
+// of this one. The app comes from the context the auth middleware built,
+// else from the user record; a caller with neither is not a session the
+// middleware built and is left to the session guard.
+func (p *Plugin) callerAppMatches(ctx forge.Context, appID id.AppID) bool {
+	if fromCtx, ok := middleware.AppIDFrom(ctx.Context()); ok {
+		return fromCtx == appID
+	}
+	if userID, ok := middleware.UserIDFrom(ctx.Context()); ok && p.store != nil {
+		if u, err := p.store.GetUser(ctx.Context(), userID); err == nil && u != nil {
+			return u.AppID == appID
+		}
+	}
+	return true
 }
 
 func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
@@ -1325,7 +1400,12 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeRequest) (*apitypes.
 	// client can revoke any token it holds a copy of. Narrower than the
 	// anonymous hole it replaces, and left tracked rather than fixed here
 	// because that column reaches all four store backends.
-	if !authenticatedClient && !callerOwnsSession(caller, sess) {
+	// A client may revoke only the tokens issued to it; a user may revoke
+	// only their own. Either way an unowned token is answered as revoked
+	// without touching it (RFC 7009 section 2.2).
+	owned := (authenticatedClient && sess.ClientID != "" && sess.ClientID == req.ClientID) ||
+		(!authenticatedClient && callerOwnsSession(caller, sess))
+	if !owned {
 		p.logger.Debug("oauth2: revoke ignored for a token the caller does not own",
 			log.String("session_id", sess.ID.String()),
 		)
@@ -1367,13 +1447,24 @@ func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInf
 		return nil, forge.InternalError(fmt.Errorf("oauth2: get user: %w", err))
 	}
 
-	return &UserInfo{
-		Sub:           u.ID.String(),
-		Email:         u.Email,
-		EmailVerified: u.EmailVerified,
-		Name:          u.Name(),
-		Phone:         u.Phone,
-	}, nil
+	// An OAuth2 token sees only the claims its scopes cover (OpenID Connect
+	// Core 5.4); a first-party session sees them all.
+	sess, _ := middleware.SessionFrom(ctx.Context())
+	granted := func(scope string) bool {
+		return sess == nil || sess.ClientID == "" || middleware.HasScopes(sess, scope)
+	}
+	info := &UserInfo{Sub: u.ID.String()}
+	if granted("profile") {
+		info.Name = u.Name()
+	}
+	if granted("email") {
+		info.Email = u.Email
+		info.EmailVerified = u.EmailVerified
+	}
+	if granted("phone") {
+		info.Phone = u.Phone
+	}
+	return info, nil
 }
 
 // handleDiscovery derives the OIDC discovery document from
@@ -1644,7 +1735,7 @@ func (p *Plugin) bindDPoP(ctx forge.Context, client *OAuth2Client, appID id.AppI
 // retried: the retry the RFC requires would arrive against a code the
 // store already rejects as used. See handleAuthorizationCodeGrant and
 // handleDeviceCodeGrant for where jkt is actually resolved.
-func (p *Plugin) issueTokens(ctx forge.Context, _ *OAuth2Client, userID id.UserID, appID id.AppID, scopes, resources []string, jkt string) (*TokenResponse, error) {
+func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.UserID, appID id.AppID, scopes, resources []string, jkt string) (*TokenResponse, error) {
 	// Resolve session config for the app.
 	sessCfg := account.SessionConfig{
 		TokenTTL:        p.config.AccessTokenTTL,
@@ -1659,6 +1750,12 @@ func (p *Plugin) issueTokens(ctx forge.Context, _ *OAuth2Client, userID id.UserI
 		return nil, forge.InternalError(fmt.Errorf("oauth2: create session: %w", err))
 	}
 	sess.DPoPJKT = jkt
+	// The token belongs to this client: the auth middleware parks the
+	// session until a RequireScope route admits it, only this client may
+	// refresh or revoke it, and the session refresh route refuses it.
+	if client != nil {
+		sess.ClientID = client.ClientID
+	}
 
 	// Stamp the granted scopes. Without this they exist only in the JWT claims
 	// and the response body, so an opaque token loses them and token exchange
@@ -1803,7 +1900,12 @@ func (p *Plugin) handleDeviceAuthorize(ctx forge.Context, req *DeviceAuthRequest
 		verificationURI = p.issuerURL() + "/v1/oauth/device"
 	}
 
-	scopes := strings.Fields(req.Scope)
+	// The client's registration bounds the scopes a device may ask for,
+	// exactly as it bounds an authorization request.
+	scopes, err := resolveScopes(client, req.Scope)
+	if err != nil {
+		return nil, err
+	}
 
 	// There is no prior authorization to narrow against at this endpoint
 	// either, so the client's own allowlist bounds what may be requested,
@@ -1988,6 +2090,9 @@ func (p *Plugin) handleDeviceComplete(ctx forge.Context, req *DeviceCompleteRequ
 	}
 
 	// Apply the user's decision.
+	if req.Action == "approve" && !p.callerAppMatches(ctx, dc.AppID) {
+		return nil, forge.NewHTTPError(http.StatusForbidden, "this device request belongs to a different app than the signed-in session")
+	}
 	if req.Action == "approve" {
 		// Same veto point as the authorization-code flow: a gate refusal
 		// must block the approval, not be undone after the fact.
@@ -2050,9 +2155,9 @@ func verifyPKCE(challenge, method, verifier string) bool {
 		h := sha256.Sum256([]byte(verifier))
 		computed := base64.RawURLEncoding.EncodeToString(h[:])
 		return computed == challenge
-	case "plain":
-		return verifier == challenge
 	default:
+		// "plain" leaves the verifier recoverable anywhere the challenge is
+		// logged and is not accepted.
 		return false
 	}
 }

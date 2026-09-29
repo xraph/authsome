@@ -253,6 +253,7 @@ type SessionModel struct {
 	CreatedAt             time.Time       `grove:"created_at,notnull,default:now()"`
 	UpdatedAt             time.Time       `grove:"updated_at,notnull,default:now()"`
 	DPoPJKT               string          `grove:"dpop_jkt"`
+	ClientID              string          `grove:"client_id"`
 }
 
 func toSession(m *SessionModel) (*session.Session, error) {
@@ -285,6 +286,7 @@ func toSession(m *SessionModel) (*session.Session, error) {
 		CreatedAt:             m.CreatedAt,
 		UpdatedAt:             m.UpdatedAt,
 		DPoPJKT:               m.DPoPJKT,
+		ClientID:              m.ClientID,
 	}
 	// Guarded like every other optional id below rather than parsed up front:
 	// a service-account session stores no user_id, and an unguarded parse
@@ -404,6 +406,7 @@ func fromSession(s *session.Session) *SessionModel {
 		CreatedAt:             s.CreatedAt,
 		UpdatedAt:             s.UpdatedAt,
 		DPoPJKT:               s.DPoPJKT,
+		ClientID:              s.ClientID,
 	}
 	if !s.ServiceAccountID.IsNil() {
 		m.ServiceAccountID = s.ServiceAccountID.String()

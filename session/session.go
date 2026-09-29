@@ -129,6 +129,13 @@ type Session struct {
 	// set, the session cannot be used without a matching proof, whatever the
 	// app or client mode says at the time of the request.
 	DPoPJKT string `json:"dpop_jkt,omitempty"`
+
+	// ClientID names the OAuth2 client a token was issued to. A session with
+	// a ClientID is the bearer of an OAuth2 access token: the auth middleware
+	// parks it until a route tagged with middleware.RequireScope admits it,
+	// only the token endpoint's refresh_token grant may rotate it, and the
+	// client that owns it is the only client that may revoke it.
+	ClientID string `json:"client_id,omitempty"`
 }
 
 // Subject returns the principal this session is for.

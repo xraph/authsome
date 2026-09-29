@@ -67,6 +67,7 @@ const (
 	ctxKeyEnvironmentSettings
 	ctxKeyAuthMethod
 	ctxKeyApp
+	ctxKeyPendingOAuth
 )
 
 // WithUser stores a user in the context.
