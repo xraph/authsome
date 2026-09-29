@@ -201,11 +201,12 @@ func TestRecordLocation_ConcurrentDistinctPrincipalsStayIsolated(t *testing.T) {
 	}
 	wg.Wait()
 
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	require.Len(t, p.lastLogins, len(refs), "every principal must have exactly one last-login entry")
+	// A write lock: a lookup marks the entry recently used.
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	require.Equal(t, len(refs), p.lastLogins.Len(), "every principal must have exactly one last-login entry")
 	for i, ref := range refs {
-		got, ok := p.lastLogins[ref.String()]
+		got, ok := p.lastLogins.Get(ref.String())
 		require.True(t, ok, "principal %s has no recorded location", ref.ID)
 		require.Equal(t, cityFor(i), got.City,
 			"principal %s picked up another principal's location", ref.ID)
@@ -253,5 +254,5 @@ func TestOnAfterSignIn_ConcurrentIsRaceFree(t *testing.T) {
 	require.Greater(t, ops.Load(), int64(200), "the hammer did no meaningful work")
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	require.NotEmpty(t, p.lastLogins, "the hammer recorded nothing")
+	require.NotZero(t, p.lastLogins.Len(), "the hammer recorded nothing")
 }

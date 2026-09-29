@@ -61,9 +61,9 @@ func TestBelowMinHistory_NoAlert(t *testing.T) {
 	}
 
 	// Pattern should exist but with only 5 logins
-	p.mu.RLock()
-	pattern := p.patterns[principal.UserRef(u.ID).String()]
-	p.mu.RUnlock()
+	p.mu.Lock()
+	pattern, _ := p.patterns.Get(principal.UserRef(u.ID).String())
+	p.mu.Unlock()
 	require.NotNil(t, pattern)
 	assert.Equal(t, 5, pattern.LoginCount)
 }
@@ -86,9 +86,9 @@ func TestUnusualCountry_Alert(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify GB was recorded
-	p.mu.RLock()
-	pattern := p.patterns[principal.UserRef(userID).String()]
-	p.mu.RUnlock()
+	p.mu.Lock()
+	pattern, _ := p.patterns.Get(principal.UserRef(userID).String())
+	p.mu.Unlock()
 	assert.Equal(t, 1, pattern.CountryHistogram["GB"])
 }
 
@@ -157,9 +157,9 @@ func TestPatternAccumulates(t *testing.T) {
 		require.NoError(t, p.OnAfterSignIn(context.Background(), u, s))
 	}
 
-	p.mu.RLock()
-	pattern := p.patterns[principal.UserRef(userID).String()]
-	p.mu.RUnlock()
+	p.mu.Lock()
+	pattern, _ := p.patterns.Get(principal.UserRef(userID).String())
+	p.mu.Unlock()
 
 	require.NotNil(t, pattern)
 	assert.Equal(t, 5, pattern.LoginCount)
@@ -197,10 +197,10 @@ func TestAnomalyKeysByPrincipal(t *testing.T) {
 		&principal.AuthAttempt{Subject: agentB, IPAddress: "2.2.2.2"},
 		&session.Session{IPAddress: "2.2.2.2"}))
 
-	p.mu.RLock()
-	patternA := p.patterns[agentA.String()]
-	patternB := p.patterns[agentB.String()]
-	p.mu.RUnlock()
+	p.mu.Lock()
+	patternA, _ := p.patterns.Get(agentA.String())
+	patternB, _ := p.patterns.Get(agentB.String())
+	p.mu.Unlock()
 
 	require.NotNil(t, patternA)
 	require.NotNil(t, patternB)

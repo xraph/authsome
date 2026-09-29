@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xraph/authsome/internal/boundedmap"
+
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/bridge"
@@ -96,6 +98,17 @@ type Config struct {
 
 	// Action is what to do on detection: "flag" (default), "block".
 	Action string
+
+	// MaxTrackedPrincipals bounds the in-memory last-login table; the
+	// least recently seen principal is dropped when it is full (default:
+	// 10000). A principal dropped from the table is checked afresh on its
+	// next login, as if it had never logged in.
+	MaxTrackedPrincipals int
+
+	// MaxEvents bounds how many alerts are kept in memory for
+	// RecordedEvents; older alerts are dropped (default: 1000). The audit
+	// trail keeps every alert regardless.
+	MaxEvents int
 }
 
 func (c *Config) defaults() {
@@ -110,6 +123,12 @@ func (c *Config) defaults() {
 	}
 	if c.Action == "" {
 		c.Action = "flag"
+	}
+	if c.MaxTrackedPrincipals == 0 {
+		c.MaxTrackedPrincipals = 10000
+	}
+	if c.MaxEvents == 0 {
+		c.MaxEvents = 1000
 	}
 }
 
@@ -151,7 +170,7 @@ type Plugin struct {
 	// than by user ID, so a machine caller gets its own travel history
 	// instead of sharing (or worse, colliding with) another principal's.
 	mu         sync.RWMutex
-	lastLogins map[string]*LoginLocation
+	lastLogins *boundedmap.Map[string, *LoginLocation]
 
 	// events records the alerts raised so far, for tests to assert against.
 	events []TravelAlert
@@ -166,7 +185,7 @@ func New(cfg ...Config) *Plugin {
 	c.defaults()
 	return &Plugin{
 		config:     c,
-		lastLogins: make(map[string]*LoginLocation),
+		lastLogins: boundedmap.New[string, *LoginLocation](c.MaxTrackedPrincipals),
 	}
 }
 
@@ -257,9 +276,11 @@ func (p *Plugin) recordLocation(ctx context.Context, ref principal.Ref, appID st
 
 	// Check against last login.
 	refKey := ref.String()
-	p.mu.RLock()
-	prev := p.lastLogins[refKey]
-	p.mu.RUnlock()
+	// A write lock, not a read lock: a lookup marks the entry recently
+	// used, which reorders the table.
+	p.mu.Lock()
+	prev, _ := p.lastLogins.Get(refKey)
+	p.mu.Unlock()
 
 	if prev != nil {
 		timeDelta := current.LoginAt.Sub(prev.LoginAt)
@@ -291,7 +312,7 @@ func (p *Plugin) recordLocation(ctx context.Context, ref principal.Ref, appID st
 
 	// Update last login.
 	p.mu.Lock()
-	p.lastLogins[refKey] = current
+	p.lastLogins.Put(refKey, current)
 	p.mu.Unlock()
 
 	return nil
@@ -329,6 +350,13 @@ func (p *Plugin) handleAlert(ctx context.Context, appID string, alert *TravelAle
 
 	p.mu.Lock()
 	p.events = append(p.events, *alert)
+	if p.config.MaxEvents > 0 && len(p.events) > p.config.MaxEvents {
+		// Keep the newest; copy so the dropped prefix can be collected
+		// rather than pinned by the slice's backing array.
+		kept := make([]TravelAlert, p.config.MaxEvents)
+		copy(kept, p.events[len(p.events)-p.config.MaxEvents:])
+		p.events = kept
+	}
 	p.mu.Unlock()
 
 	if p.chronicle != nil {

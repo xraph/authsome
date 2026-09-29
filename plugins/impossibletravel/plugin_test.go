@@ -24,6 +24,15 @@ func newTestPlugin(cfg Config, mapping map[string]*geoip.GeoLocation) *Plugin {
 	return p
 }
 
+// mustLastLogin returns the recorded last login for refKey, so a test can
+// backdate it.
+func mustLastLogin(t *testing.T, p *Plugin, refKey string) *LoginLocation {
+	t.Helper()
+	loc, ok := p.lastLogins.Get(refKey)
+	require.True(t, ok, "no last login recorded for %s", refKey)
+	return loc
+}
+
 var defaultMapping = map[string]*geoip.GeoLocation{
 	"1.1.1.1": {IP: "1.1.1.1", Country: "US", City: "New York", Latitude: 40.7128, Longitude: -74.0060},
 	"2.2.2.2": {IP: "2.2.2.2", Country: "GB", City: "London", Latitude: 51.5074, Longitude: -0.1278},
@@ -78,7 +87,7 @@ func TestImpossibleSpeed_Alert(t *testing.T) {
 
 	// Manually set the last login time to 1 minute ago
 	p.mu.Lock()
-	p.lastLogins[refKey].LoginAt = time.Now().Add(-1 * time.Minute)
+	mustLastLogin(t, p, refKey).LoginAt = time.Now().Add(-1 * time.Minute)
 	p.mu.Unlock()
 
 	// Second login from London — 5570 km in 1 minute = impossible
@@ -100,7 +109,7 @@ func TestRealisticSpeed_NoAlert(t *testing.T) {
 
 	// Set last login 8 hours ago
 	p.mu.Lock()
-	p.lastLogins[refKey].LoginAt = time.Now().Add(-8 * time.Hour)
+	mustLastLogin(t, p, refKey).LoginAt = time.Now().Add(-8 * time.Hour)
 	p.mu.Unlock()
 
 	// NYC to London (5570km) in 8h = ~696 km/h < 900 km/h threshold
@@ -121,7 +130,7 @@ func TestBelowMinDistance_NoAlert(t *testing.T) {
 	require.NoError(t, p.OnAfterSignIn(context.Background(), u, s1))
 
 	p.mu.Lock()
-	p.lastLogins[refKey].LoginAt = time.Now().Add(-1 * time.Minute)
+	mustLastLogin(t, p, refKey).LoginAt = time.Now().Add(-1 * time.Minute)
 	p.mu.Unlock()
 
 	s2 := &session.Session{IPAddress: "2.2.2.2"}
@@ -154,7 +163,7 @@ func TestLookbackExpired(t *testing.T) {
 
 	// Set last login beyond lookback window (2 hours ago, lookback is 1h)
 	p.mu.Lock()
-	p.lastLogins[refKey].LoginAt = time.Now().Add(-2 * time.Hour)
+	mustLastLogin(t, p, refKey).LoginAt = time.Now().Add(-2 * time.Hour)
 	p.mu.Unlock()
 
 	s2 := &session.Session{IPAddress: "2.2.2.2"}
@@ -211,7 +220,7 @@ func TestPrincipalAuthDeniesOnRealTravel(t *testing.T) {
 		&session.Session{IPAddress: "1.1.1.1"}))
 
 	p.mu.Lock()
-	p.lastLogins[refKey].LoginAt = time.Now().Add(-1 * time.Minute)
+	mustLastLogin(t, p, refKey).LoginAt = time.Now().Add(-1 * time.Minute)
 	p.mu.Unlock()
 
 	require.NoError(t, p.OnAfterPrincipalAuth(ctx,
