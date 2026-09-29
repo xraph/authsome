@@ -726,9 +726,14 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 		return s.refuse(ctx, r, fmt.Errorf("apikey: key is revoked or expired"))
 	}
 
-	// Update last used timestamp (best-effort, don't fail auth)
+	// Update last used timestamp (best-effort, don't fail auth). A key
+	// hashed before the pepper was set is rewritten under it here, so the
+	// legacy digest disappears with use.
 	now := time.Now()
 	key.LastUsedAt = &now
+	if apikey.NeedsRehash(rawKey, key.KeyHash) {
+		key.KeyHash = apikey.HashKey(rawKey)
+	}
 	_ = s.store.UpdateAPIKey(ctx, key) //nolint:errcheck // best-effort update
 
 	// Score this machine caller through the principal-auth hooks before

@@ -38,6 +38,17 @@ type Config struct {
 	// ProtectedResourceMetadataURL is the RFC 9728 metadata URL advertised in
 	// the WWW-Authenticate header on a 401. Empty means no hint is emitted.
 	ProtectedResourceMetadataURL string `json:"protected_resource_metadata_url"`
+
+	// TokenEncryption configures at-rest encryption of provider tokens, MFA
+	// secrets and SSO connection secrets. A key is required unless
+	// WithTokenEncryptor is passed; see AUTHSOME_TOKEN_ENCRYPTION_KEYS.
+	TokenEncryption TokenEncryptionConfig `json:"token_encryption"`
+
+	// APIKeyPepper is a server-side secret mixed into API key digests, so a
+	// copy of the database cannot be checked against a guessed key without
+	// it. Falls back to AUTHSOME_API_KEY_PEPPER. Keys hashed before a pepper
+	// was set keep verifying and are rewritten on their next use.
+	APIKeyPepper string `json:"api_key_pepper"`
 }
 
 // SessionConfig configures session behavior.

@@ -167,6 +167,9 @@ func (a *API) introspectAPIKey(ctx forge.Context, token string, inactive *Intros
 	// store hiccup shouldn't fail a valid auth.
 	now := time.Now()
 	key.LastUsedAt = &now
+	if apikey.NeedsRehash(token, key.KeyHash) {
+		key.KeyHash = apikey.HashKey(token)
+	}
 	_ = store.UpdateAPIKey(ctx.Context(), key) //nolint:errcheck // best-effort
 
 	resp := &IntrospectResponse{

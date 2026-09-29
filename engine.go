@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -256,9 +257,21 @@ func NewEngine(opts ...Option) (*Engine, error) {
 	// indirectly, the latter via NonceSecret) are established by this point.
 	e.initDPoP()
 
-	// Resolve token encryptor: WithTokenEncryptor wins, otherwise read env.
+	// Resolve token encryptor: WithTokenEncryptor wins, then configuration,
+	// then the environment. A production boot with no key fails here; only a
+	// test process may run without one.
 	if e.tokenEncryptor == nil {
-		e.tokenEncryptor = resolveTokenEncryptor(e.logger)
+		enc, err := resolveTokenEncryptor(e.config.TokenEncryption, e.logger, testing.Testing())
+		if err != nil {
+			return nil, err
+		}
+		e.tokenEncryptor = enc
+	}
+
+	// The API key pepper is process-wide because key digests are computed
+	// by the apikey package wherever a key is minted or checked.
+	if pepper := resolveAPIKeyPepper(e.config.APIKeyPepper); pepper != nil {
+		apikey.SetPepper(pepper)
 	}
 
 	// Register pending plugins
@@ -956,9 +969,10 @@ func (e *Engine) Vault() bridge.Vault { return e.vault }
 
 // TokenEncryptor returns the at-rest Encryptor used for sensitive opaque
 // payloads such as third-party OAuth access/refresh tokens. Always non-nil
-// after NewEngine — falls back to bridge.NoopEncryptor when no key is
-// configured. Plugins that persist provider tokens should wrap their store
-// using this encryptor (see plugins/social.NewEncryptedStore).
+// after NewEngine: a boot with no key configured fails rather than falling
+// back to plaintext, except under `go test`. Plugins that persist provider
+// tokens should wrap their store using this encryptor (see
+// plugins/social.NewEncryptedStore).
 func (e *Engine) TokenEncryptor() bridge.Encryptor {
 	if e.tokenEncryptor == nil {
 		return bridge.NoopEncryptor{}
@@ -1744,4 +1758,25 @@ func (e *Engine) hashLegacyTokens(ctx context.Context) {
 	if total > 0 {
 		e.logger.Info("authsome: hashed legacy credential rows", log.Int64("converted", total))
 	}
+}
+
+// envAPIKeyPepper names the server-side secret mixed into API key digests.
+// #nosec G101 -- not a credential: an environment variable name.
+const envAPIKeyPepper = "AUTHSOME_API_KEY_PEPPER"
+
+// resolveAPIKeyPepper returns the pepper bytes from configuration or the
+// environment. A value that is valid hex is decoded; anything else is used
+// as given, so an operator may paste either form.
+func resolveAPIKeyPepper(configured string) []byte {
+	raw := strings.TrimSpace(configured)
+	if raw == "" {
+		raw = strings.TrimSpace(os.Getenv(envAPIKeyPepper))
+	}
+	if raw == "" {
+		return nil
+	}
+	if b, err := hex.DecodeString(raw); err == nil && len(b) >= 16 {
+		return b
+	}
+	return []byte(raw)
 }
