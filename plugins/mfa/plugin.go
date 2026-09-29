@@ -99,7 +99,7 @@ func (p *Plugin) Name() string { return "mfa" }
 // sender, chronicle, relay, hooks, logger, and ceremony store from the engine.
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.sms = engine.SMSSender()
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.relay = engine.Relay()
 	p.hooks = engine.Hooks()
 	p.logger = engine.Logger()

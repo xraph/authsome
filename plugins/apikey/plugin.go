@@ -149,7 +149,7 @@ func (p *Plugin) SetStore(s apikey.Store) { p.store = s }
 // OnInit captures bridge references from the engine.
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.store = engine.APIKeyStore()
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.relay = engine.Relay()
 	p.hooks = engine.Hooks()
 	p.logger = engine.Logger()

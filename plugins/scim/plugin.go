@@ -59,7 +59,7 @@ func (p *Plugin) Name() string { return "scim" }
 // OnInit captures bridge and engine references.
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.authStore = engine.Store()
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.relay = engine.Relay()
 	p.hooks = engine.Hooks()
 	p.logger = engine.Logger()

@@ -12,6 +12,7 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/session"
@@ -55,7 +56,7 @@ func (a *API) captchaOpt(action string) []forge.RouteOption {
 		forge.WithMiddleware(middleware.CaptchaMiddleware(middleware.CaptchaOptions{
 			Settings:  mgr,
 			Action:    action,
-			Chronicle: a.engine.Chronicle(),
+			Chronicle: bridge.NewBusChronicle(a.engine.Hooks()),
 			Logger:    a.engine.Logger(),
 		})),
 	}

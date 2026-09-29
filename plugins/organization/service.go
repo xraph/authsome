@@ -537,7 +537,7 @@ func (p *Plugin) canDeleteOrg(ctx context.Context, actor id.UserID, org *organiz
 // after OnInit are still observed).
 func (p *Plugin) chronicleOrNil() bridge.Chronicle {
 	if p.engine != nil {
-		if ch := p.engine.Chronicle(); ch != nil {
+		if ch := bridge.NewBusChronicle(p.engine.Hooks()); ch != nil {
 			return ch
 		}
 	}

@@ -66,7 +66,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.plugins = engine.Plugins()
 	p.hooks = engine.Hooks()
 	p.relay = engine.Relay()
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.logger = engine.Logger()
 
 	p.basePath = "/v1"

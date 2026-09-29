@@ -219,7 +219,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 
 	if engine != nil {
 		p.engine = engine
-		p.chronicle = engine.Chronicle()
+		p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 		p.relay = engine.Relay()
 		p.hooks = engine.Hooks()
 		p.logger = engine.Logger()

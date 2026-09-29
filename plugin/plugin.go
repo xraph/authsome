@@ -82,7 +82,9 @@ type Engine interface {
 
 	// ── Bridges ──
 
-	Chronicle() bridge.Chronicle
+	// The audit trail is not exposed here on purpose: plugins record through
+	// bridge.NewBusChronicle(engine.Hooks()) so every event takes the one
+	// enriched path into Chronicle.
 	Relay() bridge.EventRelay
 	Herald() bridge.Herald
 	Mailer() bridge.Mailer

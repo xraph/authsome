@@ -118,7 +118,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 
 	p.store = engine.Store()
 	p.herald = engine.Herald()
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.relay = engine.Relay()
 	p.settingsMgr = engine.Settings()
 

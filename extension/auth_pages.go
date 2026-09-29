@@ -13,6 +13,7 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/dashboard/auth"
 	"github.com/xraph/authsome/formconfig"
@@ -45,7 +46,7 @@ func (a *authPages) captchaCheck(r *http.Request, action string) (allowed bool, 
 	}
 	res := middleware.VerifyCaptchaForRequest(r.Context(), middleware.CaptchaOptions{
 		Settings:  mgr,
-		Chronicle: a.engine.Chronicle(),
+		Chronicle: bridge.NewBusChronicle(a.engine.Hooks()),
 		Logger:    a.engine.Logger(),
 	}, r, a.defaultAppID(), action)
 	if res.Allowed {
