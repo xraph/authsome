@@ -4,6 +4,10 @@ go 1.26.0
 
 // replace github.com/xraph/forge => ../../forge
 
+// Temporary until v1.7.0 is tagged: the request correlation fields live on
+// the soc2/request-fields branch of forgery/chronicle.
+replace github.com/xraph/chronicle => ../../forgery/chronicle
+
 require (
 	github.com/a-h/templ v0.3.1020
 	github.com/crewjam/saml v0.5.1
@@ -13,7 +17,7 @@ require (
 	github.com/russellhaering/goxmldsig v1.6.1
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
-	github.com/xraph/chronicle v1.6.2
+	github.com/xraph/chronicle v1.7.0
 	github.com/xraph/forge v1.11.0
 	github.com/xraph/forge/extensions/auth v1.11.0
 	github.com/xraph/forgeui v1.4.1

@@ -63,6 +63,10 @@ _project_files/
 # Kept on disk for whoever is mid-task against them, but not committed.
 docs/superpowers/
 
+# Local Go workspace overrides (used to point at sibling module checkouts).
+go.work
+go.work.sum
+
 # The cloud control plane. Private by policy, and this is enforced by
 # scripts/check-private-paths.sh rather than trusted to this file alone.
 #
