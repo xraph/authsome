@@ -16,6 +16,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
 	"github.com/xraph/authsome/appclientconfig"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/dpoptest"
 	"github.com/xraph/authsome/internal/secutil"
@@ -52,7 +53,7 @@ func TestSignIn_MFAChallenge_UnderRequiredMode_IssuesBoundSession(t *testing.T) 
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -168,7 +169,7 @@ func TestMFAChallenge_UnboundTicketUnderRequiredMode_Refuses(t *testing.T) {
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),

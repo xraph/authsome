@@ -63,10 +63,11 @@ func NewTestEngine(t *testing.T, opts ...authsome.Option) *authsome.Engine {
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err, "secutil: build warden engine")
 
-	all := make([]authsome.Option, 0, 4+len(opts))
+	all := make([]authsome.Option, 0, 5+len(opts))
 	all = append(all,
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
+		authsome.WithChronicle(NewBufferedChronicle()),
 		authsome.WithDisableMigrate(),
 		authsome.WithAppID(testAppID),
 	)

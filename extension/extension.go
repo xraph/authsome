@@ -335,14 +335,17 @@ func (e *Extension) init(fapp forge.App) error {
 		e.Logger().Info("authsome: auto-discovered grove.DB from container (driver=" + driverName + ")")
 	}
 
-	// ── Auto-discover Chronicle (optional) ──
-	if emitter, err := vessel.Inject[chronicle.Emitter](fapp.Container()); err == nil {
-		opts = append(opts, authsome.WithChronicle(chronicleadapter.New(emitter)))
-		e.Logger().Info("authsome: auto-discovered chronicle emitter")
-	} else {
-		// Fallback to slog audit stub
-		opts = append(opts, authsome.WithChronicle(bridge.NewSlogChronicle(logger)))
+	// ── Chronicle (required) ──
+	//
+	// The audit trail has no fallback. A deployment without the chronicle
+	// extension would silently run with no record of who did what, which is
+	// exactly the state an auditor cannot accept, so registration fails.
+	emitter, err := vessel.Inject[chronicle.Emitter](fapp.Container())
+	if err != nil {
+		return fmt.Errorf("authsome: the chronicle extension is required for the audit trail: %w", err)
 	}
+	opts = append(opts, authsome.WithChronicle(chronicleadapter.New(emitter)))
+	e.Logger().Info("authsome: audit trail wired to chronicle")
 
 	// ── Auto-discover Warden (required authorization engine) ──
 	wardenEng, err := vessel.Inject[*warden.Engine](fapp.Container())

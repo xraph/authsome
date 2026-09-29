@@ -14,6 +14,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"testing"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
@@ -167,6 +168,9 @@ func NewEngine(opts ...Option) (*Engine, error) {
 	if e.store == nil {
 		return nil, errors.New("authsome: store is required")
 	}
+	if e.chronicle == nil {
+		return nil, ErrChronicleRequired
+	}
 	if e.wardenEng == nil {
 		return nil, errors.New("authsome: warden engine is required (use WithWarden option)")
 	}
@@ -258,6 +262,11 @@ func NewEngine(opts ...Option) (*Engine, error) {
 
 // ErrNotStarted is returned when a service method is called before Start().
 var ErrNotStarted = errors.New("authsome: engine not started, please wait for initialization to complete")
+
+// ErrChronicleRequired is returned by NewEngine when no audit trail was
+// configured. Authsome does not run without one: every security-relevant
+// action is recorded through Chronicle and there is no fallback sink.
+var ErrChronicleRequired = errors.New("authsome: a Chronicle audit trail is required; pass WithChronicle")
 
 // EnsureMigrated runs store migrations (core + plugin groups) if not disabled.
 // This is idempotent — safe to call multiple times. Use this to ensure tables
@@ -637,9 +646,6 @@ func (e *Engine) Start(ctx context.Context) error {
 	// Register the audit trail as the first hook handler so a refused record
 	// surfaces to EmitCritical callers before anything else runs.
 	e.hooks.On("chronicle", func(ctx context.Context, event *hook.Event) error {
-		if e.chronicle == nil {
-			return nil
-		}
 		if err := e.chronicle.Record(ctx, auditEventFromHook(event)); err != nil {
 			e.logger.Error("authsome: audit record failed",
 				log.String("action", event.Action),
@@ -876,7 +882,15 @@ func (e *Engine) Chronicle() bridge.Chronicle { return e.chronicle }
 
 // SetChronicle replaces the chronicle implementation. Intended for tests;
 // not safe for concurrent use after Start.
-func (e *Engine) SetChronicle(ch bridge.Chronicle) { e.chronicle = ch }
+func (e *Engine) SetChronicle(ch bridge.Chronicle) {
+	// A test seam only. Production code never swaps the audit sink after
+	// construction; importing "testing" registers no flags, so the check
+	// costs nothing outside test binaries.
+	if !testing.Testing() {
+		panic("authsome: SetChronicle is only available in tests")
+	}
+	e.chronicle = ch
+}
 
 // Authorizer returns the authorization bridge (may be nil).
 func (e *Engine) Authorizer() bridge.Authorizer { return e.authorizer }

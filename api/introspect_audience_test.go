@@ -16,6 +16,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/api"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/store/memory"
@@ -52,7 +53,7 @@ func newIntrospectAudienceEngine(t *testing.T, jwtFmt *tokenformat.JWT) *authsom
 		opts = append(opts, authsome.WithDefaultTokenFormat(jwtFmt))
 	}
 
-	eng, err := authsome.NewEngine(opts...)
+	eng, err := authsome.NewEngine(append([]authsome.Option{authsome.WithChronicle(bridge.NewMemoryChronicle())}, opts...)...)
 	require.NoError(t, err)
 	require.NoError(t, eng.Start(context.Background()))
 	secutil.RelaxAuthDefaults(t, eng)

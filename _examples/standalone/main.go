@@ -38,8 +38,13 @@ import (
 	"github.com/xraph/forge"
 	log "github.com/xraph/go-utils/log"
 
+	"github.com/xraph/chronicle"
+	chstore "github.com/xraph/chronicle/store"
+	chmemory "github.com/xraph/chronicle/store/memory"
+
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
+	"github.com/xraph/authsome/bridge/chronicleadapter"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugins/password"
 	"github.com/xraph/authsome/store/memory"
@@ -53,9 +58,18 @@ func main() {
 	// Create the in-memory store (swap with pgstore.New(db) for production).
 	store := memory.New()
 
+	// The audit trail is required. Chronicle records every security-relevant
+	// action into a hash chain; swap the memory store for a database-backed
+	// one in production so the trail survives restarts.
+	trail, err := chronicle.New(chronicle.WithStore(chstore.NewAdapter(chmemory.New())))
+	if err != nil {
+		logger.Fatal("create audit trail", log.Error(err))
+	}
+
 	// Build the AuthSome engine with desired plugins.
 	engine, err := authsome.NewEngine(
 		authsome.WithStore(store),
+		authsome.WithChronicle(chronicleadapter.New(trail)),
 		authsome.WithLogger(logger),
 		authsome.WithDisableMigrate(), // memory store has no migrations
 

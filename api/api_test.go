@@ -22,6 +22,7 @@ import (
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/appclientconfig"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
@@ -112,7 +113,7 @@ func newTestAPI(t *testing.T) (*api.API, *authsome.Engine) {
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -195,7 +196,7 @@ func TestHandleManifest_GroupedMount(t *testing.T) {
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -661,7 +662,7 @@ func TestSignIn_MFARequired_Returns403WithTicket(t *testing.T) {
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -1447,7 +1448,7 @@ func TestSignIn_MFAChallenge_RoundTripIssuesSession(t *testing.T) {
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -1566,7 +1567,7 @@ func TestMFAChallenge_BadCodeKeepsTicketUsable(t *testing.T) {
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -1646,7 +1647,7 @@ func mfaGateFixture(t *testing.T, email string) (http.Handler, string, mfa.Store
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),

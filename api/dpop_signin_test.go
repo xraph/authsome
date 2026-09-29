@@ -20,6 +20,7 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/jwkutil"
 	"github.com/xraph/authsome/internal/secutil"
@@ -61,7 +62,7 @@ func newTestAPIWithNonceSigner(t *testing.T) (*api.API, *authsome.Engine) {
 	})
 	require.NoError(t, err)
 
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),

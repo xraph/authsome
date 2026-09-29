@@ -24,6 +24,7 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/rbac"
@@ -226,7 +227,7 @@ func TestHasPermission_UnknownUser_Denied(t *testing.T) {
 // error when no warden engine is provided. Warden is required for RBAC.
 func TestHasPermission_NoWarden_ReturnsError(t *testing.T) {
 	s := memory.New()
-	_, err := authsome.NewEngine(
+	_, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithDisableMigrate(),
 		authsome.WithAppID("aapp_01jf0000000000000000000000"),
@@ -317,7 +318,7 @@ func TestHasPermission_WardenMemoryStore_NamespaceFilter(t *testing.T) {
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
 
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),

@@ -15,6 +15,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/middleware"
@@ -54,7 +55,7 @@ func e2eEngineWithAPIKey(t *testing.T) (*authsome.Engine, *memory.Store) {
 	akPlugin := apikeyPlugin.New()
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),

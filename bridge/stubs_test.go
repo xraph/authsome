@@ -12,38 +12,6 @@ import (
 	"github.com/xraph/authsome/bridge"
 )
 
-func TestSlogChronicle_Record(t *testing.T) {
-	c := bridge.NewSlogChronicle(log.NewNoopLogger())
-
-	err := c.Record(context.Background(), &bridge.AuditEvent{
-		Action:     "signup",
-		Resource:   "user",
-		ResourceID: "auth_usr_test123",
-		ActorID:    "auth_usr_test123",
-		Tenant:     "auth_app_test",
-		Outcome:    bridge.OutcomeSuccess,
-		Severity:   bridge.SeverityInfo,
-		Metadata:   map[string]string{"email": "test@example.com"},
-	})
-
-	assert.NoError(t, err)
-}
-
-func TestNoopAuthorizer_AlwaysAllows(t *testing.T) {
-	a := bridge.NewNoopAuthorizer()
-
-	result, err := a.Check(context.Background(), &bridge.AuthzRequest{
-		Subject:  "user:123",
-		Action:   "delete",
-		Resource: "user:456",
-		Tenant:   "app:test",
-	})
-
-	require.NoError(t, err)
-	assert.True(t, result.Allowed)
-	assert.Contains(t, result.Reason, "standalone mode")
-}
-
 func TestNoopKeyManager_CreateKey_ReturnsError(t *testing.T) {
 	km := bridge.NewNoopKeyManager()
 

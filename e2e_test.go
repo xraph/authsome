@@ -11,6 +11,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/device"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
@@ -65,6 +66,7 @@ func e2eEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *memory
 		authsome.WithConfig(testEngineConfig()),
 		authsome.WithAppID("aapp_01jf0000000000000000000000"),
 	}
+	baseOpts = append([]authsome.Option{authsome.WithChronicle(bridge.NewMemoryChronicle())}, baseOpts...)
 	eng, err := authsome.NewEngine(append(baseOpts, opts...)...)
 	require.NoError(t, err)
 
@@ -160,7 +162,7 @@ func e2eEngineWithOrg(t *testing.T) (*authsome.Engine, *memory.Store, *orgplugin
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
 	op := orgplugin.New()
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),

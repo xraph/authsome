@@ -14,6 +14,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/store/memory"
@@ -53,6 +54,7 @@ func newTestEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *me
 	allOpts := append([]authsome.Option{
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
+		authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithDisableMigrate(),
 		authsome.WithConfig(cfg),
 		authsome.WithAppID("aapp_01jf0000000000000000000000"),
@@ -133,8 +135,9 @@ func TestEngine_Accessors(t *testing.T) {
 	assert.NotNil(t, eng.Strategies())
 	assert.NotNil(t, eng.Logger())
 
-	// Optional bridges should be nil by default (except authorizer, set by warden)
-	assert.Nil(t, eng.Chronicle())
+	// Optional bridges should be nil by default. Chronicle and the authorizer
+	// are required, so they are always present.
+	assert.NotNil(t, eng.Chronicle())
 	assert.NotNil(t, eng.Authorizer()) // Warden is required and sets the authorizer
 	assert.Nil(t, eng.KeyManager())
 	assert.Nil(t, eng.Relay())
@@ -145,17 +148,28 @@ func TestEngine_Accessors(t *testing.T) {
 
 func TestEngine_WithBridges(t *testing.T) {
 	eng, _ := newTestEngine(t,
-		authsome.WithChronicle(nil), // nil is acceptable
 		authsome.WithAuthorizer(nil),
 		authsome.WithKeyManager(nil),
 		authsome.WithEventRelay(nil),
 	)
 
 	// They're nil because we passed nil
-	assert.Nil(t, eng.Chronicle())
 	assert.Nil(t, eng.Authorizer())
 	assert.Nil(t, eng.KeyManager())
 	assert.Nil(t, eng.Relay())
+}
+
+func TestEngine_NilChronicleIsRefused(t *testing.T) {
+	s := memory.New()
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+	_, err = authsome.NewEngine(
+		authsome.WithStore(s),
+		authsome.WithWarden(w),
+		authsome.WithChronicle(nil),
+		authsome.WithDisableMigrate(),
+	)
+	require.ErrorIs(t, err, authsome.ErrChronicleRequired)
 }
 
 func TestEngine_Metrics(t *testing.T) {
@@ -218,7 +232,7 @@ func TestEngine_EnsureMigrated_Idempotent(t *testing.T) {
 	s := memory.New()
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(authsome.WithStore(s), authsome.WithWarden(w), authsome.WithDisableMigrate())
+	eng, err := authsome.NewEngine(authsome.WithStore(s), authsome.WithWarden(w), authsome.WithChronicle(bridge.NewMemoryChronicle()), authsome.WithDisableMigrate())
 	require.NoError(t, err)
 
 	// EnsureMigrated should succeed (no-op when DisableMigrate is set)
@@ -235,7 +249,7 @@ func TestEngine_RequireStarted_SignUp(t *testing.T) {
 	s := memory.New()
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(authsome.WithStore(s), authsome.WithWarden(w), authsome.WithDisableMigrate())
+	eng, err := authsome.NewEngine(authsome.WithStore(s), authsome.WithWarden(w), authsome.WithChronicle(bridge.NewMemoryChronicle()), authsome.WithDisableMigrate())
 	require.NoError(t, err)
 
 	// SignUp before Start should return ErrNotStarted
@@ -258,7 +272,7 @@ func TestEngine_RequireStarted_SignIn(t *testing.T) {
 	s := memory.New()
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(authsome.WithStore(s), authsome.WithWarden(w), authsome.WithDisableMigrate())
+	eng, err := authsome.NewEngine(authsome.WithStore(s), authsome.WithWarden(w), authsome.WithChronicle(bridge.NewMemoryChronicle()), authsome.WithDisableMigrate())
 	require.NoError(t, err)
 
 	// SignIn before Start should return ErrNotStarted
@@ -273,7 +287,7 @@ func TestEngine_HasUsers_BeforeStart(t *testing.T) {
 	s := memory.New()
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(authsome.WithStore(s), authsome.WithWarden(w), authsome.WithDisableMigrate())
+	eng, err := authsome.NewEngine(authsome.WithStore(s), authsome.WithWarden(w), authsome.WithChronicle(bridge.NewMemoryChronicle()), authsome.WithDisableMigrate())
 	require.NoError(t, err)
 
 	// HasUsers should return false before Start (engine not started guard)

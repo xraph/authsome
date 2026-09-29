@@ -17,6 +17,7 @@ import (
 
 	"github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
@@ -36,7 +37,7 @@ func newBootstrappedAPI(t *testing.T) (*api.API, *authsome.Engine) {
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),

@@ -26,6 +26,7 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/plugins/apikey"
 	"github.com/xraph/authsome/plugins/consent"
 	"github.com/xraph/authsome/plugins/magiclink"
@@ -133,6 +134,8 @@ func run(outPath, title, version string) error {
 		authsome.WithStore(store),
 		authsome.WithLogger(logger),
 		authsome.WithWarden(wardenEng),
+		// Spec generation only walks routes; the trail is never written.
+		authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithDisableMigrate(),
 
 		// Core

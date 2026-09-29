@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/store/memory"
 
 	"github.com/xraph/warden"
@@ -249,7 +250,7 @@ func TestContributor_DefaultAppID_UsesPlatformAppID(t *testing.T) {
 		t.Fatalf("create warden: %v", err)
 	}
 
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -282,7 +283,7 @@ func TestContributor_DefaultAppID_FallsBackToConfig(t *testing.T) {
 		t.Fatalf("create warden: %v", err)
 	}
 
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),

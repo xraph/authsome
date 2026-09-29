@@ -19,6 +19,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
 	authmw "github.com/xraph/authsome/middleware"
@@ -150,6 +151,7 @@ func NewTestServer(t *testing.T, opts ...ServerOption) *TestServer {
 		authsome.WithStore(store),
 		authsome.WithLogger(logger),
 		authsome.WithWarden(wardenEng),
+		authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithDisableMigrate(),
 		authsome.WithAppID(cfg.appID),
 		// Core plugins

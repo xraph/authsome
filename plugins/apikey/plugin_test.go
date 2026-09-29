@@ -913,7 +913,7 @@ func TestPlugin_OnInit_PrincipalAuthGateSignatureMatchesRealEngine(t *testing.T)
 	s := memoryStore.New()
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
