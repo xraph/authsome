@@ -135,6 +135,10 @@ The ACS (Assertion Consumer Service) endpoint receives the SAML response from th
 
 In IdP-initiated SAML flows, the user starts at the identity provider dashboard and clicks the application tile. The IdP sends a SAML response directly to the ACS endpoint without a prior authentication request. The plugin validates the `RelayState` if present.
 
+## Browser binding
+
+A login that a browser starts is bound to that browser. The start response sets a `__Host-authsome_oauth_state` cookie (over plain http in development, `authsome_oauth_state`) holding a digest of the login's state, and the OIDC redirect landing and the SAML assertion consumer service refuse a callback for that state that arrives without the matching cookie, before any identity provider response is examined. A start that carries no fetch metadata and no `Origin`, which is what a native client looks like, sets no cookie and is bound by the state and, for OIDC, the PKCE verifier alone.
+
 ## Domain-based SSO routing
 
 For applications that serve multiple organizations, route users to the correct SSO provider based on their email domain:

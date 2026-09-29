@@ -27,6 +27,7 @@ import (
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/browserbind"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
@@ -735,6 +736,13 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		"pkce_verifier": pkceVerifier,
 		"oidc_nonce":    oidcNonce,
 	}
+	// A login started by a browser is bound to that browser: the callback
+	// must carry the cookie set below. A native client sends neither fetch
+	// metadata nor an Origin and stays bound by state and PKCE alone.
+	fromBrowser := browserbind.IsBrowser(ctx.Request())
+	if fromBrowser {
+		stateInfo["browser"] = "1"
+	}
 	stateData, _ := json.Marshal(stateInfo) //nolint:errcheck // marshaling known types
 	// Namespace the state key by app so a state minted for app A can't
 	// be replayed against app B's callback even if both share the same
@@ -752,6 +760,9 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		oauth2.SetAuthURLParam("nonce", oidcNonce),
 	)
 
+	if fromBrowser {
+		browserbind.SetStateCookie(ctx.Response(), ctx.Request(), state)
+	}
 	return &StartResponse{AuthURL: authURL}, nil
 }
 
@@ -857,6 +868,9 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	var stateInfo map[string]string
 	if unmarshalErr := json.Unmarshal(stateData, &stateInfo); unmarshalErr != nil || stateInfo["provider"] != req.Provider {
 		return nil, forge.BadRequest("invalid state parameter")
+	}
+	if stateInfo["browser"] == "1" && !browserbind.Matches(ctx.Request(), req.State) {
+		return nil, forge.BadRequest("this login was started in a different browser; start again")
 	}
 
 	// Resolve the app ID from the state (set during handleStart).

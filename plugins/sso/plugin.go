@@ -24,6 +24,7 @@ import (
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/browserbind"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/plugin"
@@ -570,6 +571,9 @@ type ssoState struct {
 	// verifier. Empty for SAML.
 	Nonce        string `json:"nonce,omitempty"`
 	CodeVerifier string `json:"code_verifier,omitempty"`
+	// Browser marks a login a web browser started. Its callback must carry
+	// the state-binding cookie set at that start.
+	Browser bool `json:"browser,omitempty"`
 }
 
 // pkceProvider is implemented by providers that can carry a nonce and an
@@ -649,14 +653,18 @@ func (p *Plugin) handleLogin(ctx forge.Context, req *LoginRequest) (*LoginRespon
 	if conn != nil {
 		connID = conn.ID.String()
 	}
-	return p.startLogin(ctx.Context(), appID, provider, req.Provider, connID, req.ReturnURL)
+	return p.startLogin(ctx.Context(), appID, provider, req.Provider, connID, req.ReturnURL, ctx.Response(), ctx.Request())
 }
 
 // startLogin generates a CSRF state (carrying the app + return URL), caches it,
 // and returns the IdP login URL. Shared by provider-name and email-domain entry
 // points. The return URL is validated here (login is publishable-key-authed), so
 // the opaque state token that round-trips through the IdP can't be tampered with.
-func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provider, providerName, connID, returnURL string) (*LoginResponse, error) {
+//
+// w and r are the start request's response and request: when r came from a
+// browser the state is bound to it with a cookie written on w. Both may be
+// nil for callers that have no request.
+func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provider, providerName, connID, returnURL string, w http.ResponseWriter, r *http.Request) (*LoginResponse, error) {
 	if returnURL != "" && !p.isAllowedReturnURL(returnURL) {
 		return nil, forge.BadRequest("return_url is not allowed")
 	}
@@ -685,10 +693,14 @@ func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provid
 		return nil, forge.InternalError(fmt.Errorf("failed to get login URL: %w", err))
 	}
 
+	fromBrowser := w != nil && browserbind.IsBrowser(r)
 	stateData, _ := json.Marshal(ssoState{ //nolint:errcheck // best-effort cache
 		Provider: providerName, AppID: appID.String(), ReturnURL: returnURL, RequestID: requestID, ConnID: connID,
-		Nonce: nonce, CodeVerifier: verifier,
+		Nonce: nonce, CodeVerifier: verifier, Browser: fromBrowser,
 	})
+	if fromBrowser {
+		browserbind.SetStateCookie(w, r, state)
+	}
 	_ = p.ceremonies.Set(ctx, "sso:state:"+state, stateData, 10*time.Minute) //nolint:errcheck // best-effort cache
 
 	return &LoginResponse{
@@ -753,7 +765,7 @@ func (p *Plugin) handleLoginByDomain(ctx forge.Context, req *LoginByDomainReques
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("sso: build provider: %w", err))
 	}
-	return p.startLogin(ctx.Context(), appID, provider, conn.Provider, conn.ID.String(), req.ReturnURL)
+	return p.startLogin(ctx.Context(), appID, provider, conn.Provider, conn.ID.String(), req.ReturnURL, ctx.Response(), ctx.Request())
 }
 
 // handleSPMetadata serves the SAML SP metadata XML for an IdP to consume. Raw
@@ -876,6 +888,9 @@ func (p *Plugin) handleOIDCRedirect(ctx forge.Context) error {
 	if serr != nil {
 		return fail("invalid_state")
 	}
+	if st.Browser && !browserbind.Matches(r, state) {
+		return fail("state_cookie_missing")
+	}
 	if providerErr != "" {
 		return fail(providerErr)
 	}
@@ -947,16 +962,21 @@ func (p *Plugin) handleACS(ctx forge.Context) error {
 	// IdP-initiated (gated by AllowIDPInitiated).
 	returnURL := ""
 	requestID := ""
+	boundToBrowser := false
 	if relayState != "" {
 		if st, serr := p.loadState(ctx.Context(), relayState, name); serr == nil {
 			returnURL = st.ReturnURL
 			requestID = st.RequestID
+			boundToBrowser = st.Browser
 		}
 	}
 
 	fail := func(reason string) error {
 		http.Redirect(ctx.Response(), r, p.errorRedirect(returnURL, reason), http.StatusFound)
 		return nil
+	}
+	if boundToBrowser && !browserbind.Matches(r, relayState) {
+		return fail("state_cookie_missing")
 	}
 
 	// Resolve the connection (and its app) from `?connection=`; fall back to
@@ -1219,6 +1239,9 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 	ssoUser, err := provider.HandleCallback(ctx.Context(), params)
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("sso: callback failed: %w", err))
+	}
+	if ssoUser == nil {
+		return nil, forge.InternalError(errors.New("sso: provider returned no user"))
 	}
 
 	goCtx := ctx.Context()
