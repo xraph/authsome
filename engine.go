@@ -980,6 +980,13 @@ func (e *Engine) TokenEncryptor() bridge.Encryptor {
 	return e.tokenEncryptor
 }
 
+// LegacyPlaintextSecretReads reports how many stored secrets have been read
+// back without an encryption envelope since this process started: rows
+// written before at-rest encryption was deployed. When it stays at zero
+// across a full cycle of the workload, every such row has been rewritten and
+// Config.TokenEncryption.Strict can be turned on.
+func (e *Engine) LegacyPlaintextSecretReads() uint64 { return bridge.LegacyPlaintextReads() }
+
 // Dispatcher returns the job queue bridge (may be nil).
 func (e *Engine) Dispatcher() bridge.Dispatcher { return e.dispatcher }
 

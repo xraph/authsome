@@ -145,6 +145,7 @@ func (r *Keyring) Decrypt(ciphertext []byte) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("bridge: keyring: no key opens this v1 envelope: %w", last)
 	default:
+		notePlaintextRead(ciphertext)
 		return ciphertext, nil
 	}
 }

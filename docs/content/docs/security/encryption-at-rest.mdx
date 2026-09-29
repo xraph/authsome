@@ -48,7 +48,7 @@ The same values can be set in code through `Config.TokenEncryption.Keys`, which 
 
 ### Strict mode
 
-A row written before encryption was deployed carries no envelope, and the encryptor passes it through so those rows stay readable. Once every such row has been rewritten, turn on strict mode with `Config.TokenEncryption.Strict` or `AUTHSOME_TOKEN_ENCRYPTION_STRICT=true`. From then on a value that reads back without an envelope is refused with `ErrPlaintextRefused`: after the migration it can only be tampering or a write that bypassed encryption. Count the unenveloped rows before enabling it; a refusal takes that connection or factor out of service until the row is fixed.
+A row written before encryption was deployed carries no envelope, and the encryptor passes it through so those rows stay readable. Once every such row has been rewritten, turn on strict mode with `Config.TokenEncryption.Strict` or `AUTHSOME_TOKEN_ENCRYPTION_STRICT=true`. From then on a value that reads back without an envelope is refused with `ErrPlaintextRefused`: after the migration it can only be tampering or a write that bypassed encryption. `Engine.LegacyPlaintextSecretReads` counts the unenveloped values read since the process started; when it stays at zero across a full cycle of the workload, strict mode is safe. A refusal takes that connection or factor out of service until the row is fixed.
 
 ## API key pepper
 

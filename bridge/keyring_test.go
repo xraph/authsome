@@ -85,6 +85,13 @@ func TestStrict_RefusesPlaintextAndPassesEnvelopes(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "legacy plaintext", string(pt), "a lenient ring passes legacy rows through")
 
+	before := LegacyPlaintextReads()
+	_, err = ring.Decrypt([]byte("another legacy row"))
+	require.NoError(t, err)
+	_, err = ring.Decrypt(nil)
+	require.NoError(t, err)
+	assert.Equal(t, before+1, LegacyPlaintextReads(), "each non-empty passthrough is counted, an empty column is not")
+
 	strict := NewStrict(ring)
 	_, err = strict.Decrypt([]byte("legacy plaintext"))
 	assert.ErrorIs(t, err, ErrPlaintextRefused)

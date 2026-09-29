@@ -73,7 +73,8 @@ func (e *AESGCMEncryptor) Encrypt(plaintext []byte) ([]byte, error) {
 // written before at-rest encryption was deployed.
 func (e *AESGCMEncryptor) Decrypt(ciphertext []byte) ([]byte, error) {
 	if !hasPrefix(ciphertext, envelopeV1Prefix) {
-		// Legacy plaintext row — return as-is.
+		// Legacy plaintext row: return as-is, and count it.
+		notePlaintextRead(ciphertext)
 		return ciphertext, nil
 	}
 	body := ciphertext[len(envelopeV1Prefix):]
