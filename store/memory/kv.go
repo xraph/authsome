@@ -67,6 +67,17 @@ func (s *Store) KVIncrement(_ context.Context, key string, ttl time.Duration) (i
 	return e.counter, nil
 }
 
+// KVCounter implements store.KV.
+func (s *Store) KVCounter(_ context.Context, key string) (int64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	e, ok := s.kv[key]
+	if !ok || e.expired(time.Now().UnixMilli()) {
+		return 0, nil
+	}
+	return e.counter, nil
+}
+
 // KVDelete implements store.KV.
 func (s *Store) KVDelete(_ context.Context, key string) error {
 	s.mu.Lock()

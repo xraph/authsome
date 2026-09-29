@@ -18,6 +18,8 @@ import (
 
 	log "github.com/xraph/go-utils/log"
 
+	authsome "github.com/xraph/authsome"
+
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/account"
@@ -257,31 +259,34 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Public OAuth2 endpoints
 	g := router.Group("/v1/oauth", forge.WithGroupTags("OAuth2"))
 
-	if err := g.GET("/authorize", p.handleAuthorize,
+	authorizeRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int { return c.OAuthAuthorizeLimit })
+	tokenRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int { return c.OAuthTokenLimit })
+
+	if err := g.GET("/authorize", p.handleAuthorize, append([]forge.RouteOption{
 		forge.WithSummary("OAuth2 Authorization"),
 		forge.WithDescription("Authorization endpoint for the OAuth2 authorization code flow."),
 		forge.WithOperationID("oauth2Authorize"),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, authorizeRL...)...); err != nil {
 		return err
 	}
 
-	if err := g.POST("/token", p.handleToken,
+	if err := g.POST("/token", p.handleToken, append([]forge.RouteOption{
 		forge.WithSummary("OAuth2 Token"),
 		forge.WithDescription("Token endpoint for exchanging authorization codes or client credentials for access tokens."),
 		forge.WithOperationID("oauth2Token"),
 		forge.WithResponseSchema(http.StatusOK, "Token response", TokenResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, tokenRL...)...); err != nil {
 		return err
 	}
 
-	if err := g.POST("/revoke", p.handleRevoke,
+	if err := g.POST("/revoke", p.handleRevoke, append([]forge.RouteOption{
 		forge.WithSummary("Revoke token"),
 		forge.WithDescription("Revokes an access or refresh token."),
 		forge.WithOperationID("oauth2Revoke"),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, tokenRL...)...); err != nil {
 		return err
 	}
 
@@ -296,13 +301,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	// Device Authorization Grant (RFC 8628) — public endpoint
-	if err := g.POST("/device/authorize", p.handleDeviceAuthorize,
+	if err := g.POST("/device/authorize", p.handleDeviceAuthorize, append([]forge.RouteOption{
 		forge.WithSummary("Device Authorization"),
 		forge.WithDescription("Device authorization endpoint (RFC 8628). Returns a device_code and user_code for device/CLI authentication."),
 		forge.WithOperationID("oauth2DeviceAuthorize"),
 		forge.WithResponseSchema(http.StatusOK, "Device authorization response", DeviceAuthResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, tokenRL...)...); err != nil {
 		return err
 	}
 

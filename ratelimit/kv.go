@@ -2,7 +2,6 @@ package ratelimit
 
 import (
 	"context"
-	"errors"
 	"strconv"
 	"time"
 
@@ -47,17 +46,15 @@ func (l *KVLimiter) Allow(ctx context.Context, key string, limit int, dur time.D
 }
 
 // Remaining reports how many requests are left in the current window
-// without counting one. The KV contract exposes the count only through an
-// increment, so this answers the full limit for an untouched window and
-// zero once the window has been used; the middleware only reads it after a
-// refusal, where zero is the truth.
+// without counting one.
 func (l *KVLimiter) Remaining(ctx context.Context, key string, limit int, dur time.Duration) (int, error) {
-	_, err := l.kv.KVGet(ctx, windowKey(key, time.Now(), dur))
+	n, err := l.kv.KVCounter(ctx, windowKey(key, time.Now(), dur))
 	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return limit, nil
-		}
 		return 0, err
 	}
-	return 0, nil
+	remaining := limit - int(n)
+	if remaining < 0 {
+		remaining = 0
+	}
+	return remaining, nil
 }

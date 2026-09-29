@@ -71,11 +71,18 @@ func testKVIncrementWindow(t *testing.T, s store.Store) {
 	ctx := context.Background()
 	key := kvKey("inc")
 
+	n0, err := s.KVCounter(ctx, key)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), n0, "an absent counter reads as zero")
+
 	for want := int64(1); want <= 3; want++ {
-		n, err := s.KVIncrement(ctx, key, time.Minute)
-		require.NoError(t, err)
+		n, incErr := s.KVIncrement(ctx, key, time.Minute)
+		require.NoError(t, incErr)
 		assert.Equal(t, want, n)
 	}
+	read, err := s.KVCounter(ctx, key)
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), read, "the counter reads back without changing")
 
 	// The window is fixed from the first increment: a later increment does
 	// not extend it, so an expired counter starts over at one.

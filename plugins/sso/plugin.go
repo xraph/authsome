@@ -393,7 +393,13 @@ func (p *Plugin) entityIDFor(conn *Connection) string {
 
 // RegisterRoutes registers SSO HTTP endpoints on a forge.Router.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
-	g := router.Group("/v1/sso", forge.WithGroupTags("SSO"))
+	// One budget for the public SSO surface: every route here either starts
+	// a federation round-trip or consumes an assertion.
+	groupOpts := []forge.GroupOption{forge.WithGroupTags("SSO")}
+	if mw := authsome.PluginRateLimitMiddleware(p.engine, func(c authsome.RateLimitConfig) int { return c.SSOLimit }); mw != nil {
+		groupOpts = append(groupOpts, forge.WithGroupMiddleware(mw))
+	}
+	g := router.Group("/v1/sso", groupOpts...)
 
 	if err := g.POST("/:provider/login", p.handleLogin,
 		forge.WithSummary("Start SSO login flow"),

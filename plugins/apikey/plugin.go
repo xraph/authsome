@@ -10,6 +10,8 @@ import (
 
 	log "github.com/xraph/go-utils/log"
 
+	authsome "github.com/xraph/authsome"
+
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/apikey"
@@ -21,6 +23,7 @@ import (
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -112,6 +115,13 @@ type Plugin struct {
 	engine           plugin.Engine
 	permChecker      plugin.PermissionChecker
 
+	// failLimiter counts failed key authentications per client address so
+	// a guessed key does not get unlimited tries. Nil when the engine has
+	// rate limiting off.
+	failLimiter ratelimit.Limiter
+	failLimit   int
+	failWindow  time.Duration
+
 	// gate scores every machine caller through the principal-auth hooks
 	// before a session is minted. Populated from the engine during OnInit
 	// when the engine implements plugin.PrincipalAuthGateProvider; nil
@@ -157,6 +167,11 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.resolvePrincipal = engine.ResolvePrincipal
 	p.defaultAppID = engine.DefaultAppID()
 	p.engine = engine
+	if rl, cfg, ok := authsome.PluginLimiter(engine); ok {
+		p.failLimiter = rl
+		p.failLimit = cfg.APIKeyFailureLimit
+		p.failWindow = cfg.Window()
+	}
 
 	if pc, ok := engine.(plugin.PermissionChecker); ok {
 		p.permChecker = pc
@@ -196,6 +211,9 @@ func (p *Plugin) Strategy() strategy.Strategy {
 		resolveUser:      p.resolveUser,
 		resolvePrincipal: p.resolvePrincipal,
 		gate:             p.gate,
+		failLimiter:      p.failLimiter,
+		failLimit:        p.failLimit,
+		failWindow:       p.failWindow,
 	}
 }
 
@@ -591,6 +609,38 @@ type apikeyStrategy struct {
 	// engine does not provide one (e.g. in isolated unit tests), in which
 	// case Authenticate does not score at all.
 	gate PrincipalAuthGate
+
+	// failLimiter, failLimit and failWindow throttle failed authentications
+	// per client address. Nil limiter means no throttle.
+	failLimiter ratelimit.Limiter
+	failLimit   int
+	failWindow  time.Duration
+}
+
+func failureKey(r *http.Request) string { return "apikey-fail:" + middleware.ClientIP(r) }
+
+// exhausted reports whether the client address has already spent its
+// failed-attempt budget for the window.
+func (s *apikeyStrategy) exhausted(ctx context.Context, r *http.Request) bool {
+	if s.failLimiter == nil || s.failLimit <= 0 {
+		return false
+	}
+	remaining, err := s.failLimiter.Remaining(ctx, failureKey(r), s.failLimit, s.failWindow)
+	if err != nil {
+		// A limiter that cannot answer refuses: the same fail-closed rule
+		// the route middleware applies.
+		return true
+	}
+	return remaining <= 0
+}
+
+// refuse counts a failed authentication against the client address and
+// returns err unchanged.
+func (s *apikeyStrategy) refuse(ctx context.Context, r *http.Request, err error) (*strategy.Result, error) {
+	if s.failLimiter != nil && s.failLimit > 0 {
+		_, _ = s.failLimiter.Allow(ctx, failureKey(r), s.failLimit, s.failWindow) //nolint:errcheck // counting only
+	}
+	return nil, err
 }
 
 // serviceAccountState returns the service account's registered kind and
@@ -630,6 +680,13 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 		return nil, strategy.NotApplicableError{}
 	}
 
+	// An address that has spent its failed-attempt budget is refused before
+	// any lookup, so guessing keys costs the guesser the window, not the
+	// store a query per guess.
+	if s.exhausted(ctx, r) {
+		return nil, fmt.Errorf("apikey: too many failed attempts from this address")
+	}
+
 	// Reject public keys — they are not for authentication.
 	if apikey.IsPublicKey(rawKey) {
 		return nil, fmt.Errorf("apikey: public keys (pk_*) cannot be used for authentication; use the secret key (sk_*) instead")
@@ -657,16 +714,16 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 
 	key, err := s.store.GetAPIKeyByPrefix(ctx, appID, prefix)
 	if err != nil {
-		return nil, fmt.Errorf("apikey: key not found")
+		return s.refuse(ctx, r, fmt.Errorf("apikey: key not found"))
 	}
 
 	// Verify the raw key against stored hash
 	if !apikey.VerifyKey(rawKey, key.KeyHash) {
-		return nil, fmt.Errorf("apikey: invalid key")
+		return s.refuse(ctx, r, fmt.Errorf("apikey: invalid key"))
 	}
 
 	if !key.IsValid() {
-		return nil, fmt.Errorf("apikey: key is revoked or expired")
+		return s.refuse(ctx, r, fmt.Errorf("apikey: key is revoked or expired"))
 	}
 
 	// Update last used timestamp (best-effort, don't fail auth)
@@ -695,7 +752,7 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 		subjectKind, active = s.serviceAccountState(ctx, key.ServiceAccountID, now)
 		if !active {
 			// A disabled or expired service account keeps no working keys.
-			return nil, fmt.Errorf("apikey: service account is not active")
+			return s.refuse(ctx, r, fmt.Errorf("apikey: service account is not active"))
 		}
 		subject = principal.Ref{Kind: subjectKind, ID: key.ServiceAccountID.String()}
 	}
@@ -750,7 +807,7 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 		return nil, fmt.Errorf("apikey: resolve user: %w", err)
 	}
 	if u.IsBanned(now) {
-		return nil, fmt.Errorf("apikey: user is banned")
+		return s.refuse(ctx, r, fmt.Errorf("apikey: user is banned"))
 	}
 
 	// Create a synthetic (non-persisted) session for context propagation.

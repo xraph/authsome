@@ -30,6 +30,10 @@ type KV interface {
 	// existing key keeps its expiry.
 	KVIncrement(ctx context.Context, key string, ttl time.Duration) (int64, error)
 
+	// KVCounter returns the counter under key without changing it, or zero
+	// when the key is absent or expired.
+	KVCounter(ctx context.Context, key string) (int64, error)
+
 	// KVDelete removes key. Deleting an absent key is not an error.
 	KVDelete(ctx context.Context, key string) error
 

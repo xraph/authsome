@@ -41,6 +41,9 @@ type Plugin struct {
 	settings     *settings.Manager
 	plugins      *plugin.Registry
 	defaultAppID string
+	// engine is kept for the route-level rate limiter, which reads the
+	// engine's limiter and limits.
+	engine plugin.Engine
 }
 
 // New creates a new SCIM plugin with the given configuration.
@@ -58,6 +61,7 @@ func (p *Plugin) Name() string { return "scim" }
 
 // OnInit captures bridge and engine references.
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.engine = engine
 	p.authStore = engine.Store()
 	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.relay = engine.Relay()

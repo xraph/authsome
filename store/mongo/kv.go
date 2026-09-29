@@ -97,6 +97,19 @@ func (s *Store) KVIncrement(ctx context.Context, key string, ttl time.Duration) 
 	return m.Counter, nil
 }
 
+// KVCounter implements store.KV.
+func (s *Store) KVCounter(ctx context.Context, key string) (int64, error) {
+	var m kvModel
+	err := s.kvColl().FindOne(ctx, bson.M{"_id": key, "expires_at": bson.M{"$gt": time.Now().UnixMilli()}}).Decode(&m)
+	if err != nil {
+		if isNoDocuments(err) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("authsome/mongo: kv counter: %w", err)
+	}
+	return m.Counter, nil
+}
+
 // KVDelete implements store.KV.
 func (s *Store) KVDelete(ctx context.Context, key string) error {
 	if _, err := s.kvColl().DeleteOne(ctx, bson.M{"_id": key}); err != nil {

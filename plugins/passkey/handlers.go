@@ -13,6 +13,8 @@ import (
 	"github.com/xraph/forge"
 	log "github.com/xraph/go-utils/log"
 
+	authsome "github.com/xraph/authsome"
+
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
@@ -38,42 +40,45 @@ func cloneWarningError(cred *webauthn.Credential) error {
 // RegisterRoutes registers passkey/WebAuthn HTTP endpoints on a forge.Router.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	g := router.Group("/v1/passkeys", forge.WithGroupTags("Passkeys"))
+	// Every ceremony endpoint takes a guessable secret or mints one, so all
+	// four share the passkey budget.
+	ceremonyRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int { return c.PasskeyLimit })
 
-	if err := g.POST("/register/begin", p.handleRegisterBegin,
+	if err := g.POST("/register/begin", p.handleRegisterBegin, append([]forge.RouteOption{
 		forge.WithSummary("Begin passkey registration"),
 		forge.WithOperationID("passkeyRegisterBegin"),
 		forge.WithResponseSchema(http.StatusOK, "Registration options", RegisterBeginResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, ceremonyRL...)...); err != nil {
 		return err
 	}
 
-	if err := g.POST("/register/finish", p.handleRegisterFinish,
+	if err := g.POST("/register/finish", p.handleRegisterFinish, append([]forge.RouteOption{
 		forge.WithSummary("Complete passkey registration"),
 		forge.WithOperationID("passkeyRegisterFinish"),
 		forge.WithRequestBodySchema(Attestation{}),
 		forge.WithResponseSchema(http.StatusOK, "Registered", RegisterFinishResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, ceremonyRL...)...); err != nil {
 		return err
 	}
 
-	if err := g.POST("/login/begin", p.handleLoginBegin,
+	if err := g.POST("/login/begin", p.handleLoginBegin, append([]forge.RouteOption{
 		forge.WithSummary("Begin passkey login"),
 		forge.WithOperationID("passkeyLoginBegin"),
 		forge.WithResponseSchema(http.StatusOK, "Assertion options", LoginBeginResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, ceremonyRL...)...); err != nil {
 		return err
 	}
 
-	if err := g.POST("/login/finish", p.handleLoginFinish,
+	if err := g.POST("/login/finish", p.handleLoginFinish, append([]forge.RouteOption{
 		forge.WithSummary("Complete passkey login"),
 		forge.WithOperationID("passkeyLoginFinish"),
 		forge.WithRequestBodySchema(Assertion{}),
 		forge.WithResponseSchema(http.StatusOK, "Authenticated", LoginFinishResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, ceremonyRL...)...); err != nil {
 		return err
 	}
 

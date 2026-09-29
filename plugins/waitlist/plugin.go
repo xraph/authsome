@@ -10,6 +10,8 @@ import (
 
 	log "github.com/xraph/go-utils/log"
 
+	authsome "github.com/xraph/authsome"
+
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/account"
@@ -178,14 +180,16 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	pub := router.Group(p.basePath+"/waitlist", forge.WithGroupTags("Waitlist"))
 
-	if err := pub.POST("/join", p.handleJoin,
+	// Joining writes a row and may send mail, so it is throttled by address.
+	joinRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int { return c.WaitlistJoinLimit })
+	if err := pub.POST("/join", p.handleJoin, append([]forge.RouteOption{
 		forge.WithSummary("Join waitlist"),
 		forge.WithDescription("Submit an email to join the waitlist. Idempotent — returns existing entry if already on the list."),
 		forge.WithOperationID("joinWaitlist"),
 		forge.WithRequestSchema(JoinRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Waitlist entry", WaitlistEntry{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, joinRL...)...); err != nil {
 		return err
 	}
 

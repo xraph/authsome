@@ -31,25 +31,33 @@ func (a *API) registerPasswordRoutes(router forge.Router) error {
 		return err
 	}
 
-	if err := g.POST("/reset-password", a.handleResetPassword,
+	// A reset token and a current password are both guessable secrets, so
+	// the routes that consume them are throttled like sign-in.
+	resetOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
+	resetOpts = append(resetOpts,
 		forge.WithSummary("Reset password"),
 		forge.WithDescription("Resets a user's password using a reset token. Revokes all existing sessions."),
 		forge.WithOperationID("resetPassword"),
 		forge.WithRequestSchema(ResetPasswordRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Password reset", StatusResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	)
+	resetOpts = append(resetOpts, a.rateLimitOpt(rlCfg.ResetPasswordLimit)...)
+	if err := g.POST("/reset-password", a.handleResetPassword, resetOpts...); err != nil {
 		return err
 	}
 
-	if err := g.POST("/change-password", a.handleChangePassword,
+	changeOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
+	changeOpts = append(changeOpts,
 		forge.WithSummary("Change password"),
 		forge.WithDescription("Changes the authenticated user's password. Requires current password."),
 		forge.WithOperationID("changePassword"),
 		forge.WithRequestSchema(ChangePasswordRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Password changed", StatusResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	)
+	changeOpts = append(changeOpts, a.rateLimitOpt(rlCfg.ChangePasswordLimit)...)
+	if err := g.POST("/change-password", a.handleChangePassword, changeOpts...); err != nil {
 		return err
 	}
 

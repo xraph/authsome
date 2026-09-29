@@ -25,6 +25,29 @@ func (e *Engine) RateLimitOptions(limit int) []forge.RouteOption {
 	}
 }
 
+// RateLimitMiddleware returns the throttling middleware for limit requests
+// per window, or nil when rate limiting is off or the limit is zero. Route
+// groups that share one budget (SSO, SCIM) mount it as a group middleware.
+func (e *Engine) RateLimitMiddleware(limit int) forge.Middleware {
+	rl := e.RateLimiter()
+	cfg := e.Config().RateLimit
+	if rl == nil || !cfg.Enabled || limit <= 0 {
+		return nil
+	}
+	return middleware.RateLimit(rl, e.RateLimitMiddlewareConfig(limit))
+}
+
+// PluginRateLimitMiddleware is RateLimitMiddleware for a plugin that holds
+// the engine as plugin.Engine; nil when the engine is not the concrete
+// *Engine or limiting is off.
+func PluginRateLimitMiddleware(engine any, pick func(RateLimitConfig) int) forge.Middleware {
+	eng, ok := engine.(*Engine)
+	if !ok || eng == nil {
+		return nil
+	}
+	return eng.RateLimitMiddleware(pick(eng.Config().RateLimit))
+}
+
 // RateLimitMiddlewareConfig builds the middleware configuration for limit
 // requests per window: the configured window, the fail-open switch and a
 // counter for limiter errors.

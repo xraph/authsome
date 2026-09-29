@@ -91,6 +91,22 @@ RETURNING counter`,
 	return counter, nil
 }
 
+// KVCounter implements store.KV.
+func (s *Store) KVCounter(ctx context.Context, key string) (int64, error) {
+	m := new(KVModel)
+	err := s.pg.NewSelect(m).
+		Where("key = ?", key).
+		Where("expires_at > ?", time.Now().UnixMilli()).
+		Scan(ctx)
+	if err != nil {
+		if errors.Is(pgError(err), store.ErrNotFound) {
+			return 0, nil
+		}
+		return 0, pgError(err)
+	}
+	return m.Counter, nil
+}
+
 // KVDelete implements store.KV.
 func (s *Store) KVDelete(ctx context.Context, key string) error {
 	_, err := s.pg.NewDelete((*KVModel)(nil)).Where("key = ?", key).Exec(ctx)
