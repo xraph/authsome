@@ -212,6 +212,7 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
+			installRequestInfo(ctx)
 			installDPoPRequestScope(ctx)
 			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
 			scheme, token := extractCredentialCtx(ctx.Context(), ctx.Request(), cookieName)
@@ -347,6 +348,7 @@ func AuthMiddlewareWithStrategies(
 
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
+			installRequestInfo(ctx)
 			installDPoPRequestScope(ctx)
 			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
 			scheme, token := extractCredentialCtx(ctx.Context(), ctx.Request(), cookieName)
@@ -393,6 +395,7 @@ func AuthMiddlewareWithJWT(
 
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
+			installRequestInfo(ctx)
 			installDPoPRequestScope(ctx)
 			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
 			scheme, token := extractCredentialCtx(ctx.Context(), ctx.Request(), cookieName)

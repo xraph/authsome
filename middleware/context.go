@@ -4,13 +4,52 @@ package middleware
 import (
 	"context"
 
+	"github.com/xraph/forge"
+	forgemw "github.com/xraph/forge/middleware"
+
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/environment"
+	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/user"
 )
+
+// RequestInfo re-exports hook.RequestInfo so handlers and plugins can read
+// the request correlation data without importing the hook package.
+type RequestInfo = hook.RequestInfo
+
+// WithRequestInfo stores the request's correlation data on the context.
+func WithRequestInfo(ctx context.Context, info RequestInfo) context.Context {
+	return hook.WithRequestInfo(ctx, info)
+}
+
+// RequestInfoFrom returns the request's correlation data.
+func RequestInfoFrom(ctx context.Context) (RequestInfo, bool) {
+	return hook.RequestInfoFrom(ctx)
+}
+
+// requestInfoFromRequest builds the correlation data for an inbound request.
+// The IP comes from the trusted-proxy resolver, never a raw header.
+func requestInfoFromRequest(ctx forge.Context) RequestInfo {
+	r := ctx.Request()
+	return RequestInfo{
+		IP:        ClientIP(r),
+		UserAgent: r.UserAgent(),
+		RequestID: forgemw.GetRequestID(ctx.Context()),
+	}
+}
+
+// installRequestInfo sets request info on the forge context once per request.
+// It runs before credentials are read, so anonymous requests are correlated
+// too; WithSessionID adds the session once one is resolved.
+func installRequestInfo(ctx forge.Context) {
+	if _, ok := hook.RequestInfoFrom(ctx.Context()); ok {
+		return
+	}
+	ctx.WithContext(WithRequestInfo(ctx.Context(), requestInfoFromRequest(ctx)))
+}
 
 // Context keys for typed access to auth state.
 type contextKey int
@@ -145,6 +184,12 @@ func UserIDFrom(ctx context.Context) (id.UserID, bool) {
 
 // WithSessionID stores a session ID in the context.
 func WithSessionID(ctx context.Context, sessionID id.SessionID) context.Context {
+	// Every path that resolves a session passes through here, so this is the
+	// one place the request correlation learns which session acted.
+	if info, ok := hook.RequestInfoFrom(ctx); ok && info.SessionID == "" {
+		info.SessionID = sessionID.String()
+		ctx = hook.WithRequestInfo(ctx, info)
+	}
 	return context.WithValue(ctx, ctxKeySessionID, sessionID)
 }
 
