@@ -95,7 +95,7 @@ func signUpForAudience(t *testing.T, eng *authsome.Engine, email string) string 
 	_, sess, err := eng.SignUp(context.Background(), &account.SignUpRequest{
 		AppID:     appID,
 		Email:     email,
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Aud",
 	})
 	require.NoError(t, err)

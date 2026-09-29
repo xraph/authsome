@@ -207,7 +207,7 @@ func newDashEngineChecker(t *testing.T, jkt, email string) (*authChecker, string
 	_, sess, err := eng.SignUp(context.Background(), &account.SignUpRequest{
 		AppID:     appID,
 		Email:     email,
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Dash",
 		DPoPJKT:   jkt,
 	})

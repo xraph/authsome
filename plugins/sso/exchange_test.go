@@ -32,7 +32,7 @@ func TestExchange_CodeCarriesNoTokenAndRotatesTheSession(t *testing.T) {
 	p := New()
 	require.NoError(t, p.OnInit(ctx, eng))
 
-	u, sess, err := eng.SignUp(ctx, &account.SignUpRequest{AppID: appID, Email: "otc@example.com", Password: "SecureP@ss1", FirstName: "O"})
+	u, sess, err := eng.SignUp(ctx, &account.SignUpRequest{AppID: appID, Email: "otc@example.com", Password: "SecureP@ss123", FirstName: "O"})
 	require.NoError(t, err)
 
 	code, err := p.mintOTC(ctx, appID, &CallbackResponse{

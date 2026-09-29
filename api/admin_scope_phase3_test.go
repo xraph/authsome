@@ -22,7 +22,7 @@ const adminServiceAccountPath = "/v1/admin/service-accounts"
 func TestAdminServiceAccount_RejectsCrossTenant(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "sa-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "sa-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	foreign, err := eng.CreateServiceAccount(context.Background(), otherAppID(t), "foreign-svc", "", []string{"read"})
@@ -43,7 +43,7 @@ func TestAdminServiceAccount_RejectsCrossTenant(t *testing.T) {
 func TestAdminServiceAccountKey_RejectsScopeEscalation(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "sa-scope-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "sa-scope-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	platformApp, err := id.ParseAppID(testAppIDStr)
@@ -63,7 +63,7 @@ func TestAdminServiceAccountKey_RejectsScopeEscalation(t *testing.T) {
 func TestAdminListUsers_RejectsForeignAppID(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "list-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "list-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/admin/users?app_id="+otherAppID(t).String(), nil)
@@ -76,7 +76,7 @@ func TestAdminListUsers_RejectsForeignAppID(t *testing.T) {
 func TestAdminBulkRevokeSessions_RejectsCrossTenant(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "revoke-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "revoke-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 	foreign := seedForeignUser(t, eng, "revoke-foreign@test.com")
 
@@ -90,7 +90,7 @@ func TestAdminBulkRevokeSessions_RejectsCrossTenant(t *testing.T) {
 func TestAdminDeleteApp_RefusesThePlatformApp(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "delapp-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "delapp-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/v1/admin/apps/"+testAppIDStr, nil)

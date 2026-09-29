@@ -23,7 +23,7 @@ func TestRefresh_ChainedRotations(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "chain@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Chain User",
 	})
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestRefresh_ReplayRevokesFamily(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "replay@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Replay User",
 	})
 	require.NoError(t, err)
@@ -99,7 +99,7 @@ func TestRefresh_ReplayStormEmitsAlertOnce(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "storm@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Storm User",
 	})
 	require.NoError(t, err)
@@ -140,7 +140,7 @@ func TestRefresh_UnrelatedSessionUntouched(t *testing.T) {
 	_, sessA, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "two-fams@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Two Families",
 	})
 	require.NoError(t, err)
@@ -149,7 +149,7 @@ func TestRefresh_UnrelatedSessionUntouched(t *testing.T) {
 	_, sessB, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "two-fams@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	require.NotEqual(t, sessA.FamilyID.String(), sessB.FamilyID.String(),

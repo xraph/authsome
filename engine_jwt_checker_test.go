@@ -25,7 +25,7 @@ func TestJWTSessionChecker_OnByDefault(t *testing.T) {
 	require.NoError(t, err)
 
 	_, sess, err := eng.SignUp(context.Background(), &account.SignUpRequest{
-		AppID: appID, Email: "jwt-check@example.com", Password: "SecureP@ss1", FirstName: "J",
+		AppID: appID, Email: "jwt-check@example.com", Password: "SecureP@ss123", FirstName: "J",
 	})
 	require.NoError(t, err)
 

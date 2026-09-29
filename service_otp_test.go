@@ -27,7 +27,7 @@ func TestSignUp_IssuesEmailVerificationCode(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "bob@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 		Username: "bob",
 	})
 	require.NoError(t, err)
@@ -57,7 +57,7 @@ func TestVerifyEmailCode_WrongThenRight(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "carol@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 		Username: "carol",
 	})
 	require.NoError(t, err)
@@ -92,7 +92,7 @@ func TestVerifyEmailCode_MaxAttempts(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "dave@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 		Username: "dave",
 	})
 	require.NoError(t, err)

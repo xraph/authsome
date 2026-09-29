@@ -23,14 +23,14 @@ func TestSignIn_IdentifierBudget(t *testing.T) {
 	appID, err := id.ParseAppID("aapp_01jf0000000000000000000000")
 	require.NoError(t, err)
 	ctx := context.Background()
-	_, _, err = eng.SignUp(ctx, &account.SignUpRequest{AppID: appID, Email: "target@example.com", Password: "SecureP@ss1", FirstName: "T"})
+	_, _, err = eng.SignUp(ctx, &account.SignUpRequest{AppID: appID, Email: "target@example.com", Password: "SecureP@ss123", FirstName: "T"})
 	require.NoError(t, err)
 
 	for i := 0; i < 5; i++ {
 		_, _, err = eng.SignIn(ctx, &account.SignInRequest{AppID: appID, Email: "target@example.com", Password: "wrong-password"})
 		assert.ErrorIs(t, err, account.ErrInvalidCredentials, "attempt %d is a plain refusal", i+1)
 	}
-	_, _, err = eng.SignIn(ctx, &account.SignInRequest{AppID: appID, Email: "target@example.com", Password: "SecureP@ss1"})
+	_, _, err = eng.SignIn(ctx, &account.SignInRequest{AppID: appID, Email: "target@example.com", Password: "SecureP@ss123"})
 	assert.ErrorIs(t, err, account.ErrRateLimited, "the sixth attempt in a window is refused even with the right password")
 
 	_, _, err = eng.SignIn(ctx, &account.SignInRequest{AppID: appID, Email: "someone-else@example.com", Password: "x"})

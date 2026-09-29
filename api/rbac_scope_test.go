@@ -43,7 +43,7 @@ func seedRole(t *testing.T, eng *authsome.Engine, appIDStr string) string {
 func TestGetRole_SameAppSucceeds(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "role-get-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "role-get-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	roleID := seedRole(t, eng, testAppIDStr)
@@ -59,7 +59,7 @@ func TestGetRole_SameAppSucceeds(t *testing.T) {
 func TestGetRole_RejectsCrossTenant(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "role-x-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "role-x-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	foreignRole := seedRole(t, eng, otherAppID(t).String())
@@ -75,7 +75,7 @@ func TestGetRole_RejectsCrossTenant(t *testing.T) {
 func TestDeleteRole_RejectsCrossTenant(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "role-del-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "role-del-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	foreignRole := seedRole(t, eng, otherAppID(t).String())
@@ -96,7 +96,7 @@ func TestDeleteRole_RejectsCrossTenant(t *testing.T) {
 func TestAddPermission_RejectsCrossTenant(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "perm-x-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "perm-x-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	foreignRole := seedRole(t, eng, otherAppID(t).String())
@@ -114,7 +114,7 @@ func TestAddPermission_RejectsCrossTenant(t *testing.T) {
 func TestAssignRole_RejectsCrossTenant(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "assign-x-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "assign-x-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	foreignRole := seedRole(t, eng, otherAppID(t).String())

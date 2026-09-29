@@ -47,7 +47,7 @@ func TestPasskeyIssueSession_UnderRequiredMode_BindsSession(t *testing.T) {
 	u, _, signUpErr := eng.SignUp(context.Background(), &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "passkey-dpop@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, signUpErr)
 

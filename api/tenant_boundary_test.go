@@ -54,7 +54,7 @@ func TestAdminScopeCannotBeSwitchedWithAnotherAppsPublishableKey(t *testing.T) {
 
 	// The first sign-up on the platform app is promoted to platform owner and
 	// therefore holds manage:user for the platform app.
-	_, ownerToken, _ := signUp(t, eng, "boundary-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "boundary-owner@test.com", "SecureP@ss123")
 	foreign := seedForeignUser(t, eng, "boundary-foreign@test.com")
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/admin/users/"+foreign.ID.String(), nil)
@@ -72,8 +72,8 @@ func TestAdminScopeFollowsTheSessionWithTheCallersOwnKey(t *testing.T) {
 	handler := realChainHandler(t, a, eng)
 	seedOtherApp(t, eng)
 
-	_, ownerToken, _ := signUp(t, eng, "boundary-owner2@test.com", "SecureP@ss1")
-	_, victimToken, _ := signUp(t, eng, "boundary-victim@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "boundary-owner2@test.com", "SecureP@ss123")
+	_, victimToken, _ := signUp(t, eng, "boundary-victim@test.com", "SecureP@ss123")
 	victimID := userIDFor(t, eng, victimToken)
 	foreign := seedForeignUser(t, eng, "boundary-foreign2@test.com")
 

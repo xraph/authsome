@@ -48,7 +48,7 @@ func signUpOnPlatform(t *testing.T, eng *authsome.Engine, email string) id.UserI
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     email,
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Test",
 	})
 	require.NoError(t, err)
@@ -341,7 +341,7 @@ func TestHasPermission_WardenMemoryStore_NamespaceFilter(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "nstest@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "NS",
 	})
 	require.NoError(t, err)

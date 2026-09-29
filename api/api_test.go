@@ -273,7 +273,7 @@ func TestHandleSignUp_Success(t *testing.T) {
 
 	body := jsonBody(t, map[string]string{
 		"email":    "signup@test.com",
-		"password": "SecureP@ss1",
+		"password": "SecureP@ss123",
 		"name":     "Sign Up User",
 	})
 
@@ -327,11 +327,11 @@ func TestHandleSignUp_DuplicateEmailReturnsSuccess(t *testing.T) {
 	handler := withTestKey(a.Handler())
 
 	// Pre-create user.
-	signUp(t, eng, "dupe@test.com", "SecureP@ss1")
+	signUp(t, eng, "dupe@test.com", "SecureP@ss123")
 
 	body := jsonBody(t, map[string]string{
 		"email":    "dupe@test.com",
-		"password": "SecureP@ss1",
+		"password": "SecureP@ss123",
 		"name":     "Dupe",
 	})
 
@@ -350,7 +350,7 @@ func TestSignup_DoesNotLeakEmailExistence(t *testing.T) {
 	_, eng := newTestAPI(t)
 	router := newAPIWithRouter(t, eng)
 
-	bodyA := []byte(`{"email":"leak-a@example.com","password":"SecureP@ss1"}`)
+	bodyA := []byte(`{"email":"leak-a@example.com","password":"SecureP@ss123"}`)
 
 	// First signup must succeed.
 	rec := httptest.NewRecorder()
@@ -381,7 +381,7 @@ func TestSignup_DuplicateDoesNotLogInExistingUser(t *testing.T) {
 	router := newAPIWithRouter(t, eng)
 
 	// First signup creates user A with password P.
-	bodyA := []byte(`{"email":"hijack-a@example.com","password":"SecureP@ss1"}`)
+	bodyA := []byte(`{"email":"hijack-a@example.com","password":"SecureP@ss123"}`)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(bodyA)))
 	require.Equal(t, http.StatusCreated, rec.Code)
@@ -391,7 +391,7 @@ func TestSignup_DuplicateDoesNotLogInExistingUser(t *testing.T) {
 	require.NotEmpty(t, firstToken, "first signup must return a real token")
 
 	// Second signup uses the SAME email and a DIFFERENT password.
-	bodyB := []byte(`{"email":"hijack-a@example.com","password":"WRONGp@ss1"}`)
+	bodyB := []byte(`{"email":"hijack-a@example.com","password":"WRONGp@ss12345"}`)
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(bodyB)))
 	require.Equal(t, http.StatusCreated, rec.Code)
@@ -452,8 +452,8 @@ func TestSignup_DuplicateRunsDummyHash(t *testing.T) {
 	// Create the user, then sign up a second, unrelated address. Both are
 	// fresh signups: they hash through the engine, not through the
 	// duplicate-path budget consumer, so the observer must stay silent.
-	signup("timing@example.com", "SecureP@ss1")
-	signup("new1@example.com", "SecureP@ss1")
+	signup("timing@example.com", "SecureP@ss123")
+	signup("new1@example.com", "SecureP@ss123")
 	require.Empty(t, hashCalls(), "fresh signups must not go through the duplicate-path hash budget")
 
 	// Duplicate email, different password. This is the branch that would
@@ -505,7 +505,7 @@ func TestSignup_DuplicateReturnsPlausibleTokenShape(t *testing.T) {
 	router := newAPIWithRouter(t, eng)
 
 	// First signup.
-	body := []byte(`{"email":"shape@example.com","password":"SecureP@ss1"}`)
+	body := []byte(`{"email":"shape@example.com","password":"SecureP@ss123"}`)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(body)))
 	require.Equal(t, http.StatusCreated, rec.Code)
@@ -556,11 +556,11 @@ func TestHandleSignIn_Success(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	signUp(t, eng, "signin@test.com", "SecureP@ss1")
+	signUp(t, eng, "signin@test.com", "SecureP@ss123")
 
 	body := jsonBody(t, map[string]string{
 		"email":    "signin@test.com",
-		"password": "SecureP@ss1",
+		"password": "SecureP@ss123",
 	})
 
 	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signin", body)
@@ -581,7 +581,7 @@ func TestHandleSignIn_WrongPassword(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	signUp(t, eng, "wrong@test.com", "SecureP@ss1")
+	signUp(t, eng, "wrong@test.com", "SecureP@ss123")
 
 	body := jsonBody(t, map[string]string{
 		"email":    "wrong@test.com",
@@ -625,7 +625,7 @@ func TestSignIn_UnverifiedEmail_Returns403WithStableCode(t *testing.T) {
 	))
 
 	// Sign up — engine creates user with EmailVerified=false.
-	body := []byte(`{"email":"unverified@example.com","password":"SecureP@ss1"}`)
+	body := []byte(`{"email":"unverified@example.com","password":"SecureP@ss123"}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -687,7 +687,7 @@ func TestSignIn_MFARequired_Returns403WithTicket(t *testing.T) {
 	require.NoError(t, err)
 
 	// Sign up a user — they have no MFA enrolled.
-	signUp(t, eng, "mfa-locked@example.com", "SecureP@ss1")
+	signUp(t, eng, "mfa-locked@example.com", "SecureP@ss123")
 
 	// Flip MFARequired on the app's client config.
 	tru := true
@@ -699,7 +699,7 @@ func TestSignIn_MFARequired_Returns403WithTicket(t *testing.T) {
 
 	router := newAPIWithRouter(t, eng)
 
-	body := []byte(`{"email":"mfa-locked@example.com","password":"SecureP@ss1"}`)
+	body := []byte(`{"email":"mfa-locked@example.com","password":"SecureP@ss123"}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signin", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -748,7 +748,7 @@ func TestSignup_CaptchaRequiredRejectsMissingToken(t *testing.T) {
 
 	body := jsonBody(t, map[string]string{
 		"email":    "captcha-missing@test.com",
-		"password": "SecureP@ss1",
+		"password": "SecureP@ss123",
 	})
 	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signup", body)
 	req.Header.Set("Content-Type", "application/json")
@@ -772,7 +772,7 @@ func TestSignup_CaptchaRequiredRejectsMissingToken(t *testing.T) {
 	for range 5 {
 		req2 := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signup", jsonBody(t, map[string]string{
 			"email":    "captcha-missing-2@test.com",
-			"password": "SecureP@ss1",
+			"password": "SecureP@ss123",
 		}))
 		req2.Header.Set("Content-Type", "application/json")
 		rec2 := httptest.NewRecorder()
@@ -815,7 +815,7 @@ func TestSignup_CaptchaNotRequiredPassesThrough(t *testing.T) {
 
 	body := jsonBody(t, map[string]string{
 		"email":    "captcha-off@test.com",
-		"password": "SecureP@ss1",
+		"password": "SecureP@ss123",
 	})
 	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signup", body)
 	req.Header.Set("Content-Type", "application/json")
@@ -834,7 +834,7 @@ func TestHandleSignOut_Success(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, token, _ := signUp(t, eng, "signout@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "signout@test.com", "SecureP@ss123")
 
 	// Resolve the session to get the session ID
 	sess, err := eng.ResolveSessionByToken(token)
@@ -869,7 +869,7 @@ func TestHandleRefresh_Success(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, _, refreshToken := signUp(t, eng, "refresh@test.com", "SecureP@ss1")
+	_, _, refreshToken := signUp(t, eng, "refresh@test.com", "SecureP@ss123")
 
 	body := jsonBody(t, map[string]string{
 		"refresh_token": refreshToken,
@@ -908,7 +908,7 @@ func TestHandleRefresh_CookieFallback_EmptyBody(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, sessionToken, _ := signUp(t, eng, "cookie-refresh@test.com", "SecureP@ss1")
+	_, sessionToken, _ := signUp(t, eng, "cookie-refresh@test.com", "SecureP@ss123")
 
 	body := jsonBody(t, map[string]string{})
 	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/refresh", body)
@@ -931,7 +931,7 @@ func TestHandleRefresh_CookieFallback_StaleBodyToken(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, _, r1 := signUp(t, eng, "stale-refresh@test.com", "SecureP@ss1")
+	_, _, r1 := signUp(t, eng, "stale-refresh@test.com", "SecureP@ss123")
 
 	// Rotate once so r1 becomes stale; the returned session carries the current
 	// session token to present as the cookie.
@@ -960,7 +960,7 @@ func TestHandleGetMe_Success(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, token, _ := signUp(t, eng, "me@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "me@test.com", "SecureP@ss123")
 
 	sess, err := eng.ResolveSessionByToken(token)
 	require.NoError(t, err)
@@ -998,7 +998,7 @@ func TestHandleUpdateMe_Success(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, token, _ := signUp(t, eng, "update@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "update@test.com", "SecureP@ss123")
 
 	sess, err := eng.ResolveSessionByToken(token)
 	require.NoError(t, err)
@@ -1030,7 +1030,7 @@ func TestHandleListSessions_Success(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, token, _ := signUp(t, eng, "sessions@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "sessions@test.com", "SecureP@ss123")
 
 	sess, err := eng.ResolveSessionByToken(token)
 	require.NoError(t, err)
@@ -1070,7 +1070,7 @@ func TestHandleRevokeSession_Success(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, token, _ := signUp(t, eng, "revoke@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "revoke@test.com", "SecureP@ss123")
 
 	sess, err := eng.ResolveSessionByToken(token)
 	require.NoError(t, err)
@@ -1087,7 +1087,7 @@ func TestHandleRevokeSession_InvalidID(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, token, _ := signUp(t, eng, "revoke-invalid@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "revoke-invalid@test.com", "SecureP@ss123")
 
 	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/sessions/invalid-id", nil)
 	req = req.WithContext(middleware.WithUserID(req.Context(), userIDFor(t, eng, token)))
@@ -1110,11 +1110,11 @@ func TestWriteAccountError_EmailTaken_NoLeak(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	signUp(t, eng, "taken@test.com", "SecureP@ss1")
+	signUp(t, eng, "taken@test.com", "SecureP@ss123")
 
 	body := jsonBody(t, map[string]string{
 		"email":    "taken@test.com",
-		"password": "SecureP@ss1",
+		"password": "SecureP@ss123",
 		"name":     "Taken",
 	})
 
@@ -1293,7 +1293,7 @@ func TestResendVerification_CreatesTokenForExistingUnverifiedUser(t *testing.T) 
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "resend-target@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	u.EmailVerified = false
@@ -1345,7 +1345,7 @@ func TestForgotPassword_EmitsResetHookWithToken(t *testing.T) {
 	_, _, err = eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "forgot-target@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
@@ -1420,7 +1420,7 @@ func TestResendVerification_NoHookForVerifiedUser(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "already-verified@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	u.EmailVerified = true
@@ -1491,7 +1491,7 @@ func TestSignIn_MFAChallenge_RoundTripIssuesSession(t *testing.T) {
 	// Sign up a user and pre-enroll TOTP so the challenge has a
 	// secret to validate against. The flag MFARequired is flipped
 	// AFTER signup so signup itself doesn't hit the gate.
-	_, sessionToken, _ := signUp(t, eng, "mfa-roundtrip@example.com", "SecureP@ss1")
+	_, sessionToken, _ := signUp(t, eng, "mfa-roundtrip@example.com", "SecureP@ss123")
 	require.NotEmpty(t, sessionToken, "signup helper must return a session token")
 
 	// Resolve the user so we can attach an enrollment.
@@ -1533,7 +1533,7 @@ func TestSignIn_MFAChallenge_RoundTripIssuesSession(t *testing.T) {
 	// Step 1: signin → 403 + ticket.
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signin",
-		bytes.NewReader([]byte(`{"email":"mfa-roundtrip@example.com","password":"SecureP@ss1"}`)))
+		bytes.NewReader([]byte(`{"email":"mfa-roundtrip@example.com","password":"SecureP@ss123"}`)))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 
@@ -1605,7 +1605,7 @@ func TestMFAChallenge_BadCodeKeepsTicketUsable(t *testing.T) {
 	secutil.RelaxAuthDefaults(t, eng)
 
 	appID, _ := id.ParseAppID(testAppIDStr)
-	signUp(t, eng, "mfa-retry@example.com", "SecureP@ss1")
+	signUp(t, eng, "mfa-retry@example.com", "SecureP@ss123")
 	u, _ := eng.Store().GetUserByEmail(context.Background(), appID, id.Nil, "mfa-retry@example.com")
 
 	totpKey, _ := mfa.GenerateTOTPKey(mfa.TOTPConfig{Issuer: "TestApp", AccountName: "mfa-retry@example.com"})
@@ -1626,7 +1626,7 @@ func TestMFAChallenge_BadCodeKeepsTicketUsable(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	siReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signin",
-		bytes.NewReader([]byte(`{"email":"mfa-retry@example.com","password":"SecureP@ss1"}`)))
+		bytes.NewReader([]byte(`{"email":"mfa-retry@example.com","password":"SecureP@ss123"}`)))
 	siReq.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, siReq)
 	require.Equal(t, http.StatusForbidden, rec.Code, "signin must hit MFA gate; body=%s", rec.Body.String())
@@ -1687,7 +1687,7 @@ func mfaGateFixture(t *testing.T, email string) (http.Handler, string, mfa.Store
 	appID, err := id.ParseAppID(testAppIDStr)
 	require.NoError(t, err)
 
-	_, sessionToken, _ := signUp(t, eng, email, "SecureP@ss1")
+	_, sessionToken, _ := signUp(t, eng, email, "SecureP@ss123")
 	require.NotEmpty(t, sessionToken)
 
 	u, err := eng.Store().GetUserByEmail(context.Background(), appID, id.Nil, email)
@@ -1722,7 +1722,7 @@ func mfaGateFixture(t *testing.T, email string) (http.Handler, string, mfa.Store
 // signInForTicket drives signin to the gate and returns the mfa_ticket.
 func signInForTicket(t *testing.T, router http.Handler, email string) string {
 	t.Helper()
-	body := []byte(`{"email":"` + email + `","password":"SecureP@ss1"}`)
+	body := []byte(`{"email":"` + email + `","password":"SecureP@ss123"}`)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signin",
 		bytes.NewReader(body))

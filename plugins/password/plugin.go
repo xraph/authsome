@@ -32,7 +32,7 @@ var (
 
 var (
 	// SettingMinLength controls the minimum password length.
-	SettingMinLength = settings.Define("password.min_length", 8,
+	SettingMinLength = settings.Define("password.min_length", 12,
 		settings.WithDisplayName("Minimum Password Length"),
 		settings.WithDescription("Minimum number of characters required for passwords"),
 		settings.WithCategory("Password Policy"),

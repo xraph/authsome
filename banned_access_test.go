@@ -25,7 +25,7 @@ func bannedFixture(t *testing.T, expires *time.Time) (*authsome.Engine, id.UserI
 	require.NoError(t, err)
 
 	u, sess, err := eng.SignUp(context.Background(), &account.SignUpRequest{
-		AppID: appID, Email: "banned@example.com", Password: "SecureP@ss1", FirstName: "B",
+		AppID: appID, Email: "banned@example.com", Password: "SecureP@ss123", FirstName: "B",
 	})
 	require.NoError(t, err)
 

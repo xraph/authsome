@@ -68,7 +68,7 @@ func TestSignIn_MFAChallenge_UnderRequiredMode_IssuesBoundSession(t *testing.T) 
 	require.NoError(t, err)
 
 	const email = "mfa-dpop@example.com"
-	_, signupToken, _ := signUp(t, eng, email, "SecureP@ss1")
+	_, signupToken, _ := signUp(t, eng, email, "SecureP@ss123")
 	require.NotEmpty(t, signupToken)
 
 	u, err := eng.Store().GetUserByEmail(context.Background(), appID, id.Nil, email)
@@ -113,7 +113,7 @@ func TestSignIn_MFAChallenge_UnderRequiredMode_IssuesBoundSession(t *testing.T) 
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signin",
-		bytes.NewReader([]byte(`{"email":"`+email+`","password":"SecureP@ss1"}`)))
+		bytes.NewReader([]byte(`{"email":"`+email+`","password":"SecureP@ss123"}`)))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("DPoP", proof)
 	router.ServeHTTP(rec, req)
@@ -184,7 +184,7 @@ func TestMFAChallenge_UnboundTicketUnderRequiredMode_Refuses(t *testing.T) {
 	require.NoError(t, err)
 
 	const email = "mfa-dpop-stale@example.com"
-	_, signupToken, _ := signUp(t, eng, email, "SecureP@ss1")
+	_, signupToken, _ := signUp(t, eng, email, "SecureP@ss123")
 	require.NotEmpty(t, signupToken)
 
 	u, err := eng.Store().GetUserByEmail(context.Background(), appID, id.Nil, email)
@@ -220,7 +220,7 @@ func TestMFAChallenge_UnboundTicketUnderRequiredMode_Refuses(t *testing.T) {
 	setSignInDPoPMode(t, eng, "optional")
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signin",
-		bytes.NewReader([]byte(`{"email":"`+email+`","password":"SecureP@ss1"}`)))
+		bytes.NewReader([]byte(`{"email":"`+email+`","password":"SecureP@ss123"}`)))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusForbidden, rec.Code, "body=%s", rec.Body.String())

@@ -90,7 +90,7 @@ func TestMagicLinkVerify_UnderRequiredMode_BindsSession(t *testing.T) {
 	eng, router, appID := pluginDPoPFixture(t, mlPlugin)
 
 	const email = "magiclink-dpop@example.com"
-	_, _, _ = signUp(t, eng, email, "SecureP@ss1")
+	_, _, _ = signUp(t, eng, email, "SecureP@ss123")
 	u, err := eng.Store().GetUserByEmail(context.Background(), appID, id.Nil, email)
 	require.NoError(t, err)
 
@@ -138,7 +138,7 @@ func TestMagicLinkVerify_UnderRequiredMode_RefusesWithoutProof(t *testing.T) {
 	eng, router, appID := pluginDPoPFixture(t, mlPlugin)
 
 	const email = "magiclink-dpop-unbound@example.com"
-	_, _, _ = signUp(t, eng, email, "SecureP@ss1")
+	_, _, _ = signUp(t, eng, email, "SecureP@ss123")
 	u, err := eng.Store().GetUserByEmail(context.Background(), appID, id.Nil, email)
 	require.NoError(t, err)
 
@@ -176,7 +176,7 @@ func TestVerifyEmail_UnderRequiredMode_BindsAutoLoginSession(t *testing.T) {
 	eng, router, appID := pluginDPoPFixture(t, magiclink.New())
 
 	const email = "verify-email-dpop@example.com"
-	_, _, _ = signUp(t, eng, email, "SecureP@ss1")
+	_, _, _ = signUp(t, eng, email, "SecureP@ss123")
 	u, err := eng.Store().GetUserByEmail(context.Background(), appID, id.Nil, email)
 	require.NoError(t, err)
 

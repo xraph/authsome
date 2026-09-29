@@ -22,7 +22,7 @@ import (
 func TestGetMe_ReadsLiveRoles(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "me-live@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "me-live@test.com", "SecureP@ss123")
 	owner := userIDFor(t, eng, ownerToken)
 	appID, err := id.ParseAppID(testAppIDStr)
 	require.NoError(t, err)

@@ -100,7 +100,7 @@ func TestRefresh_HTTP_BoundSessionWithValidProofSucceeds(t *testing.T) {
 	_, sess, err := eng.SignUp(context.Background(), &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "http-refresh-bound@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Bound User",
 		DPoPJKT:   jkt,
 	})
@@ -133,7 +133,7 @@ func TestRefresh_HTTP_BoundSessionWithoutProofIsRefused(t *testing.T) {
 	_, sess, err := eng.SignUp(context.Background(), &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "http-refresh-noproof@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Bound User",
 		DPoPJKT:   jkt,
 	})

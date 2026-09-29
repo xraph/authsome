@@ -39,7 +39,7 @@ func TestSignIn_BannedIsOnlyDisclosedToTheRightPassword(t *testing.T) {
 	appID, err := id.ParseAppID("aapp_01jf0000000000000000000000")
 	require.NoError(t, err)
 	ctx := context.Background()
-	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{AppID: appID, Email: "banned-probe@example.com", Password: "SecureP@ss1", FirstName: "B"})
+	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{AppID: appID, Email: "banned-probe@example.com", Password: "SecureP@ss123", FirstName: "B"})
 	require.NoError(t, err)
 	u.Banned = true
 	require.NoError(t, eng.Store().UpdateUser(ctx, u))
@@ -47,6 +47,6 @@ func TestSignIn_BannedIsOnlyDisclosedToTheRightPassword(t *testing.T) {
 	_, _, err = eng.SignIn(ctx, &account.SignInRequest{AppID: appID, Email: "banned-probe@example.com", Password: "wrong-password"})
 	assert.ErrorIs(t, err, account.ErrInvalidCredentials, "a wrong password learns nothing about the ban")
 
-	_, _, err = eng.SignIn(ctx, &account.SignInRequest{AppID: appID, Email: "banned-probe@example.com", Password: "SecureP@ss1"})
+	_, _, err = eng.SignIn(ctx, &account.SignInRequest{AppID: appID, Email: "banned-probe@example.com", Password: "SecureP@ss123"})
 	assert.ErrorIs(t, err, account.ErrUserBanned, "the right password is refused as banned")
 }

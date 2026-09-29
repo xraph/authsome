@@ -166,7 +166,7 @@ func dpopSignInProof(t *testing.T, key *ecdsa.PrivateKey, nonce string) string {
 
 // dpopSignInPassword is the fixed password used across this file's sign-in
 // tests; only email and DPoP header vary between cases.
-const dpopSignInPassword = "SecureP@ss1"
+const dpopSignInPassword = "SecureP@ss123"
 
 func postSignIn(email, dpopHeader string) *http.Request {
 	body, _ := json.Marshal(map[string]string{"email": email, "password": dpopSignInPassword})

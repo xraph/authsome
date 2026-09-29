@@ -34,7 +34,7 @@ func TestRoleChange_RestampsLiveSessions(t *testing.T) {
 
 	// A second verified user so this one is a plain user, not the owner.
 	_ = signUpVerified(t, eng, "owner@example.com")
-	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{AppID: appID, Email: "member@example.com", Password: "SecureP@ss1", FirstName: "M"})
+	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{AppID: appID, Email: "member@example.com", Password: "SecureP@ss123", FirstName: "M"})
 	require.NoError(t, err)
 	secutil.VerifyEmail(t, eng, u.ID)
 	assert.NotContains(t, stampedRoles(t, eng, u.ID), "admin")

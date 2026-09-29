@@ -38,7 +38,7 @@ func issueSessionFixture(t *testing.T) (*authsome.Engine, *user.User, id.AppID) 
 	u, _, err := eng.SignUp(context.Background(), &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "issuesession@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Issue",
 	})
 	require.NoError(t, err)

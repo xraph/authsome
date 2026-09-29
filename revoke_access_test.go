@@ -36,9 +36,9 @@ func newAccessFixture(t *testing.T) *accessFixture {
 	require.NoError(t, err)
 	ctx := context.Background()
 
-	u, first, err := eng.SignUp(ctx, &account.SignUpRequest{AppID: appID, Email: "access@example.com", Password: "SecureP@ss1", FirstName: "A"})
+	u, first, err := eng.SignUp(ctx, &account.SignUpRequest{AppID: appID, Email: "access@example.com", Password: "SecureP@ss123", FirstName: "A"})
 	require.NoError(t, err)
-	_, other, err := eng.SignIn(ctx, &account.SignInRequest{AppID: appID, Email: "access@example.com", Password: "SecureP@ss1"})
+	_, other, err := eng.SignIn(ctx, &account.SignInRequest{AppID: appID, Email: "access@example.com", Password: "SecureP@ss123"})
 	require.NoError(t, err)
 
 	_, hash, prefix, err := apikey.GenerateKey()
@@ -90,6 +90,6 @@ func TestRevokeOtherUserSessions_KeepsTheCurrentOne(t *testing.T) {
 func TestChangePassword_SignsOutOtherSessions(t *testing.T) {
 	f := newAccessFixture(t)
 	ctx := middleware.WithSessionID(context.Background(), f.first)
-	require.NoError(t, f.eng.ChangePassword(ctx, f.uid, "SecureP@ss1", "An0therStr0ng!Pass"))
+	require.NoError(t, f.eng.ChangePassword(ctx, f.uid, "SecureP@ss123", "An0therStr0ng!Pass"))
 	assert.Equal(t, []id.SessionID{f.first}, f.sessionIDs(t), "only the session that changed the password survives")
 }

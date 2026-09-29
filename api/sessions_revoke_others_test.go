@@ -23,9 +23,9 @@ func TestRevokeOtherSessions_KeepsCaller(t *testing.T) {
 	appID, err := id.ParseAppID(testAppIDStr)
 	require.NoError(t, err)
 
-	u, first, err := eng.SignUp(ctx, &account.SignUpRequest{AppID: appID, Email: "revoke-others@test.com", Password: "SecureP@ss1", FirstName: "R"})
+	u, first, err := eng.SignUp(ctx, &account.SignUpRequest{AppID: appID, Email: "revoke-others@test.com", Password: "SecureP@ss123", FirstName: "R"})
 	require.NoError(t, err)
-	_, _, err = eng.SignIn(ctx, &account.SignInRequest{AppID: appID, Email: "revoke-others@test.com", Password: "SecureP@ss1"})
+	_, _, err = eng.SignIn(ctx, &account.SignInRequest{AppID: appID, Email: "revoke-others@test.com", Password: "SecureP@ss123"})
 	require.NoError(t, err)
 
 	req := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/sessions", nil)

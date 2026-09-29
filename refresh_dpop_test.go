@@ -109,7 +109,7 @@ func TestRefresh_UnboundSessionUnaffected(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "unbound-refresh@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Unbound User",
 	})
 	require.NoError(t, err)
@@ -134,7 +134,7 @@ func TestRefresh_BoundSessionWithoutProofIsRefused(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "bound-noproof@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Bound User",
 		DPoPJKT:   jktA,
 	})
@@ -167,7 +167,7 @@ func TestRefresh_BoundSessionWrongKeyIsRefused(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "bound-wrongkey@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Bound User",
 		DPoPJKT:   jktA,
 	})
@@ -228,7 +228,7 @@ func TestRefresh_BindingIsInherited(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "bound-inherit@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Bound User",
 		DPoPJKT:   jktA,
 	})

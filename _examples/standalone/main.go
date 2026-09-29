@@ -12,12 +12,12 @@
 //	# Sign up
 //	curl -X POST http://localhost:8080/v1/auth/signup \
 //	  -H 'Content-Type: application/json' \
-//	  -d '{"email":"user@example.com","password":"SecureP@ss1","name":"Alice"}'
+//	  -d '{"email":"user@example.com","password":"SecureP@ss123","name":"Alice"}'
 //
 //	# Sign in
 //	curl -X POST http://localhost:8080/v1/auth/signin \
 //	  -H 'Content-Type: application/json' \
-//	  -d '{"email":"user@example.com","password":"SecureP@ss1"}'
+//	  -d '{"email":"user@example.com","password":"SecureP@ss123"}'
 //
 //	# Get current user (use session_token from sign-in response)
 //	curl http://localhost:8080/v1/auth/me \

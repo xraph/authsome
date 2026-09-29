@@ -148,7 +148,7 @@ func TestWebhookGet_RejectsCrossTenant(t *testing.T) {
 
 	// Platform-owner (first user) is fully privileged in their own app, but a
 	// webhook belonging to a *different* app must still be invisible to them.
-	_, ownerToken, _ := signUp(t, eng, "wh-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "wh-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	foreign := seedWebhook(t, eng, otherAppID(t).String())
@@ -164,7 +164,7 @@ func TestWebhookDelete_RejectsCrossTenant(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, ownerToken, _ := signUp(t, eng, "wh-del-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "wh-del-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	foreign := seedWebhook(t, eng, otherAppID(t).String())
@@ -183,7 +183,7 @@ func TestWebhookCreate_OwnerSucceeds(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, ownerToken, _ := signUp(t, eng, "wh-create-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "wh-create-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	body := []byte(`{"url":"https://good.example.com/hook","events":["user.created"]}`)
@@ -205,8 +205,8 @@ func TestWebhookCreate_ForbiddenWithoutPermission(t *testing.T) {
 	handler := withTestKey(a.Handler())
 
 	// First user consumes the platform-owner slot; the second is a plain user.
-	_, _, _ = signUp(t, eng, "wh-first-owner@test.com", "SecureP@ss1")
-	_, regularToken, _ := signUp(t, eng, "wh-regular@test.com", "SecureP@ss1")
+	_, _, _ = signUp(t, eng, "wh-first-owner@test.com", "SecureP@ss123")
+	_, regularToken, _ := signUp(t, eng, "wh-regular@test.com", "SecureP@ss123")
 	regularID := userIDFor(t, eng, regularToken)
 
 	body := []byte(`{"url":"https://good.example.com/hook","events":["user.created"]}`)
@@ -266,7 +266,7 @@ func TestEnvironmentDelete_RejectsCrossTenant(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, ownerToken, _ := signUp(t, eng, "env-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "env-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	foreign := seedEnvironment(t, eng, otherAppID(t).String())
@@ -285,7 +285,7 @@ func TestEnvironmentCreate_OwnerSucceeds(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, ownerToken, _ := signUp(t, eng, "env-create-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "env-create-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	body := []byte(`{"name":"Staging","slug":"staging","type":"staging"}`)

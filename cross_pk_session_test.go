@@ -108,14 +108,14 @@ func TestCrossPublishableKeySessionRejected(t *testing.T) {
 	_, _, err = eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    tenantID,
 		Email:    "tenant-user@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
 	_, sess, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    tenantID,
 		Email:    "tenant-user@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, sess.Token)

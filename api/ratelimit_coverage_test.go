@@ -53,7 +53,7 @@ func TestChangePassword_IsRateLimited(t *testing.T) {
 	a, eng := newTestAPI(t)
 	eng.SetRateLimiter(ratelimit.NewMemoryLimiter())
 	h := withTestKey(a.Handler())
-	_, token, _ := signUp(t, eng, "limited-change@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "limited-change@test.com", "SecureP@ss123")
 	uid := userIDFor(t, eng, token)
 
 	body := `{"current_password":"wrong-password","new_password":"An0therStr0ng!Pass"}`

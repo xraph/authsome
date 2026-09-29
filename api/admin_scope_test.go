@@ -41,11 +41,11 @@ func seedForeignUser(t *testing.T, eng *authsome.Engine, email string) *user.Use
 func TestAdminGetUser_SameAppSucceeds(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "admin-get-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "admin-get-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	// A user in the caller's own (platform) app.
-	_, victimToken, _ := signUp(t, eng, "admin-get-victim@test.com", "SecureP@ss1")
+	_, victimToken, _ := signUp(t, eng, "admin-get-victim@test.com", "SecureP@ss123")
 	victimID := userIDFor(t, eng, victimToken)
 
 	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/admin/users/"+victimID.String(), nil)
@@ -59,7 +59,7 @@ func TestAdminGetUser_SameAppSucceeds(t *testing.T) {
 func TestAdminGetUser_RejectsCrossTenant(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "admin-x-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "admin-x-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	foreign := seedForeignUser(t, eng, "foreign-user@test.com")
@@ -75,7 +75,7 @@ func TestAdminGetUser_RejectsCrossTenant(t *testing.T) {
 func TestAdminBanUser_RejectsCrossTenant(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "admin-ban-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "admin-ban-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	foreign := seedForeignUser(t, eng, "foreign-ban@test.com")
@@ -97,7 +97,7 @@ func TestAdminBanUser_RejectsCrossTenant(t *testing.T) {
 func TestAdminImpersonate_RejectsCrossTenant(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "admin-imp-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "admin-imp-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	foreign := seedForeignUser(t, eng, "foreign-imp@test.com")
@@ -113,7 +113,7 @@ func TestAdminImpersonate_RejectsCrossTenant(t *testing.T) {
 func TestAdminDeleteUser_RejectsCrossTenant(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "admin-del-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "admin-del-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	foreign := seedForeignUser(t, eng, "foreign-del@test.com")

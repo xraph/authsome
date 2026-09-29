@@ -94,7 +94,7 @@ func TestE2E_SignUpSignInSignOut(t *testing.T) {
 	u, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "alice@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Alice",
 		Username:  "alice",
 	})
@@ -117,7 +117,7 @@ func TestE2E_SignUpSignInSignOut(t *testing.T) {
 	u2, sess2, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "alice@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, u.ID, u2.ID)
@@ -188,7 +188,7 @@ func TestE2E_OrgInvitationFlow(t *testing.T) {
 	owner, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "owner@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Owner",
 	})
 	require.NoError(t, err)
@@ -197,7 +197,7 @@ func TestE2E_OrgInvitationFlow(t *testing.T) {
 	_, _, err = eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "invitee@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Invitee",
 	})
 	require.NoError(t, err)
@@ -269,7 +269,7 @@ func TestE2E_DeviceTracking(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "device-user@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "DeviceUser",
 	})
 	require.NoError(t, err)
@@ -445,7 +445,7 @@ func TestE2E_SessionManagement(t *testing.T) {
 	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "session-user@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "SessionUser",
 	})
 	require.NoError(t, err)
@@ -454,21 +454,21 @@ func TestE2E_SessionManagement(t *testing.T) {
 	_, sess1, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "session-user@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
 	_, sess2, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "session-user@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
 	_, sess3, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "session-user@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
@@ -557,7 +557,7 @@ func TestE2E_OrgTeamManagement(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "team-owner@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "TeamOwner",
 	})
 	require.NoError(t, err)
@@ -644,7 +644,7 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "rbac-user@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "RBACUser",
 	})
 	require.NoError(t, err)
@@ -786,7 +786,7 @@ func TestE2E_UserUpdateFlow(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "update-user@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Original Name",
 	})
 	require.NoError(t, err)
@@ -823,7 +823,7 @@ func TestE2E_DeclineInvitation(t *testing.T) {
 	owner, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "org-owner@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "OrgOwner",
 	})
 	require.NoError(t, err)
@@ -1068,7 +1068,7 @@ func TestE2E_SignIn_EmailNormalization(t *testing.T) {
 	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "MixedCase@Example.COM",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
@@ -1076,7 +1076,7 @@ func TestE2E_SignIn_EmailNormalization(t *testing.T) {
 	u, sess, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "MIXEDCASE@EXAMPLE.COM",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, u)
@@ -1106,7 +1106,7 @@ func TestE2E_SignIn_DefaultEnvResolution(t *testing.T) {
 	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "envtest@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
@@ -1114,7 +1114,7 @@ func TestE2E_SignIn_DefaultEnvResolution(t *testing.T) {
 	_, sess, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "envtest@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 		// EnvID intentionally omitted
 	})
 	require.NoError(t, err)

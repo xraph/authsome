@@ -28,7 +28,7 @@ func TestClient_SignUp(t *testing.T) {
 
 	resp, err := ts.Client.SignUp(ctx, &authclient.SignUpRequest{
 		Email:     "signup@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Test",
 		LastName:  "User",
 	})
@@ -44,11 +44,11 @@ func TestClient_SignIn(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	ts.CreateUser(t, "signin@example.com", "SecureP@ss1")
+	ts.CreateUser(t, "signin@example.com", "SecureP@ss123")
 
 	resp, err := ts.Client.SignIn(ctx, &authclient.SignInRequest{
 		Email:    "signin@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
@@ -61,7 +61,7 @@ func TestClient_SignOut(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "signout@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "signout@example.com", "SecureP@ss123")
 
 	resp, err := client.SignOut(ctx)
 	require.NoError(t, err)
@@ -76,7 +76,7 @@ func TestClient_SignUp_DuplicateEmail(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	ts.CreateUser(t, "dup@example.com", "SecureP@ss1")
+	ts.CreateUser(t, "dup@example.com", "SecureP@ss123")
 
 	// Phase 2A: duplicate signup must NOT return 4xx — that would
 	// leak which emails are already registered. Instead the server
@@ -86,7 +86,7 @@ func TestClient_SignUp_DuplicateEmail(t *testing.T) {
 	// covered exhaustively in api/api_test.go's signup tests.
 	resp, err := ts.Client.SignUp(ctx, &authclient.SignUpRequest{
 		Email:    "dup@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err, "duplicate signup must not error — would leak email existence")
 
@@ -102,7 +102,7 @@ func TestClient_SignIn_WrongPassword(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	ts.CreateUser(t, "wrong@example.com", "SecureP@ss1")
+	ts.CreateUser(t, "wrong@example.com", "SecureP@ss123")
 
 	_, err := ts.Client.SignIn(ctx, &authclient.SignInRequest{
 		Email:    "wrong@example.com",
@@ -122,7 +122,7 @@ func TestClient_SignIn_NonexistentUser(t *testing.T) {
 
 	_, err := ts.Client.SignIn(ctx, &authclient.SignInRequest{
 		Email:    "nobody@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	assert.Error(t, err)
 }
@@ -131,7 +131,7 @@ func TestClient_RefreshTokens(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	auth, _ := ts.CreateUser(t, "refresh@example.com", "SecureP@ss1")
+	auth, _ := ts.CreateUser(t, "refresh@example.com", "SecureP@ss123")
 
 	resp, err := ts.Client.RefreshTokens(ctx, &authclient.RefreshTokensRequest{
 		RefreshToken: auth.RefreshToken,
@@ -158,7 +158,7 @@ func TestClient_GetMe(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "getme@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "getme@example.com", "SecureP@ss123")
 
 	user, err := client.GetMe(ctx)
 	require.NoError(t, err)
@@ -185,7 +185,7 @@ func TestClient_UpdateMe(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "update@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "update@example.com", "SecureP@ss123")
 
 	updated, err := client.UpdateMe(ctx, &authclient.UpdateMeRequest{
 		FirstName: "Updated",
@@ -201,10 +201,10 @@ func TestClient_ChangePassword(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "changepw@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "changepw@example.com", "SecureP@ss123")
 
 	resp, err := client.ChangePassword(ctx, &authclient.ChangePasswordRequest{
-		CurrentPassword: "SecureP@ss1",
+		CurrentPassword: "SecureP@ss123",
 		NewPassword:     "NewSecureP@ss2",
 	})
 	require.NoError(t, err)
@@ -227,7 +227,7 @@ func TestClient_ExportUserData(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "export@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "export@example.com", "SecureP@ss123")
 
 	data, err := client.ExportUserData(ctx)
 	if err != nil {
@@ -249,7 +249,7 @@ func TestClient_ListSessions(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "sessions@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "sessions@example.com", "SecureP@ss123")
 
 	resp, err := client.ListSessions(ctx)
 	require.NoError(t, err)
@@ -261,7 +261,7 @@ func TestClient_RevokeSession(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "revoke@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "revoke@example.com", "SecureP@ss123")
 
 	sessions, err := client.ListSessions(ctx)
 	require.NoError(t, err)
@@ -285,7 +285,7 @@ func TestClient_CreateOrganization(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "orgcreator@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "orgcreator@example.com", "SecureP@ss123")
 
 	org, err := client.CreateOrganization(ctx, &authclient.CreateOrganizationRequest{
 		Name: "Acme Corp",
@@ -302,7 +302,7 @@ func TestClient_ListOrganizations(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	auth, _ := ts.CreateUser(t, "orglist@example.com", "SecureP@ss1")
+	auth, _ := ts.CreateUser(t, "orglist@example.com", "SecureP@ss123")
 	client := authclient.NewClient(ts.Server.URL,
 		authclient.WithToken(auth.SessionToken),
 		authclient.WithSessionCookies(),
@@ -320,7 +320,7 @@ func TestClient_GetOrganization(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	auth, _ := ts.CreateUser(t, "orgget@example.com", "SecureP@ss1")
+	auth, _ := ts.CreateUser(t, "orgget@example.com", "SecureP@ss123")
 	client := authclient.NewClient(ts.Server.URL,
 		authclient.WithToken(auth.SessionToken),
 		authclient.WithSessionCookies(),
@@ -340,7 +340,7 @@ func TestClient_UpdateOrganization(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	auth, _ := ts.CreateUser(t, "orgupd@example.com", "SecureP@ss1")
+	auth, _ := ts.CreateUser(t, "orgupd@example.com", "SecureP@ss123")
 	client := authclient.NewClient(ts.Server.URL,
 		authclient.WithToken(auth.SessionToken),
 		authclient.WithSessionCookies(),
@@ -361,7 +361,7 @@ func TestClient_DeleteOrganization(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	auth, _ := ts.CreateUser(t, "orgdel@example.com", "SecureP@ss1")
+	auth, _ := ts.CreateUser(t, "orgdel@example.com", "SecureP@ss123")
 	client := authclient.NewClient(ts.Server.URL,
 		authclient.WithToken(auth.SessionToken),
 		authclient.WithSessionCookies(),
@@ -386,13 +386,13 @@ func TestClient_AddMember(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	ownerAuth, _ := ts.CreateUser(t, "owner@example.com", "SecureP@ss1")
+	ownerAuth, _ := ts.CreateUser(t, "owner@example.com", "SecureP@ss123")
 	ownerClient := authclient.NewClient(ts.Server.URL,
 		authclient.WithToken(ownerAuth.SessionToken),
 		authclient.WithSessionCookies(),
 	)
 
-	memberAuth, _ := ts.CreateUser(t, "newmember@example.com", "SecureP@ss1")
+	memberAuth, _ := ts.CreateUser(t, "newmember@example.com", "SecureP@ss123")
 
 	org := ts.CreateOrg(t, ownerAuth.User.ID, "MemberOrg", "member-org")
 	ts.AddMember(t, org.ID.String(), ownerAuth.User.ID, organization.RoleOwner)
@@ -411,7 +411,7 @@ func TestClient_ListMembers(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	ownerAuth, _ := ts.CreateUser(t, "listowner@example.com", "SecureP@ss1")
+	ownerAuth, _ := ts.CreateUser(t, "listowner@example.com", "SecureP@ss123")
 	ownerClient := authclient.NewClient(ts.Server.URL,
 		authclient.WithToken(ownerAuth.SessionToken),
 		authclient.WithSessionCookies(),
@@ -430,13 +430,13 @@ func TestClient_UpdateMember(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	ownerAuth, _ := ts.CreateUser(t, "updowner@example.com", "SecureP@ss1")
+	ownerAuth, _ := ts.CreateUser(t, "updowner@example.com", "SecureP@ss123")
 	ownerClient := authclient.NewClient(ts.Server.URL,
 		authclient.WithToken(ownerAuth.SessionToken),
 		authclient.WithSessionCookies(),
 	)
 
-	memberAuth, _ := ts.CreateUser(t, "updmember@example.com", "SecureP@ss1")
+	memberAuth, _ := ts.CreateUser(t, "updmember@example.com", "SecureP@ss123")
 
 	org := ts.CreateOrg(t, ownerAuth.User.ID, "UpdMemberOrg", "upd-member-org")
 	ts.AddMember(t, org.ID.String(), ownerAuth.User.ID, organization.RoleOwner)
@@ -454,13 +454,13 @@ func TestClient_RemoveMember(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	ownerAuth, _ := ts.CreateUser(t, "rmowner@example.com", "SecureP@ss1")
+	ownerAuth, _ := ts.CreateUser(t, "rmowner@example.com", "SecureP@ss123")
 	ownerClient := authclient.NewClient(ts.Server.URL,
 		authclient.WithToken(ownerAuth.SessionToken),
 		authclient.WithSessionCookies(),
 	)
 
-	memberAuth, _ := ts.CreateUser(t, "rmmember@example.com", "SecureP@ss1")
+	memberAuth, _ := ts.CreateUser(t, "rmmember@example.com", "SecureP@ss123")
 
 	org := ts.CreateOrg(t, ownerAuth.User.ID, "RmMemberOrg", "rm-member-org")
 	ts.AddMember(t, org.ID.String(), ownerAuth.User.ID, organization.RoleOwner)
@@ -479,7 +479,7 @@ func TestClient_CreateInvitation(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	ownerAuth, _ := ts.CreateUser(t, "inviteowner@example.com", "SecureP@ss1")
+	ownerAuth, _ := ts.CreateUser(t, "inviteowner@example.com", "SecureP@ss123")
 	ownerClient := authclient.NewClient(ts.Server.URL,
 		authclient.WithToken(ownerAuth.SessionToken),
 		authclient.WithSessionCookies(),
@@ -503,7 +503,7 @@ func TestClient_ListInvitations(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	ownerAuth, _ := ts.CreateUser(t, "listinvowner@example.com", "SecureP@ss1")
+	ownerAuth, _ := ts.CreateUser(t, "listinvowner@example.com", "SecureP@ss123")
 	ownerClient := authclient.NewClient(ts.Server.URL,
 		authclient.WithToken(ownerAuth.SessionToken),
 		authclient.WithSessionCookies(),
@@ -532,7 +532,7 @@ func TestClient_ListAPIKeys(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "listkeys@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "listkeys@example.com", "SecureP@ss123")
 
 	resp, err := client.ListAPIKeys(ctx, nil)
 	if err != nil {
@@ -554,7 +554,7 @@ func TestClient_Auth_WithBearerToken(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	auth, token := ts.CreateUser(t, "bearer@example.com", "SecureP@ss1")
+	auth, token := ts.CreateUser(t, "bearer@example.com", "SecureP@ss123")
 
 	client := authclient.NewClient(ts.Server.URL, authclient.WithToken(token))
 
@@ -597,7 +597,7 @@ func TestClient_Auth_WithSessionCookies(t *testing.T) {
 
 	signUpResp, err := client.SignUp(ctx, &authclient.SignUpRequest{
 		Email:     "cookie@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Cookie",
 		LastName:  "User",
 	})
@@ -621,7 +621,7 @@ func TestClient_Auth_CookiePersistence(t *testing.T) {
 
 	resp, err := client.SignUp(ctx, &authclient.SignUpRequest{
 		Email:     "persist@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Persist",
 	})
 	require.NoError(t, err)
@@ -686,7 +686,7 @@ func TestClient_Error_404_NotFound(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "notfound@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "notfound@example.com", "SecureP@ss123")
 
 	_, err := client.GetOrganization(ctx, "aorg_01zz0000000000000000000000")
 	require.Error(t, err)
@@ -719,7 +719,7 @@ func TestClient_Error_BadRequest(t *testing.T) {
 
 	_, err := ts.Client.SignUp(ctx, &authclient.SignUpRequest{
 		Email:    "",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	assert.Error(t, err)
 
@@ -782,7 +782,7 @@ func TestClient_ScimListUsers(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "scimadmin@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "scimadmin@example.com", "SecureP@ss123")
 
 	resp, err := client.ScimListUsers(ctx)
 	if err != nil {
@@ -799,7 +799,7 @@ func TestClient_ScimListGroups(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "scimgroups@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "scimgroups@example.com", "SecureP@ss123")
 
 	resp, err := client.ScimListGroups(ctx)
 	if err != nil {
@@ -820,7 +820,7 @@ func TestClient_ListBillingPlans(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "billing@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "billing@example.com", "SecureP@ss123")
 
 	resp, err := client.ListBillingPlans(ctx, nil)
 	if err != nil {
@@ -837,7 +837,7 @@ func TestClient_ListSubscriptions(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "subs@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "subs@example.com", "SecureP@ss123")
 
 	resp, err := client.ListSubscriptions(ctx, nil)
 	if err != nil {
@@ -854,7 +854,7 @@ func TestClient_GetUsageSummary(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "usage@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "usage@example.com", "SecureP@ss123")
 
 	resp, err := client.GetUsageSummary(ctx, nil)
 	if err != nil {
@@ -871,7 +871,7 @@ func TestClient_ListCoupons(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "coupons@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "coupons@example.com", "SecureP@ss123")
 
 	resp, err := client.ListCoupons(ctx, nil)
 	if err != nil {
@@ -888,7 +888,7 @@ func TestClient_ListInvoices(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "invoices@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "invoices@example.com", "SecureP@ss123")
 
 	resp, err := client.ListInvoices(ctx, nil)
 	if err != nil {
@@ -928,7 +928,7 @@ func TestClient_ListConsents(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "consent@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "consent@example.com", "SecureP@ss123")
 
 	resp, err := client.ListConsents(ctx, nil)
 	if err != nil {
@@ -945,7 +945,7 @@ func TestClient_GrantConsent(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "grantconsent@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "grantconsent@example.com", "SecureP@ss123")
 
 	resp, err := client.GrantConsent(ctx, &authclient.GrantConsentRequest{
 		Purpose: "marketing",
@@ -968,7 +968,7 @@ func TestClient_Oauth2UserInfo(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "oauth2user@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "oauth2user@example.com", "SecureP@ss123")
 
 	resp, err := client.Oauth2UserInfo(ctx)
 	if err != nil {
@@ -988,7 +988,7 @@ func TestClient_ListOAuth2Clients_RequiresAdmin(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "oauth2clients@example.com", "SecureP@ss1")
+	client := ts.CreateUserClient(t, "oauth2clients@example.com", "SecureP@ss123")
 
 	_, err := client.ListOAuth2Clients(ctx, nil)
 	require.Error(t, err, "a non-admin user must not list OAuth2 clients")

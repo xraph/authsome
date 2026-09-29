@@ -38,7 +38,7 @@ func TestIntrospect_BoundSessionCarriesConfirmation(t *testing.T) {
 	_, eng := newTestAPI(t)
 	router := newAPIWithRouter(t, eng)
 
-	_, token, _ := signUp(t, eng, "bound-introspect@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "bound-introspect@test.com", "SecureP@ss123")
 
 	sess, err := eng.ResolveSessionByToken(token)
 	require.NoError(t, err)
@@ -61,7 +61,7 @@ func TestIntrospect_UnboundSessionOmitsConfirmation(t *testing.T) {
 	_, eng := newTestAPI(t)
 	router := newAPIWithRouter(t, eng)
 
-	_, token, _ := signUp(t, eng, "unbound-introspect@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "unbound-introspect@test.com", "SecureP@ss123")
 
 	resp := introspect(t, router, token)
 

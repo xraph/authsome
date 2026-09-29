@@ -91,7 +91,7 @@ func (c SessionConfig) ShouldRotateRefreshToken() bool {
 
 // PasswordConfig configures password validation.
 type PasswordConfig struct {
-	// MinLength is the minimum password length (default: 8).
+	// MinLength is the minimum password length (default: 12).
 	MinLength int `json:"min_length"`
 
 	// RequireUppercase requires at least one uppercase letter.
@@ -265,7 +265,7 @@ func DefaultConfig() Config {
 			RefreshTokenTTL: 30 * 24 * time.Hour,
 		},
 		Password: PasswordConfig{
-			MinLength:        8,
+			MinLength:        12,
 			RequireUppercase: true,
 			RequireLowercase: true,
 			RequireDigit:     true,

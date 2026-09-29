@@ -82,7 +82,7 @@ func TestNewEngine_DefaultConfig(t *testing.T) {
 
 	cfg := eng.Config()
 	assert.Equal(t, "/authsome", cfg.BasePath)
-	assert.Equal(t, 8, cfg.Password.MinLength)
+	assert.Equal(t, 12, cfg.Password.MinLength)
 	assert.True(t, cfg.Password.RequireUppercase)
 	assert.True(t, cfg.Password.RequireLowercase)
 	assert.True(t, cfg.Password.RequireDigit)
@@ -255,7 +255,7 @@ func TestEngine_RequireStarted_SignUp(t *testing.T) {
 	// SignUp before Start should return ErrNotStarted
 	_, _, err = eng.SignUp(context.Background(), &account.SignUpRequest{
 		Email:    "test@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	assert.ErrorIs(t, err, authsome.ErrNotStarted)
 
@@ -263,7 +263,7 @@ func TestEngine_RequireStarted_SignUp(t *testing.T) {
 	require.NoError(t, eng.Start(context.Background()))
 	_, _, err = eng.SignUp(context.Background(), &account.SignUpRequest{
 		Email:    "test@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	assert.NotErrorIs(t, err, authsome.ErrNotStarted)
 }
@@ -278,7 +278,7 @@ func TestEngine_RequireStarted_SignIn(t *testing.T) {
 	// SignIn before Start should return ErrNotStarted
 	_, _, err = eng.SignIn(context.Background(), &account.SignInRequest{
 		Email:    "test@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	assert.ErrorIs(t, err, authsome.ErrNotStarted)
 }

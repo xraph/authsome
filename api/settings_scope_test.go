@@ -31,7 +31,7 @@ func putSetting(t *testing.T, handler http.Handler, eng *authsome.Engine, as id.
 func TestSetSetting_OwnerCannotWriteAnotherAppsScope(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "settings-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "settings-owner@test.com", "SecureP@ss123")
 	owner := userIDFor(t, eng, ownerToken)
 
 	rec := putSetting(t, handler, eng, owner,
@@ -42,7 +42,7 @@ func TestSetSetting_OwnerCannotWriteAnotherAppsScope(t *testing.T) {
 func TestSetSetting_OwnerWritesOwnAppScope(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "settings-owner2@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "settings-owner2@test.com", "SecureP@ss123")
 	owner := userIDFor(t, eng, ownerToken)
 
 	rec := putSetting(t, handler, eng, owner,

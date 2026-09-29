@@ -53,7 +53,7 @@ func TestSignUp_Success(t *testing.T) {
 	u, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "alice@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Alice",
 		Username:  "alice",
 	})
@@ -88,7 +88,7 @@ func TestSignUp_DuplicateEmail(t *testing.T) {
 	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "dupe@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "First",
 	})
 	require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestSignUp_DuplicateEmail(t *testing.T) {
 	_, _, err = eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "dupe@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Second",
 	})
 	assert.ErrorIs(t, err, account.ErrEmailTaken)
@@ -111,7 +111,7 @@ func TestSignUp_DuplicateUsername(t *testing.T) {
 	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "user1@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "User One",
 		Username:  "samename",
 	})
@@ -120,7 +120,7 @@ func TestSignUp_DuplicateUsername(t *testing.T) {
 	_, _, err = eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "user2@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "User Two",
 		Username:  "samename",
 	})
@@ -150,7 +150,7 @@ func TestSignUp_EmailNormalization(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "  ALICE@EXAMPLE.COM  ",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Alice",
 	})
 	require.NoError(t, err)
@@ -166,12 +166,12 @@ func TestSignIn_Success_ByEmail(t *testing.T) {
 	ctx := context.Background()
 	appID := testAppID(t)
 
-	signUpTestUser(t, eng, "signin@example.com", "SecureP@ss1")
+	signUpTestUser(t, eng, "signin@example.com", "SecureP@ss123")
 
 	u, sess, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "signin@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 
 	require.NoError(t, err)
@@ -189,7 +189,7 @@ func TestSignIn_Success_ByUsername(t *testing.T) {
 	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "user@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "User",
 		Username:  "myuser",
 	})
@@ -198,7 +198,7 @@ func TestSignIn_Success_ByUsername(t *testing.T) {
 	u, sess, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Username: "myuser",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 
 	require.NoError(t, err)
@@ -212,7 +212,7 @@ func TestSignIn_WrongPassword(t *testing.T) {
 	ctx := context.Background()
 	appID := testAppID(t)
 
-	signUpTestUser(t, eng, "wrong@example.com", "SecureP@ss1")
+	signUpTestUser(t, eng, "wrong@example.com", "SecureP@ss123")
 
 	_, _, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
@@ -230,7 +230,7 @@ func TestSignIn_NonexistentUser(t *testing.T) {
 	_, _, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "nobody@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	assert.ErrorIs(t, err, account.ErrInvalidCredentials)
 }
@@ -242,7 +242,7 @@ func TestSignIn_NoEmailOrUsername(t *testing.T) {
 
 	_, _, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	assert.ErrorIs(t, err, account.ErrInvalidCredentials)
 }
@@ -256,7 +256,7 @@ func TestSignIn_BannedUser(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "banned@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Banned User",
 	})
 	require.NoError(t, err)
@@ -271,7 +271,7 @@ func TestSignIn_BannedUser(t *testing.T) {
 	_, _, err = eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "banned@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	assert.ErrorIs(t, err, account.ErrUserBanned)
 }
@@ -293,13 +293,13 @@ func TestSignIn_EmailVerificationRequired_DynamicSetting(t *testing.T) {
 	require.NoError(t, err)
 
 	// Sign up a user (EmailVerified defaults to false).
-	signUpTestUser(t, eng, "unverified@example.com", "SecureP@ss1")
+	signUpTestUser(t, eng, "unverified@example.com", "SecureP@ss123")
 
 	// Attempt sign-in — should fail with ErrEmailNotVerified.
 	u, sess, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "unverified@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	assert.Nil(t, sess)
 	assert.NotNil(t, u)
@@ -316,7 +316,7 @@ func TestSignIn_EmailVerificationDisabled_DynamicSetting(t *testing.T) {
 	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "unverified2@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Unverified",
 	})
 	require.NoError(t, err)
@@ -324,7 +324,7 @@ func TestSignIn_EmailVerificationDisabled_DynamicSetting(t *testing.T) {
 	u, sess, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "unverified2@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, u)
@@ -343,7 +343,7 @@ func TestSignOut_Success(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "signout@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "SignOut User",
 	})
 	require.NoError(t, err)
@@ -376,7 +376,7 @@ func TestRefresh_Success(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "refresh@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Refresh User",
 	})
 	require.NoError(t, err)
@@ -455,7 +455,7 @@ func TestGetMe_Success(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "me@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Me User",
 	})
 	require.NoError(t, err)
@@ -482,7 +482,7 @@ func TestUpdateMe_Success(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "update@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Original",
 		LastName:  "Name",
 	})
@@ -514,7 +514,7 @@ func TestListSessions(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "sessions@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Sessions User",
 	})
 	require.NoError(t, err)
@@ -523,7 +523,7 @@ func TestListSessions(t *testing.T) {
 	_, _, err = eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "sessions@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
@@ -540,7 +540,7 @@ func TestRevokeSession_Success(t *testing.T) {
 	u, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "revoke@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Revoke User",
 	})
 	require.NoError(t, err)
@@ -573,7 +573,7 @@ func TestResolveSessionByToken_Success(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "resolve@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Resolve User",
 	})
 	require.NoError(t, err)
@@ -599,7 +599,7 @@ func TestResolveUser_Success(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "resolveuser@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Resolve User",
 	})
 	require.NoError(t, err)
@@ -648,7 +648,7 @@ func TestSignIn_AccountLockout_LocksAfterMaxAttempts(t *testing.T) {
 	// about lockout, so it puts its tracker back.
 	eng.SetLockoutTracker(tracker)
 
-	signUpTestUser(t, eng, "lockout@example.com", "SecureP@ss1")
+	signUpTestUser(t, eng, "lockout@example.com", "SecureP@ss123")
 
 	// 3 failed attempts with wrong password
 	for i := range 3 {
@@ -664,7 +664,7 @@ func TestSignIn_AccountLockout_LocksAfterMaxAttempts(t *testing.T) {
 	_, _, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "lockout@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	assert.ErrorIs(t, err, account.ErrAccountLocked)
 }
@@ -686,7 +686,7 @@ func TestSignIn_AccountLockout_ResetOnSuccess(t *testing.T) {
 	appID := testAppID(t)
 	eng.SetLockoutTracker(tracker)
 
-	signUpTestUser(t, eng, "reset@example.com", "SecureP@ss1")
+	signUpTestUser(t, eng, "reset@example.com", "SecureP@ss123")
 
 	// 2 failed attempts (below threshold)
 	for range 2 {
@@ -702,7 +702,7 @@ func TestSignIn_AccountLockout_ResetOnSuccess(t *testing.T) {
 	_, _, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "reset@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
@@ -720,7 +720,7 @@ func TestSignIn_AccountLockout_ResetOnSuccess(t *testing.T) {
 	_, _, err = eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "reset@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 }
@@ -730,7 +730,7 @@ func TestSignIn_NoLockout_WhenTrackerNil(t *testing.T) {
 	ctx := context.Background()
 	appID := testAppID(t)
 
-	signUpTestUser(t, eng, "nolockout@example.com", "SecureP@ss1")
+	signUpTestUser(t, eng, "nolockout@example.com", "SecureP@ss123")
 
 	// Many failed attempts without lockout
 	for range 10 {
@@ -746,7 +746,7 @@ func TestSignIn_NoLockout_WhenTrackerNil(t *testing.T) {
 	_, _, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "nolockout@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 }

@@ -83,7 +83,7 @@ func signUpUnverified(t *testing.T, eng *authsome.Engine, email string) id.UserI
 	u, _, err := eng.SignUp(context.Background(), &account.SignUpRequest{
 		AppID:     appID,
 		Email:     email,
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "User",
 	})
 	require.NoError(t, err)

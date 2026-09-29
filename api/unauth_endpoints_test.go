@@ -53,7 +53,7 @@ func TestRevokeSession_RequiresAuth(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, token, _ := signUp(t, eng, "sess-noauth@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "sess-noauth@test.com", "SecureP@ss123")
 	sess, err := eng.ResolveSessionByToken(token)
 	require.NoError(t, err)
 
@@ -71,8 +71,8 @@ func TestRevokeSession_RejectsNonOwner(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, tokenA, _ := signUp(t, eng, "sess-owner-a@test.com", "SecureP@ss1")
-	_, tokenB, _ := signUp(t, eng, "sess-owner-b@test.com", "SecureP@ss1")
+	_, tokenA, _ := signUp(t, eng, "sess-owner-a@test.com", "SecureP@ss123")
+	_, tokenB, _ := signUp(t, eng, "sess-owner-b@test.com", "SecureP@ss123")
 
 	sessB, err := eng.ResolveSessionByToken(tokenB)
 	require.NoError(t, err)
@@ -92,7 +92,7 @@ func TestRevokeSession_OwnerSucceeds(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, token, _ := signUp(t, eng, "sess-owner@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "sess-owner@test.com", "SecureP@ss123")
 	sess, err := eng.ResolveSessionByToken(token)
 	require.NoError(t, err)
 
@@ -112,7 +112,7 @@ func TestGetDevice_RequiresAuth(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, token, _ := signUp(t, eng, "dev-noauth@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "dev-noauth@test.com", "SecureP@ss123")
 	d := registerDeviceFor(t, eng, userIDFor(t, eng, token))
 
 	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/devices/"+d.ID.String(), nil)
@@ -126,8 +126,8 @@ func TestGetDevice_RejectsNonOwner(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, tokenA, _ := signUp(t, eng, "dev-a@test.com", "SecureP@ss1")
-	_, tokenB, _ := signUp(t, eng, "dev-b@test.com", "SecureP@ss1")
+	_, tokenA, _ := signUp(t, eng, "dev-a@test.com", "SecureP@ss123")
+	_, tokenB, _ := signUp(t, eng, "dev-b@test.com", "SecureP@ss123")
 	dB := registerDeviceFor(t, eng, userIDFor(t, eng, tokenB))
 
 	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/devices/"+dB.ID.String(), nil)
@@ -142,7 +142,7 @@ func TestGetDevice_OwnerSucceeds(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, token, _ := signUp(t, eng, "dev-owner@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "dev-owner@test.com", "SecureP@ss123")
 	uid := userIDFor(t, eng, token)
 	d := registerDeviceFor(t, eng, uid)
 
@@ -158,7 +158,7 @@ func TestDeleteDevice_RequiresAuth(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, token, _ := signUp(t, eng, "dev-del-noauth@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "dev-del-noauth@test.com", "SecureP@ss123")
 	d := registerDeviceFor(t, eng, userIDFor(t, eng, token))
 
 	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/devices/"+d.ID.String(), nil)
@@ -175,8 +175,8 @@ func TestDeleteDevice_RejectsNonOwner(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, tokenA, _ := signUp(t, eng, "dev-del-a@test.com", "SecureP@ss1")
-	_, tokenB, _ := signUp(t, eng, "dev-del-b@test.com", "SecureP@ss1")
+	_, tokenA, _ := signUp(t, eng, "dev-del-a@test.com", "SecureP@ss123")
+	_, tokenB, _ := signUp(t, eng, "dev-del-b@test.com", "SecureP@ss123")
 	dB := registerDeviceFor(t, eng, userIDFor(t, eng, tokenB))
 
 	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/devices/"+dB.ID.String(), nil)
@@ -194,7 +194,7 @@ func TestDeleteDevice_OwnerSucceeds(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, token, _ := signUp(t, eng, "dev-del-owner@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "dev-del-owner@test.com", "SecureP@ss123")
 	uid := userIDFor(t, eng, token)
 	d := registerDeviceFor(t, eng, uid)
 
@@ -210,7 +210,7 @@ func TestTrustDevice_RequiresAuth(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, token, _ := signUp(t, eng, "dev-trust-noauth@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "dev-trust-noauth@test.com", "SecureP@ss123")
 	d := registerDeviceFor(t, eng, userIDFor(t, eng, token))
 
 	req := httptest.NewRequestWithContext(context.Background(), "PATCH", "/v1/devices/"+d.ID.String()+"/trust", nil)
@@ -224,8 +224,8 @@ func TestTrustDevice_RejectsNonOwner(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, tokenA, _ := signUp(t, eng, "dev-trust-a@test.com", "SecureP@ss1")
-	_, tokenB, _ := signUp(t, eng, "dev-trust-b@test.com", "SecureP@ss1")
+	_, tokenA, _ := signUp(t, eng, "dev-trust-a@test.com", "SecureP@ss123")
+	_, tokenB, _ := signUp(t, eng, "dev-trust-b@test.com", "SecureP@ss123")
 	dB := registerDeviceFor(t, eng, userIDFor(t, eng, tokenB))
 
 	req := httptest.NewRequestWithContext(context.Background(), "PATCH", "/v1/devices/"+dB.ID.String()+"/trust", nil)

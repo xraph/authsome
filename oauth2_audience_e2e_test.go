@@ -57,7 +57,7 @@ func issueOAuth2AccessToken(t *testing.T, eng *authsome.Engine, appID id.AppID, 
 	_, sess, err := eng.SignUp(context.Background(), &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "oauth2-e2e@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "E2E User",
 	})
 	require.NoError(t, err)

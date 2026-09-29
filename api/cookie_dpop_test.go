@@ -79,7 +79,7 @@ func signUpBound(t *testing.T, eng *authsome.Engine, email string, key *ecdsa.Pr
 	_, sess, err := eng.SignUp(context.Background(), &account.SignUpRequest{
 		AppID:     appID,
 		Email:     email,
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Cookie",
 		DPoPJKT:   jkt,
 	})

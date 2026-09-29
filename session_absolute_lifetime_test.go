@@ -25,7 +25,7 @@ func agedSession(t *testing.T, age time.Duration) (*authsome.Engine, *session.Se
 	appID, err := id.ParseAppID("aapp_01jf0000000000000000000000")
 	require.NoError(t, err)
 	_, sess, err := eng.SignUp(context.Background(), &account.SignUpRequest{
-		AppID: appID, Email: "aged@example.com", Password: "SecureP@ss1", FirstName: "A",
+		AppID: appID, Email: "aged@example.com", Password: "SecureP@ss123", FirstName: "A",
 	})
 	require.NoError(t, err)
 

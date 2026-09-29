@@ -22,8 +22,8 @@ import (
 func appAdmin(t *testing.T, eng *authsome.Engine, email string) id.UserID {
 	t.Helper()
 	// Burn the platform-owner slot first so this user is a plain admin.
-	signUp(t, eng, "owner-slot-"+email, "SecureP@ss1")
-	_, token, _ := signUp(t, eng, email, "SecureP@ss1")
+	signUp(t, eng, "owner-slot-"+email, "SecureP@ss123")
+	_, token, _ := signUp(t, eng, email, "SecureP@ss123")
 	uid := userIDFor(t, eng, token)
 
 	appID, err := id.ParseAppID(testAppIDStr)
@@ -70,7 +70,7 @@ func TestAssignRole_AdminCannotGrantOwner(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
 	admin := appAdmin(t, eng, "ceiling-admin@test.com")
-	_, targetToken, _ := signUp(t, eng, "ceiling-target@test.com", "SecureP@ss1")
+	_, targetToken, _ := signUp(t, eng, "ceiling-target@test.com", "SecureP@ss123")
 	target := userIDFor(t, eng, targetToken)
 
 	rec := postJSON(t, handler, eng, admin, "/v1/roles/"+roleIDBySlug(t, eng, "owner")+"/assign",
@@ -101,9 +101,9 @@ func TestAddPermission_AdminCannotGrantWhatTheyDoNotHold(t *testing.T) {
 func TestAssignRole_OwnerGrantsAdmin(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
-	_, ownerToken, _ := signUp(t, eng, "ceiling-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "ceiling-owner@test.com", "SecureP@ss123")
 	owner := userIDFor(t, eng, ownerToken)
-	_, targetToken, _ := signUp(t, eng, "ceiling-target2@test.com", "SecureP@ss1")
+	_, targetToken, _ := signUp(t, eng, "ceiling-target2@test.com", "SecureP@ss123")
 	target := userIDFor(t, eng, targetToken)
 
 	rec := postJSON(t, handler, eng, owner, "/v1/roles/"+roleIDBySlug(t, eng, "admin")+"/assign",
