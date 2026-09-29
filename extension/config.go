@@ -38,6 +38,10 @@ type Config struct {
 	// Account lockout after failed attempts.
 	Lockout LockoutConfig `json:"lockout" mapstructure:"lockout" yaml:"lockout"`
 
+	// Retention sets how long expired rows are kept before the sweeper
+	// removes them. Zero values take the engine defaults.
+	Retention RetentionConfig `json:"retention" mapstructure:"retention" yaml:"retention"`
+
 	// Mailer configuration for transactional email delivery.
 	Mailer MailerConfig `json:"mailer" mapstructure:"mailer" yaml:"mailer"`
 
@@ -244,6 +248,10 @@ type SessionConfig struct {
 	// RotateRefreshToken controls whether refresh operations issue a new
 	// refresh token (invalidating the old one). Default: true.
 	RotateRefreshToken *bool `json:"rotate_refresh_token" mapstructure:"rotate_refresh_token" yaml:"rotate_refresh_token"`
+
+	// CleanupInterval is how often the retention sweeper runs (default: 1h).
+	// A negative value disables it.
+	CleanupInterval time.Duration `json:"cleanup_interval" mapstructure:"cleanup_interval" yaml:"cleanup_interval"`
 }
 
 // PasswordConfig configures password validation.
@@ -360,6 +368,19 @@ type LockoutConfig struct {
 
 	// ResetAfterSeconds resets the failure count after this many seconds of no failures (default: 3600 = 1h).
 	ResetAfterSeconds int `json:"reset_after_seconds" mapstructure:"reset_after_seconds" yaml:"reset_after_seconds"`
+}
+
+// RetentionConfig mirrors authsome.RetentionConfig: how many days rows of
+// each kind are kept past their expiry. Zero takes the engine default and a
+// negative value keeps that kind forever.
+type RetentionConfig struct {
+	SessionsDays             int `json:"sessions_days" mapstructure:"sessions_days" yaml:"sessions_days"`
+	VerificationsDays        int `json:"verifications_days" mapstructure:"verifications_days" yaml:"verifications_days"`
+	PasswordResetsDays       int `json:"password_resets_days" mapstructure:"password_resets_days" yaml:"password_resets_days"`
+	RevokedRefreshTokensDays int `json:"revoked_refresh_tokens_days" mapstructure:"revoked_refresh_tokens_days" yaml:"revoked_refresh_tokens_days"`
+	DeviceCodesDays          int `json:"device_codes_days" mapstructure:"device_codes_days" yaml:"device_codes_days"`
+	AuthCodesDays            int `json:"auth_codes_days" mapstructure:"auth_codes_days" yaml:"auth_codes_days"`
+	BatchSize                int `json:"batch_size" mapstructure:"batch_size" yaml:"batch_size"`
 }
 
 // LockoutDuration returns the lockout duration as a time.Duration.

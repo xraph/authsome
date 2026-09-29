@@ -3,6 +3,7 @@ package oauth2provider
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/xraph/authsome/id"
 )
@@ -42,6 +43,12 @@ type Store interface {
 	GetDeviceCodeByUserCode(ctx context.Context, userCode string) (*DeviceCode, error)
 	UpdateDeviceCode(ctx context.Context, dc *DeviceCode) error
 	DeleteExpiredDeviceCodes(ctx context.Context) error
+
+	// Retention. Each call removes at most batch codes that expired before
+	// the given instant and reports how many went; a batch of zero or less
+	// removes every match. See store.Retention for why deletes are batched.
+	DeleteExpiredAuthCodes(ctx context.Context, before time.Time, batch int) (int64, error)
+	DeleteExpiredDeviceCodesBefore(ctx context.Context, before time.Time, batch int) (int64, error)
 
 	// Grants are keyed by (app, user, client). UpsertGrant creates the grant
 	// or replaces its scopes; GetGrant returns ErrGrantNotFound when the user

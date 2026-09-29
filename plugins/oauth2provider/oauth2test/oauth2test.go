@@ -65,6 +65,8 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"DeviceCodeRoundTrip", testDeviceCodeRoundTrip},
 		{"DeviceCodeUpdate", testDeviceCodeUpdate},
 		{"DeleteExpiredDeviceCodes", testDeleteExpiredDeviceCodes},
+		{"DeleteExpiredAuthCodes", testDeleteExpiredAuthCodes},
+		{"DeleteExpiredDeviceCodesBefore", testDeleteExpiredDeviceCodesBefore},
 		{"AuthCodeStoredAsHash", testAuthCodeStoredAsHash},
 		{"DeviceCodeStoredAsHash", testDeviceCodeStoredAsHash},
 		{"GrantLifecycle", testGrantLifecycle},

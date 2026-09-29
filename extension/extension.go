@@ -1363,6 +1363,28 @@ func (e *Extension) buildEngineConfig() authsome.Config {
 	if e.config.Session.RotateRefreshToken != nil {
 		cfg.Session.RotateRefreshToken = e.config.Session.RotateRefreshToken
 	}
+	if e.config.Session.CleanupInterval != 0 {
+		cfg.Session.CleanupInterval = e.config.Session.CleanupInterval
+	}
+
+	// Retention: a set value replaces the default, a negative one disables
+	// that kind, zero keeps the default.
+	for _, f := range []struct {
+		src int
+		dst *int
+	}{
+		{e.config.Retention.SessionsDays, &cfg.Retention.SessionsDays},
+		{e.config.Retention.VerificationsDays, &cfg.Retention.VerificationsDays},
+		{e.config.Retention.PasswordResetsDays, &cfg.Retention.PasswordResetsDays},
+		{e.config.Retention.RevokedRefreshTokensDays, &cfg.Retention.RevokedRefreshTokensDays},
+		{e.config.Retention.DeviceCodesDays, &cfg.Retention.DeviceCodesDays},
+		{e.config.Retention.AuthCodesDays, &cfg.Retention.AuthCodesDays},
+		{e.config.Retention.BatchSize, &cfg.Retention.BatchSize},
+	} {
+		if f.src != 0 {
+			*f.dst = f.src
+		}
+	}
 
 	// Password
 	if e.config.Password.MinLength != 0 {

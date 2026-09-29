@@ -49,7 +49,73 @@ type Config struct {
 	// it. Falls back to AUTHSOME_API_KEY_PEPPER. Keys hashed before a pepper
 	// was set keep verifying and are rewritten on their next use.
 	APIKeyPepper string `json:"api_key_pepper"`
+
+	// Retention sets how long expired rows are kept before the sweeper that
+	// runs every Session.CleanupInterval removes them.
+	Retention RetentionConfig `json:"retention"`
 }
+
+// RetentionConfig sets how long rows that have outlived their purpose are
+// kept before the retention sweeper removes them. Each value is a number of
+// days counted from the row's expiry (or revocation); zero means the default
+// and a negative value keeps rows of that kind forever.
+type RetentionConfig struct {
+	// SessionsDays keeps sessions this long after both their tokens expired
+	// (default: 30).
+	SessionsDays int `json:"sessions_days"`
+
+	// VerificationsDays keeps verification codes this long after expiry
+	// (default: 7).
+	VerificationsDays int `json:"verifications_days"`
+
+	// PasswordResetsDays keeps password reset tokens this long after expiry
+	// (default: 7).
+	PasswordResetsDays int `json:"password_resets_days"`
+
+	// RevokedRefreshTokensDays keeps refresh-token revocation records this
+	// long after revocation (default: 90). It must cover the refresh token
+	// lifetime, or a replayed token could outlive its own revocation record.
+	RevokedRefreshTokensDays int `json:"revoked_refresh_tokens_days"`
+
+	// DeviceCodesDays keeps OAuth2 device codes this long after expiry
+	// (default: 1).
+	DeviceCodesDays int `json:"device_codes_days"`
+
+	// AuthCodesDays keeps OAuth2 authorization codes this long after expiry
+	// (default: 1).
+	AuthCodesDays int `json:"auth_codes_days"`
+
+	// BatchSize is how many rows one delete statement removes (default:
+	// 1000). The sweeper repeats until a batch comes back short.
+	BatchSize int `json:"batch_size"`
+}
+
+// Days returns the retention window for one kind, by the field name used in
+// RetentionConfig, as a duration. An unknown kind gets the default of 30 days.
+func (c RetentionConfig) Days(kind string) time.Duration {
+	days := map[string]int{
+		RetentionSessions:             c.SessionsDays,
+		RetentionVerifications:        c.VerificationsDays,
+		RetentionPasswordResets:       c.PasswordResetsDays,
+		RetentionRevokedRefreshTokens: c.RevokedRefreshTokensDays,
+		RetentionDeviceCodes:          c.DeviceCodesDays,
+		RetentionAuthCodes:            c.AuthCodesDays,
+	}[kind]
+	if days == 0 {
+		days = 30
+	}
+	return time.Duration(days) * 24 * time.Hour
+}
+
+// Retention kinds, the names plugins use to ask the sweeper for a cutoff.
+const (
+	RetentionSessions             = "sessions"
+	RetentionVerifications        = "verifications"
+	RetentionPasswordResets       = "password_resets"
+	RetentionRevokedRefreshTokens = "revoked_refresh_tokens"
+	RetentionDeviceCodes          = "device_codes"
+	RetentionAuthCodes            = "auth_codes"
+)
 
 // SessionConfig configures session behavior.
 type SessionConfig struct {
@@ -263,6 +329,16 @@ func DefaultConfig() Config {
 		Session: SessionConfig{
 			TokenTTL:        1 * time.Hour,
 			RefreshTokenTTL: 30 * 24 * time.Hour,
+			CleanupInterval: time.Hour,
+		},
+		Retention: RetentionConfig{
+			SessionsDays:             30,
+			VerificationsDays:        7,
+			PasswordResetsDays:       7,
+			RevokedRefreshTokensDays: 90,
+			DeviceCodesDays:          1,
+			AuthCodesDays:            1,
+			BatchSize:                1000,
 		},
 		Password: PasswordConfig{
 			MinLength:        12,

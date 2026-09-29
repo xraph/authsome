@@ -73,6 +73,8 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"UpdateFormConfigWritesBackTimestamp", testUpdateFormConfigWritesBackTimestamp},
 		{"UpdateServiceAccountWritesBackTimestamp", testUpdateServiceAccountWritesBackTimestamp},
 		{"SessionCRUD", testSessionCRUD},
+		{"RetentionDeletesOnlyExpiredRows", testRetentionDeletesOnlyExpiredRows},
+		{"RetentionHonoursBatch", testRetentionHonoursBatch},
 		{"SessionLookupByTokenIsScoped", testSessionLookupByTokenIsScoped},
 		{"SessionRolesRoundTrip", testSessionRolesRoundTrip},
 		{"SessionAudienceRoundTrip", testSessionAudienceRoundTrip},
