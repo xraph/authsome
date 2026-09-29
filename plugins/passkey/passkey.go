@@ -112,6 +112,11 @@ type Config struct {
 
 	// SessionTimeout is how long a WebAuthn ceremony session lives (default: 5 minutes).
 	SessionTimeout time.Duration
+
+	// StepUpWindow is how recently the caller must have signed in to
+	// register a passkey (default: 5 minutes). A passkey is a sign-in
+	// credential, so adding one on a possibly stolen session is refused.
+	StepUpWindow time.Duration
 }
 
 // Plugin is the passkey/WebAuthn plugin.

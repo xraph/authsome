@@ -19,6 +19,7 @@ import (
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/mfa"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/user"
 )
 
@@ -49,6 +50,10 @@ func authedRequest(t *testing.T, method, path string, body *bytes.Buffer, userID
 	}
 	req.Header.Set("Content-Type", "application/json")
 	ctx := middleware.WithUserID(req.Context(), userID)
+	// A session signed in just now: factor changes ask for a recent sign-in.
+	sess := &session.Session{ID: id.NewSessionID(), UserID: userID, CreatedAt: time.Now()}
+	ctx = middleware.WithSession(ctx, sess)
+	ctx = middleware.WithSessionID(ctx, sess.ID)
 	return req.WithContext(ctx)
 }
 

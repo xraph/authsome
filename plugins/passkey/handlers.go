@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/xraph/forge"
@@ -226,6 +227,20 @@ func (p *Plugin) resolveUser(ctx forge.Context) (*user.User, error) {
 	return nil, forge.Unauthorized("authentication required")
 }
 
+// requireFreshSession refuses a passkey registration unless the caller
+// signed in within StepUpWindow. Registering a passkey mints a sign-in
+// credential, which a stolen session must not be able to do.
+func (p *Plugin) requireFreshSession(ctx forge.Context) error {
+	var lookup middleware.SessionLookup
+	if p.engine != nil && p.engine.Store() != nil {
+		lookup = p.engine.Store().GetSession
+	}
+	if !middleware.SessionIsFresh(ctx.Context(), time.Now(), p.config.StepUpWindow, lookup) {
+		return forge.Forbidden("recent sign-in required: sign in again to register a passkey")
+	}
+	return nil
+}
+
 // sessionRevoker is the slice of the engine a credential change needs.
 type sessionRevoker interface {
 	RevokeOtherUserSessions(ctx context.Context, userID id.UserID, keep id.SessionID) error
@@ -260,6 +275,9 @@ func (p *Plugin) handleRegisterBegin(ctx forge.Context, req *RegisterBeginReques
 	u, err := p.resolveUser(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if freshErr := p.requireFreshSession(ctx); freshErr != nil {
+		return nil, freshErr
 	}
 
 	wau := p.toWebAuthnUser(ctx.Context(), u)

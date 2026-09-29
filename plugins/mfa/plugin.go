@@ -54,6 +54,11 @@ var (
 type Config struct {
 	// Issuer is the name shown in authenticator apps (default: "AuthSome").
 	Issuer string
+
+	// StepUpWindow is how recently the caller must have signed in to enrol
+	// a first factor on session auth alone (default: 5 minutes). Once a
+	// factor is verified, enrolling another one asks for that factor.
+	StepUpWindow time.Duration
 }
 
 // Plugin is the MFA authentication plugin.
@@ -263,6 +268,9 @@ func (p *Plugin) mfaRateLimit() []forge.RouteOption {
 type EnrollRequest struct {
 	Method string `json:"method,omitempty"` // "totp" or "sms"
 	Phone  string `json:"phone,omitempty"`  // Required for SMS method
+	// Code proves the factor the user already holds when enrolling a
+	// further one: a current TOTP code or a recovery code.
+	Code string `json:"code,omitempty"`
 }
 
 // EnrollResponse is returned when MFA enrollment starts.
@@ -380,14 +388,24 @@ func (p *Plugin) handleEnroll(ctx forge.Context, req *EnrollRequest) (*EnrollRes
 		return nil, forge.BadRequest("unsupported MFA method: supported methods are totp and sms")
 	}
 
+	// Adding a factor is a change to how the account is protected, so it
+	// needs more than a session that may have been stolen: the factor the
+	// user already holds, or, before any exists, a recent sign-in.
 	if req.Method == "sms" {
+		if err := p.requireStepUp(ctx, userID, req.Code); err != nil {
+			return nil, err
+		}
 		return p.enrollSMS(ctx, userID, req)
 	}
 
-	// Check if already enrolled
+	// Check if already enrolled. Re-enrolling the factor the user already
+	// holds changes nothing, so it is answered before the gate.
 	existing, _ := p.store.GetEnrollment(ctx.Context(), userID, "totp") //nolint:errcheck // best-effort lookup
 	if existing != nil && existing.Verified {
 		return nil, forge.NewHTTPError(http.StatusConflict, "MFA already enrolled and verified")
+	}
+	if err := p.requireStepUp(ctx, userID, req.Code); err != nil {
+		return nil, err
 	}
 
 	// Generate TOTP key
@@ -660,6 +678,27 @@ func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*Cha
 		RefreshToken: result.Session.RefreshToken,
 		ExpiresAt:    expires,
 	}, nil
+}
+
+// requireStepUp gates a factor change. A user who already holds a verified
+// TOTP enrolment must present a current code (or a recovery code); a user
+// with no verified factor yet must have signed in within StepUpWindow.
+func (p *Plugin) requireStepUp(ctx forge.Context, userID id.UserID, code string) error {
+	existing, _ := p.store.GetEnrollment(ctx.Context(), userID, "totp") //nolint:errcheck // best-effort lookup
+	if existing != nil && existing.Verified {
+		if code == "" {
+			return forge.NewHTTPError(http.StatusUnauthorized, "code required: prove your current factor to change it")
+		}
+		return p.verifyStepUp(ctx.Context(), userID, existing, code)
+	}
+	var lookup middleware.SessionLookup
+	if p.engine != nil && p.engine.Store() != nil {
+		lookup = p.engine.Store().GetSession
+	}
+	if !middleware.SessionIsFresh(ctx.Context(), time.Now(), p.config.StepUpWindow, lookup) {
+		return forge.Forbidden("recent sign-in required: sign in again to change your factors")
+	}
+	return nil
 }
 
 // sessionRevoker is the slice of the engine a factor change needs.
