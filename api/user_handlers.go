@@ -88,11 +88,10 @@ func (a *API) registerUserRoutes(router forge.Router) error {
 type MeResponse struct {
 	*user.User
 
-	// Roles are the slugs stamped onto the session at sign-in, which is what
-	// authorization is decided against for this request. Deliberately the
-	// session's roles rather than a fresh lookup: a fresh list would show a
-	// role the current session cannot actually exercise, and a client would
-	// enable a control the server then refuses.
+	// Roles are the slugs the user holds in the session's app right now.
+	// Read live rather than off the session: a role change re-stamps every
+	// live session (Engine.restampUserSessions), so the two agree, and the
+	// live list is the one a client can rely on straight after a change.
 	Roles []string `json:"roles"`
 }
 
@@ -108,7 +107,19 @@ func (a *API) handleGetMe(ctx forge.Context, _ *GetMeRequest) (*MeResponse, erro
 	}
 
 	resp := &MeResponse{User: u}
-	if sess, ok := middleware.SessionFrom(ctx.Context()); ok && sess != nil {
+	sess, hasSess := middleware.SessionFrom(ctx.Context())
+	appID := u.AppID
+	if hasSess && sess != nil && !sess.AppID.IsNil() {
+		appID = sess.AppID
+	}
+	if roles, rolesErr := a.engine.ListUserRolesInApp(ctx.Context(), appID, userID); rolesErr == nil {
+		for _, r := range roles {
+			if r != nil && r.Slug != "" {
+				resp.Roles = append(resp.Roles, r.Slug)
+			}
+		}
+	} else if hasSess && sess != nil {
+		// The stamp is the fallback when RBAC cannot answer.
 		resp.Roles = sess.Roles
 	}
 

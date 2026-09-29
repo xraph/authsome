@@ -2042,6 +2042,9 @@ func (e *Engine) AssignUserRole(ctx context.Context, ur *rbac.UserRole) error {
 	if err := e.rbacStore().AssignUserRole(ctx, ur); err != nil {
 		return fmt.Errorf("authsome: assign user role: %w", err)
 	}
+	if uid, parseErr := id.ParseUserID(ur.UserID); parseErr == nil {
+		e.restampUserSessions(ctx, uid)
+	}
 
 	// Resolve names for notification template variables (best-effort).
 	hookMeta := e.buildRoleHookMetadata(ctx, ur.UserID, ur.RoleID)
@@ -2061,6 +2064,8 @@ func (e *Engine) UnassignUserRole(ctx context.Context, userID id.UserID, roleID 
 	if err := e.rbacStore().UnassignUserRole(ctx, userID.String(), roleID.String()); err != nil {
 		return fmt.Errorf("authsome: unassign user role: %w", err)
 	}
+	// A revoked role must stop working now, not at the next refresh.
+	e.restampUserSessions(ctx, userID)
 
 	// Resolve names for notification template variables (best-effort).
 	hookMeta := e.buildRoleHookMetadata(ctx, userID.String(), roleID.String())
