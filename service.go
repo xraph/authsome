@@ -754,10 +754,11 @@ func (e *Engine) verifyRefreshDPoP(ctx context.Context, sess *session.Session, o
 			ResourceID: sess.ID.String(),
 			ActorID:    sess.UserID.String(),
 			Tenant:     sess.AppID.String(),
+			Severity:   hook.SeverityWarning,
+			Outcome:    hook.OutcomeFailure,
+			Category:   "auth",
 			Metadata:   md,
 		})
-		e.audit(ctx, bridge.SeverityWarning, bridge.OutcomeFailure,
-			"dpop_key_mismatch", "session", sess.ID.String(), sess.UserID.String(), sess.AppID.String(), "auth", md)
 	}
 	return err
 }
@@ -1054,10 +1055,11 @@ func (e *Engine) bindSessionToDevice(ctx context.Context, sess *session.Session,
 }
 
 func (e *Engine) audit(ctx context.Context, severity, outcome, action, resource, resourceID, actorID, tenant, category string, metadata map[string]string) {
-	if e.chronicle == nil {
-		return
-	}
-	if err := e.chronicle.Record(ctx, &bridge.AuditEvent{
+	// Records through the hook bus so the event is enriched and observed
+	// exactly like every other emitted event. Prefer emitting a hook.Event
+	// with a hook.Action constant directly; this wrapper remains for the
+	// older call sites.
+	e.hooks.Emit(ctx, &hook.Event{
 		Action:     action,
 		Resource:   resource,
 		ResourceID: resourceID,
@@ -1067,12 +1069,19 @@ func (e *Engine) audit(ctx context.Context, severity, outcome, action, resource,
 		Severity:   severity,
 		Category:   category,
 		Metadata:   metadata,
-	}); err != nil {
-		e.logger.Warn("authsome: audit record failed",
-			log.String("action", action),
-			log.String("error", err.Error()),
-		)
+	})
+}
+
+// auditCritical records an action and refuses to proceed when the trail
+// cannot take it. Use it before an irreversible or privileged action.
+func (e *Engine) auditCritical(ctx context.Context, event *hook.Event) error {
+	if event.Severity == "" {
+		event.Severity = hook.SeverityCritical
 	}
+	if err := e.hooks.EmitCritical(ctx, event); err != nil {
+		return fmt.Errorf("authsome: audit trail unavailable: %w", err)
+	}
+	return nil
 }
 
 // checkPasswordHistory verifies that the new password does not match any

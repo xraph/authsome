@@ -14,4 +14,8 @@ type MetricsCollector interface {
 
 	// IncrementGauge adjusts a named gauge (e.g., active sessions).
 	IncrementGauge(name, tenant string, delta int)
+
+	// IncrementCounter adds one to a named counter. Used for operational
+	// signals such as audit.record.failed.
+	IncrementCounter(name, tenant string)
 }

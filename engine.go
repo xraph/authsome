@@ -634,14 +634,30 @@ func (e *Engine) Start(ctx context.Context) error {
 		}
 	}
 
+	// Register the audit trail as the first hook handler so a refused record
+	// surfaces to EmitCritical callers before anything else runs.
+	e.hooks.On("chronicle", func(ctx context.Context, event *hook.Event) error {
+		if e.chronicle == nil {
+			return nil
+		}
+		if err := e.chronicle.Record(ctx, auditEventFromHook(event)); err != nil {
+			e.logger.Error("authsome: audit record failed",
+				log.String("action", event.Action),
+				log.String("request_id", event.RequestID),
+				log.String("error", err.Error()),
+			)
+			if e.metrics != nil {
+				e.metrics.IncrementCounter("audit.record.failed", event.Tenant)
+			}
+			return err
+		}
+		return nil
+	})
+
 	// Register metrics collector as a hook handler
 	if e.metrics != nil {
 		e.hooks.On("metrics", func(_ context.Context, event *hook.Event) error {
-			outcome := "success"
-			if event.Err != nil {
-				outcome = "failure"
-			}
-			e.metrics.RecordEvent(event.Action, event.Resource, outcome, event.Tenant, 0)
+			e.metrics.RecordEvent(event.Action, event.Resource, event.Outcome, event.Tenant, 0)
 			return nil
 		})
 	}
@@ -649,13 +665,9 @@ func (e *Engine) Start(ctx context.Context) error {
 	// Register security event recorder as a hook handler
 	if e.securityEvents != nil {
 		e.hooks.On("security_events", func(ctx context.Context, event *hook.Event) error {
-			outcome := "success"
-			if event.Err != nil {
-				outcome = "failure"
-			}
 			return e.securityEvents.RecordSecurityEvent(ctx, &securityevent.Event{
 				Action:    event.Action,
-				Outcome:   outcome,
+				Outcome:   event.Outcome,
 				Metadata:  event.Metadata,
 				CreatedAt: event.Timestamp,
 			})
@@ -664,6 +676,29 @@ func (e *Engine) Start(ctx context.Context) error {
 
 	e.started = true
 	return nil
+}
+
+// auditEventFromHook maps a bus event to the audit sink's shape. Private is
+// deliberately not copied: it exists so a token can reach a notification
+// handler without being written to the trail.
+func auditEventFromHook(event *hook.Event) *bridge.AuditEvent {
+	return &bridge.AuditEvent{
+		Action:     event.Action,
+		Resource:   event.Resource,
+		ResourceID: event.ResourceID,
+		ActorID:    event.ActorID,
+		Tenant:     event.Tenant,
+		OrgID:      event.OrgID,
+		Outcome:    event.Outcome,
+		Severity:   event.Severity,
+		Category:   event.Category,
+		Metadata:   event.Metadata,
+		Reason:     event.Reason,
+		IP:         event.IP,
+		UserAgent:  event.UserAgent,
+		RequestID:  event.RequestID,
+		SessionID:  event.SessionID,
+	}
 }
 
 // Health checks the health of the engine by pinging its store.
