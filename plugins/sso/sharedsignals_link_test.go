@@ -109,6 +109,7 @@ func (s stubEngineWithPlugin) GetUser(context.Context, id.UserID) (*user.User, e
 	return nil, nil
 }
 func (s stubEngineWithPlugin) EnsureDefaultRole(context.Context, id.AppID, id.UserID) {}
+func (s stubEngineWithPlugin) RevokeOtherUserSessions(context.Context, id.UserID, id.SessionID) error { return nil }
 func (s stubEngineWithPlugin) ResolvePrincipal(context.Context, principal.Ref) (*principal.Principal, error) {
 	return nil, principal.ErrNotFound
 }

@@ -1448,6 +1448,16 @@ func (e *Engine) ChangePassword(ctx context.Context, userID id.UserID, currentPa
 
 	e.savePasswordHistory(ctx, userID, oldHash)
 
+	// A password change is usually a response to a suspected compromise, so
+	// every other session is ended; the session that made the change stays.
+	keep, _ := middleware.SessionIDFrom(ctx)
+	if revokeErr := e.RevokeOtherUserSessions(ctx, userID, keep); revokeErr != nil {
+		e.logger.Warn("authsome: revoke other sessions after password change failed",
+			log.String("user_id", userID.String()),
+			log.String("error", revokeErr.Error()),
+		)
+	}
+
 	e.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionPasswordChange,
 		Resource:   hook.ResourceUser,
@@ -2400,8 +2410,12 @@ func (e *Engine) AdminBanUser(ctx context.Context, adminID, userID id.UserID, re
 	// never actually disarmed the agents acting for them.
 	e.plugins.EmitAfterUserUpdate(ctx, u)
 
-	// Revoke all active sessions for the banned user
-	_ = e.store.DeleteUserSessions(ctx, userID) //nolint:errcheck // best-effort cleanup
+	// The ban is persisted; now every live credential goes with it. A
+	// failure here is returned so the operator retries rather than
+	// believing the person is out while a key still works.
+	if err := e.RevokeUserAccess(ctx, userID); err != nil {
+		return fmt.Errorf("authsome: admin ban user: %w", err)
+	}
 
 	e.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionAdminBanUser,

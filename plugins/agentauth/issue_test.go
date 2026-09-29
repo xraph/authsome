@@ -139,6 +139,7 @@ func (e *stubEngine) GetUser(ctx context.Context, userID id.UserID) (*user.User,
 	return e.store.GetUser(ctx, userID)
 }
 func (e *stubEngine) EnsureDefaultRole(_ context.Context, _ id.AppID, _ id.UserID) {}
+func (e *stubEngine) RevokeOtherUserSessions(context.Context, id.UserID, id.SessionID) error { return nil }
 func (e *stubEngine) AuthMiddleware() forge.Middleware                             { return nil }
 func (e *stubEngine) AuthRegistry() auth.Registry                                  { return nil }
 func (e *stubEngine) PlatformAppID() id.AppID                                      { return id.AppID{} }

@@ -78,6 +78,8 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		logger:      p.logger,
 		roleEnsurer: engine,
 		plugins:     p.plugins,
+		apiKeys:     engine.APIKeyStore(),
+		hooks:       p.hooks,
 	}
 
 	return nil

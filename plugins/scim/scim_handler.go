@@ -253,6 +253,7 @@ func (p *Plugin) handlePatchUser(ctx forge.Context, req *scimUserPathParam) (*Us
 	}
 
 	// Apply SCIM PATCH operations.
+	wasBanned := u.Banned
 	for _, op := range patch.Operations {
 		if strings.EqualFold(op.Op, "replace") {
 			p.applyUserPatchReplace(u, op)
@@ -263,6 +264,12 @@ func (p *Plugin) handlePatchUser(ctx forge.Context, req *scimUserPathParam) (*Us
 	if err := p.authStore.UpdateUser(ctx.Context(), u); err != nil {
 		p.service.RecordLog(ctx.Context(), cfg.ID, ActionUpdateUser, "User", "", req.UserID, LogStatusError, err.Error())
 		return nil, forge.InternalError(err)
+	}
+	if u.Banned && !wasBanned {
+		if err := p.service.enforceDeactivation(ctx.Context(), cfg, u); err != nil {
+			p.service.RecordLog(ctx.Context(), cfg.ID, ActionSuspendUser, "User", "", req.UserID, LogStatusError, err.Error())
+			return nil, forge.InternalError(err)
+		}
 	}
 
 	// PATCH {"path":"active","value":false} (and the pathless bulk-replace

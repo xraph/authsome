@@ -70,6 +70,9 @@ type Plugin struct {
 	// by the /v1/mfa/challenge handler to issue real sessions after a
 	// ticket+code round-trip via Engine.IssueSession.
 	engine plugin.Engine
+	// revoker ends the user's other sessions after a factor changes. Nil in
+	// minimal test wiring, in which case nothing is revoked.
+	revoker sessionRevoker
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -108,6 +111,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		p.ceremonies = ceremony.NewMemory()
 	}
 	p.engine = engine
+	p.revoker = engine
 
 	// Build a persistent, at-rest-encrypted enrollment store when one hasn't
 	// been injected (tests inject via SetStore). TOTP/SMS secrets are wrapped
@@ -495,6 +499,7 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyMFARequest) (*Verify
 
 		p.audit(ctx.Context(), hook.ActionMFAEnroll, "mfa", enrollment.ID.String(), userID.String(), "", bridge.OutcomeSuccess)
 		p.relayEvent(ctx.Context(), "auth.mfa.verified", "", map[string]string{"user_id": userID.String(), "method": "totp"})
+		p.revokeOtherSessions(ctx.Context(), userID)
 
 		return &VerifyMFAResponse{
 			Verified:      true,
@@ -657,6 +662,28 @@ func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*Cha
 	}, nil
 }
 
+// sessionRevoker is the slice of the engine a factor change needs.
+type sessionRevoker interface {
+	RevokeOtherUserSessions(ctx context.Context, userID id.UserID, keep id.SessionID) error
+}
+
+// revokeOtherSessions signs the user out everywhere but the session that
+// made the change. Enrolling or removing a factor is the moment to drop any
+// session an attacker may already hold; a failure is logged, not returned,
+// because the factor change itself has already been persisted.
+func (p *Plugin) revokeOtherSessions(ctx context.Context, userID id.UserID) {
+	if p.revoker == nil {
+		return
+	}
+	keep, _ := middleware.SessionIDFrom(ctx)
+	if err := p.revoker.RevokeOtherUserSessions(ctx, userID, keep); err != nil && p.logger != nil {
+		p.logger.Warn("mfa: revoke other sessions failed",
+			log.String("user_id", userID.String()),
+			log.String("error", err.Error()),
+		)
+	}
+}
+
 // verifyStepUp re-proves possession of the second factor for a sensitive
 // change, accepting a current TOTP code or a recovery code. Replay protection
 // applies as it does at sign-in, so the same code cannot be reused to authorise
@@ -753,6 +780,7 @@ func (p *Plugin) handleDisable(ctx forge.Context, req *DisableRequest) (*Disable
 	p.audit(ctx.Context(), hook.ActionMFADisable, "mfa", enrollment.ID.String(), userID.String(), "", bridge.OutcomeSuccess)
 	p.relayEvent(ctx.Context(), "auth.mfa.disabled", "", map[string]string{"user_id": userID.String(), "method": "totp"})
 	p.emitHook(ctx.Context(), hook.ActionMFADisable, "mfa", enrollment.ID.String(), userID.String(), "")
+	p.revokeOtherSessions(ctx.Context(), userID)
 
 	return &DisableResponse{Status: "mfa disabled"}, nil
 }

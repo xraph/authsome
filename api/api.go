@@ -211,6 +211,7 @@ func (a *API) handleManifest(ctx forge.Context, _ *apitypes.Empty) (*Manifest, e
 			{"method": "GET", "path": "/me", "auth": "session"},
 			{"method": "PATCH", "path": "/me", "auth": "session"},
 			{"method": "GET", "path": "/sessions", "auth": "session"},
+			{"method": "DELETE", "path": "/sessions", "auth": "session"},
 			{"method": "DELETE", "path": "/sessions/{id}", "auth": "session"},
 			{"method": "GET", "path": "/devices", "auth": "session"},
 			{"method": "DELETE", "path": "/devices/{id}", "auth": "session"},

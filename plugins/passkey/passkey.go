@@ -116,17 +116,20 @@ type Config struct {
 
 // Plugin is the passkey/WebAuthn plugin.
 type Plugin struct {
-	config       Config
-	store        Store
-	wa           *webauthn.WebAuthn
-	ceremonies   ceremony.Store
-	chronicle    bridge.Chronicle
-	relay        bridge.EventRelay
-	hooks        *hook.Bus
-	logger       log.Logger
-	settingsMgr  *settings.Manager
-	engine       plugin.Engine // used to resolve users and issue sessions for passwordless login
-	originWAOnce sync.Map      // map[string]*webauthn.WebAuthn — per-origin webauthn cache for localhost dev
+	config      Config
+	store       Store
+	wa          *webauthn.WebAuthn
+	ceremonies  ceremony.Store
+	chronicle   bridge.Chronicle
+	relay       bridge.EventRelay
+	hooks       *hook.Bus
+	logger      log.Logger
+	settingsMgr *settings.Manager
+	engine      plugin.Engine // used to resolve users and issue sessions for passwordless login
+	// revoker ends the user's other sessions after a passkey is registered.
+	// Nil in minimal test wiring, in which case nothing is revoked.
+	revoker      sessionRevoker
+	originWAOnce sync.Map // map[string]*webauthn.WebAuthn — per-origin webauthn cache for localhost dev
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -219,6 +222,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 
 	if engine != nil {
 		p.engine = engine
+		p.revoker = engine
 		p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 		p.relay = engine.Relay()
 		p.hooks = engine.Hooks()

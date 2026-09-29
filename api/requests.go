@@ -126,6 +126,9 @@ type SwitchOrgResponse struct {
 // ListSessionsRequest is an empty request for GET /sessions (user from context).
 type ListSessionsRequest struct{}
 
+// RevokeOtherSessionsRequest binds DELETE /sessions, which takes no input.
+type RevokeOtherSessionsRequest struct{}
+
 // RevokeSessionRequest binds the path for DELETE /sessions/:sessionId.
 type RevokeSessionRequest struct {
 	SessionID string `path:"sessionId" description:"Session identifier"`

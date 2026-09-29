@@ -1,6 +1,7 @@
 package passkey
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -9,9 +10,11 @@ import (
 
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/xraph/forge"
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
@@ -223,6 +226,28 @@ func (p *Plugin) resolveUser(ctx forge.Context) (*user.User, error) {
 	return nil, forge.Unauthorized("authentication required")
 }
 
+// sessionRevoker is the slice of the engine a credential change needs.
+type sessionRevoker interface {
+	RevokeOtherUserSessions(ctx context.Context, userID id.UserID, keep id.SessionID) error
+}
+
+// revokeOtherSessions signs the user out everywhere but the session that
+// registered the passkey, so a session an attacker already holds does not
+// survive the change. A failure is logged, not returned: the credential is
+// already stored.
+func (p *Plugin) revokeOtherSessions(ctx context.Context, userID id.UserID) {
+	if p.revoker == nil {
+		return
+	}
+	keep, _ := middleware.SessionIDFrom(ctx)
+	if err := p.revoker.RevokeOtherUserSessions(ctx, userID, keep); err != nil && p.logger != nil {
+		p.logger.Warn("passkey: revoke other sessions failed",
+			log.String("user_id", userID.String()),
+			log.String("error", err.Error()),
+		)
+	}
+}
+
 // ──────────────────────────────────────────────────
 // Handlers
 // ──────────────────────────────────────────────────
@@ -301,6 +326,7 @@ func (p *Plugin) handleRegisterFinish(ctx forge.Context, _ *RegisterFinishReques
 	p.audit(ctx.Context(), hook.ActionPasskeyRegister, hook.ResourcePasskey, credIDStr, userIDStr, "", bridge.OutcomeSuccess)
 	p.relayEvent(ctx.Context(), "auth.passkey.registered", "", map[string]string{"user_id": userIDStr})
 	p.emitHook(ctx.Context(), hook.ActionPasskeyRegister, hook.ResourcePasskey, credIDStr, userIDStr, "")
+	p.revokeOtherSessions(ctx.Context(), u.ID)
 
 	return &RegisterFinishResponse{
 		ID:          credential.ID.String(),

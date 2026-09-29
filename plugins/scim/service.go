@@ -6,11 +6,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/xraph/authsome/apikey"
+	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/plugin"
@@ -32,6 +35,60 @@ type Service struct {
 	logger      log.Logger
 	roleEnsurer roleEnsurer
 	plugins     *plugin.Registry
+	// apiKeys and hooks back enforceDeactivation: a deactivated user loses
+	// their sessions and keys, and the trail must record it.
+	apiKeys apikey.Store
+	hooks   *hook.Bus
+}
+
+// enforceDeactivation ends every live credential of a user the IdP has just
+// deactivated and records the deactivation as a critical trail entry. The
+// entry is written through EmitCritical: a deactivation the trail cannot
+// hold is reported as failed so the IdP retries it.
+func (s *Service) enforceDeactivation(ctx context.Context, cfg *SCIMConfig, u *user.User) error {
+	if err := s.authStore.DeleteUserSessions(ctx, u.ID); err != nil {
+		return fmt.Errorf("scim: deactivate: sessions: %w", err)
+	}
+	revoked := 0
+	if s.apiKeys != nil {
+		keys, err := s.apiKeys.ListAPIKeysByUser(ctx, u.AppID, u.ID)
+		if err != nil {
+			return fmt.Errorf("scim: deactivate: list keys: %w", err)
+		}
+		now := time.Now()
+		for _, k := range keys {
+			if k.Revoked {
+				continue
+			}
+			k.Revoked = true
+			k.UpdatedAt = now
+			if err := s.apiKeys.UpdateAPIKey(ctx, k); err != nil {
+				return fmt.Errorf("scim: deactivate: key %s: %w", k.ID, err)
+			}
+			revoked++
+		}
+	}
+	if s.hooks == nil {
+		return nil
+	}
+	return s.hooks.EmitCritical(ctx, &hook.Event{
+		Action:     hook.ActionAdminBanUser,
+		Resource:   hook.ResourceUser,
+		ResourceID: u.ID.String(),
+		ActorID:    "scim:" + cfg.ID.String(),
+		Tenant:     u.AppID.String(),
+		Category:   "scim",
+		Severity:   hook.SeverityWarning,
+		Reason:     "deactivated by identity provider",
+		Metadata: map[string]string{
+			"source":       "scim",
+			"config_id":    cfg.ID.String(),
+			"keys_revoked": strconv.Itoa(revoked),
+		},
+		Private: map[string]string{
+			"email": u.Email,
+		},
+	})
 }
 
 // ──────────────────────────────────────────────────
@@ -279,6 +336,7 @@ func (s *Service) ReplaceUser(ctx context.Context, cfg *SCIMConfig, target *user
 			return ErrOutOfScope
 		}
 	}
+	wasBanned := target.Banned
 	target.FirstName = scimUser.Name.GivenName
 	target.LastName = scimUser.Name.FamilyName
 	target.Banned = !scimUser.Active
@@ -290,6 +348,9 @@ func (s *Service) ReplaceUser(ctx context.Context, cfg *SCIMConfig, target *user
 	// revocation among them) must see every path that does.
 	if s.plugins != nil {
 		s.plugins.EmitAfterUserUpdate(ctx, target)
+	}
+	if target.Banned && !wasBanned {
+		return s.enforceDeactivation(ctx, cfg, target)
 	}
 	return nil
 }
@@ -316,11 +377,17 @@ func (s *Service) ProvisionUser(ctx context.Context, cfg *SCIMConfig, scimUser *
 			return nil, ActionUpdateUser, scopeErr
 		}
 		// Update existing user.
+		wasBanned := existing.Banned
 		existing.FirstName = scimUser.Name.GivenName
 		existing.LastName = scimUser.Name.FamilyName
 		existing.Banned = !scimUser.Active
 		if err := s.authStore.UpdateUser(ctx, existing); err != nil {
 			return nil, ActionUpdateUser, err
+		}
+		if existing.Banned && !wasBanned {
+			if err := s.enforceDeactivation(ctx, cfg, existing); err != nil {
+				return nil, ActionUpdateUser, err
+			}
 		}
 		// ProvisionUser backs both PUT /Users/:id (handleReplaceUser) and a
 		// POST that resolves to an existing user, and either can flip Banned.
@@ -417,7 +484,7 @@ func (s *Service) DeactivateUser(ctx context.Context, cfg *SCIMConfig, userID id
 	if s.plugins != nil {
 		s.plugins.EmitAfterUserUpdate(ctx, u)
 	}
-	return nil
+	return s.enforceDeactivation(ctx, cfg, u)
 }
 
 // ProvisionGroup creates or updates a team from SCIM Group data.

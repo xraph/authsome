@@ -125,6 +125,10 @@ type Engine interface {
 	ResolveUser(userID string) (*user.User, error)
 	// GetUser fetches a user by typed ID.
 	GetUser(ctx context.Context, userID id.UserID) (*user.User, error)
+	// RevokeOtherUserSessions ends every session of the user except keep.
+	// Plugins call it after a credential change (second factor, passkey) so
+	// a session an attacker already holds does not survive the change.
+	RevokeOtherUserSessions(ctx context.Context, userID id.UserID, keep id.SessionID) error
 
 	// ── Role management ──
 
