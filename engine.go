@@ -10,6 +10,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -280,7 +281,22 @@ func NewEngine(opts ...Option) (*Engine, error) {
 
 	// Register core session settings.
 	if err := registerCoreSessionSettings(e.settingsMgr); err != nil {
-		return nil, fmt.Errorf("authsome: failed to register core session settings: %w", err)
+		return nil, fmt.Errorf("authsome: register session settings: %w", err)
+	}
+	// SameSite=None makes the cookie ride along on cross-site requests; it
+	// is only safe with the CSRF check standing in front of them.
+	if def := e.settingsMgr.Definition(SettingCookieSameSite.Def.Key); def != nil {
+		csrfOn := e.config.CSRF.IsEnabled()
+		def.Validate = func(raw json.RawMessage) error {
+			var v string
+			if err := json.Unmarshal(raw, &v); err != nil {
+				return fmt.Errorf("session.cookie_same_site: %w", err)
+			}
+			if v == "none" && !csrfOn {
+				return errors.New("session.cookie_same_site: \"none\" needs the CSRF check on (csrf.enabled)")
+			}
+			return nil
+		}
 	}
 
 	// Register captcha settings (Phase 2B.2).

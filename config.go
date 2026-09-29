@@ -3,6 +3,7 @@ package authsome
 import (
 	"time"
 
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/store"
 )
 
@@ -61,6 +62,33 @@ type Config struct {
 	// Webhooks governs how webhook URLs are checked before a Relay endpoint
 	// is created for them.
 	Webhooks WebhookConfig `json:"webhooks"`
+
+	// CSRF governs the cross-site check on cookie-authenticated writes.
+	CSRF CSRFConfig `json:"csrf"`
+}
+
+// CSRFConfig governs the check that keeps another site from riding a
+// session cookie: an unsafe request (anything but GET, HEAD, OPTIONS,
+// TRACE) authenticated by cookie must come from the same site, or from an
+// origin listed here. Bearer, DPoP and API-key requests are not affected.
+type CSRFConfig struct {
+	// Enabled turns the check on. Unset means on: an explicit false is the
+	// only way to switch it off, and session.cookie_same_site=none is
+	// refused while it is off.
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// AllowedOrigins are origins (scheme://host[:port]) whose cross-site
+	// cookie requests are accepted, for a first-party front end served
+	// from another host.
+	AllowedOrigins []string `json:"allowed_origins"`
+}
+
+// IsEnabled reports whether the cross-site check runs.
+func (c CSRFConfig) IsEnabled() bool { return c.Enabled == nil || *c.Enabled }
+
+// ToMiddleware is the middleware's view of this configuration.
+func (c CSRFConfig) ToMiddleware() middleware.CSRFConfig {
+	return middleware.CSRFConfig{Enabled: c.IsEnabled(), AllowedOrigins: c.AllowedOrigins}
 }
 
 // WebhookConfig governs webhook registration.

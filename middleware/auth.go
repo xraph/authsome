@@ -218,6 +218,9 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 			installDPoPRequestScope(ctx)
 			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
 			scheme, token := extractCredentialCtx(ctx.Context(), ctx.Request(), cookieName)
+			if token != "" {
+				ctx.WithContext(WithCredentialScheme(ctx.Context(), scheme))
+			}
 			if token == "" {
 				return next(ctx)
 			}
@@ -364,6 +367,9 @@ func AuthMiddlewareWithStrategies(
 			installDPoPRequestScope(ctx)
 			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
 			scheme, token := extractCredentialCtx(ctx.Context(), ctx.Request(), cookieName)
+			if token != "" {
+				ctx.WithContext(WithCredentialScheme(ctx.Context(), scheme))
+			}
 
 			// Try bearer session resolution first (skip if token looks like an API key).
 			if token != "" && !isAPIKeyToken(token) {
@@ -411,6 +417,9 @@ func AuthMiddlewareWithJWT(
 			installDPoPRequestScope(ctx)
 			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
 			scheme, token := extractCredentialCtx(ctx.Context(), ctx.Request(), cookieName)
+			if token != "" {
+				ctx.WithContext(WithCredentialScheme(ctx.Context(), scheme))
+			}
 
 			if token != "" {
 				// JWT detection: tokens with two dots are JWTs.

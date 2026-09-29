@@ -921,7 +921,7 @@ func TestHandleRefresh_CookieFallback_EmptyBody(t *testing.T) {
 	var resp map[string]any
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
 	assert.NotEmpty(t, resp["session_token"])
-	assert.NotEmpty(t, resp["refresh_token"])
+	assert.Empty(t, resp["refresh_token"], "on the cookie path the refresh token stays server-side")
 }
 
 // A stale (already-rotated) body refresh token must NOT log the user out when a
@@ -948,8 +948,8 @@ func TestHandleRefresh_CookieFallback_StaleBodyToken(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	var resp map[string]any
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-	assert.NotEmpty(t, resp["refresh_token"])
-	assert.NotEqual(t, r1, resp["refresh_token"], "should issue a fresh refresh token, not echo the stale one")
+	assert.NotEmpty(t, resp["session_token"])
+	assert.Empty(t, resp["refresh_token"], "the stale body token is neither echoed nor replaced: the cookie path keeps the refresh token server-side")
 }
 
 // ──────────────────────────────────────────────────

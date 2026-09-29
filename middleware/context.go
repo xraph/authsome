@@ -68,6 +68,7 @@ const (
 	ctxKeyAuthMethod
 	ctxKeyApp
 	ctxKeyPendingOAuth
+	ctxKeyCredentialScheme
 )
 
 // WithUser stores a user in the context.
@@ -259,6 +260,18 @@ func AppFrom(ctx context.Context) (*app.App, bool) {
 }
 
 // WithAuthMethod stores the authentication method used (e.g. "session", "strategy").
+// WithCredentialScheme records how the request presented its credential
+// (bearer, dpop or cookie), for the checks that only apply to one of them.
+func WithCredentialScheme(ctx context.Context, scheme string) context.Context {
+	return context.WithValue(ctx, ctxKeyCredentialScheme, scheme)
+}
+
+// CredentialSchemeFrom returns how the request presented its credential.
+func CredentialSchemeFrom(ctx context.Context) (string, bool) {
+	s, ok := ctx.Value(ctxKeyCredentialScheme).(string)
+	return s, ok && s != ""
+}
+
 func WithAuthMethod(ctx context.Context, method string) context.Context {
 	return context.WithValue(ctx, ctxKeyAuthMethod, method)
 }

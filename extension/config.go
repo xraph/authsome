@@ -45,6 +45,9 @@ type Config struct {
 	// Webhooks governs webhook URL checks; see authsome.WebhookConfig.
 	Webhooks WebhookConfig `json:"webhooks" mapstructure:"webhooks" yaml:"webhooks"`
 
+	// CSRF governs the cross-site check on cookie sessions; see authsome.CSRFConfig.
+	CSRF CSRFConfig `json:"csrf" mapstructure:"csrf" yaml:"csrf"`
+
 	// Mailer configuration for transactional email delivery.
 	Mailer MailerConfig `json:"mailer" mapstructure:"mailer" yaml:"mailer"`
 
@@ -384,6 +387,12 @@ type RetentionConfig struct {
 	DeviceCodesDays          int `json:"device_codes_days" mapstructure:"device_codes_days" yaml:"device_codes_days"`
 	AuthCodesDays            int `json:"auth_codes_days" mapstructure:"auth_codes_days" yaml:"auth_codes_days"`
 	BatchSize                int `json:"batch_size" mapstructure:"batch_size" yaml:"batch_size"`
+}
+
+// CSRFConfig mirrors authsome.CSRFConfig.
+type CSRFConfig struct {
+	Enabled        *bool    `json:"enabled,omitempty" mapstructure:"enabled" yaml:"enabled,omitempty"`
+	AllowedOrigins []string `json:"allowed_origins" mapstructure:"allowed_origins" yaml:"allowed_origins"`
 }
 
 // WebhookConfig mirrors authsome.WebhookConfig.

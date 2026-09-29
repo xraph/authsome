@@ -688,6 +688,9 @@ func (e *Extension) Middlewares() []forge.Middleware {
 	// expiry, and the sliding window extends after it.
 	return []forge.Middleware{
 		e.AuthMiddleware(),
+		// Right after auth, before anything rotates or extends the session
+		// on a request another site may have sent.
+		middleware.CSRF(e.engine.Config().CSRF.ToMiddleware()),
 		e.autoRefreshMiddleware(),
 		e.sessionActivityMiddleware(),
 	}
@@ -1375,6 +1378,12 @@ func (e *Extension) buildEngineConfig() authsome.Config {
 		cfg.Session.CleanupInterval = e.config.Session.CleanupInterval
 	}
 
+	if e.config.CSRF.Enabled != nil {
+		cfg.CSRF.Enabled = e.config.CSRF.Enabled
+	}
+	if len(e.config.CSRF.AllowedOrigins) > 0 {
+		cfg.CSRF.AllowedOrigins = e.config.CSRF.AllowedOrigins
+	}
 	cfg.Webhooks.AllowInsecureURLs = e.config.Webhooks.AllowInsecureURLs
 	if e.config.Webhooks.VerifyTimeout != 0 {
 		cfg.Webhooks.VerifyTimeout = e.config.Webhooks.VerifyTimeout

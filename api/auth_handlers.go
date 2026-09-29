@@ -17,7 +17,6 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/session"
-	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
 )
 
@@ -327,8 +326,15 @@ func (a *API) handleRefresh(ctx forge.Context, req *RefreshRequest) (*TokenRespo
 	// session is rotated from the access token rather than by reading its
 	// refresh token back.
 	if cookieTok := a.sessionTokenFromCookie(ctx); cookieTok != "" {
+		// The cookie is the credential on this path: the new access token
+		// goes back in the cookie and the refresh token stays server-side,
+		// where a script on the page cannot read it.
 		if sess, rerr := a.engine.RefreshBySessionToken(ctx.Context(), cookieTok, opts); rerr == nil {
-			return a.respondWithTokens(ctx, sess)
+			a.setSessionCookie(ctx, sess.Token, a.sessionTokenMaxAge())
+			return nil, ctx.JSON(http.StatusOK, &TokenResponse{
+				SessionToken: sess.Token,
+				ExpiresAt:    sess.ExpiresAt.Format("2006-01-02T15:04:05Z07:00"),
+			})
 		}
 	}
 
@@ -383,45 +389,22 @@ type cookieConfig struct {
 	SameSite http.SameSite
 }
 
-// resolveCookieConfig reads cookie settings from the dynamic settings manager.
+// resolveCookieConfig is the engine's session cookie template for this
+// request: the same names and attributes every other cookie writer uses,
+// with the app taken from the request and HTTPS judged through the
+// trusted-proxy check rather than a header anyone can send.
 func (a *API) resolveCookieConfig(ctx forge.Context) cookieConfig {
-	goCtx := ctx.Context()
-	mgr := a.engine.Settings()
-	opts := settings.ResolveOpts{}
-
-	name, _ := settings.Get(goCtx, mgr, authsome.SettingCookieName, opts) //nolint:errcheck // best-effort settings
-	if name == "" {
-		name = "authsome_session_token"
+	appID := ""
+	if app, ok := middleware.AppIDFrom(ctx.Context()); ok {
+		appID = app.String()
 	}
-	domain, _ := settings.Get(goCtx, mgr, authsome.SettingCookieDomain, opts) //nolint:errcheck // best-effort settings
-	path, _ := settings.Get(goCtx, mgr, authsome.SettingCookiePath, opts)     //nolint:errcheck // best-effort settings
-	if path == "" {
-		path = "/"
-	}
-	secureSetting, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSecure, opts) //nolint:errcheck // best-effort settings
-	httpOnly, _ := settings.Get(goCtx, mgr, authsome.SettingCookieHTTPOnly, opts)    //nolint:errcheck // best-effort settings
-	sameSiteStr, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSameSite, opts) //nolint:errcheck // best-effort settings
-
-	// Auto-detect secure: if setting is true but request is plain HTTP, disable for dev.
-	r := ctx.Request()
-	isHTTPS := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
-	secure := secureSetting && isHTTPS
-
-	sameSite := http.SameSiteLaxMode
-	switch sameSiteStr {
-	case "strict":
-		sameSite = http.SameSiteStrictMode
-	case "none":
-		sameSite = http.SameSiteNoneMode
-	}
-
+	c := authsome.SessionCookieTemplate(ctx.Context(), a.engine.Settings(), appID, middleware.IsHTTPS(ctx.Request()))
 	return cookieConfig{
-		Name: name, Domain: domain, Path: path,
-		Secure: secure, HTTPOnly: httpOnly, SameSite: sameSite,
+		Name: c.Name, Domain: c.Domain, Path: c.Path,
+		Secure: c.Secure, HTTPOnly: c.HttpOnly, SameSite: c.SameSite,
 	}
 }
 
-// setSessionCookie sets the httpOnly session token cookie on the response.
 func (a *API) setSessionCookie(ctx forge.Context, token string, maxAge int) {
 	cc := a.resolveCookieConfig(ctx)
 	cookie := &http.Cookie{ // #nosec G124 -- secure/httpOnly/sameSite resolved dynamically via cookieConfig
