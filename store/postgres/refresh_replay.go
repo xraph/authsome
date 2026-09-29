@@ -2,8 +2,6 @@ package postgres
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -104,10 +102,10 @@ func (s *Store) RevokeRefreshTokenFamily(ctx context.Context, familyID id.Sessio
 	}
 
 	for _, sess := range sessions {
-		if sess.RefreshToken == "" {
+		h := hashOrDerive(sess.RefreshTokenHash.String, sess.RefreshToken).String
+		if h == "" {
 			continue
 		}
-		h := hashRefreshTokenPg(sess.RefreshToken)
 		rec := &RevokedRefreshTokenModel{
 			TokenHash: h,
 			FamilyID:  famStr,
@@ -152,13 +150,6 @@ func (s *Store) MarkRefreshTokenReplayed(ctx context.Context, tokenHash string) 
 	}
 	n, _ := res.RowsAffected() //nolint:errcheck // driver always supports RowsAffected
 	return n > 0, nil
-}
-
-// hashRefreshTokenPg returns the hex-encoded SHA-256 of a refresh token.
-// Mirrors the canonicalisation used by the in-memory store and engine.
-func hashRefreshTokenPg(tok string) string {
-	sum := sha256.Sum256([]byte(tok))
-	return hex.EncodeToString(sum[:])
 }
 
 // Compile-time assertion that the Store implements the session.Store

@@ -317,18 +317,18 @@ func (a *API) handleRefresh(ctx forge.Context, req *RefreshRequest) (*TokenRespo
 		RequestURL: middleware.RequestURL(httpReq),
 	}
 
-	// Cookie-first: when the request carries a valid session cookie, rotate via
-	// that session's *current* server-side refresh token. Browsers commonly lose
-	// track of the rotated refresh token (the cause of repeated /refresh 401s);
-	// this lets them re-sync from their still-valid session. We deliberately do
-	// NOT feed the body token in first — a stale body token trips replay
-	// detection, which cascade-revokes the whole token family and would log the
-	// user out (see Engine.Refresh).
+	// Cookie-first: when the request carries a valid session cookie, rotate
+	// the session behind it. Browsers commonly lose track of the rotated
+	// refresh token (the cause of repeated /refresh 401s); this lets them
+	// re-sync from their still-valid session. We deliberately do NOT feed the
+	// body token in first: a stale body token trips replay detection, which
+	// cascade-revokes the whole token family and would log the user out (see
+	// Engine.Refresh). The store keeps refresh tokens as hashes, so the
+	// session is rotated from the access token rather than by reading its
+	// refresh token back.
 	if cookieTok := a.sessionTokenFromCookie(ctx); cookieTok != "" {
-		if cur, err := a.engine.ResolveSessionByToken(cookieTok); err == nil && cur.RefreshToken != "" {
-			if sess, rerr := a.engine.Refresh(ctx.Context(), cur.RefreshToken, opts); rerr == nil {
-				return a.respondWithTokens(ctx, sess)
-			}
+		if sess, rerr := a.engine.RefreshBySessionToken(ctx.Context(), cookieTok, opts); rerr == nil {
+			return a.respondWithTokens(ctx, sess)
 		}
 	}
 

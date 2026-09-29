@@ -33,8 +33,13 @@ type AutoRefreshConfig struct {
 // checks run against: the DPoP proof is bound to this method and URL, and the
 // IP and User-Agent are this request's.
 type RefreshRequest struct {
-	// RefreshToken is the session's current refresh token.
+	// RefreshToken is the session's current refresh token when the caller
+	// holds it. A session loaded from the store carries none: the store keeps
+	// refresh tokens as hashes, so the middleware sends SessionToken instead
+	// and the refresher rotates the session behind that access token.
 	RefreshToken string
+	// SessionToken is the access token the request authenticated with.
+	SessionToken string
 
 	// IPAddress and UserAgent are validated against the session's stored
 	// values when session binding is enabled.
@@ -51,8 +56,9 @@ type RefreshRequest struct {
 	RequestURL string
 }
 
-// SessionRefresher refreshes a session using its refresh token and returns the
-// updated session with new tokens. The engine's Refresh method fulfills this.
+// SessionRefresher refreshes a session and returns the updated session with
+// new tokens. The extension adapts the engine's Refresh and
+// RefreshBySessionToken to it, picking by which credential the request holds.
 type SessionRefresher func(ctx context.Context, req RefreshRequest) (*session.Session, error)
 
 // AutoRefreshConfigResolver returns the auto-refresh configuration for the
@@ -141,6 +147,7 @@ func autoRefreshSession(
 	httpReq := ctx.Request()
 	refreshed, err := refresher(ctx.Context(), RefreshRequest{
 		RefreshToken: sess.RefreshToken,
+		SessionToken: sess.Token,
 		IPAddress:    ClientIP(httpReq),
 		UserAgent:    httpReq.UserAgent(),
 		DPoPProof:    httpReq.Header.Get("DPoP"),

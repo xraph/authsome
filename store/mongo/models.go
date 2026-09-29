@@ -204,8 +204,15 @@ type sessionModel struct {
 	ServiceAccountID string `grove:"service_account_id"        bson:"service_account_id,omitempty"`
 	OrgID            string `grove:"org_id"                    bson:"org_id,omitempty"`
 	FamilyID         string `grove:"family_id"                 bson:"family_id,omitempty"`
+	// Token and RefreshToken are empty on every document written since
+	// hash_session_tokens; they hold plaintext only on documents older than
+	// that migration, which the first lookup rewrites. TokenHash and
+	// RefreshTokenHash are absent on those legacy documents, which the
+	// partial unique indexes skip.
 	Token            string `grove:"token"                     bson:"token"`
 	RefreshToken     string `grove:"refresh_token"             bson:"refresh_token"`
+	TokenHash        string `grove:"token_hash"                bson:"token_hash,omitempty"`
+	RefreshTokenHash string `grove:"refresh_token_hash"        bson:"refresh_token_hash,omitempty"`
 	IPAddress        string `grove:"ip_address"                bson:"ip_address"`
 	UserAgent        string `grove:"user_agent"                bson:"user_agent"`
 	DeviceID         string `grove:"device_id"                 bson:"device_id,omitempty"`
@@ -248,8 +255,8 @@ func toSessionModel(s *session.Session) *sessionModel {
 		EnvID:                 s.EnvID.String(),
 		UserID:                s.UserID.String(),
 		PrincipalKind:         string(s.PrincipalKind),
-		Token:                 s.Token,
-		RefreshToken:          s.RefreshToken,
+		TokenHash:             hashOrDerive(s.TokenHash, s.Token),
+		RefreshTokenHash:      hashOrDerive(s.RefreshTokenHash, s.RefreshToken),
 		IPAddress:             s.IPAddress,
 		UserAgent:             s.UserAgent,
 		LastActivityAt:        s.LastActivityAt,
@@ -327,6 +334,8 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 		PrincipalKind:         principal.Kind(m.PrincipalKind),
 		Token:                 m.Token,
 		RefreshToken:          m.RefreshToken,
+		TokenHash:             hashOrDerive(m.TokenHash, m.Token),
+		RefreshTokenHash:      hashOrDerive(m.RefreshTokenHash, m.RefreshToken),
 		IPAddress:             m.IPAddress,
 		UserAgent:             m.UserAgent,
 		LastActivityAt:        m.LastActivityAt,

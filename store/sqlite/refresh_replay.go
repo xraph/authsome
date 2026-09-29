@@ -2,8 +2,6 @@ package sqlite
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -98,10 +96,10 @@ func (s *Store) RevokeRefreshTokenFamily(ctx context.Context, familyID id.Sessio
 	}
 
 	for _, sess := range sessions {
-		if sess.RefreshToken == "" {
+		h := hashOrDerive(sess.RefreshTokenHash.String, sess.RefreshToken).String
+		if h == "" {
 			continue
 		}
-		h := hashRefreshTokenSqlite(sess.RefreshToken)
 		rec := &RevokedRefreshTokenModel{
 			TokenHash: h,
 			FamilyID:  famStr,
@@ -144,10 +142,4 @@ func (s *Store) MarkRefreshTokenReplayed(ctx context.Context, tokenHash string) 
 	}
 	n, _ := res.RowsAffected() //nolint:errcheck // driver always supports RowsAffected
 	return n > 0, nil
-}
-
-// hashRefreshTokenSqlite returns hex(SHA-256(tok)).
-func hashRefreshTokenSqlite(tok string) string {
-	sum := sha256.Sum256([]byte(tok))
-	return hex.EncodeToString(sum[:])
 }

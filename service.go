@@ -474,14 +474,6 @@ type RefreshOpts struct {
 	RequestURL string
 }
 
-// hashRefreshToken returns the canonical hex-encoded SHA-256 of a refresh
-// token. This is the only form of the token that ever reaches the
-// revoked-set tables — we never persist the raw secret.
-func hashRefreshToken(tok string) string {
-	sum := sha256.Sum256([]byte(tok))
-	return hex.EncodeToString(sum[:])
-}
-
 // Refresh generates new tokens for an existing session using the refresh token.
 // When RefreshOpts are provided and session binding is enabled, the client IP
 // and/or User-Agent are validated against the session's stored values.
@@ -492,7 +484,7 @@ func hashRefreshToken(tok string) string {
 // recorded, and a generic ErrInvalidCredentials is returned (the caller must
 // not learn that replay was the reason).
 func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...RefreshOpts) (*session.Session, error) {
-	presentedHash := hashRefreshToken(refreshToken)
+	presentedHash := store.HashToken(refreshToken)
 
 	// Replay check: if the presented token's hash is already in the
 	// revoked set, this is either a leaked token being replayed or a
@@ -549,6 +541,38 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 	if err != nil {
 		return nil, account.ErrInvalidCredentials
 	}
+	return e.rotateSession(ctx, sess, opts...)
+}
+
+// RefreshBySessionToken rotates the session behind an access token the caller
+// already holds, without the caller presenting the refresh token.
+//
+// This is the cookie path: a browser that authenticated with the session
+// cookie has proven it holds the current access token, and the store keeps
+// the refresh token only as a hash, so there is no plaintext to hand back
+// and feed into Refresh. Everything Refresh enforces after the lookup applies
+// here too: bans, agent sessions, expiry, the absolute lifetime, binding and
+// DPoP. A session issued without a refresh token cannot be rotated this way.
+func (e *Engine) RefreshBySessionToken(ctx context.Context, sessionToken string, opts ...RefreshOpts) (*session.Session, error) {
+	sess, err := e.store.GetSessionByToken(ctx, sessionToken)
+	if err != nil {
+		return nil, account.ErrInvalidCredentials
+	}
+	if sess.RefreshTokenHash == "" {
+		return nil, account.ErrInvalidCredentials
+	}
+	return e.rotateSession(ctx, sess, opts...)
+}
+
+// rotateSession is the half of Refresh that runs after the session is in
+// hand: every refusal, the token mint, the compare-and-swap and the
+// revocation of the refresh token that was just spent. sess must have come
+// from the store, so it carries TokenHash and RefreshTokenHash.
+func (e *Engine) rotateSession(ctx context.Context, sess *session.Session, opts ...RefreshOpts) (*session.Session, error) {
+	// The refresh token being spent is revoked by hash once the rotation
+	// commits; capture it before RefreshSession and RotateSession replace
+	// the hashes on sess with the new ones.
+	spentRefreshHash := sess.RefreshTokenHash
 
 	// Refuse to rotate an agent-principal session. This generic path has no
 	// grant to consult: account.RefreshSession sets ExpiresAt to now plus the
@@ -583,11 +607,12 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 		}
 	}
 
-	// Capture the pre-rotation access token. The rotation below is committed
-	// via a compare-and-swap keyed on this value, so two concurrent refreshes
-	// presenting the same token cannot both persist their (different) rotated
-	// tokens — exactly one wins.
-	oldAccessToken := sess.Token
+	// Capture the pre-rotation access token hash. The rotation below is
+	// committed via a compare-and-swap keyed on this value, so two concurrent
+	// refreshes presenting the same token cannot both persist their
+	// (different) rotated tokens: exactly one wins. The store hands back the
+	// hash, never the plaintext, for a session found by its refresh token.
+	oldAccessTokenHash := sess.TokenHash
 
 	// Check if refresh token is expired
 	if time.Now().After(sess.RefreshTokenExpiresAt) {
@@ -652,7 +677,7 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 	// account.RefreshSession mutates sess in place; the new RefreshToken
 	// inherits the same FamilyID by virtue of leaving the field untouched.
 	cfg := e.sessionConfigForApp(ctx, sess.AppID, sess.EnvID)
-	if err = account.RefreshSession(sess, cfg); err != nil {
+	if err := account.RefreshSession(sess, cfg); err != nil {
 		return nil, fmt.Errorf("authsome: refresh session: %w", err)
 	}
 	// The rotated tokens stop at the absolute deadline too.
@@ -699,7 +724,7 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 		sess.Token = jwtToken
 	}
 
-	rotated, err := e.store.RotateSession(ctx, sess, oldAccessToken)
+	rotated, err := e.store.RotateSession(ctx, sess, oldAccessTokenHash)
 	if err != nil {
 		// The session can be concurrently deleted out from under us when a
 		// sibling refresh detects replay and revokes the whole family. That is
@@ -723,7 +748,7 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 	// Record the OLD refresh-token hash as rotated. A subsequent Refresh
 	// call presenting this same token will trigger the replay branch above.
 	if cfg.RotateRefreshToken {
-		if mErr := e.store.MarkRefreshTokenRevoked(ctx, presentedHash, familyID, session.RevokeReasonRotated); mErr != nil {
+		if mErr := e.store.MarkRefreshTokenRevoked(ctx, spentRefreshHash, familyID, session.RevokeReasonRotated); mErr != nil {
 			e.logger.Warn("authsome: mark refresh-token revoked failed",
 				log.String("family_id", familyID.String()),
 				log.String("error", mErr.Error()),

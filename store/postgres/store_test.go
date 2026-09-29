@@ -428,8 +428,9 @@ func TestSession_CRUD(t *testing.T) {
 	// Get by ID
 	got, err := s.GetSession(ctx, sess.ID)
 	require.NoError(t, err)
-	assert.Equal(t, sess.Token, got.Token)
-	assert.Equal(t, sess.RefreshToken, got.RefreshToken)
+	assert.Empty(t, got.Token, "no plaintext at rest")
+	assert.Equal(t, store.HashToken(sess.Token), got.TokenHash)
+	assert.Equal(t, store.HashToken(sess.RefreshToken), got.RefreshTokenHash)
 	assert.Equal(t, sess.IPAddress, got.IPAddress)
 	assert.Equal(t, sess.UserAgent, got.UserAgent)
 

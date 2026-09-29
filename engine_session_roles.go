@@ -131,7 +131,7 @@ func (s *roleStampingStore) CreateSession(ctx context.Context, sess *session.Ses
 // here already carrying the roles it was issued with. That is exactly the
 // fallback the error branch below needs.
 func (s *roleStampingStore) RotateSession(
-	ctx context.Context, sess *session.Session, expectedToken string,
+	ctx context.Context, sess *session.Session, expectedTokenHash string,
 ) (bool, error) {
 	if s.shouldRestamp(sess) {
 		roles, err := s.stamp(ctx, sess.AppID, sess.UserID)
@@ -151,7 +151,7 @@ func (s *roleStampingStore) RotateSession(
 		}
 	}
 
-	return s.Store.RotateSession(ctx, sess, expectedToken)
+	return s.Store.RotateSession(ctx, sess, expectedTokenHash)
 }
 
 // shouldRestamp reports whether sess is one this store should re-resolve roles

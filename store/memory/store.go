@@ -3,13 +3,12 @@ package memory
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/xraph/authsome/account"
@@ -384,8 +383,54 @@ func (s *Store) CreateSession(_ context.Context, sess *session.Session) error {
 		sess.CreatedAt = time.Now()
 	}
 	sess.UpdatedAt = sess.CreatedAt
-	s.sessions[sess.ID.String()] = sess
+	s.sessions[sess.ID.String()] = atRest(sess)
 	return nil
+}
+
+// atRest returns the copy of sess the store keeps: token hashes filled in
+// from whichever plaintext the caller supplied, and the plaintext itself
+// dropped. The caller's struct keeps its plaintext and learns the hashes, so
+// a freshly created session can still be handed to its owner.
+func atRest(sess *session.Session) *session.Session {
+	if sess.TokenHash == "" && sess.Token != "" {
+		sess.TokenHash = store.HashToken(sess.Token)
+	}
+	if sess.RefreshTokenHash == "" && sess.RefreshToken != "" {
+		sess.RefreshTokenHash = store.HashToken(sess.RefreshToken)
+	}
+	stored := *sess
+	stored.Token = ""
+	stored.RefreshToken = ""
+	return &stored
+}
+
+// SeedLegacySession writes sess exactly as a release before token hashing
+// did: plaintext tokens and no hashes. It exists so the conformance suite can
+// prove the upgrade path and is refused outside `go test`.
+func (s *Store) SeedLegacySession(_ context.Context, sess *session.Session) error {
+	if !testing.Testing() {
+		return errors.New("authsome/memory: SeedLegacySession is a test seam")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	legacy := *sess
+	legacy.TokenHash = ""
+	legacy.RefreshTokenHash = ""
+	s.sessions[sess.ID.String()] = &legacy
+	return nil
+}
+
+// upgradeLegacy hashes a stored session's plaintext tokens in place. Callers
+// hold the write lock.
+func upgradeLegacy(sess *session.Session) {
+	if sess.Token != "" {
+		sess.TokenHash = store.HashToken(sess.Token)
+		sess.Token = ""
+	}
+	if sess.RefreshToken != "" {
+		sess.RefreshTokenHash = store.HashToken(sess.RefreshToken)
+		sess.RefreshToken = ""
+	}
 }
 
 func (s *Store) GetSession(_ context.Context, sessionID id.SessionID) (*session.Session, error) {
@@ -399,26 +444,39 @@ func (s *Store) GetSession(_ context.Context, sessionID id.SessionID) (*session.
 }
 
 func (s *Store) GetSessionByToken(_ context.Context, token string) (*session.Session, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	if token == "" {
+		return nil, store.ErrNotFound
+	}
+	h := store.HashToken(token)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, sess := range s.sessions {
-		if sess.Token == token {
-			return sess, nil
+		if sess.TokenHash == h || (sess.TokenHash == "" && sess.Token == token) {
+			upgradeLegacy(sess)
+			// Return a copy carrying the presented plaintext: the refresh flow
+			// mutates the returned session in place before persisting via
+			// RotateSession, and the CAS there must still observe the
+			// pre-rotation hash. Sharing the map pointer would defeat it.
+			copied := *sess
+			copied.Token = token
+			return &copied, nil
 		}
 	}
 	return nil, store.ErrNotFound
 }
 
 func (s *Store) GetSessionByRefreshToken(_ context.Context, refreshToken string) (*session.Session, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	if refreshToken == "" {
+		return nil, store.ErrNotFound
+	}
+	h := store.HashToken(refreshToken)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, sess := range s.sessions {
-		if sess.RefreshToken == refreshToken {
-			// Return a copy: the refresh flow mutates the returned session in
-			// place before persisting via RotateSession, and the CAS there must
-			// still be able to observe the pre-rotation token. Sharing the map
-			// pointer would let that mutation defeat the compare-and-swap.
+		if sess.RefreshTokenHash == h || (sess.RefreshTokenHash == "" && sess.RefreshToken == refreshToken) {
+			upgradeLegacy(sess)
 			copied := *sess
+			copied.RefreshToken = refreshToken
 			return &copied, nil
 		}
 	}
@@ -432,25 +490,28 @@ func (s *Store) UpdateSession(_ context.Context, sess *session.Session) error {
 		return store.ErrNotFound
 	}
 	sess.UpdatedAt = time.Now()
-	s.sessions[sess.ID.String()] = sess
+	s.sessions[sess.ID.String()] = atRest(sess)
 	return nil
 }
 
-func (s *Store) RotateSession(_ context.Context, sess *session.Session, expectedToken string) (bool, error) {
+func (s *Store) RotateSession(_ context.Context, sess *session.Session, expectedTokenHash string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	stored, ok := s.sessions[sess.ID.String()]
 	if !ok {
 		return false, store.ErrNotFound
 	}
-	// Compare-and-swap on the access token: only apply if the stored token is
-	// still the pre-rotation value the caller observed.
-	if stored.Token != expectedToken {
+	// Compare-and-swap on the access token hash: only apply if the stored
+	// hash is still the pre-rotation value the caller observed.
+	if expectedTokenHash == "" || stored.TokenHash != expectedTokenHash {
 		return false, nil
 	}
-	updated := *sess
-	updated.UpdatedAt = time.Now()
-	s.sessions[sess.ID.String()] = &updated
+	// The caller's sess carries the rotated plaintext; drop stale hashes so
+	// atRest derives fresh ones from it.
+	sess.TokenHash = ""
+	sess.RefreshTokenHash = ""
+	sess.UpdatedAt = time.Now()
+	s.sessions[sess.ID.String()] = atRest(sess)
 	return true, nil
 }
 
@@ -594,8 +655,7 @@ func (s *Store) RevokeRefreshTokenFamily(_ context.Context, familyID id.SessionF
 		if sess.FamilyID.String() != familyID.String() {
 			continue
 		}
-		if sess.RefreshToken != "" {
-			h := hashRefreshToken(sess.RefreshToken)
+		if h := sess.RefreshTokenHash; h != "" {
 			if _, exists := s.revokedRefreshTokens[h]; !exists {
 				s.revokedRefreshTokens[h] = &session.RevokedRefreshToken{
 					TokenHash: h,
@@ -626,13 +686,6 @@ func (s *Store) MarkRefreshTokenReplayed(_ context.Context, tokenHash string) (b
 	}
 	rec.Reason = session.RevokeReasonReplayDetected
 	return true, nil
-}
-
-// hashRefreshToken returns the hex-encoded SHA-256 of a refresh token. Kept as
-// a small helper so memory + service share the exact same canonicalisation.
-func hashRefreshToken(tok string) string {
-	sum := sha256.Sum256([]byte(tok))
-	return hex.EncodeToString(sum[:])
 }
 
 // ──────────────────────────────────────────────────

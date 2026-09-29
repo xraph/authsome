@@ -102,5 +102,6 @@ func TestIssueAgentSession_AgainstPostgres_TwoSessionsInsertWithDistinctTokensAn
 	// GetSession would fail on a session that didn't really persist.
 	got, err := s.GetSession(context.Background(), sess1.ID)
 	require.NoError(t, err)
-	assert.Equal(t, sess1.Token, got.Token)
+	assert.Equal(t, store.HashToken(sess1.Token), got.TokenHash, "the row keeps the hash, never the plaintext")
+	assert.Empty(t, got.Token)
 }

@@ -438,8 +438,8 @@ func TestRefresh_RefusesAgentPrincipalSession(t *testing.T) {
 	// byte-for-byte what was written, not partially rotated.
 	got, getErr := eng.Store().GetSession(ctx, sess.ID)
 	require.NoError(t, getErr)
-	assert.Equal(t, "agent-access-token", got.Token, "an agent session's access token must not be rotated")
-	assert.Equal(t, "agent-refresh-token", got.RefreshToken, "an agent session's refresh token must not be rotated")
+	assert.Equal(t, store.HashToken("agent-access-token"), got.TokenHash, "an agent session's access token must not be rotated")
+	assert.Equal(t, store.HashToken("agent-refresh-token"), got.RefreshTokenHash, "an agent session's refresh token must not be rotated")
 	assert.WithinDuration(t, sess.ExpiresAt, got.ExpiresAt, time.Second, "a refused refresh must not extend ExpiresAt")
 }
 

@@ -529,19 +529,11 @@ func migrationIndexes() map[string][]mongo.IndexModel {
 			},
 			{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "created_at", Value: -1}}},
 		},
-		colSessions: {
-			{
-				Keys:    bson.D{{Key: "token", Value: 1}},
-				Options: options.Index().SetUnique(true),
-			},
-			{
-				Keys:    bson.D{{Key: "refresh_token", Value: 1}},
-				Options: options.Index().SetUnique(true),
-			},
-			{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "created_at", Value: -1}}},
-			{Keys: bson.D{{Key: "expires_at", Value: 1}}},
-			{Keys: bson.D{{Key: "family_id", Value: 1}}},
-		},
+		colSessions: append(sessionTokenIndexes(),
+			mongo.IndexModel{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "created_at", Value: -1}}},
+			mongo.IndexModel{Keys: bson.D{{Key: "expires_at", Value: 1}}},
+			mongo.IndexModel{Keys: bson.D{{Key: "family_id", Value: 1}}},
+		),
 		colRevokedRefreshTokens: {
 			{Keys: bson.D{{Key: "family_id", Value: 1}}},
 		},

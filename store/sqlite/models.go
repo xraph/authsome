@@ -211,16 +211,23 @@ type SessionModel struct {
 	ServiceAccountID string `grove:"service_account_id"`
 	// AgentID and GrantID carry the agent principal and the grant that
 	// authorized it, mapped the same way as ServiceAccountID above.
-	AgentID        string `grove:"agent_id"`
-	GrantID        string `grove:"grant_id"`
-	OrgID          string `grove:"org_id"`
-	FamilyID       string `grove:"family_id"`
-	Token          string `grove:"token,notnull"`
-	RefreshToken   string `grove:"refresh_token,notnull"`
-	IPAddress      string `grove:"ip_address"`
-	UserAgent      string `grove:"user_agent"`
-	DeviceID       string `grove:"device_id"`
-	ImpersonatedBy string `grove:"impersonated_by"`
+	AgentID  string `grove:"agent_id"`
+	GrantID  string `grove:"grant_id"`
+	OrgID    string `grove:"org_id"`
+	FamilyID string `grove:"family_id"`
+	// Token and RefreshToken are empty on every row written since
+	// hash_session_tokens; they hold plaintext only on rows older than that
+	// migration, which the first lookup rewrites. TokenHash and
+	// RefreshTokenHash are NULL on those legacy rows so the unique index
+	// skips them.
+	Token            string         `grove:"token,notnull"`
+	RefreshToken     string         `grove:"refresh_token,notnull"`
+	TokenHash        sql.NullString `grove:"token_hash"`
+	RefreshTokenHash sql.NullString `grove:"refresh_token_hash"`
+	IPAddress        string         `grove:"ip_address"`
+	UserAgent        string         `grove:"user_agent"`
+	DeviceID         string         `grove:"device_id"`
+	ImpersonatedBy   string         `grove:"impersonated_by"`
 	// Roles is JSON rather than the comma-separated form APIKeyModel.Scopes
 	// uses. A slug containing a comma would split into two role names nobody
 	// was ever granted, and these strings are read back as an authorization
@@ -268,6 +275,8 @@ func toSession(m *SessionModel) (*session.Session, error) {
 		PrincipalKind:         principal.Kind(m.PrincipalKind),
 		Token:                 m.Token,
 		RefreshToken:          m.RefreshToken,
+		TokenHash:             hashOrDerive(m.TokenHash.String, m.Token).String,
+		RefreshTokenHash:      hashOrDerive(m.RefreshTokenHash.String, m.RefreshToken).String,
 		IPAddress:             m.IPAddress,
 		UserAgent:             m.UserAgent,
 		LastActivityAt:        m.LastActivityAt,
@@ -385,8 +394,8 @@ func fromSession(s *session.Session) *SessionModel {
 		EnvID:                 s.EnvID.String(),
 		UserID:                s.UserID.String(),
 		PrincipalKind:         string(s.PrincipalKind),
-		Token:                 s.Token,
-		RefreshToken:          s.RefreshToken,
+		TokenHash:             hashOrDerive(s.TokenHash, s.Token),
+		RefreshTokenHash:      hashOrDerive(s.RefreshTokenHash, s.RefreshToken),
 		IPAddress:             s.IPAddress,
 		UserAgent:             s.UserAgent,
 		LastActivityAt:        s.LastActivityAt,

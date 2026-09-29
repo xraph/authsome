@@ -98,6 +98,9 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"KVSetNXHonoursExpiry", testKVSetNXHonoursExpiry},
 		{"KVIncrementWindow", testKVIncrementWindow},
 		{"KVDeleteExpired", testKVDeleteExpired},
+		{"SessionTokensStoredAsHashes", testSessionTokensStoredAsHashes},
+		{"LegacyPlaintextSessionUpgrades", testLegacyPlaintextSessionUpgrades},
+		{"RevokeFamilyUsesStoredHashes", testRevokeFamilyUsesStoredHashes},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -949,18 +952,23 @@ func testRotateSessionCAS(t *testing.T, s store.Store) {
 	stale := *sess
 	stale.Token = "new-tok-a"
 	stale.RefreshToken = "new-rtok-a"
-	swapped, err := s.RotateSession(ctx, &stale, "WRONG-old-tok")
+	swapped, err := s.RotateSession(ctx, &stale, store.HashToken("WRONG-old-tok"))
 	require.NoError(t, err)
 	assert.False(t, swapped, "rotation with a mismatched expected token must not swap")
 	unchanged, err := s.GetSessionByToken(ctx, "old-tok")
 	require.NoError(t, err, "the original token must still be valid after a failed CAS")
 	assert.Equal(t, sess.ID.String(), unchanged.ID.String())
 
-	// Rotate with the correct expected token: must swap atomically.
+	// A caller who passes the plaintext instead of its hash must lose too.
+	swapped, err = s.RotateSession(ctx, &stale, "old-tok")
+	require.NoError(t, err)
+	assert.False(t, swapped, "the compare-and-swap keys on the hash, never the plaintext")
+
+	// Rotate with the correct expected hash: must swap atomically.
 	fresh := *sess
 	fresh.Token = "new-tok-b"
 	fresh.RefreshToken = "new-rtok-b"
-	swapped, err = s.RotateSession(ctx, &fresh, "old-tok")
+	swapped, err = s.RotateSession(ctx, &fresh, store.HashToken("old-tok"))
 	require.NoError(t, err)
 	assert.True(t, swapped, "rotation with the correct expected token must swap")
 	_, err = s.GetSessionByToken(ctx, "old-tok")

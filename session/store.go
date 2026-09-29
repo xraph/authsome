@@ -32,12 +32,13 @@ type Store interface {
 	GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*Session, error)
 	UpdateSession(ctx context.Context, s *Session) error
 	// RotateSession atomically persists s only if the stored row's access token
-	// still equals expectedToken. It reports true when the row was updated and
+	// hash still equals expectedTokenHash (store.HashToken of the pre-rotation
+	// plaintext, which s.TokenHash carries after a lookup). It reports true when the row was updated and
 	// false when no row matched — meaning a concurrent refresh already rotated
 	// this session. This compare-and-swap serializes concurrent refresh-token
 	// rotations so only one caller can "win"; the others are refused rather than
 	// returning tokens that were never persisted (the refresh TOCTOU fix).
-	RotateSession(ctx context.Context, s *Session, expectedToken string) (bool, error)
+	RotateSession(ctx context.Context, s *Session, expectedTokenHash string) (bool, error)
 	// TouchSession performs a lightweight update of last_activity_at, expires_at,
 	// and updated_at without rewriting the entire session row.
 	TouchSession(ctx context.Context, sessionID id.SessionID, lastActivityAt, expiresAt time.Time) error

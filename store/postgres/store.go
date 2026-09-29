@@ -341,8 +341,12 @@ func (s *Store) ListUsers(ctx context.Context, q *user.Query) (*user.List, error
 
 func (s *Store) CreateSession(ctx context.Context, sess *session.Session) error {
 	m := fromSession(sess)
-	_, err := s.pg.NewInsert(m).Exec(ctx)
-	return pgError(err)
+	if _, err := s.pg.NewInsert(m).Exec(ctx); err != nil {
+		return pgError(err)
+	}
+	sess.TokenHash = m.TokenHash.String
+	sess.RefreshTokenHash = m.RefreshTokenHash.String
+	return nil
 }
 
 func (s *Store) GetSession(ctx context.Context, sessionID id.SessionID) (*session.Session, error) {
@@ -355,21 +359,29 @@ func (s *Store) GetSession(ctx context.Context, sessionID id.SessionID) (*sessio
 }
 
 func (s *Store) GetSessionByToken(ctx context.Context, token string) (*session.Session, error) {
-	m := new(SessionModel)
-	err := s.pg.NewSelect(m).Where("token = ?", token).Scan(ctx)
+	m, err := s.findSessionByCredential(ctx, "token_hash", "token", token)
 	if err != nil {
-		return nil, pgError(err)
+		return nil, err
 	}
-	return toSession(m)
+	sess, err := toSession(m)
+	if err != nil {
+		return nil, err
+	}
+	sess.Token = token
+	return sess, nil
 }
 
 func (s *Store) GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*session.Session, error) {
-	m := new(SessionModel)
-	err := s.pg.NewSelect(m).Where("refresh_token = ?", refreshToken).Scan(ctx)
+	m, err := s.findSessionByCredential(ctx, "refresh_token_hash", "refresh_token", refreshToken)
 	if err != nil {
-		return nil, pgError(err)
+		return nil, err
 	}
-	return toSession(m)
+	sess, err := toSession(m)
+	if err != nil {
+		return nil, err
+	}
+	sess.RefreshToken = refreshToken
+	return sess, nil
 }
 
 func (s *Store) UpdateSession(ctx context.Context, sess *session.Session) error {
@@ -383,16 +395,27 @@ func (s *Store) UpdateSession(ctx context.Context, sess *session.Session) error 
 	return nil
 }
 
-func (s *Store) RotateSession(ctx context.Context, sess *session.Session, expectedToken string) (bool, error) {
+func (s *Store) RotateSession(ctx context.Context, sess *session.Session, expectedTokenHash string) (bool, error) {
+	if expectedTokenHash == "" {
+		return false, nil
+	}
+	// The caller's sess carries the rotated plaintext; drop the stale hashes
+	// so fromSession derives fresh ones from it.
+	sess.TokenHash = ""
+	sess.RefreshTokenHash = ""
 	m := fromSession(sess)
 	m.UpdatedAt = time.Now()
-	// Compare-and-swap: only rotate if the stored access token is still the
-	// pre-rotation value, so two concurrent refreshes cannot both win.
-	res, err := s.pg.NewUpdate(m).WherePK().Where("token = ?", expectedToken).Exec(ctx)
+	// Compare-and-swap: only rotate if the stored access token hash is still
+	// the pre-rotation value, so two concurrent refreshes cannot both win.
+	res, err := s.pg.NewUpdate(m).WherePK().Where("token_hash = ?", expectedTokenHash).Exec(ctx)
 	if err != nil {
 		return false, pgError(err)
 	}
 	n, _ := res.RowsAffected() //nolint:errcheck // RowsAffected always succeeds for pgx
+	if n > 0 {
+		sess.TokenHash = m.TokenHash.String
+		sess.RefreshTokenHash = m.RefreshTokenHash.String
+	}
 	return n > 0, nil
 }
 
