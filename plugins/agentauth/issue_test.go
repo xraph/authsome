@@ -139,12 +139,14 @@ func (e *stubEngine) GetUser(ctx context.Context, userID id.UserID) (*user.User,
 	return e.store.GetUser(ctx, userID)
 }
 func (e *stubEngine) EnsureDefaultRole(_ context.Context, _ id.AppID, _ id.UserID) {}
-func (e *stubEngine) RevokeOtherUserSessions(context.Context, id.UserID, id.SessionID) error { return nil }
-func (e *stubEngine) AuthMiddleware() forge.Middleware                             { return nil }
-func (e *stubEngine) AuthRegistry() auth.Registry                                  { return nil }
-func (e *stubEngine) PlatformAppID() id.AppID                                      { return id.AppID{} }
-func (e *stubEngine) DefaultAppID() string                                         { return "" }
-func (e *stubEngine) BasePath() string                                             { return "" }
+func (e *stubEngine) RevokeOtherUserSessions(context.Context, id.UserID, id.SessionID) error {
+	return nil
+}
+func (e *stubEngine) AuthMiddleware() forge.Middleware { return nil }
+func (e *stubEngine) AuthRegistry() auth.Registry      { return nil }
+func (e *stubEngine) PlatformAppID() id.AppID          { return id.AppID{} }
+func (e *stubEngine) DefaultAppID() string             { return "" }
+func (e *stubEngine) BasePath() string                 { return "" }
 
 // The risk plugins subscribe to BeforeSessionCreate and AfterSignIn. The API
 // key plugin hand-builds a synthetic session at plugins/apikey/plugin.go:567

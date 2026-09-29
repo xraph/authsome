@@ -19,8 +19,8 @@ func (e *Engine) RevokeUserAccess(ctx context.Context, userID id.UserID) error {
 	if err != nil {
 		return fmt.Errorf("authsome: revoke user access: %w", err)
 	}
-	if err := e.store.DeleteUserSessions(ctx, userID); err != nil {
-		return fmt.Errorf("authsome: revoke user access: sessions: %w", err)
+	if delErr := e.store.DeleteUserSessions(ctx, userID); delErr != nil {
+		return fmt.Errorf("authsome: revoke user access: sessions: %w", delErr)
 	}
 
 	keys := e.APIKeyStore()

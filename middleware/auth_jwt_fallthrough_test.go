@@ -142,7 +142,7 @@ func jwtFallthroughCases() []jwtFallthroughCase {
 			},
 			rescue: jwtFallthroughRescue(appID, userID),
 			bind: middleware.SessionBindingConfig{
-				JWTSessionChecker: func(_ string) (*session.Session, error) {
+				JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 					return nil, errors.New("session revoked")
 				},
 			},
@@ -172,7 +172,7 @@ func jwtFallthroughCases() []jwtFallthroughCase {
 			rescue: rescue,
 			bind: middleware.SessionBindingConfig{
 				BindToIP: true,
-				JWTSessionChecker: func(_ string) (*session.Session, error) {
+				JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 					return bound, nil
 				},
 			},
@@ -202,7 +202,7 @@ func jwtFallthroughCases() []jwtFallthroughCase {
 			rescue: rescue,
 			bind: middleware.SessionBindingConfig{
 				BindToDevice: true,
-				JWTSessionChecker: func(_ string) (*session.Session, error) {
+				JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 					return bound, nil
 				},
 			},

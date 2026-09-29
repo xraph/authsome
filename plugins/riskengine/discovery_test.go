@@ -85,7 +85,9 @@ func (*registryEngine) ResolveSessionByToken(string) (*session.Session, error) {
 func (*registryEngine) ResolveUser(string) (*user.User, error)                 { return nil, nil }
 func (*registryEngine) GetUser(context.Context, id.UserID) (*user.User, error) { return nil, nil }
 func (*registryEngine) EnsureDefaultRole(context.Context, id.AppID, id.UserID) {}
-func (*registryEngine) RevokeOtherUserSessions(context.Context, id.UserID, id.SessionID) error { return nil }
+func (*registryEngine) RevokeOtherUserSessions(context.Context, id.UserID, id.SessionID) error {
+	return nil
+}
 func (*registryEngine) ResolvePrincipal(context.Context, principal.Ref) (*principal.Principal, error) {
 	return nil, principal.ErrNotFound
 }

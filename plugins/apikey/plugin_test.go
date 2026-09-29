@@ -118,7 +118,9 @@ func (m *mockEngine) GetUser(_ context.Context, _ id.UserID) (*user.User, error)
 	return nil, errors.New("not implemented")
 }
 func (m *mockEngine) EnsureDefaultRole(_ context.Context, _ id.AppID, _ id.UserID) {}
-func (m *mockEngine) RevokeOtherUserSessions(context.Context, id.UserID, id.SessionID) error { return nil }
+func (m *mockEngine) RevokeOtherUserSessions(context.Context, id.UserID, id.SessionID) error {
+	return nil
+}
 func (m *mockEngine) ResolvePrincipal(_ context.Context, ref principal.Ref) (*principal.Principal, error) {
 	if p, ok := m.principals[ref.ID]; ok {
 		return p, nil

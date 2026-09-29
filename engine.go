@@ -350,7 +350,7 @@ func (e *Engine) buildAuthMiddleware() {
 
 	bindCfg := e.DPoPBindingConfig()
 	bindCfg.CookieNameResolver = e.resolveSessionCookieName
-	bindCfg.JWTSessionChecker = e.jwtSessionChecker
+	bindCfg.JWTSessionChecker = e.JWTSessionChecker
 	bindCfg.ExpectedAudienceResolver = e.resolveExpectedAudience
 	bindCfg.PrincipalResolver = e.ResolvePrincipalByRef
 
@@ -508,18 +508,23 @@ func (e *Engine) resolveExpectedAudience(ctx context.Context, appID string) []st
 	return []string{identifier}
 }
 
-// jwtSessionChecker checks whether a JWT's session ID still exists in the
-// store. This enables JWT revocation — revoked sessions are rejected even if
-// the JWT signature is valid. The SettingJWTRequireActiveSession setting
-// controls whether this check is active; when disabled, a non-nil sentinel
-// session is returned to skip binding checks.
-func (e *Engine) jwtSessionChecker(sessionIDStr string) (*session.Session, error) {
+// JWTSessionChecker checks whether a JWT's session ID still exists in the
+// store. This enables JWT revocation: revoked sessions are rejected even if
+// the JWT signature is valid. The SettingJWTRequireActiveSession setting,
+// resolved under the token's own app, controls whether this check is
+// active; when it is off, nil, nil is returned to skip the store lookup and
+// the binding checks. The setting defaults to on.
+func (e *Engine) JWTSessionChecker(appIDStr, sessionIDStr string) (*session.Session, error) {
 	ctx := context.Background()
 
 	// Check if the feature is enabled via dynamic settings.
 	mgr := e.Settings()
 	if mgr != nil {
-		enabled, _ := settings.Get(ctx, mgr, SettingJWTRequireActiveSession, settings.ResolveOpts{}) //nolint:errcheck // best-effort
+		opts := settings.ResolveOpts{}
+		if appID, err := id.ParseAppID(appIDStr); err == nil && !appID.IsNil() {
+			opts.AppID = appID.String()
+		}
+		enabled, _ := settings.Get(ctx, mgr, SettingJWTRequireActiveSession, opts) //nolint:errcheck // best-effort
 		if !enabled {
 			return nil, nil //nolint:nilnil // nil,nil signals "feature disabled, skip check"
 		}

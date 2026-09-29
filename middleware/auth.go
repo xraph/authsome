@@ -129,7 +129,9 @@ type JWTValidator interface {
 // SessionExistsChecker checks whether a session ID still exists in the store.
 // Used for JWT revocation support — when enabled, JWT tokens are cross-checked
 // against the session store so revoked sessions are rejected immediately.
-type SessionExistsChecker func(sessionID string) (*session.Session, error)
+// appID is the token's own app, so the check honours that app's setting
+// rather than the global one.
+type SessionExistsChecker func(appID, sessionID string) (*session.Session, error)
 
 // CookieNameResolver returns the session cookie name for the current context.
 // When nil, the default "authsome_session_token" is used.
@@ -536,7 +538,7 @@ func tryJWTAuth(
 	// against the store. This enables revocation and IP/device binding for JWTs.
 	// The checker returns (nil, nil) when the feature is disabled via settings.
 	if bindCfg.JWTSessionChecker != nil && claims.SessionID != "" {
-		sess, sessErr := bindCfg.JWTSessionChecker(claims.SessionID)
+		sess, sessErr := bindCfg.JWTSessionChecker(claims.AppID, claims.SessionID)
 		if sessErr != nil {
 			logger.Debug("auth middleware: JWT session not found in store (revoked?)",
 				log.String("session_id", claims.SessionID),

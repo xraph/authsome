@@ -65,7 +65,7 @@ func TestJWTAuth_SessionChecker_Disabled_PassesThrough(t *testing.T) {
 		validator,
 		log.NewNoopLogger(),
 		middleware.SessionBindingConfig{
-			JWTSessionChecker: func(_ string) (*session.Session, error) {
+			JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 				// nil, nil = feature disabled
 				return nil, nil
 			},
@@ -117,7 +117,7 @@ func TestJWTAuth_SessionChecker_SessionNotFound_Rejects(t *testing.T) {
 		validator,
 		log.NewNoopLogger(),
 		middleware.SessionBindingConfig{
-			JWTSessionChecker: func(_ string) (*session.Session, error) {
+			JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 				// Session not found — revoked
 				return nil, errors.New("session not found")
 			},
@@ -166,7 +166,7 @@ func TestJWTAuth_SessionChecker_IPMismatch_Rejects(t *testing.T) {
 		log.NewNoopLogger(),
 		middleware.SessionBindingConfig{
 			BindToIP: true,
-			JWTSessionChecker: func(_ string) (*session.Session, error) {
+			JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 				return &session.Session{
 					ID:        testSessID,
 					IPAddress: "10.0.0.1",
@@ -218,7 +218,7 @@ func TestJWTAuth_SessionChecker_DeviceMismatch_Rejects(t *testing.T) {
 		log.NewNoopLogger(),
 		middleware.SessionBindingConfig{
 			BindToDevice: true,
-			JWTSessionChecker: func(_ string) (*session.Session, error) {
+			JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 				return &session.Session{
 					ID:        testSessID,
 					UserAgent: "OriginalBrowser/1.0",
@@ -274,7 +274,7 @@ func TestJWTAuth_SessionChecker_Matches_Allows(t *testing.T) {
 		middleware.SessionBindingConfig{
 			BindToIP:     true,
 			BindToDevice: true,
-			JWTSessionChecker: func(_ string) (*session.Session, error) {
+			JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 				return &session.Session{
 					ID:        testSessID,
 					IPAddress: "10.0.0.1",

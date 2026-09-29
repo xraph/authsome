@@ -68,10 +68,10 @@ func (stubEngine) TokenFormatForApp(string) tokenformat.Format { return nil }
 func (stubEngine) SessionConfigForApp(context.Context, id.AppID, ...id.EnvironmentID) account.SessionConfig {
 	return account.SessionConfig{}
 }
-func (stubEngine) ResolveSessionByToken(string) (*session.Session, error) { return nil, nil }
-func (stubEngine) ResolveUser(string) (*user.User, error)                 { return nil, nil }
-func (stubEngine) GetUser(context.Context, id.UserID) (*user.User, error) { return nil, nil }
-func (stubEngine) EnsureDefaultRole(context.Context, id.AppID, id.UserID) {}
+func (stubEngine) ResolveSessionByToken(string) (*session.Session, error)                 { return nil, nil }
+func (stubEngine) ResolveUser(string) (*user.User, error)                                 { return nil, nil }
+func (stubEngine) GetUser(context.Context, id.UserID) (*user.User, error)                 { return nil, nil }
+func (stubEngine) EnsureDefaultRole(context.Context, id.AppID, id.UserID)                 {}
 func (stubEngine) RevokeOtherUserSessions(context.Context, id.UserID, id.SessionID) error { return nil }
 func (stubEngine) ResolvePrincipal(context.Context, principal.Ref) (*principal.Principal, error) {
 	return nil, principal.ErrNotFound

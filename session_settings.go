@@ -191,14 +191,15 @@ var (
 
 var (
 	// SettingJWTRequireActiveSession controls whether JWT tokens are cross-checked
-	// against the session store to enable immediate revocation.
-	SettingJWTRequireActiveSession = settings.Define("session.jwt_require_active_session", false,
+	// against the session store to enable immediate revocation. On by default:
+	// a JWT that cannot be revoked is a session that outlives a ban.
+	SettingJWTRequireActiveSession = settings.Define("session.jwt_require_active_session", true,
 		settings.WithDisplayName("Require Active Session for JWT"),
 		settings.WithDescription("Cross-check JWT tokens against the session store to enable revocation"),
 		settings.WithCategory("JWT Security"),
 		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
 		settings.WithEnforceable(),
-		settings.WithHelpText("When enabled, JWT tokens are validated against the session store on each request. This adds a DB lookup but enables instant revocation and IP/device binding for JWT tokens."),
+		settings.WithHelpText("On by default. JWT tokens are validated against the session store on each request, which adds a DB lookup but makes revocation and IP/device binding take effect at once. Turning it off makes a JWT valid until it expires, whatever happens to the session."),
 		settings.WithOrder(55),
 	)
 
