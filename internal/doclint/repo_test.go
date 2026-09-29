@@ -1,6 +1,7 @@
 package doclint
 
 import (
+	"context"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -14,7 +15,7 @@ func TestNoTrackedEnvFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("git", "ls-files")
+	cmd := exec.CommandContext(context.Background(), "git", "ls-files")
 	cmd.Dir = root
 	out, err := cmd.Output()
 	if err != nil {

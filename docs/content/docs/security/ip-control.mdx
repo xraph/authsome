@@ -1,166 +1,84 @@
 ---
-title: IP Access Control
-description: IP whitelist and blacklist configuration for application-level access control, and session IP binding for session hijacking prevention.
+title: IP and Network Controls
+description: How the client address is established behind proxies, how sessions can be bound to it, and the plugins that refuse sign-ins by country, reputation or anonymiser.
 ---
 
-Authsome provides two IP-based security controls: application-level IP whitelisting and blacklisting to allow or deny authentication from specific addresses or ranges, and session-level IP binding that rejects requests when the session is used from a different IP than the one that created it.
+Every control that reasons about where a request came from starts with one question: what is the client's address? Authsome answers it once, in `middleware.ClientIP`, and everything else (rate limits, lockout, session binding, the audit trail, the plugins on this page) uses that answer.
 
-## Application-level IP control
+## Trusted proxies
 
-IP control rules are applied before any authentication logic runs. A request from a blacklisted IP is rejected immediately with a `403 Forbidden` response without revealing whether credentials are valid.
+A `X-Forwarded-For` or `X-Forwarded-Proto` header is only believed when the immediate peer is a proxy the operator named. Anyone else's header is ignored, so a direct client cannot pick its own address, mint fresh rate-limit buckets, or dodge lockout.
 
-### Configuration
+The built-in set is the private ranges: loopback, `10/8`, `172.16/12`, `192.168/16`, link-local and `fc00::/7`. That is right for a load balancer on the same network and wrong for one on a public address, or for a network shared with workloads you do not control. Name your proxies:
 
-```go
-import (
-    "github.com/xraph/authsome"
-    "github.com/xraph/authsome/ipcontrol"
-)
-
-auth := authsome.New(
-    authsome.WithIPControl(ipcontrol.Config{
-        // Whitelist: when non-empty, ONLY these IPs/ranges can authenticate.
-        Whitelist: []string{
-            "10.0.0.0/8",         // internal network
-            "172.16.0.0/12",      // Docker network
-            "203.0.113.42",       // specific external IP
-        },
-
-        // Blacklist: these IPs are always denied, even if on the whitelist.
-        Blacklist: []string{
-            "10.0.99.0/24",       // specific internal subnet to deny
-        },
-
-        // TrustProxies: when true, read the client IP from X-Forwarded-For.
-        // Only enable this when Authsome runs behind a trusted reverse proxy.
-        TrustProxies: true,
-
-        // TrustedProxyRanges: only trust X-Forwarded-For from these proxy IPs.
-        TrustedProxyRanges: []string{
-            "127.0.0.1",
-            "10.0.0.0/8",
-        },
-    }),
-)
+```
+AUTHSOME_TRUSTED_PROXIES=203.0.113.10/32,2001:db8::/48
 ```
 
-### Whitelist semantics
+The extension logs a warning at start while the built-in set is in use. From Go, `middleware.SetTrustedProxies` replaces the set and `middleware.TrustedProxiesAreDefault` reports whether it was ever set.
 
-When `Whitelist` is non-empty, Authsome applies an **allow-list** model:
+`middleware.IsHTTPS` applies the same rule to the scheme: TLS on the socket, or a trusted proxy's `X-Forwarded-Proto`. The session cookie's `Secure` attribute and the CSRF check both read it, so a forged header cannot downgrade either.
 
-- Only IPs that match at least one whitelist entry are allowed to authenticate
-- Blacklist entries are still applied on top -- a blacklisted IP is denied even if it matches the whitelist
-- When `Whitelist` is empty, all IPs are allowed by default (deny-list model using only `Blacklist`)
+## Binding sessions
 
-### Blacklist semantics
+Two per-app settings bind a session to where it was created:
 
-Blacklisted entries are always denied regardless of whitelist status. The blacklist takes precedence over the whitelist. Use the blacklist to block known-bad IPs, Tor exit nodes, or datacenter IP ranges associated with abuse.
+| Setting | Default | Effect |
+|---------|---------|--------|
+| `session.bind_to_ip` | `false` | A refresh from a different client address than the one the session recorded is refused. |
+| `session.bind_to_device` | `false` | A refresh with a different `User-Agent` is refused. |
 
-### CIDR notation
+Binding to the address is a strong control on a fixed network and a nuisance on a mobile one, where addresses change as the device roams. Prefer DPoP-bound tokens for clients that can hold a key; use address binding for admin surfaces reached from an office network.
 
-Both whitelist and blacklist entries support:
-- Single IPv4 addresses: `"203.0.113.42"`
-- Single IPv6 addresses: `"2001:db8::1"`
-- IPv4 CIDR ranges: `"192.168.0.0/16"`
-- IPv6 CIDR ranges: `"2001:db8::/32"`
+The cookie session also carries a cross-site check (see the CSRF section of the cookies documentation): a cookie-authenticated write must come from the same site or an allowlisted origin.
 
-### Proxy header handling
+## Refusing by place, reputation or anonymiser
 
-When running behind a reverse proxy (nginx, Cloudflare, AWS ALB), the `RemoteAddr` on the request is the proxy's IP, not the client's. Enable `TrustProxies: true` and configure `TrustedProxyRanges` to tell Authsome which proxy IPs are trusted to set `X-Forwarded-For`.
+Three plugins refuse a sign-in or sign-up before any credential is checked. Each runs on `OnBeforeSignIn`, `OnBeforeSignUp` and `OnBeforePrincipalAuth`, so machine callers are covered as well as people. Each records what it refused on the audit trail.
 
-<Callout type="warn">
-Never enable `TrustProxies: true` without configuring `TrustedProxyRanges`. Without it, a malicious client can send a forged `X-Forwarded-For` header to bypass IP controls by spoofing a whitelisted IP.
-</Callout>
+### Geofence
 
-### Dynamic IP control
-
-You can update IP control rules at runtime without restarting the application:
+Needs the `geoip` plugin for country lookup.
 
 ```go
-// Add a new blacklist entry (takes effect immediately).
-err := auth.IPControl().Block(ctx, "198.51.100.0/24")
+import "github.com/xraph/authsome/plugins/geofence"
 
-// Remove a blacklist entry.
-err := auth.IPControl().Unblock(ctx, "198.51.100.0/24")
-
-// Add a whitelist entry.
-err := auth.IPControl().Allow(ctx, "10.100.0.0/16")
-
-// Check if an IP is currently allowed.
-allowed, reason, err := auth.IPControl().Check(ctx, "203.0.113.42")
-if !allowed {
-    fmt.Printf("denied: %s\n", reason)
-}
-```
-
-## Session IP binding
-
-Session IP binding records the client IP at session creation time and rejects subsequent requests that use the session from a different IP. This prevents session hijacking attacks where an attacker captures a session token and uses it from a different network.
-
-### Configuration
-
-```go
-import "github.com/xraph/authsome/session"
-
-auth := authsome.New(
-    authsome.WithSessionConfig(session.Config{
-        IPBinding: session.IPBindingConfig{
-            Enabled: true,
-            Mode:    session.IPBindingStrict,  // reject on any IP change
-        },
-    }),
-)
-```
-
-### Binding modes
-
-| Mode | Constant | Description |
-|------|----------|-------------|
-| Disabled | `session.IPBindingDisabled` | No IP checking (default) |
-| Strict | `session.IPBindingStrict` | Reject requests from any IP that differs from the session's recorded IP |
-| Subnet | `session.IPBindingSubnet` | Allow requests from within the same /24 subnet (accommodates DHCP changes on the same network) |
-| Country | `session.IPBindingCountry` | Allow requests from IPs in the same country (requires IP geolocation) |
-
-```go
-// Subnet mode -- allows IP changes within the same /24.
-authsome.WithSessionConfig(session.Config{
-    IPBinding: session.IPBindingConfig{
-        Enabled: true,
-        Mode:    session.IPBindingSubnet,
-    },
+geofence.New(geofence.Config{
+    DefaultPolicy:    "allow",
+    BlockedCountries: []string{"KP"},
+    BlockMessage:     "sign-in is not available from your region",
 })
 ```
 
-<Callout type="info">
-Strict IP binding can cause false positives for users on mobile networks or VPNs, where the IP address changes frequently. Subnet mode offers a good balance between security and usability for consumer applications. Strict mode is most appropriate for internal tools and high-security contexts.
-</Callout>
+With `DefaultPolicy: "deny"`, only `AllowedCountries` may sign in.
 
-### What happens on IP mismatch
-
-When a session is used from a mismatched IP:
-
-1. The session is not extended (the `UpdatedAt` timestamp is not refreshed).
-2. The request is rejected with `401 Unauthorized` and `error: "session_ip_mismatch"`.
-3. A `session.ip_mismatch` security event is recorded in the audit trail.
-4. If the mismatch happens more than a configurable number of times in a short window, the session is automatically revoked.
+### IP reputation
 
 ```go
-// Configure automatic revocation on repeated IP mismatches.
-authsome.WithSessionConfig(session.Config{
-    IPBinding: session.IPBindingConfig{
-        Enabled:             true,
-        Mode:                session.IPBindingStrict,
-        AutoRevokeAfter:     3,                // revoke after 3 mismatches
-        AutoRevokeWindow:    5 * time.Minute,  // within this window
-    },
+import "github.com/xraph/authsome/plugins/ipreputation"
+
+ipreputation.New(ipreputation.Config{
+    Provider:       provider, // implements CheckIP(ctx, ip) (*IPReputation, error)
+    BlockThreshold: 80,
+    WarnThreshold:  50,
+    CacheTTL:       6 * time.Hour,
 })
 ```
 
-### Reading the bound IP
+A score at or above `BlockThreshold` refuses; one at or above `WarnThreshold` is flagged on the trail. Results are cached per address for `CacheTTL`, in a table bounded by `MaxCachedIPs` (10,000 by default).
 
-The session model exposes the bound IP:
+### VPN, proxy and Tor
 
 ```go
-sess, err := auth.Sessions().Get(ctx, sessionID)
-fmt.Printf("session created from IP: %s\n", sess.CreatedIP)
+import "github.com/xraph/authsome/plugins/vpndetect"
+
+vpndetect.New(vpndetect.Config{BlockVPN: true, BlockProxy: true, BlockTor: true})
 ```
+
+## Travel and anomaly
+
+The `impossibletravel` plugin flags (or, with `Action: "block"`, refuses) a sign-in whose distance from the last one could not have been covered in the time between them; the `anomaly` plugin scores a sign-in against the account's own history of countries and hours. Both keep bounded in-memory histories, `MaxTrackedPrincipals` entries each, and both record alerts on the trail.
+
+## Lockout by network
+
+Failed sign-ins are counted per app, identifier and client network (`/24` for IPv4, `/64` for IPv6), so an attacker who fails from one network locks that network out of the account while the owner elsewhere still signs in. See [Account Lockout](/docs/security/lockout).
