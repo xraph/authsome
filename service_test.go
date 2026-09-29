@@ -578,7 +578,7 @@ func TestResolveSessionByToken_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resolved, err := eng.ResolveSessionByToken(sess.Token)
+	resolved, err := eng.ResolveSessionByToken(context.Background(), sess.Token)
 	require.NoError(t, err)
 	assert.Equal(t, sess.ID, resolved.ID)
 	assert.Equal(t, sess.UserID, resolved.UserID)
@@ -587,7 +587,7 @@ func TestResolveSessionByToken_Success(t *testing.T) {
 func TestResolveSessionByToken_Invalid(t *testing.T) {
 	eng, _ := newTestEngine(t)
 
-	_, err := eng.ResolveSessionByToken("nonexistent-token")
+	_, err := eng.ResolveSessionByToken(context.Background(), "nonexistent-token")
 	assert.Error(t, err)
 }
 
@@ -604,7 +604,7 @@ func TestResolveUser_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resolved, err := eng.ResolveUser(u.ID.String())
+	resolved, err := eng.ResolveUser(context.Background(), u.ID.String())
 	require.NoError(t, err)
 	assert.Equal(t, u.ID, resolved.ID)
 	assert.Equal(t, u.Email, resolved.Email)
@@ -613,7 +613,7 @@ func TestResolveUser_Success(t *testing.T) {
 func TestResolveUser_InvalidID(t *testing.T) {
 	eng, _ := newTestEngine(t)
 
-	_, err := eng.ResolveUser("not-a-valid-id")
+	_, err := eng.ResolveUser(context.Background(), "not-a-valid-id")
 	assert.Error(t, err)
 }
 
@@ -621,7 +621,7 @@ func TestResolveUser_NonexistentUser(t *testing.T) {
 	eng, _ := newTestEngine(t)
 
 	userID := id.NewUserID()
-	_, err := eng.ResolveUser(userID.String())
+	_, err := eng.ResolveUser(context.Background(), userID.String())
 	assert.Error(t, err)
 }
 

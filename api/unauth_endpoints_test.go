@@ -26,7 +26,7 @@ func asUser(req *http.Request, userID id.UserID) *http.Request {
 // userIDFor resolves the user ID behind a session token.
 func userIDFor(t *testing.T, eng *authsome.Engine, token string) id.UserID {
 	t.Helper()
-	sess, err := eng.ResolveSessionByToken(token)
+	sess, err := eng.ResolveSessionByToken(context.Background(), token)
 	require.NoError(t, err)
 	return sess.UserID
 }
@@ -54,7 +54,7 @@ func TestRevokeSession_RequiresAuth(t *testing.T) {
 	handler := withTestKey(a.Handler())
 
 	_, token, _ := signUp(t, eng, "sess-noauth@test.com", "SecureP@ss123")
-	sess, err := eng.ResolveSessionByToken(token)
+	sess, err := eng.ResolveSessionByToken(context.Background(), token)
 	require.NoError(t, err)
 
 	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/sessions/"+sess.ID.String(), nil)
@@ -63,7 +63,7 @@ func TestRevokeSession_RequiresAuth(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 
-	_, err = eng.ResolveSessionByToken(token)
+	_, err = eng.ResolveSessionByToken(context.Background(), token)
 	assert.NoError(t, err, "session must not be revoked by an unauthenticated caller")
 }
 
@@ -74,7 +74,7 @@ func TestRevokeSession_RejectsNonOwner(t *testing.T) {
 	_, tokenA, _ := signUp(t, eng, "sess-owner-a@test.com", "SecureP@ss123")
 	_, tokenB, _ := signUp(t, eng, "sess-owner-b@test.com", "SecureP@ss123")
 
-	sessB, err := eng.ResolveSessionByToken(tokenB)
+	sessB, err := eng.ResolveSessionByToken(context.Background(), tokenB)
 	require.NoError(t, err)
 
 	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/sessions/"+sessB.ID.String(), nil)
@@ -84,7 +84,7 @@ func TestRevokeSession_RejectsNonOwner(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 
-	_, err = eng.ResolveSessionByToken(tokenB)
+	_, err = eng.ResolveSessionByToken(context.Background(), tokenB)
 	assert.NoError(t, err, "user B's session must survive user A's revoke attempt")
 }
 
@@ -93,7 +93,7 @@ func TestRevokeSession_OwnerSucceeds(t *testing.T) {
 	handler := withTestKey(a.Handler())
 
 	_, token, _ := signUp(t, eng, "sess-owner@test.com", "SecureP@ss123")
-	sess, err := eng.ResolveSessionByToken(token)
+	sess, err := eng.ResolveSessionByToken(context.Background(), token)
 	require.NoError(t, err)
 
 	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/sessions/"+sess.ID.String(), nil)

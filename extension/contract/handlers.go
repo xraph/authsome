@@ -103,7 +103,7 @@ func logoutHandler(deps Deps) func(ctx context.Context, _ struct{}, p contract.P
 		// server-side session. Best-effort: even if SignOut errors we still
 		// clear the client cookie so the shell stops thinking it's signed in.
 		if token := extractToken(httpReq); token != "" {
-			if sess, err := eng.ResolveSessionByToken(token); err == nil && sess != nil {
+			if sess, err := eng.ResolveSessionByToken(ctx, token); err == nil && sess != nil {
 				_ = eng.SignOut(ctx, sess.ID) //nolint:errcheck // best-effort sign out
 			}
 		}

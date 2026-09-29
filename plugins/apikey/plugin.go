@@ -89,7 +89,7 @@ type Config struct {
 }
 
 // UserResolver resolves a user by ID string.
-type UserResolver func(userID string) (*user.User, error)
+type UserResolver func(ctx context.Context, userID string) (*user.User, error)
 
 // PrincipalResolver resolves any caller, human or otherwise, by ref. Taken as
 // a function rather than the whole engine so the strategy keeps its narrow
@@ -807,7 +807,7 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 	if key.UserID.IsNil() {
 		return nil, fmt.Errorf("apikey: key %s has no user binding (re-mint via /v1/keys or the dashboard)", key.KeyPrefix)
 	}
-	u, err := s.resolveUser(key.UserID.String())
+	u, err := s.resolveUser(ctx, key.UserID.String())
 	if err != nil {
 		return nil, fmt.Errorf("apikey: resolve user: %w", err)
 	}

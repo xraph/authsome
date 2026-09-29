@@ -45,13 +45,13 @@ func TestEnforcement_MachineCredentialReachesGuardedRoute(t *testing.T) {
 			}
 
 			mw := middleware.AuthMiddleware(
-				func(token string) (*session.Session, error) {
+				func(_ context.Context, token string) (*session.Session, error) {
 					if token == "machine-token" {
 						return sess, nil
 					}
 					return nil, errors.New("invalid")
 				},
-				func(string) (*user.User, error) {
+				func(context.Context, string) (*user.User, error) {
 					return nil, errors.New("no user behind a machine principal")
 				},
 				log.NewNoopLogger(),
@@ -100,8 +100,8 @@ func TestEnforcement_HumanCredentialUnchanged(t *testing.T) {
 	u := &user.User{ID: userID, AppID: appID, Email: "human@example.com"}
 
 	mw := middleware.AuthMiddleware(
-		func(string) (*session.Session, error) { return sess, nil },
-		func(idStr string) (*user.User, error) {
+		func(context.Context, string) (*session.Session, error) { return sess, nil },
+		func(_ context.Context, idStr string) (*user.User, error) {
 			if idStr == userID.String() {
 				return u, nil
 			}
@@ -138,8 +138,8 @@ func TestEnforcement_HumanCredentialUnchanged(t *testing.T) {
 // into "anyone at all".
 func TestEnforcement_AnonymousStillRejected(t *testing.T) {
 	mw := middleware.AuthMiddleware(
-		func(string) (*session.Session, error) { return nil, errors.New("invalid") },
-		func(string) (*user.User, error) { return nil, errors.New("not found") },
+		func(context.Context, string) (*session.Session, error) { return nil, errors.New("invalid") },
+		func(context.Context, string) (*user.User, error) { return nil, errors.New("not found") },
 		log.NewNoopLogger(),
 	)
 

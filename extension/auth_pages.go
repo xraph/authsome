@@ -384,7 +384,7 @@ func (a *authPages) handleLogout(ctx *router.PageContext) (string, templ.Compone
 	// Resolve and terminate the server-side session.
 	token := extractToken(r)
 	if token != "" {
-		if sess, err := a.engine.ResolveSessionByToken(token); err == nil {
+		if sess, err := a.engine.ResolveSessionByToken(r.Context(), token); err == nil {
 			_ = a.engine.SignOut(r.Context(), sess.ID) //nolint:errcheck // best-effort sign out
 		}
 	}
@@ -489,7 +489,7 @@ func (c *authChecker) CheckAuth(ctx context.Context, r *http.Request) (*dashauth
 		return nil, nil
 	}
 
-	sess, err := c.engine.ResolveSessionByToken(token)
+	sess, err := c.engine.ResolveSessionByToken(ctx, token)
 	if err != nil {
 		return nil, nil
 	}
@@ -503,7 +503,7 @@ func (c *authChecker) CheckAuth(ctx context.Context, r *http.Request) (*dashauth
 		return nil, nil
 	}
 
-	u, err := c.engine.ResolveUser(sess.UserID.String())
+	u, err := c.engine.ResolveUser(ctx, sess.UserID.String())
 	if err != nil {
 		return nil, nil
 	}

@@ -68,13 +68,13 @@ func chainRouter(t *testing.T, sess *session.Session, bind authmw.SessionBinding
 
 	u := &user.User{ID: sess.UserID, AppID: sess.AppID, Email: "chain@test.com"}
 
-	resolveSession := func(token string) (*session.Session, error) {
+	resolveSession := func(_ context.Context, token string) (*session.Session, error) {
 		if token == sess.Token {
 			return sess, nil
 		}
 		return nil, errors.New("invalid token")
 	}
-	resolveUser := func(userIDStr string) (*user.User, error) {
+	resolveUser := func(_ context.Context, userIDStr string) (*user.User, error) {
 		if userIDStr == sess.UserID.String() {
 			return u, nil
 		}

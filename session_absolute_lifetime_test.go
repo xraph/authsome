@@ -44,7 +44,7 @@ func TestAbsoluteLifetime_DefaultsToThirtyDays(t *testing.T) {
 
 func TestAbsoluteLifetime_ResolveRefusesAnOldSession(t *testing.T) {
 	eng, sess := agedSession(t, 31*24*time.Hour)
-	_, err := eng.ResolveSessionByToken(sess.Token)
+	_, err := eng.ResolveSessionByToken(context.Background(), sess.Token)
 	assert.ErrorIs(t, err, account.ErrSessionExpired)
 }
 
@@ -66,7 +66,7 @@ func TestAbsoluteLifetime_RefreshClampsToTheDeadline(t *testing.T) {
 
 func TestAbsoluteLifetime_YoungSessionIsUntouched(t *testing.T) {
 	eng, sess := agedSession(t, time.Hour)
-	got, err := eng.ResolveSessionByToken(sess.Token)
+	got, err := eng.ResolveSessionByToken(context.Background(), sess.Token)
 	require.NoError(t, err)
 	assert.Equal(t, sess.ID, got.ID)
 }

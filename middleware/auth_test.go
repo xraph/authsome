@@ -119,11 +119,11 @@ func TestSessionIDFrom_Missing(t *testing.T) {
 
 func TestAuthMiddleware_NoToken(t *testing.T) {
 	mw := middleware.AuthMiddleware(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			t.Fatal("should not be called")
 			return nil, nil
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			t.Fatal("should not be called")
 			return nil, nil
 		},
@@ -165,13 +165,13 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if token == "valid-token" {
 				return testSession, nil
 			}
 			return nil, errors.New("invalid")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ context.Context, userIDStr string) (*user.User, error) {
 			if userIDStr == testUserID.String() {
 				return testUser, nil
 			}
@@ -246,13 +246,13 @@ func TestAuthMiddleware_ValidToken_OrgScope(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if token == "org-token" {
 				return testSession, nil
 			}
 			return nil, errors.New("invalid")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ context.Context, userIDStr string) (*user.User, error) {
 			if userIDStr == testUserID.String() {
 				return testUser, nil
 			}
@@ -295,10 +295,10 @@ func TestAuthMiddleware_ValidToken_OrgScope(t *testing.T) {
 
 func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	mw := middleware.AuthMiddleware(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			return nil, errors.New("session not found")
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			t.Fatal("should not be called")
 			return nil, nil
 		},
@@ -325,11 +325,11 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 
 func TestAuthMiddleware_NonBearerAuth(t *testing.T) {
 	mw := middleware.AuthMiddleware(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			t.Fatal("should not be called")
 			return nil, nil
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			t.Fatal("should not be called")
 			return nil, nil
 		},
@@ -365,10 +365,10 @@ func TestAuthMiddleware_UserResolveFails(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddleware(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			return testSession, nil
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			return nil, errors.New("user not found")
 		},
 		log.NewNoopLogger(),
@@ -468,13 +468,13 @@ func TestAuthMiddleware_CookieNameResolver_CustomName(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if token == "cookie-token" {
 				return testSession, nil
 			}
 			return nil, errors.New("invalid")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ context.Context, userIDStr string) (*user.User, error) {
 			if userIDStr == testUserID.String() {
 				return testUser, nil
 			}
@@ -524,13 +524,13 @@ func TestAuthMiddleware_CookieNameResolver_DefaultFallback(t *testing.T) {
 
 	// No CookieNameResolver — should fall back to "authsome_session_token"
 	mw := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if token == "default-cookie-token" {
 				return testSession, nil
 			}
 			return nil, errors.New("invalid")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ context.Context, userIDStr string) (*user.User, error) {
 			if userIDStr == testUserID.String() {
 				return testUser, nil
 			}
@@ -570,13 +570,13 @@ func TestAuthMiddleware_SessionBinding_IPMismatch_Rejects(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if token == "bound-token" {
 				return testSession, nil
 			}
 			return nil, errors.New("invalid")
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			return &user.User{ID: testSession.UserID}, nil
 		},
 		log.NewNoopLogger(),
@@ -608,13 +608,13 @@ func TestAuthMiddleware_SessionBinding_DeviceMismatch_Rejects(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if token == "device-token" {
 				return testSession, nil
 			}
 			return nil, errors.New("invalid")
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			return &user.User{ID: testSession.UserID}, nil
 		},
 		log.NewNoopLogger(),
@@ -649,13 +649,13 @@ func TestAuthMiddleware_SessionBinding_Matches_Allows(t *testing.T) {
 	testUser := &user.User{ID: testUserID, Email: "bound@test.com"}
 
 	mw := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if token == "matching-token" {
 				return testSession, nil
 			}
 			return nil, errors.New("invalid")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ context.Context, userIDStr string) (*user.User, error) {
 			if userIDStr == testUserID.String() {
 				return testUser, nil
 			}

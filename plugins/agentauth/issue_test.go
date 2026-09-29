@@ -127,10 +127,10 @@ func (e *stubEngine) SessionConfigForApp(_ context.Context, _ id.AppID, _ ...id.
 func (e *stubEngine) TokenFormatForApp(_ string) tokenformat.Format { return nil }
 func (e *stubEngine) CeremonyStore() ceremony.Store                 { return nil }
 func (e *stubEngine) APIKeyStore() apikey.Store                     { return nil }
-func (e *stubEngine) ResolveSessionByToken(_ string) (*session.Session, error) {
+func (e *stubEngine) ResolveSessionByToken(_ context.Context, _ string) (*session.Session, error) {
 	return nil, errors.New("not implemented")
 }
-func (e *stubEngine) ResolveUser(_ string) (*user.User, error) {
+func (e *stubEngine) ResolveUser(_ context.Context, _ string) (*user.User, error) {
 	return nil, errors.New("not implemented")
 }
 func (e *stubEngine) GetUser(ctx context.Context, userID id.UserID) (*user.User, error) {

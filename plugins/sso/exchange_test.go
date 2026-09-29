@@ -69,10 +69,10 @@ func TestExchange_CodeCarriesNoTokenAndRotatesTheSession(t *testing.T) {
 	assert.NotEqual(t, sess.Token, resp.SessionToken, "the exchange returns a rotated access token")
 	assert.NotEqual(t, sess.RefreshToken, resp.RefreshToken, "the exchange returns a rotated refresh token")
 
-	live, err := eng.ResolveSessionByToken(resp.SessionToken)
+	live, err := eng.ResolveSessionByToken(context.Background(), resp.SessionToken)
 	require.NoError(t, err, "the rotated token authenticates")
 	assert.Equal(t, sess.ID.String(), live.ID.String(), "the same session, rotated")
-	_, err = eng.ResolveSessionByToken(sess.Token)
+	_, err = eng.ResolveSessionByToken(context.Background(), sess.Token)
 	assert.Error(t, err, "the token minted at the callback is retired by the exchange")
 	revoked, err := eng.Store().IsRefreshTokenRevoked(ctx, store.HashToken(sess.RefreshToken))
 	require.NoError(t, err)

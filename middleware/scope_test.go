@@ -23,8 +23,8 @@ import (
 
 func oauthMiddlewareFixture(t *testing.T, sess *session.Session) forge.Router {
 	t.Helper()
-	resolveSession := func(_ string) (*session.Session, error) { return sess, nil }
-	resolveUser := func(_ string) (*user.User, error) {
+	resolveSession := func(_ context.Context, _ string) (*session.Session, error) { return sess, nil }
+	resolveUser := func(_ context.Context, _ string) (*user.User, error) {
 		return &user.User{ID: sess.UserID, AppID: sess.AppID, Email: "oauth@example.com"}, nil
 	}
 	router := forge.NewRouter()

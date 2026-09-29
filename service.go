@@ -960,8 +960,7 @@ func (e *Engine) RevokeSession(ctx context.Context, sessionID id.SessionID) erro
 }
 
 // ResolveSessionByToken resolves a session from its token (for middleware).
-func (e *Engine) ResolveSessionByToken(token string) (*session.Session, error) {
-	ctx := context.Background()
+func (e *Engine) ResolveSessionByToken(ctx context.Context, token string) (*session.Session, error) {
 	sess, err := e.store.GetSessionByToken(ctx, token)
 	if err != nil {
 		return nil, err
@@ -1002,8 +1001,7 @@ func (e *Engine) AbsoluteLifetimeFor(ctx context.Context, appID id.AppID) time.D
 // does not resolve: every credential path that turns an id into a user runs
 // through here, so a ban takes effect on the next request, not the next
 // sign-in.
-func (e *Engine) ResolveUser(userIDStr string) (*user.User, error) {
-	ctx := context.Background()
+func (e *Engine) ResolveUser(ctx context.Context, userIDStr string) (*user.User, error) {
 	userID, err := id.ParseUserID(userIDStr)
 	if err != nil {
 		return nil, err
@@ -1020,13 +1018,8 @@ func (e *Engine) ResolveUser(userIDStr string) (*user.User, error) {
 
 // ResolvePrincipalByRef adapts Engine.ResolvePrincipal to
 // middleware.PrincipalResolver's no-context shape (for middleware).
-//
-// Same trade as ResolveUser above: the resolver signature this mirrors
-// (middleware.UserResolver) carries no request context, so neither does
-// this one, and a request's cancellation or deadline does not propagate
-// into the store lookup it triggers.
-func (e *Engine) ResolvePrincipalByRef(ref principal.Ref) (*principal.Principal, error) {
-	return e.ResolvePrincipal(context.Background(), ref)
+func (e *Engine) ResolvePrincipalByRef(ctx context.Context, ref principal.Ref) (*principal.Principal, error) {
+	return e.ResolvePrincipal(ctx, ref)
 }
 
 // ──────────────────────────────────────────────────

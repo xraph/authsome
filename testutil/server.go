@@ -205,7 +205,7 @@ func NewTestServer(t *testing.T, opts ...ServerOption) *TestServer {
 	// context the same way the Forge authsome extension does, but without
 	// requiring Forge's context adapter.
 	resolveSession := engine.ResolveSessionByToken
-	resolveUser := func(userID string) (*user.User, error) {
+	resolveUser := func(ctx context.Context, userID string) (*user.User, error) {
 		parsed, parseErr := id.ParseUserID(userID)
 		if parseErr != nil {
 			return nil, parseErr
@@ -266,20 +266,20 @@ func authMiddlewareHTTP(
 			return
 		}
 
-		sess, err := resolveSession(token)
+		ctx := r.Context()
+		sess, err := resolveSession(ctx, token)
 		if err != nil {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		ctx := r.Context()
 		ctx = authmw.WithSessionID(ctx, sess.ID)
 		ctx = authmw.WithAppID(ctx, sess.AppID)
 		if sess.OrgID != (id.OrgID{}) {
 			ctx = authmw.WithOrgID(ctx, sess.OrgID)
 		}
 
-		u, err := resolveUser(sess.UserID.String())
+		u, err := resolveUser(ctx, sess.UserID.String())
 		if err != nil {
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return

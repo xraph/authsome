@@ -111,14 +111,14 @@ type StrategyAuthenticator interface {
 }
 
 // SessionResolver loads a session from a token.
-type SessionResolver func(token string) (*session.Session, error)
+type SessionResolver func(ctx context.Context, token string) (*session.Session, error)
 
 // UserResolver loads a user by ID string.
-type UserResolver func(userID string) (*user.User, error)
+type UserResolver func(ctx context.Context, userID string) (*user.User, error)
 
 // PrincipalResolver resolves a caller by ref. Middleware takes this as a
 // function rather than an engine so it does not import the engine package.
-type PrincipalResolver func(principal.Ref) (*principal.Principal, error)
+type PrincipalResolver func(ctx context.Context, ref principal.Ref) (*principal.Principal, error)
 
 // JWTValidator validates JWT access tokens and returns claims.
 // The engine implements this via its TokenFormatForApp method.
@@ -222,7 +222,7 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 				return next(ctx)
 			}
 
-			sess, err := resolveSession(token)
+			sess, err := resolveSession(ctx.Context(), token)
 			if err != nil {
 				logger.Debug("auth middleware: invalid session token",
 					log.String("error", err.Error()),
@@ -295,17 +295,11 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 			if imp := sess.ImpersonatedBy(); imp.Prefix() != "" {
 				goCtx = WithImpersonator(goCtx, imp)
 			}
-			goCtx = setPrincipalContext(goCtx, sess, bindCfg.PrincipalResolver, logger)
-
-			if sess.OrgID.Prefix() != "" {
-				goCtx = WithOrgID(goCtx, sess.OrgID)
-				goCtx = forge.WithScope(goCtx, forge.NewOrgScope(sess.AppID.String(), sess.OrgID.String()))
-			} else {
-				goCtx = forge.WithScope(goCtx, forge.NewAppScope(sess.AppID.String()))
-			}
-
+			// The user is loaded once, here, and the principal for a human
+			// session is built from that user rather than loaded again.
+			var u *user.User
 			if sess.IsHumanPrincipal() {
-				u, err := resolveUser(sess.UserID.String())
+				loaded, err := resolveUser(ctx.Context(), sess.UserID.String())
 				if err != nil {
 					// A session whose user no longer resolves (deleted or
 					// banned) authenticates nobody.
@@ -315,6 +309,18 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 					)
 					return next(ctx)
 				}
+				u = loaded
+			}
+			goCtx = setPrincipalContext(goCtx, sess, u, bindCfg.PrincipalResolver, logger)
+
+			if sess.OrgID.Prefix() != "" {
+				goCtx = WithOrgID(goCtx, sess.OrgID)
+				goCtx = forge.WithScope(goCtx, forge.NewOrgScope(sess.AppID.String(), sess.OrgID.String()))
+			} else {
+				goCtx = forge.WithScope(goCtx, forge.NewAppScope(sess.AppID.String()))
+			}
+
+			if u != nil {
 				goCtx = WithUser(goCtx, u)
 			}
 
@@ -666,7 +672,7 @@ func tryJWTAuth(
 	// Resolve user from claims. A signature proves who minted the token,
 	// not that its subject may still act: a deleted or banned user is
 	// refused here even though the token verifies.
-	u, err := resolveUser(claims.UserID)
+	u, err := resolveUser(ctx.Context(), claims.UserID)
 	if err != nil {
 		logger.Warn("auth middleware: refusing JWT, user does not resolve",
 			log.String("user_id", claims.UserID),
@@ -698,7 +704,7 @@ func trySessionAuth(
 	logger log.Logger,
 	bindCfg SessionBindingConfig,
 ) (bool, error) {
-	sess, err := resolveSession(token)
+	sess, err := resolveSession(ctx.Context(), token)
 	if err != nil {
 		logger.Debug("auth middleware: invalid session token",
 			log.String("error", err.Error()),
@@ -851,7 +857,7 @@ func tryStrategyAuth(
 		} else {
 			goCtx = forge.WithScope(goCtx, forge.NewAppScope(result.Session.AppID.String()))
 		}
-		goCtx = setPrincipalContext(goCtx, result.Session, resolvePrincipal, logger)
+		goCtx = setPrincipalContext(goCtx, result.Session, nil, resolvePrincipal, logger)
 	}
 
 	if result.User != nil {
@@ -872,7 +878,7 @@ func tryStrategyAuth(
 // and refusing the request over it would turn a principal-store blip into an
 // outage on traffic that is otherwise fine.
 func setPrincipalContext(
-	goCtx context.Context, sess *session.Session, resolve PrincipalResolver, logger log.Logger,
+	goCtx context.Context, sess *session.Session, u *user.User, resolve PrincipalResolver, logger log.Logger,
 ) context.Context {
 	// AuthzActors, not Actors. The two differ for exactly one case and it is
 	// the case that matters: on an impersonation, AuthzActors is empty,
@@ -888,14 +894,19 @@ func setPrincipalContext(
 	if actors := sess.AuthzActors(); len(actors) > 0 {
 		goCtx = WithActors(goCtx, actors)
 	}
-	if resolve == nil {
-		return goCtx
-	}
 	ref := sess.Subject()
 	if ref.IsZero() {
 		return goCtx
 	}
-	p, err := resolve(ref)
+	// A human subject's principal is the user the caller already loaded:
+	// one store read per request, not two for the same row.
+	if u != nil && ref.Kind == principal.KindUser && ref.ID == u.ID.String() {
+		return WithPrincipal(goCtx, principalFromUser(ref, u))
+	}
+	if resolve == nil {
+		return goCtx
+	}
+	p, err := resolve(goCtx, ref)
 	if err != nil {
 		logger.Warn("auth middleware: failed to resolve principal",
 			log.String("principal", ref.String()),
@@ -924,7 +935,19 @@ func setSessionContext(
 	if imp := sess.ImpersonatedBy(); imp.Prefix() != "" {
 		goCtx = WithImpersonator(goCtx, imp)
 	}
-	goCtx = setPrincipalContext(goCtx, sess, resolvePrincipal, logger)
+	var u *user.User
+	if sess.IsHumanPrincipal() {
+		loaded, err := resolveUser(ctx.Context(), sess.UserID.String())
+		if err != nil {
+			logger.Warn("auth middleware: refusing session, user does not resolve",
+				log.String("user_id", sess.UserID.String()),
+				log.String("error", err.Error()),
+			)
+			return false
+		}
+		u = loaded
+	}
+	goCtx = setPrincipalContext(goCtx, sess, u, resolvePrincipal, logger)
 
 	if sess.OrgID.Prefix() != "" {
 		goCtx = WithOrgID(goCtx, sess.OrgID)
@@ -933,15 +956,7 @@ func setSessionContext(
 		goCtx = forge.WithScope(goCtx, forge.NewAppScope(sess.AppID.String()))
 	}
 
-	if sess.IsHumanPrincipal() {
-		u, err := resolveUser(sess.UserID.String())
-		if err != nil {
-			logger.Warn("auth middleware: refusing session, user does not resolve",
-				log.String("user_id", sess.UserID.String()),
-				log.String("error", err.Error()),
-			)
-			return false
-		}
+	if u != nil {
 		goCtx = WithUser(goCtx, u)
 	}
 	goCtx = WithAuthMethod(goCtx, "session")
@@ -1372,4 +1387,16 @@ func dpopChallenge(ctx forge.Context, cfg SessionBindingConfig, jkt, code string
 		ctx.Response().Header().Set("DPoP-Nonce", cfg.DPoPNonceSigner.Issue(jkt))
 	}
 	return forge.Unauthorized("invalid proof of possession")
+}
+
+// principalFromUser is the principal a store would build for a user: the
+// same shape store.GetPrincipal returns for a user ref, without the read.
+func principalFromUser(ref principal.Ref, u *user.User) *principal.Principal {
+	return &principal.Principal{
+		Ref:      ref,
+		AppID:    u.AppID,
+		EnvID:    u.EnvID,
+		Name:     u.Name(),
+		Disabled: false,
+	}
 }

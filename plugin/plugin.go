@@ -121,9 +121,9 @@ type Engine interface {
 	// ── User / session resolution ──
 
 	// ResolveSessionByToken resolves a session from its opaque token.
-	ResolveSessionByToken(token string) (*session.Session, error)
+	ResolveSessionByToken(ctx context.Context, token string) (*session.Session, error)
 	// ResolveUser resolves a user by ID string.
-	ResolveUser(userID string) (*user.User, error)
+	ResolveUser(ctx context.Context, userID string) (*user.User, error)
 	// GetUser fetches a user by typed ID.
 	GetUser(ctx context.Context, userID id.UserID) (*user.User, error)
 	// RevokeOtherUserSessions ends every session of the user except keep.

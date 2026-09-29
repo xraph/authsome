@@ -453,13 +453,13 @@ func TestAutoRefresh_BoundSessionRevalidatesTheSameProof(t *testing.T) {
 
 	router := forge.NewRouter()
 	router.Use(middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if token == originalToken {
 				return sess, nil
 			}
 			return nil, errors.New("invalid")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ context.Context, userIDStr string) (*user.User, error) {
 			if userIDStr == sess.UserID.String() {
 				return u, nil
 			}

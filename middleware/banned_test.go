@@ -56,8 +56,8 @@ func humanSession() *session.Session {
 func TestSessionAuth_UnresolvableUserIsRefused(t *testing.T) {
 	sess := humanSession()
 	mw := middleware.AuthMiddleware(
-		func(_ string) (*session.Session, error) { return sess, nil },
-		func(_ string) (*user.User, error) { return nil, errUserGone },
+		func(_ context.Context, _ string) (*session.Session, error) { return sess, nil },
+		func(_ context.Context, _ string) (*user.User, error) { return nil, errUserGone },
 		log.NewNoopLogger(),
 	)
 	code, sawSession := serveWithRequireAuth(t, mw, "tok")
@@ -68,8 +68,8 @@ func TestSessionAuth_UnresolvableUserIsRefused(t *testing.T) {
 func TestSessionAuthWithStrategies_UnresolvableUserIsRefused(t *testing.T) {
 	sess := humanSession()
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(_ string) (*session.Session, error) { return sess, nil },
-		func(_ string) (*user.User, error) { return nil, errUserGone },
+		func(_ context.Context, _ string) (*session.Session, error) { return sess, nil },
+		func(_ context.Context, _ string) (*user.User, error) { return nil, errUserGone },
 		nil,
 		log.NewNoopLogger(),
 	)
@@ -83,8 +83,11 @@ func TestSessionAuth_MachineSessionNeedsNoUser(t *testing.T) {
 	sess.PrincipalKind = principal.KindService
 	sess.ServiceAccountID = id.NewServiceAccountID()
 	mw := middleware.AuthMiddleware(
-		func(_ string) (*session.Session, error) { return sess, nil },
-		func(_ string) (*user.User, error) { t.Fatal("no user lookup for a machine session"); return nil, nil },
+		func(_ context.Context, _ string) (*session.Session, error) { return sess, nil },
+		func(_ context.Context, _ string) (*user.User, error) {
+			t.Fatal("no user lookup for a machine session")
+			return nil, nil
+		},
 		log.NewNoopLogger(),
 	)
 	code, sawSession := serveWithRequireAuth(t, mw, "tok")
@@ -98,8 +101,8 @@ func TestJWTAuth_UnresolvableUserIsRefused(t *testing.T) {
 		UserID: uid.String(), AppID: id.NewAppID().String(),
 	}}
 	mw := middleware.AuthMiddlewareWithJWT(
-		func(_ string) (*session.Session, error) { return nil, errors.New("not a session") },
-		func(_ string) (*user.User, error) { return nil, errUserGone },
+		func(_ context.Context, _ string) (*session.Session, error) { return nil, errors.New("not a session") },
+		func(_ context.Context, _ string) (*user.User, error) { return nil, errUserGone },
 		nil,
 		validator,
 		log.NewNoopLogger(),

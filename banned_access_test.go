@@ -37,7 +37,7 @@ func bannedFixture(t *testing.T, expires *time.Time) (*authsome.Engine, id.UserI
 
 func TestBanned_ResolveUserRefuses(t *testing.T) {
 	eng, uid, _ := bannedFixture(t, nil)
-	_, err := eng.ResolveUser(uid.String())
+	_, err := eng.ResolveUser(context.Background(), uid.String())
 	assert.ErrorIs(t, err, account.ErrUserBanned)
 }
 
@@ -58,7 +58,7 @@ func TestBanned_IssueSessionRefuses(t *testing.T) {
 func TestBanned_ExpiredBanNoLongerApplies(t *testing.T) {
 	past := time.Now().Add(-time.Hour)
 	eng, uid, refresh := bannedFixture(t, &past)
-	_, err := eng.ResolveUser(uid.String())
+	_, err := eng.ResolveUser(context.Background(), uid.String())
 	assert.NoError(t, err, "an expired ban must not block")
 	_, err = eng.Refresh(context.Background(), refresh)
 	assert.NoError(t, err)

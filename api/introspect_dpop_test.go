@@ -40,7 +40,7 @@ func TestIntrospect_BoundSessionCarriesConfirmation(t *testing.T) {
 
 	_, token, _ := signUp(t, eng, "bound-introspect@test.com", "SecureP@ss123")
 
-	sess, err := eng.ResolveSessionByToken(token)
+	sess, err := eng.ResolveSessionByToken(context.Background(), token)
 	require.NoError(t, err)
 	sess.DPoPJKT = "test-thumbprint-value"
 	require.NoError(t, eng.Store().UpdateSession(context.Background(), sess))

@@ -99,10 +99,12 @@ func (s stubEngineWithPlugin) TokenFormatForApp(string) tokenformat.Format { ret
 func (s stubEngineWithPlugin) SessionConfigForApp(context.Context, id.AppID, ...id.EnvironmentID) account.SessionConfig {
 	return account.SessionConfig{}
 }
-func (s stubEngineWithPlugin) ResolveSessionByToken(string) (*session.Session, error) {
+func (s stubEngineWithPlugin) ResolveSessionByToken(context.Context, string) (*session.Session, error) {
 	return nil, nil
 }
-func (s stubEngineWithPlugin) ResolveUser(string) (*user.User, error) { return nil, nil }
+func (s stubEngineWithPlugin) ResolveUser(context.Context, string) (*user.User, error) {
+	return nil, nil
+}
 func (s stubEngineWithPlugin) GetUser(context.Context, id.UserID) (*user.User, error) {
 	return nil, nil
 }

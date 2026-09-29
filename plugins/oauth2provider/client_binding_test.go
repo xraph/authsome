@@ -82,7 +82,7 @@ func TestRefreshGrant_RotatesOnlyForTheOwningClient(t *testing.T) {
 	require.NoError(t, err)
 	first := obtainTokens(t, mux, u.ID, appID, "openid profile")
 
-	sess, err := eng.ResolveSessionByToken(first.AccessToken)
+	sess, err := eng.ResolveSessionByToken(context.Background(), first.AccessToken)
 	require.NoError(t, err)
 	assert.Equal(t, publicID, sess.ClientID, "the session is stamped with its client")
 
@@ -103,16 +103,16 @@ func TestRefreshGrant_RotatesOnlyForTheOwningClient(t *testing.T) {
 	assert.NotEqual(t, first.AccessToken, second.AccessToken)
 	assert.NotEqual(t, first.RefreshToken, second.RefreshToken)
 	assert.Equal(t, "openid profile", second.Scope)
-	live, err := eng.ResolveSessionByToken(second.AccessToken)
+	live, err := eng.ResolveSessionByToken(context.Background(), second.AccessToken)
 	require.NoError(t, err)
 	assert.Equal(t, publicID, live.ClientID)
-	_, err = eng.ResolveSessionByToken(first.AccessToken)
+	_, err = eng.ResolveSessionByToken(context.Background(), first.AccessToken)
 	assert.Error(t, err, "the previous access token is retired")
 
 	// Replaying the spent refresh token revokes the family.
 	replay := postToken(t, mux, map[string]string{"grant_type": "refresh_token", "refresh_token": first.RefreshToken, "client_id": publicID})
 	assert.Equal(t, http.StatusBadRequest, replay.Code)
-	_, err = eng.ResolveSessionByToken(second.AccessToken)
+	_, err = eng.ResolveSessionByToken(context.Background(), second.AccessToken)
 	assert.Error(t, err, "a replay revokes the whole family")
 }
 

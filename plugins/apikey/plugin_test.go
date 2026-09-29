@@ -109,7 +109,7 @@ func (m *mockEngine) DPoPModeForApp(_ context.Context, _ id.AppID) dpop.Mode {
 	return dpop.ModeOff
 }
 func (m *mockEngine) DPoPNonceRequiredForApp(_ context.Context, _ id.AppID) bool { return false }
-func (m *mockEngine) ResolveSessionByToken(_ string) (*session.Session, error) {
+func (m *mockEngine) ResolveSessionByToken(_ context.Context, _ string) (*session.Session, error) {
 	return nil, errors.New("not implemented")
 }
 func (m *mockEngine) GetUser(_ context.Context, _ id.UserID) (*user.User, error) {
@@ -134,7 +134,7 @@ func (m *mockEngine) AuthRegistry() auth.Registry      { return nil }
 func (m *mockEngine) PlatformAppID() id.AppID          { return id.AppID{} }
 func (m *mockEngine) DefaultAppID() string             { return "" }
 func (m *mockEngine) BasePath() string                 { return "" }
-func (m *mockEngine) ResolveUser(userID string) (*user.User, error) {
+func (m *mockEngine) ResolveUser(_ context.Context, userID string) (*user.User, error) {
 	uid, err := id.ParseUserID(userID)
 	if err != nil {
 		return nil, err

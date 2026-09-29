@@ -96,7 +96,7 @@ func (e *exchangeEngine) HasPermission(_ context.Context, _ id.UserID, _, _ stri
 	return false, nil
 }
 
-func (e *exchangeEngine) ResolveSessionByToken(token string) (*session.Session, error) {
+func (e *exchangeEngine) ResolveSessionByToken(_ context.Context, token string) (*session.Session, error) {
 	return e.core.GetSessionByToken(context.Background(), token)
 }
 

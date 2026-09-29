@@ -68,13 +68,13 @@ func TestStrategyMiddleware_ValidBearerSession(t *testing.T) {
 	testUserID, testAppID, testSessID, testSession, testUser := newTestFixtures()
 
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if token == "valid-token" {
 				return testSession, nil
 			}
 			return nil, errors.New("invalid")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ context.Context, userIDStr string) (*user.User, error) {
 			if userIDStr == testUserID.String() {
 				return testUser, nil
 			}
@@ -155,10 +155,10 @@ func TestStrategyMiddleware_InvalidBearerFallsBackToStrategy(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			return nil, errors.New("session not found")
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			t.Fatal("user resolver should not be called for session path")
 			return nil, nil
 		},
@@ -204,11 +204,11 @@ func TestStrategyMiddleware_InvalidBearerFallsBackToStrategy(t *testing.T) {
 
 func TestStrategyMiddleware_NoAuthHeaders(t *testing.T) {
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			t.Fatal("session resolver should not be called")
 			return nil, nil
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			t.Fatal("user resolver should not be called")
 			return nil, nil
 		},
@@ -261,11 +261,11 @@ func TestStrategyMiddleware_APIKeyOnly(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			t.Fatal("session resolver should not be called without bearer token")
 			return nil, nil
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			t.Fatal("user resolver should not be called")
 			return nil, nil
 		},
@@ -332,11 +332,11 @@ func TestStrategyMiddleware_BearerWithAskPrefix(t *testing.T) {
 	sessionResolverCalled := false
 
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			sessionResolverCalled = true
 			return nil, errors.New("should not be called")
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			return nil, errors.New("not found")
 		},
 		&mockStrategyAuth{
@@ -381,11 +381,11 @@ func TestStrategyMiddleware_BearerWithAskPrefix(t *testing.T) {
 
 func TestStrategyMiddleware_StrategyNotApplicable(t *testing.T) {
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			t.Fatal("session resolver should not be called")
 			return nil, nil
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			t.Fatal("user resolver should not be called")
 			return nil, nil
 		},
@@ -418,11 +418,11 @@ func TestStrategyMiddleware_StrategyNotApplicable(t *testing.T) {
 
 func TestStrategyMiddleware_StrategyError(t *testing.T) {
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			t.Fatal("session resolver should not be called")
 			return nil, nil
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			t.Fatal("user resolver should not be called")
 			return nil, nil
 		},
@@ -455,10 +455,10 @@ func TestStrategyMiddleware_StrategyError(t *testing.T) {
 
 func TestStrategyMiddleware_RequireAuth_NoAuth(t *testing.T) {
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			return nil, errors.New("invalid")
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			return nil, errors.New("not found")
 		},
 		&mockStrategyAuth{
@@ -507,10 +507,10 @@ func TestStrategyMiddleware_RequireAuth_WithStrategy(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			return nil, errors.New("invalid")
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			return nil, errors.New("not found")
 		},
 		&mockStrategyAuth{
@@ -564,10 +564,10 @@ func TestStrategyMiddleware_StrategyResultSetsScope(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			return nil, errors.New("invalid")
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			return nil, errors.New("not found")
 		},
 		&mockStrategyAuth{

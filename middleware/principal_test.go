@@ -87,13 +87,13 @@ func TestSessionPathResolvesPrincipal(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if token == "svc-token" {
 				return testSession, nil
 			}
 			return nil, errors.New("invalid")
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			// AuthMiddleware's bearer-session path resolves the user
 			// unconditionally, same as before this change (untouched
 			// behavior). A workload session carries no UserID, so this
@@ -103,7 +103,7 @@ func TestSessionPathResolvesPrincipal(t *testing.T) {
 		},
 		log.NewNoopLogger(),
 		middleware.SessionBindingConfig{
-			PrincipalResolver: func(ref principal.Ref) (*principal.Principal, error) {
+			PrincipalResolver: func(_ context.Context, ref principal.Ref) (*principal.Principal, error) {
 				assert.Equal(t, wantPrincipal.Ref, ref)
 				return wantPrincipal, nil
 			},
@@ -153,10 +153,10 @@ func TestStrategyPathResolvesPrincipal(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			return nil, errors.New("no bearer session")
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			t.Fatal("resolveUser should not be called for a non-human strategy result")
 			return nil, nil
 		},
@@ -167,7 +167,7 @@ func TestStrategyPathResolvesPrincipal(t *testing.T) {
 		},
 		log.NewNoopLogger(),
 		middleware.SessionBindingConfig{
-			PrincipalResolver: func(ref principal.Ref) (*principal.Principal, error) {
+			PrincipalResolver: func(_ context.Context, ref principal.Ref) (*principal.Principal, error) {
 				assert.Equal(t, wantPrincipal.Ref, ref)
 				return wantPrincipal, nil
 			},
@@ -196,50 +196,110 @@ func TestStrategyPathResolvesPrincipal(t *testing.T) {
 // point: a principal-store failure is logged and passed over, not turned
 // into a request failure. The session already authenticated the caller.
 func TestPrincipalResolutionFailureIsEnrichmentNotRejection(t *testing.T) {
+	// A workload session: its principal comes from the resolver, since there
+	// is no user to build it from, so a resolver failure is observable.
 	testSession := &session.Session{
-		ID:     id.NewSessionID(),
-		AppID:  id.NewAppID(),
-		UserID: id.NewUserID(),
-		Token:  "human-token",
+		ID:               id.NewSessionID(),
+		AppID:            id.NewAppID(),
+		PrincipalKind:    principal.KindWorkload,
+		ServiceAccountID: id.NewServiceAccountID(),
+		Token:            "svc-token",
 	}
-	testUser := &user.User{ID: testSession.UserID}
 
 	mw := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
-			if token == "human-token" {
+		func(_ context.Context, token string) (*session.Session, error) {
+			if token == "svc-token" {
 				return testSession, nil
 			}
 			return nil, errors.New("invalid")
 		},
-		func(_ string) (*user.User, error) {
-			return testUser, nil
+		func(_ context.Context, _ string) (*user.User, error) {
+			return nil, errors.New("not found")
 		},
 		log.NewNoopLogger(),
 		middleware.SessionBindingConfig{
-			PrincipalResolver: func(principal.Ref) (*principal.Principal, error) {
+			PrincipalResolver: func(context.Context, principal.Ref) (*principal.Principal, error) {
 				return nil, errors.New("principal store unavailable")
 			},
 		},
 	)
 
-	var gotUser *user.User
-	var userOK bool
-	var principalOK bool
+	var sessionOK, principalOK bool
 	router := forge.NewRouter()
 	router.Use(mw)
 	router.GET("/test", func(ctx forge.Context) error {
-		gotUser, userOK = middleware.UserFrom(ctx.Context())
+		_, sessionOK = middleware.SessionFrom(ctx.Context())
 		_, principalOK = middleware.PrincipalFrom(ctx.Context())
 		return ctx.NoContent(http.StatusOK)
 	})
 
 	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
-	req.Header.Set("Authorization", "Bearer human-token")
+	req.Header.Set("Authorization", "Bearer svc-token")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code, "a principal-resolution failure must not fail the request")
-	require.True(t, userOK, "the user, resolved separately, must still be set")
-	assert.Equal(t, testUser, gotUser)
+	require.True(t, sessionOK, "the session, resolved separately, must still be set")
 	assert.False(t, principalOK, "no principal should be on the context when resolution failed")
+}
+
+type ctxKey string
+
+// A human session loads its user once and builds the principal from it:
+// the principal resolver is never asked about a user, and the request's
+// own context reaches the resolvers.
+func TestHumanSessionLoadsUserOnceAndBuildsPrincipal(t *testing.T) {
+	appID, envID := id.NewAppID(), id.NewEnvironmentID()
+	testSession := &session.Session{ID: id.NewSessionID(), AppID: appID, UserID: id.NewUserID(), Token: "human-token"}
+	testUser := &user.User{ID: testSession.UserID, AppID: appID, EnvID: envID, FirstName: "Ada", LastName: "Lovelace"}
+
+	var userLoads, principalResolves int
+	var sawRequestCtx bool
+	mw := middleware.AuthMiddleware(
+		func(ctx context.Context, token string) (*session.Session, error) {
+			sawRequestCtx = ctx.Value(ctxKey("marker")) == "present"
+			if token == "human-token" {
+				return testSession, nil
+			}
+			return nil, errors.New("invalid")
+		},
+		func(_ context.Context, _ string) (*user.User, error) {
+			userLoads++
+			return testUser, nil
+		},
+		log.NewNoopLogger(),
+		middleware.SessionBindingConfig{
+			PrincipalResolver: func(context.Context, principal.Ref) (*principal.Principal, error) {
+				principalResolves++
+				return nil, errors.New("must not be asked about a user")
+			},
+		},
+	)
+
+	var gotPrincipal *principal.Principal
+	var gotUser *user.User
+	router := forge.NewRouter()
+	router.Use(mw)
+	router.GET("/test", func(ctx forge.Context) error {
+		gotPrincipal, _ = middleware.PrincipalFrom(ctx.Context())
+		gotUser, _ = middleware.UserFrom(ctx.Context())
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	reqCtx := context.WithValue(context.Background(), ctxKey("marker"), "present")
+	req := httptest.NewRequestWithContext(reqCtx, "GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer human-token")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, sawRequestCtx, "the request context reaches the session resolver")
+	assert.Equal(t, 1, userLoads, "one user load per request")
+	assert.Zero(t, principalResolves, "a user's principal is built from the loaded user")
+	assert.Equal(t, testUser, gotUser)
+	require.NotNil(t, gotPrincipal)
+	assert.Equal(t, principal.Ref{Kind: principal.KindUser, ID: testUser.ID.String()}, gotPrincipal.Ref)
+	assert.Equal(t, appID.String(), gotPrincipal.AppID.String())
+	assert.Equal(t, envID.String(), gotPrincipal.EnvID.String())
+	assert.Equal(t, testUser.Name(), gotPrincipal.Name)
 }

@@ -526,7 +526,7 @@ func (c *Contributor) renderUserDetail(ctx context.Context, appID id.AppID, para
 		}
 	}
 
-	u, err := c.engine.ResolveUser(userIDStr)
+	u, err := c.engine.ResolveUser(ctx, userIDStr)
 	if err != nil {
 		return nil, fmt.Errorf("dashboard: resolve user: %w", err)
 	}
@@ -928,7 +928,7 @@ func (c *Contributor) renderSessionDetail(ctx context.Context, params contributo
 
 	// Resolve the user associated with this session.
 	if !sess.UserID.IsNil() {
-		if u, err := c.engine.ResolveUser(sess.UserID.String()); err == nil {
+		if u, err := c.engine.ResolveUser(ctx, sess.UserID.String()); err == nil {
 			data.User = u
 		}
 	}
@@ -968,7 +968,7 @@ func (c *Contributor) renderDeviceDetail(ctx context.Context, params contributor
 
 	// Resolve the user who owns this device.
 	if !d.UserID.IsNil() {
-		if u, err := c.engine.ResolveUser(d.UserID.String()); err == nil {
+		if u, err := c.engine.ResolveUser(ctx, d.UserID.String()); err == nil {
 			data.User = u
 		}
 		// List sessions for this device's user.

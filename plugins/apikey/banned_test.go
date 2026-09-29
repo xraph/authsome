@@ -23,7 +23,7 @@ import (
 
 type bannedUserEngine struct{ *mockEngine }
 
-func (bannedUserEngine) ResolveUser(userID string) (*user.User, error) {
+func (bannedUserEngine) ResolveUser(_ context.Context, userID string) (*user.User, error) {
 	uid, err := id.ParseUserID(userID)
 	if err != nil {
 		return nil, err

@@ -71,7 +71,7 @@ func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*Intr
 
 		// Optionally resolve user details
 		if claims.UserID != "" {
-			if u, err := a.engine.ResolveUser(claims.UserID); err == nil {
+			if u, err := a.engine.ResolveUser(ctx.Context(), claims.UserID); err == nil {
 				resp.User = &IntrospectUser{
 					ID:        u.ID.String(),
 					Email:     u.Email,
@@ -86,7 +86,7 @@ func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*Intr
 	}
 
 	// Opaque session token
-	sess, err := a.engine.ResolveSessionByToken(req.Token)
+	sess, err := a.engine.ResolveSessionByToken(ctx.Context(), req.Token)
 	if err != nil {
 		return inactive, nil //nolint:nilerr // RFC 7662: invalid token → active=false
 	}
@@ -109,7 +109,7 @@ func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*Intr
 	}
 
 	// Resolve user details
-	if u, resolveErr := a.engine.ResolveUser(sess.UserID.String()); resolveErr == nil {
+	if u, resolveErr := a.engine.ResolveUser(ctx.Context(), sess.UserID.String()); resolveErr == nil {
 		resp.User = &IntrospectUser{
 			ID:        u.ID.String(),
 			Email:     u.Email,
@@ -186,7 +186,7 @@ func (a *API) introspectAPIKey(ctx forge.Context, token string, inactive *Intros
 	}
 
 	if key.UserID.String() != "" {
-		if u, resolveErr := a.engine.ResolveUser(key.UserID.String()); resolveErr == nil {
+		if u, resolveErr := a.engine.ResolveUser(ctx.Context(), key.UserID.String()); resolveErr == nil {
 			resp.User = &IntrospectUser{
 				ID:        u.ID.String(),
 				Email:     u.Email,

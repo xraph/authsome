@@ -65,14 +65,14 @@ type tokenExchanger interface {
 }
 
 // resolveExchangeToken resolves a subject or actor token to its session.
-func (p *Plugin) resolveExchangeToken(token, tokenType string) (*session.Session, error) {
+func (p *Plugin) resolveExchangeToken(ctx context.Context, token, tokenType string) (*session.Session, error) {
 	if tokenType != tokenTypeAccessToken && tokenType != tokenTypeSession {
 		return nil, errUnsupportedTokenType
 	}
 	if p.engine == nil {
 		return nil, forge.InternalError(fmt.Errorf("oauth2: no engine"))
 	}
-	sess, err := p.engine.ResolveSessionByToken(token)
+	sess, err := p.engine.ResolveSessionByToken(ctx, token)
 	if err != nil || sess == nil {
 		return nil, forge.BadRequest("invalid_grant")
 	}
@@ -180,7 +180,7 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 	if req.RequestedTokenType != "" && req.RequestedTokenType != tokenTypeAccessToken {
 		return nil, forge.BadRequest("unsupported requested_token_type")
 	}
-	subject, err := p.resolveExchangeToken(req.SubjectToken, req.SubjectTokenType)
+	subject, err := p.resolveExchangeToken(ctx.Context(), req.SubjectToken, req.SubjectTokenType)
 	if err != nil {
 		reason := denyInvalidSubject
 		if errors.Is(err, errUnsupportedTokenType) {
@@ -221,7 +221,7 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 		return nil, e
 	}
 	if req.ActorToken != "" {
-		actorSess, aErr := p.resolveExchangeToken(req.ActorToken, req.ActorTokenType)
+		actorSess, aErr := p.resolveExchangeToken(ctx.Context(), req.ActorToken, req.ActorTokenType)
 		if aErr != nil {
 			reason := denyInvalidSubject
 			if errors.Is(aErr, errUnsupportedTokenType) {

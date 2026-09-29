@@ -109,7 +109,7 @@ func TestE2E_SignUpSignInSignOut(t *testing.T) {
 	assert.NotEmpty(t, sess.RefreshToken)
 
 	// Step 2: Verify session is valid
-	resolved, err := eng.ResolveSessionByToken(sess.Token)
+	resolved, err := eng.ResolveSessionByToken(context.Background(), sess.Token)
 	require.NoError(t, err)
 	assert.Equal(t, sess.ID, resolved.ID)
 	assert.Equal(t, u.ID, resolved.UserID)
@@ -129,11 +129,11 @@ func TestE2E_SignUpSignInSignOut(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 5: First session should no longer resolve
-	_, err = eng.ResolveSessionByToken(sess.Token)
+	_, err = eng.ResolveSessionByToken(context.Background(), sess.Token)
 	assert.Error(t, err)
 
 	// Step 6: Second session should still be valid
-	resolved2, err := eng.ResolveSessionByToken(sess2.Token)
+	resolved2, err := eng.ResolveSessionByToken(context.Background(), sess2.Token)
 	require.NoError(t, err)
 	assert.Equal(t, sess2.ID, resolved2.ID)
 }
@@ -491,14 +491,14 @@ func TestE2E_SessionManagement(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 5: Second session should be gone
-	_, err = eng.ResolveSessionByToken(sess2.Token)
+	_, err = eng.ResolveSessionByToken(context.Background(), sess2.Token)
 	assert.Error(t, err)
 
 	// Step 6: First and third sessions should still work
-	_, err = eng.ResolveSessionByToken(sess1.Token)
+	_, err = eng.ResolveSessionByToken(context.Background(), sess1.Token)
 	require.NoError(t, err)
 
-	_, err = eng.ResolveSessionByToken(sess3.Token)
+	_, err = eng.ResolveSessionByToken(context.Background(), sess3.Token)
 	require.NoError(t, err)
 
 	// Step 7: Refresh the first session

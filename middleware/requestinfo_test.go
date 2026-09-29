@@ -21,8 +21,8 @@ import (
 
 func TestAuthMiddlewareSetsRequestInfoForAnonymousRequests(t *testing.T) {
 	mw := middleware.AuthMiddleware(
-		func(string) (*session.Session, error) { return nil, errors.New("no session") },
-		func(string) (*user.User, error) { return nil, errors.New("no user") },
+		func(context.Context, string) (*session.Session, error) { return nil, errors.New("no session") },
+		func(context.Context, string) (*user.User, error) { return nil, errors.New("no user") },
 		log.NewNoopLogger(),
 	)
 
@@ -56,13 +56,13 @@ func TestAuthMiddlewareAddsSessionToRequestInfo(t *testing.T) {
 	u := &user.User{ID: userID, AppID: appID, Email: "a@example.com"}
 
 	mw := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if token == "valid-token" {
 				return sess, nil
 			}
 			return nil, errors.New("invalid")
 		},
-		func(string) (*user.User, error) { return u, nil },
+		func(context.Context, string) (*user.User, error) { return u, nil },
 		log.NewNoopLogger(),
 	)
 

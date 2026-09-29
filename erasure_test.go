@@ -46,7 +46,7 @@ func TestAdminDeleteUser_AnonymisesLikeDeleteAccount(t *testing.T) {
 	assert.Empty(t, got.LastName)
 	assert.Empty(t, got.PasswordHash)
 
-	_, err = eng.ResolveSessionByToken(sess.Token)
+	_, err = eng.ResolveSessionByToken(context.Background(), sess.Token)
 	assert.Error(t, err, "sessions end with the account")
 	devices, err := st.ListUserDevices(ctx, u.ID)
 	require.NoError(t, err)

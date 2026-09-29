@@ -218,13 +218,13 @@ func jwtFallthroughCases() []jwtFallthroughCase {
 func (tc jwtFallthroughCase) run(t *testing.T, validator middleware.JWTValidator) *httptest.ResponseRecorder {
 	t.Helper()
 
-	resolveSession := func(token string) (*session.Session, error) {
+	resolveSession := func(_ context.Context, token string) (*session.Session, error) {
 		if token == jwtFallthroughToken {
 			return tc.rescue, nil
 		}
 		return nil, errors.New("no session for token")
 	}
-	resolveUser := func(userID string) (*user.User, error) {
+	resolveUser := func(_ context.Context, userID string) (*user.User, error) {
 		if userID == tc.rescue.UserID.String() {
 			return &user.User{ID: tc.rescue.UserID, AppID: tc.rescue.AppID, Email: "fallthrough@test.com"}, nil
 		}

@@ -837,7 +837,7 @@ func TestHandleSignOut_Success(t *testing.T) {
 	_, token, _ := signUp(t, eng, "signout@test.com", "SecureP@ss123")
 
 	// Resolve the session to get the session ID
-	sess, err := eng.ResolveSessionByToken(token)
+	sess, err := eng.ResolveSessionByToken(context.Background(), token)
 	require.NoError(t, err)
 
 	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signout", nil)
@@ -962,7 +962,7 @@ func TestHandleGetMe_Success(t *testing.T) {
 
 	_, token, _ := signUp(t, eng, "me@test.com", "SecureP@ss123")
 
-	sess, err := eng.ResolveSessionByToken(token)
+	sess, err := eng.ResolveSessionByToken(context.Background(), token)
 	require.NoError(t, err)
 
 	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/me", nil)
@@ -1000,7 +1000,7 @@ func TestHandleUpdateMe_Success(t *testing.T) {
 
 	_, token, _ := signUp(t, eng, "update@test.com", "SecureP@ss123")
 
-	sess, err := eng.ResolveSessionByToken(token)
+	sess, err := eng.ResolveSessionByToken(context.Background(), token)
 	require.NoError(t, err)
 
 	body := jsonBody(t, map[string]string{
@@ -1032,7 +1032,7 @@ func TestHandleListSessions_Success(t *testing.T) {
 
 	_, token, _ := signUp(t, eng, "sessions@test.com", "SecureP@ss123")
 
-	sess, err := eng.ResolveSessionByToken(token)
+	sess, err := eng.ResolveSessionByToken(context.Background(), token)
 	require.NoError(t, err)
 
 	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/sessions", nil)
@@ -1072,7 +1072,7 @@ func TestHandleRevokeSession_Success(t *testing.T) {
 
 	_, token, _ := signUp(t, eng, "revoke@test.com", "SecureP@ss123")
 
-	sess, err := eng.ResolveSessionByToken(token)
+	sess, err := eng.ResolveSessionByToken(context.Background(), token)
 	require.NoError(t, err)
 
 	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/sessions/"+sess.ID.String(), nil)

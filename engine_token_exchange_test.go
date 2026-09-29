@@ -256,7 +256,7 @@ func TestExchangedCredentialCannotBeReExchangedOnAJWTApp(t *testing.T) {
 	// What the session lookup hands the handler on the replay attempt.
 	// ResolveSessionByToken is exactly what middleware.trySessionAuth calls,
 	// so this is the chain a real replay would arrive carrying.
-	stored, err := e.ResolveSessionByToken(aliceSess.Token)
+	stored, err := e.ResolveSessionByToken(context.Background(), aliceSess.Token)
 	require.NoError(t, err, "an opaque exchanged token must resolve back to its own row")
 	require.Equal(t, principal.Chain{agent}, stored.Actors,
 		"the row the middleware loads must carry the chain")
@@ -314,7 +314,7 @@ func TestRefreshKeepsAChainCarryingSessionOpaqueOnAJWTApp(t *testing.T) {
 	// The property that actually matters downstream: the refreshed credential
 	// still resolves back to a row carrying the agent, which is what
 	// middleware.SessionFrom hands the token-exchange handler.
-	stored, err := e.ResolveSessionByToken(refreshed.Token)
+	stored, err := e.ResolveSessionByToken(context.Background(), refreshed.Token)
 	require.NoError(t, err, "a refreshed exchanged token must still resolve through the session path")
 	assert.Equal(t, principal.Chain{agent}, stored.Actors,
 		"the chain must survive the round trip, or a second exchange is judged on an empty chain")

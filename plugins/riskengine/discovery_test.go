@@ -79,10 +79,12 @@ func (*registryEngine) TokenFormatForApp(string) tokenformat.Format            {
 func (*registryEngine) SessionConfigForApp(context.Context, id.AppID, ...id.EnvironmentID) account.SessionConfig {
 	return account.SessionConfig{}
 }
-func (*registryEngine) ResolveSessionByToken(string) (*session.Session, error) { return nil, nil }
-func (*registryEngine) ResolveUser(string) (*user.User, error)                 { return nil, nil }
-func (*registryEngine) GetUser(context.Context, id.UserID) (*user.User, error) { return nil, nil }
-func (*registryEngine) EnsureDefaultRole(context.Context, id.AppID, id.UserID) {}
+func (*registryEngine) ResolveSessionByToken(context.Context, string) (*session.Session, error) {
+	return nil, nil
+}
+func (*registryEngine) ResolveUser(context.Context, string) (*user.User, error) { return nil, nil }
+func (*registryEngine) GetUser(context.Context, id.UserID) (*user.User, error)  { return nil, nil }
+func (*registryEngine) EnsureDefaultRole(context.Context, id.AppID, id.UserID)  {}
 func (*registryEngine) RevokeOtherUserSessions(context.Context, id.UserID, id.SessionID) error {
 	return nil
 }
