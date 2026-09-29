@@ -29,7 +29,9 @@ import (
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/rbac"
 	authclient "github.com/xraph/authsome/sdk/go"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store/memory"
+	"github.com/xraph/authsome/user"
 )
 
 // ──────────────────────────────────────────────────
@@ -514,4 +516,41 @@ func TestClientAuthChecker_ClaimsComeFromIntrospection(t *testing.T) {
 	assert.Equal(t, map[string]any{claimAppID: appID, claimEnvID: envID, claimOrgID: orgID}, info.Claims)
 	assert.Empty(t, info.Roles, "introspection carries no roles")
 	assert.Empty(t, info.Scopes)
+}
+
+// TestDashboardIdentity_OrgNeverTravelsWithoutApp: an org belongs to one app,
+// so org_id is only ever sent next to app_id. Chronicle refuses a tenant
+// claim with no app outright.
+func TestDashboardIdentity_OrgNeverTravelsWithoutApp(t *testing.T) {
+	t.Parallel()
+	f := newIdentityFixture(t)
+	u := &user.User{ID: id.NewUserID(), Email: "org@example.com"}
+	orgID := id.NewOrgID()
+
+	t.Run("a session in an org carries org_id beside app_id", func(t *testing.T) {
+		sess := &session.Session{ID: id.NewSessionID(), AppID: f.platform, UserID: u.ID, OrgID: orgID}
+
+		info := f.checker.dashboardIdentity(context.Background(), dashCheckerRequest(t, "unused", ""), sess, u)
+
+		assert.Equal(t, f.platform.String(), info.Claims[claimAppID])
+		assert.Equal(t, orgID.String(), info.Claims[claimOrgID])
+	})
+
+	t.Run("a session with no app carries no org_id", func(t *testing.T) {
+		sess := &session.Session{ID: id.NewSessionID(), UserID: u.ID, OrgID: orgID}
+
+		info := f.checker.dashboardIdentity(context.Background(), dashCheckerRequest(t, "unused", ""), sess, u)
+
+		assert.Empty(t, info.Claims)
+	})
+}
+
+func TestClientAuthChecker_OrgNeverTravelsWithoutApp(t *testing.T) {
+	t.Parallel()
+
+	claims := introspectionClaims(&authclient.IntrospectResponse{
+		Active: true, EnvID: id.NewEnvironmentID().String(), OrgID: id.NewOrgID().String(),
+	})
+
+	assert.Empty(t, claims)
 }

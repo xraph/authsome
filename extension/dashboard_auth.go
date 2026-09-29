@@ -166,9 +166,12 @@ func (c *clientAuthChecker) CheckAuth(ctx context.Context, r *http.Request) (*da
 // it does.
 func introspectionClaims(resp *authclient.IntrospectResponse) map[string]any {
 	claims := make(map[string]any, 3)
-	if resp.AppID != "" {
-		claims[claimAppID] = resp.AppID
+	if resp.AppID == "" {
+		// Neither an environment nor an org means anything without the app
+		// it belongs to, so a response with no app yields no claims.
+		return claims
 	}
+	claims[claimAppID] = resp.AppID
 	if resp.EnvID != "" {
 		claims[claimEnvID] = resp.EnvID
 	}

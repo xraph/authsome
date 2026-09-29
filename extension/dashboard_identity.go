@@ -188,7 +188,9 @@ func (c *authChecker) dashboardIdentity(ctx context.Context, r *http.Request, se
 	if envID := c.activeEnv(ctx, r, sess, appID); !envID.IsNil() {
 		claims[claimEnvID] = envID.String()
 	}
-	if appID == sess.AppID && !sess.OrgID.IsNil() {
+	// An org only means something inside the app it belongs to, so org_id
+	// never goes out without app_id. Chronicle refuses that shape anyway.
+	if !appID.IsNil() && appID == sess.AppID && !sess.OrgID.IsNil() {
 		claims[claimOrgID] = sess.OrgID.String()
 	}
 
