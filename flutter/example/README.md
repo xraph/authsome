@@ -19,6 +19,8 @@ cd flutter/example
 flutter run -d chrome --dart-define=AUTHSOME_BASE_URL=http://localhost:8080
 ```
 
+The example also reads a `.env` file bundled as an asset. It is not in git: copy `.env.example` to `.env` and fill in your base URL and a `pk_test_` publishable key. `--dart-define` values win over the file.
+
 A helper script wraps the flags:
 
 ```bash
