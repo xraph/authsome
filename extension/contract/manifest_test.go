@@ -13,8 +13,8 @@ func TestManifest_Loads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if m.Contributor.Name != "auth" {
-		t.Errorf("contributor name = %q, want auth", m.Contributor.Name)
+	if m.Contributor.Name != "authsome" {
+		t.Errorf("contributor name = %q, want authsome", m.Contributor.Name)
 	}
 	// 68 intents: 66 prior + 2 new feature-toggle intents
 	// (auth.featureToggles, auth.toggleFeature). apikeys.* are owned
@@ -53,7 +53,7 @@ func TestManifest_RegistersWithRegistry(t *testing.T) {
 	// (l.5) shifted the route from a hardcoded form.edit to the dynamic
 	// auth.login.form intent backed by the auth.config query, so the
 	// expectation flips to verifying the data binding.
-	root, ok := reg.MergedGraph("auth", "/login")
+	root, ok := reg.MergedGraph("authsome", "/login")
 	if !ok {
 		t.Fatal("expected /login route to be registered")
 	}

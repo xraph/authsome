@@ -88,7 +88,7 @@ func Register(
 		return fmt.Errorf("authsome/contract: register manifest: %w", err)
 	}
 
-	const c = "auth"
+	const c = "authsome"
 	if err := dispatcher.RegisterCommand(d, c, "auth.login", 1, loginHandler(deps)); err != nil {
 		return fmt.Errorf("authsome/contract: register auth.login: %w", err)
 	}

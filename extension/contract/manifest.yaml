@@ -1,6 +1,6 @@
 schemaVersion: 1
 contributor:
-  name: auth
+  name: authsome
   envelope:
     supports: [v1]
     preferred: v1

@@ -31,7 +31,7 @@ func mockUpstream(t *testing.T) (string, *[]dashcontract.Request, func()) {
 		// behind the manifest.
 		yaml := `
 schemaVersion: 1
-contributor: { name: auth, envelope: { supports: [v1], preferred: v1 } }
+contributor: { name: authsome, envelope: { supports: [v1], preferred: v1 } }
 intents:
   - { name: auth.login,  kind: command, version: 1, capability: write }
   - { name: auth.logout, kind: command, version: 1, capability: write }
@@ -99,7 +99,7 @@ func TestEndToEnd_RemoteAuthLoginRoutes(t *testing.T) {
 	data, _, err := hostDisp.Dispatch(context.Background(), dashcontract.Request{
 		Envelope:      "v1",
 		Kind:          dashcontract.KindCommand,
-		Contributor:   "auth",
+		Contributor:   "authsome",
 		Intent:        "auth.login",
 		IntentVersion: 1,
 		Payload:       json.RawMessage(`{"email":"a@b","password":"x"}`),
@@ -114,8 +114,8 @@ func TestEndToEnd_RemoteAuthLoginRoutes(t *testing.T) {
 		t.Fatalf("upstream saw %d requests; want 1", len(*captured))
 	}
 	got := (*captured)[0]
-	if got.Contributor != "auth" || got.Intent != "auth.login" {
-		t.Errorf("upstream got %s/%s; want auth/auth.login", got.Contributor, got.Intent)
+	if got.Contributor != "authsome" || got.Intent != "auth.login" {
+		t.Errorf("upstream got %s/%s; want authsome/auth.login", got.Contributor, got.Intent)
 	}
 	if string(got.Payload) != `{"email":"a@b","password":"x"}` {
 		t.Errorf("upstream payload not forwarded verbatim: %s", got.Payload)
