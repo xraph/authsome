@@ -1,0 +1,7 @@
+go 1.26.0
+
+toolchain go1.26.6
+
+use .
+
+replace github.com/xraph/chronicle => /Users/rexraphael/Work/xraph/forgery/chronicle/.claude/worktrees/soc2
