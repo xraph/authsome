@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Sign-in now hides the passkey option, spacing and divider when the selected
+  authenticator is unavailable. Social login retains its divider, and you can
+  still supply a supported native authenticator through `passkeyAuthenticator`.
+
 ## 1.6.1
 
 - Release versioning is now unified across `authsome_core`, `authsome_flutter`

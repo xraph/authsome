@@ -19,7 +19,7 @@ import '../widgets/loading_indicator.dart';
 
 /// A multi-step sign-in form wrapped in an [AuthCard].
 ///
-/// Supports social login, email/password authentication, and passkey (visual only).
+/// Supports social login, email/password authentication, and passkey sign-in.
 /// Social providers are auto-discovered from the server's [ClientConfig] unless
 /// explicitly overridden via [socialProviders].
 class SignInForm extends StatefulWidget {
@@ -55,9 +55,10 @@ class SignInForm extends StatefulWidget {
   /// Whether to show the passkey option.
   ///
   /// When null (the default), the value is auto-derived from
-  /// `clientConfig.passkey.enabled` — mirrors React `sign-in-form.tsx`
+  /// `clientConfig.passkey.enabled`, matching React `sign-in-form.tsx`
   /// (`showPasskeyProp ?? config?.passkey?.enabled ?? false`). Pass
-  /// `true` or `false` to override.
+  /// `true` or `false` to override. The option and its spacing are hidden
+  /// when the selected authenticator is unavailable, even when set to true.
   final bool? showPasskey;
 
   /// Authenticator used for the passkey ceremony. Defaults to
@@ -295,12 +296,12 @@ class _SignInFormState extends State<SignInForm> {
     final theme = AuthTheme.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     final providers = _resolveSocialProviders();
-    // Auto-derive passkey visibility from client config when the
-    // caller hasn't pinned a value — mirrors React `sign-in-form.tsx`
-    // line 96: `showPasskeyProp ?? config?.passkey?.enabled ?? false`.
-    final showPasskey = widget.showPasskey ??
-        _auth?.clientConfig?.passkey?.enabled ??
-        false;
+    final passkeyAuthenticator =
+        widget.passkeyAuthenticator ?? defaultPasskeyAuthenticator();
+    final showPasskey = (widget.showPasskey ??
+            _auth?.clientConfig?.passkey?.enabled ??
+            false) &&
+        passkeyAuthenticator.isAvailable;
 
     return AuthCard(
       title: widget.titleText,
@@ -319,6 +320,7 @@ class _SignInFormState extends State<SignInForm> {
               colorScheme,
               providers,
               showPasskey: showPasskey,
+              passkeyAuthenticator: passkeyAuthenticator,
             ),
           _SignInStep.password =>
             _buildPasswordStep(context, theme, colorScheme),
@@ -410,6 +412,7 @@ class _SignInFormState extends State<SignInForm> {
     ColorScheme colorScheme,
     List<SocialProvider> providers, {
     required bool showPasskey,
+    required PasskeyAuthenticator passkeyAuthenticator,
   }) {
     final hasSocial = providers.isNotEmpty;
     final hasAuthOptions = hasSocial || showPasskey;
@@ -432,7 +435,7 @@ class _SignInFormState extends State<SignInForm> {
         if (showPasskey)
           PasskeyLoginButton(
             auth: _auth,
-            authenticator: widget.passkeyAuthenticator,
+            authenticator: passkeyAuthenticator,
             onSuccess: widget.onSuccess,
           ),
         if (hasAuthOptions) ...[
