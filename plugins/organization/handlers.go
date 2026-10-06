@@ -435,7 +435,8 @@ func (p *Plugin) handleAddMember(ctx forge.Context, req *AddMemberRequest) (*org
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
 
-	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+	caller, err := p.requireOrgRole(ctx, orgID, organization.RoleAdmin)
+	if err != nil {
 		return nil, err
 	}
 
@@ -450,7 +451,10 @@ func (p *Plugin) handleAddMember(ctx forge.Context, req *AddMemberRequest) (*org
 
 	role := organization.RoleMember
 	if req.Role != "" {
-		role = organization.MemberRole(req.Role)
+		role = normalizeRole(req.Role)
+	}
+	if err := mayGrantRole(caller.Role, role); err != nil {
+		return nil, err
 	}
 
 	m := &organization.Member{
@@ -477,11 +481,19 @@ func (p *Plugin) handleRemoveMember(ctx forge.Context, _ *RemoveMemberRequest) (
 		return nil, forge.BadRequest(fmt.Sprintf("invalid member id: %v", err))
 	}
 
-	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
+	caller, err := p.requireOrgRole(ctx, orgID, organization.RoleAdmin)
+	if err != nil {
 		return nil, err
 	}
 	if merr := p.assertMemberInOrg(ctx, memberID, orgID); merr != nil {
 		return nil, merr
+	}
+	target, err := p.store.GetMember(ctx.Context(), memberID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	if err := mayRemoveMember(caller.Role, target.Role); err != nil {
+		return nil, err
 	}
 
 	if err := p.RemoveMember(ctx.Context(), memberID); err != nil {
@@ -545,7 +557,10 @@ func (p *Plugin) handleCreateInvitation(ctx forge.Context, req *CreateInvitation
 
 	role := organization.RoleMember
 	if req.Role != "" {
-		role = organization.MemberRole(req.Role)
+		role = normalizeRole(req.Role)
+	}
+	if err := mayGrantRole(inviter.Role, role); err != nil {
+		return nil, err
 	}
 
 	token, err := account.GenerateVerificationToken()

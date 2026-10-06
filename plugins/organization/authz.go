@@ -2,6 +2,7 @@ package organization
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/xraph/forge"
 
@@ -24,6 +25,37 @@ func orgRoleRank(r organization.MemberRole) int {
 	default:
 		return 0
 	}
+}
+
+// normalizeRole canonicalises a requested role. The built-in roles are matched
+// case-insensitively and trimmed, so "Owner" or " OWNER " cannot rank as an
+// unknown role (0) while meaning owner to anything that compares them loosely.
+// Other role names are free-form (apps use e.g. "viewer") and pass through.
+func normalizeRole(r string) organization.MemberRole {
+	switch n := organization.MemberRole(strings.ToLower(strings.TrimSpace(r))); n {
+	case organization.RoleOwner, organization.RoleAdmin, organization.RoleMember:
+		return n
+	}
+	return organization.MemberRole(strings.TrimSpace(r))
+}
+
+// mayGrantRole refuses granting a role that outranks the caller's own. Only an
+// owner can make an owner; an admin can still grant admin and below. Without
+// it, an org admin could invite an alias -- or add an account -- as owner.
+func mayGrantRole(caller, requested organization.MemberRole) error {
+	if orgRoleRank(requested) > orgRoleRank(caller) {
+		return forge.Forbidden("cannot grant a role above your own")
+	}
+	return nil
+}
+
+// mayRemoveMember refuses removing a member who outranks the caller, so an
+// admin cannot remove the owner.
+func mayRemoveMember(caller, target organization.MemberRole) error {
+	if orgRoleRank(target) > orgRoleRank(caller) {
+		return forge.Forbidden("cannot remove a member who outranks you")
+	}
+	return nil
 }
 
 // requireOrgRole verifies the authenticated caller is a member of orgID holding
