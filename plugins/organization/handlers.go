@@ -453,8 +453,8 @@ func (p *Plugin) handleAddMember(ctx forge.Context, req *AddMemberRequest) (*org
 	if req.Role != "" {
 		role = normalizeRole(req.Role)
 	}
-	if err := mayGrantRole(caller.Role, role); err != nil {
-		return nil, err
+	if gerr := mayGrantRole(caller.Role, role); gerr != nil {
+		return nil, gerr
 	}
 
 	m := &organization.Member{
@@ -492,8 +492,8 @@ func (p *Plugin) handleRemoveMember(ctx forge.Context, _ *RemoveMemberRequest) (
 	if err != nil {
 		return nil, mapError(err)
 	}
-	if err := mayRemoveMember(caller.Role, target.Role); err != nil {
-		return nil, err
+	if rerr := mayRemoveMember(caller.Role, target.Role); rerr != nil {
+		return nil, rerr
 	}
 
 	if err := p.RemoveMember(ctx.Context(), memberID); err != nil {
@@ -559,8 +559,8 @@ func (p *Plugin) handleCreateInvitation(ctx forge.Context, req *CreateInvitation
 	if req.Role != "" {
 		role = normalizeRole(req.Role)
 	}
-	if err := mayGrantRole(inviter.Role, role); err != nil {
-		return nil, err
+	if gerr := mayGrantRole(inviter.Role, role); gerr != nil {
+		return nil, gerr
 	}
 
 	token, err := account.GenerateVerificationToken()
