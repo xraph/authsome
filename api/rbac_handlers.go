@@ -374,14 +374,11 @@ func (a *API) handleUpdateRole(ctx forge.Context, req *UpdateRoleRequest) (*rbac
 	if req.Description != nil {
 		r.Description = *req.Description
 	}
-	if req.ParentID != nil {
-		// Re-parenting must stay within the caller's app.
-		if *req.ParentID != "" {
-			if err := a.assertParentRoleInApp(ctx, *req.ParentID); err != nil {
-				return nil, err
-			}
-		}
-		r.ParentID = *req.ParentID
+	// The store writes only name and description, so a new parent would be
+	// dropped without a word. Refuse it instead. Echoing back the parent the
+	// role already has (the slug a GET returns) is not a change.
+	if req.ParentID != nil && *req.ParentID != r.ParentID {
+		return nil, forge.BadRequest("parent_id cannot be changed here: re-parenting a role is not supported by this endpoint")
 	}
 
 	if err := a.engine.UpdateRole(ctx.Context(), r); err != nil {

@@ -306,7 +306,7 @@ type UpdateRoleRequest struct {
 	RoleID      string  `path:"roleId" description:"Role identifier"`
 	Name        *string `json:"name,omitempty" description:"Role name"`
 	Description *string `json:"description,omitempty" description:"Role description"`
-	ParentID    *string `json:"parent_id,omitempty" description:"Parent role ID for inheritance (empty string to clear)"`
+	ParentID    *string `json:"parent_id,omitempty" description:"Must be omitted or equal the role's current parent; re-parenting is refused with 400"`
 }
 
 // DeleteRoleRequest binds the path for DELETE /roles/:roleId.
