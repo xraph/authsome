@@ -1,8 +1,10 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/xraph/forge"
 
@@ -220,14 +222,18 @@ func (a *API) requireCallerHolds(ctx forge.Context, perms []*rbac.Permission) er
 // effectivePermissions collects a role's own permissions plus every
 // ancestor's, since assignment confers all of them.
 func (a *API) effectivePermissions(ctx forge.Context, role *rbac.Role) ([]*rbac.Permission, error) {
+	appID, err := id.ParseAppID(role.AppID)
+	if err != nil {
+		return nil, mapErrorCtx(ctx, err)
+	}
 	var out []*rbac.Permission
 	seen := map[string]bool{}
 	current := role
 	for current != nil && !seen[current.ID] {
 		seen[current.ID] = true
-		rid, err := id.ParseRoleID(current.ID)
+		rid, err := storedRoleID(current.ID)
 		if err != nil {
-			break
+			return nil, mapErrorCtx(ctx, err)
 		}
 		perms, err := a.engine.ListRolePermissions(ctx.Context(), rid)
 		if err != nil {
@@ -237,17 +243,32 @@ func (a *API) effectivePermissions(ctx forge.Context, role *rbac.Role) ([]*rbac.
 		if current.ParentID == "" {
 			break
 		}
-		pid, err := id.ParseRoleID(current.ParentID)
-		if err != nil {
+		// ParentID holds warden's parent slug, not an id. Warden skips a
+		// parent it cannot find, so a dangling slug confers nothing more.
+		parent, err := a.engine.GetRoleBySlug(ctx.Context(), appID, current.ParentID)
+		if errors.Is(err, rbac.ErrRoleNotFound) {
 			break
 		}
-		parent, err := a.engine.GetRole(ctx.Context(), pid)
 		if err != nil {
-			break
+			return nil, mapErrorCtx(ctx, err)
 		}
 		current = parent
 	}
 	return out, nil
+}
+
+// storedRoleID turns a role id as the store hands it back, in warden's
+// "role" form, into the authsome form the engine takes. The two share the
+// suffix.
+func storedRoleID(s string) (id.RoleID, error) {
+	if rid, err := id.ParseRoleID(s); err == nil {
+		return rid, nil
+	}
+	_, suffix, ok := strings.Cut(s, "_")
+	if !ok {
+		return id.Nil, fmt.Errorf("invalid role id %q", s)
+	}
+	return id.ParseRoleID(string(id.PrefixRole) + "_" + suffix)
 }
 
 // requireAssignable applies the grant ceilings: the caller must hold every
