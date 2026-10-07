@@ -11,6 +11,10 @@ var (
 	ErrPermissionNotFound  = errors.New("rbac: permission not found")
 	ErrRoleAlreadyAssigned = errors.New("rbac: role already assigned")
 	ErrCyclicHierarchy     = errors.New("rbac: cyclic role hierarchy detected")
+
+	// ErrSystemRoleImmutable refuses a change to a role declared
+	// is_system, as warden's own contract and REST paths refuse it.
+	ErrSystemRoleImmutable = errors.New("rbac: system role cannot be changed")
 )
 
 // Store persists RBAC data. All IDs are plain strings — the rbac package

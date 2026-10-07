@@ -10,6 +10,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/store"
 )
 
@@ -74,6 +75,9 @@ func mapErrorCtx(ctx forge.Context, err error) error {
 	}
 	if errors.Is(err, store.ErrNotFound) {
 		return forge.NotFound(err.Error())
+	}
+	if errors.Is(err, rbac.ErrSystemRoleImmutable) {
+		return forge.Forbidden("system roles cannot be changed")
 	}
 	if errors.Is(err, authsome.ErrWebhooksUnavailable) {
 		// A webhook that cannot deliver is not registered at all.

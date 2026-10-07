@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/xraph/warden"
+	wardenrole "github.com/xraph/warden/role"
 	wardenmem "github.com/xraph/warden/store/memory"
 
 	"github.com/xraph/authsome/rbac"
@@ -264,4 +265,97 @@ func TestWardenStore_HasPermission_NoRoles(t *testing.T) {
 	ok, err := s.HasPermission(ctx, "unknown-user", "read", "anything")
 	require.NoError(t, err)
 	assert.False(t, ok, "user with no roles should have no permissions")
+}
+
+// newWardenStoreWith seeds roles straight into warden's store, the way the
+// warden DSL and dashboard write them, so a test can give a role the fields
+// authsome's Role has no room for.
+func newWardenStoreWith(t *testing.T, roles ...*wardenrole.Role) (*wardenmem.Store, *rbac.WardenStore) {
+	t.Helper()
+	ws := wardenmem.New()
+	for _, r := range roles {
+		require.NoError(t, ws.CreateRole(context.Background(), r))
+	}
+	eng, err := warden.NewEngine(warden.WithStore(ws))
+	require.NoError(t, err)
+	return ws, rbac.NewWardenStore(eng)
+}
+
+// storedRole reads back the warden row for r.
+func storedRole(t *testing.T, ws *wardenmem.Store, r *wardenrole.Role) wardenrole.Role {
+	t.Helper()
+	roles, err := ws.ListRoles(context.Background(), &wardenrole.ListFilter{TenantID: r.TenantID})
+	require.NoError(t, err)
+	for _, got := range roles {
+		if got.ID == r.ID {
+			return *got
+		}
+	}
+	t.Fatalf("role %s is not stored", r.ID)
+	return wardenrole.Role{}
+}
+
+func TestWardenStore_UpdateRole_KeepsWardenOnlyFields(t *testing.T) {
+	ctx := context.Background()
+	created := time.Now().Add(-time.Hour).UTC()
+	parent := &wardenrole.Role{
+		TenantID: "app-1", AppID: "app-1", NamespacePath: "engineering",
+		Name: "Staff", Slug: "staff",
+	}
+	seeded := &wardenrole.Role{
+		TenantID: "app-1", AppID: "app-1", NamespacePath: "engineering",
+		Name: "Reviewer", Slug: "reviewer", Description: "Reviews changes",
+		IsDefault: true, ParentSlug: "staff", MaxMembers: 5,
+		Metadata:  map[string]any{"team": "platform"},
+		CreatedAt: created, UpdatedAt: created,
+	}
+	ws, s := newWardenStoreWith(t, parent, seeded)
+	before := storedRole(t, ws, seeded)
+
+	r := rbac.FromWardenRole(&before)
+	r.Name = "Senior Reviewer"
+	r.Description = "Reviews and approves changes"
+	require.NoError(t, s.UpdateRole(ctx, r))
+
+	after := storedRole(t, ws, seeded)
+	assert.Equal(t, "Senior Reviewer", after.Name)
+	assert.Equal(t, "Reviews and approves changes", after.Description)
+	assert.True(t, after.UpdatedAt.After(created), "UpdatedAt should move forward")
+
+	// Every field authsome does not edit is exactly as warden stored it.
+	want := before
+	want.Name, want.Description, want.UpdatedAt = after.Name, after.Description, after.UpdatedAt
+	assert.Equal(t, want, after)
+
+	// The caller's Role now shows what was written, parent and all.
+	assert.Equal(t, "staff", r.ParentID)
+	assert.Equal(t, "reviewer", r.Slug)
+}
+
+func TestWardenStore_UpdateRole_RefusesSystemRole(t *testing.T) {
+	ctx := context.Background()
+	seeded := &wardenrole.Role{
+		TenantID: "app-1", AppID: "app-1", Name: "Owner", Slug: "owner", IsSystem: true,
+	}
+	ws, s := newWardenStoreWith(t, seeded)
+
+	r := rbac.FromWardenRole(seeded)
+	r.Name = "Renamed"
+	require.ErrorIs(t, s.UpdateRole(ctx, r), rbac.ErrSystemRoleImmutable)
+	assert.Equal(t, "Owner", storedRole(t, ws, seeded).Name)
+}
+
+func TestWardenStore_UpdateRole_StaysInItsApp(t *testing.T) {
+	ctx := context.Background()
+	seeded := &wardenrole.Role{TenantID: "app-1", AppID: "app-1", Name: "Admin", Slug: "admin"}
+	ws, s := newWardenStoreWith(t, seeded)
+
+	r := rbac.FromWardenRole(seeded)
+	r.AppID = "app-2"
+	r.Name = "Taken"
+	require.ErrorIs(t, s.UpdateRole(ctx, r), rbac.ErrRoleNotFound)
+
+	got := storedRole(t, ws, seeded)
+	assert.Equal(t, "Admin", got.Name)
+	assert.Equal(t, "app-1", got.TenantID)
 }

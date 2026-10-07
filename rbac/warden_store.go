@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/xraph/forge"
 	"github.com/xraph/warden"
@@ -99,11 +100,38 @@ func (s *WardenStore) GetRoleBySlug(ctx context.Context, appID, slug string) (*R
 	return nil, ErrRoleNotFound
 }
 
+// UpdateRole writes the fields authsome edits, name and description, onto
+// the stored warden role and keeps everything else. Warden's store replaces
+// the whole row, and a Role has no room for the namespace, parent, default
+// flag, member cap or metadata, so writing a converted Role would wipe them.
+// Slug stays too, since child roles find their parent by it.
+//
+// A system role is refused, as warden's own write paths refuse it. On
+// success r is refreshed from what was written.
 func (s *WardenStore) UpdateRole(ctx context.Context, r *Role) error {
-	wr := ToWardenRole(r)
+	wid, err := convertToWardenRoleID(r.ID)
+	if err != nil {
+		return fmt.Errorf("rbac: invalid role id %q: %w", r.ID, err)
+	}
+	wr, err := s.engine.Store().GetRole(ctx, wid)
+	if err != nil {
+		return mapWardenError(err)
+	}
+	// A role is changed only from the app that owns it.
+	if wr.TenantID != r.AppID {
+		return ErrRoleNotFound
+	}
+	if wr.IsSystem {
+		return ErrSystemRoleImmutable
+	}
+
+	wr.Name = r.Name
+	wr.Description = r.Description
+	wr.UpdatedAt = time.Now().UTC()
 	if err := s.engine.Store().UpdateRole(ctx, wr); err != nil {
 		return mapWardenError(err)
 	}
+	*r = *FromWardenRole(wr)
 	return nil
 }
 
@@ -368,6 +396,9 @@ func mapWardenError(err error) error {
 	}
 	if errors.Is(err, warden.ErrDuplicateAssignment) {
 		return ErrRoleAlreadyAssigned
+	}
+	if errors.Is(err, warden.ErrSystemRoleImmutable) {
+		return ErrSystemRoleImmutable
 	}
 	return err
 }

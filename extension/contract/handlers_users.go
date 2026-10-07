@@ -19,6 +19,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/user"
 
 	"github.com/xraph/forge/extensions/dashboard/contract"
@@ -411,6 +412,8 @@ func mapEngineError(err error) error {
 		return &contract.Error{Code: contract.CodeBadRequest, Message: err.Error()}
 	case errors.Is(err, authsome.ErrNotStarted):
 		return &contract.Error{Code: contract.CodeUnavailable, Message: "System is still initializing. Please try again in a moment."}
+	case errors.Is(err, rbac.ErrSystemRoleImmutable):
+		return &contract.Error{Code: contract.CodePermissionDenied, Message: "System roles cannot be changed"}
 	}
 	// "not found" engine wraps typically read "authsome: admin get user: ...".
 	// Surface as CodeNotFound when the message looks like a lookup failure
