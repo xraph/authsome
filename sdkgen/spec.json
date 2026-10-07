@@ -5844,7 +5844,7 @@
             "type": "string"
           },
           "parent_id": {
-            "description": "Parent role ID for inheritance (empty string to clear)",
+            "description": "Must be omitted or equal the role's current parent; re-parenting is refused with 400",
             "type": "string"
           }
         },
