@@ -309,18 +309,15 @@ func (a *API) handleCreateRole(ctx forge.Context, req *CreateRoleRequest) (*rbac
 		return nil, err
 	}
 
-	// A parent role, if given, must live in the caller's app too — otherwise a
-	// new role could inherit another tenant's permissions.
+	// The store links a parent by slug and the create path cannot set one,
+	// so a parent_id would be dropped without a word. Refuse it instead.
 	if req.ParentID != "" {
-		if err := a.assertParentRoleInApp(ctx, req.ParentID); err != nil {
-			return nil, err
-		}
+		return nil, forge.BadRequest("parent_id is not supported here: a role cannot be created with a parent through this endpoint")
 	}
 
 	r := &rbac.Role{
 		ID:          id.NewRoleID().String(),
 		AppID:       appID.String(),
-		ParentID:    req.ParentID,
 		Name:        req.Name,
 		Slug:        req.Slug,
 		Description: req.Description,
@@ -331,19 +328,6 @@ func (a *API) handleCreateRole(ctx forge.Context, req *CreateRoleRequest) (*rbac
 	}
 
 	return nil, ctx.JSON(http.StatusCreated, r)
-}
-
-// assertParentRoleInApp verifies a parent role id refers to a role in the
-// caller's app, preventing cross-tenant permission inheritance via re-parenting.
-func (a *API) assertParentRoleInApp(ctx forge.Context, parentID string) error {
-	pid, err := id.ParseRoleID(parentID)
-	if err != nil {
-		return forge.BadRequest(fmt.Sprintf("invalid parent_id: %v", err))
-	}
-	if _, err := a.roleInCallerApp(ctx, pid); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (a *API) handleListRoles(ctx forge.Context, req *ListRolesRequest) (*RoleListResponse, error) {

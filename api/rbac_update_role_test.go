@@ -80,3 +80,27 @@ func TestUpdateRole_RefusesParentChange(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
 	assert.Equal(t, "Renamed", decodeRole(t, rec).Name)
 }
+
+// POST /roles has no way to link a parent either: the store keeps parents by
+// slug and the create path drops parent_id. It used to answer 201 with the
+// parent silently gone, so a parent_id is now refused and nothing is created.
+func TestCreateRole_RefusesParent(t *testing.T) {
+	a, eng := newBootstrappedAPI(t)
+	handler := withTestKey(a.Handler())
+	_, ownerToken, _ := signUp(t, eng, "create-parent-owner@test.com", "SecureP@ss123")
+	owner := userIDFor(t, eng, ownerToken)
+
+	rec := sendJSON(t, handler, eng, owner, http.MethodPost, "/v1/roles", `{"name":"Parent","slug":"create-parent"}`)
+	require.Equal(t, http.StatusCreated, rec.Code, "body=%s", rec.Body.String())
+	parent := decodeRole(t, rec)
+
+	rec = sendJSON(t, handler, eng, owner, http.MethodPost, "/v1/roles",
+		`{"name":"Child","slug":"create-child","parent_id":"`+parent.ID+`"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "body=%s", rec.Body.String())
+	assert.Contains(t, rec.Body.String(), "parent_id")
+
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+	_, err = eng.GetRoleBySlug(context.Background(), appID, "create-child")
+	assert.Error(t, err, "the refused role must not exist")
+}

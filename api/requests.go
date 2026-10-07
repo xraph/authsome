@@ -288,7 +288,7 @@ type CreateRoleRequest struct {
 	Name        string `json:"name" description:"Role name"`
 	Slug        string `json:"slug" description:"URL-safe role slug"`
 	Description string `json:"description,omitempty" description:"Role description"`
-	ParentID    string `json:"parent_id,omitempty" description:"Parent role ID for inheritance"`
+	ParentID    string `json:"parent_id,omitempty" description:"Must be omitted; creating a role with a parent is refused with 400"`
 }
 
 // ListRolesRequest binds query params for GET /roles.

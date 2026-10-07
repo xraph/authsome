@@ -28058,7 +28058,7 @@
                     "type": "string"
                   },
                   "parent_id": {
-                    "description": "Parent role ID for inheritance",
+                    "description": "Must be omitted; creating a role with a parent is refused with 400",
                     "type": "string"
                   },
                   "slug": {
