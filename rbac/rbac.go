@@ -37,6 +37,11 @@ type Role struct {
 	Description string    `json:"description,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+
+	// NamespacePath is the warden namespace the role was read from. Warden
+	// resolves ParentID (a slug) in this namespace only. It is read-only:
+	// ToWardenRole places a role by EnvID, not by this field.
+	NamespacePath string `json:"-"`
 }
 
 // Permission represents a single action on a resource granted by a role.
@@ -105,13 +110,14 @@ func FromWardenRole(wr *wardenrole.Role) *Role {
 		appID = wr.TenantID // backward compatibility
 	}
 	r := &Role{
-		ID:          wr.ID.String(),
-		AppID:       appID,
-		Name:        wr.Name,
-		Slug:        wr.Slug,
-		Description: wr.Description,
-		CreatedAt:   wr.CreatedAt,
-		UpdatedAt:   wr.UpdatedAt,
+		ID:            wr.ID.String(),
+		AppID:         appID,
+		Name:          wr.Name,
+		Slug:          wr.Slug,
+		Description:   wr.Description,
+		CreatedAt:     wr.CreatedAt,
+		UpdatedAt:     wr.UpdatedAt,
+		NamespacePath: wr.NamespacePath,
 	}
 	// Warden surfaces parent linkage via ParentSlug now (was ParentID). We
 	// store the slug into authsome's ParentID field as a best-effort hint

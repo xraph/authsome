@@ -2110,6 +2110,29 @@ func (e *Engine) GetRoleBySlug(ctx context.Context, appID id.AppID, slug string)
 	return e.rbacStore().GetRoleBySlug(ctx, appID.String(), slug)
 }
 
+// GetRoleParent returns the role r inherits from, found the way warden
+// finds it: by r's parent slug, in r's own namespace within the app.
+// GetRoleBySlug searches several namespaces and can land on another role
+// with the same slug. It returns rbac.ErrRoleNotFound when r has no parent
+// or warden reports the parent missing; any other failure comes back as an
+// error, so a caller deciding a grant can refuse it.
+func (e *Engine) GetRoleParent(ctx context.Context, appID id.AppID, r *rbac.Role) (*rbac.Role, error) {
+	if r.ParentID == "" {
+		return nil, rbac.ErrRoleNotFound
+	}
+	if e.wardenEng == nil {
+		return nil, fmt.Errorf("authsome: get role parent: warden is not configured")
+	}
+	wr, err := e.wardenEng.Store().GetRoleBySlug(ctx, appID.String(), r.NamespacePath, r.ParentID)
+	if errors.Is(err, warden.ErrRoleNotFound) {
+		return nil, rbac.ErrRoleNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("authsome: get role parent: %w", err)
+	}
+	return rbac.FromWardenRole(wr), nil
+}
+
 // UpdateRole updates an existing RBAC role.
 func (e *Engine) UpdateRole(ctx context.Context, r *rbac.Role) error {
 	r.UpdatedAt = time.Now()

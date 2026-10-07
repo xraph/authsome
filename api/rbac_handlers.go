@@ -240,12 +240,10 @@ func (a *API) effectivePermissions(ctx forge.Context, role *rbac.Role) ([]*rbac.
 			return nil, mapErrorCtx(ctx, err)
 		}
 		out = append(out, perms...)
-		if current.ParentID == "" {
-			break
-		}
-		// ParentID holds warden's parent slug, not an id. Warden skips a
-		// parent it cannot find, so a dangling slug confers nothing more.
-		parent, err := a.engine.GetRoleBySlug(ctx.Context(), appID, current.ParentID)
+		// ParentID holds warden's parent slug, not an id, and only means
+		// something in the role's own namespace. Warden skips a parent it
+		// cannot find, so a dangling slug confers nothing more.
+		parent, err := a.engine.GetRoleParent(ctx.Context(), appID, current)
 		if errors.Is(err, rbac.ErrRoleNotFound) {
 			break
 		}
