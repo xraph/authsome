@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useAuth } from "@authsome/ui-react";
+import { useAuth, useClientConfig } from "@authsome/ui-react";
 import { CheckCircle2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useCodeFromURL } from "../lib/use-code-from-url";
@@ -74,6 +74,9 @@ export function DeviceAuthorizationForm({
   autoSubmit = true,
 }: DeviceAuthorizationFormProps): React.ReactElement {
   const { client, session, isLoading } = useAuth();
+  const { config } = useClientConfig();
+  const deviceAuthDisabled =
+    !!config?.device_authorization && !config.device_authorization.enabled;
 
   // Auto-read code from URL when not explicitly provided.
   const autoCode = useCodeFromURL();
@@ -151,6 +154,7 @@ export function DeviceAuthorizationForm({
   useEffect(() => {
     if (
       autoSubmit &&
+      !deviceAuthDisabled &&
       !autoSubmittedRef.current &&
       !isSubmitting &&
       !isSuccess &&
@@ -160,7 +164,7 @@ export function DeviceAuthorizationForm({
       autoSubmittedRef.current = true;
       void handleSubmit(code);
     }
-  }, [autoSubmit, code, codeLength, handleSubmit, isLoading, isSubmitting, isSuccess]);
+  }, [autoSubmit, code, codeLength, deviceAuthDisabled, handleSubmit, isLoading, isSubmitting, isSuccess]);
 
   const handleChange = useCallback(
     (value: string) => {
@@ -184,6 +188,27 @@ export function DeviceAuthorizationForm({
     },
     [code, handleSubmit],
   );
+
+  // Device authorization explicitly disabled for this app. Say so rather than
+  // render nothing: this page is usually opened from a link a CLI printed,
+  // and a blank page there reads as a broken link.
+  if (deviceAuthDisabled) {
+    return (
+      <AuthCard
+        title="Device sign-in unavailable"
+        description="Device authorization is not enabled for this app."
+        logo={logo}
+        align={align}
+        variant={variant}
+        className={cn(className)}
+      >
+        <p className="text-center text-sm text-muted-foreground">
+          Ask the app&apos;s administrator to enable it, then try again from
+          your device.
+        </p>
+      </AuthCard>
+    );
+  }
 
   if (isSuccess) {
     return (

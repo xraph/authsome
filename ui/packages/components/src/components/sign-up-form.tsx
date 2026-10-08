@@ -50,6 +50,12 @@ export interface SignUpFormComponentProps {
   variant?: AuthCardVariant;
   /** Additional CSS class names. */
   className?: string;
+  /**
+   * Heading shown on the initial sign-up view. Defaults to
+   * "Create your {app_name} account" when `config.branding.app_name` is set,
+   * otherwise "Create an account".
+   */
+  title?: string;
 }
 
 
@@ -204,9 +210,15 @@ export function SignUpForm({
   align,
   variant,
   className,
+  title: titleProp,
 }: SignUpFormComponentProps) {
   const { signUp, client } = useAuth();
   const { config } = useClientConfig();
+
+  const appName = config?.branding?.app_name;
+  const title =
+    titleProp ??
+    (appName ? `Create your ${appName} account` : "Create an account");
 
   // Auto-derive social providers from client config when not explicitly provided.
   const socialProviders =
@@ -359,7 +371,7 @@ export function SignUpForm({
   if (!showPassword) {
     return (
       <AuthCard
-        title="Create an account"
+        title={title}
         description="Get started with your account."
         logo={logo}
         footer={footer}
@@ -421,7 +433,7 @@ export function SignUpForm({
   if (step === "email") {
     return (
       <AuthCard
-        title="Create an account"
+        title={title}
         description="Enter your email to get started."
         logo={logo}
         footer={footer}

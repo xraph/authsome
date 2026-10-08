@@ -8,6 +8,7 @@ import { SignInForm, type SSOResolution } from "./sign-in-form";
 import { ForgotPasswordForm } from "./forgot-password-form";
 import { ResetPasswordForm } from "./reset-password-form";
 import { EmailVerificationForm } from "./email-verification-form";
+import { SSOCallback } from "./sso-callback";
 import type { AuthCardAlign, AuthCardVariant } from "./auth-card";
 import type { SocialButtonLayout, SocialProvider } from "./social-buttons";
 
@@ -34,6 +35,13 @@ export interface SignInProps {
   socialLayout?: SocialButtonLayout;
   /** Show passkey sign-in button. */
   showPasskey?: boolean;
+  /**
+   * Where the backend lands the browser after an SSO connection's IdP round
+   * trip. Must be allowlisted on the server. Point it at `${path}/sso-callback`
+   * to finish the login inside this component; when omitted the server's
+   * default `/sso/callback` landing is used.
+   */
+  ssoReturnUrl?: string;
   /** Optional logo element. */
   logo?: React.ReactNode;
   /** Title and description alignment. */
@@ -52,6 +60,7 @@ export interface SignInProps {
  * - `/sign-in/forgot-password` → Forgot password form
  * - `/sign-in/reset-password?token=...` → Reset password form
  * - `/sign-in/verify-email` → Email verification form
+ * - `/sign-in/sso-callback?code=...` → SSO code exchange
  *
  * Usage with a Next.js catch-all route `[[...sign-in]]/page.tsx`:
  * ```tsx
@@ -70,6 +79,7 @@ export function SignIn({
   onSocialLogin,
   socialLayout,
   showPasskey,
+  ssoReturnUrl,
   logo,
   align,
   variant,
@@ -132,6 +142,19 @@ export function SignIn({
     );
   }
 
+  if (subPath === "sso-callback") {
+    return (
+      <SSOCallback
+        onSuccess={handleSuccess}
+        signInUrl={path}
+        logo={logo}
+        align={align}
+        variant={variant}
+        className={className}
+      />
+    );
+  }
+
   // Default: sign-in form
   return (
     <SignInForm
@@ -144,6 +167,7 @@ export function SignIn({
       onSocialLogin={onSocialLogin}
       socialLayout={socialLayout}
       showPasskey={showPasskey}
+      ssoReturnUrl={ssoReturnUrl}
       logo={logo}
       align={align}
       variant={variant}

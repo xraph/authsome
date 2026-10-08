@@ -121,4 +121,26 @@ describe("DeviceAuthorizationForm", () => {
     );
     expect(bodies).toHaveLength(1);
   });
+
+  it("says device sign-in is unavailable when config disables it", async () => {
+    at("?user_code=ABCD-EFGH");
+    const { fetchFn, calls } = routedFetch({
+      "POST /v1/oauth/device/complete": () => ({ status: "approved" }),
+    });
+
+    render(
+      withProvider(<DeviceAuthorizationForm />, {
+        fetch: fetchFn,
+        clientConfig: { device_authorization: { enabled: false } },
+      }),
+    );
+
+    expect(screen.getByText("Device sign-in unavailable")).toBeTruthy();
+    expect(
+      screen.getByText("Device authorization is not enabled for this app."),
+    ).toBeTruthy();
+    // Let the provider settle: the URL code must not be auto-submitted.
+    await waitFor(() => expect(calls).toContain("GET /v1/me"));
+    expect(calls).not.toContain("POST /v1/oauth/device/complete");
+  });
 });

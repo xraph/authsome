@@ -48,9 +48,9 @@ export function MagicLinkForm({
     setIsSubmitting(true);
 
     try {
-      // TODO: Replace with a dedicated magic-link endpoint (e.g. client.requestMagicLink({ email }))
-      // once the AuthClient supports it. Using forgotPassword as a placeholder.
-      await client.forgotPassword({ email });
+      // This used to call forgotPassword as a placeholder, which emailed a
+      // password reset instead of a sign-in link.
+      await client.sendMagicLink({ email });
       setIsSuccess(true);
       onSuccess?.();
     } catch (err) {
