@@ -67,7 +67,11 @@ class FakeAuthNotifier extends ChangeNotifier implements AuthNotifier {
   }
 
   @override
-  Future<void> signIn(String email, String password) async {
+  Future<void> signIn(
+    String email,
+    String password, {
+    String? captchaToken,
+  }) async {
     signInCalls.add((email: email, password: password));
     setState(const AuthLoading());
   }
