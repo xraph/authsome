@@ -886,6 +886,7 @@ export interface IntrospectResponse {
   env_id?: string;
   expires_at?: string;
   org_id?: string;
+  scope?: string;
   session_id?: string;
   user?: IntrospectUser;
   user_id?: string;

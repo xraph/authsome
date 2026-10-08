@@ -1005,6 +1005,7 @@ type IntrospectResponse struct {
 	EnvID     string                  `json:"env_id,omitempty"`
 	ExpiresAt string                  `json:"expires_at,omitempty"`
 	OrgID     string                  `json:"org_id,omitempty"`
+	Scope     string                  `json:"scope,omitempty"`
 	SessionID string                  `json:"session_id,omitempty"`
 	User      *IntrospectUser         `json:"user,omitempty"`
 	UserID    string                  `json:"user_id,omitempty"`

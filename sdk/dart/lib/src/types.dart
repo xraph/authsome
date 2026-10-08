@@ -4333,6 +4333,7 @@ class IntrospectResponse {
   final String? envId;
   final String? expiresAt;
   final String? orgId;
+  final String? scope;
   final String? sessionId;
   final IntrospectUser? user;
   final String? userId;
@@ -4345,6 +4346,7 @@ class IntrospectResponse {
     this.envId,
     this.expiresAt,
     this.orgId,
+    this.scope,
     this.sessionId,
     this.user,
     this.userId,
@@ -4359,6 +4361,7 @@ class IntrospectResponse {
       envId: json['env_id'] as String?,
       expiresAt: json['expires_at'] as String?,
       orgId: json['org_id'] as String?,
+      scope: json['scope'] as String?,
       sessionId: json['session_id'] as String?,
       user: json['user'] == null ? null : IntrospectUser.fromJson(Map<String, dynamic>.from(json['user'] as Map)),
       userId: json['user_id'] as String?,
@@ -4374,6 +4377,7 @@ class IntrospectResponse {
       if (envId != null) 'env_id': envId,
       if (expiresAt != null) 'expires_at': expiresAt,
       if (orgId != null) 'org_id': orgId,
+      if (scope != null) 'scope': scope,
       if (sessionId != null) 'session_id': sessionId,
       if (user != null) 'user': user?.toJson(),
       if (userId != null) 'user_id': userId,

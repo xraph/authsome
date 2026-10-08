@@ -844,13 +844,13 @@ class AuthClient {
 
   /// List SSO connections for an app (admin)
   /// GET /v1/admin/sso/connections
-  Future<AdminListConnectionsResponse> ssoAdminListConnections({required String appId, required String token}) async {
+  Future<AdminListConnectionsResponse> ssoAdminListConnections({required String token, String? appId}) async {
     final path = '/v1/admin/sso/connections';
     // A list of pairs rather than a map, because a query string may carry the
     // same key more than once. RFC 8707 sends `resource` that way, and a map
     // would keep only the last value.
     final queryPairs = <MapEntry<String, String>>[];
-    queryPairs.add(MapEntry('app_id', appId.toString()));
+    if (appId != null) queryPairs.add(MapEntry('app_id', appId.toString()));
     final queryString = queryPairs.isNotEmpty
         ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
@@ -1035,6 +1035,18 @@ class AuthClient {
   /// POST /v1/admin/users/{userId}/unban
   Future<ApiStatusResponse> adminUnbanUser({required String userId, required String token}) async {
     final path = '/v1/admin/users/$userId/unban';
+    final res = await _request(
+'POST',
+      path,
+      token: token,
+    );
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Unlock user (admin)
+  /// POST /v1/admin/users/{userId}/unlock
+  Future<ApiStatusResponse> adminUnlockUser({required String userId, required String token}) async {
+    final path = '/v1/admin/users/$userId/unlock';
     final res = await _request(
 'POST',
       path,
@@ -1772,6 +1784,29 @@ class AuthClient {
     return Map<String, dynamic>.from(res as Map);
   }
 
+  /// List my OAuth2 grants
+  /// GET /v1/me/oauth/grants
+  Future<ListGrantsResponse> oauth2ListMyGrants({required String token}) async {
+    final path = '/v1/me/oauth/grants';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ListGrantsResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Revoke an OAuth2 grant
+  /// DELETE /v1/me/oauth/grants/{clientId}
+  Future<void> oauth2RevokeMyGrant({required String clientId, required String token}) async {
+    final path = '/v1/me/oauth/grants/$clientId';
+    await _request(
+'DELETE',
+      path,
+      token: token,
+    );
+  }
+
   /// Switch active organization
   /// POST /v1/me/switch-org
   Future<SwitchOrgResponse> switchOrg({required SwitchOrgRequest body, required String token}) async {
@@ -1887,7 +1922,7 @@ class AuthClient {
 
   /// OAuth2 Authorization
   /// GET /v1/oauth/authorize
-  Future<void> oauth2Authorize({required String responseType, required String clientId, String? redirectUri, String? scope, String? state, String? codeChallenge, String? codeChallengeMethod, List<String>? resource}) async {
+  Future<void> oauth2Authorize({required String responseType, required String clientId, String? redirectUri, String? scope, String? state, String? codeChallenge, String? codeChallengeMethod, String? prompt, List<String>? resource}) async {
     final path = '/v1/oauth/authorize';
     // A list of pairs rather than a map, because a query string may carry the
     // same key more than once. RFC 8707 sends `resource` that way, and a map
@@ -1900,6 +1935,7 @@ class AuthClient {
     if (state != null) queryPairs.add(MapEntry('state', state.toString()));
     if (codeChallenge != null) queryPairs.add(MapEntry('code_challenge', codeChallenge.toString()));
     if (codeChallengeMethod != null) queryPairs.add(MapEntry('code_challenge_method', codeChallengeMethod.toString()));
+    if (prompt != null) queryPairs.add(MapEntry('prompt', prompt.toString()));
     for (final element in resource ?? const []) {
       queryPairs.add(MapEntry('resource', element.toString()));
     }
@@ -1909,6 +1945,28 @@ class AuthClient {
     await _request(
 'GET',
       '$path$queryString',
+    );
+  }
+
+  /// OAuth2 consent
+  /// GET /v1/oauth/consent
+  Future<void> oauth2ConsentPage({required String token}) async {
+    final path = '/v1/oauth/consent';
+    await _request(
+'GET',
+      path,
+      token: token,
+    );
+  }
+
+  /// OAuth2 consent decision
+  /// POST /v1/oauth/consent
+  Future<void> oauth2ConsentDecision({required String token}) async {
+    final path = '/v1/oauth/consent';
+    await _request(
+'POST',
+      path,
+      token: token,
     );
   }
 
@@ -2028,11 +2086,20 @@ class AuthClient {
 
   /// List organizations
   /// GET /v1/orgs
-  Future<OrgListResponse> listOrganizations({required String token}) async {
+  Future<OrgListResponse> listOrganizations({required String token, int? limit, String? cursor}) async {
     final path = '/v1/orgs';
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    if (limit != null) queryPairs.add(MapEntry('limit', limit.toString()));
+    if (cursor != null) queryPairs.add(MapEntry('cursor', cursor.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
       token: token,
     );
     return OrgListResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -2137,11 +2204,20 @@ class AuthClient {
 
   /// List invitations
   /// GET /v1/orgs/{orgId}/invitations
-  Future<InvitationListResponse> listInvitations({required String orgId, required String token}) async {
+  Future<InvitationListResponse> listInvitations({required String orgId, required String token, int? limit, String? cursor}) async {
     final path = '/v1/orgs/$orgId/invitations';
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    if (limit != null) queryPairs.add(MapEntry('limit', limit.toString()));
+    if (cursor != null) queryPairs.add(MapEntry('cursor', cursor.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
       token: token,
     );
     return InvitationListResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -2162,11 +2238,20 @@ class AuthClient {
 
   /// List members
   /// GET /v1/orgs/{orgId}/members
-  Future<MemberListResponse> listMembers({required String orgId, required String token}) async {
+  Future<MemberListResponse> listMembers({required String orgId, required String token, int? limit, String? cursor}) async {
     final path = '/v1/orgs/$orgId/members';
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    if (limit != null) queryPairs.add(MapEntry('limit', limit.toString()));
+    if (cursor != null) queryPairs.add(MapEntry('cursor', cursor.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
       token: token,
     );
     return MemberListResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -2212,11 +2297,20 @@ class AuthClient {
 
   /// List teams
   /// GET /v1/orgs/{orgId}/teams
-  Future<TeamListResponse> listTeams({required String orgId, required String token}) async {
+  Future<TeamListResponse> listTeams({required String orgId, required String token, int? limit, String? cursor}) async {
     final path = '/v1/orgs/$orgId/teams';
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    if (limit != null) queryPairs.add(MapEntry('limit', limit.toString()));
+    if (cursor != null) queryPairs.add(MapEntry('cursor', cursor.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
       token: token,
     );
     return TeamListResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -2553,14 +2647,35 @@ class AuthClient {
 
   /// List sessions
   /// GET /v1/sessions
-  Future<SessionListResponse> listSessions({required String token}) async {
+  Future<SessionListResponse> listSessions({required String token, int? limit, String? cursor}) async {
     final path = '/v1/sessions';
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    if (limit != null) queryPairs.add(MapEntry('limit', limit.toString()));
+    if (cursor != null) queryPairs.add(MapEntry('cursor', cursor.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
       token: token,
     );
     return SessionListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Revoke other sessions
+  /// DELETE /v1/sessions
+  Future<ApiStatusResponse> revokeOtherSessions({required String token}) async {
+    final path = '/v1/sessions';
+    final res = await _request(
+'DELETE',
+      path,
+      token: token,
+    );
+    return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Revoke session
@@ -2829,7 +2944,7 @@ class AuthClient {
 
   /// Create webhook
   /// POST /v1/webhooks
-  Future<Webhook> createWebhook({required CreateWebhookRequest body, required String token}) async {
+  Future<CreateWebhookResponse> createWebhook({required CreateWebhookRequest body, required String token}) async {
     final path = '/v1/webhooks';
     final res = await _request(
 'POST',
@@ -2837,7 +2952,7 @@ class AuthClient {
       body: body.toJson(),
       token: token,
     );
-    return Webhook.fromJson(Map<String, dynamic>.from(res as Map));
+    return CreateWebhookResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get webhook
@@ -2875,6 +2990,18 @@ class AuthClient {
       token: token,
     );
     return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Rotate webhook secret
+  /// POST /v1/webhooks/{webhookId}/rotate-secret
+  Future<RotateWebhookSecretResponse> rotateWebhookSecret({required String webhookId, required String token}) async {
+    final path = '/v1/webhooks/$webhookId/rotate-secret';
+    final res = await _request(
+'POST',
+      path,
+      token: token,
+    );
+    return RotateWebhookSecretResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   // ──────────────────────────────────────────────────
