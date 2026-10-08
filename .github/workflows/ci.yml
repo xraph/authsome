@@ -375,6 +375,12 @@ jobs:
       - name: Get dependencies (workspace)
         run: cd flutter && flutter pub get
 
+      # The example bundles .env as an asset and the file is not in git, so
+      # analyze warns about a missing asset. Do what the example's README
+      # asks a developer to do.
+      - name: Provide the example's .env
+        run: cp flutter/example/.env.example flutter/example/.env
+
       - name: Analyze (workspace)
         run: cd flutter && flutter analyze --no-fatal-infos
 
