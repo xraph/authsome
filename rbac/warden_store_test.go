@@ -42,7 +42,7 @@ func TestWardenStore_RoleCRUD(t *testing.T) {
 	assert.NotEmpty(t, r.ID, "CreateRole should populate the role ID")
 
 	// Get role by ID.
-	got, err := s.GetRole(ctx, r.ID)
+	got, err := s.GetRole(ctx, appID, r.ID)
 	require.NoError(t, err)
 	assert.Equal(t, r.ID, got.ID)
 	assert.Equal(t, "Admin", got.Name)
@@ -59,7 +59,7 @@ func TestWardenStore_RoleCRUD(t *testing.T) {
 	r.UpdatedAt = time.Now()
 	require.NoError(t, s.UpdateRole(ctx, r))
 
-	got, err = s.GetRole(ctx, r.ID)
+	got, err = s.GetRole(ctx, appID, r.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Super Admin", got.Name)
 
@@ -69,9 +69,9 @@ func TestWardenStore_RoleCRUD(t *testing.T) {
 	assert.Len(t, roles, 1)
 
 	// Delete role.
-	require.NoError(t, s.DeleteRole(ctx, r.ID))
+	require.NoError(t, s.DeleteRole(ctx, appID, r.ID))
 
-	_, err = s.GetRole(ctx, r.ID)
+	_, err = s.GetRole(ctx, appID, r.ID)
 	assert.Error(t, err, "GetRole after delete should fail")
 }
 
@@ -98,11 +98,11 @@ func TestWardenStore_PermissionCRUD(t *testing.T) {
 		Action:   "read",
 		Resource: "document",
 	}
-	require.NoError(t, s.AddPermission(ctx, perm))
+	require.NoError(t, s.AddPermission(ctx, appID, perm))
 	assert.NotEmpty(t, perm.ID, "AddPermission should populate the permission ID")
 
 	// List role permissions.
-	perms, err := s.ListRolePermissions(ctx, r.ID)
+	perms, err := s.ListRolePermissions(ctx, appID, r.ID)
 	require.NoError(t, err)
 	assert.Len(t, perms, 1)
 	assert.Equal(t, "read", perms[0].Action)
@@ -115,16 +115,16 @@ func TestWardenStore_PermissionCRUD(t *testing.T) {
 		Action:   "write",
 		Resource: "document",
 	}
-	require.NoError(t, s.AddPermission(ctx, perm2))
+	require.NoError(t, s.AddPermission(ctx, appID, perm2))
 
-	perms, err = s.ListRolePermissions(ctx, r.ID)
+	perms, err = s.ListRolePermissions(ctx, appID, r.ID)
 	require.NoError(t, err)
 	assert.Len(t, perms, 2)
 
 	// Remove first permission.
-	require.NoError(t, s.RemovePermission(ctx, perm.ID))
+	require.NoError(t, s.RemovePermission(ctx, appID, perm.ID))
 
-	perms, err = s.ListRolePermissions(ctx, r.ID)
+	perms, err = s.ListRolePermissions(ctx, appID, r.ID)
 	require.NoError(t, err)
 	assert.Len(t, perms, 1)
 	assert.Equal(t, "write", perms[0].Action)
@@ -151,7 +151,7 @@ func TestWardenStore_Assignment(t *testing.T) {
 		Action:   "read",
 		Resource: "page",
 	}
-	require.NoError(t, s.AddPermission(ctx, perm))
+	require.NoError(t, s.AddPermission(ctx, appID, perm))
 
 	// Assign role to user.
 	userID := "user-42"
@@ -160,7 +160,7 @@ func TestWardenStore_Assignment(t *testing.T) {
 		RoleID:     r.ID,
 		AssignedAt: now,
 	}
-	require.NoError(t, s.AssignUserRole(ctx, ur))
+	require.NoError(t, s.AssignUserRole(ctx, appID, ur))
 
 	// ListUserRolesForApp should find the role under the correct app.
 	roles, err := s.ListUserRolesForApp(ctx, appID, userID)
@@ -171,7 +171,7 @@ func TestWardenStore_Assignment(t *testing.T) {
 	assert.Equal(t, appID, roles[0].AppID)
 
 	// Unassign role.
-	require.NoError(t, s.UnassignUserRole(ctx, userID, r.ID))
+	require.NoError(t, s.UnassignUserRole(ctx, appID, userID, r.ID))
 
 	roles, err = s.ListUserRolesForApp(ctx, appID, userID)
 	require.NoError(t, err)
@@ -200,7 +200,7 @@ func TestWardenStore_HasPermission(t *testing.T) {
 		Action:   "write",
 		Resource: "document",
 	}
-	require.NoError(t, s.AddPermission(ctx, perm))
+	require.NoError(t, s.AddPermission(ctx, appID, perm))
 
 	// Assign role to user.
 	userID := "user-99"
@@ -209,7 +209,7 @@ func TestWardenStore_HasPermission(t *testing.T) {
 		RoleID:     r.ID,
 		AssignedAt: now,
 	}
-	require.NoError(t, s.AssignUserRole(ctx, ur))
+	require.NoError(t, s.AssignUserRole(ctx, appID, ur))
 
 	// HasPermission should return true for exact match.
 	ok, err := s.HasPermission(ctx, userID, "write", "document")
@@ -241,8 +241,8 @@ func TestWardenStore_ListUserRolesForApp_Isolation(t *testing.T) {
 	require.NoError(t, s.CreateRole(ctx, r2))
 
 	userID := "user-1"
-	require.NoError(t, s.AssignUserRole(ctx, &rbac.UserRole{UserID: userID, RoleID: r1.ID, AssignedAt: now}))
-	require.NoError(t, s.AssignUserRole(ctx, &rbac.UserRole{UserID: userID, RoleID: r2.ID, AssignedAt: now}))
+	require.NoError(t, s.AssignUserRole(ctx, app1, &rbac.UserRole{UserID: userID, RoleID: r1.ID, AssignedAt: now}))
+	require.NoError(t, s.AssignUserRole(ctx, app2, &rbac.UserRole{UserID: userID, RoleID: r2.ID, AssignedAt: now}))
 
 	// Should only return roles for app1.
 	roles, err := s.ListUserRolesForApp(ctx, app1, userID)
@@ -255,6 +255,62 @@ func TestWardenStore_ListUserRolesForApp_Isolation(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, roles, 1)
 	assert.Equal(t, app2, roles[0].AppID)
+}
+
+func TestWardenStore_ByIDCallsStayInTheirApp(t *testing.T) {
+	s := newWardenStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	owner, other := "app-owner", "app-other"
+
+	r := &rbac.Role{AppID: owner, Name: "Admin", Slug: "admin", CreatedAt: now, UpdatedAt: now}
+	require.NoError(t, s.CreateRole(ctx, r))
+	perm := &rbac.Permission{RoleID: r.ID, Action: "read", Resource: "document"}
+	require.NoError(t, s.AddPermission(ctx, owner, perm))
+
+	// Holding the id is not enough: every by-id call from another app
+	// behaves as if the role did not exist.
+	_, err := s.GetRole(ctx, other, r.ID)
+	require.ErrorIs(t, err, rbac.ErrRoleNotFound)
+	require.ErrorIs(t, s.AssignUserRole(ctx, other, &rbac.UserRole{UserID: "user-1", RoleID: r.ID, AssignedAt: now}), rbac.ErrRoleNotFound)
+	require.ErrorIs(t, s.AddPermission(ctx, other, &rbac.Permission{RoleID: r.ID, Action: "write", Resource: "document"}), rbac.ErrRoleNotFound)
+	require.Error(t, s.DeleteRole(ctx, other, r.ID))
+	require.Error(t, s.RemovePermission(ctx, other, perm.ID))
+
+	roles, err := s.GetRoles(ctx, other, []string{r.ID})
+	require.NoError(t, err)
+	assert.Empty(t, roles)
+
+	// The owner still sees the role and its one permission, untouched.
+	got, err := s.GetRole(ctx, owner, r.ID)
+	require.NoError(t, err)
+	assert.Equal(t, r.ID, got.ID)
+	perms, err := s.ListRolePermissions(ctx, owner, r.ID)
+	require.NoError(t, err)
+	require.Len(t, perms, 1)
+	assert.Equal(t, "read", perms[0].Action)
+}
+
+func TestWardenStore_GetRoles_KeepsRequestOrder(t *testing.T) {
+	s := newWardenStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	appID := "app-1"
+
+	ids := make([]string, 0, 3)
+	for _, slug := range []string{"a", "b", "c"} {
+		r := &rbac.Role{AppID: appID, Name: slug, Slug: slug, CreatedAt: now, UpdatedAt: now}
+		require.NoError(t, s.CreateRole(ctx, r))
+		ids = append(ids, r.ID)
+	}
+	want := []string{ids[2], ids[0], ids[1]}
+
+	roles, err := s.GetRoles(ctx, appID, append(want, "not-an-id"))
+	require.NoError(t, err)
+	require.Len(t, roles, 3)
+	for i, r := range roles {
+		assert.Equal(t, want[i], r.ID)
+	}
 }
 
 func TestWardenStore_HasPermission_NoRoles(t *testing.T) {

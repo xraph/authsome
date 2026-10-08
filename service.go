@@ -2100,9 +2100,10 @@ func (e *Engine) CreateRole(ctx context.Context, r *rbac.Role) error {
 	return nil
 }
 
-// GetRole returns a role by ID.
-func (e *Engine) GetRole(ctx context.Context, roleID id.RoleID) (*rbac.Role, error) {
-	return e.rbacStore().GetRole(ctx, roleID.String())
+// GetRole returns a role by ID within an app. A role owned by another app
+// is reported as not found.
+func (e *Engine) GetRole(ctx context.Context, appID id.AppID, roleID id.RoleID) (*rbac.Role, error) {
+	return e.rbacStore().GetRole(ctx, appID.String(), roleID.String())
 }
 
 // GetRoleBySlug returns a role by slug within an app.
@@ -2150,9 +2151,10 @@ func (e *Engine) UpdateRole(ctx context.Context, r *rbac.Role) error {
 	return nil
 }
 
-// DeleteRole deletes an RBAC role and cascades to its permissions and assignments.
-func (e *Engine) DeleteRole(ctx context.Context, roleID id.RoleID) error {
-	if err := e.rbacStore().DeleteRole(ctx, roleID.String()); err != nil {
+// DeleteRole deletes an app's RBAC role and cascades to its permissions and
+// assignments.
+func (e *Engine) DeleteRole(ctx context.Context, appID id.AppID, roleID id.RoleID) error {
+	if err := e.rbacStore().DeleteRole(ctx, appID.String(), roleID.String()); err != nil {
 		return fmt.Errorf("authsome: delete role: %w", err)
 	}
 
@@ -2160,6 +2162,7 @@ func (e *Engine) DeleteRole(ctx context.Context, roleID id.RoleID) error {
 		Action:     hook.ActionRoleDelete,
 		Resource:   hook.ResourceRole,
 		ResourceID: roleID.String(),
+		Tenant:     appID.String(),
 	})
 
 	return nil
@@ -2170,34 +2173,35 @@ func (e *Engine) ListRoles(ctx context.Context, appID id.AppID) ([]*rbac.Role, e
 	return e.rbacStore().ListRoles(ctx, appID.String())
 }
 
-// AddPermission adds a permission to a role.
-func (e *Engine) AddPermission(ctx context.Context, p *rbac.Permission) error {
-	if err := e.rbacStore().AddPermission(ctx, p); err != nil {
+// AddPermission adds a permission to one of the app's roles.
+func (e *Engine) AddPermission(ctx context.Context, appID id.AppID, p *rbac.Permission) error {
+	if err := e.rbacStore().AddPermission(ctx, appID.String(), p); err != nil {
 		return fmt.Errorf("authsome: add permission: %w", err)
 	}
 	return nil
 }
 
-// RemovePermission removes a permission from a role.
-func (e *Engine) RemovePermission(ctx context.Context, permID id.PermissionID) error {
-	if err := e.rbacStore().RemovePermission(ctx, permID.String()); err != nil {
+// RemovePermission removes one of the app's permissions.
+func (e *Engine) RemovePermission(ctx context.Context, appID id.AppID, permID id.PermissionID) error {
+	if err := e.rbacStore().RemovePermission(ctx, appID.String(), permID.String()); err != nil {
 		return fmt.Errorf("authsome: remove permission: %w", err)
 	}
 	return nil
 }
 
-// ListRolePermissions returns all permissions for a role.
-func (e *Engine) ListRolePermissions(ctx context.Context, roleID id.RoleID) ([]*rbac.Permission, error) {
-	return e.rbacStore().ListRolePermissions(ctx, roleID.String())
+// ListRolePermissions returns all permissions for one of the app's roles.
+func (e *Engine) ListRolePermissions(ctx context.Context, appID id.AppID, roleID id.RoleID) ([]*rbac.Permission, error) {
+	return e.rbacStore().ListRolePermissions(ctx, appID.String(), roleID.String())
 }
 
-// AssignUserRole assigns a role to a user.
-func (e *Engine) AssignUserRole(ctx context.Context, ur *rbac.UserRole) error {
+// AssignUserRole assigns one of the app's roles to a user. A role owned by
+// another app is refused as not found.
+func (e *Engine) AssignUserRole(ctx context.Context, appID id.AppID, ur *rbac.UserRole) error {
 	if ur.AssignedAt.IsZero() {
 		ur.AssignedAt = time.Now()
 	}
 
-	if err := e.rbacStore().AssignUserRole(ctx, ur); err != nil {
+	if err := e.rbacStore().AssignUserRole(ctx, appID.String(), ur); err != nil {
 		return fmt.Errorf("authsome: assign user role: %w", err)
 	}
 	if uid, parseErr := id.ParseUserID(ur.UserID); parseErr == nil {
@@ -2205,33 +2209,35 @@ func (e *Engine) AssignUserRole(ctx context.Context, ur *rbac.UserRole) error {
 	}
 
 	// Resolve names for notification template variables (best-effort).
-	hookMeta := e.buildRoleHookMetadata(ctx, ur.UserID, ur.RoleID)
+	hookMeta := e.buildRoleHookMetadata(ctx, appID, ur.UserID, ur.RoleID)
 	e.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionRoleAssign,
 		Resource:   hook.ResourceRole,
 		ResourceID: ur.RoleID,
 		ActorID:    ur.UserID,
+		Tenant:     appID.String(),
 		Metadata:   hookMeta,
 	})
 
 	return nil
 }
 
-// UnassignUserRole removes a role from a user.
-func (e *Engine) UnassignUserRole(ctx context.Context, userID id.UserID, roleID id.RoleID) error {
-	if err := e.rbacStore().UnassignUserRole(ctx, userID.String(), roleID.String()); err != nil {
+// UnassignUserRole removes one of the app's roles from a user.
+func (e *Engine) UnassignUserRole(ctx context.Context, appID id.AppID, userID id.UserID, roleID id.RoleID) error {
+	if err := e.rbacStore().UnassignUserRole(ctx, appID.String(), userID.String(), roleID.String()); err != nil {
 		return fmt.Errorf("authsome: unassign user role: %w", err)
 	}
 	// A revoked role must stop working now, not at the next refresh.
 	e.restampUserSessions(ctx, userID)
 
 	// Resolve names for notification template variables (best-effort).
-	hookMeta := e.buildRoleHookMetadata(ctx, userID.String(), roleID.String())
+	hookMeta := e.buildRoleHookMetadata(ctx, appID, userID.String(), roleID.String())
 	e.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionRoleUnassign,
 		Resource:   hook.ResourceRole,
 		ResourceID: roleID.String(),
 		ActorID:    userID.String(),
+		Tenant:     appID.String(),
 		Metadata:   hookMeta,
 	})
 
@@ -2240,7 +2246,7 @@ func (e *Engine) UnassignUserRole(ctx context.Context, userID id.UserID, roleID 
 
 // buildRoleHookMetadata resolves user and role names for notification templates.
 // All lookups are best-effort — missing fields are simply omitted.
-func (e *Engine) buildRoleHookMetadata(ctx context.Context, userIDStr, roleIDStr string) map[string]string {
+func (e *Engine) buildRoleHookMetadata(ctx context.Context, appID id.AppID, userIDStr, roleIDStr string) map[string]string {
 	meta := make(map[string]string, 4)
 	if uid, err := id.ParseUserID(userIDStr); err == nil {
 		if u, err := e.store.GetUser(ctx, uid); err == nil {
@@ -2248,7 +2254,7 @@ func (e *Engine) buildRoleHookMetadata(ctx context.Context, userIDStr, roleIDStr
 			meta["email"] = u.Email
 		}
 	}
-	if role, err := e.rbacStore().GetRole(ctx, roleIDStr); err == nil {
+	if role, err := e.rbacStore().GetRole(ctx, appID.String(), roleIDStr); err == nil {
 		meta["new_role"] = role.Name
 	}
 	return meta
@@ -2325,9 +2331,9 @@ func (e *Engine) ListUsersWithRole(ctx context.Context, appID id.AppID, roleSlug
 	return userIDs, nil
 }
 
-// GetRoleChildren returns the direct child roles of a parent role.
-func (e *Engine) GetRoleChildren(ctx context.Context, roleID id.RoleID) ([]*rbac.Role, error) {
-	return e.rbacStore().GetRoleChildren(ctx, roleID.String())
+// GetRoleChildren returns the direct child roles of one of the app's roles.
+func (e *Engine) GetRoleChildren(ctx context.Context, appID id.AppID, roleID id.RoleID) ([]*rbac.Role, error) {
+	return e.rbacStore().GetRoleChildren(ctx, appID.String(), roleID.String())
 }
 
 // HasPermission checks whether a user has a specific permission.
@@ -2395,7 +2401,7 @@ func (e *Engine) EnsureDefaultRole(ctx context.Context, appID id.AppID, userID i
 	}
 
 	// Assign role (ignore duplicate assignment errors).
-	_ = e.AssignUserRole(ctx, &rbac.UserRole{ //nolint:errcheck // best-effort role assign
+	_ = e.AssignUserRole(ctx, appID, &rbac.UserRole{ //nolint:errcheck // best-effort role assign
 		UserID: userID.String(),
 		RoleID: role.ID,
 	})
@@ -2470,7 +2476,7 @@ func (e *Engine) promoteVerifiedOwner(ctx context.Context, u *user.User) {
 		return
 	}
 
-	if err := e.AssignUserRole(ctx, &rbac.UserRole{
+	if err := e.AssignUserRole(ctx, appID, &rbac.UserRole{
 		UserID: u.ID.String(),
 		RoleID: ownerRole.ID,
 	}); err != nil {
@@ -3391,7 +3397,7 @@ func (e *Engine) CreateApp(ctx context.Context, a *app.App) error {
 	if userID, ok := middleware.UserIDFrom(ctx); ok && !userID.IsNil() {
 		ownerRole, roleErr := e.GetRoleBySlug(ctx, a.ID, rbac.AppOwnerSlug)
 		if roleErr == nil && ownerRole != nil {
-			_ = e.AssignUserRole(ctx, &rbac.UserRole{ //nolint:errcheck // best-effort role assign
+			_ = e.AssignUserRole(ctx, a.ID, &rbac.UserRole{ //nolint:errcheck // best-effort role assign
 				UserID: userID.String(),
 				RoleID: ownerRole.ID,
 			})
@@ -3654,8 +3660,8 @@ func (a *storeCloneAdapter) ListRolesForClone(ctx context.Context, appID id.AppI
 	return out, nil
 }
 
-func (a *storeCloneAdapter) ListPermissionsForClone(ctx context.Context, roleID string) ([]*environment.PermissionForClone, error) {
-	perms, err := a.rbacStore.ListRolePermissions(ctx, roleID)
+func (a *storeCloneAdapter) ListPermissionsForClone(ctx context.Context, appID, roleID string) ([]*environment.PermissionForClone, error) {
+	perms, err := a.rbacStore.ListRolePermissions(ctx, appID, roleID)
 	if err != nil {
 		return nil, err
 	}
@@ -3710,7 +3716,7 @@ func (a *storeCloneAdapter) CreateClonedRole(ctx context.Context, r *environment
 }
 
 func (a *storeCloneAdapter) CreateClonedPermission(ctx context.Context, p *environment.PermissionForClone) error {
-	return a.rbacStore.AddPermission(ctx, &rbac.Permission{
+	return a.rbacStore.AddPermission(ctx, p.AppID, &rbac.Permission{
 		ID:       p.ID,
 		RoleID:   p.RoleID,
 		Action:   p.Action,

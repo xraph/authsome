@@ -31,7 +31,7 @@ func appAdmin(t *testing.T, eng *authsome.Engine, email string) id.UserID {
 	adminRole, err := eng.GetRoleBySlug(context.Background(), appID, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, adminRole)
-	require.NoError(t, eng.AssignUserRole(context.Background(), &rbac.UserRole{UserID: uid.String(), RoleID: adminRole.ID}))
+	require.NoError(t, eng.AssignUserRole(context.Background(), appID, &rbac.UserRole{UserID: uid.String(), RoleID: adminRole.ID}))
 
 	roles, err := eng.ListUserRoles(context.Background(), uid)
 	require.NoError(t, err)

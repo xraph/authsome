@@ -70,20 +70,22 @@ role := &rbac.Role{AppID: appID.String(), Name: "Support", Slug: "support"}
 if err := engine.CreateRole(ctx, role); err != nil {
     return err
 }
-if err := engine.AddPermission(ctx, &rbac.Permission{RoleID: role.ID, Action: "read", Resource: "session"}); err != nil {
+if err := engine.AddPermission(ctx, appID, &rbac.Permission{RoleID: role.ID, Action: "read", Resource: "session"}); err != nil {
     return err
 }
-if err := engine.AddPermission(ctx, &rbac.Permission{RoleID: role.ID, Action: "revoke", Resource: "session"}); err != nil {
+if err := engine.AddPermission(ctx, appID, &rbac.Permission{RoleID: role.ID, Action: "revoke", Resource: "session"}); err != nil {
     return err
 }
 ```
 
 `GetRole`, `GetRoleBySlug`, `UpdateRole`, `DeleteRole`, `ListRoles`, `ListRolePermissions`, `RemovePermission` and `GetRoleChildren` complete the set. A role slug is unique within its app.
 
+Every call that takes a role or permission ID also takes the app that owns it. Pass another app's ID and the role reads as not found: nothing is returned, changed or deleted, so holding an ID from another tenant gets you nothing.
+
 ## Assigning roles
 
 ```go
-err := engine.AssignUserRole(ctx, &rbac.UserRole{UserID: userID.String(), RoleID: role.ID})
+err := engine.AssignUserRole(ctx, appID, &rbac.UserRole{UserID: userID.String(), RoleID: role.ID})
 ```
 
 Set `OrgID` to confine the assignment to one organization. `UnassignUserRole`, `ListUserRoles`, `ListUserRolesInApp`, `ListUsersWithRole` and `ListUserRoleSlugs` read and undo it. A session minted after the change carries the new slugs; a session already open carries the slugs it was minted with until it is refreshed.

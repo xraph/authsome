@@ -311,7 +311,7 @@ func grantOrDeny(t *testing.T, eng *authsome.Engine, appID id.AppID, ref princip
 
 	// Decoy permission: always present, so the role (and the assignment
 	// binding it to ref) is real regardless of allow.
-	require.NoError(t, eng.AddPermission(ctx, &rbac.Permission{
+	require.NoError(t, eng.AddPermission(ctx, appID, &rbac.Permission{
 		ID:       id.NewPermissionID().String(),
 		RoleID:   role.ID,
 		Action:   "noop",
@@ -319,7 +319,7 @@ func grantOrDeny(t *testing.T, eng *authsome.Engine, appID id.AppID, ref princip
 	}))
 
 	if allow {
-		require.NoError(t, eng.AddPermission(ctx, &rbac.Permission{
+		require.NoError(t, eng.AddPermission(ctx, appID, &rbac.Permission{
 			ID:       id.NewPermissionID().String(),
 			RoleID:   role.ID,
 			Action:   "read",

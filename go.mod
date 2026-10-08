@@ -29,7 +29,7 @@ require (
 	github.com/xraph/relay v1.7.0
 	github.com/xraph/vault v1.7.0
 	github.com/xraph/vessel v1.0.4
-	github.com/xraph/warden v1.6.2
+	github.com/xraph/warden v1.7.0
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 	go.mongodb.org/mongo-driver/v2 v2.9.1
 	golang.org/x/crypto v0.55.0

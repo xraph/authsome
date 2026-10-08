@@ -42,12 +42,12 @@ func TestRoleChange_RestampsLiveSessions(t *testing.T) {
 	admin, err := eng.GetRoleBySlug(ctx, appID, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, admin)
-	require.NoError(t, eng.AssignUserRole(ctx, &rbac.UserRole{UserID: u.ID.String(), RoleID: admin.ID}))
+	require.NoError(t, eng.AssignUserRole(ctx, appID, &rbac.UserRole{UserID: u.ID.String(), RoleID: admin.ID}))
 	assert.Contains(t, stampedRoles(t, eng, u.ID), "admin", "a grant reaches the live session")
 
 	suffix := admin.ID[strings.IndexByte(admin.ID, '_')+1:]
 	roleID, err := id.ParseRoleID("arol_" + suffix)
 	require.NoError(t, err)
-	require.NoError(t, eng.UnassignUserRole(ctx, u.ID, roleID))
+	require.NoError(t, eng.UnassignUserRole(ctx, appID, u.ID, roleID))
 	assert.NotContains(t, stampedRoles(t, eng, u.ID), "admin", "a revocation reaches the live session")
 }

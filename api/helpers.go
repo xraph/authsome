@@ -76,6 +76,13 @@ func mapErrorCtx(ctx forge.Context, err error) error {
 	if errors.Is(err, store.ErrNotFound) {
 		return forge.NotFound(err.Error())
 	}
+	// Another app's role or permission is reported exactly like a missing one.
+	if errors.Is(err, rbac.ErrRoleNotFound) {
+		return forge.NotFound("role not found")
+	}
+	if errors.Is(err, rbac.ErrPermissionNotFound) {
+		return forge.NotFound("permission not found")
+	}
 	if errors.Is(err, rbac.ErrSystemRoleImmutable) {
 		return forge.Forbidden("system roles cannot be changed")
 	}

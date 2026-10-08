@@ -746,7 +746,7 @@ func (a *API) handleGrantPlatformOwner(ctx forge.Context, req *AdminGrantPlatfor
 		return nil, middleware.InternalError(ctx, fmt.Errorf("audit trail unavailable: %w", auditErr))
 	}
 
-	if err := a.engine.AssignUserRole(ctx.Context(), &rbac.UserRole{
+	if err := a.engine.AssignUserRole(ctx.Context(), appID, &rbac.UserRole{
 		UserID: targetUserID.String(),
 		RoleID: ownerRole.ID,
 	}); err != nil {
@@ -824,7 +824,7 @@ func (a *API) handleRevokePlatformOwner(ctx forge.Context, req *AdminRevokePlatf
 		return nil, middleware.InternalError(ctx, fmt.Errorf("invalid platform-owner role ID"))
 	}
 
-	if err := a.engine.UnassignUserRole(ctx.Context(), targetUserID, roleID); err != nil {
+	if err := a.engine.UnassignUserRole(ctx.Context(), appID, targetUserID, roleID); err != nil {
 		return nil, mapErrorCtx(ctx, err)
 	}
 

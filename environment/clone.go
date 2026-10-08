@@ -71,6 +71,7 @@ type RoleForClone struct {
 // PermissionForClone is a minimal permission representation used during cloning.
 type PermissionForClone struct {
 	ID       string
+	AppID    string
 	RoleID   string
 	Action   string
 	Resource string
@@ -93,8 +94,8 @@ type CloneSource interface {
 	// ListRolesForClone returns all roles in the source environment.
 	ListRolesForClone(ctx context.Context, appID id.AppID, envID id.EnvironmentID) ([]*RoleForClone, error)
 
-	// ListPermissionsForClone returns all permissions for a role.
-	ListPermissionsForClone(ctx context.Context, roleID string) ([]*PermissionForClone, error)
+	// ListPermissionsForClone returns all permissions for one of the app's roles.
+	ListPermissionsForClone(ctx context.Context, appID, roleID string) ([]*PermissionForClone, error)
 
 	// ListWebhooksForClone returns all webhooks in the source environment.
 	ListWebhooksForClone(ctx context.Context, appID id.AppID, envID id.EnvironmentID) ([]*WebhookForClone, error)
@@ -209,7 +210,7 @@ func (c *Cloner) Clone(ctx context.Context, req CloneRequest) (*CloneResult, err
 
 	// 5. Clone permissions, remapping role IDs.
 	for oldRoleID, newRoleID := range result.RoleIDMap {
-		perms, permErr := c.source.ListPermissionsForClone(ctx, oldRoleID)
+		perms, permErr := c.source.ListPermissionsForClone(ctx, srcEnv.AppID.String(), oldRoleID)
 		if permErr != nil {
 			return nil, fmt.Errorf("environment: clone: list permissions for role %s: %w", oldRoleID, permErr)
 		}
@@ -219,6 +220,7 @@ func (c *Cloner) Clone(ctx context.Context, req CloneRequest) (*CloneResult, err
 
 			newPerm := &PermissionForClone{
 				ID:       newPermID,
+				AppID:    srcEnv.AppID.String(),
 				RoleID:   newRoleID,
 				Action:   perm.Action,
 				Resource: perm.Resource,

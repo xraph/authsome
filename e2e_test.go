@@ -684,7 +684,7 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 4: Add permissions to admin role
-	err = eng.AddPermission(ctx, &rbac.Permission{
+	err = eng.AddPermission(ctx, appID, &rbac.Permission{
 		ID:       id.NewPermissionID().String(),
 		RoleID:   adminRole.ID,
 		Action:   "*",
@@ -693,7 +693,7 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 5: Add permissions to viewer role
-	err = eng.AddPermission(ctx, &rbac.Permission{
+	err = eng.AddPermission(ctx, appID, &rbac.Permission{
 		ID:       id.NewPermissionID().String(),
 		RoleID:   viewerRole.ID,
 		Action:   "read",
@@ -701,7 +701,7 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = eng.AddPermission(ctx, &rbac.Permission{
+	err = eng.AddPermission(ctx, appID, &rbac.Permission{
 		ID:       id.NewPermissionID().String(),
 		RoleID:   viewerRole.ID,
 		Action:   "read",
@@ -715,17 +715,17 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	assert.Len(t, roles, 2)
 
 	// Step 7: List role permissions
-	adminPerms, err := eng.ListRolePermissions(ctx, adminRoleID)
+	adminPerms, err := eng.ListRolePermissions(ctx, appID, adminRoleID)
 	require.NoError(t, err)
 	assert.Len(t, adminPerms, 1)
 	assert.Equal(t, "*", adminPerms[0].Action)
 
-	viewerPerms, err := eng.ListRolePermissions(ctx, viewerRoleID)
+	viewerPerms, err := eng.ListRolePermissions(ctx, appID, viewerRoleID)
 	require.NoError(t, err)
 	assert.Len(t, viewerPerms, 2)
 
 	// Step 8: Assign viewer role to user
-	err = eng.AssignUserRole(ctx, &rbac.UserRole{
+	err = eng.AssignUserRole(ctx, appID, &rbac.UserRole{
 		UserID: u.ID.String(),
 		RoleID: viewerRole.ID,
 	})
@@ -745,7 +745,7 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	assert.True(t, ok)
 
 	// Step 10: Upgrade to admin
-	err = eng.AssignUserRole(ctx, &rbac.UserRole{
+	err = eng.AssignUserRole(ctx, appID, &rbac.UserRole{
 		UserID: u.ID.String(),
 		RoleID: adminRole.ID,
 	})
@@ -766,7 +766,7 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	assert.Len(t, userRoles, 2) // viewer + admin
 
 	// Step 13: Unassign viewer role
-	err = eng.UnassignUserRole(ctx, u.ID, viewerRoleID)
+	err = eng.UnassignUserRole(ctx, appID, u.ID, viewerRoleID)
 	require.NoError(t, err)
 
 	userRoles, err = eng.ListUserRoles(ctx, u.ID)
@@ -774,7 +774,7 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	assert.Len(t, userRoles, 1) // admin only
 
 	// Step 14: Delete viewer role
-	err = eng.DeleteRole(ctx, viewerRoleID)
+	err = eng.DeleteRole(ctx, appID, viewerRoleID)
 	require.NoError(t, err)
 
 	roles, err = eng.ListRoles(ctx, appID)
@@ -1002,7 +1002,7 @@ func TestE2E_EnvironmentClone(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 3: Add permission to admin role
-	err = eng.AddPermission(ctx, &rbac.Permission{
+	err = eng.AddPermission(ctx, appID, &rbac.Permission{
 		ID:       id.NewPermissionID().String(),
 		RoleID:   adminRole.ID,
 		Action:   "*",

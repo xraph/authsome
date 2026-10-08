@@ -89,7 +89,7 @@ func TestDeleteRole_RejectsCrossTenant(t *testing.T) {
 
 	rid, err := id.ParseRoleID(foreignRole)
 	require.NoError(t, err)
-	_, err = eng.GetRole(context.Background(), rid)
+	_, err = eng.GetRole(context.Background(), otherAppID(t), rid)
 	assert.NoError(t, err, "the foreign role must survive the delete attempt")
 }
 
