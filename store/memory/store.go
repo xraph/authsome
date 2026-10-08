@@ -1502,7 +1502,10 @@ func (s *Store) GetWebhook(_ context.Context, webhookID id.WebhookID) (*webhook.
 	if !ok {
 		return nil, store.ErrNotFound
 	}
-	return w, nil
+	// A copy, like the database stores hand back: a caller that edits the
+	// row before saving it must not be writing to the stored one.
+	cp := *w
+	return &cp, nil
 }
 
 func (s *Store) UpdateWebhook(_ context.Context, w *webhook.Webhook) error {
@@ -1531,7 +1534,8 @@ func (s *Store) ListWebhooks(_ context.Context, appID id.AppID) ([]*webhook.Webh
 	var result []*webhook.Webhook
 	for _, w := range s.webhooks {
 		if w.AppID.String() == appID.String() {
-			result = append(result, w)
+			cp := *w
+			result = append(result, &cp)
 		}
 	}
 	return result, nil
