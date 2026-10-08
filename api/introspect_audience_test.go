@@ -53,7 +53,7 @@ func newIntrospectAudienceEngine(t *testing.T, jwtFmt *tokenformat.JWT) *authsom
 		opts = append(opts, authsome.WithDefaultTokenFormat(jwtFmt))
 	}
 
-	eng, err := authsome.NewEngine(append([]authsome.Option{authsome.WithChronicle(bridge.NewMemoryChronicle())}, opts...)...)
+	eng, err := authsome.NewEngine(append([]authsome.Option{authsome.WithConfig(testConfig()), authsome.WithChronicle(bridge.NewMemoryChronicle())}, opts...)...)
 	require.NoError(t, err)
 	require.NoError(t, eng.Start(context.Background()))
 	secutil.RelaxAuthDefaults(t, eng)

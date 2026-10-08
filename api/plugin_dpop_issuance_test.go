@@ -54,7 +54,7 @@ func pluginDPoPFixture(t *testing.T, p routablePlugin) (*authsome.Engine, http.H
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
+	eng, err := authsome.NewEngine(authsome.WithConfig(testConfig()), authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),

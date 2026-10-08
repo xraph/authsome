@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/xraph/forge"
 
@@ -107,13 +108,25 @@ func seedTestPlatformApp(t *testing.T, s *memory.Store) {
 	}))
 }
 
+// testConfig is DefaultConfig with password hashing dropped to the cheapest
+// bcrypt cost, for the reason testEngineConfig in the root package gives:
+// cost 12 under -race ran this package past the ten minute per-package
+// timeout in CI. The duplicate-signup timing test compares against whatever
+// cost the engine is configured with, so it holds at MinCost too.
+func testConfig() authsome.Config {
+	cfg := authsome.DefaultConfig()
+	cfg.Password.BcryptCost = bcrypt.MinCost
+
+	return cfg
+}
+
 func newTestAPI(t *testing.T) (*api.API, *authsome.Engine) {
 	t.Helper()
 	s := memory.New()
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
+	eng, err := authsome.NewEngine(authsome.WithConfig(testConfig()), authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -200,7 +213,7 @@ func TestHandleManifest_GroupedMount(t *testing.T) {
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
+	eng, err := authsome.NewEngine(authsome.WithConfig(testConfig()), authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -672,7 +685,7 @@ func TestSignIn_MFARequired_Returns403WithTicket(t *testing.T) {
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
+	eng, err := authsome.NewEngine(authsome.WithConfig(testConfig()), authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -1480,7 +1493,7 @@ func TestSignIn_MFAChallenge_RoundTripIssuesSession(t *testing.T) {
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
+	eng, err := authsome.NewEngine(authsome.WithConfig(testConfig()), authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -1599,7 +1612,7 @@ func TestMFAChallenge_BadCodeKeepsTicketUsable(t *testing.T) {
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
+	eng, err := authsome.NewEngine(authsome.WithConfig(testConfig()), authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -1679,7 +1692,7 @@ func mfaGateFixture(t *testing.T, email string) (http.Handler, string, mfa.Store
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
+	eng, err := authsome.NewEngine(authsome.WithConfig(testConfig()), authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),

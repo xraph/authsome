@@ -72,7 +72,7 @@ func newMultiAppAPI(t *testing.T) (http.Handler, *authsome.Engine) { //nolint:un
 
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
+	eng, err := authsome.NewEngine(authsome.WithConfig(testConfig()), authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),

@@ -38,6 +38,7 @@ func newBootstrappedAPI(t *testing.T, opts ...authsome.Option) (*api.API, *auths
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
 	eng, err := authsome.NewEngine(append([]authsome.Option{
+		authsome.WithConfig(testConfig()),
 		authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
@@ -190,7 +191,7 @@ func webhookReceiver(t *testing.T) *httptest.Server {
 }
 
 func webhookTestOptions() []authsome.Option {
-	cfg := authsome.DefaultConfig()
+	cfg := testConfig()
 	cfg.Webhooks.AllowInsecureURLs = true
 	return []authsome.Option{authsome.WithConfig(cfg), authsome.WithEventRelay(bridge.NewMemoryRelay())}
 }
