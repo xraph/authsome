@@ -118,7 +118,9 @@ func (e *Engine) verifyWebhookURL(ctx context.Context, w *webhook.Webhook, secre
 	if err != nil {
 		return fmt.Errorf("%w: test delivery failed: %w", ErrWebhookURLRejected, err)
 	}
-	resp.Body.Close()
+	// Only the status matters; the body is never read, so a close error
+	// changes nothing.
+	_ = resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		return fmt.Errorf("%w: test delivery answered %d, want 2xx (redirects are refused)", ErrWebhookURLRejected, resp.StatusCode)
 	}

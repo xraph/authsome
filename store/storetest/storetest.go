@@ -1917,7 +1917,8 @@ func testWebhookSecretNotStored(t *testing.T, s store.Store) {
 	assert.Equal(t, "ep_1", again.RelayEndpointID)
 	assert.False(t, again.Active)
 
-	legacy := &webhook.Webhook{ //nolint:gosec // G101: a fixture, not a credential
+	// #nosec G101 -- a fixture, not a credential.
+	legacy := &webhook.Webhook{
 		ID: id.NewWebhookID(), AppID: tn.AppID, EnvID: tn.EnvID, URL: "https://example.test/legacy",
 		Events: []string{"user.created"}, Active: true, CreatedAt: now(), UpdatedAt: now(), Secret: "whsec_legacy",
 	}
