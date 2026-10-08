@@ -377,20 +377,6 @@ func (p *Plugin) loadDBProviderSettings(ctx context.Context) []ProviderSetting {
 	return providers
 }
 
-// saveDBProviderSettings writes dynamic providers to the settings store.
-func (p *Plugin) saveDBProviderSettings(ctx context.Context, providers []ProviderSetting) error {
-	if p.settingsMgr == nil {
-		return fmt.Errorf("social: settings manager not available")
-	}
-	// #nosec G117 -- marshalling a value this package constructed itself.
-	raw, err := json.Marshal(providers)
-	if err != nil {
-		return err
-	}
-	return p.settingsMgr.Set(ctx, SettingSocialProviders.Def.Key, raw,
-		settings.ScopeGlobal, "", "", "", "dashboard")
-}
-
 // providerFromSetting creates a Provider from a ProviderSetting.
 func providerFromSetting(s ProviderSetting) Provider {
 	cfg := ProviderConfig{

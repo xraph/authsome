@@ -26,16 +26,6 @@ func TestManifest_Loads(t *testing.T) {
 	if got := len(m.Intents); got != 1 {
 		t.Errorf("intents = %d, want 1 (policy)", got)
 	}
-	// One graph route: /auth/password (deep-link page rendering
-	// the settings.panel for the password namespace).
-	if got := len(m.Graph); got != 1 {
-		t.Errorf("graph routes = %d, want 1 (/auth/password)", got)
-	}
-	// No extends — the global /settings page auto-discovers via
-	// settings.tabs + settings.namespaces.
-	if got := len(m.Extends); got != 0 {
-		t.Errorf("extends = %d, want 0 (no manual extension; auto-discovered)", got)
-	}
 }
 
 // TestManifest_Validates ensures every intent referenced by the graph

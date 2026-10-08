@@ -42,7 +42,8 @@ func TestEndpointLifecycle(t *testing.T) {
 
 	body := []byte(`{"id":"u_1"}`)
 	ts := time.Now().Unix()
-	sig := signature.Sign(body, ep.Secret, ts)
+	sig, err := signature.Sign(body, ep.Secret, ts)
+	require.NoError(t, err)
 	assert.NoError(t, webhook.VerifyRelay(body, "whsec_first", strconv.FormatInt(ts, 10), sig, 0),
 		"a receiver verifies relay's signature with the once-shown secret")
 	assert.ErrorIs(t, webhook.VerifyRelay(body, "whsec_other", strconv.FormatInt(ts, 10), sig, 0), webhook.ErrSignatureMismatch)

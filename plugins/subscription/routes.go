@@ -3,7 +3,6 @@ package subscription
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -1042,25 +1041,4 @@ func toCouponResponse(c *coupon.Coupon) CouponResponse {
 		resp.ValidUntil = &vu
 	}
 	return resp
-}
-
-// parseAmountCents parses a dollar string like "9.99" into cents (999).
-func parseAmountCents(s string) int64 {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0
-	}
-	parts := strings.SplitN(s, ".", 2)
-	dollars, _ := strconv.ParseInt(parts[0], 10, 64) //nolint:errcheck // best-effort parse
-	var cents int64
-	if len(parts) == 2 {
-		c := parts[1]
-		if len(c) == 1 {
-			c += "0"
-		} else if len(c) > 2 {
-			c = c[:2]
-		}
-		cents, _ = strconv.ParseInt(c, 10, 64) //nolint:errcheck // best-effort parse
-	}
-	return dollars*100 + cents
 }

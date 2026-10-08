@@ -18,7 +18,7 @@ import (
 // production wiring shape: PortalURL is passed in already containing the
 // authsome basePath (e.g. http://identity:7902/authsome), matching how
 // twinos sets TWINOS_AUTH_IDENTITY_URL, the SDK's authclient.NewClient,
-// the client API proxy, and the legacy dashboard contributor fetch.
+// and the client API proxy.
 //
 // Regression: an earlier version of registerRemoteContractContributor did
 // `remoteBaseURL := portalURL + basePath`, producing a doubled /authsome

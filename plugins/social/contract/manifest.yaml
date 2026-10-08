@@ -7,15 +7,3 @@ contributor:
   capabilities: [auth.read]
 
 intents: []
-
-graph:
-  - route: /auth/social
-    intent: page.shell
-    title: Social Login
-    nav: { group: Auth, icon: users, priority: 6 }
-    slots:
-      main:
-        - intent: settings.panel
-          props:
-            namespace: social
-            scope: app

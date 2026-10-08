@@ -7,15 +7,3 @@ contributor:
   capabilities: [auth.read]
 
 intents: []
-
-graph:
-  - route: /auth/passkeys
-    intent: page.shell
-    title: Passkeys
-    nav: { group: Auth, icon: key, priority: 5 }
-    slots:
-      main:
-        - intent: settings.panel
-          props:
-            namespace: passkey
-            scope: app

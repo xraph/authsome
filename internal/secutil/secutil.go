@@ -19,7 +19,6 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/bridge"
-	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/lockout"
 	"github.com/xraph/authsome/organization"
@@ -183,15 +182,6 @@ func AttachChronicle(t *testing.T, eng *authsome.Engine, ch *BufferedChronicle) 
 	require.NotNil(t, eng, "secutil: AttachChronicle: nil engine")
 	require.NotNil(t, ch, "secutil: AttachChronicle: nil chronicle")
 	eng.SetChronicle(ch)
-}
-
-// InitTestNonceSigner installs a deterministic process-wide nonce signer so
-// tests that exercise GenerateScopedNonce / ConsumeScopedNonce code paths
-// don't have to wire one themselves.
-func InitTestNonceSigner(t *testing.T) {
-	t.Helper()
-	require.NoError(t, dashboard.InitNonceSigner([]byte("secutil-test-nonce-signer-secret-32bytes!")),
-		"secutil: init nonce signer")
 }
 
 // RelaxAuthDefaults disables the production-secure auth defaults that would
