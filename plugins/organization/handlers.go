@@ -442,9 +442,12 @@ func (p *Plugin) handleAddMember(ctx forge.Context, req *AddMemberRequest) (*org
 		return nil, forge.BadRequest(fmt.Sprintf("invalid user_id: %v", err))
 	}
 
-	role, err := grantableOrgRole(caller.Role, req.Role)
-	if err != nil {
-		return nil, err
+	role := organization.RoleMember
+	if req.Role != "" {
+		role = normalizeRole(req.Role)
+	}
+	if gerr := mayGrantRole(caller.Role, role); gerr != nil {
+		return nil, gerr
 	}
 
 	m := &organization.Member{
@@ -541,9 +544,12 @@ func (p *Plugin) handleCreateInvitation(ctx forge.Context, req *CreateInvitation
 		return nil, forge.BadRequest("email is required")
 	}
 
-	role, err := grantableOrgRole(inviter.Role, req.Role)
-	if err != nil {
-		return nil, err
+	role := organization.RoleMember
+	if req.Role != "" {
+		role = normalizeRole(req.Role)
+	}
+	if gerr := mayGrantRole(inviter.Role, role); gerr != nil {
+		return nil, gerr
 	}
 
 	token, err := account.GenerateVerificationToken()

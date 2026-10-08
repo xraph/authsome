@@ -3,6 +3,7 @@ package organization
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/xraph/forge"
 
@@ -27,22 +28,26 @@ func orgRoleRank(r organization.MemberRole) int {
 	}
 }
 
-// grantableOrgRole parses a requested membership role and checks the caller
-// may grant it: the role must be one of the three known roles, and the
-// caller's rank must be at least the requested rank. An admin can therefore
-// add admins and members, never owners.
-func grantableOrgRole(callerRole organization.MemberRole, requested string) (organization.MemberRole, error) {
-	role := organization.RoleMember
-	if requested != "" {
-		role = organization.MemberRole(requested)
+// normalizeRole canonicalises a requested role. The built-in roles are matched
+// case-insensitively and trimmed, so "Owner" or " OWNER " cannot rank as an
+// unknown role (0) while meaning owner to anything that compares them loosely.
+// Other role names are free-form (apps use e.g. "viewer") and pass through.
+func normalizeRole(r string) organization.MemberRole {
+	switch n := organization.MemberRole(strings.ToLower(strings.TrimSpace(r))); n {
+	case organization.RoleOwner, organization.RoleAdmin, organization.RoleMember:
+		return n
 	}
-	if orgRoleRank(role) == 0 {
-		return "", forge.BadRequest("role must be one of owner, admin or member")
+	return organization.MemberRole(strings.TrimSpace(r))
+}
+
+// mayGrantRole refuses granting a role that outranks the caller's own. Only an
+// owner can make an owner; an admin can still grant admin and below. Without
+// it, an org admin could invite an alias -- or add an account -- as owner.
+func mayGrantRole(caller, requested organization.MemberRole) error {
+	if orgRoleRank(requested) > orgRoleRank(caller) {
+		return forge.Forbidden("cannot grant a role above your own")
 	}
-	if orgRoleRank(callerRole) < orgRoleRank(role) {
-		return "", forge.Forbidden("cannot grant a role above your own")
-	}
-	return role, nil
+	return nil
 }
 
 // requireRemovable applies the removal ceilings: the target's rank may not

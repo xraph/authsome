@@ -14,8 +14,9 @@ import (
 	orgplugin "github.com/xraph/authsome/plugins/organization"
 )
 
-// An org admin may add admins and members, never owners; an unknown role is
-// rejected; owners cannot be removed by admins; the last owner stays.
+// An org admin may add admins and members, never owners; owners cannot be
+// removed by admins; the last owner stays. Free-form roles are covered in
+// role_rank_test.go.
 
 func TestOrgAddMember_AdminCannotGrantOwner(t *testing.T) {
 	p, h := newOrgHTTP(t)
@@ -29,18 +30,6 @@ func TestOrgAddMember_AdminCannotGrantOwner(t *testing.T) {
 	h.ServeHTTP(rec, orgReq(http.MethodPost, "/v1/orgs/"+o.ID.String()+"/members", body, admin))
 
 	assert.Equal(t, http.StatusForbidden, rec.Code, "an admin must not mint an owner; body=%s", rec.Body.String())
-}
-
-func TestOrgAddMember_RejectsUnknownRole(t *testing.T) {
-	p, h := newOrgHTTP(t)
-	owner := id.NewUserID()
-	o := seedOrg(t, p, owner)
-
-	body := []byte(`{"user_id":"` + id.NewUserID().String() + `","role":"superuser"}`)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, orgReq(http.MethodPost, "/v1/orgs/"+o.ID.String()+"/members", body, owner))
-
-	assert.Equal(t, http.StatusBadRequest, rec.Code, "body=%s", rec.Body.String())
 }
 
 func TestOrgInvitation_AdminCannotInviteOwner(t *testing.T) {
