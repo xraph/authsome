@@ -35,12 +35,16 @@ import {
   type SocialButtonLayout,
 } from "./social-buttons";
 import { handleSocialLogin } from "../lib/social-login";
-import { ArrowLeft, MailCheck } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { validEmail, validateSignupField } from "../lib/form-validation";
+import { EmailVerificationForm } from "./email-verification-form";
 import { TurnstileWidget } from "./turnstile-widget";
 
 export interface SignUpFormComponentProps {
   /** Callback invoked after a successful sign-up. */
   onSuccess?: () => void;
+  /** Called when signup requires email verification. */
+  onVerificationRequired?: (email: string) => void;
   /** URL to the sign-in page. Renders an "Already have an account?" footer link. */
   signInUrl?: string;
   /** URL to the forgot-password page. Renders a "Forgot password?" link. */
@@ -105,6 +109,7 @@ function DynamicField({
   );
 
   switch (field.type) {
+    case "radio":
     case "select":
       return (
         <div className="grid gap-1.5">
@@ -145,7 +150,7 @@ function DynamicField({
             {field.label}
             {field.description && (
               <span className="ml-1 text-muted-foreground">
-                — {field.description}
+                : {field.description}
               </span>
             )}
           </Label>
@@ -213,6 +218,7 @@ function DynamicField({
  */
 export function SignUpForm({
   onSuccess,
+  onVerificationRequired,
   signInUrl,
   forgotPasswordUrl,
   socialProviders: socialProvidersProp,
@@ -273,10 +279,12 @@ export function SignUpForm({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   // Captcha config (Turnstile only for now).
   const captchaCfg = config?.captcha;
+  const captchaRequired = !!captchaCfg?.required;
   const captchaEnabled =
     !!captchaCfg?.required &&
     captchaCfg.provider === "turnstile" &&
@@ -323,8 +331,8 @@ export function SignUpForm({
     setError(null);
 
     const signupEmail = email.trim().toLowerCase();
-    if (!signupEmail) {
-      setError("Please enter your email address.");
+    if (!validEmail(signupEmail)) {
+      setError("Please enter a valid email address.");
       return;
     }
 
@@ -336,6 +344,11 @@ export function SignUpForm({
         (client.getPublishableKey?.()
           ? await manager.fetchClientConfig()
           : null);
+      if (signupConfig?.signup_enabled === false) {
+        setError("Signup isn't available for this app.");
+        return;
+      }
+      if (signupConfig?.password?.enabled === false) return;
       if (signupConfig?.waitlist?.enabled) {
         const entry = await client.joinWaitlist({ email: signupEmail });
         setWaitlistStatus(entry.status);
@@ -358,13 +371,26 @@ export function SignUpForm({
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    if (config?.signup_enabled === false || !showPassword) return;
+    if (captchaRequired && !captchaToken) {
+      setError("Please complete the captcha.");
+      return;
+    }
+    const fields: Record<string, string> = {};
+    for (const field of signupFields ?? []) {
+      const value = fieldValues[field.key] ?? "";
+      const problem = validateSignupField(field, value);
+      if (problem) {
+        setError(problem);
+        return;
+      }
+      if (value) fields[field.key] = value;
+    }
     setError(null);
     setIsSubmitting(true);
 
     try {
-      // Build the fields object.
-      const fields: Record<string, string> = { ...fieldValues };
-
       // If using fallback (no dynamic fields), map the first/last name inputs.
       if (!signupFields) {
         if (fallbackFirstName) fields.first_name = fallbackFirstName;
@@ -377,10 +403,12 @@ export function SignUpForm({
         Object.keys(fields).length > 0 ? fields : undefined,
         captchaToken ? { captchaToken } : undefined,
       );
-      // Email verification is required by default — never auto-route to a
-      // signed-in shell. Swap to the "check your inbox" panel instead.
-      setStep("verify");
-      onSuccess?.();
+      if (manager.getState().status === "authenticated") {
+        onSuccess?.();
+      } else {
+        setStep("verify");
+        onVerificationRequired?.(email);
+      }
     } catch (err) {
       setError(
         err instanceof Error
@@ -388,11 +416,16 @@ export function SignUpForm({
           : "Sign up failed. Please try again.",
       );
     } finally {
+      setCaptchaToken(null);
+      setCaptchaAttempt((value) => value + 1);
       setIsSubmitting(false);
     }
   };
 
   const goBack = () => {
+    if (isSubmitting) return;
+    setCaptchaToken(null);
+    setCaptchaAttempt((value) => value + 1);
     setStep("email");
     setPassword("");
     setError(null);
@@ -410,6 +443,34 @@ export function SignUpForm({
       </a>
     </p>
   ) : undefined;
+
+  if (step === "verify") {
+    return (
+      <EmailVerificationForm
+        email={email}
+        logo={logo}
+        className={className}
+        onSuccess={() => {
+          if (signInUrl) window.location.assign(signInUrl);
+        }}
+      />
+    );
+  }
+  if (config?.signup_enabled === false) {
+    return (
+      <AuthCard
+        title="Signup isn't available"
+        description="New accounts aren't available for this app."
+        logo={logo}
+        footer={footer}
+        align={align}
+        variant={variant}
+        className={className}
+      >
+        {null}
+      </AuthCard>
+    );
+  }
 
   if (step === "waitlist") {
     const rejected = waitlistStatus === "rejected";
@@ -476,33 +537,6 @@ export function SignUpForm({
               administrator.
             </p>
           )}
-        </div>
-      </AuthCard>
-    );
-  }
-
-  /* -- Verify: Check your inbox ----------------------------- */
-
-  if (step === "verify") {
-    return (
-      <AuthCard
-        title="Check your inbox"
-        description={`We sent a verification link to ${email}.`}
-        logo={logo}
-        footer={footer}
-        align={align}
-        variant={variant}
-        className={cn(className)}
-      >
-        <div className="grid gap-4">
-          <div className="flex flex-col items-center gap-3 py-4 text-center">
-            <div className="rounded-full bg-muted p-3">
-              <MailCheck className="h-6 w-6 text-foreground" />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Click the link in the email to verify your account, then sign in.
-            </p>
-          </div>
         </div>
       </AuthCard>
     );
@@ -662,8 +696,12 @@ export function SignUpForm({
             />
           </div>
 
+          {captchaRequired && !captchaEnabled && (
+            <ErrorDisplay error="Verification is unavailable. Please try again later." />
+          )}
           {captchaEnabled && captchaCfg?.site_key && (
             <TurnstileWidget
+              key={`${captchaCfg?.provider}:${captchaCfg?.site_key}:${captchaAttempt}`}
               siteKey={captchaCfg.site_key}
               onToken={setCaptchaToken}
               onExpire={() => setCaptchaToken(null)}
@@ -674,7 +712,7 @@ export function SignUpForm({
           <Button
             type="submit"
             className="w-full"
-            disabled={isSubmitting || (captchaEnabled && !captchaToken)}
+            disabled={isSubmitting || (captchaRequired && !captchaToken)}
           >
             {isSubmitting && <LoadingSpinner size="sm" className="mr-2" />}
             Create account

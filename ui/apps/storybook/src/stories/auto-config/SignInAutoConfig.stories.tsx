@@ -165,3 +165,32 @@ export const EmptyConfig: Story = {
   ],
   args: defaultArgs,
 };
+
+/** Password sign-in hands the user to MFA before success. */
+export const MFAHandoff: Story = {
+  decorators: [
+    (Story) => (
+      <MockAuthProvider
+        signInBehavior="mfa_required"
+        clientConfig={CONFIG_PASSWORD_ONLY}
+      >
+        <Story />
+      </MockAuthProvider>
+    ),
+  ],
+  args: defaultArgs,
+};
+
+/** A failed SSO handoff leaves a visible error and a retry action. */
+export const SSOHandoffFailure: Story = {
+  args: {
+    ...defaultArgs,
+    resolveSSO: async () => ({
+      enforced: true,
+      provider: "Acme",
+      continue: async () => {
+        throw new Error("Single sign-on is unavailable. Please try again.");
+      },
+    }),
+  },
+};

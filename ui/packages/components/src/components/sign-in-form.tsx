@@ -3,11 +3,16 @@
 import * as React from "react";
 import { useState } from "react";
 import { useAuth, useClientConfig } from "@authsome/ui-react";
+import { authFlowUrl } from "../lib/auth-flow-url";
 import { cn } from "../lib/utils";
 import { Button } from "../primitives/button";
 import { Input } from "../primitives/input";
 import { Label } from "../primitives/label";
-import { AuthCard, type AuthCardAlign, type AuthCardVariant } from "./auth-card";
+import {
+  AuthCard,
+  type AuthCardAlign,
+  type AuthCardVariant,
+} from "./auth-card";
 import { ErrorDisplay } from "./error-display";
 import { LoadingSpinner } from "./loading-spinner";
 import { PasswordInput } from "./password-input";
@@ -21,6 +26,9 @@ import {
 import { handleSocialLogin } from "../lib/social-login";
 import { ArrowLeft, MailCheck } from "lucide-react";
 import { TurnstileWidget } from "./turnstile-widget";
+import { EmailVerificationForm } from "./email-verification-form";
+import { MFAChallengeForm } from "./mfa-challenge-form";
+import { validEmail } from "../lib/form-validation";
 import { AuthClientError } from "@authsome/ui-core";
 
 /**
@@ -58,9 +66,7 @@ export interface SignInFormComponentProps {
    * fall through to password entry. Rejections fail open to password so a
    * discovery outage never locks users out.
    */
-  resolveSSO?: (
-    email: string,
-  ) => Promise<SSOResolution | null | undefined>;
+  resolveSSO?: (email: string) => Promise<SSOResolution | null | undefined>;
   /** URL to the sign-up page. Renders a "Don't have an account?" footer link. */
   signUpUrl?: string;
   /** URL to the forgot-password page. Renders a "Forgot password?" link. */
@@ -161,7 +167,8 @@ export function SignInForm({
   title: titleProp,
   description = "Welcome back. Sign in to your account.",
 }: SignInFormComponentProps) {
-  const { signIn, client, resendVerification, startSSOLogin } = useAuth();
+  const { signIn, client, manager, state, resendVerification, startSSOLogin } =
+    useAuth();
   const { config } = useClientConfig();
 
   const appName = config?.branding?.app_name;
@@ -181,12 +188,12 @@ export function SignInForm({
   const showPassword = config?.password?.enabled ?? true;
 
   // Auto-derive magic link support from client config when not explicitly provided.
-  const showMagicLink = showMagicLinkProp ?? config?.magiclink?.enabled ?? false;
+  const showMagicLink =
+    showMagicLinkProp ?? config?.magiclink?.enabled ?? false;
 
   // Auto-derive SSO connections from client config when not explicitly provided.
   const ssoConnections =
-    ssoConnectionsProp ??
-    (config?.sso?.enabled ? config.sso.connections : []);
+    ssoConnectionsProp ?? (config?.sso?.enabled ? config.sso.connections : []);
   const hasSSO = ssoConnections.length > 0;
 
   // Default social login: popup-based OAuth flow via startOAuth API.
@@ -218,92 +225,118 @@ export function SignInForm({
   // The resolved IdP handoff once discovery finds SSO for the domain.
   const [sso, setSso] = useState<SSOResolution | null>(null);
   const [isSendingMagicLink, setIsSendingMagicLink] = useState(false);
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [resendStatus, setResendStatus] = useState<"idle" | "sent" | "error">(
-    "idle",
-  );
-
   const captchaCfg = config?.captcha;
+  const captchaRequired = !!captchaCfg?.required;
   const captchaEnabled =
     !!captchaCfg?.required &&
     captchaCfg.provider === "turnstile" &&
     !!captchaCfg.site_key;
 
-  const handleEmailContinue = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const startSSO = async (resolution = sso) => {
+    if (!resolution || isSubmitting) return;
     setError(null);
-
-    if (!email.trim()) {
-      setError("Please enter your email address.");
-      return;
-    }
-
-    // No discovery hook: keep the plain email → password flow.
-    if (!resolveSSO) {
-      setStep("password");
-      return;
-    }
-
-    // Home-realm discovery. A rejection (or any non-resolution) fails open to
-    // password entry — a discovery outage must never lock a user out.
-    setIsResolvingSSO(true);
-    let resolution: SSOResolution | null | undefined;
+    setIsSubmitting(true);
     try {
-      resolution = await resolveSSO(email.trim());
-    } catch {
-      resolution = null;
+      await resolution.continue();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not start single sign-on. Please try again.",
+      );
     } finally {
-      setIsResolvingSSO(false);
-    }
-
-    if (!resolution) {
-      setStep("password");
-      return;
-    }
-
-    setSso(resolution);
-    setStep("sso");
-    // An enforced domain routes straight to the IdP — no password offered.
-    if (resolution.enforced) {
-      void resolution.continue();
+      setIsSubmitting(false);
     }
   };
 
-  const startSSO = () => {
-    if (sso) void sso.continue();
+  const handleEmailContinue = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (isSubmitting || isResolvingSSO) return;
+    setError(null);
+    const target = email.trim().toLowerCase();
+    if (!validEmail(target)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    setEmail(target);
+    setIsResolvingSSO(true);
+    try {
+      const currentConfig =
+        config ??
+        (client.getPublishableKey?.()
+          ? await manager.fetchClientConfig()
+          : null);
+      let resolution: SSOResolution | null | undefined;
+      try {
+        resolution = await resolveSSO?.(target);
+      } catch {
+        resolution = null;
+      }
+      if (resolution) {
+        setSso(resolution);
+        setStep("sso");
+        if (resolution.enforced) await startSSO(resolution);
+      } else if (currentConfig?.password?.enabled !== false) {
+        setStep("password");
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load sign-in options. Please try again.",
+      );
+    } finally {
+      setIsResolvingSSO(false);
+    }
   };
 
   // Default SSO connection handler: ask the backend for the IdP login URL and
   // send the browser there. The backend lands it back on `ssoReturnUrl` (or
   // its own default) with a one-time code for <SSOCallback> to exchange.
-  const onSSOLogin =
-    onSSOLoginProp ??
-    (async (connectionId: string) => {
-      setError(null);
-      setIsSubmitting(true);
-      try {
+  const onSSOLogin = async (connectionId: string) => {
+    if (isSubmitting || isResolvingSSO) return;
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      if (onSSOLoginProp) await onSSOLoginProp(connectionId);
+      else {
         const url = await startSSOLogin(connectionId, ssoReturnUrl);
         window.location.assign(url);
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Could not start single sign-on. Please try again.",
-        );
-        setIsSubmitting(false);
       }
-    });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not start single sign-on. Please try again.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const sendMagicLink = async () => {
+    if (isSubmitting || isSendingMagicLink || isResolvingSSO) return;
     setError(null);
-    const target = email.trim();
-    if (!target) {
-      setError("Please enter your email address.");
+    const target = email.trim().toLowerCase();
+    if (!validEmail(target)) {
+      setError("Please enter a valid email address.");
       return;
     }
 
     setIsSendingMagicLink(true);
     try {
+      const currentConfig =
+        config ??
+        (client.getPublishableKey?.()
+          ? await manager.fetchClientConfig()
+          : null);
+      if (!(showMagicLinkProp ?? currentConfig?.magiclink?.enabled ?? false)) {
+        setError("Email sign-in links aren't available for this app.");
+        return;
+      }
+      setEmail(target);
       await client.sendMagicLink({ email: target });
       setStep("magic-link-sent");
     } catch (err) {
@@ -324,6 +357,11 @@ export function SignInForm({
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSubmitting || !showPassword) return;
+    if (captchaRequired && !captchaToken) {
+      setError("Please complete the captcha.");
+      return;
+    }
     setError(null);
     setIsSubmitting(true);
 
@@ -333,24 +371,26 @@ export function SignInForm({
         password,
         captchaToken ? { captchaToken } : undefined,
       );
-      onSuccess?.();
+      if (manager.getState().status === "authenticated") onSuccess?.();
     } catch (err) {
       // Surface "email_not_verified" via a dedicated panel, not a generic
       // error message. When a verifyEmailUrl is provided, navigate the
       // browser to the dedicated OTP-based verification view (and kick off
       // a resend in the background so the user has a fresh code on
       // arrival). Otherwise fall back to the inline resend panel.
-      if (
-        err instanceof AuthClientError &&
-        err.type === "email_not_verified"
-      ) {
+      if (err instanceof AuthClientError && err.type === "email_not_verified") {
         if (verifyEmailUrl && typeof window !== "undefined") {
           void resendVerification(email).catch(() => {
             // Best-effort: the verify view also exposes a Resend button.
           });
-          const sep = verifyEmailUrl.includes("?") ? "&" : "?";
-          window.location.href =
-            verifyEmailUrl + sep + "email=" + encodeURIComponent(email);
+          window.location.assign(
+            authFlowUrl(
+              verifyEmailUrl,
+              window.location.origin,
+              window.location.search,
+              email,
+            ),
+          );
           return;
         }
         setStep("verify");
@@ -362,38 +402,34 @@ export function SignInForm({
           : "Sign in failed. Please try again.",
       );
     } finally {
+      setCaptchaToken(null);
+      setCaptchaAttempt((value) => value + 1);
       setIsSubmitting(false);
     }
   };
 
-  const handleResend = async () => {
-    setResendStatus("idle");
-    try {
-      await resendVerification(email);
-      setResendStatus("sent");
-    } catch {
-      setResendStatus("error");
-    }
-  };
-
   const goBack = () => {
+    if (isSubmitting || isResolvingSSO || isSendingMagicLink) return;
+    setCaptchaToken(null);
+    setCaptchaAttempt((value) => value + 1);
     setStep("email");
     setPassword("");
     setError(null);
     setSso(null);
   };
 
-  const footer = signUpUrl ? (
-    <p className="text-[13px] text-muted-foreground">
-      Don&apos;t have an account?{" "}
-      <a
-        href={signUpUrl}
-        className="font-medium text-foreground underline-offset-4 hover:underline"
-      >
-        Sign up
-      </a>
-    </p>
-  ) : undefined;
+  const footer =
+    signUpUrl && config?.signup_enabled !== false ? (
+      <p className="text-[13px] text-muted-foreground">
+        Don&apos;t have an account?{" "}
+        <a
+          href={signUpUrl}
+          className="font-medium text-foreground underline-offset-4 hover:underline"
+        >
+          Sign up
+        </a>
+      </p>
+    ) : undefined;
 
   const ssoButtons = hasSSO ? (
     <div className="flex flex-col gap-2">
@@ -411,6 +447,16 @@ export function SignInForm({
       ))}
     </div>
   ) : null;
+
+  if (state.status === "mfa_required") {
+    return (
+      <MFAChallengeForm
+        onSuccess={onSuccess}
+        logo={logo}
+        className={className}
+      />
+    );
+  }
 
   /* ── Magic link sent: check your inbox ──────────────── */
 
@@ -450,7 +496,7 @@ export function SignInForm({
 
   /* ── Password disabled: show only alternative methods ── */
 
-  if (!showPassword) {
+  if (!showPassword && step !== "verify" && step !== "sso") {
     const hasButtons = hasSocial || hasSSO;
     const hasAnyMethod = hasButtons || showPasskey || showMagicLink;
     return (
@@ -539,53 +585,13 @@ export function SignInForm({
 
   if (step === "verify") {
     return (
-      <AuthCard
-        title="Verify your email"
-        description={`Your account at ${email} hasn't been verified yet.`}
+      <EmailVerificationForm
+        email={email}
+        onSuccess={goBack}
+        onBack={goBack}
         logo={logo}
-        footer={footer}
-        align={align}
-        variant={variant}
-        className={cn(className)}
-      >
-        <div className="grid gap-4">
-          <div className="flex flex-col items-center gap-3 py-2 text-center">
-            <div className="rounded-full bg-muted p-3">
-              <MailCheck className="h-6 w-6 text-foreground" />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Click the verification link we emailed you, then sign in again.
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            onClick={handleResend}
-            disabled={resendStatus === "sent"}
-          >
-            {resendStatus === "sent"
-              ? "Verification email sent"
-              : "Resend verification email"}
-          </Button>
-          {resendStatus === "error" && (
-            <ErrorDisplay error="Could not resend the email. Please try again." />
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              setStep("email");
-              setPassword("");
-              setError(null);
-              setResendStatus("idle");
-            }}
-            className="inline-flex items-center justify-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Use a different email
-          </button>
-        </div>
-      </AuthCard>
+        className={className}
+      />
     );
   }
 
@@ -680,13 +686,19 @@ export function SignInForm({
         className={cn(className)}
       >
         <div className="grid gap-4">
+          <ErrorDisplay error={error} />
           <p className="text-sm text-muted-foreground">
             {sso?.enforced
               ? "Your organization requires single sign-on for this email."
               : "Your organization supports single sign-on for this email."}
           </p>
 
-          <Button type="button" className="w-full" onClick={startSSO}>
+          <Button
+            type="button"
+            className="w-full"
+            onClick={() => void startSSO()}
+            disabled={isSubmitting || isResolvingSSO}
+          >
             {providerLabel}
           </Button>
 
@@ -786,8 +798,12 @@ export function SignInForm({
             />
           </div>
 
+          {captchaRequired && !captchaEnabled && (
+            <ErrorDisplay error="Verification is unavailable. Please try again later." />
+          )}
           {captchaEnabled && captchaCfg?.site_key && (
             <TurnstileWidget
+              key={`${captchaCfg?.provider}:${captchaCfg?.site_key}:${captchaAttempt}`}
               siteKey={captchaCfg.site_key}
               onToken={setCaptchaToken}
               onExpire={() => setCaptchaToken(null)}
@@ -801,7 +817,7 @@ export function SignInForm({
             disabled={
               isSubmitting ||
               isSendingMagicLink ||
-              (captchaEnabled && !captchaToken)
+              (captchaRequired && !captchaToken)
             }
           >
             {isSubmitting && <LoadingSpinner size="sm" className="mr-2" />}

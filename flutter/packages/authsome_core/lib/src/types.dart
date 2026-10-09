@@ -155,6 +155,8 @@ class SSOConnectionConfig {
 /// Describes which auth methods are enabled so SDK components
 /// can auto-configure their UI without manual props.
 class ClientConfig {
+  /// Whether new accounts can be created. Defaults to true when omitted.
+  final bool? signupEnabled;
   final String? version;
   final String? appId;
   final BrandingConfig? branding;
@@ -182,6 +184,7 @@ class ClientConfig {
   final CaptchaConfig? captcha;
 
   const ClientConfig({
+    this.signupEnabled,
     this.version,
     this.appId,
     this.branding,
@@ -201,6 +204,7 @@ class ClientConfig {
 
   factory ClientConfig.fromJson(Map<String, dynamic> json) {
     return ClientConfig(
+      signupEnabled: json['signup_enabled'] as bool?,
       version: json['version'] as String?,
       appId: json['app_id'] as String?,
       branding: json['branding'] != null
@@ -220,16 +224,14 @@ class ClientConfig {
               Map<String, dynamic>.from(json['passkey'] as Map))
           : null,
       mfa: json['mfa'] != null
-          ? MfaConfig.fromJson(
-              Map<String, dynamic>.from(json['mfa'] as Map))
+          ? MfaConfig.fromJson(Map<String, dynamic>.from(json['mfa'] as Map))
           : null,
       magiclink: json['magiclink'] != null
           ? MagicLinkConfig.fromJson(
               Map<String, dynamic>.from(json['magiclink'] as Map))
           : null,
       sso: json['sso'] != null
-          ? SsoConfig.fromJson(
-              Map<String, dynamic>.from(json['sso'] as Map))
+          ? SsoConfig.fromJson(Map<String, dynamic>.from(json['sso'] as Map))
           : null,
       supportedPlugins: (json['supported_plugins'] as List<dynamic>?)
           ?.map((e) => e as String)
@@ -258,6 +260,7 @@ class ClientConfig {
   }
 
   Map<String, dynamic> toJson() => {
+        if (signupEnabled != null) 'signup_enabled': signupEnabled,
         if (version != null) 'version': version,
         if (appId != null) 'app_id': appId,
         if (branding != null) 'branding': branding!.toJson(),
@@ -296,7 +299,8 @@ class EmailVerificationConfig {
   final bool enabled;
   final bool required;
 
-  const EmailVerificationConfig({required this.enabled, required this.required});
+  const EmailVerificationConfig(
+      {required this.enabled, required this.required});
 
   factory EmailVerificationConfig.fromJson(Map<String, dynamic> json) {
     return EmailVerificationConfig(
@@ -438,7 +442,8 @@ class SignupFieldConfig {
         'type': type,
         if (placeholder != null) 'placeholder': placeholder,
         if (description != null) 'description': description,
-        if (options != null) 'options': options!.map((o) => o.toJson()).toList(),
+        if (options != null)
+          'options': options!.map((o) => o.toJson()).toList(),
         if (defaultValue != null) 'default': defaultValue,
         if (validation != null) 'validation': validation!.toJson(),
         'order': order,
@@ -486,8 +491,8 @@ class SocialConfig {
     return SocialConfig(
       enabled: json['enabled'] as bool,
       providers: (json['providers'] as List<dynamic>)
-          .map((e) =>
-              SocialProviderConfig.fromJson(Map<String, dynamic>.from(e as Map)))
+          .map((e) => SocialProviderConfig.fromJson(
+              Map<String, dynamic>.from(e as Map)))
           .toList(),
     );
   }
@@ -519,9 +524,8 @@ class MfaConfig {
   factory MfaConfig.fromJson(Map<String, dynamic> json) {
     return MfaConfig(
       enabled: json['enabled'] as bool,
-      methods: (json['methods'] as List<dynamic>)
-          .map((e) => e as String)
-          .toList(),
+      methods:
+          (json['methods'] as List<dynamic>).map((e) => e as String).toList(),
     );
   }
 

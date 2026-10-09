@@ -71,14 +71,14 @@ class AuthSomeClient extends generated.AuthClient {
     required String email,
     required String password,
     String? captchaToken,
-  }) {
-    return super.signIn(
-      body: SignInRequest(
-        email: email,
-        password: password,
-        captchaToken: captchaToken,
-      ),
+  }) async {
+    final body = SignInRequest(
+      email: email,
+      password: password,
+      captchaToken: captchaToken,
     );
+    return AuthResponse.fromJson(
+        await _rawPost('/v1/signin', body: body.toJson()));
   }
 
   /// Sign up with email & password.
@@ -337,14 +337,23 @@ class AuthSomeClient extends generated.AuthClient {
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       String errorMessage;
+      String? errorType;
+      Map<String, dynamic>? details;
       try {
         final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+        errorType = errorBody['type'] as String?;
+        details = {
+          ...errorBody,
+          if (errorBody['details'] is Map)
+            ...Map<String, dynamic>.from(errorBody['details'] as Map)
+        };
         errorMessage = (errorBody['error'] as String?) ??
             'Request failed with status ${response.statusCode}';
       } catch (_) {
         errorMessage = 'Request failed with status ${response.statusCode}';
       }
-      throw AuthClientException(errorMessage, code: response.statusCode);
+      throw AuthClientException(errorMessage,
+          code: response.statusCode, type: errorType, details: details);
     }
 
     return jsonDecode(response.body) as Map<String, dynamic>;

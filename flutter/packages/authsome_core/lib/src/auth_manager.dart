@@ -42,6 +42,8 @@ class AuthManager {
 
   final String? _publishableKey;
   ClientConfig? _clientConfig;
+  String get _configCacheKey =>
+      '$_configKey:${jsonEncode([_client.baseUrl, _publishableKey ?? ""])}';
   final Set<void Function(ClientConfig?)> _configListeners = {};
   Future<ClientConfig>? _configFetchFuture;
 
@@ -111,8 +113,7 @@ class AuthManager {
   }
 
   /// Subscribe to client config changes. Returns an unsubscribe function.
-  void Function() subscribeConfig(
-      void Function(ClientConfig?) listener) {
+  void Function() subscribeConfig(void Function(ClientConfig?) listener) {
     _configListeners.add(listener);
     return () => _configListeners.remove(listener);
   }
@@ -128,8 +129,10 @@ class AuthManager {
   Future<void> initialize() async {
     // Kick off config fetch in parallel (non-blocking).
     if (_publishableKey != null && _clientConfig == null) {
-      // ignore: unawaited_futures
-      fetchClientConfig();
+      unawaited(fetchClientConfig().catchError((Object error) {
+        // Continue can retry a failed configuration request.
+        return const ClientConfig();
+      }));
     }
 
     try {
@@ -139,10 +142,10 @@ class AuthManager {
         return;
       }
 
-      final sessionJson =
-          jsonDecode(raw) as Map<String, dynamic>;
+      final sessionJson = jsonDecode(raw) as Map<String, dynamic>;
       final session = Session.fromJson(sessionJson);
-      final expiresAt = DateTime.parse(session.expiresAt).millisecondsSinceEpoch;
+      final expiresAt =
+          DateTime.parse(session.expiresAt).millisecondsSinceEpoch;
 
       if (DateTime.now().millisecondsSinceEpoch >= expiresAt) {
         // Token expired — try refresh.
@@ -186,7 +189,7 @@ class AuthManager {
     String? captchaToken,
   }) async {
     _pendingEmail = email;
-    _setState(const AuthLoading());
+    // The form owns submission progress so parent loading views keep it mounted.
     try {
       final res = await _client.signInWithCredentials(
         email: email,
@@ -226,8 +229,13 @@ class AuthManager {
     String? captchaToken,
   }) async {
     _pendingEmail = email;
-    _setState(const AuthLoading());
+
     try {
+      final config = _clientConfig ??
+          (_publishableKey != null ? await fetchClientConfig() : null);
+      if (config?.signupEnabled == false) {
+        throw StateError("Signup isn't available for this app.");
+      }
       final res = await _client.signUpWithCredentials(
         email: email,
         password: password,
@@ -235,25 +243,25 @@ class AuthManager {
         fields: fields,
         captchaToken: captchaToken,
       );
-      // A sign-up that beats the config fetch must still see the
-      // verification setting, or it would sign in with a dead session.
-      if (_clientConfig == null && _publishableKey != null) {
+      final verification = config?.emailVerification;
+      if (verification != null &&
+          (!verification.enabled || !verification.required)) {
         try {
-          await fetchClientConfig();
-        } catch (_) {
-          // No config: fall back to treating the session as usable.
+          final user = await _client.getMeWithToken(res.sessionToken);
+          final session = Session(
+            sessionToken: res.sessionToken,
+            refreshToken: res.refreshToken,
+            expiresAt: res.expiresAt,
+          );
+          await _handleAuthResponse(user, session);
+          return;
+        } on AuthClientException catch (error) {
+          if (error.code != 401 && error.code != 403) {
+            rethrow;
+          }
         }
       }
-      if (_clientConfig?.emailVerification?.required == true) {
-        _setState(AuthVerificationPending(email: email));
-        return;
-      }
-      final session = Session(
-        sessionToken: res.sessionToken,
-        refreshToken: res.refreshToken,
-        expiresAt: res.expiresAt,
-      );
-      await _handleAuthResponse(res.user, session);
+      _setState(AuthVerificationPending(email: email));
     } catch (err) {
       _handleError(err);
     }
@@ -319,22 +327,24 @@ class AuthManager {
     if (current is! AuthMfaRequired) {
       throw StateError('submitMFAChallenge called outside MFA flow');
     }
-    _setState(const AuthLoading());
     try {
-      // Reuses the existing legacy endpoint until the ticket-based one ships.
-      // The enrollment ID is sourced from the ticket for compatibility.
-      final res = await _client.mfaChallenge(
-        enrollmentId: current.mfaTicket,
-        code: code,
+      final res = await _client.challengeMFA(
+        body: ChallengeRequest(mfaTicket: current.mfaTicket, code: code),
       );
       final session = Session(
         sessionToken: res.sessionToken,
         refreshToken: res.refreshToken,
         expiresAt: res.expiresAt,
       );
-      await _handleAuthResponse(res.user, session);
+      final user = res.user is Map
+          ? User.fromJson(Map<String, dynamic>.from(res.user as Map))
+          : res.user;
+      await _handleAuthResponse(user, session);
     } catch (err) {
-      _handleError(err);
+      // Keep the ticket available so a failed code can be retried.
+      _onError?.call(err is AuthClientException ? err.message : err.toString(),
+          err is AuthClientException ? err.code : null);
+      rethrow;
     }
   }
 
@@ -535,7 +545,7 @@ class AuthManager {
   Future<ClientConfig> _doFetchClientConfig() async {
     // Check storage cache.
     try {
-      final cached = await _storage.getItem(_configKey);
+      final cached = await _storage.getItem(_configCacheKey);
       if (cached != null) {
         final parsed = jsonDecode(cached) as Map<String, dynamic>;
         final config =
@@ -556,7 +566,7 @@ class AuthManager {
     // Cache with timestamp.
     try {
       await _storage.setItem(
-        _configKey,
+        _configCacheKey,
         jsonEncode({
           'config': config.toJson(),
           'fetchedAt': DateTime.now().millisecondsSinceEpoch,
@@ -614,8 +624,7 @@ class AuthManager {
     // successful sign-in.
     final int expiresAt;
     try {
-      expiresAt =
-          DateTime.parse(session.expiresAt).millisecondsSinceEpoch;
+      expiresAt = DateTime.parse(session.expiresAt).millisecondsSinceEpoch;
     } on FormatException {
       _refreshTimer = Timer(const Duration(minutes: 5), () {
         _refreshSession(session.refreshToken);
@@ -623,9 +632,8 @@ class AuthManager {
       return;
     }
 
-    final delay = expiresAt -
-        DateTime.now().millisecondsSinceEpoch -
-        _refreshBeforeMs;
+    final delay =
+        expiresAt - DateTime.now().millisecondsSinceEpoch - _refreshBeforeMs;
 
     if (delay <= 0) {
       // Already near expiry — refresh immediately.
@@ -680,7 +688,7 @@ class AuthManager {
     final code = err is AuthClientException ? err.code : null;
 
     if (err is AuthClientException) {
-      if (err.isMfaRequired) {
+      if (err.isMfaRequired && (err.mfaTicket?.isNotEmpty ?? false)) {
         _setState(AuthMfaRequired(
           email: err.errorEmail ?? _pendingEmail ?? '',
           mfaTicket: err.mfaTicket ?? '',

@@ -21,8 +21,10 @@ export interface EmailVerificationFormProps {
   email: string;
   /** Callback invoked after successful verification. */
   onSuccess?: () => void;
+  /** Return to the email step. */
+  onBack?: () => void;
   /** Callback to resend the verification email. */
-  onResend?: () => void;
+  onResend?: () => void | Promise<void>;
   /** Optional logo element rendered above the title. */
   logo?: React.ReactNode;
   /** Additional CSS class names. */
@@ -39,6 +41,7 @@ export interface EmailVerificationFormProps {
 export function EmailVerificationForm({
   email,
   onSuccess,
+  onBack,
   onResend,
   logo,
   className,
@@ -49,6 +52,7 @@ export function EmailVerificationForm({
   const [error, setError] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isSuccess, setIsSuccess] = React.useState(false);
+  const [isResending, setIsResending] = React.useState(false);
   const [resendCooldown, setResendCooldown] = React.useState(0);
 
   // Countdown timer for resend cooldown.
@@ -68,7 +72,7 @@ export function EmailVerificationForm({
       setIsSubmitting(true);
 
       try {
-        await client.verifyEmail({ token: otpCode });
+        await client.verifyEmail({ email, code: otpCode });
         setIsSuccess(true);
         onSuccess?.();
       } catch (err) {
@@ -82,7 +86,7 @@ export function EmailVerificationForm({
         setIsSubmitting(false);
       }
     },
-    [client, isSubmitting, onSuccess],
+    [client, email, isSubmitting, onSuccess],
   );
 
   const handleChange = React.useCallback((value: string) => {
@@ -106,14 +110,23 @@ export function EmailVerificationForm({
   );
 
   const handleResend = React.useCallback(async () => {
-    if (resendCooldown > 0) return;
+    if (resendCooldown > 0 || isResending || !email) return;
+    setIsResending(true);
+    setError(null);
     try {
-      onResend?.();
+      if (onResend) await onResend();
+      else await client.resendEmailVerification({ email });
       setResendCooldown(60);
-    } catch {
-      // Silently handle resend errors
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Unable to resend the code. Please try again.",
+      );
+    } finally {
+      setIsResending(false);
     }
-  }, [onResend, resendCooldown]);
+  }, [client, email, onResend, resendCooldown, isResending]);
 
   if (isSuccess) {
     return (
@@ -128,7 +141,7 @@ export function EmailVerificationForm({
             <MailCheck className="h-5 w-5 text-green-600 dark:text-green-400" />
           </div>
           <p className="text-[13px] text-muted-foreground">
-            You can now continue to your account.
+            You can now sign in to your account.
           </p>
         </div>
       </AuthCard>
@@ -143,6 +156,16 @@ export function EmailVerificationForm({
       className={cn(className)}
     >
       <form onSubmit={handleFormSubmit} className="grid gap-3">
+        {onBack && (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={isSubmitting || isResending}
+            onClick={onBack}
+          >
+            Use a different email
+          </Button>
+        )}
         <div className="flex justify-center">
           <InputOTP
             maxLength={6}
@@ -193,6 +216,7 @@ export function EmailVerificationForm({
             <button
               type="button"
               className="font-medium text-foreground underline-offset-4 hover:underline"
+              disabled={isResending || !email}
               onClick={() => void handleResend()}
             >
               Resend

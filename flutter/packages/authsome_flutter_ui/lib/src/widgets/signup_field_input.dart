@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'form_validation.dart';
 import 'package:authsome_flutter/authsome_flutter.dart';
 
 /// Checks [value] against [field]'s validation rules and returns the first
@@ -19,7 +20,18 @@ String? validateSignupField(SignupFieldConfig field, String value) {
       (trimmed.isEmpty || (isToggle && trimmed != 'true'))) {
     return '${field.label} is required';
   }
-  if (rules == null || trimmed.isEmpty) return null;
+  if (trimmed.isEmpty) return null;
+  if ((field.type == 'select' || field.type == 'radio') &&
+      !(field.options?.any((option) => option.value == trimmed) ?? false)) {
+    return 'Choose a valid ${field.label.toLowerCase()}';
+  }
+  if (field.type == 'email' && !validEmail(trimmed)) {
+    return '${field.label} must be an email address';
+  }
+  if (field.type == 'number' && (int.tryParse(trimmed) == null)) {
+    return '${field.label} must be a number';
+  }
+  if (rules == null) return null;
   if (rules.minLen != null && trimmed.length < rules.minLen!) {
     return '${field.label} must be at least ${rules.minLen} characters';
   }
@@ -137,8 +149,8 @@ class SignupFieldInput extends StatelessWidget {
           onChanged: enabled ? (v) => onChanged(v ?? '') : null,
           decoration: InputDecoration(
             labelText: _label,
-            hintText: field.placeholder ??
-                'Select ${field.label.toLowerCase()}',
+            hintText:
+                field.placeholder ?? 'Select ${field.label.toLowerCase()}',
             helperText: field.description,
             errorText: errorText,
             border: const OutlineInputBorder(),

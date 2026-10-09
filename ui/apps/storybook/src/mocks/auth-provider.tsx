@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { AuthContext, type AuthContextValue } from "@authsome/ui-react";
+import { AuthClientError } from "@authsome/ui-core";
 import type {
   AuthState,
   User,
@@ -232,12 +233,18 @@ export function MockAuthProvider({
   user = MOCK_USER,
   clientConfig = null,
   signInBehavior = "authenticated",
-  signUpBehavior = "authenticated",
+  signUpBehavior,
   waitlistStatus = "pending",
 }: MockAuthProviderProps) {
   const [state, setState] = useState<AuthState>(
     stateFromPreset(initialState, user, MOCK_SESSION),
   );
+
+  const stateRef = useRef(state);
+  const updateState = useCallback((next: AuthState) => {
+    stateRef.current = next;
+    setState(next);
+  }, []);
 
   const wait = useCallback(
     () => new Promise<void>((resolve) => setTimeout(resolve, delay)),
@@ -246,26 +253,38 @@ export function MockAuthProvider({
 
   const signIn = useCallback(
     async (email: string, _password: string) => {
-      setState({ status: "loading" });
       await wait();
       if (simulateError) {
-        setState({ status: "error", error: errorMessage });
+        updateState({ status: "error", error: errorMessage });
         throw new Error(errorMessage);
       }
       if (signInBehavior === "mfa_required") {
-        setState({
+        updateState({
           status: "mfa_required",
           email,
           mfaTicket: "mock_mfa_ticket",
           availableMethods: clientConfig?.mfa?.methods ?? ["totp"],
         });
       } else if (signInBehavior === "email_verification_required") {
-        setState({ status: "email_not_verified", email });
+        updateState({ status: "email_not_verified", email });
+        throw new AuthClientError(
+          "Verify your email",
+          403,
+          "email_not_verified",
+        );
       } else {
-        setState({ status: "authenticated", user, session: MOCK_SESSION });
+        updateState({ status: "authenticated", user, session: MOCK_SESSION });
       }
     },
-    [wait, simulateError, errorMessage, user, signInBehavior, clientConfig],
+    [
+      wait,
+      simulateError,
+      errorMessage,
+      user,
+      signInBehavior,
+      clientConfig,
+      updateState,
+    ],
   );
 
   const signUp = useCallback(
@@ -274,45 +293,58 @@ export function MockAuthProvider({
       _password: string,
       _fields?: Record<string, string>,
     ) => {
-      setState({ status: "loading" });
       await wait();
       if (simulateError) {
-        setState({ status: "error", error: errorMessage });
+        updateState({ status: "error", error: errorMessage });
         throw new Error(errorMessage);
       }
-      if (signUpBehavior === "email_verification_required") {
-        setState({ status: "verification_pending", email });
+      if (
+        signUpBehavior === "email_verification_required" ||
+        (!signUpBehavior &&
+          !(
+            clientConfig?.email_verification &&
+            (!clientConfig.email_verification.enabled ||
+              !clientConfig.email_verification.required)
+          ))
+      ) {
+        updateState({ status: "verification_pending", email });
       } else {
-        setState({ status: "authenticated", user, session: MOCK_SESSION });
+        updateState({ status: "authenticated", user, session: MOCK_SESSION });
       }
     },
-    [wait, simulateError, errorMessage, user, signUpBehavior],
+    [
+      wait,
+      simulateError,
+      errorMessage,
+      user,
+      signUpBehavior,
+      clientConfig,
+      updateState,
+    ],
   );
 
   const signOut = useCallback(async () => {
-    setState({ status: "loading" });
+    updateState({ status: "loading" });
     await wait();
-    setState({ status: "unauthenticated" });
-  }, [wait]);
+    updateState({ status: "unauthenticated" });
+  }, [wait, updateState]);
 
   const submitMFACode = useCallback(
     async (_enrollmentId: string, _code: string) => {
-      setState({ status: "loading" });
       await wait();
       if (simulateError) {
-        setState(stateFromPreset("mfa_required", user, MOCK_SESSION));
+        updateState(stateFromPreset("mfa_required", user, MOCK_SESSION));
         throw new Error("Invalid MFA code");
       }
-      setState({ status: "authenticated", user, session: MOCK_SESSION });
+      updateState({ status: "authenticated", user, session: MOCK_SESSION });
     },
-    [wait, simulateError, user],
+    [wait, simulateError, user, updateState],
   );
 
   const submitRecoveryCode = useCallback(
     async (_code: string) => {
-      setState({ status: "loading" });
       await wait();
-      setState({ status: "authenticated", user, session: MOCK_SESSION });
+      updateState({ status: "authenticated", user, session: MOCK_SESSION });
     },
     [wait, user],
   );
@@ -327,7 +359,7 @@ export function MockAuthProvider({
       verifyEmail: async () => {
         await wait();
         if (simulateError) throw new Error("Invalid verification code");
-        setState({ status: "authenticated", user, session: MOCK_SESSION });
+        updateState({ status: "authenticated", user, session: MOCK_SESSION });
         return { status: "ok" };
       },
       forgotPassword: async () => {
@@ -435,7 +467,9 @@ export function MockAuthProvider({
   const value = useMemo<AuthContextValue>(
     () => ({
       state,
-      manager: {} as AuthContextValue["manager"],
+      manager: {
+        getState: () => stateRef.current,
+      } as AuthContextValue["manager"],
       client: mockClient,
       user: currentUser,
       session: currentSession,
@@ -450,7 +484,7 @@ export function MockAuthProvider({
       },
       completeSSOLogin: async () => {
         await wait();
-        setState({ status: "authenticated", user, session: MOCK_SESSION });
+        updateState({ status: "authenticated", user, session: MOCK_SESSION });
       },
       signUp,
       signOut,
@@ -483,6 +517,7 @@ export function MockAuthProvider({
       user,
       simulateError,
       errorMessage,
+      updateState,
     ],
   );
 

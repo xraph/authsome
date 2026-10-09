@@ -24,9 +24,7 @@ export interface SignInProps {
    * {@link SSOResolution} to route an email's domain to its IdP
    * (identifier-first), or `null` to fall through to password.
    */
-  resolveSSO?: (
-    email: string,
-  ) => Promise<SSOResolution | null | undefined>;
+  resolveSSO?: (email: string) => Promise<SSOResolution | null | undefined>;
   /** Social/OAuth providers to display. Auto-derived from config when omitted. */
   socialProviders?: SocialProvider[];
   /** Override social login click handler. */
@@ -110,7 +108,7 @@ export function SignIn({
   if (subPath === "reset-password") {
     const token =
       typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("token") ?? ""
+        ? (new URLSearchParams(window.location.search).get("token") ?? "")
         : "";
 
     return (
@@ -187,18 +185,15 @@ function VerifyEmailRoute({
   logo?: React.ReactNode;
   className?: string;
 }) {
-  const { resendVerification } = useAuth();
+  const { client } = useAuth();
   const email =
     typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("email") ?? ""
+      ? (new URLSearchParams(window.location.search).get("email") ?? "")
       : "";
 
-  const handleResend = React.useCallback(() => {
-    if (!email) return;
-    void resendVerification(email).catch(() => {
-      // Surfaced via the form's own error handling; cooldown still applies.
-    });
-  }, [email, resendVerification]);
+  const handleResend = React.useCallback(async () => {
+    if (email) await client.resendEmailVerification({ email });
+  }, [email, client]);
 
   const handleVerified = React.useCallback(() => {
     // verifyEmail does not issue a session — bounce back to sign-in so the
@@ -226,4 +221,3 @@ function VerifyEmailRoute({
     />
   );
 }
-

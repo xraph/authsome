@@ -45,14 +45,14 @@ class CaptchaField extends StatelessWidget {
 
   /// Whether [config] asks the form to collect a token before submitting.
   static bool isRequired(CaptchaConfig? config) =>
-      config != null &&
-      config.required &&
-      (config.siteKey?.isNotEmpty ?? false);
+      config != null && config.required;
 
   @override
   Widget build(BuildContext context) {
     if (builder != null) return builder!(context, config, onToken);
-    if (config.provider == 'turnstile' && turnstileSupported) {
+    if (config.provider == 'turnstile' &&
+        turnstileSupported &&
+        (config.siteKey?.isNotEmpty ?? false)) {
       return Center(
         child: TurnstileView(
           siteKey: config.siteKey!,
@@ -63,8 +63,7 @@ class CaptchaField extends StatelessWidget {
       );
     }
     return const ErrorDisplay(
-      error: 'This app requires a captcha that this platform cannot show. '
-          'Pass a captchaBuilder to enable it.',
+      error: 'Verification is unavailable. Please try again later.',
     );
   }
 }

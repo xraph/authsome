@@ -21,6 +21,7 @@ dependencies:
   web: ^1.1.0
 
 dev_dependencies:
+  http: ^1.6.0
   flutter_lints: ^4.0.0
   flutter_test:
     sdk: flutter

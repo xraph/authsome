@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:authsome_flutter/authsome_flutter.dart';
 
 import '../theme/auth_theme.dart';
+import '../widgets/form_validation.dart';
 import '../widgets/auth_card.dart';
 import '../widgets/captcha_field.dart';
 import '../widgets/error_display.dart';
@@ -35,6 +36,9 @@ import '../widgets/loading_indicator.dart';
 class SignUpForm extends StatefulWidget {
   /// Called when sign-up completes successfully.
   final VoidCallback? onSuccess;
+
+  /// Called after email verification, when the user can sign in.
+  final VoidCallback? onVerificationComplete;
 
   /// Called when the user taps the "Sign in" link.
   final VoidCallback? onSignInTap;
@@ -93,6 +97,7 @@ class SignUpForm extends StatefulWidget {
   const SignUpForm({
     this.auth,
     this.onSuccess,
+    this.onVerificationComplete,
     this.onSignInTap,
     this.socialProviders,
     this.onSocialLogin,
@@ -125,6 +130,8 @@ class _SignUpFormState extends State<SignUpForm> {
   bool _isSubmitting = false;
   WaitlistStatus? _waitlistStatus;
   String? _captchaToken;
+  int _captchaAttempt = 0;
+  bool _successReported = false;
 
   /// Email awaiting verification, set once sign-up lands in
   /// [AuthVerificationPending].
@@ -169,7 +176,10 @@ class _SignUpFormState extends State<SignUpForm> {
     final auth = _auth!;
 
     if (auth.state is AuthAuthenticated) {
-      widget.onSuccess?.call();
+      if (!_successReported) {
+        _successReported = true;
+        widget.onSuccess?.call();
+      }
       return;
     }
 
@@ -195,8 +205,8 @@ class _SignUpFormState extends State<SignUpForm> {
   Future<void> _onContinue() async {
     if (_isSubmitting) return;
     final email = _emailController.text.trim().toLowerCase();
-    if (email.isEmpty) {
-      setState(() => _error = 'Please enter your email');
+    if (!validEmail(email)) {
+      setState(() => _error = 'Please enter a valid email address');
       return;
     }
     setState(() {
@@ -210,6 +220,11 @@ class _SignUpFormState extends State<SignUpForm> {
         config = await _auth!.manager.fetchClientConfig();
         if (!mounted) return;
       }
+      if (config?.signupEnabled == false) {
+        setState(() => _error = "Signup isn't available for this app.");
+        return;
+      }
+      if (config?.password?.enabled == false) return;
       if (config?.waitlist?.enabled == true) {
         final status = await _auth!.client.joinWaitlistWithStatus(email);
         if (!mounted) return;
@@ -240,6 +255,12 @@ class _SignUpFormState extends State<SignUpForm> {
   }
 
   Future<void> _onSignUp() async {
+    if (_isSubmitting ||
+        _auth?.clientConfig?.signupEnabled == false ||
+        _auth?.clientConfig?.password?.enabled == false) {
+      return;
+    }
+    _successReported = false;
     final name = _nameController.text.trim();
     final password = _passwordController.text;
     final fields = _signupFields();
@@ -281,8 +302,9 @@ class _SignUpFormState extends State<SignUpForm> {
 
     try {
       final values = <String, String>{
-        for (final e in _fieldValues.entries)
-          if (e.value.isNotEmpty) e.key: e.value,
+        for (final field in fields ?? const <SignupFieldConfig>[])
+          if ((_fieldValues[field.key] ?? '').isNotEmpty)
+            field.key: _fieldValues[field.key]!,
       };
       await _auth!.signUp(
         _emailController.text.trim(),
@@ -299,15 +321,26 @@ class _SignUpFormState extends State<SignUpForm> {
           _isSubmitting = false;
         });
       }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _captchaToken = null;
+          _captchaAttempt++;
+        });
+      }
     }
   }
 
   void _goBack() {
+    if (_isSubmitting) return;
     setState(() {
       _step = 0;
       _error = null;
       _nameController.clear();
       _passwordController.clear();
+      _captchaToken = null;
+      _captchaAttempt++;
     });
   }
 
@@ -339,6 +372,7 @@ class _SignUpFormState extends State<SignUpForm> {
   }
 
   List<SocialProvider> _resolveSocialProviders() {
+    if (widget.onSocialLogin == null) return const [];
     if (widget.socialProviders != null) return widget.socialProviders!;
     final config = _auth?.clientConfig;
     if (config?.social?.enabled != true) return const [];
@@ -369,8 +403,18 @@ class _SignUpFormState extends State<SignUpForm> {
         email: verifyEmail,
         logo: widget.logo,
         align: widget.align,
-        onSuccess: widget.onSuccess,
+        onSuccess: widget.onVerificationComplete ?? widget.onSignInTap,
       );
+    }
+
+    if (_auth?.clientConfig?.signupEnabled == false) {
+      return AuthCard(
+          title: "Signup isn't available",
+          description: "New accounts aren't available for this app.",
+          logo: widget.logo,
+          align: widget.align,
+          footer: _buildFooter(context),
+          child: const SizedBox.shrink());
     }
 
     final theme = AuthTheme.of(context);
@@ -601,9 +645,13 @@ class _SignUpFormState extends State<SignUpForm> {
         if (captchaRequired) ...[
           SizedBox(height: theme.fieldSpacing),
           CaptchaField(
+            key: ValueKey(
+                '${captcha?.provider}:${captcha?.siteKey}:$_captchaAttempt'),
             config: captcha!,
             builder: widget.captchaBuilder,
-            onToken: (token) => setState(() => _captchaToken = token),
+            onToken: (token) {
+              if (mounted) setState(() => _captchaToken = token);
+            },
           ),
         ],
         SizedBox(height: theme.fieldSpacing),

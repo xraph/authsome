@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useClientConfig } from "@authsome/ui-react";
+import { authFlowUrl } from "../lib/auth-flow-url";
 import { redirectAfterAuth } from "../lib/redirect-after-auth";
 import { useSubPath } from "../lib/use-sub-path";
 import { SignUpForm } from "./sign-up-form";
@@ -61,10 +61,6 @@ export function SignUp({
   className,
 }: SignUpProps) {
   const subPath = useSubPath(path);
-  const { config } = useClientConfig();
-  const emailVerificationRequired =
-    config?.email_verification?.enabled && config?.email_verification?.required;
-
   const handleSuccess = React.useCallback(() => {
     if (onSuccess) {
       onSuccess();
@@ -73,25 +69,38 @@ export function SignUp({
     redirectAfterAuth();
   }, [onSuccess]);
 
-  const handleSignUpSuccess = React.useCallback(() => {
-    if (emailVerificationRequired) {
-      // Redirect to verify-email sub-route after signup.
-      window.location.href = `${path}/verify-email`;
-      return;
-    }
-    handleSuccess();
-  }, [emailVerificationRequired, path, handleSuccess]);
+  const handleVerificationRequired = React.useCallback(
+    (email: string) => {
+      window.location.assign(
+        authFlowUrl(
+          `${path}/verify-email`,
+          window.location.origin,
+          window.location.search,
+          email,
+        ),
+      );
+    },
+    [path],
+  );
 
   if (subPath === "verify-email") {
     const email =
       typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("email") ?? ""
+        ? (new URLSearchParams(window.location.search).get("email") ?? "")
         : "";
 
     return (
       <EmailVerificationForm
         email={email}
-        onSuccess={handleSuccess}
+        onSuccess={() => {
+          window.location.assign(
+            authFlowUrl(
+              signInUrl,
+              window.location.origin,
+              window.location.search,
+            ),
+          );
+        }}
         logo={logo}
         className={className}
       />
@@ -100,7 +109,8 @@ export function SignUp({
 
   return (
     <SignUpForm
-      onSuccess={handleSignUpSuccess}
+      onSuccess={handleSuccess}
+      onVerificationRequired={handleVerificationRequired}
       signInUrl={signInUrl}
       forgotPasswordUrl={`${signInUrl}/forgot-password`}
       socialProviders={socialProviders}
@@ -113,4 +123,3 @@ export function SignUp({
     />
   );
 }
-

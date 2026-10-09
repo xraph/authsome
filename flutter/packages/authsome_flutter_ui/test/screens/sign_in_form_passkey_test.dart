@@ -124,6 +124,7 @@ void main() {
       child: SignInForm(
         auth: mockAuth,
         socialProviders: const [SocialProvider(id: 'google', name: 'Google')],
+        onSocialLogin: (_) {},
       ),
     );
 

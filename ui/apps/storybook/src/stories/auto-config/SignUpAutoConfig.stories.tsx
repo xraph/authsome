@@ -137,3 +137,50 @@ export const ExplicitPropsOverride: Story = {
     onSocialLogin: fn(),
   },
 };
+
+/** Closed signup keeps the sign-in link available. */
+export const SignupClosed: Story = {
+  decorators: [
+    (Story) => (
+      <MockAuthProvider clientConfig={{ signup_enabled: false }}>
+        <Story />
+      </MockAuthProvider>
+    ),
+  ],
+  args: defaultArgs,
+};
+
+/** Configured consent must be accepted before signup. */
+export const RequiredConsent: Story = {
+  decorators: [
+    (Story) => (
+      <MockAuthProvider
+        clientConfig={{
+          signup_fields: [
+            {
+              key: "plan",
+              label: "Plan",
+              type: "radio",
+              order: 1,
+              options: [
+                { label: "Personal", value: "personal" },
+                { label: "Team", value: "team" },
+              ],
+              validation: { required: true },
+            },
+            {
+              key: "terms",
+              label: "Accept the terms",
+              type: "checkbox",
+              order: 2,
+              validation: { required: true },
+            },
+          ],
+        }}
+      >
+        <Story />
+      </MockAuthProvider>
+    ),
+  ],
+  args: defaultArgs,
+};

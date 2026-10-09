@@ -22,6 +22,7 @@ const _user = {
   'id': 'u_1',
   'last_name': 'User',
   'phone_verified': false,
+  'roles': <String>[],
   'updated_at': '2024-01-01T00:00:00Z',
 };
 
@@ -37,7 +38,7 @@ MockClient _recording(List<http.Request> seen, {String? body}) {
   return MockClient((req) async {
     seen.add(req);
     return http.Response(
-      body ?? _authBody,
+      body ?? (req.url.path == '/v1/me' ? jsonEncode(_user) : _authBody),
       200,
       headers: {'content-type': 'application/json'},
     );
@@ -196,8 +197,8 @@ void main() {
       await manager.signUp('new@example.com', 'pw');
 
       expect(manager.state, isA<AuthVerificationPending>());
-      expect((manager.state as AuthVerificationPending).email,
-          'new@example.com');
+      expect(
+          (manager.state as AuthVerificationPending).email, 'new@example.com');
       expect(manager.getSessionToken(), isNull,
           reason: 'the unverified session must not be kept');
     });

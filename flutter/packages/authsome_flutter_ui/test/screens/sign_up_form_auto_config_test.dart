@@ -123,7 +123,8 @@ void main() {
       ),
     );
 
-    await pumpAuthSomeApp(tester, child: SignUpForm(auth: mockAuth));
+    await pumpAuthSomeApp(tester,
+        child: SignUpForm(auth: mockAuth, onSocialLogin: (_) {}));
 
     expect(find.byType(SocialButtons), findsOneWidget);
     expect(find.widgetWithText(TextField, 'Email'), findsNothing);
@@ -193,7 +194,8 @@ void main() {
 
   testWidgets('branded title uses the app name', (tester) async {
     final mockAuth = buildIdleMock(
-      clientConfig: const ClientConfig(branding: BrandingConfig(appName: 'Acme')),
+      clientConfig:
+          const ClientConfig(branding: BrandingConfig(appName: 'Acme')),
     );
 
     await pumpAuthSomeApp(tester, child: SignUpForm(auth: mockAuth));

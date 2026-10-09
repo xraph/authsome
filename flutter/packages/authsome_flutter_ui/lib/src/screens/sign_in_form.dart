@@ -10,6 +10,9 @@ import 'package:flutter/material.dart';
 import 'package:authsome_flutter/authsome_flutter.dart';
 
 import '../theme/auth_theme.dart';
+import '../widgets/form_validation.dart';
+import 'mfa_challenge_form.dart';
+import 'email_verification_form.dart';
 import '../platform/browser.dart';
 import '../widgets/auth_card.dart';
 import '../widgets/captcha_field.dart';
@@ -191,9 +194,11 @@ class _SignInFormState extends State<SignInForm> {
 
   _SignInStep _step = _SignInStep.email;
   String? _error;
-  String? _info;
   bool _isSubmitting = false;
   String? _captchaToken;
+  int _captchaAttempt = 0;
+  bool _showMfa = false;
+  bool _successReported = false;
 
   AuthNotifier? _auth;
   bool _missingProvider = false;
@@ -226,35 +231,64 @@ class _SignInFormState extends State<SignInForm> {
     final auth = _auth!;
 
     if (auth.state is AuthAuthenticated) {
-      widget.onSuccess?.call();
+      if (!_successReported) {
+        _successReported = true;
+        widget.onSuccess?.call();
+      }
       return;
     }
-
-    if (auth.error != null && mounted) {
-      setState(() {
+    setState(() {
+      if (auth.state is AuthMfaRequired) {
+        _showMfa = true;
+        _isSubmitting = false;
+      }
+      if (auth.error != null) {
         _error = auth.error;
         _isSubmitting = false;
-      });
-    }
+      }
+    });
   }
 
-  void _onContinue() {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      setState(() => _error = 'Please enter your email');
+  Future<void> _onContinue() async {
+    if (_isSubmitting) return;
+    final email = _emailController.text.trim().toLowerCase();
+    if (!validEmail(email)) {
+      setState(() => _error = 'Please enter a valid email address');
       return;
     }
     setState(() {
       _error = null;
-      _step = _SignInStep.password;
+      _isSubmitting = true;
     });
-    // Focus the password field after the transition.
-    Future.delayed(const Duration(milliseconds: 350), () {
-      if (mounted) _passwordFocusNode.requestFocus();
-    });
+    try {
+      var config = _auth!.clientConfig;
+      if (config == null && _auth!.client.publishableKey != null) {
+        config = await _auth!.manager.fetchClientConfig();
+      }
+      if (!mounted || config?.password?.enabled == false) return;
+      setState(() {
+        _emailController.text = email;
+        _step = _SignInStep.password;
+      });
+      Future.delayed(const Duration(milliseconds: 350), () {
+        if (mounted) _passwordFocusNode.requestFocus();
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = error is AuthClientException
+            ? error.message
+            : 'Unable to load sign-in options. Please try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   Future<void> _onSignIn() async {
+    if (_isSubmitting || _auth?.clientConfig?.password?.enabled == false) {
+      return;
+    }
+    _successReported = false;
     final password = _passwordController.text;
     if (password.isEmpty) {
       setState(() => _error = 'Please enter your password');
@@ -285,7 +319,6 @@ class _SignInFormState extends State<SignInForm> {
         setState(() {
           _step = _SignInStep.verify;
           _error = null;
-          _info = null;
           _isSubmitting = false;
         });
         return;
@@ -301,47 +334,33 @@ class _SignInFormState extends State<SignInForm> {
           _isSubmitting = false;
         });
       }
-    }
-  }
-
-  Future<void> _onResendVerification() async {
-    if (_isSubmitting) return;
-    setState(() {
-      _isSubmitting = true;
-      _error = null;
-      _info = null;
-    });
-    try {
-      await _auth!.resendVerification(_emailController.text.trim());
+    } finally {
       if (mounted) {
         setState(() {
-          _info = 'Verification email sent. Check your inbox.';
           _isSubmitting = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e is AuthClientException ? e.message : e.toString();
-          _isSubmitting = false;
+          _captchaToken = null;
+          _captchaAttempt++;
         });
       }
     }
   }
 
   void _goBack() {
+    if (_isSubmitting) return;
     setState(() {
       _step = _SignInStep.email;
       _error = null;
-      _info = null;
       _passwordController.clear();
+      _captchaToken = null;
+      _captchaAttempt++;
     });
   }
 
   Future<void> _onSendMagicLink() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      setState(() => _error = 'Please enter your email');
+    if (_isSubmitting) return;
+    final email = _emailController.text.trim().toLowerCase();
+    if (!validEmail(email)) {
+      setState(() => _error = 'Please enter a valid email address');
       return;
     }
     setState(() {
@@ -349,6 +368,20 @@ class _SignInFormState extends State<SignInForm> {
       _isSubmitting = true;
     });
     try {
+      var config = _auth!.clientConfig;
+      if (config == null && _auth!.client.publishableKey != null) {
+        config = await _auth!.manager.fetchClientConfig();
+      }
+      if (!(widget.showMagicLink ?? config?.magiclink?.enabled ?? false)) {
+        if (mounted) {
+          setState(() {
+            _error = "Email sign-in links aren't available for this app.";
+            _isSubmitting = false;
+          });
+        }
+        return;
+      }
+      _emailController.text = email;
       await _auth!.sendMagicLink(email);
       if (!mounted) return;
       setState(() {
@@ -365,6 +398,7 @@ class _SignInFormState extends State<SignInForm> {
   }
 
   Future<void> _onSSOTap(String connectionId) async {
+    if (_isSubmitting) return;
     final custom = widget.onSSOLogin;
     if (custom != null) {
       custom(connectionId);
@@ -409,6 +443,7 @@ class _SignInFormState extends State<SignInForm> {
   }
 
   List<SocialProvider> _resolveSocialProviders() {
+    if (widget.onSocialLogin == null) return const [];
     if (widget.socialProviders != null) return widget.socialProviders!;
     final config = _auth?.clientConfig;
     if (config?.social?.enabled != true) return const [];
@@ -426,11 +461,26 @@ class _SignInFormState extends State<SignInForm> {
         logo: widget.logo,
         align: widget.align,
         child: const ErrorDisplay(
-          error:
-              'AuthProvider not found in widget tree. Wrap your app in '
+          error: 'AuthProvider not found in widget tree. Wrap your app in '
               'AuthProvider, or pass an `auth:` notifier to SignInForm.',
         ),
       );
+    }
+
+    if (_showMfa || _auth?.state is AuthMfaRequired) {
+      return MfaChallengeForm(
+          auth: _auth, logo: widget.logo, align: widget.align);
+    }
+
+    if (_step == _SignInStep.verify) {
+      return EmailVerificationForm(
+          auth: _auth,
+          email: _emailController.text.trim(),
+          logo: widget.logo,
+          align: widget.align,
+          resendLabel: 'Resend',
+          onSuccess: _goBack,
+          onBack: _goBack);
     }
 
     final theme = AuthTheme.of(context);
@@ -439,10 +489,9 @@ class _SignInFormState extends State<SignInForm> {
     final passkeyAuthenticator =
         widget.passkeyAuthenticator ?? defaultPasskeyAuthenticator();
     final config = _auth?.clientConfig;
-    final showPasskey = (widget.showPasskey ??
-            config?.passkey?.enabled ??
-            false) &&
-        passkeyAuthenticator.isAvailable;
+    final showPasskey =
+        (widget.showPasskey ?? config?.passkey?.enabled ?? false) &&
+            passkeyAuthenticator.isAvailable;
     final showPassword = config?.password?.enabled ?? true;
     final showMagicLink =
         widget.showMagicLink ?? config?.magiclink?.enabled ?? false;
@@ -459,7 +508,9 @@ class _SignInFormState extends State<SignInForm> {
         duration: const Duration(milliseconds: 300),
         switchInCurve: Curves.easeOut,
         switchOutCurve: Curves.easeIn,
-        child: switch (_step) {
+        child: switch (!showPassword && _step == _SignInStep.password
+            ? _SignInStep.email
+            : _step) {
           _SignInStep.email => _buildEmailStep(
               context,
               theme,
@@ -478,87 +529,11 @@ class _SignInFormState extends State<SignInForm> {
               showMagicLink: showMagicLink,
               captcha: config?.captcha,
             ),
-          _SignInStep.verify => _buildVerifyStep(context, theme, colorScheme),
+          _SignInStep.verify => const SizedBox.shrink(),
           _SignInStep.magicLinkSent =>
             _buildMagicLinkSentStep(context, theme, colorScheme),
         },
       ),
-    );
-  }
-
-  Widget _buildVerifyStep(
-    BuildContext context,
-    AuthThemeData theme,
-    ColorScheme colorScheme,
-  ) {
-    return Column(
-      key: const ValueKey('sign-in-verify-step'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back, size: 20),
-              onPressed: _isSubmitting ? null : _goBack,
-              tooltip: 'Back',
-              style: IconButton.styleFrom(
-                padding: EdgeInsets.zero,
-                minimumSize: const Size(36, 36),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                _emailController.text.trim(),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: theme.fieldSpacing),
-        Text(
-          'Verify your email',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Please verify your email address before signing in. Check your inbox for a verification link.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-        ),
-        SizedBox(height: theme.fieldSpacing),
-        ErrorDisplay(error: _error),
-        if (_info != null) ...[
-          Container(
-            width: double.infinity,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: colorScheme.secondaryContainer,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              _info!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSecondaryContainer,
-                  ),
-            ),
-          ),
-          SizedBox(height: theme.fieldSpacing),
-        ],
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton(
-            onPressed: _isSubmitting ? null : _onResendVerification,
-            child: const Text('Resend'),
-          ),
-        ),
-      ],
     );
   }
 
@@ -607,7 +582,6 @@ class _SignInFormState extends State<SignInForm> {
           PasskeyLoginButton(
             auth: _auth,
             authenticator: passkeyAuthenticator,
-            onSuccess: widget.onSuccess,
           ),
         if (hasAuthOptions && showEmailField) ...[
           SizedBox(height: theme.fieldSpacing),
@@ -748,21 +722,28 @@ class _SignInFormState extends State<SignInForm> {
           onSubmitted: _onSignIn,
         ),
         const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: _isSubmitting
-                ? null
-                : (widget.onForgotPasswordTap ?? () {}),
-            child: Text(widget.forgotPasswordLabel),
+        if (widget.onForgotPasswordTap != null ||
+            (canRedirectBrowser && widget.forgotPasswordUrl != null))
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _isSubmitting
+                  ? null
+                  : (widget.onForgotPasswordTap ??
+                      () => redirectBrowser(widget.forgotPasswordUrl!)),
+              child: Text(widget.forgotPasswordLabel),
+            ),
           ),
-        ),
         if (captchaRequired) ...[
           SizedBox(height: theme.fieldSpacing),
           CaptchaField(
+            key: ValueKey(
+                '${captcha?.provider}:${captcha?.siteKey}:$_captchaAttempt'),
             config: captcha!,
             builder: widget.captchaBuilder,
-            onToken: (token) => setState(() => _captchaToken = token),
+            onToken: (token) {
+              if (mounted) setState(() => _captchaToken = token);
+            },
           ),
         ],
         SizedBox(height: theme.fieldSpacing),
@@ -784,12 +765,17 @@ class _SignInFormState extends State<SignInForm> {
   }
 
   Widget? _buildFooter(BuildContext context) {
-    final hasSignUp = widget.onSignUpTap != null || widget.signUpUrl != null;
+    if (_auth?.clientConfig?.signupEnabled == false) return null;
+    final signupAction = widget.onSignUpTap ??
+        (canRedirectBrowser && widget.signUpUrl != null
+            ? () => redirectBrowser(widget.signUpUrl!)
+            : null);
+    final hasSignUp = signupAction != null;
     if (!hasSignUp) return null;
 
     return Center(
       child: TextButton(
-        onPressed: widget.onSignUpTap,
+        onPressed: signupAction,
         child: Text(widget.signUpLabel),
       ),
     );

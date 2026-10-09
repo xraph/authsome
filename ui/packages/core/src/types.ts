@@ -77,7 +77,12 @@ export type AuthState =
    * `availableMethods` is what the backend reports as enrolled and
    * ready to validate — typically ["totp"] today.
    */
-  | { status: "mfa_required"; email: string; mfaTicket: string; availableMethods: string[] }
+  | {
+      status: "mfa_required";
+      email: string;
+      mfaTicket: string;
+      availableMethods: string[];
+    }
   /**
    * Returned when a sign-in attempt is rejected because the user's email
    * has not yet been verified, or when sign-up succeeded with email
@@ -174,6 +179,8 @@ export interface SignupFieldConfig {
  * can auto-configure their UI without manual props.
  */
 export interface ClientConfig {
+  /** Whether new accounts can be created. Defaults to true when omitted. */
+  signup_enabled?: boolean;
   version?: string;
   app_id?: string;
   branding?: {

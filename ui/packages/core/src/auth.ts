@@ -6,8 +6,20 @@
  * class and expose reactive state.
  */
 
-import { AuthClient, type SignInRequest, type SignUpRequest, AuthClientError } from "./client";
-import type { AuthConfig, AuthState, ClientConfig, Session, TokenStorage, User } from "./types";
+import {
+  AuthClient,
+  type SignInRequest,
+  type SignUpRequest,
+  AuthClientError,
+} from "./client";
+import type {
+  AuthConfig,
+  AuthState,
+  ClientConfig,
+  Session,
+  TokenStorage,
+  User,
+} from "./types";
 
 /**
  * Storage key under which the whole Session (tokens + expiry) is persisted.
@@ -94,7 +106,9 @@ function toSession(res: {
   return {
     session_token: res.session_token,
     refresh_token: res.refresh_token,
-    expires_at: res.expires_at ?? new Date(Date.now() + DEFAULT_SESSION_TTL_MS).toISOString(),
+    expires_at:
+      res.expires_at ??
+      new Date(Date.now() + DEFAULT_SESSION_TTL_MS).toISOString(),
   };
 }
 
@@ -117,7 +131,10 @@ function isAuthRejection(err: unknown): boolean {
 // storage adapter in runtimes without Web Locks.
 const refreshQueues = new Map<string, Promise<void>>();
 
-async function withRefreshLock(key: string, operation: () => Promise<void>): Promise<void> {
+async function withRefreshLock(
+  key: string,
+  operation: () => Promise<void>,
+): Promise<void> {
   if (typeof navigator !== "undefined" && navigator.locks) {
     await navigator.locks.request(key, operation);
     return;
@@ -154,15 +171,23 @@ export class AuthManager {
   private active = true;
   private smsCeremonyVersion = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
-  private onError?: (error: { error: string; code?: number; type?: string }) => void;
+  private onError?: (error: {
+    error: string;
+    code?: number;
+    type?: string;
+  }) => void;
 
   private publishableKey?: string;
+  private configCacheKey: string;
   private clientConfig: ClientConfig | null = null;
   private configListeners = new Set<(config: ClientConfig | null) => void>();
   private configFetchPromise: Promise<ClientConfig> | null = null;
 
   constructor(config: AuthConfig) {
     this.client = new AuthClient(config);
+    let baseEnd = config.baseURL.length;
+    while (baseEnd > 0 && config.baseURL[baseEnd - 1] === "/") baseEnd--;
+    this.configCacheKey = `${CONFIG_KEY}:${JSON.stringify([config.baseURL.slice(0, baseEnd), config.publishableKey ?? ""])}`;
     this.refreshLockKey = `authsome:refresh:${config.baseURL}:${config.publishableKey ?? ""}`;
     this.storage = config.storage ?? createMemoryStorage();
     this.onError = config.onError;
@@ -216,7 +241,9 @@ export class AuthManager {
     let session: Session | undefined;
     // Kick off config fetch in parallel (non-blocking).
     if (this.publishableKey && !this.clientConfig) {
-      void this.fetchClientConfig();
+      void this.fetchClientConfig().catch(() => {
+        /* Continue can retry configuration. */
+      });
     }
 
     try {
@@ -288,7 +315,9 @@ export class AuthManager {
     this.setState({ status: "unknown", session });
     this.clearRefreshTimer();
     if (this.active) {
-      this.refreshTimer = setTimeout(() => { void this.initialize(); }, REFRESH_RETRY_BASE_MS);
+      this.refreshTimer = setTimeout(() => {
+        void this.initialize();
+      }, REFRESH_RETRY_BASE_MS);
     }
   }
 
@@ -312,9 +341,10 @@ export class AuthManager {
         err.type === "mfa_required" &&
         err.details
       ) {
-        const ticket = typeof err.details["mfa_ticket"] === "string"
-          ? (err.details["mfa_ticket"] as string)
-          : "";
+        const ticket =
+          typeof err.details["mfa_ticket"] === "string"
+            ? (err.details["mfa_ticket"] as string)
+            : "";
         const methods = Array.isArray(err.details["available_methods"])
           ? (err.details["available_methods"] as string[])
           : [];
@@ -335,10 +365,7 @@ export class AuthManager {
       // Specifically surface email_not_verified as a first-class state
       // so the UI can swap to a "verify your email" panel rather than a
       // generic error.
-      if (
-        err instanceof AuthClientError &&
-        err.type === "email_not_verified"
-      ) {
+      if (err instanceof AuthClientError && err.type === "email_not_verified") {
         this.setState({
           status: "email_not_verified",
           email: credentials.email ?? "",
@@ -359,7 +386,10 @@ export class AuthManager {
    * allowlisted https origin (or localhost). Omit it to use the server's
    * default `/sso/callback` landing.
    */
-  async startSSOLogin(connectionId: string, returnUrl?: string): Promise<string> {
+  async startSSOLogin(
+    connectionId: string,
+    returnUrl?: string,
+  ): Promise<string> {
     const res = await this.client.startSSOLogin(connectionId, returnUrl);
     return res.login_url;
   }
@@ -384,17 +414,24 @@ export class AuthManager {
   async signUp(data: SignUpRequest): Promise<void> {
     // See signIn() comment — forms manage their own loading state.
     try {
-      // The signup response always includes a session token, but when the
-      // backend has email verification enabled (the default) that token is
-      // unusable until the email is verified. The UI must NOT route the
-      // user into the signed-in shell — it should show a "check your inbox"
-      // panel. We therefore discard the session entirely and surface a
-      // verification_pending state.
-      //
-      // Enumeration-resistance note: when a duplicate signup is detected,
-      // the backend returns a byte-shape-identical 201 with a synthetic
-      // session token. We treat both real and duplicate signups the same.
-      await this.client.signUp(data);
+      const config =
+        this.clientConfig ??
+        (this.publishableKey ? await this.fetchClientConfig() : null);
+      if (config?.signup_enabled === false)
+        throw new Error("Signup isn't available for this app.");
+      const res = await this.client.signUp(data);
+      const verification = config?.email_verification;
+      if (verification && (!verification.enabled || !verification.required)) {
+        // Validate the returned session before persisting it. Duplicate signups
+        // receive synthetic tokens with the same response shape.
+        try {
+          const user = await this.client.getMe(res.session_token);
+          await this.handleAuthResponse(user, toSession(res));
+          return;
+        } catch (err) {
+          if (!isAuthRejection(err)) throw err;
+        }
+      }
       this.setState({
         status: "verification_pending",
         email: data.email,
@@ -457,7 +494,9 @@ export class AuthManager {
   async submitMFAChallenge(code: string): Promise<void> {
     const state = this.state;
     if (state.status !== "mfa_required") {
-      throw new Error("auth: submitMFAChallenge called outside the mfa_required state");
+      throw new Error(
+        "auth: submitMFAChallenge called outside the mfa_required state",
+      );
     }
     try {
       const res = await this.client.challengeMFA({
@@ -494,10 +533,16 @@ export class AuthManager {
   }
 
   /** Send an SMS code for an already authenticated session. */
-  async sendSMSCode(): Promise<{ sent: boolean; phone_masked: string; expires_in_seconds: number }> {
+  async sendSMSCode(): Promise<{
+    sent: boolean;
+    phone_masked: string;
+    expires_in_seconds: number;
+  }> {
     const state = this.requireSMSAuthState();
     const version = this.smsCeremonyVersion;
-    const result = await this.client.sendSMSCodeForMFA(state.session.session_token);
+    const result = await this.client.sendSMSCodeForMFA(
+      state.session.session_token,
+    );
     this.checkSMSAuthState(state, version);
     if (!result.sent) throw new Error("SMS code was not sent");
     return result;
@@ -507,22 +552,36 @@ export class AuthManager {
   async submitSMSCode(code: string): Promise<void> {
     const state = this.requireSMSAuthState();
     const version = this.smsCeremonyVersion;
-    const result = await this.client.verifySMSCodeForMFA(code, state.session.session_token);
+    const result = await this.client.verifySMSCodeForMFA(
+      code,
+      state.session.session_token,
+    );
     this.checkSMSAuthState(state, version);
     if (!result.verified || result.method !== "sms") {
       throw new Error("SMS verification failed");
     }
   }
 
-  private requireSMSAuthState(): Extract<AuthState, { status: "authenticated" }> {
-    if (!this.active || this.state.status !== "authenticated" || !this.state.session.session_token) {
+  private requireSMSAuthState(): Extract<
+    AuthState,
+    { status: "authenticated" }
+  > {
+    if (
+      !this.active ||
+      this.state.status !== "authenticated" ||
+      !this.state.session.session_token
+    ) {
       throw new Error("SMS verification requires an authenticated session");
     }
     return this.state;
   }
 
   private checkSMSAuthState(state: AuthState, version: number): void {
-    if (!this.active || this.state !== state || this.smsCeremonyVersion !== version) {
+    if (
+      !this.active ||
+      this.state !== state ||
+      this.smsCeremonyVersion !== version
+    ) {
       throw new Error("Session changed during SMS verification");
     }
   }
@@ -592,9 +651,12 @@ export class AuthManager {
 
     // Check storage cache.
     try {
-      const cached = await this.storage.getItem(CONFIG_KEY);
+      const cached = await this.storage.getItem(this.configCacheKey);
       if (cached) {
-        const { config, fetchedAt } = JSON.parse(cached) as { config: ClientConfig; fetchedAt: number };
+        const { config, fetchedAt } = JSON.parse(cached) as {
+          config: ClientConfig;
+          fetchedAt: number;
+        };
         if (Date.now() - fetchedAt < CONFIG_TTL_MS) {
           this.setClientConfig(config);
           return config;
@@ -611,7 +673,7 @@ export class AuthManager {
         // Cache with timestamp.
         try {
           await this.storage.setItem(
-            CONFIG_KEY,
+            this.configCacheKey,
             JSON.stringify({ config, fetchedAt: Date.now() }),
           );
         } catch {
@@ -636,7 +698,10 @@ export class AuthManager {
 
   // ── Internals ─────────────────────────────────────
 
-  private async handleAuthResponse(user: User, session: Session): Promise<void> {
+  private async handleAuthResponse(
+    user: User,
+    session: Session,
+  ): Promise<void> {
     await this.persistSession(session);
     this.setState({ status: "authenticated", user, session });
     this.scheduleRefresh(session);
@@ -648,12 +713,17 @@ export class AuthManager {
     if (!this.refreshPromise) {
       this.refreshPromise = withRefreshLock(this.refreshLockKey, () =>
         this.exchangeSession(refreshToken, attempt),
-      ).finally(() => { this.refreshPromise = null; });
+      ).finally(() => {
+        this.refreshPromise = null;
+      });
     }
     return this.refreshPromise;
   }
 
-  private async exchangeSession(refreshToken: string, attempt: number): Promise<void> {
+  private async exchangeSession(
+    refreshToken: string,
+    attempt: number,
+  ): Promise<void> {
     let current: Session | undefined;
     let exchanged = false;
     try {
@@ -664,7 +734,10 @@ export class AuthManager {
       }
       current = JSON.parse(raw) as Session;
       // A waiting tab or an old timer may hold the token another tab spent.
-      if (current.refresh_token === refreshToken || Date.now() >= Date.parse(current.expires_at)) {
+      if (
+        current.refresh_token === refreshToken ||
+        Date.now() >= Date.parse(current.expires_at)
+      ) {
         current = await this.client.refresh(current.refresh_token);
         exchanged = true;
         await this.persistSession(current);
@@ -674,17 +747,24 @@ export class AuthManager {
       this.scheduleRefresh(current);
     } catch (err) {
       this.clearRefreshTimer();
-      if (!exchanged && isAuthRejection(err) && current?.refresh_token === refreshToken) {
+      if (
+        !exchanged &&
+        isAuthRejection(err) &&
+        current?.refresh_token === refreshToken
+      ) {
         await this.clearSession();
         this.setState({ status: "unauthenticated" });
         return;
       }
       if (current) this.setState({ status: "unknown", session: current });
       if (attempt >= MAX_REFRESH_ATTEMPTS || !this.active) return;
-      this.refreshTimer = setTimeout(() => {
-        // Re-read storage under the lock, including after a profile failure.
-        void this.refreshSession(refreshToken, attempt + 1);
-      }, REFRESH_RETRY_BASE_MS * 2 ** attempt);
+      this.refreshTimer = setTimeout(
+        () => {
+          // Re-read storage under the lock, including after a profile failure.
+          void this.refreshSession(refreshToken, attempt + 1);
+        },
+        REFRESH_RETRY_BASE_MS * 2 ** attempt,
+      );
     }
   }
 
@@ -702,9 +782,12 @@ export class AuthManager {
 
     // Long sessions need several bounded waits. Check the deadline again at
     // each boundary so a timer limit cannot trigger an early token rotation.
-    this.refreshTimer = setTimeout(() => {
-      this.scheduleRefresh(session);
-    }, Math.min(delay, MAX_TIMEOUT_MS));
+    this.refreshTimer = setTimeout(
+      () => {
+        this.scheduleRefresh(session);
+      },
+      Math.min(delay, MAX_TIMEOUT_MS),
+    );
   }
 
   private clearRefreshTimer(): void {
@@ -745,7 +828,10 @@ export class AuthManager {
   }
 
   private handleError(err: unknown): void {
-    const message = err instanceof AuthClientError ? err.message : "An unexpected error occurred";
+    const message =
+      err instanceof AuthClientError
+        ? err.message
+        : "An unexpected error occurred";
     const code = err instanceof AuthClientError ? err.code : undefined;
     const type = err instanceof AuthClientError ? err.type : undefined;
 

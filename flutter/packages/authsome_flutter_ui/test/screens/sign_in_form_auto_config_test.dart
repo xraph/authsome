@@ -36,7 +36,8 @@ void main() {
     testWidgets('password disabled with nothing else shows the empty notice',
         (tester) async {
       final mockAuth = buildIdleMock(
-        clientConfig: const ClientConfig(password: PasswordConfig(enabled: false)),
+        clientConfig:
+            const ClientConfig(password: PasswordConfig(enabled: false)),
       );
 
       await pumpAuthSomeApp(tester, child: SignInForm(auth: mockAuth));
@@ -57,7 +58,8 @@ void main() {
         ),
       );
 
-      await pumpAuthSomeApp(tester, child: SignInForm(auth: mockAuth));
+      await pumpAuthSomeApp(tester,
+          child: SignInForm(auth: mockAuth, onSocialLogin: (_) {}));
 
       expect(find.byType(SocialButtons), findsOneWidget);
       expect(find.widgetWithText(TextField, 'Email'), findsNothing);
@@ -70,7 +72,8 @@ void main() {
     testWidgets('password step offers the link only when enabled',
         (tester) async {
       final mockAuth = buildIdleMock(
-        clientConfig: const ClientConfig(magiclink: MagicLinkConfig(enabled: true)),
+        clientConfig:
+            const ClientConfig(magiclink: MagicLinkConfig(enabled: true)),
       );
 
       await pumpAuthSomeApp(tester, child: SignInForm(auth: mockAuth));
@@ -86,7 +89,8 @@ void main() {
 
     testWidgets('showMagicLink:false beats magiclink.enabled', (tester) async {
       final mockAuth = buildIdleMock(
-        clientConfig: const ClientConfig(magiclink: MagicLinkConfig(enabled: true)),
+        clientConfig:
+            const ClientConfig(magiclink: MagicLinkConfig(enabled: true)),
       );
 
       await pumpAuthSomeApp(
@@ -251,7 +255,8 @@ void main() {
       await pumpAuthSomeApp(tester, child: SignInForm(auth: mockAuth));
       await _continueWithEmail(tester, 'user@example.com');
 
-      expect(find.textContaining('requires a captcha'), findsOneWidget);
+      expect(find.text('Verification is unavailable. Please try again later.'),
+          findsOneWidget);
     });
 
     testWidgets('no captcha when the config does not require one',

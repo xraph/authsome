@@ -30,6 +30,7 @@ class AuthNotifier extends ChangeNotifier {
       : _manager = AuthManager(
           AuthConfig(
             baseUrl: config.baseUrl,
+            httpClient: config.httpClient,
             publishableKey: config.publishableKey,
             initialClientConfig: config.initialClientConfig,
             storage: config.storage ?? SecureTokenStorage(),
@@ -140,8 +141,7 @@ class AuthNotifier extends ChangeNotifier {
       _manager.startSSOLogin(connectionId, returnUrl: returnUrl);
 
   /// Finish an SSO login with the one-time `?code=` from the return URL.
-  Future<void> completeSSOLogin(String code) =>
-      _manager.completeSSOLogin(code);
+  Future<void> completeSSOLogin(String code) => _manager.completeSSOLogin(code);
 
   /// Email a magic sign-in link to [email].
   Future<void> sendMagicLink(String email) => _manager.sendMagicLink(email);

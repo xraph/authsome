@@ -113,8 +113,7 @@ class MfaChallengeForm extends StatefulWidget {
     this.titleText = 'Two-factor authentication',
     this.totpDescriptionText =
         'Enter the 6-digit code from your authenticator app',
-    this.smsDescriptionText =
-        "We'll send a verification code to your phone",
+    this.smsDescriptionText = "We'll send a verification code to your phone",
     this.smsSentDescriptionText,
     this.recoveryDescriptionText = 'Enter one of your recovery codes',
     this.sendCodeLabel = 'Send code',
@@ -161,7 +160,9 @@ class _MfaChallengeFormState extends State<MfaChallengeForm> {
       _auth = injected;
       _auth!.addListener(_onAuthStateChanged);
       _availableMethods = _resolveMethods();
-      _activeMethod = widget.defaultMethod ?? _availableMethods.first;
+      _activeMethod = _availableMethods.contains(widget.defaultMethod)
+          ? widget.defaultMethod!
+          : _availableMethods.first;
     }
   }
 
@@ -191,6 +192,18 @@ class _MfaChallengeFormState extends State<MfaChallengeForm> {
   }
 
   List<MfaMethod> _resolveMethods() {
+    final state = _auth?.state;
+    if (state is AuthMfaRequired) {
+      final configured = widget.methods ??
+          state.availableMethods
+              .where((method) => method == 'totp')
+              .map((_) => MfaMethod.totp)
+              .toList();
+      return {
+        ...configured.where((method) => method != MfaMethod.sms),
+        MfaMethod.recovery
+      }.toList();
+    }
     if (widget.methods != null && widget.methods!.isNotEmpty) {
       return widget.methods!;
     }
@@ -226,6 +239,7 @@ class _MfaChallengeFormState extends State<MfaChallengeForm> {
   // ── TOTP ──
 
   Future<void> _onTotpCompleted(String code) async {
+    if (_isSubmitting) return;
     setState(() {
       _error = null;
       _isSubmitting = true;
@@ -332,7 +346,11 @@ class _MfaChallengeFormState extends State<MfaChallengeForm> {
     });
 
     try {
-      await _auth!.submitRecoveryCode(code);
+      if (_auth!.state is AuthMfaRequired) {
+        await _auth!.submitMFAChallenge(code);
+      } else {
+        await _auth!.submitRecoveryCode(code);
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -362,8 +380,7 @@ class _MfaChallengeFormState extends State<MfaChallengeForm> {
         logo: widget.logo,
         align: widget.align,
         child: const ErrorDisplay(
-          error:
-              'AuthProvider not found in widget tree. Wrap your app in '
+          error: 'AuthProvider not found in widget tree. Wrap your app in '
               'AuthProvider, or pass an `auth:` notifier to MfaChallengeForm.',
         ),
       );

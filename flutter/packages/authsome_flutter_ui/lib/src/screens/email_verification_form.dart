@@ -30,11 +30,14 @@ class EmailVerificationForm extends StatefulWidget {
   /// Called when verification succeeds.
   final VoidCallback? onSuccess;
 
+  /// Return to the email step.
+  final VoidCallback? onBack;
+
   /// Called when the user taps "Resend code".
   ///
   /// If null, the resend button calls [AuthSomeClient.verifyEmail] with
   /// just the email to trigger a new code.
-  final VoidCallback? onResend;
+  final FutureOr<void> Function()? onResend;
 
   /// Optional logo widget displayed above the title.
   final Widget? logo;
@@ -66,14 +69,14 @@ class EmailVerificationForm extends StatefulWidget {
     required this.email,
     this.auth,
     this.onSuccess,
+    this.onBack,
     this.onResend,
     this.logo,
     this.titleText = 'Verify your email',
     this.descriptionText,
     this.resendLabel = 'Resend code',
     this.successTitleText = 'Email verified',
-    this.successDescriptionText =
-        'Your email has been verified successfully',
+    this.successDescriptionText = 'Your email has been verified successfully',
     this.cooldownSeconds = 60,
     this.align = AuthCardAlign.center,
     super.key,
@@ -86,6 +89,7 @@ class EmailVerificationForm extends StatefulWidget {
 class _EmailVerificationFormState extends State<EmailVerificationForm> {
   String? _error;
   bool _isSubmitting = false;
+  bool _isResending = false;
   bool _isSuccess = false;
 
   int _resendCooldown = 0;
@@ -98,6 +102,7 @@ class _EmailVerificationFormState extends State<EmailVerificationForm> {
   }
 
   Future<void> _onCodeCompleted(String code) async {
+    if (_isSubmitting) return;
     setState(() {
       _error = null;
       _isSubmitting = true;
@@ -126,24 +131,23 @@ class _EmailVerificationFormState extends State<EmailVerificationForm> {
   }
 
   Future<void> _onResend() async {
-    if (_resendCooldown > 0) return;
-
-    if (widget.onResend != null) {
-      widget.onResend!.call();
-    } else {
-      // Default: ask the server for a fresh code. This used to call the
-      // verify endpoint with no code, which never sends anything.
-      final auth = widget.auth ?? context.auth;
-      try {
-        await auth.resendVerification(widget.email);
-      } catch (e) {
-        if (mounted) {
-          setState(() => _error = e.toString());
-        }
+    if (_resendCooldown > 0 || _isResending || widget.email.isEmpty) return;
+    setState(() {
+      _isResending = true;
+      _error = null;
+    });
+    try {
+      if (widget.onResend != null) {
+        await widget.onResend!();
+      } else {
+        await (widget.auth ?? context.auth).resendVerification(widget.email);
       }
+      if (mounted) _startCooldown();
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _isResending = false);
     }
-
-    _startCooldown();
   }
 
   void _startCooldown() {
@@ -183,6 +187,10 @@ class _EmailVerificationFormState extends State<EmailVerificationForm> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (widget.onBack != null)
+            TextButton(
+                onPressed: _isSubmitting || _isResending ? null : widget.onBack,
+                child: const Text('Use a different email')),
           ErrorDisplay(error: _error),
           if (_error != null) SizedBox(height: theme.fieldSpacing),
           OtpInput(

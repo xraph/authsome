@@ -44,7 +44,8 @@ void main() {
       await _advancePastSubmit(tester);
 
       expect(find.textContaining('Verify your email'), findsOneWidget);
-      expect(find.text('user@example.com'), findsWidgets);
+      expect(find.textContaining('user@example.com'), findsWidgets);
+      expect(find.byType(OtpInput), findsOneWidget);
     },
   );
 
