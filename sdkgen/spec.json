@@ -28262,19 +28262,19 @@
           },
           {
             "in": "query",
-            "name": "prompt",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
             "name": "resource",
             "schema": {
               "items": {
                 "type": "string"
               },
               "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "prompt",
+            "schema": {
+              "type": "string"
             }
           }
         ],

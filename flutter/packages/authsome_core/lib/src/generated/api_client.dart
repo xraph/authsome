@@ -1922,7 +1922,7 @@ class AuthClient {
 
   /// OAuth2 Authorization
   /// GET /v1/oauth/authorize
-  Future<void> oauth2Authorize({required String responseType, required String clientId, String? redirectUri, String? scope, String? state, String? codeChallenge, String? codeChallengeMethod, String? prompt, List<String>? resource}) async {
+  Future<void> oauth2Authorize({required String responseType, required String clientId, String? redirectUri, String? scope, String? state, String? codeChallenge, String? codeChallengeMethod, List<String>? resource, String? prompt}) async {
     final path = '/v1/oauth/authorize';
     // A list of pairs rather than a map, because a query string may carry the
     // same key more than once. RFC 8707 sends `resource` that way, and a map
@@ -1935,10 +1935,10 @@ class AuthClient {
     if (state != null) queryPairs.add(MapEntry('state', state.toString()));
     if (codeChallenge != null) queryPairs.add(MapEntry('code_challenge', codeChallenge.toString()));
     if (codeChallengeMethod != null) queryPairs.add(MapEntry('code_challenge_method', codeChallengeMethod.toString()));
-    if (prompt != null) queryPairs.add(MapEntry('prompt', prompt.toString()));
     for (final element in resource ?? const []) {
       queryPairs.add(MapEntry('resource', element.toString()));
     }
+    if (prompt != null) queryPairs.add(MapEntry('prompt', prompt.toString()));
     final queryString = queryPairs.isNotEmpty
         ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';

@@ -603,13 +603,17 @@ type AuthorizeRequest struct {
 	State               string `query:"state,omitempty"`
 	CodeChallenge       string `query:"code_challenge,omitempty"`
 	CodeChallengeMethod string `query:"code_challenge_method,omitempty"`
-	// Prompt=consent forces the consent page even when a grant covers the
-	// request (OpenID Connect Core 3.1.2.1).
-	Prompt string `query:"prompt,omitempty"`
 	// RFC 8707, repeatable. A field rather than a raw-request read, because
 	// only a declared field reaches the OpenAPI document, and only a described
 	// parameter reaches the generated clients.
 	Resource []string `query:"resource,omitempty"`
+	// Prompt=consent forces the consent page even when a grant covers the
+	// request (OpenID Connect Core 3.1.2.1).
+	//
+	// It stays last. The generated clients take query parameters positionally
+	// in field order, so a field added above Resource moves it, and a caller
+	// passing resources by position would hand them to this one instead.
+	Prompt string `query:"prompt,omitempty"`
 }
 
 // TokenRequest is the OAuth2 token request.

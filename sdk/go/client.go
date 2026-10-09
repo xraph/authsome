@@ -2130,11 +2130,11 @@ func (c *Client) Oauth2Authorize(ctx context.Context, params *Oauth2AuthorizePar
 		if params.CodeChallengeMethod != "" {
 			q.Set("code_challenge_method", params.CodeChallengeMethod)
 		}
-		if params.Prompt != "" {
-			q.Set("prompt", params.Prompt)
-		}
 		for _, v := range params.Resource {
 			q.Add("resource", v)
+		}
+		if params.Prompt != "" {
+			q.Set("prompt", params.Prompt)
 		}
 		if encoded := q.Encode(); encoded != "" {
 			path += "?" + encoded
@@ -3458,8 +3458,8 @@ type Oauth2AuthorizeParams struct {
 	State               string   `json:"state,omitempty"`
 	CodeChallenge       string   `json:"code_challenge,omitempty"`
 	CodeChallengeMethod string   `json:"code_challenge_method,omitempty"`
-	Prompt              string   `json:"prompt,omitempty"`
 	Resource            []string `json:"resource,omitempty"`
+	Prompt              string   `json:"prompt,omitempty"`
 }
 
 // ListOrganizationsParams holds optional query parameters for ListOrganizations.
