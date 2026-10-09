@@ -15,6 +15,12 @@ const config: StorybookConfig = {
   viteFinal: async (config) => {
     config.plugins = config.plugins || [];
     config.plugins.push(tailwindcss());
+    const target = ["chrome87", "edge88", "es2020", "firefox78", "safari14.1"];
+    config.build = { ...config.build, target };
+    config.optimizeDeps = {
+      ...config.optimizeDeps,
+      esbuildOptions: { ...config.optimizeDeps?.esbuildOptions, target },
+    };
     return config;
   },
 };

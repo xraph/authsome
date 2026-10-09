@@ -57,10 +57,12 @@ function AccountDashboard({ onSignOut }: { onSignOut?: () => void }) {
       {/* ── Header ──────────────────────────────── */}
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <UserAvatar user={MOCK_USER} size="lg" />
+          <UserAvatar size="lg" />
           <div>
             <h1 className="text-base font-semibold leading-tight">
-              {MOCK_USER.name}
+              {[MOCK_USER.first_name, MOCK_USER.last_name]
+                .filter(Boolean)
+                .join(" ")}
             </h1>
             <p className="text-[13px] text-muted-foreground">
               {MOCK_USER.email}
@@ -189,7 +191,7 @@ function FullAuthFlowRenderer() {
       <PageShell>
         {step === "sign-in" && (
           <div className="flex min-h-[70vh] items-center justify-center">
-            <div className="w-full max-w-[380px]">
+            <div className="w-full max-w-[380px] max-w-full">
               <SignInForm
                 signUpUrl="/sign-up"
                 forgotPasswordUrl="/forgot-password"
@@ -201,7 +203,7 @@ function FullAuthFlowRenderer() {
 
         {step === "mfa" && (
           <div className="flex min-h-[70vh] items-center justify-center">
-            <div className="w-full max-w-[380px]">
+            <div className="w-full max-w-[380px] max-w-full">
               <MFAChallengeFormStyled
                 enrollmentId="enroll_mock_totp"
                 onSuccess={() => setStep("dashboard")}

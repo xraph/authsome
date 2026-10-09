@@ -50,7 +50,7 @@ function SignInMFAFlowRenderer({
       errorMessage="Invalid MFA code. Please try again."
       delay={800}
     >
-      <div className="w-[380px]">
+      <div className="w-[380px] max-w-full">
         {step === "sign-in" && (
           <SignInForm
             signUpUrl="/sign-up"
@@ -76,8 +76,12 @@ function SignInMFAFlowRenderer({
               <Check className="h-6 w-6 text-green-600 dark:text-green-400" />
             </div>
             <div className="mb-1 flex items-center justify-center gap-2">
-              <UserAvatar user={MOCK_USER} size="sm" />
-              <span className="text-sm font-medium">{MOCK_USER.name}</span>
+              <UserAvatar size="sm" />
+              <span className="text-sm font-medium">
+                {[MOCK_USER.first_name, MOCK_USER.last_name]
+                  .filter(Boolean)
+                  .join(" ")}
+              </span>
             </div>
             <p className="text-[13px] text-muted-foreground">
               Welcome back! You&apos;re now signed in.

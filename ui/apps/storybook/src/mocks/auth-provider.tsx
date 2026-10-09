@@ -1,16 +1,24 @@
 import React, { useCallback, useMemo, useState } from "react";
-import {
-  AuthContext,
-  type AuthContextValue,
-} from "@authsome/ui-react";
-import type { AuthState, User, Session, AuthClient, ClientConfig, Organization } from "@authsome/ui-core";
+import { AuthContext, type AuthContextValue } from "@authsome/ui-react";
+import type {
+  AuthState,
+  User,
+  Session,
+  AuthClient,
+  ClientConfig,
+  Organization,
+} from "@authsome/ui-core";
 
 /** Mock user for Storybook stories. */
 export const MOCK_USER: User = {
   id: "user_mock_123",
   email: "jane@example.com",
   email_verified: true,
-  name: "Jane Doe",
+  app_id: "app_1",
+  env_id: "env_1",
+  first_name: "Jane",
+  last_name: "Doe",
+  phone_verified: false,
   username: "janedoe",
   image: "",
   phone: "+1234567890",
@@ -34,6 +42,7 @@ export const MOCK_ORGANIZATIONS: Organization[] = [
     name: "Acme Corp",
     slug: "acme-corp",
     app_id: "app_1",
+    env_id: "env_1",
     created_by: "user_mock_123",
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-06-01T00:00:00Z",
@@ -43,6 +52,7 @@ export const MOCK_ORGANIZATIONS: Organization[] = [
     name: "Widgets Inc",
     slug: "widgets-inc",
     app_id: "app_1",
+    env_id: "env_1",
     created_by: "user_mock_123",
     created_at: "2024-03-01T00:00:00Z",
     updated_at: "2024-06-01T00:00:00Z",
@@ -52,6 +62,7 @@ export const MOCK_ORGANIZATIONS: Organization[] = [
     name: "Startup Labs",
     slug: "startup-labs",
     app_id: "app_1",
+    env_id: "env_1",
     created_by: "user_mock_456",
     created_at: "2024-05-01T00:00:00Z",
     updated_at: "2024-06-01T00:00:00Z",
@@ -79,6 +90,7 @@ export const MOCK_DEVICES = [
   {
     id: "dev_1",
     app_id: "app_1",
+    env_id: "env_1",
     user_id: "user_mock_123",
     name: "Chrome on MacBook Pro",
     browser: "Chrome 120",
@@ -94,6 +106,7 @@ export const MOCK_DEVICES = [
   {
     id: "dev_2",
     app_id: "app_1",
+    env_id: "env_1",
     user_id: "user_mock_123",
     name: "Safari on iPhone",
     browser: "Safari 17",
@@ -109,6 +122,7 @@ export const MOCK_DEVICES = [
   {
     id: "dev_3",
     app_id: "app_1",
+    env_id: "env_1",
     user_id: "user_mock_123",
     name: "Firefox on iPad",
     browser: "Firefox 121",
@@ -172,7 +186,12 @@ function stateFromPreset(
     case "loading":
       return { status: "loading" };
     case "mfa_required":
-      return { status: "mfa_required", session };
+      return {
+        status: "mfa_required",
+        email: user.email,
+        mfaTicket: "mock_mfa_ticket",
+        availableMethods: ["totp"],
+      };
     case "error":
       return { status: "error", error: "Something went wrong" };
   }
@@ -190,7 +209,12 @@ export interface MockAuthProviderProps {
   /** Custom mock user. */
   user?: User;
   /** Optional client config for auto-configuration stories. */
-  clientConfig?: ClientConfig;
+  clientConfig?: ClientConfig | null;
+  signInBehavior?:
+    | "authenticated"
+    | "mfa_required"
+    | "email_verification_required";
+  signUpBehavior?: "authenticated" | "email_verification_required";
 }
 
 /**
@@ -205,6 +229,8 @@ export function MockAuthProvider({
   errorMessage = "Invalid email or password",
   user = MOCK_USER,
   clientConfig = null,
+  signInBehavior = "authenticated",
+  signUpBehavior = "authenticated",
 }: MockAuthProviderProps) {
   const [state, setState] = useState<AuthState>(
     stateFromPreset(initialState, user, MOCK_SESSION),
@@ -216,29 +242,48 @@ export function MockAuthProvider({
   );
 
   const signIn = useCallback(
-    async (_email: string, _password: string) => {
+    async (email: string, _password: string) => {
       setState({ status: "loading" });
       await wait();
       if (simulateError) {
         setState({ status: "error", error: errorMessage });
         throw new Error(errorMessage);
       }
-      setState({ status: "authenticated", user, session: MOCK_SESSION });
+      if (signInBehavior === "mfa_required") {
+        setState({
+          status: "mfa_required",
+          email,
+          mfaTicket: "mock_mfa_ticket",
+          availableMethods: clientConfig?.mfa?.methods ?? ["totp"],
+        });
+      } else if (signInBehavior === "email_verification_required") {
+        setState({ status: "email_not_verified", email });
+      } else {
+        setState({ status: "authenticated", user, session: MOCK_SESSION });
+      }
     },
-    [wait, simulateError, errorMessage, user],
+    [wait, simulateError, errorMessage, user, signInBehavior, clientConfig],
   );
 
   const signUp = useCallback(
-    async (_email: string, _password: string, _name?: string) => {
+    async (
+      email: string,
+      _password: string,
+      _fields?: Record<string, string>,
+    ) => {
       setState({ status: "loading" });
       await wait();
       if (simulateError) {
         setState({ status: "error", error: errorMessage });
         throw new Error(errorMessage);
       }
-      setState({ status: "authenticated", user, session: MOCK_SESSION });
+      if (signUpBehavior === "email_verification_required") {
+        setState({ status: "verification_pending", email });
+      } else {
+        setState({ status: "authenticated", user, session: MOCK_SESSION });
+      }
     },
-    [wait, simulateError, errorMessage, user],
+    [wait, simulateError, errorMessage, user, signUpBehavior],
   );
 
   const signOut = useCallback(async () => {
@@ -252,7 +297,7 @@ export function MockAuthProvider({
       setState({ status: "loading" });
       await wait();
       if (simulateError) {
-        setState({ status: "mfa_required", session: MOCK_SESSION });
+        setState(stateFromPreset("mfa_required", user, MOCK_SESSION));
         throw new Error("Invalid MFA code");
       }
       setState({ status: "authenticated", user, session: MOCK_SESSION });
@@ -271,6 +316,12 @@ export function MockAuthProvider({
 
   const mockClient = useMemo(() => {
     const client = {
+      verifyEmail: async () => {
+        await wait();
+        if (simulateError) throw new Error("Invalid verification code");
+        setState({ status: "authenticated", user, session: MOCK_SESSION });
+        return { status: "ok" };
+      },
       forgotPassword: async () => {
         await wait();
         if (simulateError) throw new Error("Email not found");
@@ -283,21 +334,26 @@ export function MockAuthProvider({
         await wait();
         if (simulateError) throw new Error("Current password is incorrect");
       },
-      updateMe: async (body: any) => {
+      updateMe: async (body: Partial<User>) => {
         await wait();
         if (simulateError) throw new Error("Failed to update profile");
         return { ...user, ...body };
       },
       listOrganizations: async () => {
         await wait();
-        return { items: MOCK_ORGANIZATIONS, total: MOCK_ORGANIZATIONS.length, organizations: MOCK_ORGANIZATIONS };
+        return {
+          items: MOCK_ORGANIZATIONS,
+          total: MOCK_ORGANIZATIONS.length,
+          organizations: MOCK_ORGANIZATIONS,
+        };
       },
-      createOrganization: async (body: any) => {
+      createOrganization: async (body: Record<string, unknown>) => {
         await wait();
         return {
           ...body,
           id: "org_new",
           app_id: "app_1",
+          env_id: "env_1",
           created_by: user.id,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -366,9 +422,7 @@ export function MockAuthProvider({
 
   const currentUser = state.status === "authenticated" ? state.user : null;
   const currentSession =
-    state.status === "authenticated" || state.status === "mfa_required"
-      ? state.session
-      : null;
+    state.status === "authenticated" ? state.session : null;
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -392,9 +446,18 @@ export function MockAuthProvider({
       },
       signUp,
       signOut,
+      resendVerification: async () => {
+        await wait();
+        if (simulateError) throw new Error(errorMessage);
+      },
+      submitMFAChallenge: (code: string) => submitMFACode("", code),
       submitMFACode,
       submitRecoveryCode,
-      sendSMSCode: async () => ({ sent: true, phone_masked: "+1***1234", expires_in_seconds: 300 }),
+      sendSMSCode: async () => ({
+        sent: true,
+        phone_masked: "+1***1234",
+        expires_in_seconds: 300,
+      }),
       submitSMSCode: async () => {},
     }),
     [
@@ -410,10 +473,10 @@ export function MockAuthProvider({
       submitRecoveryCode,
       wait,
       user,
+      simulateError,
+      errorMessage,
     ],
   );
 
-  return (
-    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

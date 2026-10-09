@@ -28,7 +28,7 @@ export const WithSocialProviders: Story = {
       { id: "github", name: "GitHub" },
       { id: "apple", name: "Apple" },
     ],
-    onSocialLogin: (id: string) => console.log("Social:", id),
+    onSocialLogin: fn(),
   },
 };
 

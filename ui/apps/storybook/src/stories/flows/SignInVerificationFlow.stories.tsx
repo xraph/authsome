@@ -35,7 +35,7 @@ function SignInVerificationRenderer() {
       signInBehavior="email_verification_required"
       delay={800}
     >
-      <div className="w-[380px]">
+      <div className="w-[380px] max-w-full">
         {step === "sign-in" && (
           <SignInForm
             signUpUrl="/sign-up"
@@ -58,8 +58,12 @@ function SignInVerificationRenderer() {
               <Check className="h-6 w-6 text-green-600 dark:text-green-400" />
             </div>
             <div className="mb-1 flex items-center justify-center gap-2">
-              <UserAvatar user={MOCK_USER} size="sm" />
-              <span className="text-sm font-medium">{MOCK_USER.name}</span>
+              <UserAvatar size="sm" />
+              <span className="text-sm font-medium">
+                {[MOCK_USER.first_name, MOCK_USER.last_name]
+                  .filter(Boolean)
+                  .join(" ")}
+              </span>
             </div>
             <p className="text-[13px] text-muted-foreground">
               Email verified! You&apos;re now signed in.

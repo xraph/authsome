@@ -35,7 +35,7 @@ function SignUpVerificationRenderer() {
       signUpBehavior="email_verification_required"
       delay={800}
     >
-      <div className="w-[380px]">
+      <div className="w-[380px] max-w-full">
         {step === "sign-up" && (
           <SignUpForm
             signInUrl="/sign-in"
@@ -60,7 +60,7 @@ function SignUpVerificationRenderer() {
               <Check className="h-6 w-6 text-green-600 dark:text-green-400" />
             </div>
             <div className="mb-1 flex items-center justify-center gap-2">
-              <UserAvatar user={MOCK_USER} size="sm" />
+              <UserAvatar size="sm" />
               <span className="text-sm font-medium">Welcome!</span>
             </div>
             <p className="text-[13px] text-muted-foreground">
@@ -85,7 +85,7 @@ export const HappyPath: Story = {
 export const VerificationStepOnly: Story = {
   render: () => (
     <MockAuthProvider clientConfig={CONFIG_ALL_ENABLED} delay={800}>
-      <div className="w-[380px]">
+      <div className="w-[380px] max-w-full">
         <EmailVerificationForm
           email="jane@example.com"
           onSuccess={() => {}}

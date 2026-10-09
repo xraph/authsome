@@ -18,7 +18,7 @@ export const Default: Story = {
       { id: "github", name: "GitHub" },
       { id: "apple", name: "Apple" },
     ],
-    onSocialLogin: (id: string) => console.log("Social login:", id),
+    onProviderClick: fn(),
   },
 };
 

@@ -1,5 +1,6 @@
 import React from "react";
 import type { Meta, StoryObj } from "@storybook/react";
+import { fn } from "@storybook/test";
 import { SignUpForm, type SocialProvider } from "@authsome/ui-components";
 
 const socialProviders: SocialProvider[] = [
@@ -21,7 +22,7 @@ export const Default: Story = {
       <SignUpForm
         signInUrl="/sign-in"
         socialProviders={socialProviders}
-        onSocialLogin={(id) => console.log("Social login:", id)}
+        onSocialLogin={fn()}
       />
     </div>
   ),

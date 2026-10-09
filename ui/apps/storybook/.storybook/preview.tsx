@@ -24,8 +24,14 @@ const preview: Preview = {
     viewport: {
       viewports: {
         mobile: { name: "Mobile", styles: { width: "375px", height: "812px" } },
-        tablet: { name: "Tablet", styles: { width: "768px", height: "1024px" } },
-        desktop: { name: "Desktop", styles: { width: "1280px", height: "800px" } },
+        tablet: {
+          name: "Tablet",
+          styles: { width: "768px", height: "1024px" },
+        },
+        desktop: {
+          name: "Desktop",
+          styles: { width: "1280px", height: "800px" },
+        },
       },
     },
   },
@@ -49,7 +55,7 @@ const preview: Preview = {
 
       return (
         <MockAuthProvider>
-          <div className="flex min-h-[600px] min-w-[480px] items-center justify-center p-8">
+          <div className="flex min-h-[600px] w-full max-w-[calc(100vw-2rem)] min-w-0 items-center justify-center p-4 sm:p-8">
             <Story />
           </div>
         </MockAuthProvider>

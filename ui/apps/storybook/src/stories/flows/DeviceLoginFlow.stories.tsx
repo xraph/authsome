@@ -36,7 +36,7 @@ function DeviceLoginRenderer() {
       initialState={step === "sign-in" ? "unauthenticated" : "authenticated"}
       delay={800}
     >
-      <div className="w-[380px]">
+      <div className="w-[380px] max-w-full">
         {step === "sign-in" && (
           <SignInForm
             signUpUrl="/sign-up"
@@ -59,8 +59,12 @@ function DeviceLoginRenderer() {
                 <Check className="h-6 w-6 text-green-600 dark:text-green-400" />
               </div>
               <div className="mb-1 flex items-center justify-center gap-2">
-                <UserAvatar user={MOCK_USER} size="sm" />
-                <span className="text-sm font-medium">{MOCK_USER.name}</span>
+                <UserAvatar size="sm" />
+                <span className="text-sm font-medium">
+                  {[MOCK_USER.first_name, MOCK_USER.last_name]
+                    .filter(Boolean)
+                    .join(" ")}
+                </span>
               </div>
               <p className="text-[13px] text-muted-foreground">
                 Device authorized successfully.
@@ -88,7 +92,7 @@ export const ManageDevices: Story = {
       initialState="authenticated"
       delay={800}
     >
-      <div className="w-[380px]">
+      <div className="w-[380px] max-w-full">
         <DeviceList />
       </div>
     </MockAuthProvider>
@@ -103,11 +107,8 @@ export const DeviceAuthorizationOnly: Story = {
       initialState="authenticated"
       delay={800}
     >
-      <div className="w-[380px]">
-        <DeviceAuthorizationForm
-          onSuccess={() => {}}
-          codeLength={8}
-        />
+      <div className="w-[380px] max-w-full">
+        <DeviceAuthorizationForm onSuccess={() => {}} codeLength={8} />
       </div>
     </MockAuthProvider>
   ),
