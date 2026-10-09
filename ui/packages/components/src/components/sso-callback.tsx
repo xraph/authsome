@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useAuth } from "@authsome/ui-react";
-import { safeRedirectTarget } from "@authsome/ui-core";
+import { redirectAfterAuth } from "../lib/redirect-after-auth";
 import { cn } from "../lib/utils";
 import { subscribeToPopState } from "../lib/pop-state";
 import { AuthCard, type AuthCardAlign, type AuthCardVariant } from "./auth-card";
@@ -110,12 +110,7 @@ export function SSOCallback({
           onSuccess();
           return;
         }
-        const query = new URLSearchParams(window.location.search);
-        // `redirect` is attacker-controllable, so only same-origin targets
-        // are honored. See sign-in.tsx.
-        window.location.href = safeRedirectTarget(query.get("redirect"), "/", {
-          currentOrigin: window.location.origin,
-        });
+        redirectAfterAuth();
       },
       (err: unknown) => {
         const failure =

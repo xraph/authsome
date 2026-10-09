@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useAuth } from "@authsome/ui-react";
-import { safeRedirectTarget } from "@authsome/ui-core";
+import { redirectAfterAuth } from "../lib/redirect-after-auth";
 import { useSubPath } from "../lib/use-sub-path";
 import { SignInForm, type SSOResolution } from "./sign-in-form";
 import { ForgotPasswordForm } from "./forgot-password-form";
@@ -92,13 +92,7 @@ export function SignIn({
       onSuccess();
       return;
     }
-    const params = new URLSearchParams(window.location.search);
-    // `redirect` is attacker-controllable — an absolute URL here would send a
-    // just-authenticated user to a hostile page. Fall back to "/" unless the
-    // target resolves to this origin.
-    window.location.href = safeRedirectTarget(params.get("redirect"), "/", {
-      currentOrigin: window.location.origin,
-    });
+    redirectAfterAuth();
   }, [onSuccess]);
 
   if (subPath === "forgot-password") {

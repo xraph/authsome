@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useClientConfig } from "@authsome/ui-react";
-import { safeRedirectTarget } from "@authsome/ui-core";
+import { redirectAfterAuth } from "../lib/redirect-after-auth";
 import { useSubPath } from "../lib/use-sub-path";
 import { SignUpForm } from "./sign-up-form";
 import { EmailVerificationForm } from "./email-verification-form";
@@ -70,12 +70,7 @@ export function SignUp({
       onSuccess();
       return;
     }
-    const params = new URLSearchParams(window.location.search);
-    // See sign-in.tsx — `redirect` is attacker-controllable and must resolve
-    // to this origin before we navigate a just-authenticated user to it.
-    window.location.href = safeRedirectTarget(params.get("redirect"), "/", {
-      currentOrigin: window.location.origin,
-    });
+    redirectAfterAuth();
   }, [onSuccess]);
 
   const handleSignUpSuccess = React.useCallback(() => {
