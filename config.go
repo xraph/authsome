@@ -1,6 +1,11 @@
 package authsome
 
-import "time"
+import (
+	"time"
+
+	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/store"
+)
 
 // Config holds all configuration for the AuthSome engine.
 type Config struct {
@@ -38,6 +43,140 @@ type Config struct {
 	// ProtectedResourceMetadataURL is the RFC 9728 metadata URL advertised in
 	// the WWW-Authenticate header on a 401. Empty means no hint is emitted.
 	ProtectedResourceMetadataURL string `json:"protected_resource_metadata_url"`
+
+	// TokenEncryption configures at-rest encryption of provider tokens, MFA
+	// secrets and SSO connection secrets. A key is required unless
+	// WithTokenEncryptor is passed; see AUTHSOME_TOKEN_ENCRYPTION_KEYS.
+	TokenEncryption TokenEncryptionConfig `json:"token_encryption"`
+
+	// APIKeyPepper is a server-side secret mixed into API key digests, so a
+	// copy of the database cannot be checked against a guessed key without
+	// it. Falls back to AUTHSOME_API_KEY_PEPPER. Keys hashed before a pepper
+	// was set keep verifying and are rewritten on their next use.
+	APIKeyPepper string `json:"api_key_pepper"`
+
+	// Retention sets how long expired rows are kept before the sweeper that
+	// runs every Session.CleanupInterval removes them.
+	Retention RetentionConfig `json:"retention"`
+
+	// Webhooks governs how webhook URLs are checked before a Relay endpoint
+	// is created for them.
+	Webhooks WebhookConfig `json:"webhooks"`
+
+	// CSRF governs the cross-site check on cookie-authenticated writes.
+	CSRF CSRFConfig `json:"csrf"`
+}
+
+// CSRFConfig governs the check that keeps another site from riding a
+// session cookie: an unsafe request (anything but GET, HEAD, OPTIONS,
+// TRACE) authenticated by cookie must come from the same site, or from an
+// origin listed here. Bearer, DPoP and API-key requests are not affected.
+type CSRFConfig struct {
+	// Enabled turns the check on. Unset means on: an explicit false is the
+	// only way to switch it off, and session.cookie_same_site=none is
+	// refused while it is off.
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// AllowedOrigins are origins (scheme://host[:port]) whose cross-site
+	// cookie requests are accepted, for a first-party front end served
+	// from another host.
+	AllowedOrigins []string `json:"allowed_origins"`
+}
+
+// IsEnabled reports whether the cross-site check runs.
+func (c CSRFConfig) IsEnabled() bool { return c.Enabled == nil || *c.Enabled }
+
+// ToMiddleware is the middleware's view of this configuration.
+func (c CSRFConfig) ToMiddleware() middleware.CSRFConfig {
+	return middleware.CSRFConfig{Enabled: c.IsEnabled(), AllowedOrigins: c.AllowedOrigins}
+}
+
+// WebhookConfig governs webhook registration.
+type WebhookConfig struct {
+	// AllowInsecureURLs permits http URLs and non-public addresses, for
+	// development against a receiver on the same machine. Never set it in
+	// production: it is the only thing standing between a webhook URL and
+	// the network the service runs in.
+	AllowInsecureURLs bool `json:"allow_insecure_urls"`
+
+	// VerifyTimeout bounds the test delivery made when a webhook is
+	// created or its URL changes (default: 10s).
+	VerifyTimeout time.Duration `json:"verify_timeout"`
+}
+
+// RetentionConfig sets how long rows that have outlived their purpose are
+// kept before the retention sweeper removes them. Each value is a number of
+// days counted from the row's expiry (or revocation); zero means the default
+// and a negative value keeps rows of that kind forever.
+type RetentionConfig struct {
+	// SessionsDays keeps sessions this long after both their tokens expired
+	// (default: 30).
+	SessionsDays int `json:"sessions_days"`
+
+	// VerificationsDays keeps verification codes this long after expiry
+	// (default: 7).
+	VerificationsDays int `json:"verifications_days"`
+
+	// PasswordResetsDays keeps password reset tokens this long after expiry
+	// (default: 7).
+	PasswordResetsDays int `json:"password_resets_days"`
+
+	// RevokedRefreshTokensDays keeps refresh-token revocation records this
+	// long after revocation (default: 90). It must cover the refresh token
+	// lifetime, or a replayed token could outlive its own revocation record.
+	RevokedRefreshTokensDays int `json:"revoked_refresh_tokens_days"`
+
+	// DeviceCodesDays keeps OAuth2 device codes this long after expiry
+	// (default: 1).
+	DeviceCodesDays int `json:"device_codes_days"`
+
+	// AuthCodesDays keeps OAuth2 authorization codes this long after expiry
+	// (default: 1).
+	AuthCodesDays int `json:"auth_codes_days"`
+
+	// BatchSize is how many rows one delete statement removes (default:
+	// 1000). The sweeper repeats until a batch comes back short.
+	BatchSize int `json:"batch_size"`
+}
+
+// Days returns the retention window for one kind (a store.Retention* name)
+// as a duration. Zero takes the kind's default; a negative value returns
+// zero, meaning that kind is never swept.
+func (c RetentionConfig) Days(kind string) time.Duration {
+	configured := map[string]int{
+		store.RetentionSessions:             c.SessionsDays,
+		store.RetentionVerifications:        c.VerificationsDays,
+		store.RetentionPasswordResets:       c.PasswordResetsDays,
+		store.RetentionRevokedRefreshTokens: c.RevokedRefreshTokensDays,
+		store.RetentionDeviceCodes:          c.DeviceCodesDays,
+		store.RetentionAuthCodes:            c.AuthCodesDays,
+	}
+	defaults := map[string]int{
+		store.RetentionSessions:             30,
+		store.RetentionVerifications:        7,
+		store.RetentionPasswordResets:       7,
+		store.RetentionRevokedRefreshTokens: 90,
+		store.RetentionDeviceCodes:          1,
+		store.RetentionAuthCodes:            1,
+	}
+	days := configured[kind]
+	if days == 0 {
+		days = defaults[kind]
+	}
+	if days <= 0 {
+		return 0
+	}
+	return time.Duration(days) * 24 * time.Hour
+}
+
+// Cutoff returns the instant before which rows of kind are removed, or the
+// zero time when that kind is never swept.
+func (c RetentionConfig) Cutoff(kind string, now time.Time) time.Time {
+	window := c.Days(kind)
+	if window <= 0 {
+		return time.Time{}
+	}
+	return now.Add(-window)
 }
 
 // SessionConfig configures session behavior.
@@ -80,7 +219,7 @@ func (c SessionConfig) ShouldRotateRefreshToken() bool {
 
 // PasswordConfig configures password validation.
 type PasswordConfig struct {
-	// MinLength is the minimum password length (default: 8).
+	// MinLength is the minimum password length (default: 12).
 	MinLength int `json:"min_length"`
 
 	// RequireUppercase requires at least one uppercase letter.
@@ -165,11 +304,45 @@ type RateLimitConfig struct {
 	// circuit breaker.
 	SSFPushLimit int `json:"ssf_push_limit"`
 
+	// ResetPasswordLimit caps reset-password submissions per window (default: 5).
+	ResetPasswordLimit int `json:"reset_password_limit"`
+
+	// ChangePasswordLimit caps change-password submissions per window (default: 5).
+	ChangePasswordLimit int `json:"change_password_limit"`
+
+	// OAuthTokenLimit caps OAuth2 token, revoke and device-authorize
+	// requests per window (default: 30).
+	OAuthTokenLimit int `json:"oauth_token_limit"`
+
+	// OAuthAuthorizeLimit caps OAuth2 authorize requests per window (default: 30).
+	OAuthAuthorizeLimit int `json:"oauth_authorize_limit"`
+
+	// PasskeyLimit caps passkey login and registration ceremonies per window (default: 10).
+	PasskeyLimit int `json:"passkey_limit"`
+
+	// SSOLimit caps public SSO requests per window (default: 20).
+	SSOLimit int `json:"sso_limit"`
+
+	// SCIMLimit caps SCIM requests per window (default: 60).
+	SCIMLimit int `json:"scim_limit"`
+
+	// WaitlistJoinLimit caps waitlist joins per window (default: 5).
+	WaitlistJoinLimit int `json:"waitlist_join_limit"`
+
+	// APIKeyFailureLimit caps failed API-key authentications per client
+	// address per window (default: 20).
+	APIKeyFailureLimit int `json:"api_key_failure_limit"`
+
 	// WindowSeconds is the sliding window duration in seconds (default: 60).
 	WindowSeconds int `json:"window_seconds"`
 
-	// Enabled enables rate limiting (default: false).
+	// Enabled enables rate limiting (default: true).
 	Enabled bool `json:"enabled"`
+
+	// FailOpen lets requests through when the limiter itself fails
+	// (default: false). Off, a limiter outage answers 503: an attacker who
+	// can break the limiter must not get an unlimited window out of it.
+	FailOpen bool `json:"fail_open"`
 }
 
 // Window returns the rate limit window as a time.Duration.
@@ -191,7 +364,7 @@ type LockoutConfig struct {
 	// ResetAfterSeconds resets the failure count after this many seconds of no failures (default: 3600 = 1h).
 	ResetAfterSeconds int `json:"reset_after_seconds"`
 
-	// Enabled enables account lockout (default: false).
+	// Enabled enables account lockout (default: true).
 	Enabled bool `json:"enabled"`
 }
 
@@ -218,15 +391,27 @@ func DefaultConfig() Config {
 		Session: SessionConfig{
 			TokenTTL:        1 * time.Hour,
 			RefreshTokenTTL: 30 * 24 * time.Hour,
+			CleanupInterval: time.Hour,
+		},
+		Webhooks: WebhookConfig{VerifyTimeout: 10 * time.Second},
+		Retention: RetentionConfig{
+			SessionsDays:             30,
+			VerificationsDays:        7,
+			PasswordResetsDays:       7,
+			RevokedRefreshTokensDays: 90,
+			DeviceCodesDays:          1,
+			AuthCodesDays:            1,
+			BatchSize:                1000,
 		},
 		Password: PasswordConfig{
-			MinLength:        8,
+			MinLength:        12,
 			RequireUppercase: true,
 			RequireLowercase: true,
 			RequireDigit:     true,
 			BcryptCost:       12,
 		},
 		RateLimit: RateLimitConfig{
+			Enabled:                 true,
 			SignInLimit:             5,
 			SignUpLimit:             3,
 			RefreshLimit:            10,
@@ -236,9 +421,19 @@ func DefaultConfig() Config {
 			VerifyEmailLimit:        10,
 			ResendVerificationLimit: 3,
 			SSFPushLimit:            60,
+			ResetPasswordLimit:      5,
+			ChangePasswordLimit:     5,
+			OAuthTokenLimit:         30,
+			OAuthAuthorizeLimit:     30,
+			PasskeyLimit:            10,
+			SSOLimit:                20,
+			SCIMLimit:               60,
+			WaitlistJoinLimit:       5,
+			APIKeyFailureLimit:      20,
 			WindowSeconds:           60,
 		},
 		Lockout: LockoutConfig{
+			Enabled:                true,
 			MaxAttempts:            5,
 			LockoutDurationSeconds: 900,  // 15 minutes
 			ResetAfterSeconds:      3600, // 1 hour

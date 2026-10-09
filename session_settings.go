@@ -191,14 +191,15 @@ var (
 
 var (
 	// SettingJWTRequireActiveSession controls whether JWT tokens are cross-checked
-	// against the session store to enable immediate revocation.
-	SettingJWTRequireActiveSession = settings.Define("session.jwt_require_active_session", false,
+	// against the session store to enable immediate revocation. On by default:
+	// a JWT that cannot be revoked is a session that outlives a ban.
+	SettingJWTRequireActiveSession = settings.Define("session.jwt_require_active_session", true,
 		settings.WithDisplayName("Require Active Session for JWT"),
 		settings.WithDescription("Cross-check JWT tokens against the session store to enable revocation"),
 		settings.WithCategory("JWT Security"),
 		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
 		settings.WithEnforceable(),
-		settings.WithHelpText("When enabled, JWT tokens are validated against the session store on each request. This adds a DB lookup but enables instant revocation and IP/device binding for JWT tokens."),
+		settings.WithHelpText("On by default. JWT tokens are validated against the session store on each request, which adds a DB lookup but makes revocation and IP/device binding take effect at once. Turning it off makes a JWT valid until it expires, whatever happens to the session."),
 		settings.WithOrder(55),
 	)
 
@@ -247,6 +248,21 @@ var (
 		settings.WithHelpText("The session expiry is reset to now + this value on each request. Default: 604800 (7 days)"),
 		settings.WithOrder(106),
 		settings.WithVisibleWhen("session.extend_on_activity", true),
+	)
+
+	// SettingAbsoluteLifetimeSeconds bounds how long a session may live from
+	// the moment it was issued, however active it is. The sliding window and
+	// refresh both stop at this deadline.
+	SettingAbsoluteLifetimeSeconds = settings.Define("session.absolute_lifetime_seconds", 2592000,
+		settings.WithDisplayName("Absolute Session Lifetime (seconds)"),
+		settings.WithDescription("A session ends this many seconds after it was issued, no matter how active it is"),
+		settings.WithCategory("Session Extension"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: new(3600), Max: new(31536000)}),
+		settings.WithHelpText("Activity extension and refresh never move a session past created_at + this value. Default: 2592000 (30 days)"),
+		settings.WithOrder(107),
 	)
 )
 
@@ -401,6 +417,9 @@ func registerCoreSessionSettings(m *settings.Manager) error {
 		return err
 	}
 	if err := settings.RegisterTyped(m, "session", SettingInactivityTimeoutSeconds); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingAbsoluteLifetimeSeconds); err != nil {
 		return err
 	}
 	if err := settings.RegisterTyped(m, "session", SettingCookieName); err != nil {

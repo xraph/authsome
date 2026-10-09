@@ -23,6 +23,10 @@ class EmailVerificationForm extends StatefulWidget {
   /// The email address being verified.
   final String email;
 
+  /// Optional injected [AuthNotifier]. When null, the form resolves the
+  /// notifier from the surrounding [AuthProvider].
+  final AuthNotifier? auth;
+
   /// Called when verification succeeds.
   final VoidCallback? onSuccess;
 
@@ -60,6 +64,7 @@ class EmailVerificationForm extends StatefulWidget {
 
   const EmailVerificationForm({
     required this.email,
+    this.auth,
     this.onSuccess,
     this.onResend,
     this.logo,
@@ -99,7 +104,7 @@ class _EmailVerificationFormState extends State<EmailVerificationForm> {
     });
 
     try {
-      final auth = context.auth;
+      final auth = widget.auth ?? context.auth;
       await auth.client.verifyEmail(
         body: VerifyEmailRequest(email: widget.email, code: code),
       );
@@ -126,12 +131,11 @@ class _EmailVerificationFormState extends State<EmailVerificationForm> {
     if (widget.onResend != null) {
       widget.onResend!.call();
     } else {
-      // Default: trigger a new verification code via the client.
-      final auth = context.auth;
+      // Default: ask the server for a fresh code. This used to call the
+      // verify endpoint with no code, which never sends anything.
+      final auth = widget.auth ?? context.auth;
       try {
-        await auth.client.verifyEmail(
-          body: VerifyEmailRequest(email: widget.email),
-        );
+        await auth.resendVerification(widget.email);
       } catch (e) {
         if (mounted) {
           setState(() => _error = e.toString());

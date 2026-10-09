@@ -32,7 +32,7 @@ func TestRefresh_PreservesJWTAccessToken(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "jwt-refresh@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "JWT User",
 	})
 	require.NoError(t, err)

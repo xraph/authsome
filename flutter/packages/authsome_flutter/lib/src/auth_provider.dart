@@ -113,13 +113,46 @@ class AuthNotifier extends ChangeNotifier {
   /// Call this once on app start (e.g., in [AuthProvider]).
   Future<void> initialize() => _manager.initialize();
 
-  /// Sign in with email & password.
-  Future<void> signIn(String email, String password) =>
-      _manager.signIn(email, password);
+  /// Sign in with email & password. Pass [captchaToken] when the client
+  /// config requires a captcha.
+  Future<void> signIn(String email, String password, {String? captchaToken}) =>
+      _manager.signIn(email, password, captchaToken: captchaToken);
 
-  /// Sign up with email & password.
-  Future<void> signUp(String email, String password, {String? name}) =>
-      _manager.signUp(email, password, name: name);
+  /// Sign up with email & password, plus optional values for the app's
+  /// configured signup [fields] and a [captchaToken].
+  Future<void> signUp(
+    String email,
+    String password, {
+    String? name,
+    Map<String, String>? fields,
+    String? captchaToken,
+  }) =>
+      _manager.signUp(
+        email,
+        password,
+        name: name,
+        fields: fields,
+        captchaToken: captchaToken,
+      );
+
+  /// Start an SSO login for [connectionId] and return the IdP URL.
+  Future<String> startSSOLogin(String connectionId, {String? returnUrl}) =>
+      _manager.startSSOLogin(connectionId, returnUrl: returnUrl);
+
+  /// Finish an SSO login with the one-time `?code=` from the return URL.
+  Future<void> completeSSOLogin(String code) =>
+      _manager.completeSSOLogin(code);
+
+  /// Email a magic sign-in link to [email].
+  Future<void> sendMagicLink(String email) => _manager.sendMagicLink(email);
+
+  /// Put [email] (and an optional [name]) on the app's waitlist.
+  Future<void> joinWaitlist(String email, {String? name}) =>
+      _manager.joinWaitlist(email, name: name);
+
+  /// Approve an OAuth device authorization request by its [userCode].
+  Future<void> approveDeviceAuthorization(String userCode) =>
+      _manager.approveDeviceAuthorization(userCode);
 
   /// Sign out.
   Future<void> signOut() => _manager.signOut();

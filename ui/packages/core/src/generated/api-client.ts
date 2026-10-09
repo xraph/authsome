@@ -82,6 +82,7 @@ import type {
   CreateSubscriptionRequest,
   CreateTeamRequest,
   CreateWebhookRequest,
+  CreateWebhookResponse,
   CredentialInfo,
   DeclineInvitationRequest,
   Definition,
@@ -110,6 +111,7 @@ import type {
   ForgotPasswordRequest,
   ForgotPasswordResponse,
   GrantConsentRequest,
+  GrantView,
   GroupRef,
   GroupResource,
   HealthResponse,
@@ -125,6 +127,7 @@ import type {
   ListClientsResponse,
   ListCouponsResponse,
   ListDefinitionsResponse,
+  ListGrantsResponse,
   ListInvoicesResponse,
   ListKeysResponse,
   ListPlansResponse,
@@ -177,6 +180,7 @@ import type {
   Role,
   RoleListResponse,
   RotateClientSecretResponse,
+  RotateWebhookSecretResponse,
   SMSSendRequest,
   SMSSendResponse,
   SMSVerifyRequest,
@@ -1182,7 +1186,7 @@ export class AuthClient {
    * List SSO connections for an app (admin)
    * GET /v1/admin/sso/connections
    */
-  async ssoAdminListConnections(app_id: string, token: string): Promise<AdminListConnectionsResponse> {
+  async ssoAdminListConnections(token: string, app_id?: string): Promise<AdminListConnectionsResponse> {
     const params = new URLSearchParams();
     if (app_id !== undefined) params.set('app_id', String(app_id));
     const qs = params.toString();
@@ -1378,6 +1382,20 @@ export class AuthClient {
    */
   async adminUnbanUser(userId: string, token: string): Promise<ApiStatusResponse> {
     const path = `/v1/admin/users/${userId}/unban`;
+    return this.request<ApiStatusResponse>(
+      'POST',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Unlock user (admin)
+   * POST /v1/admin/users/{userId}/unlock
+   */
+  async adminUnlockUser(userId: string, token: string): Promise<ApiStatusResponse> {
+    const path = `/v1/admin/users/${userId}/unlock`;
     return this.request<ApiStatusResponse>(
       'POST',
       path,
@@ -2162,6 +2180,34 @@ export class AuthClient {
   }
 
   /**
+   * List my OAuth2 grants
+   * GET /v1/me/oauth/grants
+   */
+  async oauth2ListMyGrants(token: string): Promise<ListGrantsResponse> {
+    const path = "/v1/me/oauth/grants";
+    return this.request<ListGrantsResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Revoke an OAuth2 grant
+   * DELETE /v1/me/oauth/grants/{clientId}
+   */
+  async oauth2RevokeMyGrant(clientId: string, token: string): Promise<void> {
+    const path = `/v1/me/oauth/grants/${clientId}`;
+    return this.request<void>(
+      'DELETE',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
    * Switch active organization
    * POST /v1/me/switch-org
    */
@@ -2288,7 +2334,7 @@ export class AuthClient {
    * OAuth2 Authorization
    * GET /v1/oauth/authorize
    */
-  async oauth2Authorize(response_type: string, client_id: string, redirect_uri?: string, scope?: string, state?: string, code_challenge?: string, code_challenge_method?: string, resource?: string[]): Promise<void> {
+  async oauth2Authorize(response_type: string, client_id: string, redirect_uri?: string, scope?: string, state?: string, code_challenge?: string, code_challenge_method?: string, resource?: string[], prompt?: string): Promise<void> {
     const params = new URLSearchParams();
     if (response_type !== undefined) params.set('response_type', String(response_type));
     if (client_id !== undefined) params.set('client_id', String(client_id));
@@ -2301,12 +2347,41 @@ export class AuthClient {
     // lists, which is how RFC 8707 sends `resource`. String() on an array
     // would join it on commas and reach the server as one value.
     if (resource !== undefined) for (const element of resource) params.append('resource', String(element));
+    if (prompt !== undefined) params.set('prompt', String(prompt));
     const qs = params.toString();
     const path = "/v1/oauth/authorize" + (qs ? `?${qs}` : '');
     return this.request<void>(
       'GET',
       path,
       undefined,
+    );
+  }
+
+  /**
+   * OAuth2 consent
+   * GET /v1/oauth/consent
+   */
+  async oauth2ConsentPage(token: string): Promise<void> {
+    const path = "/v1/oauth/consent";
+    return this.request<void>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * OAuth2 consent decision
+   * POST /v1/oauth/consent
+   */
+  async oauth2ConsentDecision(token: string): Promise<void> {
+    const path = "/v1/oauth/consent";
+    return this.request<void>(
+      'POST',
+      path,
+      undefined,
+      token,
     );
   }
 
@@ -2444,8 +2519,12 @@ export class AuthClient {
    * List organizations
    * GET /v1/orgs
    */
-  async listOrganizations(token: string): Promise<OrgListResponse> {
-    const path = "/v1/orgs";
+  async listOrganizations(token: string, limit?: number, cursor?: string): Promise<OrgListResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', String(limit));
+    if (cursor !== undefined) params.set('cursor', String(cursor));
+    const qs = params.toString();
+    const path = "/v1/orgs" + (qs ? `?${qs}` : '');
     return this.request<OrgListResponse>(
       'GET',
       path,
@@ -2560,8 +2639,12 @@ export class AuthClient {
    * List invitations
    * GET /v1/orgs/{orgId}/invitations
    */
-  async listInvitations(orgId: string, token: string): Promise<InvitationListResponse> {
-    const path = `/v1/orgs/${orgId}/invitations`;
+  async listInvitations(orgId: string, token: string, limit?: number, cursor?: string): Promise<InvitationListResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', String(limit));
+    if (cursor !== undefined) params.set('cursor', String(cursor));
+    const qs = params.toString();
+    const path = `/v1/orgs/${orgId}/invitations` + (qs ? `?${qs}` : '');
     return this.request<InvitationListResponse>(
       'GET',
       path,
@@ -2588,8 +2671,12 @@ export class AuthClient {
    * List members
    * GET /v1/orgs/{orgId}/members
    */
-  async listMembers(orgId: string, token: string): Promise<MemberListResponse> {
-    const path = `/v1/orgs/${orgId}/members`;
+  async listMembers(orgId: string, token: string, limit?: number, cursor?: string): Promise<MemberListResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', String(limit));
+    if (cursor !== undefined) params.set('cursor', String(cursor));
+    const qs = params.toString();
+    const path = `/v1/orgs/${orgId}/members` + (qs ? `?${qs}` : '');
     return this.request<MemberListResponse>(
       'GET',
       path,
@@ -2644,8 +2731,12 @@ export class AuthClient {
    * List teams
    * GET /v1/orgs/{orgId}/teams
    */
-  async listTeams(orgId: string, token: string): Promise<TeamListResponse> {
-    const path = `/v1/orgs/${orgId}/teams`;
+  async listTeams(orgId: string, token: string, limit?: number, cursor?: string): Promise<TeamListResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', String(limit));
+    if (cursor !== undefined) params.set('cursor', String(cursor));
+    const qs = params.toString();
+    const path = `/v1/orgs/${orgId}/teams` + (qs ? `?${qs}` : '');
     return this.request<TeamListResponse>(
       'GET',
       path,
@@ -3019,10 +3110,28 @@ export class AuthClient {
    * List sessions
    * GET /v1/sessions
    */
-  async listSessions(token: string): Promise<SessionListResponse> {
-    const path = "/v1/sessions";
+  async listSessions(token: string, limit?: number, cursor?: string): Promise<SessionListResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', String(limit));
+    if (cursor !== undefined) params.set('cursor', String(cursor));
+    const qs = params.toString();
+    const path = "/v1/sessions" + (qs ? `?${qs}` : '');
     return this.request<SessionListResponse>(
       'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Revoke other sessions
+   * DELETE /v1/sessions
+   */
+  async revokeOtherSessions(token: string): Promise<ApiStatusResponse> {
+    const path = "/v1/sessions";
+    return this.request<ApiStatusResponse>(
+      'DELETE',
       path,
       undefined,
       token,
@@ -3299,9 +3408,9 @@ export class AuthClient {
    * Create webhook
    * POST /v1/webhooks
    */
-  async createWebhook(body: CreateWebhookRequest, token: string): Promise<Webhook> {
+  async createWebhook(body: CreateWebhookRequest, token: string): Promise<CreateWebhookResponse> {
     const path = "/v1/webhooks";
-    return this.request<Webhook>(
+    return this.request<CreateWebhookResponse>(
       'POST',
       path,
       body,
@@ -3345,6 +3454,20 @@ export class AuthClient {
     const path = `/v1/webhooks/${webhookId}`;
     return this.request<ApiStatusResponse>(
       'DELETE',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Rotate webhook secret
+   * POST /v1/webhooks/{webhookId}/rotate-secret
+   */
+  async rotateWebhookSecret(webhookId: string, token: string): Promise<RotateWebhookSecretResponse> {
+    const path = `/v1/webhooks/${webhookId}/rotate-secret`;
+    return this.request<RotateWebhookSecretResponse>(
+      'POST',
       path,
       undefined,
       token,

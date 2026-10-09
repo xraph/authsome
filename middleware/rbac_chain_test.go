@@ -80,13 +80,13 @@ func serveGuardedCapturingActors(
 	var ctxActors principal.Chain
 
 	auth := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if sess != nil && token == sess.Token {
 				return sess, nil
 			}
 			return nil, errors.New("invalid token")
 		},
-		func(uid string) (*user.User, error) {
+		func(_ context.Context, uid string) (*user.User, error) {
 			parsed, err := id.ParseUserID(uid)
 			if err != nil {
 				return nil, err

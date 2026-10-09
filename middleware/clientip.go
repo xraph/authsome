@@ -21,7 +21,22 @@ import (
 var (
 	trustedProxyMu   sync.RWMutex
 	trustedProxyNets = defaultTrustedProxyNets()
+	// trustedProxyConfigured is set once an operator names the proxies,
+	// through the environment or SetTrustedProxies; while it is false the
+	// built-in private-range set is in use, which trusts any peer on the
+	// same network to speak for the client.
+	trustedProxyConfigured bool
 )
+
+// TrustedProxiesAreDefault reports whether the built-in private-range set
+// is in use because nobody configured one. A deployment behind a load
+// balancer on a public address, or with untrusted workloads on the same
+// private network, should set AUTHSOME_TRUSTED_PROXIES.
+func TrustedProxiesAreDefault() bool {
+	trustedProxyMu.RLock()
+	defer trustedProxyMu.RUnlock()
+	return !trustedProxyConfigured
+}
 
 func defaultTrustedProxyNets() []*net.IPNet {
 	return parseCIDRs([]string{
@@ -50,9 +65,11 @@ func SetTrustedProxies(nets []*net.IPNet) {
 	defer trustedProxyMu.Unlock()
 	if nets == nil {
 		trustedProxyNets = defaultTrustedProxyNets()
+		trustedProxyConfigured = false
 		return
 	}
 	trustedProxyNets = nets
+	trustedProxyConfigured = true
 }
 
 func isTrustedProxy(ip net.IP) bool {
@@ -134,20 +151,10 @@ func ClientIP(r *http.Request) string {
 //
 // Query and fragment are excluded: RFC 9449 compares htu without them.
 func RequestURL(r *http.Request) string {
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
+	scheme := requestScheme(r)
 	host := r.Host
 
 	if peer := peerIP(r.RemoteAddr); peer != nil && isTrustedProxy(peer) {
-		if p := r.Header.Get("X-Forwarded-Proto"); p != "" {
-			// Take the first entry: a chain of proxies appends.
-			if i := strings.IndexByte(p, ','); i >= 0 {
-				p = p[:i]
-			}
-			scheme = strings.ToLower(strings.TrimSpace(p))
-		}
 		if h := r.Header.Get("X-Forwarded-Host"); h != "" {
 			if i := strings.IndexByte(h, ','); i >= 0 {
 				h = h[:i]
@@ -157,4 +164,30 @@ func RequestURL(r *http.Request) string {
 	}
 
 	return (&url.URL{Scheme: scheme, Host: host, Path: r.URL.Path}).String()
+}
+
+// requestScheme is the scheme the client used: https on a TLS socket, and
+// otherwise whatever X-Forwarded-Proto says, but only when the peer is a
+// trusted proxy. Anyone can send the header; only a proxy the operator
+// named is believed.
+func requestScheme(r *http.Request) string {
+	if r.TLS != nil {
+		return "https"
+	}
+	if peer := peerIP(r.RemoteAddr); peer != nil && isTrustedProxy(peer) {
+		if p := r.Header.Get("X-Forwarded-Proto"); p != "" {
+			// Take the first entry: a chain of proxies appends.
+			if i := strings.IndexByte(p, ','); i >= 0 {
+				p = p[:i]
+			}
+			return strings.ToLower(strings.TrimSpace(p))
+		}
+	}
+	return "http"
+}
+
+// IsHTTPS reports whether the client reached the service over TLS, judged
+// the way RequestURL judges it: the socket, or a trusted proxy's word.
+func IsHTTPS(r *http.Request) bool {
+	return requestScheme(r) == "https"
 }

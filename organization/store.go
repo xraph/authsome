@@ -3,6 +3,8 @@ package organization
 import (
 	"context"
 
+	"github.com/xraph/authsome/page"
+
 	"github.com/xraph/authsome/id"
 )
 
@@ -16,6 +18,9 @@ type Store interface {
 	DeleteOrganization(ctx context.Context, orgID id.OrgID) error
 	ListOrganizations(ctx context.Context, appID id.AppID) ([]*Organization, error)
 	ListUserOrganizations(ctx context.Context, userID id.UserID) ([]*Organization, error)
+	// Paged twins for the request path; see page.Opts.
+	ListOrganizationsPage(ctx context.Context, appID id.AppID, opts page.Opts) (page.Page[*Organization], error)
+	ListUserOrganizationsPage(ctx context.Context, userID id.UserID, opts page.Opts) (page.Page[*Organization], error)
 
 	// Membership
 	CreateMember(ctx context.Context, m *Member) error
@@ -24,6 +29,7 @@ type Store interface {
 	UpdateMember(ctx context.Context, m *Member) error
 	DeleteMember(ctx context.Context, memberID id.MemberID) error
 	ListMembers(ctx context.Context, orgID id.OrgID) ([]*Member, error)
+	ListMembersPage(ctx context.Context, orgID id.OrgID, opts page.Opts) (page.Page[*Member], error)
 
 	// Invitations
 	CreateInvitation(ctx context.Context, inv *Invitation) error
@@ -32,6 +38,7 @@ type Store interface {
 	UpdateInvitation(ctx context.Context, inv *Invitation) error
 	DeleteInvitation(ctx context.Context, invID id.InvitationID) error
 	ListInvitations(ctx context.Context, orgID id.OrgID) ([]*Invitation, error)
+	ListInvitationsPage(ctx context.Context, orgID id.OrgID, opts page.Opts) (page.Page[*Invitation], error)
 
 	// Teams
 	CreateTeam(ctx context.Context, t *Team) error
@@ -39,6 +46,7 @@ type Store interface {
 	UpdateTeam(ctx context.Context, t *Team) error
 	DeleteTeam(ctx context.Context, teamID id.TeamID) error
 	ListTeams(ctx context.Context, orgID id.OrgID) ([]*Team, error)
+	ListTeamsPage(ctx context.Context, orgID id.OrgID, opts page.Opts) (page.Page[*Team], error)
 
 	// WithTx runs fn inside a single store transaction. The fn receives a
 	// Store handle scoped to the transaction; on error, all writes via that

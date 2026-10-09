@@ -19,9 +19,10 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/bridge"
-	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/lockout"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store/memory"
 
@@ -63,10 +64,11 @@ func NewTestEngine(t *testing.T, opts ...authsome.Option) *authsome.Engine {
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err, "secutil: build warden engine")
 
-	all := make([]authsome.Option, 0, 4+len(opts))
+	all := make([]authsome.Option, 0, 5+len(opts))
 	all = append(all,
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
+		authsome.WithChronicle(NewBufferedChronicle()),
 		authsome.WithDisableMigrate(),
 		authsome.WithAppID(testAppID),
 	)
@@ -182,15 +184,6 @@ func AttachChronicle(t *testing.T, eng *authsome.Engine, ch *BufferedChronicle) 
 	eng.SetChronicle(ch)
 }
 
-// InitTestNonceSigner installs a deterministic process-wide nonce signer so
-// tests that exercise GenerateScopedNonce / ConsumeScopedNonce code paths
-// don't have to wire one themselves.
-func InitTestNonceSigner(t *testing.T) {
-	t.Helper()
-	require.NoError(t, dashboard.InitNonceSigner([]byte("secutil-test-nonce-signer-secret-32bytes!")),
-		"secutil: init nonce signer")
-}
-
 // RelaxAuthDefaults disables the production-secure auth defaults that would
 // otherwise break the bulk of authsome's pre-existing tests:
 //
@@ -208,6 +201,11 @@ func InitTestNonceSigner(t *testing.T) {
 func RelaxAuthDefaults(t *testing.T, eng *authsome.Engine) {
 	t.Helper()
 	require.NotNil(t, eng, "secutil: RelaxAuthDefaults: nil engine")
+	// Rate limiting and lockout are on by default; a test that signs in
+	// many times from httptest's single address would trip them. Tests that
+	// exercise the limits build their own engine and never call this.
+	eng.SetRateLimiter(ratelimit.NewNoopLimiter())
+	eng.SetLockoutTracker(lockout.NewNoopTracker())
 	mgr := eng.Settings()
 	if mgr == nil {
 		return
@@ -218,6 +216,22 @@ func RelaxAuthDefaults(t *testing.T, eng *authsome.Engine) {
 			json.RawMessage(`false`),
 			settings.ScopeGlobal, "", "", "", "test-bootstrap"),
 		"secutil: relax auth.require_email_verification")
+}
+
+// VerifyEmail proves the user's email through the real OTP path: it has the
+// engine issue a code, the same way a resend does, and submits it. The store
+// keeps codes only as hashes, so the code sign-up issued cannot be read back;
+// issuing a fresh one retires it. Use this wherever a test needs a verified
+// user, including the first platform user, whose ownership is only granted
+// on verification.
+func VerifyEmail(t *testing.T, eng *authsome.Engine, userID id.UserID) {
+	t.Helper()
+	ctx := context.Background()
+	u, err := eng.Store().GetUser(ctx, userID)
+	require.NoError(t, err, "secutil: VerifyEmail: load user %s", userID)
+	code, err := eng.SendEmailVerification(ctx, u)
+	require.NoError(t, err, "secutil: VerifyEmail: issue code for %s", userID)
+	require.NoError(t, eng.VerifyEmailCode(ctx, userID, code), "secutil: VerifyEmail")
 }
 
 // InjectStoreFault makes the named store method return err on its next

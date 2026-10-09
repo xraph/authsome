@@ -119,7 +119,7 @@ func (p *Plugin) DefaultGrantTTL() time.Duration { return p.grantTTL }
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.engine = engine
 	p.hooks = engine.Hooks()
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.logger = engine.Logger()
 	// The router plugins register on is already grouped at the app's base
 	// path (extension/extension.go groups it before handing plugins the

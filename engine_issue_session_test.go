@@ -38,7 +38,7 @@ func issueSessionFixture(t *testing.T) (*authsome.Engine, *user.User, id.AppID) 
 	u, _, err := eng.SignUp(context.Background(), &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "issuesession@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Issue",
 	})
 	require.NoError(t, err)
@@ -202,7 +202,9 @@ func TestIssueSession_AuditMetadataIncludesAuthMethod(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	secutil.AssertAuditEvent(t, ch, "issue_session", func(ev *bridge.AuditEvent) {
+	// IssueSession is the one place a sign-in is recorded, under the
+	// public action name, so every auth method shares one event shape.
+	secutil.AssertAuditEvent(t, ch, "auth.signin", func(ev *bridge.AuditEvent) {
 		require.NotNil(t, ev)
 		assert.Equal(t, "social:google", ev.Metadata["auth_method"])
 	})

@@ -92,7 +92,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.engine = engine
 	p.hooks = engine.Hooks()
 	p.relay = engine.Relay()
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.logger = engine.Logger()
 
 	p.basePath = "/v1"
@@ -196,7 +196,7 @@ func (p *Plugin) handleGrant(ctx forge.Context, req *GrantConsentRequest) (*Cons
 	}
 
 	if err := p.store.GrantConsent(ctx.Context(), c); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to record consent"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to record consent"))
 	}
 
 	p.audit(ctx.Context(), "consent.grant", "consent", c.ID.String(), userID.String(), appID.String(), map[string]string{
@@ -238,7 +238,7 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeConsentRequest) (*St
 		if errors.Is(err, ErrNotFound) {
 			return nil, forge.NotFound("consent record not found")
 		}
-		return nil, forge.InternalError(fmt.Errorf("failed to revoke consent"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to revoke consent"))
 	}
 
 	p.audit(ctx.Context(), "consent.revoke", "consent", "", userID.String(), appID.String(), map[string]string{
@@ -278,7 +278,7 @@ func (p *Plugin) handleList(ctx forge.Context, req *ListConsentsRequest) (*ListR
 
 	consents, cursor, err := p.store.ListConsents(ctx.Context(), q)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to list consents"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list consents"))
 	}
 
 	resp := &ListResponse{
@@ -376,4 +376,14 @@ func (p *Plugin) emitHook(ctx context.Context, action, resource, resourceID, act
 // record whose purpose is to evidence who consented and from where.
 func clientIPFromRequest(ctx forge.Context) string {
 	return middleware.ClientIP(ctx.Request())
+}
+
+// OnBeforeUserDelete keeps the user's consent history as proof of what was
+// granted and when, with every recorded address reduced to its network.
+func (p *Plugin) OnBeforeUserDelete(ctx context.Context, userID id.UserID) error {
+	if p.store == nil {
+		return nil
+	}
+	_, err := p.store.AnonymizeUserConsents(ctx, userID)
+	return err
 }

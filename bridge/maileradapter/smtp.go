@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/smtp"
 	"strings"
+	"time"
 
 	"github.com/xraph/authsome/bridge"
 )
@@ -77,29 +78,31 @@ func (m *SMTPMailer) SendEmail(ctx context.Context, msg *bridge.EmailMessage) er
 		auth = smtp.PlainAuth("", m.username, m.password, m.host)
 	}
 
+	// Every SMTP conversation runs under a deadline: the request's own when
+	// it has one, else defaultSMTPTimeout. A mail server that accepts the
+	// connection and then says nothing must not hold a sign-up open.
+	deadline := time.Now().Add(defaultSMTPTimeout)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
+	dialCtx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+
+	var conn net.Conn
+	var err error
 	if m.useTLS {
-		return m.sendWithTLS(ctx, addr, from, msg.To, body.String(), auth)
+		dialer := &tls.Dialer{NetDialer: &net.Dialer{}, Config: m.tlsConfig()}
+		conn, err = dialer.DialContext(dialCtx, "tcp", addr)
+	} else {
+		conn, err = (&net.Dialer{}).DialContext(dialCtx, "tcp", addr)
 	}
-
-	if err := smtp.SendMail(addr, auth, from, msg.To, []byte(body.String())); err != nil {
-		return fmt.Errorf("smtp: send mail: %w", err)
-	}
-	return nil
-}
-
-// sendWithTLS establishes a TLS connection and sends the email.
-func (m *SMTPMailer) sendWithTLS(ctx context.Context, addr, from string, to []string, body string, auth smtp.Auth) error {
-	tlsConfig := &tls.Config{
-		ServerName: m.host,
-		MinVersion: tls.VersionTLS12,
-	}
-
-	dialer := &tls.Dialer{Config: tlsConfig}
-	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return fmt.Errorf("smtp: tls dial: %w", err)
+		return fmt.Errorf("smtp: dial: %w", err)
 	}
 	defer conn.Close()
+	if deadlineErr := conn.SetDeadline(deadline); deadlineErr != nil {
+		return fmt.Errorf("smtp: set deadline: %w", deadlineErr)
+	}
 
 	client, err := smtp.NewClient(conn, m.host)
 	if err != nil {
@@ -107,12 +110,34 @@ func (m *SMTPMailer) sendWithTLS(ctx context.Context, addr, from string, to []st
 	}
 	defer client.Close()
 
+	// A plain connection upgrades with STARTTLS when the server offers it,
+	// as smtp.SendMail did before the deadline made a hand-rolled
+	// conversation necessary.
+	if !m.useTLS {
+		if ok, _ := client.Extension("STARTTLS"); ok {
+			if tlsErr := client.StartTLS(m.tlsConfig()); tlsErr != nil {
+				return fmt.Errorf("smtp: starttls: %w", tlsErr)
+			}
+		}
+	}
+	return deliver(client, from, msg.To, body.String(), auth)
+}
+
+// defaultSMTPTimeout bounds an SMTP conversation whose context has no
+// deadline of its own.
+const defaultSMTPTimeout = 30 * time.Second
+
+func (m *SMTPMailer) tlsConfig() *tls.Config {
+	return &tls.Config{ServerName: m.host, MinVersion: tls.VersionTLS12}
+}
+
+// deliver runs the SMTP conversation on an open, deadline-bound client.
+func deliver(client *smtp.Client, from string, to []string, body string, auth smtp.Auth) error {
 	if auth != nil {
 		if authErr := client.Auth(auth); authErr != nil {
 			return fmt.Errorf("smtp: auth: %w", authErr)
 		}
 	}
-
 	if mailErr := client.Mail(from); mailErr != nil {
 		return fmt.Errorf("smtp: mail from: %w", mailErr)
 	}
@@ -121,7 +146,6 @@ func (m *SMTPMailer) sendWithTLS(ctx context.Context, addr, from string, to []st
 			return fmt.Errorf("smtp: rcpt to %s: %w", recipient, rcptErr)
 		}
 	}
-
 	w, err := client.Data()
 	if err != nil {
 		return fmt.Errorf("smtp: data: %w", err)
@@ -132,6 +156,5 @@ func (m *SMTPMailer) sendWithTLS(ctx context.Context, addr, from string, to []st
 	if err := w.Close(); err != nil {
 		return fmt.Errorf("smtp: close data: %w", err)
 	}
-
 	return client.Quit()
 }

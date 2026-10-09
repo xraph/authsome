@@ -53,6 +53,7 @@ type Invitation struct {
 	InviterID id.UserID        `json:"inviter_id"`
 	Status    InvitationStatus `json:"status"`
 	Token     string           `json:"-"`
+	TokenHash string           `json:"-"`
 	ExpiresAt time.Time        `json:"expires_at"`
 	CreatedAt time.Time        `json:"created_at"`
 }

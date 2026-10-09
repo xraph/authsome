@@ -45,6 +45,8 @@ void main() {
       );
 
       expect(find.byType(PasskeyLoginButton), findsOneWidget);
+      expect(find.byType(OrDivider), findsOneWidget);
+      expect(find.text('Continue with passkey'), findsOneWidget);
     },
   );
 
@@ -90,4 +92,62 @@ void main() {
       expect(find.byType(PasskeyLoginButton), findsNothing);
     },
   );
+
+  for (final showPasskey in <bool?>[null, true]) {
+    testWidgets(
+      'unavailable default authenticator leaves no divider with showPasskey=$showPasskey',
+      (tester) async {
+        final mockAuth = buildIdleMock(
+          clientConfig: const ClientConfig(
+            passkey: PasskeyConfig(enabled: true),
+          ),
+        );
+        await pumpAuthSomeApp(
+          tester,
+          child: SignInForm(auth: mockAuth, showPasskey: showPasskey),
+        );
+
+        expect(find.byType(OrDivider), findsNothing);
+        expect(find.byType(PasskeyLoginButton), findsNothing);
+        expect(find.text('Continue'), findsOneWidget);
+      },
+    );
+  }
+
+  testWidgets('social login keeps its divider when passkeys are unavailable',
+      (tester) async {
+    final mockAuth = buildIdleMock(
+      clientConfig: const ClientConfig(passkey: PasskeyConfig(enabled: true)),
+    );
+    await pumpAuthSomeApp(
+      tester,
+      child: SignInForm(
+        auth: mockAuth,
+        socialProviders: const [SocialProvider(id: 'google', name: 'Google')],
+      ),
+    );
+
+    expect(find.byType(SocialButtons), findsOneWidget);
+    expect(find.byType(OrDivider), findsOneWidget);
+    expect(find.byType(PasskeyLoginButton), findsNothing);
+  });
+
+  testWidgets('replacing an available authenticator removes its divider',
+      (tester) async {
+    final mockAuth = buildIdleMock(
+      clientConfig: const ClientConfig(passkey: PasskeyConfig(enabled: true)),
+    );
+    await pumpAuthSomeApp(
+      tester,
+      child: SignInForm(
+        auth: mockAuth,
+        passkeyAuthenticator: _AlwaysAvailablePasskey(),
+      ),
+    );
+    expect(find.byType(OrDivider), findsOneWidget);
+    await pumpAuthSomeApp(tester, child: SignInForm(auth: mockAuth));
+
+    expect(find.byType(OrDivider), findsNothing);
+    expect(find.byType(PasskeyLoginButton), findsNothing);
+  });
 }

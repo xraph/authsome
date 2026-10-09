@@ -37,6 +37,7 @@ func TestUpdateClient_SQLiteRoundTrip(t *testing.T) {
 		AppID:        appID,
 		Name:         "Before",
 		ClientID:     "sqlite-update-client",
+		FirstParty:   true,
 		RedirectURIs: []string{"https://app.example.com/cb"},
 		Scopes:       []string{"openid"},
 		GrantTypes:   []string{"authorization_code"},

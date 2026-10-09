@@ -76,25 +76,39 @@ type Options struct {
 	ValidateURI func(rawURL string) error
 }
 
+// NewHTTPClient returns a client for fetching documents an inbound request
+// named: JWKS sets, OIDC discovery, provider userinfo. It refuses to dial
+// loopback, private, link-local and unspecified addresses at connect time,
+// which catches both a hostname that resolves to an internal address and a
+// DNS answer that changed since the URL was validated; it follows at most
+// two same-host https redirects; and it gives up after timeout. Pair it with
+// ValidateURI, which rejects the obvious cases before any network work.
+func NewHTTPClient(timeout time.Duration) *http.Client {
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: timeout,
+				// Control runs after DNS resolution, on the resolved IP,
+				// immediately before the socket opens. That is the only
+				// point that catches both a hostname that resolves
+				// straight to an internal address (ValidateURI's literal
+				// check never sees a bare hostname) and DNS rebinding
+				// (an address that was public when ValidateURI ran and
+				// is not by the time we actually connect).
+				Control: guardDialAddress,
+			}).DialContext,
+		},
+		CheckRedirect: checkRedirect,
+	}
+}
+
 func (o *Options) defaults() {
 	if o.HTTPClient == nil {
-		o.HTTPClient = &http.Client{
-			Timeout: 5 * time.Second,
-			Transport: &http.Transport{
-				DialContext: (&net.Dialer{
-					Timeout: 5 * time.Second,
-					// Control runs after DNS resolution, on the resolved IP,
-					// immediately before the socket opens. That is the only
-					// point that catches both a hostname that resolves
-					// straight to an internal address (ValidateURI's literal
-					// check never sees a bare hostname) and DNS rebinding
-					// (an address that was public when ValidateURI ran and
-					// is not by the time we actually connect).
-					Control: guardDialAddress,
-				}).DialContext,
-			},
-			CheckRedirect: checkRedirect,
-		}
+		o.HTTPClient = NewHTTPClient(5 * time.Second)
 	}
 	if o.MinRefetchInterval == 0 {
 		o.MinRefetchInterval = 5 * time.Minute

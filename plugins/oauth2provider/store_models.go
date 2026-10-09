@@ -7,6 +7,7 @@ import (
 	"github.com/xraph/grove"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/store"
 )
 
 // ──────────────────────────────────────────────────
@@ -34,6 +35,7 @@ type oauth2ClientModel struct {
 	Metadata                json.RawMessage `grove:"metadata,type:jsonb"`
 	DPoPMode                string          `grove:"dpop_mode,notnull"`
 	PrincipalID             string          `grove:"principal_id,notnull"`
+	FirstParty              bool            `grove:"first_party,notnull"`
 
 	CreatedAt time.Time `grove:"created_at,notnull,default:now()"`
 	UpdatedAt time.Time `grove:"updated_at,notnull,default:now()"`
@@ -46,7 +48,11 @@ type oauth2ClientModel struct {
 type authCodeModel struct {
 	grove.BaseModel `grove:"table:authsome_oauth2_auth_codes,alias:ac"`
 
-	ID                  string          `grove:"id,pk"`
+	ID string `grove:"id,pk"`
+	// Code holds store.HashToken of the authorization code. Codes live for
+	// minutes, so there is no legacy plaintext path: a code minted by a
+	// release before hashing simply fails to redeem once that release is
+	// gone, and the client re-runs the authorization request.
 	Code                string          `grove:"code,notnull"`
 	ClientID            string          `grove:"client_id,notnull"`
 	UserID              string          `grove:"user_id,notnull"`
@@ -68,7 +74,9 @@ type authCodeModel struct {
 type deviceCodeModel struct {
 	grove.BaseModel `grove:"table:authsome_oauth2_device_codes,alias:dc"`
 
-	ID              string          `grove:"id,pk"`
+	ID string `grove:"id,pk"`
+	// DeviceCode and UserCode hold store.HashToken of the codes the device
+	// and the human present; see authCodeModel.Code.
 	DeviceCode      string          `grove:"device_code,notnull"`
 	UserCode        string          `grove:"user_code,notnull"`
 	ClientID        string          `grove:"client_id,notnull"`
@@ -154,6 +162,7 @@ func toOAuth2Client(m *oauth2ClientModel) (*OAuth2Client, error) {
 		Metadata:                metadata,
 		DPoPMode:                m.DPoPMode,
 		PrincipalID:             parsePrincipalID(m.PrincipalID),
+		FirstParty:              m.FirstParty,
 		CreatedAt:               m.CreatedAt,
 		UpdatedAt:               m.UpdatedAt,
 	}, nil
@@ -200,6 +209,7 @@ func fromOAuth2Client(c *OAuth2Client) *oauth2ClientModel {
 		Metadata:                metadata,
 		DPoPMode:                c.DPoPMode,
 		PrincipalID:             principalIDString(c.PrincipalID),
+		FirstParty:              c.FirstParty,
 		CreatedAt:               c.CreatedAt,
 		UpdatedAt:               c.UpdatedAt,
 	}
@@ -261,7 +271,7 @@ func fromAuthCode(c *AuthorizationCode) *authCodeModel {
 
 	return &authCodeModel{
 		ID:                  c.ID.String(),
-		Code:                c.Code,
+		Code:                store.HashToken(c.Code),
 		ClientID:            c.ClientID,
 		UserID:              c.UserID.String(),
 		AppID:               c.AppID.String(),
@@ -337,8 +347,8 @@ func fromDeviceCode(dc *DeviceCode) *deviceCodeModel {
 
 	return &deviceCodeModel{
 		ID:              dc.ID.String(),
-		DeviceCode:      dc.DeviceCode,
-		UserCode:        dc.UserCode,
+		DeviceCode:      store.HashToken(dc.DeviceCode),
+		UserCode:        store.HashToken(dc.UserCode),
 		ClientID:        dc.ClientID,
 		AppID:           dc.AppID.String(),
 		Scopes:          scopes,
@@ -387,3 +397,58 @@ func parsePrincipalID(s string) id.ServiceAccountID {
 // on time, east of UTC live rows are swept early. Normalizing on the way in
 // keeps every stored timestamp on one clock.
 func utc(t time.Time) time.Time { return t.UTC() }
+
+// ──────────────────────────────────────────────────
+// Grant model (shared across SQL stores)
+// ──────────────────────────────────────────────────
+
+type grantModel struct {
+	grove.BaseModel `grove:"table:authsome_oauth2_grants,alias:og"`
+
+	ID        string          `grove:"id,pk"`
+	AppID     string          `grove:"app_id,notnull"`
+	UserID    string          `grove:"user_id,notnull"`
+	ClientID  string          `grove:"client_id,notnull"`
+	Scopes    json.RawMessage `grove:"scopes,type:jsonb"`
+	CreatedAt time.Time       `grove:"created_at,notnull,default:now()"`
+	UpdatedAt time.Time       `grove:"updated_at,notnull,default:now()"`
+}
+
+func fromGrant(g *Grant) *grantModel {
+	scopes, _ := json.Marshal(g.Scopes) //nolint:errcheck // marshaling known types
+	if len(g.Scopes) == 0 {
+		scopes = []byte("[]")
+	}
+	return &grantModel{
+		ID:        g.ID.String(),
+		AppID:     g.AppID.String(),
+		UserID:    g.UserID.String(),
+		ClientID:  g.ClientID,
+		Scopes:    scopes,
+		CreatedAt: g.CreatedAt,
+		UpdatedAt: g.UpdatedAt,
+	}
+}
+
+func toGrant(m *grantModel) (*Grant, error) {
+	grantID, err := id.ParseOAuth2GrantID(m.ID)
+	if err != nil {
+		return nil, err
+	}
+	appID, err := id.ParseAppID(m.AppID)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := id.ParseUserID(m.UserID)
+	if err != nil {
+		return nil, err
+	}
+	var scopes []string
+	if len(m.Scopes) > 0 {
+		_ = json.Unmarshal(m.Scopes, &scopes) //nolint:errcheck // best-effort decode
+	}
+	if scopes == nil {
+		scopes = []string{}
+	}
+	return &Grant{ID: grantID, AppID: appID, UserID: userID, ClientID: m.ClientID, Scopes: scopes, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}, nil
+}

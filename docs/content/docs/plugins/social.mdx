@@ -112,6 +112,10 @@ type Provider interface {
 }
 ```
 
+## Browser binding
+
+A login started from a browser (the start request carries fetch metadata or an `Origin` header) sets a `__Host-authsome_oauth_state` cookie holding a digest of the login's state, and the callback for that state is refused unless it arrives with the matching cookie. Native clients, which send neither header, set no cookie and stay bound by the state and PKCE verifier.
+
 ## OAuth2 callback flow
 
 

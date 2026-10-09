@@ -8,6 +8,7 @@ import (
 
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/store"
 	memory "github.com/xraph/authsome/store/memory"
 )
 
@@ -32,7 +33,7 @@ func TestRotateSession_CompareAndSwap(t *testing.T) {
 	win := *sess
 	win.Token = "T1"
 	win.RefreshToken = "R1"
-	ok, err := s.RotateSession(ctx, &win, "T0")
+	ok, err := s.RotateSession(ctx, &win, store.HashToken("T0"))
 	require.NoError(t, err)
 	require.True(t, ok, "CAS with the current token must succeed")
 
@@ -40,15 +41,16 @@ func TestRotateSession_CompareAndSwap(t *testing.T) {
 	lose := *sess
 	lose.Token = "T2"
 	lose.RefreshToken = "R2"
-	ok, err = s.RotateSession(ctx, &lose, "T0")
+	ok, err = s.RotateSession(ctx, &lose, store.HashToken("T0"))
 	require.NoError(t, err)
 	require.False(t, ok, "CAS with a stale token must not overwrite the winner")
 
 	// The stored session must reflect the winner's tokens.
 	got, err := s.GetSession(ctx, sess.ID)
 	require.NoError(t, err)
-	require.Equal(t, "T1", got.Token, "winner's access token must be persisted")
-	require.Equal(t, "R1", got.RefreshToken, "winner's refresh token must be persisted")
+	require.Equal(t, store.HashToken("T1"), got.TokenHash, "winner's access token must be persisted")
+	require.Equal(t, store.HashToken("R1"), got.RefreshTokenHash, "winner's refresh token must be persisted")
+	require.Empty(t, got.Token, "no plaintext at rest")
 }
 
 // TestGetSessionByRefreshToken_ReturnsCopy pins that the memory store hands out
@@ -77,5 +79,5 @@ func TestGetSessionByRefreshToken_ReturnsCopy(t *testing.T) {
 
 	stored, err := s.GetSession(ctx, sess.ID)
 	require.NoError(t, err)
-	require.Equal(t, "T0", stored.Token, "mutating a fetched session must not leak into the store")
+	require.Equal(t, store.HashToken("T0"), stored.TokenHash, "mutating a fetched session must not leak into the store")
 }

@@ -28,7 +28,7 @@ func TestUnlinkAuthMethod_BindsProviderFromPath(t *testing.T) {
 	_, eng := newTestAPI(t)
 	handler := newAPIWithRouter(t, eng)
 
-	_, token, _ := signUp(t, eng, "unlink-path-bind@test.com", "SecureP@ss1")
+	_, token, _ := signUp(t, eng, "unlink-path-bind@test.com", "SecureP@ss123")
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/v1/me/auth-methods/password", nil)
 	req = asUser(req, userIDFor(t, eng, token))

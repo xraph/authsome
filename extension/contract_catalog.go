@@ -64,8 +64,8 @@ func fetchContractCatalog(ctx context.Context, baseURL, apiKey string) ([]*contr
 		}
 		seen[manifest.Contributor.Name] = true
 	}
-	if !seen["auth"] {
-		return nil, fmt.Errorf("manifest catalog is missing auth")
+	if !seen[ExtensionName] {
+		return nil, fmt.Errorf("manifest catalog is missing the %s contributor", ExtensionName)
 	}
 	return catalog.Manifests, nil
 }

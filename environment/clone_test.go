@@ -70,7 +70,7 @@ func (m *mockCloneSource) ListRolesForClone(_ context.Context, _ id.AppID, _ id.
 	return m.roles, nil
 }
 
-func (m *mockCloneSource) ListPermissionsForClone(_ context.Context, roleID string) ([]*PermissionForClone, error) {
+func (m *mockCloneSource) ListPermissionsForClone(_ context.Context, _, roleID string) ([]*PermissionForClone, error) {
 	return m.permissions[roleID], nil
 }
 

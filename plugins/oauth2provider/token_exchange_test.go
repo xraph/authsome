@@ -17,12 +17,13 @@ import (
 
 	"github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/oauth2provider"
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/ratelimit"
-	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/store/memory"
@@ -40,16 +41,20 @@ const (
 	xchgSecret      = "svc-exchange-secret"
 )
 
-// recordingEvents captures what the plugin writes.
-type recordingEvents struct{ events []*securityevent.Event }
-
-func (r *recordingEvents) RecordSecurityEvent(_ context.Context, e *securityevent.Event) error {
-	r.events = append(r.events, e)
-	return nil
+// recordingEvents captures what the plugin emits on the hook bus, which is
+// the one path every audit record takes.
+type recordingEvents struct {
+	bus    *hook.Bus
+	events []*hook.Event
 }
 
-func (r *recordingEvents) QuerySecurityEvents(_ context.Context, _ *securityevent.Query) ([]*securityevent.Event, string, error) {
-	return r.events, "", nil
+func newRecordingEvents() *recordingEvents {
+	r := &recordingEvents{bus: hook.NewBus(log.NewNoopLogger())}
+	r.bus.On("capture", func(_ context.Context, ev *hook.Event) error {
+		r.events = append(r.events, ev)
+		return nil
+	})
+	return r
 }
 
 // exchangeEngine implements only the plugin.Engine methods this grant touches,
@@ -69,13 +74,16 @@ type exchangeEngine struct {
 	exchangeErr  error
 }
 
-func (e *exchangeEngine) Store() store.Store                  { return e.core }
-func (e *exchangeEngine) Logger() log.Logger                  { return log.NewNoopLogger() }
-func (e *exchangeEngine) SecurityEvents() securityevent.Store { return e.events }
+func (e *exchangeEngine) Store() store.Store { return e.core }
+func (e *exchangeEngine) Logger() log.Logger { return log.NewNoopLogger() }
+func (e *exchangeEngine) Hooks() *hook.Bus   { return e.events.bus }
 
 // Nil is a valid answer here: OnInit reads it and falls back to a
 // process-local limiter, which is what a test wants anyway.
 func (e *exchangeEngine) RateLimiter() ratelimit.Limiter { return nil }
+
+// CeremonyStore backs the consent flow the plugin wires at init.
+func (e *exchangeEngine) CeremonyStore() ceremony.Store { return ceremony.NewMemory() }
 
 // Nil registry means SessionGuard and AdminGuard attach no middleware, which
 // is how the other fixtures in this package register routes without standing
@@ -88,7 +96,7 @@ func (e *exchangeEngine) HasPermission(_ context.Context, _ id.UserID, _, _ stri
 	return false, nil
 }
 
-func (e *exchangeEngine) ResolveSessionByToken(token string) (*session.Session, error) {
+func (e *exchangeEngine) ResolveSessionByToken(_ context.Context, token string) (*session.Session, error) {
 	return e.core.GetSessionByToken(context.Background(), token)
 }
 
@@ -124,7 +132,7 @@ func newExchangeFixture(t *testing.T) *xchgFixture {
 	p.SetOAuth2Store(oauth)
 
 	core := memory.New()
-	events := &recordingEvents{}
+	events := newRecordingEvents()
 	principalID := id.NewServiceAccountID()
 	eng := &exchangeEngine{
 		core:   core,
@@ -147,6 +155,7 @@ func newExchangeFixture(t *testing.T) *xchgFixture {
 		ID:           id.NewOAuth2ClientID(),
 		AppID:        appID,
 		ClientID:     xchgClientID,
+		FirstParty:   true,
 		ClientSecret: string(hashed),
 		Name:         "Exchange client",
 		Scopes:       []string{"a", "b"},

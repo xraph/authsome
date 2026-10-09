@@ -131,7 +131,7 @@ func (s *roleStampingStore) CreateSession(ctx context.Context, sess *session.Ses
 // here already carrying the roles it was issued with. That is exactly the
 // fallback the error branch below needs.
 func (s *roleStampingStore) RotateSession(
-	ctx context.Context, sess *session.Session, expectedToken string,
+	ctx context.Context, sess *session.Session, expectedTokenHash string,
 ) (bool, error) {
 	if s.shouldRestamp(sess) {
 		roles, err := s.stamp(ctx, sess.AppID, sess.UserID)
@@ -151,7 +151,7 @@ func (s *roleStampingStore) RotateSession(
 		}
 	}
 
-	return s.Store.RotateSession(ctx, sess, expectedToken)
+	return s.Store.RotateSession(ctx, sess, expectedTokenHash)
 }
 
 // shouldRestamp reports whether sess is one this store should re-resolve roles
@@ -213,6 +213,44 @@ func (s *roleStampingStore) shouldStamp(sess *session.Session) bool {
 		return false
 	default:
 		return true
+	}
+}
+
+// restampUserSessions rewrites the stamped roles on every live session of a
+// user after a role changes. Stamped roles are otherwise fixed until the
+// next refresh, which on a long session can be days after a revocation; this
+// makes a grant or revocation reach the session on its next request.
+//
+// Best-effort per session: one row that fails to update is logged and the
+// rest are still written, and the next rotation corrects any stragglers.
+func (e *Engine) restampUserSessions(ctx context.Context, userID id.UserID) {
+	sessions, err := e.store.ListUserSessions(ctx, userID)
+	if err != nil {
+		e.logger.Warn("authsome: list sessions for role re-stamp failed",
+			log.String("user_id", userID.String()),
+			log.String("error", err.Error()),
+		)
+		return
+	}
+	for _, s := range sessions {
+		if !s.IsHumanPrincipal() {
+			continue
+		}
+		roles, stampErr := e.sessionRoleSlugs(ctx, s.AppID, userID)
+		if stampErr != nil {
+			e.logger.Warn("authsome: resolve roles for re-stamp failed",
+				log.String("session_id", s.ID.String()),
+				log.String("error", stampErr.Error()),
+			)
+			continue
+		}
+		s.Roles = roles
+		if updErr := e.store.UpdateSession(ctx, s); updErr != nil {
+			e.logger.Warn("authsome: re-stamp session roles failed",
+				log.String("session_id", s.ID.String()),
+				log.String("error", updErr.Error()),
+			)
+		}
 	}
 }
 

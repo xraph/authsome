@@ -164,8 +164,8 @@ func resetPasswordHandler(deps Deps) func(ctx context.Context, in ResetPasswordI
 // The auth.signup-form renderer ships a single Name field — splitting
 // here keeps the wire shape simple while still populating the
 // engine's first/last fields. Unicode-aware trimming would be nicer;
-// the current split-on-first-space matches what the templ register
-// page does today.
+// splitting on the first space keeps "Ada King Lovelace" as
+// first="Ada", last="King Lovelace".
 func splitName(name string) (first, last string) {
 	n := strings.TrimSpace(name)
 	if n == "" {

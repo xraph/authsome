@@ -2,6 +2,8 @@ package organization
 
 import (
 	"errors"
+	"net/http"
+	"strings"
 
 	"github.com/xraph/forge"
 
@@ -26,6 +28,64 @@ func orgRoleRank(r organization.MemberRole) int {
 	}
 }
 
+// normalizeRole canonicalises a requested role. The built-in roles are matched
+// case-insensitively and trimmed, so "Owner" or " OWNER " cannot rank as an
+// unknown role (0) while meaning owner to anything that compares them loosely.
+// Other role names are free-form (apps use e.g. "viewer") and pass through.
+func normalizeRole(r string) organization.MemberRole {
+	switch n := organization.MemberRole(strings.ToLower(strings.TrimSpace(r))); n {
+	case organization.RoleOwner, organization.RoleAdmin, organization.RoleMember:
+		return n
+	}
+	return organization.MemberRole(strings.TrimSpace(r))
+}
+
+// mayGrantRole refuses granting a role that outranks the caller's own. Only an
+// owner can make an owner; an admin can still grant admin and below. Without
+// it, an org admin could invite an alias -- or add an account -- as owner.
+func mayGrantRole(caller, requested organization.MemberRole) error {
+	if orgRoleRank(requested) > orgRoleRank(caller) {
+		return forge.Forbidden("cannot grant a role above your own")
+	}
+	return nil
+}
+
+// requireRemovable applies the removal ceilings: the target's rank may not
+// exceed the caller's, only an owner may remove an owner, and the last owner
+// of an org cannot be removed.
+func (p *Plugin) requireRemovable(ctx forge.Context, caller *organization.Member, memberID id.MemberID, orgID id.OrgID) error {
+	target, err := p.store.GetMember(ctx.Context(), memberID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return forge.NotFound("member not found")
+		}
+		return p.mapError(ctx, err)
+	}
+	if orgRoleRank(target.Role) > orgRoleRank(caller.Role) {
+		return forge.Forbidden("cannot remove a member with a higher role than your own")
+	}
+	if target.Role != organization.RoleOwner {
+		return nil
+	}
+	if caller.Role != organization.RoleOwner {
+		return forge.Forbidden("only an owner may remove an owner")
+	}
+	members, err := p.store.ListMembers(ctx.Context(), orgID)
+	if err != nil {
+		return p.mapError(ctx, err)
+	}
+	owners := 0
+	for _, m := range members {
+		if m.Role == organization.RoleOwner {
+			owners++
+		}
+	}
+	if owners <= 1 {
+		return forge.NewHTTPError(http.StatusConflict, "an organization must keep at least one owner")
+	}
+	return nil
+}
+
 // requireOrgRole verifies the authenticated caller is a member of orgID holding
 // at least minRole, returning their membership record. Failure modes:
 //   - no authenticated identity on the request → 401
@@ -42,7 +102,7 @@ func (p *Plugin) requireOrgRole(ctx forge.Context, orgID id.OrgID, minRole organ
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, forge.NotFound("organization not found")
 		}
-		return nil, p.mapError(err)
+		return nil, p.mapError(ctx, err)
 	}
 	if orgRoleRank(member.Role) < orgRoleRank(minRole) {
 		return nil, forge.Forbidden("insufficient organization role")
@@ -59,7 +119,7 @@ func (p *Plugin) assertMemberInOrg(ctx forge.Context, memberID id.MemberID, orgI
 		if errors.Is(err, store.ErrNotFound) {
 			return forge.NotFound("member not found")
 		}
-		return p.mapError(err)
+		return p.mapError(ctx, err)
 	}
 	if m.OrgID.String() != orgID.String() {
 		return forge.NotFound("member not found")
@@ -75,7 +135,7 @@ func (p *Plugin) assertTeamInOrg(ctx forge.Context, teamID id.TeamID, orgID id.O
 		if errors.Is(err, store.ErrNotFound) {
 			return forge.NotFound("team not found")
 		}
-		return p.mapError(err)
+		return p.mapError(ctx, err)
 	}
 	if tm.OrgID.String() != orgID.String() {
 		return forge.NotFound("team not found")

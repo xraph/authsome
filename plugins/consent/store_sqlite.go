@@ -10,6 +10,7 @@ import (
 	"github.com/xraph/grove/drivers/sqlitedriver"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/ipmask"
 )
 
 // SqliteStore implements consent.Store using the Grove ORM with SQLite.
@@ -164,4 +165,31 @@ func consentSqliteError(err error) error {
 		return ErrNotFound
 	}
 	return err
+}
+
+func (s *SqliteStore) AnonymizeUserConsents(ctx context.Context, userID id.UserID) (int64, error) {
+	var rows []consentModel
+	if err := s.sdb.NewSelect(&rows).Where("user_id = ?", userID.String()).Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, consentSqliteError(err)
+	}
+	var n int64
+	now := time.Now()
+	for i := range rows {
+		masked := ipmask.Network(rows[i].IPAddress)
+		if rows[i].IPAddress == "" || masked == rows[i].IPAddress {
+			continue
+		}
+		if _, err := s.sdb.NewUpdate((*consentModel)(nil)).
+			Set("ip_address = ?", masked).
+			Set("updated_at = ?", now).
+			Where("id = ?", rows[i].ID).
+			Exec(ctx); err != nil {
+			return n, consentSqliteError(err)
+		}
+		n++
+	}
+	return n, nil
 }

@@ -39,12 +39,12 @@ func TestRegisterCoreSessionSettings_AllRegistered(t *testing.T) {
 	assert.True(t, keys["session.jwt_require_active_session"], "JWT require active session should be registered")
 }
 
-func TestSettingJWTRequireActiveSession_DefaultFalse(t *testing.T) {
-	// The default value should be false (opt-in feature).
+func TestSettingJWTRequireActiveSession_DefaultTrue(t *testing.T) {
+	// On by default: a JWT must be revocable without waiting for expiry.
 	var val bool
 	err := json.Unmarshal(SettingJWTRequireActiveSession.Def.Default, &val)
 	require.NoError(t, err)
-	assert.False(t, val, "JWT require active session should default to false")
+	assert.True(t, val, "JWT require active session should default to true")
 }
 
 func TestSettingAutoRefreshExposeRefreshToken_DefaultFalse(t *testing.T) {

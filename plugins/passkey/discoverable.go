@@ -16,6 +16,7 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/user"
 )
@@ -115,7 +116,7 @@ func (p *Plugin) finishDiscoverableLogin(ctx forge.Context, ceremonyID string) (
 
 	var waSession webauthn.SessionData
 	if unmarshalErr := json.Unmarshal(sessionJSON, &waSession); unmarshalErr != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to parse session: %w", unmarshalErr))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to parse session: %w", unmarshalErr))
 	}
 
 	var loggedIn *user.User
@@ -169,7 +170,7 @@ func (p *Plugin) finishDiscoverableLogin(ctx forge.Context, ceremonyID string) (
 func (p *Plugin) issueSession(ctx forge.Context, u *user.User) (*session.Session, error) {
 	eng, ok := p.engine.(*authsome.Engine)
 	if !ok || eng == nil {
-		return nil, forge.InternalError(fmt.Errorf("passkey: session issuance unavailable"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: session issuance unavailable"))
 	}
 	// /login/finish is a POST from the SDK, so the key-holding client is the
 	// caller and can prove possession. Under mode=required IssueSession

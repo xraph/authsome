@@ -100,7 +100,7 @@ func TestRefresh_HTTP_ProactiveRefreshWithLiveAccessTokenSucceeds(t *testing.T) 
 	_, sess, err := eng.SignUp(context.Background(), &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "proactive-refresh@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Proactive",
 		DPoPJKT:   dpopSignInThumbprint(t, key),
 	})
@@ -136,7 +136,7 @@ func TestRefresh_HTTP_ProactiveRefreshWithProofFromAnotherKeyIsRefused(t *testin
 	_, sess, err := eng.SignUp(context.Background(), &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "proactive-refresh-wrong-key@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Wrong Key",
 		DPoPJKT:   dpopSignInThumbprint(t, bound),
 	})

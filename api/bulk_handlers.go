@@ -67,9 +67,9 @@ func (a *API) handleBulkImportUsers(ctx forge.Context, req *BulkImportUsersReque
 		return nil, forge.BadRequest("maximum 1000 users per import")
 	}
 
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.scopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	// Convert request users to domain users
@@ -88,7 +88,7 @@ func (a *API) handleBulkImportUsers(ctx forge.Context, req *BulkImportUsersReque
 
 	result, err := a.engine.AdminBulkImportUsers(ctx.Context(), adminID, users)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusOK, result)
@@ -108,10 +108,13 @@ func (a *API) handleBulkRevokeSessions(ctx forge.Context, req *BulkRevokeSession
 	if err != nil {
 		return nil, forge.BadRequest("invalid user_id")
 	}
+	if _, scopeErr := a.userInCallerApp(ctx, userID); scopeErr != nil {
+		return nil, scopeErr
+	}
 
 	count, err := a.engine.AdminBulkRevokeSessions(ctx.Context(), adminID, userID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &BulkRevokeSessionsResponse{

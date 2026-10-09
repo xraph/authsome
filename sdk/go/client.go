@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Client is an HTTP client for the AuthSome API.
@@ -143,8 +144,9 @@ func WithSessionCookies() Option {
 // NewClient creates a new AuthSome API client.
 func NewClient(baseURL string, opts ...Option) *Client {
 	c := &Client{
-		baseURL:    baseURL,
-		httpClient: &http.Client{},
+		baseURL: baseURL,
+		// A deadline by default; WithHTTPClient replaces it.
+		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -1243,6 +1245,17 @@ func (c *Client) AdminUnbanUser(ctx context.Context, userId string) (*ApiStatusR
 	return &result, nil
 }
 
+// AdminUnlockUser — Unlock user (admin)
+func (c *Client) AdminUnlockUser(ctx context.Context, userId string) (*ApiStatusResponse, error) {
+	path := "/v1/admin/users/{userId}/unlock"
+	path = strings.Replace(path, "{userId}", userId, 1)
+	var result ApiStatusResponse
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // ListCoupons — List coupons
 func (c *Client) ListCoupons(ctx context.Context, params *ListCouponsParams) (*ListCouponsResponse, error) {
 	path := "/v1/billing/coupons"
@@ -1952,6 +1965,23 @@ func (c *Client) ExportUserData(ctx context.Context) (*map[string]any, error) {
 	return &result, nil
 }
 
+// Oauth2ListMyGrants — List my OAuth2 grants
+func (c *Client) Oauth2ListMyGrants(ctx context.Context) (*ListGrantsResponse, error) {
+	path := "/v1/me/oauth/grants"
+	var result ListGrantsResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Oauth2RevokeMyGrant — Revoke an OAuth2 grant
+func (c *Client) Oauth2RevokeMyGrant(ctx context.Context, clientId string) error {
+	path := "/v1/me/oauth/grants/{clientId}"
+	path = strings.Replace(path, "{clientId}", clientId, 1)
+	return c.do(ctx, "DELETE", path, nil, nil)
+}
+
 // SwitchOrg — Switch active organization
 func (c *Client) SwitchOrg(ctx context.Context, req *SwitchOrgRequest) (*SwitchOrgResponse, error) {
 	body, err := json.Marshal(req)
@@ -2103,11 +2133,26 @@ func (c *Client) Oauth2Authorize(ctx context.Context, params *Oauth2AuthorizePar
 		for _, v := range params.Resource {
 			q.Add("resource", v)
 		}
+		if params.Prompt != "" {
+			q.Set("prompt", params.Prompt)
+		}
 		if encoded := q.Encode(); encoded != "" {
 			path += "?" + encoded
 		}
 	}
 	return c.do(ctx, "GET", path, nil, nil)
+}
+
+// Oauth2ConsentPage — OAuth2 consent
+func (c *Client) Oauth2ConsentPage(ctx context.Context) error {
+	path := "/v1/oauth/consent"
+	return c.do(ctx, "GET", path, nil, nil)
+}
+
+// Oauth2ConsentDecision — OAuth2 consent decision
+func (c *Client) Oauth2ConsentDecision(ctx context.Context) error {
+	path := "/v1/oauth/consent"
+	return c.do(ctx, "POST", path, nil, nil)
 }
 
 // Oauth2DeviceAuthorize — Device Authorization
@@ -2246,6 +2291,9 @@ func (c *Client) Oauth2Token(ctx context.Context, req *Oauth2TokenRequest) (*Oau
 		if req.RedirectURI != "" {
 			form.Set("redirect_uri", req.RedirectURI)
 		}
+		if req.RefreshToken != "" {
+			form.Set("refresh_token", req.RefreshToken)
+		}
 		if req.RequestedTokenType != "" {
 			form.Set("requested_token_type", req.RequestedTokenType)
 		}
@@ -2282,8 +2330,21 @@ func (c *Client) Oauth2UserInfo(ctx context.Context) (*UserInfo, error) {
 }
 
 // ListOrganizations — List organizations
-func (c *Client) ListOrganizations(ctx context.Context) (*OrgListResponse, error) {
+func (c *Client) ListOrganizations(ctx context.Context, params *ListOrganizationsParams) (*OrgListResponse, error) {
 	path := "/v1/orgs"
+	if params != nil {
+		q := url.Values{}
+		var zeroLimit int64
+		if params.Limit != zeroLimit {
+			q.Set("limit", fmt.Sprint(params.Limit))
+		}
+		if params.Cursor != "" {
+			q.Set("cursor", params.Cursor)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result OrgListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -2393,9 +2454,22 @@ func (c *Client) DeleteOrganization(ctx context.Context, orgId string) (*Organiz
 }
 
 // ListInvitations — List invitations
-func (c *Client) ListInvitations(ctx context.Context, orgId string) (*InvitationListResponse, error) {
+func (c *Client) ListInvitations(ctx context.Context, orgId string, params *ListInvitationsParams) (*InvitationListResponse, error) {
 	path := "/v1/orgs/{orgId}/invitations"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
+	if params != nil {
+		q := url.Values{}
+		var zeroLimit int64
+		if params.Limit != zeroLimit {
+			q.Set("limit", fmt.Sprint(params.Limit))
+		}
+		if params.Cursor != "" {
+			q.Set("cursor", params.Cursor)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result InvitationListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -2419,9 +2493,22 @@ func (c *Client) CreateInvitation(ctx context.Context, orgId string, req *Create
 }
 
 // ListMembers — List members
-func (c *Client) ListMembers(ctx context.Context, orgId string) (*MemberListResponse, error) {
+func (c *Client) ListMembers(ctx context.Context, orgId string, params *ListMembersParams) (*MemberListResponse, error) {
 	path := "/v1/orgs/{orgId}/members"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
+	if params != nil {
+		q := url.Values{}
+		var zeroLimit int64
+		if params.Limit != zeroLimit {
+			q.Set("limit", fmt.Sprint(params.Limit))
+		}
+		if params.Cursor != "" {
+			q.Set("cursor", params.Cursor)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result MemberListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -2473,9 +2560,22 @@ func (c *Client) RemoveMember(ctx context.Context, orgId string, memberId string
 }
 
 // ListTeams — List teams
-func (c *Client) ListTeams(ctx context.Context, orgId string) (*TeamListResponse, error) {
+func (c *Client) ListTeams(ctx context.Context, orgId string, params *ListTeamsParams) (*TeamListResponse, error) {
 	path := "/v1/orgs/{orgId}/teams"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
+	if params != nil {
+		q := url.Values{}
+		var zeroLimit int64
+		if params.Limit != zeroLimit {
+			q.Set("limit", fmt.Sprint(params.Limit))
+		}
+		if params.Cursor != "" {
+			q.Set("cursor", params.Cursor)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result TeamListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -2831,10 +2931,33 @@ func (c *Client) AuthsomeUnassignRole(ctx context.Context, roleId string, req *A
 }
 
 // ListSessions — List sessions
-func (c *Client) ListSessions(ctx context.Context) (*SessionListResponse, error) {
+func (c *Client) ListSessions(ctx context.Context, params *ListSessionsParams) (*SessionListResponse, error) {
 	path := "/v1/sessions"
+	if params != nil {
+		q := url.Values{}
+		var zeroLimit int64
+		if params.Limit != zeroLimit {
+			q.Set("limit", fmt.Sprint(params.Limit))
+		}
+		if params.Cursor != "" {
+			q.Set("cursor", params.Cursor)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result SessionListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RevokeOtherSessions — Revoke other sessions
+func (c *Client) RevokeOtherSessions(ctx context.Context) (*ApiStatusResponse, error) {
+	path := "/v1/sessions"
+	var result ApiStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -3115,13 +3238,13 @@ func (c *Client) ListWebhooks(ctx context.Context, params *ListWebhooksParams) (
 }
 
 // CreateWebhook — Create webhook
-func (c *Client) CreateWebhook(ctx context.Context, req *CreateWebhookRequest) (*Webhook, error) {
+func (c *Client) CreateWebhook(ctx context.Context, req *CreateWebhookRequest) (*CreateWebhookResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/webhooks"
-	var result Webhook
+	var result CreateWebhookResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -3160,6 +3283,17 @@ func (c *Client) DeleteWebhook(ctx context.Context, webhookId string) (*ApiStatu
 	path = strings.Replace(path, "{webhookId}", webhookId, 1)
 	var result ApiStatusResponse
 	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RotateWebhookSecret — Rotate webhook secret
+func (c *Client) RotateWebhookSecret(ctx context.Context, webhookId string) (*RotateWebhookSecretResponse, error) {
+	path := "/v1/webhooks/{webhookId}/rotate-secret"
+	path = strings.Replace(path, "{webhookId}", webhookId, 1)
+	var result RotateWebhookSecretResponse
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -3325,6 +3459,13 @@ type Oauth2AuthorizeParams struct {
 	CodeChallenge       string   `json:"code_challenge,omitempty"`
 	CodeChallengeMethod string   `json:"code_challenge_method,omitempty"`
 	Resource            []string `json:"resource,omitempty"`
+	Prompt              string   `json:"prompt,omitempty"`
+}
+
+// ListOrganizationsParams holds optional query parameters for ListOrganizations.
+type ListOrganizationsParams struct {
+	Limit  int64  `json:"limit,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
 }
 
 // CheckOrgSlugParams holds optional query parameters for CheckOrgSlug.
@@ -3333,9 +3474,33 @@ type CheckOrgSlugParams struct {
 	Slug  string `json:"slug,omitempty"`
 }
 
+// ListInvitationsParams holds optional query parameters for ListInvitations.
+type ListInvitationsParams struct {
+	Limit  int64  `json:"limit,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
+}
+
+// ListMembersParams holds optional query parameters for ListMembers.
+type ListMembersParams struct {
+	Limit  int64  `json:"limit,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
+}
+
+// ListTeamsParams holds optional query parameters for ListTeams.
+type ListTeamsParams struct {
+	Limit  int64  `json:"limit,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
+}
+
 // AuthsomeListRolesParams holds optional query parameters for AuthsomeListRoles.
 type AuthsomeListRolesParams struct {
 	AppID string `json:"app_id,omitempty"`
+}
+
+// ListSessionsParams holds optional query parameters for ListSessions.
+type ListSessionsParams struct {
+	Limit  int64  `json:"limit,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
 }
 
 // StartOAuthParams holds optional query parameters for StartOAuth.

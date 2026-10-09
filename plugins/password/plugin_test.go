@@ -40,7 +40,7 @@ func TestPlugin_BeforeSignUp_NoRestrictions(t *testing.T) {
 	err := p.OnBeforeSignUp(ctx, &account.SignUpRequest{
 		AppID:     id.NewAppID(),
 		Email:     "anyone@anydomain.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Anyone",
 	})
 
@@ -56,7 +56,7 @@ func TestPlugin_BeforeSignUp_DomainRestriction_Allowed(t *testing.T) {
 	err := p.OnBeforeSignUp(ctx, &account.SignUpRequest{
 		AppID:    id.NewAppID(),
 		Email:    "user@company.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 
 	assert.NoError(t, err)
@@ -71,7 +71,7 @@ func TestPlugin_BeforeSignUp_DomainRestriction_Blocked(t *testing.T) {
 	err := p.OnBeforeSignUp(ctx, &account.SignUpRequest{
 		AppID:    id.NewAppID(),
 		Email:    "hacker@evil.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 
 	assert.Error(t, err)

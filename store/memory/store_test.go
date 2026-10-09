@@ -171,7 +171,8 @@ func TestSession_CreateAndGet(t *testing.T) {
 
 	got, err := s.GetSession(ctx(), sess.ID)
 	require.NoError(t, err)
-	assert.Equal(t, sess.Token, got.Token)
+	assert.Empty(t, got.Token, "no plaintext at rest")
+	assert.Equal(t, store.HashToken(sess.Token), got.TokenHash)
 }
 
 func TestSession_GetByToken(t *testing.T) {

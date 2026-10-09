@@ -8,11 +8,13 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/xraph/grove"
 	"github.com/xraph/grove/drivers/mongodriver"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/store"
 )
 
 // MongoStore implements oauth2provider.Store using the Grove MongoDB driver.
@@ -54,6 +56,7 @@ type oauth2ClientDoc struct {
 	ClientSecretExpiresAt   *time.Time     `bson:"client_secret_expires_at,omitempty"`
 	Metadata                map[string]any `bson:"metadata"`
 	DPoPMode                string         `bson:"dpop_mode"`
+	FirstParty              bool           `bson:"first_party"`
 	PrincipalID             string         `bson:"principal_id"`
 
 	CreatedAt time.Time `bson:"created_at"`
@@ -130,6 +133,7 @@ func oauth2ClientDocToModel(d *oauth2ClientDoc) (*OAuth2Client, error) {
 		ClientSecretExpiresAt:   d.ClientSecretExpiresAt,
 		Metadata:                metadata,
 		DPoPMode:                d.DPoPMode,
+		FirstParty:              d.FirstParty,
 		CreatedAt:               d.CreatedAt,
 		UpdatedAt:               d.UpdatedAt,
 	}, nil
@@ -175,6 +179,7 @@ func oauth2ClientToDoc(c *OAuth2Client) *oauth2ClientDoc {
 		ClientSecretExpiresAt:   c.ClientSecretExpiresAt,
 		Metadata:                metadata,
 		DPoPMode:                c.DPoPMode,
+		FirstParty:              c.FirstParty,
 		PrincipalID:             principalIDString(c.PrincipalID),
 		CreatedAt:               c.CreatedAt,
 		UpdatedAt:               c.UpdatedAt,
@@ -233,7 +238,7 @@ func authCodeToDoc(c *AuthorizationCode) *authCodeDoc {
 
 	return &authCodeDoc{
 		ID:                  c.ID.String(),
-		Code:                c.Code,
+		Code:                store.HashToken(c.Code),
 		ClientID:            c.ClientID,
 		UserID:              c.UserID.String(),
 		AppID:               c.AppID.String(),
@@ -326,8 +331,8 @@ func deviceCodeToDoc(dc *DeviceCode) *deviceCodeDoc {
 
 	return &deviceCodeDoc{
 		ID:              dc.ID.String(),
-		DeviceCode:      dc.DeviceCode,
-		UserCode:        dc.UserCode,
+		DeviceCode:      store.HashToken(dc.DeviceCode),
+		UserCode:        store.HashToken(dc.UserCode),
 		ClientID:        dc.ClientID,
 		AppID:           dc.AppID.String(),
 		Scopes:          scopes,
@@ -350,6 +355,7 @@ const (
 	oauth2ClientsColl     = "authsome_oauth2_clients"
 	oauth2AuthCodesColl   = "authsome_oauth2_auth_codes"
 	oauth2DeviceCodesColl = "authsome_oauth2_device_codes"
+	oauth2GrantsColl      = "authsome_oauth2_grants"
 )
 
 // ──────────────────────────────────────────────────
@@ -454,17 +460,22 @@ func (s *MongoStore) CreateAuthCode(ctx context.Context, code *AuthorizationCode
 func (s *MongoStore) GetAuthCode(ctx context.Context, code string) (*AuthorizationCode, error) {
 	doc := new(authCodeDoc)
 	err := s.mdb.Collection(oauth2AuthCodesColl).FindOne(ctx, bson.M{
-		"code": code,
+		"code": store.HashToken(code),
 	}).Decode(doc)
 	if err != nil {
 		return nil, oauth2MongoError(err)
 	}
-	return authCodeDocToModel(doc)
+	ac, err := authCodeDocToModel(doc)
+	if err != nil {
+		return nil, err
+	}
+	ac.Code = code
+	return ac, nil
 }
 
 func (s *MongoStore) ConsumeAuthCode(ctx context.Context, code string) (bool, error) {
 	res, err := s.mdb.Collection(oauth2AuthCodesColl).UpdateOne(ctx,
-		bson.M{"code": code, "consumed": false},
+		bson.M{"code": store.HashToken(code), "consumed": false},
 		bson.M{"$set": bson.M{"consumed": true}},
 	)
 	if err != nil {
@@ -489,7 +500,7 @@ func (s *MongoStore) CreateDeviceCode(ctx context.Context, dc *DeviceCode) error
 func (s *MongoStore) GetDeviceCodeByDeviceCode(ctx context.Context, deviceCode string) (*DeviceCode, error) {
 	doc := new(deviceCodeDoc)
 	err := s.mdb.Collection(oauth2DeviceCodesColl).FindOne(ctx, bson.M{
-		"device_code": deviceCode,
+		"device_code": store.HashToken(deviceCode),
 	}).Decode(doc)
 	if err != nil {
 		if oauth2IsNoDocuments(err) {
@@ -497,13 +508,18 @@ func (s *MongoStore) GetDeviceCodeByDeviceCode(ctx context.Context, deviceCode s
 		}
 		return nil, oauth2MongoError(err)
 	}
-	return deviceCodeDocToModel(doc)
+	dc, err := deviceCodeDocToModel(doc)
+	if err != nil {
+		return nil, err
+	}
+	dc.DeviceCode, dc.UserCode = deviceCode, ""
+	return dc, nil
 }
 
 func (s *MongoStore) GetDeviceCodeByUserCode(ctx context.Context, userCode string) (*DeviceCode, error) {
 	doc := new(deviceCodeDoc)
 	err := s.mdb.Collection(oauth2DeviceCodesColl).FindOne(ctx, bson.M{
-		"user_code": userCode,
+		"user_code": store.HashToken(userCode),
 	}).Decode(doc)
 	if err != nil {
 		if oauth2IsNoDocuments(err) {
@@ -511,7 +527,12 @@ func (s *MongoStore) GetDeviceCodeByUserCode(ctx context.Context, userCode strin
 		}
 		return nil, oauth2MongoError(err)
 	}
-	return deviceCodeDocToModel(doc)
+	dc, err := deviceCodeDocToModel(doc)
+	if err != nil {
+		return nil, err
+	}
+	dc.UserCode, dc.DeviceCode = userCode, ""
+	return dc, nil
 }
 
 func (s *MongoStore) UpdateDeviceCode(ctx context.Context, dc *DeviceCode) error {
@@ -549,4 +570,127 @@ func oauth2MongoError(err error) error {
 		return ErrClientNotFound
 	}
 	return err
+}
+
+// ──────────────────────────────────────────────────
+// Grants
+// ──────────────────────────────────────────────────
+
+// grantDoc keys the document on (app_id, user_id, client_id) through _id so
+// the pair is unique without a separate index.
+type grantDoc struct {
+	ID        string    `bson:"_id"`
+	GrantID   string    `bson:"grant_id"`
+	AppID     string    `bson:"app_id"`
+	UserID    string    `bson:"user_id"`
+	ClientID  string    `bson:"client_id"`
+	Scopes    []string  `bson:"scopes"`
+	CreatedAt time.Time `bson:"created_at"`
+	UpdatedAt time.Time `bson:"updated_at"`
+}
+
+func grantDocID(appID id.AppID, userID id.UserID, clientID string) string {
+	return appID.String() + "|" + userID.String() + "|" + clientID
+}
+
+func grantDocToModel(d *grantDoc) (*Grant, error) {
+	grantID, err := id.ParseOAuth2GrantID(d.GrantID)
+	if err != nil {
+		return nil, err
+	}
+	appID, err := id.ParseAppID(d.AppID)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := id.ParseUserID(d.UserID)
+	if err != nil {
+		return nil, err
+	}
+	scopes := d.Scopes
+	if scopes == nil {
+		scopes = []string{}
+	}
+	return &Grant{ID: grantID, AppID: appID, UserID: userID, ClientID: d.ClientID, Scopes: scopes, CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt}, nil
+}
+
+func (s *MongoStore) UpsertGrant(ctx context.Context, g *Grant) error {
+	now := time.Now()
+	if g.ID.IsNil() {
+		g.ID = id.NewOAuth2GrantID()
+	}
+	if g.CreatedAt.IsZero() {
+		g.CreatedAt = now
+	}
+	g.UpdatedAt = now
+	scopes := g.Scopes
+	if scopes == nil {
+		scopes = []string{}
+	}
+	docID := grantDocID(g.AppID, g.UserID, g.ClientID)
+	_, err := s.mdb.Collection(oauth2GrantsColl).UpdateOne(ctx,
+		bson.M{"_id": docID},
+		bson.M{
+			"$set": bson.M{"scopes": scopes, "updated_at": g.UpdatedAt},
+			"$setOnInsert": bson.M{
+				"grant_id": g.ID.String(), "app_id": g.AppID.String(), "user_id": g.UserID.String(),
+				"client_id": g.ClientID, "created_at": g.CreatedAt,
+			},
+		},
+		options.UpdateOne().SetUpsert(true))
+	if err != nil {
+		return oauth2MongoError(err)
+	}
+	// Read back the stored id and creation time on an update.
+	stored := new(grantDoc)
+	if err := s.mdb.Collection(oauth2GrantsColl).FindOne(ctx, bson.M{"_id": docID}).Decode(stored); err == nil {
+		if parsed, perr := id.ParseOAuth2GrantID(stored.GrantID); perr == nil {
+			g.ID = parsed
+		}
+		g.CreatedAt = stored.CreatedAt
+	}
+	return nil
+}
+
+func (s *MongoStore) GetGrant(ctx context.Context, appID id.AppID, userID id.UserID, clientID string) (*Grant, error) {
+	doc := new(grantDoc)
+	err := s.mdb.Collection(oauth2GrantsColl).FindOne(ctx, bson.M{"_id": grantDocID(appID, userID, clientID)}).Decode(doc)
+	if err != nil {
+		if oauth2IsNoDocuments(err) {
+			return nil, ErrGrantNotFound
+		}
+		return nil, oauth2MongoError(err)
+	}
+	return grantDocToModel(doc)
+}
+
+func (s *MongoStore) ListGrantsByUser(ctx context.Context, appID id.AppID, userID id.UserID) ([]*Grant, error) {
+	cursor, err := s.mdb.Collection(oauth2GrantsColl).Find(ctx, bson.M{"app_id": appID.String(), "user_id": userID.String()})
+	if err != nil {
+		return nil, oauth2MongoError(err)
+	}
+	defer cursor.Close(ctx)
+	out := make([]*Grant, 0)
+	for cursor.Next(ctx) {
+		doc := new(grantDoc)
+		if err := cursor.Decode(doc); err != nil {
+			return nil, oauth2MongoError(err)
+		}
+		g, convErr := grantDocToModel(doc)
+		if convErr != nil {
+			return nil, convErr
+		}
+		out = append(out, g)
+	}
+	return out, oauth2MongoError(cursor.Err())
+}
+
+func (s *MongoStore) DeleteGrant(ctx context.Context, appID id.AppID, userID id.UserID, clientID string) error {
+	res, err := s.mdb.Collection(oauth2GrantsColl).DeleteOne(ctx, bson.M{"_id": grantDocID(appID, userID, clientID)})
+	if err != nil {
+		return oauth2MongoError(err)
+	}
+	if res.DeletedCount == 0 {
+		return ErrGrantNotFound
+	}
+	return nil
 }

@@ -15,6 +15,10 @@ dependencies:
   flutter:
     sdk: flutter
   authsome_flutter: ^1.6.1
+  # Web-only bindings for the Turnstile captcha and SSO redirects. Safe to
+  # depend on cross-platform: the code that imports it is only compiled
+  # into Web builds (see lib/src/platform/).
+  web: ^1.1.0
 
 dev_dependencies:
   flutter_lints: ^4.0.0

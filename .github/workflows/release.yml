@@ -29,9 +29,9 @@ on:
         type: boolean
         default: false
 
+# Read by default; each job widens to exactly what it publishes with.
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 jobs:
   # ─── Prepare ─────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
 
@@ -82,7 +82,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ steps.set-tag.outputs.tag }}
           body: |
@@ -117,6 +117,8 @@ jobs:
     name: Go Release
     runs-on: ubuntu-latest
     needs: [prepare]
+    permissions:
+      contents: write # creates the GitHub release
     if: >-
       github.event_name == 'push' ||
       github.event.inputs.modules == 'all' ||
@@ -124,12 +126,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
@@ -146,6 +148,9 @@ jobs:
     name: npm Release
     runs-on: ubuntu-latest
     needs: [prepare]
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing
     if: >-
       github.event_name == 'push' ||
       github.event.inputs.modules == 'all' ||
@@ -155,10 +160,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
@@ -168,7 +173,7 @@ jobs:
         run: npm install -g npm@latest
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 9
 
@@ -234,11 +239,14 @@ jobs:
   flutter-release:
     name: Flutter Release
     needs: [prepare]
+    permissions:
+      contents: read
+      id-token: write # pub.dev trusted publishing
     if: >-
       github.event_name == 'push' ||
       github.event.inputs.modules == 'all' ||
       contains(github.event.inputs.modules, 'flutter')
-    uses: xraph/workflows/.github/workflows/pub-publish.yml@v1
+    uses: xraph/workflows/.github/workflows/pub-publish.yml@1fb7007e92faefba7fa820084412d853d552aad6 # v1
     with:
       # Ordered: authsome_flutter depends on authsome_core, and
       # authsome_flutter_ui depends on authsome_flutter.

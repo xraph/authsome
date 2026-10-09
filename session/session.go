@@ -33,17 +33,24 @@ type Session struct {
 	// can be revoked together when refresh-token replay is detected
 	// (RFC 6819 §5.2.2.3). Fresh sign-ins start a new family; rotations
 	// inherit the parent's FamilyID. Zero-value on legacy rows is allowed.
-	FamilyID              id.SessionFamilyID `json:"family_id,omitempty"`
-	Token                 string             `json:"-"`
-	RefreshToken          string             `json:"-"`
-	IPAddress             string             `json:"ip_address,omitempty"`
-	UserAgent             string             `json:"user_agent,omitempty"`
-	DeviceID              id.DeviceID        `json:"device_id,omitempty"`
-	LastActivityAt        time.Time          `json:"last_activity_at,omitempty"`
-	ExpiresAt             time.Time          `json:"expires_at"`
-	RefreshTokenExpiresAt time.Time          `json:"refresh_token_expires_at"`
-	CreatedAt             time.Time          `json:"created_at"`
-	UpdatedAt             time.Time          `json:"updated_at"`
+	FamilyID id.SessionFamilyID `json:"family_id,omitempty"`
+	// Token and RefreshToken hold the plaintext credentials and are only
+	// ever populated on the way into the store or when the caller presented
+	// that exact plaintext to look the session up. A session read back by id
+	// carries empty plaintext: the store keeps only TokenHash and
+	// RefreshTokenHash, so a copy of the database yields no usable credential.
+	Token                 string      `json:"-"`
+	RefreshToken          string      `json:"-"`
+	TokenHash             string      `json:"-"`
+	RefreshTokenHash      string      `json:"-"`
+	IPAddress             string      `json:"ip_address,omitempty"`
+	UserAgent             string      `json:"user_agent,omitempty"`
+	DeviceID              id.DeviceID `json:"device_id,omitempty"`
+	LastActivityAt        time.Time   `json:"last_activity_at,omitempty"`
+	ExpiresAt             time.Time   `json:"expires_at"`
+	RefreshTokenExpiresAt time.Time   `json:"refresh_token_expires_at"`
+	CreatedAt             time.Time   `json:"created_at"`
+	UpdatedAt             time.Time   `json:"updated_at"`
 
 	// Roles holds the role slugs the principal held when this session was
 	// issued, stamped once on the way to the store rather than resolved per
@@ -122,6 +129,13 @@ type Session struct {
 	// set, the session cannot be used without a matching proof, whatever the
 	// app or client mode says at the time of the request.
 	DPoPJKT string `json:"dpop_jkt,omitempty"`
+
+	// ClientID names the OAuth2 client a token was issued to. A session with
+	// a ClientID is the bearer of an OAuth2 access token: the auth middleware
+	// parks it until a route tagged with middleware.RequireScope admits it,
+	// only the token endpoint's refresh_token grant may rotate it, and the
+	// client that owns it is the only client that may revoke it.
+	ClientID string `json:"client_id,omitempty"`
 }
 
 // Subject returns the principal this session is for.
@@ -142,6 +156,37 @@ func (s *Session) Subject() principal.Ref {
 // IsHumanPrincipal reports whether a person owns this session.
 func (s *Session) IsHumanPrincipal() bool {
 	return s.PrincipalKind == "" || s.PrincipalKind == principal.KindUser
+}
+
+// AbsoluteDeadline is the instant after which the session must not be
+// honoured however active it has been: CreatedAt plus lifetime. A zero
+// lifetime or an unset CreatedAt yields the zero time, meaning no deadline.
+func (s *Session) AbsoluteDeadline(lifetime time.Duration) time.Time {
+	if lifetime <= 0 || s.CreatedAt.IsZero() {
+		return time.Time{}
+	}
+	return s.CreatedAt.Add(lifetime)
+}
+
+// PastAbsoluteDeadline reports whether now is after AbsoluteDeadline.
+func (s *Session) PastAbsoluteDeadline(lifetime time.Duration, now time.Time) bool {
+	d := s.AbsoluteDeadline(lifetime)
+	return !d.IsZero() && now.After(d)
+}
+
+// ClampToAbsoluteDeadline pulls ExpiresAt and RefreshTokenExpiresAt back to
+// the absolute deadline when they were set past it.
+func (s *Session) ClampToAbsoluteDeadline(lifetime time.Duration) {
+	d := s.AbsoluteDeadline(lifetime)
+	if d.IsZero() {
+		return
+	}
+	if s.ExpiresAt.After(d) {
+		s.ExpiresAt = d
+	}
+	if s.RefreshTokenExpiresAt.After(d) {
+		s.RefreshTokenExpiresAt = d
+	}
 }
 
 // AuthzActors returns the actors Warden must independently authorize.

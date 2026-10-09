@@ -23,3 +23,6 @@ func (*NoopTracker) IsLocked(context.Context, string) (bool, time.Time, error) {
 
 // Reset is a no-op.
 func (*NoopTracker) Reset(context.Context, string) error { return nil }
+
+// ResetPrefix is a no-op.
+func (*NoopTracker) ResetPrefix(context.Context, string) error { return nil }

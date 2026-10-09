@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xraph/authsome/internal/boundedmap"
+
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/bridge"
@@ -100,6 +102,11 @@ type Config struct {
 
 	// EnableGeoAnomaly enables new country detection (default: true).
 	EnableGeoAnomaly bool
+
+	// MaxTrackedPrincipals bounds the in-memory pattern table; the least
+	// recently seen principal is dropped when it is full (default: 10000).
+	// A dropped principal starts a fresh history on its next login.
+	MaxTrackedPrincipals int
 }
 
 func (c *Config) defaults() {
@@ -108,6 +115,9 @@ func (c *Config) defaults() {
 	}
 	if c.RiskThreshold == 0 {
 		c.RiskThreshold = 70
+	}
+	if c.MaxTrackedPrincipals == 0 {
+		c.MaxTrackedPrincipals = 10000
 	}
 }
 
@@ -145,7 +155,7 @@ type Plugin struct {
 	// so a machine caller gets its own pattern history instead of sharing
 	// (or colliding with) another principal's.
 	mu       sync.RWMutex
-	patterns map[string]*LoginPattern
+	patterns *boundedmap.Map[string, *LoginPattern]
 }
 
 // New creates a new anomaly detection plugin.
@@ -162,7 +172,7 @@ func New(cfg ...Config) *Plugin {
 	}
 	return &Plugin{
 		config:   c,
-		patterns: make(map[string]*LoginPattern),
+		patterns: boundedmap.New[string, *LoginPattern](c.MaxTrackedPrincipals),
 	}
 }
 
@@ -191,7 +201,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		p.logger = log.NewNoopLogger()
 	}
 
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.relay = engine.Relay()
 	p.settingsMgr = engine.Settings()
 
@@ -234,13 +244,13 @@ func (p *Plugin) recordLogin(ctx context.Context, ref principal.Ref, appID strin
 	refKey := ref.String()
 
 	p.mu.Lock()
-	pattern, exists := p.patterns[refKey]
+	pattern, exists := p.patterns.Get(refKey)
 	if !exists {
 		pattern = &LoginPattern{
 			Principal:        ref,
 			CountryHistogram: make(map[string]int),
 		}
-		p.patterns[refKey] = pattern
+		p.patterns.Put(refKey, pattern)
 	}
 
 	// Record this login.

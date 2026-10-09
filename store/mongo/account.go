@@ -24,6 +24,7 @@ func (s *Store) CreateVerification(ctx context.Context, v *account.Verification)
 	if err != nil {
 		return fmt.Errorf("authsome/mongo: create verification: %w", err)
 	}
+	v.TokenHash = m.TokenHash
 
 	return nil
 }
@@ -31,35 +32,33 @@ func (s *Store) CreateVerification(ctx context.Context, v *account.Verification)
 // GetVerification returns a verification by token.
 func (s *Store) GetVerification(ctx context.Context, token string) (*account.Verification, error) {
 	var m verificationModel
-
-	err := s.mdb.NewFind(&m).
-		Filter(bson.M{"token": token}).
-		Scan(ctx)
+	legacy, err := s.findByToken(ctx, &m, "verification", token)
 	if err != nil {
-		if isNoDocuments(err) {
-			return nil, store.ErrNotFound
-		}
-
-		return nil, fmt.Errorf("authsome/mongo: get verification: %w", err)
+		return nil, err
 	}
-
-	return fromVerificationModel(&m)
+	if legacy {
+		if upErr := s.upgradeLegacyToken(ctx, (*verificationModel)(nil), m.ID, token); upErr != nil {
+			return nil, upErr
+		}
+		m.Token = ""
+	}
+	v, err := fromVerificationModel(&m)
+	if err != nil {
+		return nil, err
+	}
+	v.Token, v.TokenHash = token, store.HashToken(token)
+	return v, nil
 }
 
 // ConsumeVerification marks a verification token as consumed.
 func (s *Store) ConsumeVerification(ctx context.Context, token string) error {
-	res, err := s.mdb.NewUpdate((*verificationModel)(nil)).
-		Filter(bson.M{"token": token, "consumed": false}).
-		Set("consumed", true).
-		Exec(ctx)
+	consumed, err := s.consumeByToken(ctx, (*verificationModel)(nil), "verification", token)
 	if err != nil {
-		return fmt.Errorf("authsome/mongo: consume verification: %w", err)
+		return err
 	}
-
-	if res.MatchedCount() == 0 {
+	if !consumed {
 		return store.ErrNotFound
 	}
-
 	return nil
 }
 
@@ -112,6 +111,7 @@ func (s *Store) CreatePasswordReset(ctx context.Context, pr *account.PasswordRes
 	if err != nil {
 		return fmt.Errorf("authsome/mongo: create password reset: %w", err)
 	}
+	pr.TokenHash = m.TokenHash
 
 	return nil
 }
@@ -119,34 +119,32 @@ func (s *Store) CreatePasswordReset(ctx context.Context, pr *account.PasswordRes
 // GetPasswordReset returns a password reset by token.
 func (s *Store) GetPasswordReset(ctx context.Context, token string) (*account.PasswordReset, error) {
 	var m passwordResetModel
-
-	err := s.mdb.NewFind(&m).
-		Filter(bson.M{"token": token}).
-		Scan(ctx)
+	legacy, err := s.findByToken(ctx, &m, "password reset", token)
 	if err != nil {
-		if isNoDocuments(err) {
-			return nil, store.ErrNotFound
-		}
-
-		return nil, fmt.Errorf("authsome/mongo: get password reset: %w", err)
+		return nil, err
 	}
-
-	return fromPasswordResetModel(&m)
+	if legacy {
+		if upErr := s.upgradeLegacyToken(ctx, (*passwordResetModel)(nil), m.ID, token); upErr != nil {
+			return nil, upErr
+		}
+		m.Token = ""
+	}
+	pr, err := fromPasswordResetModel(&m)
+	if err != nil {
+		return nil, err
+	}
+	pr.Token, pr.TokenHash = token, store.HashToken(token)
+	return pr, nil
 }
 
 // ConsumePasswordReset marks a password reset token as consumed.
 func (s *Store) ConsumePasswordReset(ctx context.Context, token string) error {
-	res, err := s.mdb.NewUpdate((*passwordResetModel)(nil)).
-		Filter(bson.M{"token": token, "consumed": false}).
-		Set("consumed", true).
-		Exec(ctx)
+	consumed, err := s.consumeByToken(ctx, (*passwordResetModel)(nil), "password reset", token)
 	if err != nil {
-		return fmt.Errorf("authsome/mongo: consume password reset: %w", err)
+		return err
 	}
-
-	if res.MatchedCount() == 0 {
+	if !consumed {
 		return store.ErrNotFound
 	}
-
 	return nil
 }

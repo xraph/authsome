@@ -109,6 +109,7 @@ func TestDeviceAuthorize_AcceptsFormEncodedBody(t *testing.T) {
 		ID:         id.NewOAuth2ClientID(),
 		AppID:      id.NewAppID(),
 		ClientID:   deviceClientID,
+		FirstParty: true,
 		Name:       "Device",
 		Scopes:     []string{"openid", "profile"},
 		GrantTypes: []string{"urn:ietf:params:oauth:grant-type:device_code"},

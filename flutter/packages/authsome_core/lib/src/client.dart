@@ -67,31 +67,41 @@ class AuthSomeClient extends generated.AuthClient {
   Future<AuthResponse> signInWithCredentials({
     required String email,
     required String password,
+    String? captchaToken,
   }) {
-    return super.signIn(body: SignInRequest(email: email, password: password));
+    return super.signIn(
+      body: SignInRequest(
+        email: email,
+        password: password,
+        captchaToken: captchaToken,
+      ),
+    );
   }
 
   /// Sign up with email & password.
+  ///
+  /// [fields] carries the values of the app's configured signup fields,
+  /// keyed by field key. `first_name`, `last_name` and `username` map to
+  /// their own request fields and everything else goes into `metadata`,
+  /// the same split React's `signUp` makes. [name] is the older single
+  /// display-name input and only applies when [fields] names neither a
+  /// first nor a last name.
   Future<AuthResponse> signUpWithCredentials({
     required String email,
     required String password,
     String? name,
+    Map<String, String>? fields,
+    String? captchaToken,
   }) {
-    // This used to post a "name" key, which POST /v1/signup has never read:
-    // the body carries first_name and last_name. The value was being dropped
-    // on the floor. Split on the first space so a single display name lands
-    // somewhere rather than nowhere.
-    String? firstName;
-    String? lastName;
-    if (name != null && name.trim().isNotEmpty) {
-      final trimmed = name.trim();
-      final split = trimmed.indexOf(' ');
-      if (split == -1) {
-        firstName = trimmed;
-      } else {
-        firstName = trimmed.substring(0, split);
-        lastName = trimmed.substring(split + 1).trim();
-      }
+    final rest = Map<String, String>.from(fields ?? const {});
+    var firstName = rest.remove('first_name');
+    var lastName = rest.remove('last_name');
+    final username = rest.remove('username');
+    if (firstName == null && lastName == null) {
+      // POST /v1/signup has never read a "name" key: the body carries
+      // first_name and last_name. Split on the first space so a single
+      // display name lands somewhere rather than nowhere.
+      (firstName, lastName) = _splitName(name);
     }
     return super.signUp(
       body: SignUpRequest(
@@ -99,8 +109,54 @@ class AuthSomeClient extends generated.AuthClient {
         password: password,
         firstName: firstName,
         lastName: lastName,
+        username: username,
+        metadata: rest.isNotEmpty ? rest : null,
+        captchaToken: captchaToken,
       ),
     );
+  }
+
+  /// Start an SSO login for [connectionId] (the provider name the client
+  /// config lists). Returns the IdP URL to send the browser to. The server
+  /// rejects a [returnUrl] that isn't https and allowlisted (localhost is
+  /// always allowed). Leave it null to land on the server's default
+  /// `/sso/callback`.
+  Future<String> startSSOLoginUrl(
+    String connectionId, {
+    String? returnUrl,
+  }) async {
+    final res = await super.startSSOLogin(
+      provider: connectionId,
+      returnUrl: returnUrl,
+    );
+    return res.loginUrl;
+  }
+
+  /// Redeem the one-time code the SSO landing page receives as `?code=`.
+  ///
+  /// Raw post because the generated `ssoExchange` demands a bearer token,
+  /// and this endpoint is publishable-key authed: there is no session yet.
+  Future<AuthResponse> ssoExchangeCode(String code) async {
+    final data = await _rawPost('/v1/sso/exchange', body: {'code': code});
+    return AuthResponse.fromJson(data);
+  }
+
+  /// Join the app's waitlist. POST /v1/waitlist/join has no generated
+  /// method, so this posts the body React's waitlist form sends.
+  Future<void> joinWaitlist({required String email, String? name}) async {
+    await _rawPost('/v1/waitlist/join', body: {
+      'email': email,
+      if (name != null && name.isNotEmpty) 'name': name,
+    });
+  }
+
+  /// Splits a display name on its first space into first and last name.
+  static (String?, String?) _splitName(String? name) {
+    if (name == null || name.trim().isEmpty) return (null, null);
+    final trimmed = name.trim();
+    final split = trimmed.indexOf(' ');
+    if (split == -1) return (trimmed, null);
+    return (trimmed.substring(0, split), trimmed.substring(split + 1).trim());
   }
 
   /// Refresh session tokens using a refresh token string.

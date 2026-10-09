@@ -8,15 +8,3 @@ contributor:
   # Library contributor — settings auto-discover via settings.tabs.
 
 intents: []
-
-graph:
-  - route: /auth/phone
-    intent: page.shell
-    title: Phone
-    nav: { group: Auth, icon: smartphone, priority: 2 }
-    slots:
-      main:
-        - intent: settings.panel
-          props:
-            namespace: phone
-            scope: app

@@ -65,3 +65,16 @@ permission "permission:create"
 permission "permission:read"
 permission "permission:delete"
 permission "permission:*"
+
+// ── Dynamic settings (owner only; see app.warden) ──────────────────
+permission "settings:read"
+permission "settings:manage"
+permission "settings:*"
+
+// ── API keys managed on behalf of other users ──────────────────────
+permission "apikey:manage"
+permission "apikey:*"
+
+// ── Organization administration (admin listing across an app) ──────
+permission "organization:manage"
+permission "organization:*"

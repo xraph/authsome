@@ -38,12 +38,15 @@ import (
 func audienceRouter(eng *authsome.Engine) forge.Router {
 	router := forge.NewRouter()
 	router.Use(eng.AuthMiddleware())
+	// A resource route declares that OAuth2-issued tokens may reach it;
+	// without the tag the auth middleware keeps such tokens parked and only
+	// ordinary sessions get through.
 	router.GET("/test", func(ctx forge.Context) error {
 		if _, ok := middleware.UserFrom(ctx.Context()); !ok {
 			return ctx.NoContent(http.StatusUnauthorized)
 		}
 		return ctx.NoContent(http.StatusOK)
-	})
+	}, forge.WithMiddleware(middleware.RequireScope()))
 	return router
 }
 
@@ -94,7 +97,7 @@ func TestEngineExpectedAudience_UnsetDisablesCheck(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "audience-unset@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
@@ -130,7 +133,7 @@ func TestEngineExpectedAudience_SetEnforcesMatch(t *testing.T) {
 	_, wrongSess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "audience-wrong@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	wrongSess.Audience = []string{"https://other.example.com"}
@@ -139,7 +142,7 @@ func TestEngineExpectedAudience_SetEnforcesMatch(t *testing.T) {
 	_, rightSess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "audience-right@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	rightSess.Audience = []string{"https://api.example.com"}
@@ -173,7 +176,7 @@ func TestEngineExpectedAudience_SetButSessionHasNoAudience(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "audience-none@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	require.Empty(t, sess.Audience, "a session minted without a resource parameter carries no audience")
@@ -203,7 +206,7 @@ func TestEngineExpectedAudience_SetEnforcesMatchWithPublishableKey(t *testing.T)
 	_, wrongSess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "audience-pk-wrong@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	wrongSess.Audience = []string{"https://other.example.com"}
@@ -212,7 +215,7 @@ func TestEngineExpectedAudience_SetEnforcesMatchWithPublishableKey(t *testing.T)
 	_, rightSess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "audience-pk-right@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	rightSess.Audience = []string{"https://api.example.com"}

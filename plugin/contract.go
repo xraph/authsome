@@ -8,9 +8,8 @@
 // with the plugin registry. Order matters when a plugin extends another
 // plugin's pages — register host-owning plugins first.
 //
-// Plugins remain free to ship only a templ-based DashboardContributor,
-// only a contract one, or both during the migration. The interface is
-// purely additive — non-implementers are skipped.
+// This is the only way a plugin contributes to the dashboard; its UI ships
+// as a React plugin that calls these intents. Non-implementers are skipped.
 package plugin
 
 import (

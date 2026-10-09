@@ -51,7 +51,8 @@ export interface AdminCreateAppRequest {
 
 export interface AdminCreateConnectionRequest {
   acs_url?: string;
-  app_id: string;
+  allowed_domains?: string[];
+  app_id?: string;
   attribute_mappings?: Record<string, unknown>;
   client_id?: string;
   client_secret?: string;
@@ -66,6 +67,7 @@ export interface AdminCreateConnectionRequest {
   protocol: string;
   provider: string;
   sign_requests?: boolean;
+  trusted_federation?: boolean;
 }
 
 export interface AdminCreateConnectionResponse {
@@ -176,6 +178,7 @@ export interface AdminStatsResponse {
 export interface AdminUpdateConnectionRequest {
   acs_url?: string;
   active?: boolean;
+  allowed_domains?: string[];
   attribute_mappings?: Record<string, unknown>;
   client_id?: string;
   client_secret?: string;
@@ -188,6 +191,7 @@ export interface AdminUpdateConnectionRequest {
   metadata_url?: string;
   provider?: string;
   sign_requests?: boolean;
+  trusted_federation?: boolean;
 }
 
 export interface AdminUpdateUserRequest {
@@ -446,6 +450,7 @@ export interface CloneEnvironmentResponse {
 export interface Connection {
   acs_url?: string;
   active: boolean;
+  allowed_domains?: string[];
   app_id: string;
   attribute_mappings?: Record<string, unknown>;
   client_id?: string;
@@ -466,6 +471,7 @@ export interface Connection {
   provider: string;
   sign_requests?: boolean;
   sp_certificate?: string;
+  trusted_federation?: boolean;
   updated_at: string;
 }
 
@@ -510,6 +516,7 @@ export interface CouponResponse {
 export interface CreateClientRequest {
   app_id: string;
   dpop_mode?: string;
+  first_party?: boolean;
   grant_types?: string[];
   name: string;
   public?: boolean;
@@ -621,6 +628,11 @@ export interface CreateWebhookRequest {
   app_id?: string;
   events: string[];
   url: string;
+}
+
+export interface CreateWebhookResponse {
+  secret: string;
+  webhook: unknown;
 }
 
 export interface CredentialInfo {
@@ -754,6 +766,7 @@ export interface EnforceSettingRequest {
 }
 
 export interface EnrollRequest {
+  code?: string;
   method?: string;
   phone?: string;
 }
@@ -829,6 +842,14 @@ export interface GrantConsentRequest {
   version?: string;
 }
 
+export interface GrantView {
+  client_id: string;
+  client_name: string;
+  created_at: string;
+  scopes: string[];
+  updated_at: string;
+}
+
 export interface GroupRef {
   $ref?: string;
   display?: string;
@@ -865,6 +886,7 @@ export interface IntrospectResponse {
   env_id?: string;
   expires_at?: string;
   org_id?: string;
+  scope?: string;
   session_id?: string;
   user?: IntrospectUser;
   user_id?: string;
@@ -891,6 +913,7 @@ export interface Invitation {
 
 export interface InvitationListResponse {
   invitations: Invitation[];
+  next_cursor?: string;
 }
 
 export interface InvoiceResponse {
@@ -932,6 +955,10 @@ export interface ListCouponsResponse {
 export interface ListDefinitionsResponse {
   groups: DefinitionGroup[];
   total: number;
+}
+
+export interface ListGrantsResponse {
+  grants: GrantView[];
 }
 
 export interface ListInvoicesResponse {
@@ -1027,6 +1054,7 @@ export interface Member {
 
 export interface MemberListResponse {
   members: Member[];
+  next_cursor?: string;
 }
 
 export interface MemberRef {
@@ -1072,6 +1100,7 @@ export interface OAuth2Client {
   created_at: string;
   dpop_mode?: string;
   dynamically_registered: boolean;
+  first_party: boolean;
   grant_types: string[];
   id: string;
   metadata?: Record<string, unknown>;
@@ -1106,6 +1135,7 @@ export interface ObjectFieldDef {
 }
 
 export interface OrgListResponse {
+  next_cursor?: string;
   organizations: Organization[];
 }
 
@@ -1314,6 +1344,10 @@ export interface RotateClientSecretResponse {
   id: string;
 }
 
+export interface RotateWebhookSecretResponse {
+  secret: string;
+}
+
 export interface SMSSendRequest {
   phone?: string;
 }
@@ -1372,6 +1406,7 @@ export interface ServiceProviderConfig {
 }
 
 export interface SessionListResponse {
+  next_cursor?: string;
   sessions: Record<string, unknown>[];
 }
 
@@ -1508,6 +1543,7 @@ export interface Team {
 }
 
 export interface TeamListResponse {
+  next_cursor?: string;
   teams: Team[];
 }
 
@@ -1550,6 +1586,7 @@ export interface UnlinkAuthMethodResponse {
 export interface UpdateClientRequest {
   app_id?: string;
   client_id?: string;
+  first_party?: boolean;
   grant_types?: string[];
   name?: string;
   public?: boolean;
@@ -1748,6 +1785,7 @@ export interface Webhook {
   env_id: string;
   events: string[];
   id: string;
+  relay_endpoint_id?: string;
   updated_at: string;
   url: string;
 }
@@ -1804,7 +1842,7 @@ export type Oauth2UpdateRegistrationRequest = UpdateRegistrationRequest;
 
 export type Oauth2RevokeRequest = { client_id?: string; client_secret?: string; token: string; token_type_hint?: string };
 
-export type Oauth2TokenRequest = { actor_token?: string; actor_token_type?: string; audience?: string; client_id?: string; client_secret?: string; code?: string; code_verifier?: string; device_code?: string; grant_type: string; redirect_uri?: string; requested_token_type?: string; resource?: string[]; scope?: string; subject_token?: string; subject_token_type?: string };
+export type Oauth2TokenRequest = { actor_token?: string; actor_token_type?: string; audience?: string; client_id?: string; client_secret?: string; code?: string; code_verifier?: string; device_code?: string; grant_type: string; redirect_uri?: string; refresh_token?: string; requested_token_type?: string; resource?: string[]; scope?: string; subject_token?: string; subject_token_type?: string };
 
 export type CreateOrganizationRequest = CreateOrgRequest;
 

@@ -206,7 +206,7 @@ func newTestEngine(t *testing.T) *authsome.Engine {
                 RefreshTokenTTL: 1 * time.Hour,
             },
             Password: authsome.PasswordConfig{
-                MinLength: 8,
+                MinLength: 12,
             },
         }),
     )

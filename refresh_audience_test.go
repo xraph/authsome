@@ -37,7 +37,7 @@ func TestRefreshPreservesAudience(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "aud-refresh@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Aud User",
 	})
 	require.NoError(t, err)
@@ -81,7 +81,7 @@ func TestNewSessionRecordsConfiguredJWTAudience(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     testAppID(t),
 		Email:     "aud-newsession@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Aud User",
 	})
 	require.NoError(t, err)
@@ -113,7 +113,7 @@ func TestNewSessionWithoutConfiguredAudienceStaysUnaudienced(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     testAppID(t),
 		Email:     "aud-newsession-none@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Aud User",
 	})
 	require.NoError(t, err)

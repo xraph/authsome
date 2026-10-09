@@ -3,11 +3,14 @@ package social
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/xraph/grove"
 	"github.com/xraph/grove/drivers/mongodriver"
@@ -17,8 +20,10 @@ import (
 
 // MongoStore implements social.Store using the Grove MongoDB driver.
 type MongoStore struct {
-	db  *grove.DB
-	mdb *mongodriver.MongoDB
+	db      *grove.DB
+	mdb     *mongodriver.MongoDB
+	indexMu sync.Mutex
+	indexed bool
 }
 
 // NewMongoStore creates a new MongoDB-backed social/OAuth store.
@@ -27,6 +32,40 @@ func NewMongoStore(db *grove.DB) *MongoStore {
 		db:  db,
 		mdb: mongodriver.Unwrap(db),
 	}
+}
+
+// ensureIndexes installs the unique (app_id, provider, provider_user_id)
+// index before the first write. Mongo has no migration group for this
+// plugin, so the store guarantees the index itself; a conflicting older
+// index named for the provider pair is dropped first. A failed attempt is
+// retried on the next write rather than remembered.
+func (s *MongoStore) ensureIndexes(ctx context.Context) error {
+	s.indexMu.Lock()
+	defer s.indexMu.Unlock()
+	if s.indexed {
+		return nil
+	}
+	coll := s.mdb.Collection(oauthConnectionsColl)
+	if dropErr := coll.Indexes().DropOne(ctx, "provider_1_provider_user_id_1"); dropErr != nil {
+		var cmdErr mongo.CommandError
+		// 26 is NamespaceNotFound (the collection does not exist yet) and
+		// 27 is IndexNotFound; both mean there is nothing to drop.
+		if !errors.As(dropErr, &cmdErr) || (cmdErr.Code != 26 && cmdErr.Code != 27) {
+			return fmt.Errorf("social/mongo: drop provider index: %w", dropErr)
+		}
+	}
+	_, err := coll.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "app_id", Value: 1}, {Key: "provider", Value: 1}, {Key: "provider_user_id", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		},
+		{Keys: bson.D{{Key: "user_id", Value: 1}}},
+	})
+	if err != nil {
+		return fmt.Errorf("social/mongo: ensure indexes: %w", err)
+	}
+	s.indexed = true
+	return nil
 }
 
 // Compile-time interface check.
@@ -137,13 +176,17 @@ func (s *MongoStore) CreateOAuthConnection(ctx context.Context, c *OAuthConnecti
 		c.UpdatedAt = now
 	}
 	doc := oauthConnectionToDoc(c)
+	if err := s.ensureIndexes(ctx); err != nil {
+		return err
+	}
 	_, err := s.mdb.Collection(oauthConnectionsColl).InsertOne(ctx, doc)
 	return socialMongoError(err)
 }
 
-func (s *MongoStore) GetOAuthConnection(ctx context.Context, provider, providerUserID string) (*OAuthConnection, error) {
+func (s *MongoStore) GetOAuthConnection(ctx context.Context, appID id.AppID, provider, providerUserID string) (*OAuthConnection, error) {
 	doc := new(oauthConnectionDoc)
 	err := s.mdb.Collection(oauthConnectionsColl).FindOne(ctx, bson.M{
+		"app_id":           appID.String(),
 		"provider":         provider,
 		"provider_user_id": providerUserID,
 	}).Decode(doc)

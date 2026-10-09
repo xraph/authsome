@@ -23,25 +23,9 @@ import (
 
 const scimLifecycleTestAppID = "aapp_01jf0000000000000000000000"
 
-// Both tests below give their SCIMConfig a zero-value AppID. That is a
-// workaround for a pre-existing, unrelated bug, not a design choice:
-// Service.ValidateToken authenticates a bearer token by calling
-// s.store.ListConfigs(ctx, "") — an empty string — and matching
-// c.AppID.String() == appID for each candidate config. Every real config
-// carries a non-empty AppID (dashboard config creation parses one from a
-// required field; see handleCreateConfig), so that comparison can never
-// succeed for a real deployment: authenticateSCIM would 401 every genuine
-// SCIM token. This looks like it should have called the store's
-// FindTokenByHash instead, which ValidateToken's own comment describes but
-// the code below it does not use.
-//
-// That bug is unrelated to grant revocation and out of scope for this task,
-// so it is not fixed here — flagged separately instead (see task-11-report
-// round 2). Zeroing the config's AppID is the one case ValidateToken's
-// comparison actually matches, which is what lets these tests still drive
-// the real HTTP handlers (handlePatchUser / handleReplaceUser) end to end
-// instead of calling their Go internals directly. The users under test
-// still carry a normal, non-zero AppID.
+// Both tests drive the real HTTP handlers end to end. The config and the
+// users under test share one app id: the handlers now refuse any row
+// outside the configuration's app, so a mismatch would read as 404.
 
 // TestHandlePatchUser_ActiveFalse_RevokesAgentGrants covers Gap A from
 // review round 2: SCIM PATCH /Users/:userId with {"path":"active","value":
@@ -63,10 +47,8 @@ func TestHandlePatchUser_ActiveFalse_RevokesAgentGrants(t *testing.T) {
 	appID, err := id.ParseAppID(scimLifecycleTestAppID)
 	require.NoError(t, err)
 
-	// AppID intentionally left zero-value on the config only — see
-	// scimConfigWorkaroundNote above.
 	cfg := &SCIMConfig{
-		ID: id.NewSCIMConfigID(), Name: "okta",
+		ID: id.NewSCIMConfigID(), Name: "okta", AppID: appID,
 		Enabled: true, AutoSuspend: true,
 	}
 	require.NoError(t, p.service.CreateConfig(context.Background(), cfg))
@@ -125,25 +107,18 @@ func TestHandleReplaceUser_ActiveFalse_RevokesAgentGrants(t *testing.T) {
 	appID, err := id.ParseAppID(scimLifecycleTestAppID)
 	require.NoError(t, err)
 
-	// AppID intentionally left zero-value on the config only — see the
-	// workaround note above TestHandlePatchUser_ActiveFalse_RevokesAgentGrants.
-	// ProvisionUser's existing-user lookup keys on cfg.AppID
-	// (GetUserByAnyEmail(ctx, cfg.AppID, ...)), so the user's own email row
-	// must match it — both zero here — or ProvisionUser would silently take
-	// the create-new-user branch instead of finding this one.
 	cfg := &SCIMConfig{
-		ID: id.NewSCIMConfigID(), Name: "entra",
+		ID: id.NewSCIMConfigID(), Name: "entra", AppID: appID,
 		Enabled: true, AutoCreate: true, AutoSuspend: true,
 	}
 	require.NoError(t, p.service.CreateConfig(context.Background(), cfg))
 	token, _, err := p.service.GenerateToken(context.Background(), cfg.ID, "test-token", nil)
 	require.NoError(t, err)
 
-	// ProvisionUser's existing-user branch is reached via
-	// GetUserByAnyEmail, so the user needs a primary-email row, not just a
-	// bare user record.
+	// ReplaceUser checks the body's email against the app's email rows, so
+	// the user needs a primary-email row, not just a bare user record.
 	u := &user.User{
-		ID: id.NewUserID(), Email: "put-user@example.com",
+		ID: id.NewUserID(), AppID: appID, Email: "put-user@example.com",
 		FirstName: "Ada", LastName: "Lovelace",
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}

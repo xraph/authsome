@@ -91,3 +91,56 @@ CREATE INDEX IF NOT EXISTS idx_authsome_oauth_connections_user
 		},
 	)
 }
+
+func init() {
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "oauth_connections_app_scope",
+			Version: "20260922000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_oauth_connections_provider;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_oauth_connections_app_provider
+    ON authsome_oauth_connections (app_id, provider, provider_user_id);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_oauth_connections_app_provider;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_oauth_connections_provider
+    ON authsome_oauth_connections (provider, provider_user_id);
+`)
+				return err
+			},
+		},
+	)
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "oauth_connections_app_scope",
+			Version: "20260922000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				for _, stmt := range []string{
+					`DROP INDEX IF EXISTS idx_authsome_oauth_connections_provider`,
+					`CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_oauth_connections_app_provider ON authsome_oauth_connections (app_id, provider, provider_user_id)`,
+				} {
+					if _, err := exec.Exec(ctx, stmt); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				for _, stmt := range []string{
+					`DROP INDEX IF EXISTS idx_authsome_oauth_connections_app_provider`,
+					`CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_oauth_connections_provider ON authsome_oauth_connections (provider, provider_user_id)`,
+				} {
+					if _, err := exec.Exec(ctx, stmt); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+		},
+	)
+}

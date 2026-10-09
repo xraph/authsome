@@ -57,6 +57,7 @@ func seedClient(t *testing.T, st oauth2provider.Store, appID id.AppID, clientID 
 		ID:           id.NewOAuth2ClientID(),
 		AppID:        appID,
 		ClientID:     clientID,
+		FirstParty:   true,
 		Name:         "Seeded " + clientID,
 		RedirectURIs: []string{registeredURI},
 		Scopes:       []string{"openid"},

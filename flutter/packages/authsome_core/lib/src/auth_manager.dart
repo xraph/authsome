@@ -180,13 +180,18 @@ class AuthManager {
   /// Re-throws on `email_not_verified` so callers can branch into the
   /// inline verification panel without polling state — mirrors React
   /// `auth.ts` lines 197–206.
-  Future<void> signIn(String email, String password) async {
+  Future<void> signIn(
+    String email,
+    String password, {
+    String? captchaToken,
+  }) async {
     _pendingEmail = email;
     _setState(const AuthLoading());
     try {
       final res = await _client.signInWithCredentials(
         email: email,
         password: password,
+        captchaToken: captchaToken,
       );
       final session = Session(
         sessionToken: res.sessionToken,
@@ -203,7 +208,23 @@ class AuthManager {
   }
 
   /// Sign up with email & password.
-  Future<void> signUp(String email, String password, {String? name}) async {
+  ///
+  /// [fields] holds the values of the app's configured signup fields; see
+  /// [AuthSomeClient.signUpWithCredentials] for how they map onto the
+  /// request.
+  ///
+  /// When the client config says email verification is required, the
+  /// session the server returns can't be used until the address is
+  /// verified, so it is discarded and the state moves to
+  /// [AuthVerificationPending] instead of [AuthAuthenticated]. React's
+  /// `signUp` does the same.
+  Future<void> signUp(
+    String email,
+    String password, {
+    String? name,
+    Map<String, String>? fields,
+    String? captchaToken,
+  }) async {
     _pendingEmail = email;
     _setState(const AuthLoading());
     try {
@@ -211,7 +232,22 @@ class AuthManager {
         email: email,
         password: password,
         name: name,
+        fields: fields,
+        captchaToken: captchaToken,
       );
+      // A sign-up that beats the config fetch must still see the
+      // verification setting, or it would sign in with a dead session.
+      if (_clientConfig == null && _publishableKey != null) {
+        try {
+          await fetchClientConfig();
+        } catch (_) {
+          // No config: fall back to treating the session as usable.
+        }
+      }
+      if (_clientConfig?.emailVerification?.required == true) {
+        _setState(AuthVerificationPending(email: email));
+        return;
+      }
       final session = Session(
         sessionToken: res.sessionToken,
         refreshToken: res.refreshToken,
@@ -221,6 +257,59 @@ class AuthManager {
     } catch (err) {
       _handleError(err);
     }
+  }
+
+  /// Start an SSO login and return the IdP URL to send the user to.
+  ///
+  /// Doesn't touch auth state: the user leaves the app here, and the
+  /// round trip ends in [completeSSOLogin] on the landing page.
+  Future<String> startSSOLogin(String connectionId, {String? returnUrl}) {
+    return _client.startSSOLoginUrl(connectionId, returnUrl: returnUrl);
+  }
+
+  /// Finish an SSO login by redeeming the one-time `?code=` the backend
+  /// appended to the return URL. Rethrows on failure so the landing page
+  /// can show why.
+  Future<void> completeSSOLogin(String code) async {
+    _setState(const AuthLoading());
+    try {
+      final res = await _client.ssoExchangeCode(code);
+      final session = Session(
+        sessionToken: res.sessionToken,
+        refreshToken: res.refreshToken,
+        expiresAt: res.expiresAt,
+      );
+      await _handleAuthResponse(res.user, session);
+    } catch (err) {
+      _handleError(err);
+      rethrow;
+    }
+  }
+
+  /// Email a magic sign-in link to [email].
+  Future<void> sendMagicLink(String email) async {
+    await _client.sendMagicLink(body: SendRequest(email: email));
+  }
+
+  /// Put [email] (and an optional [name]) on the app's waitlist.
+  Future<void> joinWaitlist(String email, {String? name}) {
+    return _client.joinWaitlist(email: email, name: name);
+  }
+
+  /// Approve the OAuth device authorization request identified by
+  /// [userCode] (RFC 8628) as the signed-in user.
+  Future<void> approveDeviceAuthorization(String userCode) async {
+    final token = getSessionToken();
+    if (token == null) {
+      throw const AuthClientException(
+        'Sign in before authorizing a device',
+        code: 401,
+      );
+    }
+    await _client.oauth2DeviceComplete(
+      body: Oauth2DeviceCompleteRequest(action: 'approve', userCode: userCode),
+      token: token,
+    );
   }
 
   /// Submit an MFA challenge code using the ticket from [AuthMfaRequired].

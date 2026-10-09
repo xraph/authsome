@@ -60,10 +60,11 @@ func TestTimestampRoundTrip_Clients(t *testing.T) {
 
 	before := time.Now()
 	c := &OAuth2Client{
-		ID:       id.NewOAuth2ClientID(),
-		AppID:    appID,
-		Name:     "CLI",
-		ClientID: "client_roundtrip",
+		ID:         id.NewOAuth2ClientID(),
+		AppID:      appID,
+		Name:       "CLI",
+		ClientID:   "client_roundtrip",
+		FirstParty: true,
 	}
 	require.NoError(t, s.CreateClient(ctx, c))
 

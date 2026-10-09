@@ -29,7 +29,18 @@ func (a *API) registerWebhookRoutes(router forge.Router) error {
 		forge.WithDescription("Creates a new webhook endpoint registration."),
 		forge.WithOperationID("createWebhook"),
 		forge.WithRequestSchema(CreateWebhookRequest{}),
-		forge.WithCreatedResponse(webhook.Webhook{}),
+		forge.WithCreatedResponse(CreateWebhookResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	if err := g.POST("/webhooks/:webhookId/rotate-secret", a.handleRotateWebhookSecret,
+		forge.WithSummary("Rotate webhook secret"),
+		forge.WithDescription("Replaces the webhook's signing secret and returns the new one, shown only once. The old secret stops verifying immediately."),
+		forge.WithOperationID("rotateWebhookSecret"),
+		forge.WithRequestSchema(RotateWebhookSecretRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "New secret", RotateWebhookSecretResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -79,7 +90,7 @@ func (a *API) registerWebhookRoutes(router forge.Router) error {
 // Webhook handlers
 // ──────────────────────────────────────────────────
 
-func (a *API) handleCreateWebhook(ctx forge.Context, req *CreateWebhookRequest) (*webhook.Webhook, error) {
+func (a *API) handleCreateWebhook(ctx forge.Context, req *CreateWebhookRequest) (*CreateWebhookResponse, error) {
 	if req.URL == "" {
 		return nil, forge.BadRequest("url is required")
 	}
@@ -96,13 +107,34 @@ func (a *API) handleCreateWebhook(ctx forge.Context, req *CreateWebhookRequest) 
 		AppID:  appID,
 		URL:    req.URL,
 		Events: req.Events,
+		Active: true,
 	}
-
 	if err := a.engine.CreateWebhook(ctx.Context(), w); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
+	// The secret rides on w only for this response; the store never sees it.
+	secret := w.Secret
+	w.Secret = ""
+	return nil, ctx.JSON(http.StatusCreated, &CreateWebhookResponse{Webhook: w, Secret: secret})
+}
 
-	return nil, ctx.JSON(http.StatusCreated, w)
+func (a *API) handleRotateWebhookSecret(ctx forge.Context, _ *RotateWebhookSecretRequest) (*RotateWebhookSecretResponse, error) {
+	webhookID, err := id.ParseWebhookID(ctx.Param("webhookId"))
+	if err != nil {
+		return nil, forge.BadRequest(fmt.Sprintf("invalid webhook id: %v", err))
+	}
+	w, err := a.engine.GetWebhook(ctx.Context(), webhookID)
+	if err != nil {
+		return nil, mapErrorCtx(ctx, err)
+	}
+	if scopeErr := a.assertAppScope(ctx, w.AppID); scopeErr != nil {
+		return nil, scopeErr
+	}
+	secret, err := a.engine.RotateWebhookSecret(ctx.Context(), webhookID)
+	if err != nil {
+		return nil, mapErrorCtx(ctx, err)
+	}
+	return &RotateWebhookSecretResponse{Secret: secret}, nil
 }
 
 func (a *API) handleListWebhooks(ctx forge.Context, req *ListWebhooksRequest) (*WebhookListResponse, error) {
@@ -113,7 +145,7 @@ func (a *API) handleListWebhooks(ctx forge.Context, req *ListWebhooksRequest) (*
 
 	webhooks, err := a.engine.ListWebhooks(ctx.Context(), appID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	if webhooks == nil {
@@ -131,7 +163,7 @@ func (a *API) handleGetWebhook(ctx forge.Context, _ *GetWebhookRequest) (*webhoo
 
 	w, err := a.engine.GetWebhook(ctx.Context(), webhookID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	if err := a.assertAppScope(ctx, w.AppID); err != nil {
 		return nil, err
@@ -148,7 +180,7 @@ func (a *API) handleUpdateWebhook(ctx forge.Context, req *UpdateWebhookRequest) 
 
 	w, err := a.engine.GetWebhook(ctx.Context(), webhookID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	if err := a.assertAppScope(ctx, w.AppID); err != nil {
 		return nil, err
@@ -165,7 +197,7 @@ func (a *API) handleUpdateWebhook(ctx forge.Context, req *UpdateWebhookRequest) 
 	}
 
 	if err := a.engine.UpdateWebhook(ctx.Context(), w); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return w, nil
@@ -179,14 +211,14 @@ func (a *API) handleDeleteWebhook(ctx forge.Context, _ *DeleteWebhookRequest) (*
 
 	w, err := a.engine.GetWebhook(ctx.Context(), webhookID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	if err := a.assertAppScope(ctx, w.AppID); err != nil {
 		return nil, err
 	}
 
 	if err := a.engine.DeleteWebhook(ctx.Context(), webhookID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "deleted"}

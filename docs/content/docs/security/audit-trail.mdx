@@ -1,222 +1,105 @@
 ---
 title: Audit Trail
-description: Append-only security event log with IP and user agent recording, time-range queries, cursor pagination, and Chronicle bridge integration.
+description: Every security-relevant action is recorded on Chronicle, with request correlation, through one enriched path. Chronicle is required, nothing is recorded anywhere else, and the actions that matter most refuse to run when the trail is unavailable.
 ---
 
-Authsome records every significant authentication and authorization event to an append-only audit trail. The audit trail is the authoritative record for security investigations, compliance reporting, and user activity monitoring. Events are immutable -- there is no update or delete operation on the audit store.
+Authsome records every security-relevant action on [Chronicle](https://github.com/xraph/chronicle), the hash-chained audit trail used across the Forge ecosystem. There is no second store and no fallback logger: if Chronicle is not wired, the engine refuses to start. That is deliberate. An auditor cannot accept a deployment that might, under some configuration, have run with no record of who did what.
 
-## The SecurityEvent model
+## Chronicle is required
 
-```go
-import "github.com/xraph/authsome/audit"
+When authsome runs as a Forge extension it looks for a `chronicle.Emitter` in the application container. The Chronicle extension provides one; without it, `Register` fails with:
 
-type SecurityEvent struct {
-    ID          id.ID             `json:"id"`           // asec_ prefix
-    AppID       string            `json:"app_id"`
-    EnvID       string            `json:"env_id"`
-    UserID      *id.ID            `json:"user_id,omitempty"`
-    SessionID   *id.ID            `json:"session_id,omitempty"`
-    OrgID       *id.ID            `json:"org_id,omitempty"`
-    Action      string            `json:"action"`       // e.g. "auth.signin"
-    Outcome     string            `json:"outcome"`      // "success" or "failure"
-    IP          string            `json:"ip,omitempty"`
-    UserAgent   string            `json:"user_agent,omitempty"`
-    Country     string            `json:"country,omitempty"`
-    City        string            `json:"city,omitempty"`
-    DeviceType  string            `json:"device_type,omitempty"`
-    Reason      string            `json:"reason,omitempty"`     // on failure
-    Metadata    map[string]any    `json:"metadata,omitempty"`
-    CreatedAt   time.Time         `json:"created_at"`
-}
+```
+authsome: the chronicle extension is required for the audit trail
 ```
 
-| Field | Description |
-|-------|-------------|
-| `Action` | The event type string, e.g. `"auth.signin"`, `"auth.mfa.verified"`, `"passkey.registered"` |
-| `Outcome` | `"success"` or `"failure"` |
-| `IP` | Client IP address extracted from the request context |
-| `UserAgent` | Full user agent string from the request |
-| `Country` / `City` | Geo-location data if IP geolocation is configured |
-| `DeviceType` | Parsed device type: `"desktop"`, `"mobile"`, `"tablet"`, `"bot"` |
-| `Reason` | Human-readable failure reason, e.g. `"invalid_password"`, `"token_expired"` |
-| `Metadata` | Additional context key-value pairs (e.g. MFA method, SSO provider name) |
-
-## Event types
-
-Authsome records events across all authentication methods:
-
-| Action | Category | Description |
-|--------|----------|-------------|
-| `auth.signin` | Auth | Successful sign-in |
-| `auth.signin.failed` | Auth | Failed sign-in attempt |
-| `auth.signout` | Auth | User signed out |
-| `auth.password.reset` | Auth | Password was reset |
-| `auth.mfa.enabled` | MFA | MFA was enabled for the account |
-| `auth.mfa.disabled` | MFA | MFA was disabled for the account |
-| `auth.mfa.enrolled` | MFA | MFA method was enrolled (e.g., TOTP added) |
-| `auth.mfa.verified` | MFA | MFA challenge was verified successfully |
-| `auth.mfa.challenged` | MFA | MFA challenge was initiated |
-| `passkey.registered` | Passkey | A new passkey credential was registered |
-| `passkey.authenticated` | Passkey | Authentication via passkey succeeded |
-| `passkey.deleted` | Passkey | A passkey credential was removed |
-| `social.signin` | Social | OAuth social sign-in |
-| `social.signup` | Social | Account created via social OAuth |
-| `sso.signin` | SSO | Enterprise SSO sign-in |
-| `sso.signup` | SSO | Account created via SSO |
-| `session.created` | Session | A new session was created |
-| `session.revoked` | Session | A session was explicitly revoked |
-| `apikey.created` | API Key | A new API key was created |
-| `apikey.revoked` | API Key | An API key was revoked |
-| `org.member.invited` | Org | A user was invited to an organization |
-| `org.member.joined` | Org | A user accepted an org invitation |
-| `org.member.removed` | Org | A user was removed from an organization |
-
-## The SecurityEventStore interface
+When you build the engine yourself, pass a Chronicle through `WithChronicle`. `NewEngine` returns `ErrChronicleRequired` otherwise.
 
 ```go
-type SecurityEventStore interface {
-    // Record appends a new security event. Errors are logged but do not fail the auth operation.
-    Record(ctx context.Context, event *SecurityEvent) error
+import (
+    "github.com/xraph/chronicle"
+    chstore "github.com/xraph/chronicle/store"
+    chpg "github.com/xraph/chronicle/store/postgres"
 
-    // List returns events for an app within a time range, with cursor pagination.
-    List(ctx context.Context, opts ListEventsOpts) ([]*SecurityEvent, string, error)
+    authsome "github.com/xraph/authsome"
+    "github.com/xraph/authsome/bridge/chronicleadapter"
+)
 
-    // ListByUser returns events for a specific user.
-    ListByUser(ctx context.Context, userID id.ID, opts ListEventsOpts) ([]*SecurityEvent, string, error)
-
-    // ListBySession returns events for a specific session.
-    ListBySession(ctx context.Context, sessionID id.ID, opts ListEventsOpts) ([]*SecurityEvent, string, error)
-}
-```
-
-### ListEventsOpts
-
-```go
-type ListEventsOpts struct {
-    AppID     string
-    EnvID     string
-    Limit     int        // default 50, max 500
-    Cursor    string     // opaque cursor from previous NextCursor
-    Since     *time.Time // return events after this time
-    Until     *time.Time // return events before this time
-    Actions   []string   // filter by action strings
-    Outcomes  []string   // filter by "success" or "failure"
-    IPFilter  string     // exact IP match
-}
-```
-
-The list methods return `(events, nextCursor, error)`. Pass `nextCursor` as the `Cursor` in the next call to get the next page. An empty `nextCursor` means you have reached the last page.
-
-## Querying the audit trail
-
-### List recent events for the app
-
-```go
-import "github.com/xraph/authsome/audit"
-
-since := time.Now().Add(-24 * time.Hour)
-events, nextCursor, err := auth.Audit().List(ctx, audit.ListEventsOpts{
-    Since: &since,
-    Limit: 100,
-})
+trail, err := chronicle.New(chronicle.WithStore(chstore.NewAdapter(chpg.New(db))))
 if err != nil {
     return err
 }
 
-for _, e := range events {
-    fmt.Printf("  [%s] %s %s ip=%s user=%s\n",
-        e.CreatedAt.Format(time.RFC3339),
-        e.Action,
-        e.Outcome,
-        e.IP,
-        e.UserID,
-    )
-}
-```
-
-### List events for a specific user
-
-```go
-// Last 30 days of events for a user.
-since := time.Now().Add(-30 * 24 * time.Hour)
-events, nextCursor, err := auth.Audit().ListByUser(ctx, userID, audit.ListEventsOpts{
-    Since: &since,
-    Limit: 50,
-})
-```
-
-### Filter by action and outcome
-
-```go
-// All failed sign-ins in the last 7 days.
-since := time.Now().Add(-7 * 24 * time.Hour)
-events, _, err := auth.Audit().List(ctx, audit.ListEventsOpts{
-    Since:    &since,
-    Actions:  []string{"auth.signin", "auth.signin.failed"},
-    Outcomes: []string{"failure"},
-    Limit:    200,
-})
-```
-
-### Paginating through results
-
-```go
-opts := audit.ListEventsOpts{
-    Since: &since,
-    Limit: 100,
-}
-
-for {
-    events, nextCursor, err := auth.Audit().List(ctx, opts)
-    if err != nil {
-        return err
-    }
-    process(events)
-
-    if nextCursor == "" {
-        break
-    }
-    opts.Cursor = nextCursor
-}
-```
-
-## Chronicle bridge integration
-
-[Chronicle](https://github.com/xraph/chronicle) is the Forge-ecosystem's dedicated append-only event log service. When Chronicle is configured, Authsome forwards every security event to Chronicle in addition to the local audit store, giving you centralized cross-service audit logging.
-
-```go
-import (
-    "github.com/xraph/authsome"
-    "github.com/xraph/authsome/audit/chronicle"
-)
-
-auth := authsome.New(
-    authsome.WithAuditBridge(chronicle.NewBridge(
-        chronicle.WithEndpoint("https://chronicle.internal:8080"),
-        chronicle.WithAPIKey(os.Getenv("CHRONICLE_API_KEY")),
-        chronicle.WithAsync(true),        // non-blocking delivery
-        chronicle.WithBufferSize(1000),   // in-flight event buffer
-    )),
+engine, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithChronicle(chronicleadapter.New(trail)),
+    // ...
 )
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `WithEndpoint` | required | Chronicle service endpoint |
-| `WithAPIKey` | required | API key for Chronicle authentication |
-| `WithAsync` | `false` | When `true`, events are delivered asynchronously -- sign-in is not blocked by delivery failures |
-| `WithBufferSize` | `500` | Size of the async delivery buffer. Events are dropped (and logged) if the buffer is full. |
-| `WithActions` | all | When set, only the specified action strings are forwarded to Chronicle |
+Tests use `bridge.NewMemoryChronicle()`, an in-memory recorder with `Events()` and `Reset()`.
 
-<Callout type="info">
-With `WithAsync(true)`, a temporary Chronicle outage will not affect authentication. Events in the buffer are delivered when Chronicle recovers. Events that overflow the buffer are written to the application log with `level=warn`.
-</Callout>
+## One path in
 
-## HTTP API endpoints
+Every engine action emits a `hook.Event` on the engine's hook bus. The bus fills in what the call site did not: the timestamp, the outcome (derived from the error when one is set), the default severity, and the request correlation fields the auth middleware attached to the request. The first bus subscriber is the audit trail. Metrics and notifications subscribe after it, so they observe exactly the events the trail holds.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/admin/audit` | List all security events with filters |
-| `GET` | `/admin/audit/users/:user_id` | List security events for a specific user |
-| `GET` | `/admin/audit/sessions/:session_id` | List security events for a specific session |
-| `GET` | `/users/me/security-events` | User-facing: list the current user's own security events |
+Plugins and middleware record through the same bus. Their audit helpers hold a `bridge.BusChronicle`, which turns a `bridge.AuditEvent` into a hook event and emits it, so a plugin cannot bypass enrichment or write to the sink directly.
+
+## What every event carries
+
+| Field | Meaning |
+|-------|---------|
+| `action` | The action name, dotted lower snake case, from the `hook.Action*` constants |
+| `resource`, `resource_id` | What was acted on |
+| `actor_id` | The user or principal that acted. Empty only for unauthenticated failures such as a wrong password |
+| `tenant` | The app the action belongs to. Every event carries one; the bus logs a warning when a call site forgets |
+| `org_id` | The organization, when the action is org-scoped |
+| `outcome` | `success` or `failure` |
+| `severity` | `info`, `warning` or `critical` |
+| `category` | A grouping for reporting: `auth`, `admin`, `org`, `settings`, `oauth2`, `dashboard`, or a plugin name |
+| `reason` | Why a failure happened, or a short human-readable cause |
+| `ip`, `user_agent` | The client address (resolved through the trusted-proxy rules) and User-Agent. Chronicle seals both when crypto-erasure is on |
+| `request_id` | Forge's request id, so one HTTP request can be reconstructed end to end |
+| `session_id` | The authenticated session that performed the action |
+| `metadata` | Action-specific detail |
+
+## What is recorded
+
+Authentication: sign-up, sign-in (once per session, whatever the method), sign-out, refresh and refresh-token replay, failed sign-in, account lockout, password change, password reset requested and completed, email verification requested and completed, MFA enrol, challenge, disable and recovery, passkey register, login and delete, social and SSO sign-in and sign-up, DPoP proof failures.
+
+Sessions and principals: session create and revoke, machine authentication, delegation grant and revoke, impersonation start and stop.
+
+Administration: user create, update, ban, unban, delete, copy and bulk import, bulk session revoke, app and environment lifecycle, role create, update, delete, assign and unassign, platform-owner grant, API key create and revoke, webhook create, update and delete.
+
+Organizations: create, update, delete, member add, remove and role change, invitation accept and decline, team create, update and delete.
+
+Settings: every set, enforce, unenforce and delete, with the key, scope, old value and new value.
+
+Plugins: OAuth2 token exchange, SCIM provisioning, consent grant and revoke, risk assessments, anomaly and impossible-travel alerts, geofence, IP reputation and VPN blocks, new device detection, Shared Signals events.
+
+## What is never recorded
+
+The trail keeps evidence, not secrets or addresses:
+
+- Password reset tokens and email OTP codes travel in `Event.Private`, which the notification handler reads and the audit subscriber drops. They never reach Chronicle.
+- A failed sign-in stores `identifier_hash`, the SHA-256 of the lower-cased identifier, never the email or username.
+- Admin actions on a user (ban, unban, delete, export, erasure) carry the user id, not the address or name.
+
+## Actions that fail closed
+
+Most events are recorded best-effort: a Chronicle outage is logged, counted and the request continues. A short list of actions is different, because they are irreversible or widen privilege, and an auditor will always ask for their record. These run `EmitCritical` before the action, and a refused record stops the action with an error:
+
+- admin user delete
+- impersonation start
+- app delete
+- organization delete
+- platform-owner grant
+- settings writes at global scope
+
+## Querying
+
+Chronicle owns the query surface. Use its admin API or the `audit.Query` type; `session_id` and `request_id` are indexed, so "everything this session did" and "everything this request did" are single queries. Chronicle's crypto-erasure removes the sealed personal fields for a subject while leaving the hash chain intact.
+
+## Metrics
+
+The engine's `MetricsCollector` receives `audit.record.failed` (a counter, labelled by tenant) whenever Chronicle refuses a record. Alert on it: a non-zero rate means the trail has gaps.

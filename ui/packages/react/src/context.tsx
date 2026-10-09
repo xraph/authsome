@@ -46,6 +46,14 @@ export interface AuthContextValue {
     password: string,
     options?: { captchaToken?: string },
   ) => Promise<void>;
+  /**
+   * Begin an SSO login for a configured connection. Resolves to the IdP
+   * `login_url` to navigate to. `returnUrl` must be allowlisted on the server;
+   * omit it to land on the server's default `/sso/callback`.
+   */
+  startSSOLogin: (connectionId: string, returnUrl?: string) => Promise<string>;
+  /** Exchange the one-time `code` from the SSO callback URL for a session. */
+  completeSSOLogin: (code: string) => Promise<void>;
   /** Sign up with email & password and optional extra fields. */
   signUp: (
     email: string,
@@ -132,6 +140,17 @@ export function AuthProvider({ children, ...config }: AuthProviderProps) {
     [manager],
   );
 
+  const startSSOLogin = useCallback(
+    (connectionId: string, returnUrl?: string) =>
+      manager.startSSOLogin(connectionId, returnUrl),
+    [manager],
+  );
+
+  const completeSSOLogin = useCallback(
+    (code: string) => manager.completeSSOLogin(code),
+    [manager],
+  );
+
   const signUp = useCallback(
     (
       email: string,
@@ -201,6 +220,8 @@ export function AuthProvider({ children, ...config }: AuthProviderProps) {
       clientConfig,
       isConfigLoaded: clientConfig !== null,
       signIn,
+      startSSOLogin,
+      completeSSOLogin,
       signUp,
       signOut,
       resendVerification,
@@ -210,7 +231,7 @@ export function AuthProvider({ children, ...config }: AuthProviderProps) {
       sendSMSCode,
       submitSMSCode,
     };
-  }, [state, manager, clientConfig, signIn, signUp, signOut, resendVerification, submitMFAChallenge, submitMFACode, submitRecoveryCode, sendSMSCode, submitSMSCode]);
+  }, [state, manager, clientConfig, signIn, startSSOLogin, completeSSOLogin, signUp, signOut, resendVerification, submitMFAChallenge, submitMFACode, submitRecoveryCode, sendSMSCode, submitSMSCode]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

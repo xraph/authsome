@@ -15,12 +15,24 @@ import (
 	"github.com/xraph/authsome/middleware"
 )
 
-// CallerAppID returns the app the authenticated caller is bound to, as resolved
-// onto the request context by the auth / publishable-key middleware. This is
+// CallerAppID returns the app the authenticated caller is bound to. This is
 // the tenant boundary used to scope app-owned admin resources (webhooks,
 // environments, OAuth2 clients, per-app config) to the caller.
+//
+// The credential decides: the session's app first, then a machine
+// principal's app. The context app id set by the publishable-key middleware
+// is consulted only when no credential is present (public routes), because
+// a publishable key is public by design and must never move an authenticated
+// caller into another tenant.
 func CallerAppID(ctx forge.Context) (id.AppID, bool) {
-	return middleware.AppIDFrom(ctx.Context())
+	goCtx := ctx.Context()
+	if sess, ok := middleware.SessionFrom(goCtx); ok && sess != nil && !sess.AppID.IsNil() {
+		return sess.AppID, true
+	}
+	if p, ok := middleware.PrincipalFrom(goCtx); ok && p != nil && !p.AppID.IsNil() {
+		return p.AppID, true
+	}
+	return middleware.AppIDFrom(goCtx)
 }
 
 // ScopedAppID resolves the caller's tenant app for create/list operations,

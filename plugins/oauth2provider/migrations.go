@@ -435,3 +435,66 @@ UPDATE authsome_oauth2_clients
 		},
 	)
 }
+
+func init() {
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "oauth2_consent",
+			Version: "20260922000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_oauth2_clients ADD COLUMN IF NOT EXISTS first_party BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE TABLE IF NOT EXISTS authsome_oauth2_grants (
+    id         TEXT PRIMARY KEY,
+    app_id     TEXT NOT NULL REFERENCES authsome_apps(id) ON DELETE CASCADE,
+    user_id    TEXT NOT NULL REFERENCES authsome_users(id) ON DELETE CASCADE,
+    client_id  TEXT NOT NULL,
+    scopes     JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_oauth2_grants_subject
+    ON authsome_oauth2_grants (app_id, user_id, client_id);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP TABLE IF EXISTS authsome_oauth2_grants;
+ALTER TABLE authsome_oauth2_clients DROP COLUMN IF EXISTS first_party;
+`)
+				return err
+			},
+		},
+	)
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "oauth2_consent",
+			Version: "20260922000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				for _, stmt := range []string{
+					`ALTER TABLE authsome_oauth2_clients ADD COLUMN first_party INTEGER NOT NULL DEFAULT 0`,
+					`CREATE TABLE IF NOT EXISTS authsome_oauth2_grants (
+    id         TEXT PRIMARY KEY,
+    app_id     TEXT NOT NULL,
+    user_id    TEXT NOT NULL,
+    client_id  TEXT NOT NULL,
+    scopes     TEXT NOT NULL DEFAULT '[]',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+)`,
+					`CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_oauth2_grants_subject ON authsome_oauth2_grants (app_id, user_id, client_id)`,
+				} {
+					if _, err := exec.Exec(ctx, stmt); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_oauth2_grants;`)
+				return err
+			},
+		},
+	)
+}

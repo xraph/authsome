@@ -1,324 +1,159 @@
 ---
 title: Webhooks
-description: Configure webhook endpoints to receive real-time notifications for all 31 Authsome events, with HMAC signing and Relay bridge integration.
+description: Every webhook is a Relay delivery endpoint with a public URL, a once-shown rotatable secret, and Relay's signed deliveries.
 ---
 
-Authsome delivers event notifications to your own HTTP endpoints via webhooks. Every significant event -- user creation, sign-in attempts, MFA enrollment, organization changes, environment lifecycle -- fires a webhook. You can configure multiple endpoints and subscribe each one to different event types.
+Authsome does not deliver webhooks itself. A webhook you register with authsome is a delivery endpoint in [Relay](https://github.com/xraph/relay), the Forge event bus, and Relay does the delivering, retrying, and signing. Authsome owns the registration: it checks the URL, mints the secret, creates the Relay endpoint, and keeps a row that names it.
 
-## The Webhook model
+Without a Relay that can manage endpoints, the webhook routes answer `501 Not Implemented`. A webhook that cannot deliver is not registered at all, so you never hold a subscription that silently does nothing.
+
+## The model
 
 ```go
 import "github.com/xraph/authsome/webhook"
 
 type Webhook struct {
-    ID          id.ID      `json:"id"`          // awhk_ prefix
-    AppID       string     `json:"app_id"`
-    EnvID       string     `json:"env_id"`
-    OrgID       *id.ID     `json:"org_id,omitempty"` // nil for app-level webhooks
-    Name        string     `json:"name"`
-    URL         string     `json:"url"`
-    Secret      string     `json:"-"`           // HMAC signing secret -- never exposed after creation
-    SecretHash  string     `json:"-"`           // stored hash
-    Events      []string   `json:"events"`      // subscribed event types
-    IsActive    bool       `json:"is_active"`
-    Headers     map[string]string `json:"headers,omitempty"` // custom HTTP headers
-    MaxRetries  int        `json:"max_retries"` // 0-5, default 3
-    TimeoutMs   int        `json:"timeout_ms"`  // delivery timeout, default 5000
-    CreatedAt   time.Time  `json:"created_at"`
-    UpdatedAt   time.Time  `json:"updated_at"`
+    ID              id.WebhookID
+    AppID           id.AppID
+    EnvID           id.EnvironmentID
+    URL             string
+    Events          []string
+    Secret          string // set on the way out of CreateWebhook and RotateWebhookSecret, never stored
+    SecretHash      string // store.HashToken of the current secret
+    RelayEndpointID string // the Relay endpoint that delivers for this webhook
+    Active          bool
+    CreatedAt       time.Time
+    UpdatedAt       time.Time
 }
 ```
 
-## All event types
+The row holds a hash of the secret and the id of the Relay endpoint. Relay holds the secret, because Relay signs with it. Authsome shows it to you exactly once.
 
-Authsome emits 31 event types grouped by category:
+## Registering a webhook
 
-### User events
+`POST /v1/webhooks` with `{"url": "...", "events": ["user.created", "auth.*"]}` answers `201`:
 
-| Event | Description |
-|-------|-------------|
-| `user.created` | A new user account was created |
-| `user.updated` | User profile information was updated |
-| `user.deleted` | A user account was permanently deleted |
+```json
+{
+  "webhook": {"id": "awhk_...", "url": "https://api.example.com/authsome", "events": ["user.created", "auth.*"], "active": true},
+  "secret": "whsec_..."
+}
+```
 
-### Session events
+In Go:
 
-| Event | Description |
-|-------|-------------|
-| `session.created` | A new session was created (sign-in) |
-| `session.revoked` | A session was revoked (sign-out or forced termination) |
+```go
+w := &webhook.Webhook{AppID: appID, URL: "https://api.example.com/authsome", Events: []string{"user.created", "auth.*"}, Active: true}
+if err := engine.CreateWebhook(ctx, w); err != nil {
+    return err
+}
+// w.Secret is the signing secret. This is the only time it is available.
+```
 
-### Auth events
+<Callout type="warn">
+The secret is returned once, in the create response, and never again. A later `GET` does not include it. If it is lost, rotate it.
+</Callout>
 
-| Event | Description |
-|-------|-------------|
-| `auth.signin` | Successful sign-in |
-| `auth.signin.failed` | Failed sign-in attempt |
-| `auth.signout` | User signed out |
-| `auth.password.reset` | Password was reset |
-| `auth.mfa.enabled` | MFA was enabled on the account |
-| `auth.mfa.enrolled` | A specific MFA method was enrolled (TOTP, SMS, etc.) |
-| `auth.mfa.verified` | An MFA challenge was successfully verified |
-| `auth.mfa.challenged` | An MFA challenge was initiated |
-| `auth.mfa.disabled` | MFA was disabled on the account |
+Before the endpoint is created, authsome checks the URL and makes one test delivery to it:
 
-### Passkey events
+- The URL must be `https`, name a host, and carry no credentials.
+- Every address the host resolves to must be public. Loopback, private ranges, link-local addresses (the cloud metadata address among them), carrier-grade NAT, and the reserved blocks are refused. A name that answers with one public and one private address is refused.
+- A `POST` with a `webhook.test` event, signed the way Relay will sign, must answer `2xx`. The client resolves the name itself, dials only addresses that pass the same check, and never follows a redirect: a `3xx` answer fails the check.
 
-| Event | Description |
-|-------|-------------|
-| `passkey.registered` | A new passkey (WebAuthn credential) was registered |
-| `passkey.authenticated` | Authentication via passkey succeeded |
-| `passkey.deleted` | A passkey credential was removed |
+A refused URL answers `400`. The same checks run again when a webhook's URL changes.
 
-### Social events
+For development against a receiver on your own machine, `Config.Webhooks.AllowInsecureURLs` permits `http` and non-public addresses. Never set it in production.
 
-| Event | Description |
-|-------|-------------|
-| `social.signin` | Sign-in via a social OAuth provider (Google, GitHub, etc.) |
-| `social.signup` | New account created via social OAuth |
+Event names are validated by shape (dotted lowercase words, `*` allowed as a segment) rather than against a fixed list, because plugins register their own event types with Relay at start.
 
-### SSO events
+## Managing webhooks
 
-| Event | Description |
-|-------|-------------|
-| `sso.signin` | Sign-in via enterprise SSO (OIDC or SAML) |
-| `sso.signup` | New account created via enterprise SSO |
+| Method | Path | What it does |
+|--------|------|--------------|
+| `POST` | `/v1/webhooks` | Register a webhook; answers the webhook and its secret |
+| `GET` | `/v1/webhooks` | List an app's webhooks, without secrets |
+| `GET` | `/v1/webhooks/:webhookId` | One webhook, without its secret |
+| `PATCH` | `/v1/webhooks/:webhookId` | Change URL, events, or active state; mirrored to Relay |
+| `DELETE` | `/v1/webhooks/:webhookId` | Remove the Relay endpoint, then the row |
+| `POST` | `/v1/webhooks/:webhookId/rotate-secret` | Replace the secret; answers `{"secret": "..."}` once |
 
-### Organization events
+All routes require `manage` on `app`. The Go engine offers the same surface: `CreateWebhook`, `GetWebhook`, `ListWebhooks`, `UpdateWebhook`, `DeleteWebhook`, and `RotateWebhookSecret`.
 
-| Event | Description |
-|-------|-------------|
-| `org.created` | A new organization was created |
-| `org.updated` | Organization details were updated |
-| `org.member.invited` | A user was invited to the organization |
-| `org.member.joined` | An invited user accepted and joined |
-| `org.member.removed` | A member was removed from the organization |
-| `org.member.role_changed` | A member's role was changed |
+Setting `active` to `false` disables the Relay endpoint: deliveries stop, and resume when it is set back.
 
-### Environment events
+Rotation takes effect at once. Relay signs the next delivery with the new secret, and the old one stops verifying. Update the receiver first, then rotate, or accept a brief window of rejected deliveries that Relay will retry.
 
-| Event | Description |
-|-------|-------------|
-| `environment.created` | A new environment was created |
-| `environment.updated` | Environment settings were updated |
-| `environment.deleted` | An environment was deleted |
-| `environment.cloned` | An environment was cloned from another |
+## Verifying a delivery
 
-### API key events
+Relay sends an HTTP `POST` with a JSON body and these headers:
 
-| Event | Description |
-|-------|-------------|
-| `apikey.created` | A new API key was created |
-| `apikey.revoked` | An API key was revoked |
+| Header | Value |
+|--------|-------|
+| `X-Relay-Signature` | `v1=<hex>`, an HMAC-SHA256 over `<timestamp>.<raw body>` under the webhook secret |
+| `X-Relay-Timestamp` | Unix seconds when the delivery was signed |
+| `X-Relay-Event-Type` | The event name, such as `user.created` |
+| `X-Relay-Event-ID` | The event's id |
+| `X-Relay-Delivery-ID` | This delivery attempt's id |
 
-### Consent events
-
-| Event | Description |
-|-------|-------------|
-| `consent.granted` | A user granted consent |
-| `consent.revoked` | A user revoked a previously granted consent |
-
-## Creating a webhook
+Verify with the helper in the `webhook` package, which also refuses timestamps outside a five-minute window:
 
 ```go
 import "github.com/xraph/authsome/webhook"
 
-result, err := auth.Webhooks().Create(ctx, &webhook.CreateInput{
-    Name: "My Backend Notifications",
-    URL:  "https://api.myapp.com/authsome/events",
-    Events: []string{
-        "user.created",
-        "user.deleted",
-        "auth.signin",
-        "auth.signin.failed",
-        "session.revoked",
-    },
-    Headers: map[string]string{
-        "X-Source": "authsome",
-    },
-    MaxRetries: 3,
-    TimeoutMs:  5000,
-})
-if err != nil {
-    return err
-}
-
-// result.Secret is the signing secret -- only available at creation time.
-fmt.Printf("webhook created: id=%s secret=%s\n", result.Webhook.ID, result.Secret)
-```
-
-<Callout type="warn">
-The webhook signing secret is returned only once at creation time and is not stored in plain text. Store it securely (e.g., in your secrets manager). If you lose it, rotate it using `auth.Webhooks().RotateSecret(ctx, webhookID)`.
-</Callout>
-
-## Listing and managing webhooks
-
-```go
-// List all webhooks.
-result, err := auth.Webhooks().List(ctx, &webhook.ListInput{Limit: 50})
-
-// Get a specific webhook.
-w, err := auth.Webhooks().GetByID(ctx, webhookID)
-
-// Update a webhook (e.g., change subscribed events).
-updated, err := auth.Webhooks().Update(ctx, webhookID, &webhook.UpdateInput{
-    Events: []string{"user.created", "user.deleted"},
-    IsActive: true,
-})
-
-// Deactivate (pause delivery without deleting).
-err := auth.Webhooks().Deactivate(ctx, webhookID)
-
-// Delete permanently.
-err := auth.Webhooks().Delete(ctx, webhookID)
-
-// Rotate the signing secret.
-result, err := auth.Webhooks().RotateSecret(ctx, webhookID)
-// result.NewSecret is the new secret -- only available here.
-```
-
-## Webhook payload
-
-Every webhook request is an HTTP POST with a JSON body:
-
-```json
-{
-  "id": "awhke_01h455vb4pex5vsknk084sn02q",
-  "event": "auth.signin",
-  "app_id": "myapp",
-  "env_id": "aenv_01h455vb...",
-  "occurred_at": "2024-03-15T14:30:00Z",
-  "data": {
-    "user": {
-      "id": "ausr_01h455vb...",
-      "email": "alice@example.com",
-      "display_name": "Alice Nguyen"
-    },
-    "session": {
-      "id": "ases_01h455vb...",
-      "ip": "203.0.113.42",
-      "user_agent": "Mozilla/5.0 ..."
-    }
-  }
-}
-```
-
-The `data` field shape varies by event type. Each event type's data schema is specific to what changed.
-
-## HMAC signature verification
-
-Every webhook request includes an `X-Authsome-Signature` header containing an HMAC-SHA256 signature of the raw request body. Verify this signature on your endpoint before processing the payload:
-
-```go
-package webhookhandler
-
-import (
-    "crypto/hmac"
-    "crypto/sha256"
-    "encoding/hex"
-    "io"
-    "net/http"
-)
-
-func HandleAuthsomeWebhook(secret string) http.HandlerFunc {
+func handle(secret string) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         body, err := io.ReadAll(r.Body)
         if err != nil {
             http.Error(w, "cannot read body", http.StatusBadRequest)
             return
         }
-
-        // Verify HMAC-SHA256 signature.
-        sig := r.Header.Get("X-Authsome-Signature")
-        mac := hmac.New(sha256.New, []byte(secret))
-        mac.Write(body)
-        expected := "sha256=" + hex.EncodeToString(mac.Sum(nil))
-
-        if !hmac.Equal([]byte(sig), []byte(expected)) {
+        err = webhook.VerifyRelay(body, secret,
+            r.Header.Get(webhook.RelayTimestampHeader),
+            r.Header.Get(webhook.RelaySignatureHeader),
+            0, // zero means webhook.DefaultSignatureTolerance
+        )
+        if err != nil {
             http.Error(w, "invalid signature", http.StatusUnauthorized)
             return
         }
-
-        // Process the verified payload.
-        var payload map[string]any
-        json.Unmarshal(body, &payload)
-        // ...
-
         w.WriteHeader(http.StatusOK)
     }
 }
 ```
 
-### Signature headers
+`VerifyRelay` returns `ErrSignatureMismatch`, `ErrTimestampSkew`, or `ErrMalformedHeader`, all matchable with `errors.Is`.
 
-| Header | Description |
-|--------|-------------|
-| `X-Authsome-Signature` | `sha256=<hex-encoded HMAC>` |
-| `X-Authsome-Event` | The event type string (e.g. `auth.signin`) |
-| `X-Authsome-Delivery` | A unique UUID for this delivery attempt |
-| `X-Authsome-Timestamp` | Unix timestamp of delivery (use to reject old replays) |
+The test delivery made at registration carries the same headers, signed with the secret you are about to be shown, and an `X-Relay-Event-Type` of `webhook.test`.
 
-## Delivery and retry
+## Event types
 
-When Authsome fires a webhook:
+The core engine registers these with Relay at start. Plugins register their own (the MFA, passkey, API key, consent, organization, waitlist, and subscription plugins among them), and a subscription may name any of them.
 
-1. The event payload is built and signed.
-2. An HTTP POST is sent to the endpoint URL with a configurable timeout (`TimeoutMs`, default 5000ms).
-3. Any 2xx response is considered a success.
-4. On failure (non-2xx, timeout, or connection error), delivery is retried up to `MaxRetries` times with exponential backoff.
-5. All delivery attempts (including failures) are logged in the webhook delivery log.
+| Group | Events |
+|-------|--------|
+| user | `user.created`, `user.updated`, `user.deleted`, `user.email_verified`, `user.account_deleted` |
+| session | `session.created`, `session.revoked` |
+| auth | `auth.signin`, `auth.signin.failed`, `auth.signout`, `auth.forgot_password`, `auth.password_reset`, `auth.account_locked` |
+| mfa | `auth.mfa.enabled`, `auth.mfa.enrolled`, `auth.mfa.verified`, `auth.mfa.challenged`, `auth.mfa.disabled` |
+| passkey | `auth.passkey.registered`, `auth.passkey.authenticated`, `auth.passkey.deleted` |
+| social and SSO | `auth.social.signin`, `auth.social.signup`, `auth.sso.signin`, `auth.sso.signup` |
+| org | `org.created`, `org.updated`, `org.member.invited`, `org.member.joined`, `org.member.removed`, `org.member.role_changed` |
+| environment | `environment.created`, `environment.updated`, `environment.deleted`, `environment.cloned` |
+| device | `device.registered`, `device.trusted` |
+| api key | `apikey.created`, `apikey.revoked` |
+| consent | `consent.granted`, `consent.revoked` |
+| admin | `admin.user.banned`, `admin.user.unbanned`, `admin.user.deleted`, `admin.sessions.bulk_revoked`, `admin.impersonate` |
+| webhook | `webhook.created` |
+| rbac | `rbac.role.created` |
 
-```go
-// View delivery attempts for a webhook.
-deliveries, err := auth.Webhooks().ListDeliveries(ctx, webhookID, &webhook.ListDeliveriesInput{
-    Limit: 50,
-})
+Events are sent to Relay under the app id as the tenant, and an endpoint only ever receives its own app's events.
 
-for _, d := range deliveries {
-    fmt.Printf("  [%s] attempt=%d status=%d success=%v\n",
-        d.CreatedAt.Format(time.RFC3339),
-        d.Attempt,
-        d.ResponseStatus,
-        d.Success,
-    )
-}
+## Rows from before Relay
 
-// Manually retry a failed delivery.
-err := auth.Webhooks().RetryDelivery(ctx, webhookID, deliveryID)
-```
+Webhook rows written by releases that delivered nothing are adopted the first time an engine with a Relay starts. Each gets a Relay endpoint of its own. A row that still holds its plaintext secret hands that same secret to Relay, so a receiver that already verifies with it keeps working and nothing has to be re-shared. A row with no secret gets a fresh one and starts disabled, since the secret has nowhere to be shown; rotate it, hand the new secret to the receiver, and enable the webhook. Adopted rows are rewritten with the hash and no plaintext.
 
-## Relay bridge integration
+Adoption does not re-check the URL. The rules above apply from the next change to it.
 
-[Relay](https://github.com/xraph/relay) is the Forge-ecosystem's event bus. When Relay is configured, Authsome publishes every event to Relay in addition to (or instead of) direct HTTP webhook delivery. This lets other services in your platform subscribe to authentication events without going through HTTP.
+## Clones
 
-```go
-import (
-    "github.com/xraph/authsome"
-    "github.com/xraph/authsome/webhook/relay"
-)
-
-auth := authsome.New(
-    authsome.WithWebhookBridge(relay.NewBridge(
-        relay.WithEndpoint("https://relay.internal:8080"),
-        relay.WithAPIKey(os.Getenv("RELAY_API_KEY")),
-        relay.WithTopic("authsome.events"),
-        relay.WithAsync(true),
-    )),
-)
-```
-
-## HTTP API endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/webhooks` | Create a new webhook |
-| `GET` | `/webhooks` | List all webhooks |
-| `GET` | `/webhooks/:webhook_id` | Get a webhook by ID |
-| `PATCH` | `/webhooks/:webhook_id` | Update a webhook |
-| `DELETE` | `/webhooks/:webhook_id` | Delete a webhook |
-| `POST` | `/webhooks/:webhook_id/deactivate` | Pause webhook delivery |
-| `POST` | `/webhooks/:webhook_id/activate` | Resume webhook delivery |
-| `POST` | `/webhooks/:webhook_id/rotate-secret` | Rotate the signing secret |
-| `GET` | `/webhooks/:webhook_id/deliveries` | List delivery attempts |
-| `POST` | `/webhooks/:webhook_id/deliveries/:delivery_id/retry` | Retry a failed delivery |
-| `POST` | `/webhooks/test` | Send a test event to a webhook URL |
+Cloning an environment clones its webhooks as new Relay endpoints, each with a fresh secret and disabled, for the same reason: the clone has nowhere to show a secret. Rotate and enable each one you want live. A clone whose URL fails the checks, or a clone made without a Relay, is skipped with a warning rather than failing the whole clone.

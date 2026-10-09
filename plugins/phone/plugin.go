@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/xraph/authsome/internal/mask"
+
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/forge"
@@ -20,6 +22,7 @@ import (
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/mfa"
 	"github.com/xraph/authsome/session"
@@ -255,7 +258,7 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		return nil, forge.BadRequest("phone number must be in E.164 format (e.g. +14155551234)")
 	}
 	if p.sms == nil {
-		return nil, forge.InternalError(fmt.Errorf("phone auth: SMS sender not configured"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("phone auth: SMS sender not configured"))
 	}
 
 	appIDStr := req.AppID
@@ -266,14 +269,23 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		return nil, forge.BadRequest("app_id required")
 	}
 
+	// One number may receive only so many codes per window, from however
+	// many client addresses the requests come; each code is a billed SMS.
+	if limitAppID, parseErr := id.ParseAppID(appIDStr); parseErr == nil {
+		if limitErr := authsome.PluginIdentifierLimit(ctx.Context(), p.engine, "phone", limitAppID, req.Phone,
+			func(c authsome.RateLimitConfig) int { return c.ResendVerificationLimit }); limitErr != nil {
+			return nil, forge.NewHTTPError(http.StatusTooManyRequests, "too many codes requested for this number, try again later")
+		}
+	}
+
 	// Generate and send OTP using the MFA SMS helper.
 	challenge, err := mfa.SendSMSChallenge(ctx.Context(), p.sms, req.Phone)
 	if err != nil {
 		p.logger.Error("phone auth: failed to send OTP",
-			log.String("phone", req.Phone),
+			log.String("phone", mask.Phone(req.Phone)),
 			log.String("error", err.Error()),
 		)
-		return nil, forge.InternalError(fmt.Errorf("phone auth: failed to send OTP: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("phone auth: failed to send OTP: %w", err))
 	}
 
 	// Store challenge in ceremony store keyed by phone+app.
@@ -285,10 +297,10 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		ExpiresAt: challenge.ExpiresAt,
 	})
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("phone auth: marshal challenge: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("phone auth: marshal challenge: %w", err))
 	}
 	if err := p.ceremonies.Set(ctx.Context(), ceremonyKey, data, p.config.CodeTTL); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("phone auth: store challenge: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("phone auth: store challenge: %w", err))
 	}
 
 	return &StartResponse{
@@ -310,23 +322,27 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 // wrong-code response into a 500, which would itself leak that the code was
 // wrong via a distinguishable status.
 func (p *Plugin) recordFailedAttempt(ctx context.Context, key string, challenge *phoneChallenge) {
-	challenge.Attempts++
-
 	remaining := time.Until(challenge.ExpiresAt)
-	if challenge.Attempts >= maxPhoneCodeAttempts || remaining <= 0 {
+	if remaining <= 0 {
 		_ = p.ceremonies.Delete(ctx, key) //nolint:errcheck // best-effort
 		return
 	}
 
-	data, err := json.Marshal(challenge)
+	// One atomic increment per wrong guess, bounded by the challenge's own
+	// deadline. A read-modify-write of the challenge let two replicas each
+	// count one attempt as one, and let a guess arrive between the read and
+	// the write uncounted.
+	attempts, err := p.ceremonies.Increment(ctx, key+":attempts", remaining)
 	if err != nil {
-		// Can't persist the count — drop the challenge rather than leave it
-		// standing with the attempt uncounted.
+		// Can't count the attempt — drop the challenge rather than leave it
+		// standing with the guess uncounted.
 		_ = p.ceremonies.Delete(ctx, key) //nolint:errcheck // best-effort
 		return
 	}
-	if setErr := p.ceremonies.Set(ctx, key, data, remaining); setErr != nil {
-		_ = p.ceremonies.Delete(ctx, key) //nolint:errcheck // best-effort
+	challenge.Attempts = int(attempts)
+	if attempts >= maxPhoneCodeAttempts {
+		_ = p.ceremonies.Delete(ctx, key)             //nolint:errcheck // best-effort
+		_ = p.ceremonies.Delete(ctx, key+":attempts") //nolint:errcheck // best-effort
 	}
 }
 
@@ -360,7 +376,7 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 
 	var challenge phoneChallenge
 	if unmarshalErr := json.Unmarshal(data, &challenge); unmarshalErr != nil {
-		return nil, forge.InternalError(fmt.Errorf("phone auth: unmarshal challenge: %w", unmarshalErr))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("phone auth: unmarshal challenge: %w", unmarshalErr))
 	}
 
 	// Validate using the MFA helper.
@@ -427,10 +443,10 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 		var newErr error
 		sess, newErr = account.NewSession(appID, u.ID, sessCfg)
 		if newErr != nil {
-			return nil, forge.InternalError(fmt.Errorf("phone auth: create session: %w", newErr))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("phone auth: create session: %w", newErr))
 		}
 		if storeErr := p.store.CreateSession(ctx.Context(), sess); storeErr != nil {
-			return nil, forge.InternalError(fmt.Errorf("phone auth: save session: %w", storeErr))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("phone auth: save session: %w", storeErr))
 		}
 	}
 
@@ -476,7 +492,7 @@ func (p *Plugin) resolveOrCreateUser(ctx context.Context, appID id.AppID, phone 
 		UpdatedAt:     time.Now(),
 	}
 	if err := p.store.CreateUser(ctx, newUser); err != nil {
-		return nil, false, forge.InternalError(fmt.Errorf("phone auth: create user: %w", err))
+		return nil, false, middleware.InternalErrorCtx(ctx, fmt.Errorf("phone auth: create user: %w", err))
 	}
 	if p.engine != nil {
 		p.engine.EnsureDefaultRole(ctx, appID, newUser.ID)

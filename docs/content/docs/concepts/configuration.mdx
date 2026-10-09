@@ -98,7 +98,7 @@ type PasswordConfig struct {
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `MinLength` | `int` | `8` | Minimum password length in characters. |
+| `MinLength` | `int` | `12` | Minimum password length in characters. |
 | `RequireUppercase` | `bool` | `true` | Requires at least one uppercase letter (`A-Z`). |
 | `RequireLowercase` | `bool` | `true` | Requires at least one lowercase letter (`a-z`). |
 | `RequireDigit` | `bool` | `true` | Requires at least one digit (`0-9`). |
@@ -177,7 +177,7 @@ cfg := authsome.DefaultConfig()
 // cfg.BasePath              = "/v1/auth"
 // cfg.Session.TokenTTL      = 1 * time.Hour
 // cfg.Session.RefreshTokenTTL = 30 * 24 * time.Hour
-// cfg.Password.MinLength    = 8
+// cfg.Password.MinLength    = 12
 // cfg.Password.RequireUppercase = true
 // cfg.Password.RequireLowercase = true
 // cfg.Password.RequireDigit = true

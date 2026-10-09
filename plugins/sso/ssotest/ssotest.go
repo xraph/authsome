@@ -58,6 +58,7 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"DomainLookupIsOrgScoped", testDomainLookupIsOrgScoped},
 		{"ProviderLookupIsAppScoped", testProviderLookupIsAppScoped},
 		{"ListConnectionsIsAppScoped", testListConnectionsIsAppScoped},
+		{"IdentityBindingRoundTrip", testIdentityBindingRoundTrip},
 		{"SAMLFieldsRoundTrip", testSAMLFieldsRoundTrip},
 		{"AttributeMappingsRoundTrip", testAttributeMappingsRoundTrip},
 		{"EmptyAttributeMappingsRoundTrip", testEmptyAttributeMappingsRoundTrip},

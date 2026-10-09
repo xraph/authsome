@@ -29,6 +29,10 @@ type Fixture struct {
 	OtherAppID id.AppID
 }
 
+// OtherUserID is a user id that owns nothing in the fixture, for proving
+// per-user scoping without a second seeded user.
+func (f Fixture) OtherUserID() id.UserID { return id.NewUserID() }
+
 // Factory builds a fresh, empty, migrated fixture for a single test.
 type Factory func(t *testing.T) Fixture
 
@@ -61,6 +65,12 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"DeviceCodeRoundTrip", testDeviceCodeRoundTrip},
 		{"DeviceCodeUpdate", testDeviceCodeUpdate},
 		{"DeleteExpiredDeviceCodes", testDeleteExpiredDeviceCodes},
+		{"DeleteExpiredAuthCodes", testDeleteExpiredAuthCodes},
+		{"DeleteExpiredDeviceCodesBefore", testDeleteExpiredDeviceCodesBefore},
+		{"AuthCodeStoredAsHash", testAuthCodeStoredAsHash},
+		{"DeviceCodeStoredAsHash", testDeviceCodeStoredAsHash},
+		{"GrantLifecycle", testGrantLifecycle},
+		{"ClientFirstPartyRoundTrip", testClientFirstPartyRoundTrip},
 	}
 	for _, tc := range cases {
 		if skipSet[tc.name] {

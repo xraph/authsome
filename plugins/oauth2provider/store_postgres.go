@@ -10,6 +10,7 @@ import (
 	"github.com/xraph/grove/drivers/pgdriver"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/store"
 )
 
 // PostgresStore implements oauth2provider.Store using the Grove ORM with PostgreSQL.
@@ -129,18 +130,23 @@ func (s *PostgresStore) CreateAuthCode(ctx context.Context, code *AuthorizationC
 func (s *PostgresStore) GetAuthCode(ctx context.Context, code string) (*AuthorizationCode, error) {
 	m := new(authCodeModel)
 	err := s.pg.NewSelect(m).
-		Where("code = ?", code).
+		Where("code = ?", store.HashToken(code)).
 		Scan(ctx)
 	if err != nil {
 		return nil, oauth2PgError(err)
 	}
-	return toAuthCode(m)
+	ac, err := toAuthCode(m)
+	if err != nil {
+		return nil, err
+	}
+	ac.Code = code
+	return ac, nil
 }
 
 func (s *PostgresStore) ConsumeAuthCode(ctx context.Context, code string) (bool, error) {
 	res, err := s.pg.NewUpdate((*authCodeModel)(nil)).
 		Set("consumed = ?", true).
-		Where("code = ?", code).
+		Where("code = ?", store.HashToken(code)).
 		Where("consumed = ?", false).
 		Exec(ctx)
 	if err != nil {
@@ -169,7 +175,7 @@ func (s *PostgresStore) CreateDeviceCode(ctx context.Context, dc *DeviceCode) er
 func (s *PostgresStore) GetDeviceCodeByDeviceCode(ctx context.Context, deviceCode string) (*DeviceCode, error) {
 	m := new(deviceCodeModel)
 	err := s.pg.NewSelect(m).
-		Where("device_code = ?", deviceCode).
+		Where("device_code = ?", store.HashToken(deviceCode)).
 		Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -177,13 +183,18 @@ func (s *PostgresStore) GetDeviceCodeByDeviceCode(ctx context.Context, deviceCod
 		}
 		return nil, oauth2PgError(err)
 	}
-	return toDeviceCode(m)
+	dc, err := toDeviceCode(m)
+	if err != nil {
+		return nil, err
+	}
+	dc.DeviceCode, dc.UserCode = deviceCode, ""
+	return dc, nil
 }
 
 func (s *PostgresStore) GetDeviceCodeByUserCode(ctx context.Context, userCode string) (*DeviceCode, error) {
 	m := new(deviceCodeModel)
 	err := s.pg.NewSelect(m).
-		Where("user_code = ?", userCode).
+		Where("user_code = ?", store.HashToken(userCode)).
 		Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -191,13 +202,23 @@ func (s *PostgresStore) GetDeviceCodeByUserCode(ctx context.Context, userCode st
 		}
 		return nil, oauth2PgError(err)
 	}
-	return toDeviceCode(m)
+	dc, err := toDeviceCode(m)
+	if err != nil {
+		return nil, err
+	}
+	dc.UserCode, dc.DeviceCode = userCode, ""
+	return dc, nil
 }
 
 func (s *PostgresStore) UpdateDeviceCode(ctx context.Context, dc *DeviceCode) error {
-	m := fromDeviceCode(dc)
-	_, err := s.pg.NewUpdate(m).
-		WherePK().
+	// Only the fields the flow mutates. dc may carry a plaintext code from
+	// the lookup that found it, and rewriting the code columns from it would
+	// hash that plaintext a second time and orphan the row.
+	_, err := s.pg.NewUpdate((*deviceCodeModel)(nil)).
+		Set("status = ?", dc.Status).
+		Set("user_id = ?", dc.UserID.String()).
+		Set("last_polled_at = ?", dc.LastPolledAt).
+		Where("id = ?", dc.ID.String()).
 		Exec(ctx)
 	return oauth2PgError(err)
 }
@@ -221,4 +242,94 @@ func oauth2PgError(err error) error {
 		return ErrClientNotFound
 	}
 	return err
+}
+
+// ──────────────────────────────────────────────────
+// Grants
+// ──────────────────────────────────────────────────
+
+func (s *PostgresStore) UpsertGrant(ctx context.Context, g *Grant) error {
+	now := time.Now()
+	existing, err := s.GetGrant(ctx, g.AppID, g.UserID, g.ClientID)
+	switch {
+	case err == nil:
+		g.ID = existing.ID
+		g.CreatedAt = existing.CreatedAt
+		g.UpdatedAt = now
+		m := fromGrant(g)
+		_, err = s.pg.NewUpdate((*grantModel)(nil)).
+			Set("scopes = ?", m.Scopes).
+			Set("updated_at = ?", m.UpdatedAt).
+			Where("id = ?", m.ID).
+			Exec(ctx)
+		return oauth2PgError(err)
+	case errors.Is(err, ErrGrantNotFound):
+		if g.ID.IsNil() {
+			g.ID = id.NewOAuth2GrantID()
+		}
+		if g.CreatedAt.IsZero() {
+			g.CreatedAt = now
+		}
+		g.UpdatedAt = now
+		_, err = s.pg.NewInsert(fromGrant(g)).Exec(ctx)
+		return oauth2PgError(err)
+	default:
+		return err
+	}
+}
+
+func (s *PostgresStore) GetGrant(ctx context.Context, appID id.AppID, userID id.UserID, clientID string) (*Grant, error) {
+	m := new(grantModel)
+	err := s.pg.NewSelect(m).
+		Where("app_id = ?", appID.String()).
+		Where("user_id = ?", userID.String()).
+		Where("client_id = ?", clientID).
+		Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGrantNotFound
+		}
+		return nil, oauth2PgError(err)
+	}
+	return toGrant(m)
+}
+
+func (s *PostgresStore) ListGrantsByUser(ctx context.Context, appID id.AppID, userID id.UserID) ([]*Grant, error) {
+	var models []grantModel
+	err := s.pg.NewSelect(&models).
+		Where("app_id = ?", appID.String()).
+		Where("user_id = ?", userID.String()).
+		OrderExpr("created_at DESC").
+		Scan(ctx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, oauth2PgError(err)
+	}
+	out := make([]*Grant, 0, len(models))
+	for i := range models {
+		g, convErr := toGrant(&models[i])
+		if convErr != nil {
+			return nil, convErr
+		}
+		out = append(out, g)
+	}
+	return out, nil
+}
+
+func (s *PostgresStore) DeleteGrant(ctx context.Context, appID id.AppID, userID id.UserID, clientID string) error {
+	res, err := s.pg.NewDelete((*grantModel)(nil)).
+		Where("app_id = ?", appID.String()).
+		Where("user_id = ?", userID.String()).
+		Where("client_id = ?", clientID).
+		Exec(ctx)
+	if err != nil {
+		return oauth2PgError(err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return oauth2PgError(err)
+	}
+	if n == 0 {
+		return ErrGrantNotFound
+	}
+	return nil
 }

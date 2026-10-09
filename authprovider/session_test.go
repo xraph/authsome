@@ -46,13 +46,13 @@ func TestSessionProvider_MachinePrincipalAuthenticates(t *testing.T) {
 			}
 
 			p := authprovider.NewSessionProvider(
-				func(token string) (*session.Session, error) {
+				func(_ context.Context, token string) (*session.Session, error) {
 					if token == "machine-token" {
 						return sess, nil
 					}
 					return nil, errors.New("not found")
 				},
-				func(string) (*user.User, error) {
+				func(context.Context, string) (*user.User, error) {
 					t.Fatal("resolveUser must not be called for a machine principal")
 					return nil, nil
 				},
@@ -89,8 +89,8 @@ func TestSessionProvider_UserPathUnchanged(t *testing.T) {
 	u := &user.User{ID: userID, AppID: appID, Email: "a@b.com", FirstName: "Ada"}
 
 	p := authprovider.NewSessionProvider(
-		func(string) (*session.Session, error) { return sess, nil },
-		func(idStr string) (*user.User, error) {
+		func(context.Context, string) (*session.Session, error) { return sess, nil },
+		func(_ context.Context, idStr string) (*user.User, error) {
 			require.Equal(t, userID.String(), idStr)
 			return u, nil
 		},
@@ -120,8 +120,8 @@ func TestSessionProvider_UserSessionWithMissingUserStillFails(t *testing.T) {
 	}
 
 	p := authprovider.NewSessionProvider(
-		func(string) (*session.Session, error) { return sess, nil },
-		func(string) (*user.User, error) { return nil, errors.New("gone") },
+		func(context.Context, string) (*session.Session, error) { return sess, nil },
+		func(context.Context, string) (*user.User, error) { return nil, errors.New("gone") },
 		log.NewNoopLogger(),
 	)
 

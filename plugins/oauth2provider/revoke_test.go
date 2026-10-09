@@ -42,6 +42,7 @@ func newRevokeFixture(t *testing.T) (store.Store, forge.Router) {
 		ID:           id.NewOAuth2ClientID(),
 		AppID:        appID,
 		ClientID:     confidentialID,
+		FirstParty:   true,
 		ClientSecret: string(hashed),
 		Name:         "Confidential",
 		RedirectURIs: []string{registeredURI, otherURI},

@@ -7,15 +7,3 @@ contributor:
   capabilities: [auth.read]
 
 intents: []
-
-graph:
-  - route: /security/geofence
-    intent: page.shell
-    title: Geofencing
-    nav: { group: Security, icon: map-pin, priority: 3 }
-    slots:
-      main:
-        - intent: settings.panel
-          props:
-            namespace: geofence
-            scope: app

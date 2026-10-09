@@ -14,6 +14,7 @@ import (
 	wardenmem "github.com/xraph/warden/store/memory"
 
 	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/store/memory"
@@ -87,7 +88,7 @@ func TestInvitationHandlers_OneTimeTokenAndAppScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	mem := memory.New()
-	engine, err := authsome.NewEngine(authsome.WithStore(mem), authsome.WithWarden(w))
+	engine, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()), authsome.WithStore(mem), authsome.WithWarden(w))
 	if err != nil {
 		t.Fatal(err)
 	}

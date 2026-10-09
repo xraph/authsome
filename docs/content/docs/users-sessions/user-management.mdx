@@ -158,10 +158,13 @@ Authorization: Bearer <session_token>
 
 This operation:
 
-1. Soft-deletes the user record (sets `deleted_at`)
-2. Revokes all active sessions
-3. Removes associated devices, enrollments, and recovery codes
-4. Emits `ActionDeleteAccount` on the hook bus
+1. Revokes every delegation the user is party to and removes their devices
+2. Asks every plugin to forget the user (MFA enrollments and recovery codes, passkeys, social connections, consent proofs with the IP truncated)
+3. Revokes all sessions, refresh tokens, and API keys
+4. Anonymises the user row: `deleted_at` is set, the email becomes `deleted_<id>@deleted.local`, and the name, password hash, and profile fields are cleared
+5. Emits `ActionDeleteAccount` on the hook bus
+
+An admin deletion runs the same erasure. See [Erasure and Retention](/docs/security/data-retention) for what stays and for how long.
 
 ### In Go
 

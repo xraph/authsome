@@ -1,12 +1,14 @@
 package apikey
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"github.com/xraph/authsome/environment"
 )
@@ -50,16 +52,62 @@ func GenerateKey() (raw, hash, prefix string, err error) {
 	return raw, hash, prefix, nil
 }
 
-// HashKey returns the SHA-256 hash of a raw API key.
+// pepper is the process-wide secret mixed into key digests. It is set once
+// at engine construction; a nil pepper means plain SHA-256, the digest every
+// release before the pepper produced.
+var pepper atomic.Pointer[[]byte]
+
+// SetPepper installs the server-side secret mixed into every API key digest
+// from now on. With a pepper set, HashKey is HMAC-SHA256 over the raw key,
+// so a copy of the key table cannot be checked against a guessed or leaked
+// key without the pepper too. Passing nil returns to plain SHA-256.
+func SetPepper(p []byte) {
+	if len(p) == 0 {
+		pepper.Store(nil)
+		return
+	}
+	cp := append([]byte(nil), p...)
+	pepper.Store(&cp)
+}
+
+// HashKey returns the digest stored for a raw API key: HMAC-SHA256 under the
+// pepper when one is set, plain SHA-256 otherwise.
 func HashKey(raw string) string {
+	if p := pepper.Load(); p != nil {
+		mac := hmac.New(sha256.New, *p)
+		mac.Write([]byte(raw))
+		return hex.EncodeToString(mac.Sum(nil))
+	}
+	return legacyHashKey(raw)
+}
+
+// legacyHashKey is the plain SHA-256 digest keys carried before a pepper.
+func legacyHashKey(raw string) string {
 	h := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(h[:])
 }
 
-// VerifyKey checks whether the raw key matches the stored hash.
-// Uses constant-time comparison to prevent timing side-channel attacks.
+// VerifyKey checks whether the raw key matches the stored hash, accepting
+// the peppered digest and, when a pepper is set, the digest a key was given
+// before the pepper existed. Both comparisons are constant time and both
+// run, so a legacy key costs the same as a current one.
 func VerifyKey(raw, hash string) bool {
-	return subtle.ConstantTimeCompare([]byte(HashKey(raw)), []byte(hash)) == 1
+	current := subtle.ConstantTimeCompare([]byte(HashKey(raw)), []byte(hash)) == 1
+	if pepper.Load() == nil {
+		return current
+	}
+	legacy := subtle.ConstantTimeCompare([]byte(legacyHashKey(raw)), []byte(hash)) == 1
+	return current || legacy
+}
+
+// NeedsRehash reports whether a stored hash that just verified raw was made
+// without the pepper now in force, so the caller can store HashKey(raw) in
+// its place.
+func NeedsRehash(raw, hash string) bool {
+	if pepper.Load() == nil {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(legacyHashKey(raw)), []byte(hash)) == 1
 }
 
 // EnvironmentKeyMarker returns the key prefix marker for a given environment type.

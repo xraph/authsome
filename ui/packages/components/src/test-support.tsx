@@ -195,6 +195,8 @@ export function stubAuth(opts: {
     clientConfig: null,
     isConfigLoaded: true,
     signIn: unsupported("signIn"),
+    startSSOLogin: unsupported("startSSOLogin"),
+    completeSSOLogin: unsupported("completeSSOLogin"),
     signUp: unsupported("signUp"),
     signOut: unsupported("signOut"),
     resendVerification: unsupported("resendVerification"),

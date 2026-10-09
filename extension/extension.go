@@ -21,31 +21,24 @@ import (
 	contractloader "github.com/xraph/forge/extensions/dashboard/contract/loader"
 	contractremote "github.com/xraph/forge/extensions/dashboard/contract/remote"
 	contractserver "github.com/xraph/forge/extensions/dashboard/contract/server"
-	"github.com/xraph/forge/extensions/dashboard/contributor"
-	"github.com/xraph/forge/extensions/dashboard/ui/shell"
 	"github.com/xraph/vessel"
-
-	fuibridge "github.com/xraph/forgeui/bridge"
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
-	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/bridge/chronicleadapter"
 	"github.com/xraph/authsome/bridge/dispatchadapter"
 	"github.com/xraph/authsome/bridge/heraldadapter"
 	"github.com/xraph/authsome/bridge/maileradapter"
+	"github.com/xraph/authsome/bridge/metricsadapter"
 	"github.com/xraph/authsome/bridge/relayadapter"
-	authdash "github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/environment"
 	authcontract "github.com/xraph/authsome/extension/contract"
 	"github.com/xraph/authsome/id"
-	"github.com/xraph/authsome/lockout"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
-	"github.com/xraph/authsome/ratelimit"
 	authclient "github.com/xraph/authsome/sdk/go"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
@@ -75,16 +68,14 @@ const ExtensionDescription = "Pluggable authentication engine for identity, sess
 // ExtensionVersion is the semantic version.
 const ExtensionVersion = "0.5.0"
 
-// Ensure Extension implements forge.Extension, forge.MiddlewareExtension,
-// dashboard.DashboardAware, dashboard.DashboardAuthAware, and
-// dashboard.DashboardFooterContributor at compile time.
+// Ensure Extension implements forge.Extension, forge.MiddlewareExtension and
+// the dashboard's auth, contract and status hooks at compile time.
 var (
-	_ forge.Extension                      = (*Extension)(nil)
-	_ forge.MiddlewareExtension            = (*Extension)(nil)
-	_ dashboard.DashboardAware             = (*Extension)(nil)
-	_ dashboard.DashboardAuthAware         = (*Extension)(nil)
-	_ dashboard.DashboardFooterContributor = (*Extension)(nil)
-	_ dashboard.BridgeAware                = (*Extension)(nil)
+	_ forge.Extension                    = (*Extension)(nil)
+	_ forge.MiddlewareExtension          = (*Extension)(nil)
+	_ dashboard.DashboardAuthAware       = (*Extension)(nil)
+	_ dashboard.ContractContributorAware = (*Extension)(nil)
+	_ dashboard.DashboardStatusAware     = (*Extension)(nil)
 )
 
 // Extension adapts AuthSome as a Forge extension.
@@ -238,37 +229,10 @@ func (e *Extension) initClientMode(fapp forge.App) error {
 		return fmt.Errorf("authsome: register client in container: %w", err)
 	}
 
-	// Self-register as a remote dashboard contributor against the upstream
-	// authsome service. Dashboard discovery (with FARP/memory backends in
-	// dev) doesn't reliably surface peer services, so we don't rely on it —
-	// we know exactly where the upstream lives in client mode (PortalURL),
-	// so we register a remote contributor directly. The previous API
-	// (`dashExt.WatchRemoteContributor`) was removed upstream in
-	// forge ≥ v0.10; the replacement is a manifest fetch + manual
-	// `Registry().RegisterRemote(...)` call. We do the registration
-	// inside a goroutine with bounded retry so Portal coming up after
-	// identity (the common dev case) is still tolerated — failures
-	// during the retry window are logged but never block app boot.
-	if err := forge.OnBeforeRun(fapp, "authsome-register-remote-dashboard", func(hookCtx context.Context, app forge.App) error {
-		dashExt, err := vessel.Inject[*dashboard.Extension](app.Container())
-		if err != nil {
-			logger.Info("authsome: dashboard extension not present, skipping remote registration")
-
-			return nil //nolint:nilerr // dashboard is optional
-		}
-
-		go e.registerRemoteDashboardContributor(hookCtx, dashExt, logger)
-		return nil
-	}); err != nil {
-		return fmt.Errorf("authsome: register dashboard remote hook: %w", err)
-	}
-
-	// Mount a same-origin reverse proxy for admin API calls so XHRs from
-	// pages rendered through the remote dashboard contributor (which load
-	// into the dashboard host's origin, not authsome's) reach upstream.
-	// Without this, every admin XHR (e.g. settings save) 404s because the
-	// dashboard host has no /authsome/v1/* handler. See
-	// extension/client_api_proxy.go for the full rationale.
+	// Mount a same-origin reverse proxy for admin API calls so browser
+	// code on the dashboard host's origin reaches upstream. Without it
+	// those calls 404 because the dashboard host has no /authsome/v1/*
+	// handler. See extension/client_api_proxy.go for the full rationale.
 	if err := e.registerClientAPIProxy(fapp.Router()); err != nil {
 		return fmt.Errorf("authsome: register client API proxy: %w", err)
 	}
@@ -335,14 +299,17 @@ func (e *Extension) init(fapp forge.App) error {
 		e.Logger().Info("authsome: auto-discovered grove.DB from container (driver=" + driverName + ")")
 	}
 
-	// ── Auto-discover Chronicle (optional) ──
-	if emitter, err := vessel.Inject[chronicle.Emitter](fapp.Container()); err == nil {
-		opts = append(opts, authsome.WithChronicle(chronicleadapter.New(emitter)))
-		e.Logger().Info("authsome: auto-discovered chronicle emitter")
-	} else {
-		// Fallback to slog audit stub
-		opts = append(opts, authsome.WithChronicle(bridge.NewSlogChronicle(logger)))
+	// ── Chronicle (required) ──
+	//
+	// The audit trail has no fallback. A deployment without the chronicle
+	// extension would silently run with no record of who did what, which is
+	// exactly the state an auditor cannot accept, so registration fails.
+	emitter, err := vessel.Inject[chronicle.Emitter](fapp.Container())
+	if err != nil {
+		return fmt.Errorf("authsome: the chronicle extension is required for the audit trail: %w", err)
 	}
+	opts = append(opts, authsome.WithChronicle(chronicleadapter.New(emitter)))
+	e.Logger().Info("authsome: audit trail wired to chronicle")
 
 	// ── Auto-discover Warden (required authorization engine) ──
 	wardenEng, err := vessel.Inject[*warden.Engine](fapp.Container())
@@ -356,6 +323,11 @@ func (e *Extension) init(fapp forge.App) error {
 	if ksEng, ksErr := vessel.Inject[*keysmith.Engine](fapp.Container()); ksErr == nil {
 		opts = append(opts, authsome.WithKeysmith(ksEng))
 		e.Logger().Info("authsome: auto-discovered keysmith engine (first-class)")
+	}
+
+	// ── Metrics: record into the app's registry ──
+	if m := fapp.Metrics(); m != nil {
+		opts = append(opts, authsome.WithMetrics(metricsadapter.New(m)))
 	}
 
 	// ── Auto-discover Relay (optional) ──
@@ -421,23 +393,10 @@ func (e *Extension) init(fapp forge.App) error {
 		opts = append(opts, authsome.WithMailer(bridge.NewNoopMailer(logger)))
 	}
 
-	// ── Auto-configure rate limiter (in-memory fallback) ──
-	if e.config.RateLimit.Enabled {
-		opts = append(opts, authsome.WithRateLimiter(ratelimit.NewMemoryLimiter()))
-		e.Logger().Info("authsome: rate limiting enabled (in-memory)")
-	}
-
-	// ── Auto-configure account lockout (in-memory fallback) ──
-	if e.config.Lockout.Enabled {
-		opts = append(opts, authsome.WithLockoutTracker(
-			lockout.NewMemoryTracker(
-				lockout.WithMaxAttempts(e.config.Lockout.MaxAttempts),
-				lockout.WithLockoutDuration(e.config.Lockout.LockoutDuration()),
-				lockout.WithResetAfter(e.config.Lockout.ResetAfter()),
-			),
-		))
-		e.Logger().Info("authsome: account lockout enabled (in-memory)")
-	}
+	// Rate limiting, lockout and ceremony state are wired by the engine on
+	// the store's shared KV table (engine.go, NewEngine), so they hold across
+	// replicas without any wiring here. A host that wants something else
+	// passes WithRateLimiter, WithLockoutTracker or WithCeremonyStore.
 
 	// ── Per-app session configuration from YAML ──
 	for appIDStr, appCfg := range e.config.Apps {
@@ -476,6 +435,15 @@ func (e *Extension) init(fapp forge.App) error {
 		bootstrapOpts := e.buildBootstrapOptions()
 		opts = append(opts, authsome.WithBootstrap(bootstrapOpts...))
 		e.Logger().Info("authsome: bootstrap enabled")
+	}
+
+	// The built-in trusted-proxy set is every private range. That is right
+	// for a load balancer on the same network and wrong for one on a public
+	// address or a network shared with workloads you do not control: a
+	// forged X-Forwarded-For then rewrites the client address that lockout,
+	// rate limiting and the audit trail see. Say so once at start.
+	if middleware.TrustedProxiesAreDefault() {
+		logger.Warn("authsome: trusted proxies are the built-in private ranges; set AUTHSOME_TRUSTED_PROXIES to the proxies that actually front this service")
 	}
 
 	eng, err := authsome.NewEngine(opts...)
@@ -521,7 +489,8 @@ func (e *Extension) init(fapp forge.App) error {
 
 		router := fapp.Router()
 		if router != nil {
-			groupedRouter := router.Group(basePath)
+			// Every authsome route reports its latency and outcome.
+			groupedRouter := router.Group(basePath, forge.WithGroupMiddleware(middleware.Metrics(eng.MetricsCollector())))
 
 			// Origin-root routes first. Well-known discovery documents must
 			// answer at the host root, so they cannot go on groupedRouter.
@@ -543,13 +512,6 @@ func (e *Extension) init(fapp forge.App) error {
 				if err := rp.RegisterRoutes(groupedRouter); err != nil {
 					return fmt.Errorf("authsome: register plugin routes (%T): %w", rp, err)
 				}
-			}
-
-			// Expose the dashboard contributor over HTTP so other Forge apps
-			// can consume it as a remote contributor without needing the full
-			// dashboard extension installed locally.
-			if err := e.registerContributorProtocol(groupedRouter); err != nil {
-				return err
 			}
 
 			// Slice (m): expose the contract contributor over HTTP at
@@ -693,6 +655,9 @@ func (e *Extension) Middlewares() []forge.Middleware {
 	// expiry, and the sliding window extends after it.
 	return []forge.Middleware{
 		e.AuthMiddleware(),
+		// Right after auth, before anything rotates or extends the session
+		// on a request another site may have sent.
+		middleware.CSRF(e.engine.Config().CSRF.ToMiddleware()),
 		e.autoRefreshMiddleware(),
 		e.sessionActivityMiddleware(),
 	}
@@ -739,13 +704,20 @@ func (e *Extension) AuthMiddleware() forge.Middleware {
 // near-expiry access tokens based on the auto-refresh settings.
 func (e *Extension) autoRefreshMiddleware() forge.Middleware {
 	refresher := func(ctx context.Context, req middleware.RefreshRequest) (*session.Session, error) {
-		return e.engine.Refresh(ctx, req.RefreshToken, authsome.RefreshOpts{
-			IPAddress:  req.IPAddress,
-			UserAgent:  req.UserAgent,
-			DPoPProof:  req.DPoPProof,
-			Method:     req.Method,
-			RequestURL: req.RequestURL,
-		})
+		opts := authsome.RefreshOpts{
+			IPAddress:        req.IPAddress,
+			UserAgent:        req.UserAgent,
+			DPoPProof:        req.DPoPProof,
+			Method:           req.Method,
+			RequestURL:       req.RequestURL,
+			KeepRefreshToken: req.KeepRefreshToken,
+		}
+		// A session the auth middleware loaded from the store carries no
+		// refresh plaintext, only the access token it authenticated with.
+		if req.RefreshToken == "" {
+			return e.engine.RefreshBySessionToken(ctx, req.SessionToken, opts)
+		}
+		return e.engine.Refresh(ctx, req.RefreshToken, opts)
 	}
 	return middleware.AutoRefreshMiddleware(
 		refresher,
@@ -809,9 +781,14 @@ func (e *Extension) sessionActivityMiddleware() forge.Middleware {
 				timeoutSec = 1800
 			}
 
+			var appID id.AppID
+			if resolved, ok := middleware.AppIDFrom(ctx); ok {
+				appID = resolved
+			}
 			return middleware.SessionActivityConfig{
 				Enabled:           true,
 				InactivityTimeout: time.Duration(timeoutSec) * time.Second,
+				AbsoluteLifetime:  e.engine.AbsoluteLifetimeFor(ctx, appID),
 			}
 		},
 		e.Logger(),
@@ -848,44 +825,18 @@ func (e *Extension) cookieSetter() middleware.CookieSetter {
 	}
 }
 
-// DashboardContributor implements dashboard.DashboardAware. It returns a
-// LocalContributor that renders authsome pages, widgets, and settings in the
-// Forge dashboard using templ + ForgeUI.
-//
-// In client mode no local contributor is registered. The full authsome UI is
-// expected to be exposed by the upstream authsome service and surfaced in the
-// host dashboard via discovery (RegisterRemote). Returning a local proxy here
-// would collide with the discovered remote contributor under the same name.
-func (e *Extension) DashboardContributor() contributor.LocalContributor {
-	if e.clientMode {
-		return nil
-	}
-	if e.engine == nil {
-		return nil
-	}
-	return authdash.New(
-		authdash.NewManifest(e.engine, e.plugins),
-		e.engine,
-		e.plugins,
-	)
-}
-
-// RegisterDashboardAuth implements dashboard.DashboardAuthAware. It registers
-// authsome as the dashboard's auth page provider, auth checker, and tenant
-// resolver. Called automatically by the dashboard during Start() via discovery.
+// RegisterDashboardAuth implements dashboard.DashboardAuthAware. It installs
+// authsome as the dashboard's auth checker and tenant resolver, which is what
+// {BasePath}/api/dashboard/v1/principal answers from. The login UI itself is
+// the auth.login contract intent (see RegisterContractContributor), rendered
+// by the dashboard's React plugin. Called by the dashboard during Start().
 func (e *Extension) RegisterDashboardAuth(dashExt *dashboard.Extension) {
-	basePath := dashExt.ForgeUIApp().Config().BasePath
-
 	switch {
 	case e.clientMode:
 		if e.client == nil {
 			e.Logger().Warn("authsome: client mode enabled but client is nil; skipping dashboard auth registration")
 			return
 		}
-		dashExt.SetAuthPageProvider(&clientAuthPages{
-			client:   e.client,
-			basePath: basePath,
-		})
 		dashExt.SetAuthChecker(&clientAuthChecker{
 			client:  e.client,
 			binding: e.clientDPoPBinding(),
@@ -896,7 +847,6 @@ func (e *Extension) RegisterDashboardAuth(dashExt *dashboard.Extension) {
 			e.Logger().Warn("authsome: engine not initialised; skipping dashboard auth registration")
 			return
 		}
-		dashExt.SetAuthPageProvider(&authPages{engine: e.engine, basePath: basePath})
 		dashExt.SetAuthChecker(&authChecker{engine: e.engine})
 	}
 
@@ -914,6 +864,28 @@ func (e *Extension) RegisterDashboardAuth(dashExt *dashboard.Extension) {
 	}
 }
 
+// DashboardStatus implements dashboard.DashboardStatusAware. The dashboard
+// checks Version against the React plugin's `requires` range and renders the
+// plugin's setup guide when Configured is false.
+func (e *Extension) DashboardStatus() dashboard.DashboardStatus {
+	switch {
+	case e.clientMode && e.client == nil:
+		return dashboard.DashboardStatus{
+			Version:    ExtensionVersion,
+			Configured: false,
+			Message:    "client mode is on but no authsome client was built; check portal_url",
+		}
+	case !e.clientMode && e.engine == nil:
+		return dashboard.DashboardStatus{
+			Version:    ExtensionVersion,
+			Configured: false,
+			Message:    "the authsome engine has not been initialised",
+		}
+	default:
+		return dashboard.DashboardStatus{Version: ExtensionVersion, Configured: true}
+	}
+}
+
 // registerRemoteContractContributor is the client-mode arm of
 // RegisterContractContributor. It treats the upstream authsome service as
 // a remote contract contributor: fetches its manifest from
@@ -923,8 +895,7 @@ func (e *Extension) RegisterDashboardAuth(dashExt *dashboard.Extension) {
 //
 // PortalURL is used verbatim as the remote base URL — it already points at
 // the authsome service's mount (e.g. http://identity:7902/authsome), the
-// same form passed to authclient.NewClient and the legacy dashboard
-// contributor fetch. The contract server's HandleManifest is mounted at
+// same form passed to authclient.NewClient. The contract server's HandleManifest is mounted at
 // <basePath>/_forge/contract/manifest on the upstream, so appending only
 // /_forge/contract/manifest reaches it.
 //
@@ -1027,9 +998,9 @@ func (e *Extension) registerContractServer(router forge.Router) error {
 
 // RegisterContractContributor implements dashboard.ContractContributorAware.
 // It registers the `auth` contract contributor against the dashboard's
-// contract registry + dispatcher: declares auth.login + auth.logout command
-// intents and ships the /login graph route the dashboard's React shell
-// renders inside its AuthGate.
+// contract registry + dispatcher, including the auth.login + auth.logout
+// commands behind the React plugin's login gate, then lets each plugin that
+// implements plugin.ContractContributor register its own manifest.
 //
 // Skipped in client mode — there's no local engine to wire. The upstream
 // authsome service exposes the contract contributor itself in that
@@ -1091,73 +1062,6 @@ func (e *Extension) RegisterContractContributor(
 
 	e.Logger().Info("authsome: registered as contract contributor")
 	return nil
-}
-
-// DashboardUserDropdownActions implements dashboard.DashboardFooterContributor.
-// It contributes user-related actions (Profile, Security) to the sidebar footer
-// user dropdown menu. In client mode the authsome contributor is consumed via
-// discovery under /remote/authsome rather than /ext/authsome, so the link
-// prefix flips accordingly.
-func (e *Extension) DashboardUserDropdownActions(basePath string) []shell.UserDropdownAction {
-	prefix := basePath + "/ext/authsome/pages"
-	if e.clientMode {
-		prefix = basePath + "/remote/authsome/pages"
-	}
-
-	return []shell.UserDropdownAction{
-		{Label: "Profile", Icon: "user", Href: prefix + "/profile"},
-		{Label: "Security", Icon: "shield", Href: prefix + "/security"},
-	}
-}
-
-// RegisterDashboardBridge implements dashboard.BridgeAware. It registers
-// authsome bridge functions for Go↔JS communication in the dashboard.
-func (e *Extension) RegisterDashboardBridge(b *fuibridge.Bridge) error {
-	return b.Register("authsome.createApp", e.bridgeCreateApp,
-		fuibridge.WithDescription("Create a new application with default environments and roles"),
-	)
-}
-
-// createAppInput holds parameters for the authsome.createApp bridge function.
-type createAppInput struct {
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-	Logo string `json:"logo,omitempty"`
-}
-
-// createAppOutput holds the result of a successful app creation.
-type createAppOutput struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-}
-
-// bridgeCreateApp handles the authsome.createApp bridge function call.
-func (e *Extension) bridgeCreateApp(ctx fuibridge.Context, input createAppInput) (*createAppOutput, error) {
-	if input.Name == "" || input.Slug == "" {
-		return nil, fuibridge.NewError(fuibridge.ErrCodeBadRequest, "Name and slug are required")
-	}
-
-	existing, err := e.engine.GetAppBySlug(ctx.Context(), input.Slug)
-	if err == nil && existing != nil {
-		return nil, fuibridge.NewError(fuibridge.ErrCodeBadRequest, fmt.Sprintf("Slug %q is already in use", input.Slug))
-	}
-
-	a := &app.App{
-		Name: input.Name,
-		Slug: input.Slug,
-		Logo: input.Logo,
-	}
-
-	if err := e.engine.CreateApp(ctx.Context(), a); err != nil {
-		return nil, fuibridge.NewError(fuibridge.ErrCodeInternal, fmt.Sprintf("Failed to create app: %v", err))
-	}
-
-	return &createAppOutput{
-		ID:   a.ID.String(),
-		Name: a.Name,
-		Slug: a.Slug,
-	}, nil
 }
 
 // --- Config Loading (mirrors grove extension pattern) ---
@@ -1357,6 +1261,39 @@ func (e *Extension) buildEngineConfig() authsome.Config {
 	if e.config.Session.RotateRefreshToken != nil {
 		cfg.Session.RotateRefreshToken = e.config.Session.RotateRefreshToken
 	}
+	if e.config.Session.CleanupInterval != 0 {
+		cfg.Session.CleanupInterval = e.config.Session.CleanupInterval
+	}
+
+	if e.config.CSRF.Enabled != nil {
+		cfg.CSRF.Enabled = e.config.CSRF.Enabled
+	}
+	if len(e.config.CSRF.AllowedOrigins) > 0 {
+		cfg.CSRF.AllowedOrigins = e.config.CSRF.AllowedOrigins
+	}
+	cfg.Webhooks.AllowInsecureURLs = e.config.Webhooks.AllowInsecureURLs
+	if e.config.Webhooks.VerifyTimeout != 0 {
+		cfg.Webhooks.VerifyTimeout = e.config.Webhooks.VerifyTimeout
+	}
+
+	// Retention: a set value replaces the default, a negative one disables
+	// that kind, zero keeps the default.
+	for _, f := range []struct {
+		src int
+		dst *int
+	}{
+		{e.config.Retention.SessionsDays, &cfg.Retention.SessionsDays},
+		{e.config.Retention.VerificationsDays, &cfg.Retention.VerificationsDays},
+		{e.config.Retention.PasswordResetsDays, &cfg.Retention.PasswordResetsDays},
+		{e.config.Retention.RevokedRefreshTokensDays, &cfg.Retention.RevokedRefreshTokensDays},
+		{e.config.Retention.DeviceCodesDays, &cfg.Retention.DeviceCodesDays},
+		{e.config.Retention.AuthCodesDays, &cfg.Retention.AuthCodesDays},
+		{e.config.Retention.BatchSize, &cfg.Retention.BatchSize},
+	} {
+		if f.src != 0 {
+			*f.dst = f.src
+		}
+	}
 
 	// Password
 	if e.config.Password.MinLength != 0 {
@@ -1399,9 +1336,29 @@ func (e *Extension) buildEngineConfig() authsome.Config {
 		cfg.Password.Argon2.KeyLength = e.config.Password.Argon2.KeyLength
 	}
 
-	// Rate limit
-	if e.config.RateLimit.Enabled {
-		cfg.RateLimit.Enabled = true
+	// Rate limit. The engine default is on; only an explicit false turns
+	// it off.
+	if e.config.RateLimit.Enabled != nil {
+		cfg.RateLimit.Enabled = *e.config.RateLimit.Enabled
+	}
+	cfg.RateLimit.FailOpen = e.config.RateLimit.FailOpen
+	for _, pair := range []struct {
+		src int
+		dst *int
+	}{
+		{e.config.RateLimit.ResetPasswordLimit, &cfg.RateLimit.ResetPasswordLimit},
+		{e.config.RateLimit.ChangePasswordLimit, &cfg.RateLimit.ChangePasswordLimit},
+		{e.config.RateLimit.OAuthTokenLimit, &cfg.RateLimit.OAuthTokenLimit},
+		{e.config.RateLimit.OAuthAuthorizeLimit, &cfg.RateLimit.OAuthAuthorizeLimit},
+		{e.config.RateLimit.PasskeyLimit, &cfg.RateLimit.PasskeyLimit},
+		{e.config.RateLimit.SSOLimit, &cfg.RateLimit.SSOLimit},
+		{e.config.RateLimit.SCIMLimit, &cfg.RateLimit.SCIMLimit},
+		{e.config.RateLimit.WaitlistJoinLimit, &cfg.RateLimit.WaitlistJoinLimit},
+		{e.config.RateLimit.APIKeyFailureLimit, &cfg.RateLimit.APIKeyFailureLimit},
+	} {
+		if pair.src != 0 {
+			*pair.dst = pair.src
+		}
 	}
 	if e.config.RateLimit.SignInLimit != 0 {
 		cfg.RateLimit.SignInLimit = e.config.RateLimit.SignInLimit
@@ -1419,9 +1376,9 @@ func (e *Extension) buildEngineConfig() authsome.Config {
 		cfg.RateLimit.WindowSeconds = e.config.RateLimit.WindowSeconds
 	}
 
-	// Lockout
-	if e.config.Lockout.Enabled {
-		cfg.Lockout.Enabled = true
+	// Lockout. On by default; only an explicit false turns it off.
+	if e.config.Lockout.Enabled != nil {
+		cfg.Lockout.Enabled = *e.config.Lockout.Enabled
 	}
 	if e.config.Lockout.MaxAttempts != 0 {
 		cfg.Lockout.MaxAttempts = e.config.Lockout.MaxAttempts
@@ -1563,66 +1520,4 @@ func (e *Extension) discoverPlatformAppID(ctx context.Context, logger log.Logger
 		)
 	}
 	return nil
-}
-
-// registerRemoteDashboardContributor fetches the dashboard manifest
-// from the configured PortalURL and registers a RemoteContributor on
-// the dashboard extension's registry. Replaces the older one-call
-// `WatchRemoteContributor` API that was removed upstream in
-// forge ≥ v0.10.
-//
-// Retries with exponential backoff (capped at 30s) for ~5 minutes so
-// dev workflows where Portal boots after identity still converge. A
-// failure beyond the retry window is logged but never blocks the host
-// — remote contributors are an enhancement, not a hard requirement.
-func (e *Extension) registerRemoteDashboardContributor(ctx context.Context, dashExt *dashboard.Extension, logger log.Logger) {
-	const (
-		fetchTimeout = 10 * time.Second
-		maxBackoff   = 30 * time.Second
-		giveUpAfter  = 5 * time.Minute
-	)
-
-	deadline := time.Now().Add(giveUpAfter)
-	backoff := time.Second
-
-	for {
-		manifest, err := contributor.FetchManifest(ctx, e.config.PortalURL, fetchTimeout, e.config.ServiceAPIKey)
-		if err == nil {
-			opts := []contributor.RemoteContributorOption{}
-			if e.config.ServiceAPIKey != "" {
-				opts = append(opts, contributor.WithAPIKey(e.config.ServiceAPIKey))
-			}
-			rc := contributor.NewRemoteContributor(e.config.PortalURL, manifest, opts...)
-			if regErr := dashExt.Registry().RegisterRemote(rc); regErr != nil {
-				logger.Warn("authsome: register remote dashboard contributor failed",
-					log.String("portal_url", e.config.PortalURL),
-					log.Error(regErr),
-				)
-				return
-			}
-			logger.Info("authsome: registered remote dashboard contributor",
-				log.String("portal_url", e.config.PortalURL),
-				log.String("contributor", manifest.Name),
-			)
-			return
-		}
-
-		if ctx.Err() != nil || time.Now().After(deadline) {
-			logger.Warn("authsome: gave up registering remote dashboard contributor",
-				log.String("portal_url", e.config.PortalURL),
-				log.Error(err),
-			)
-			return
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(backoff):
-		}
-		backoff *= 2
-		if backoff > maxBackoff {
-			backoff = maxBackoff
-		}
-	}
 }

@@ -41,6 +41,9 @@ type Plugin struct {
 	settings     *settings.Manager
 	plugins      *plugin.Registry
 	defaultAppID string
+	// engine is kept for the route-level rate limiter, which reads the
+	// engine's limiter and limits.
+	engine plugin.Engine
 }
 
 // New creates a new SCIM plugin with the given configuration.
@@ -58,8 +61,9 @@ func (p *Plugin) Name() string { return "scim" }
 
 // OnInit captures bridge and engine references.
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.engine = engine
 	p.authStore = engine.Store()
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.relay = engine.Relay()
 	p.hooks = engine.Hooks()
 	p.logger = engine.Logger()
@@ -68,7 +72,23 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.defaultAppID = engine.DefaultAppID()
 
 	// Initialize in-memory store.
-	p.scimStore = NewMemoryStore()
+	// The SCIM store lives in the engine's database, like every other
+	// plugin store; memory is for tests and deployments without a database.
+	if p.scimStore == nil {
+		if db := engine.DB(); db != nil {
+			switch db.Driver().Name() {
+			case "pg":
+				p.scimStore = NewPostgresStore(db)
+			case "sqlite":
+				p.scimStore = NewSqliteStore(db)
+			case "mongo":
+				p.scimStore = NewMongoStore(db)
+			}
+		}
+	}
+	if p.scimStore == nil {
+		p.scimStore = NewMemoryStore()
+	}
 
 	// Initialize the service layer.
 	p.service = &Service{
@@ -78,10 +98,15 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		logger:      p.logger,
 		roleEnsurer: engine,
 		plugins:     p.plugins,
+		apiKeys:     engine.APIKeyStore(),
+		hooks:       p.hooks,
 	}
 
 	return nil
 }
+
+// SetSCIMStore overrides the store the plugin uses; call it before OnInit.
+func (p *Plugin) SetSCIMStore(s Store) { p.scimStore = s }
 
 // MigrationGroups returns SCIM-specific database migrations.
 func (p *Plugin) MigrationGroups(driverName string) []*migrate.Group {

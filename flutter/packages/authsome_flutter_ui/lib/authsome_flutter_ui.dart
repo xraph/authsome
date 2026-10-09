@@ -24,13 +24,16 @@ export 'src/theme/social_icons.dart' show buildSocialIcon;
 
 // Shared widgets
 export 'src/widgets/auth_card.dart';
+export 'src/widgets/captcha_field.dart';
 export 'src/widgets/error_display.dart';
 export 'src/widgets/loading_indicator.dart';
 export 'src/widgets/or_divider.dart';
 export 'src/widgets/otp_input.dart';
 export 'src/widgets/passkey_login_button.dart';
 export 'src/widgets/password_input.dart';
+export 'src/widgets/signup_field_input.dart';
 export 'src/widgets/social_buttons.dart';
+export 'src/widgets/sso_buttons.dart';
 
 // Headless builders
 export 'src/builders/auth_guard.dart';
@@ -47,6 +50,9 @@ export 'src/screens/mfa_challenge_form.dart';
 export 'src/screens/magic_link_form.dart';
 export 'src/screens/change_password_form.dart';
 export 'src/screens/email_verification_form.dart';
+export 'src/screens/waitlist_form.dart';
+export 'src/screens/device_authorization_form.dart';
+export 'src/screens/sso_callback_form.dart';
 
 // User management
 export 'src/user/user_avatar.dart';

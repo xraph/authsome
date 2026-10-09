@@ -1,11 +1,16 @@
 package webhook
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"gotest.tools/v3/assert"
 )
 
 func TestSignBody_RoundTripVerifies(t *testing.T) {
@@ -137,4 +142,24 @@ func splitCSV(s string) []string {
 	}
 	out = append(out, s[start:])
 	return out
+}
+
+// VerifyRelay accepts what Relay's signer produces and refuses a stale or
+// tampered delivery.
+func TestVerifyRelay(t *testing.T) {
+	body := []byte(`{"type":"user.created"}`)
+	ts := time.Now().Unix()
+	tsStr := strconv.FormatInt(ts, 10)
+	// Relay's format: HMAC-SHA256 over "<ts>.<body>", "v1=<hex>".
+	mac := hmac.New(sha256.New, []byte("whsec_x"))
+	mac.Write([]byte(tsStr + "."))
+	mac.Write(body)
+	sig := "v1=" + hex.EncodeToString(mac.Sum(nil))
+
+	require.NoError(t, VerifyRelay(body, "whsec_x", tsStr, sig, 0))
+	assert.ErrorIs(t, VerifyRelay(body, "whsec_y", tsStr, sig, 0), ErrSignatureMismatch)
+	assert.ErrorIs(t, VerifyRelay([]byte(`{}`), "whsec_x", tsStr, sig, 0), ErrSignatureMismatch)
+	stale := strconv.FormatInt(ts-3600, 10)
+	assert.ErrorIs(t, VerifyRelay(body, "whsec_x", stale, sig, 0), ErrTimestampSkew)
+	assert.ErrorIs(t, VerifyRelay(body, "whsec_x", "not-a-number", sig, 0), ErrMalformedHeader)
 }

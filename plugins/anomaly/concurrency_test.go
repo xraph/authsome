@@ -65,8 +65,8 @@ func TestRecordLogin_ConcurrentSamePrincipalLosesNoLogins(t *testing.T) {
 
 	want := anomalyHammerWorkers * anomalyLoginsPerRef
 
-	p.mu.RLock()
-	pattern, ok := p.patterns[ref.String()]
+	p.mu.Lock()
+	pattern, ok := p.patterns.Get(ref.String())
 	require.True(t, ok, "the hammered principal has no pattern at all")
 	gotCount := pattern.LoginCount
 	gotCountry := pattern.CountryHistogram["US"]
@@ -74,7 +74,7 @@ func TestRecordLogin_ConcurrentSamePrincipalLosesNoLogins(t *testing.T) {
 	for _, n := range pattern.HourHistogram {
 		hourTotal += n
 	}
-	p.mu.RUnlock()
+	p.mu.Unlock()
 
 	require.Equal(t, want, gotCount,
 		"LoginCount lost updates under concurrency: the increment must happen under the write lock")
@@ -119,11 +119,12 @@ func TestRecordLogin_ConcurrentDistinctPrincipalsStayIsolated(t *testing.T) {
 
 	want := anomalyHammerWorkers * perRefPerWorker
 
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	require.Len(t, p.patterns, len(refs), "every principal must have exactly one pattern of its own")
+	// A write lock: a lookup marks the entry recently used.
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	require.Equal(t, len(refs), p.patterns.Len(), "every principal must have exactly one pattern of its own")
 	for _, ref := range refs {
-		pattern, ok := p.patterns[ref.String()]
+		pattern, ok := p.patterns.Get(ref.String())
 		require.True(t, ok, "principal %s has no pattern", ref.ID)
 		require.Equal(t, want, pattern.LoginCount, "principal %s lost logins", ref.ID)
 	}
@@ -160,9 +161,9 @@ func TestRecordLogin_ConcurrentMixedGeography(t *testing.T) {
 
 	want := anomalyHammerWorkers * anomalyLoginsPerRef
 
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	pattern := p.patterns[ref.String()]
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	pattern, _ := p.patterns.Get(ref.String())
 	require.NotNil(t, pattern)
 	require.Equal(t, want, pattern.LoginCount)
 
@@ -210,7 +211,7 @@ func TestOnAfterPrincipalAuth_ConcurrentIsRaceFree(t *testing.T) {
 	}
 	wg.Wait()
 
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	require.NotEmpty(t, p.patterns, "the hammer recorded nothing; it is not exercising the plugin")
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	require.NotZero(t, p.patterns.Len(), "the hammer recorded nothing; it is not exercising the plugin")
 }

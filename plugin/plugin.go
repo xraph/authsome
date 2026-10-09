@@ -8,6 +8,7 @@ package plugin
 
 import (
 	"context"
+	"time"
 
 	log "github.com/xraph/go-utils/log"
 	"github.com/xraph/grove"
@@ -25,7 +26,6 @@ import (
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/ratelimit"
-	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -82,7 +82,9 @@ type Engine interface {
 
 	// ── Bridges ──
 
-	Chronicle() bridge.Chronicle
+	// The audit trail is not exposed here on purpose: plugins record through
+	// bridge.NewBusChronicle(engine.Hooks()) so every event takes the one
+	// enriched path into Chronicle.
 	Relay() bridge.EventRelay
 	Herald() bridge.Herald
 	Mailer() bridge.Mailer
@@ -105,14 +107,6 @@ type Engine interface {
 	CeremonyStore() ceremony.Store
 	// APIKeyStore returns the API key store.
 	APIKeyStore() apikey.Store
-	// SecurityEvents returns the queryable security event store, or nil when
-	// the engine was built without one.
-	//
-	// Plugins write here directly rather than emitting a hook. The hook-bus
-	// bridge builds its Event from Action, Outcome, Metadata and CreatedAt
-	// only, never setting AppID, and securityevent.Query filters on AppID, so
-	// anything recorded that way is written but cannot be read back.
-	SecurityEvents() securityevent.Store
 	// DPoPValidator returns the RFC 9449 proof validator. Never nil.
 	DPoPValidator() *dpop.Validator
 	// DPoPNonceSigner returns the DPoP nonce signer, or nil when no signing
@@ -127,11 +121,15 @@ type Engine interface {
 	// ── User / session resolution ──
 
 	// ResolveSessionByToken resolves a session from its opaque token.
-	ResolveSessionByToken(token string) (*session.Session, error)
+	ResolveSessionByToken(ctx context.Context, token string) (*session.Session, error)
 	// ResolveUser resolves a user by ID string.
-	ResolveUser(userID string) (*user.User, error)
+	ResolveUser(ctx context.Context, userID string) (*user.User, error)
 	// GetUser fetches a user by typed ID.
 	GetUser(ctx context.Context, userID id.UserID) (*user.User, error)
+	// RevokeOtherUserSessions ends every session of the user except keep.
+	// Plugins call it after a credential change (second factor, passkey) so
+	// a session an attacker already holds does not survive the change.
+	RevokeOtherUserSessions(ctx context.Context, userID id.UserID, keep id.SessionID) error
 
 	// ── Role management ──
 
@@ -252,6 +250,16 @@ type OnInit interface {
 // OnShutdown is called during engine shutdown.
 type OnShutdown interface {
 	OnShutdown(ctx context.Context) error
+}
+
+// RetentionSweeper is implemented by a plugin that keeps rows with a
+// lifetime of their own. The engine's retention sweeper calls it on every
+// run: cutoff returns the instant before which rows of a kind (a
+// store.Retention* name, or the plugin's own) may go, or the zero time when
+// that kind is kept forever; batch is how many rows one delete may remove.
+// The plugin loops until a batch comes back short and reports the total.
+type RetentionSweeper interface {
+	SweepRetention(ctx context.Context, cutoff func(kind string) time.Time, batch int) (int64, error)
 }
 
 // ──────────────────────────────────────────────────

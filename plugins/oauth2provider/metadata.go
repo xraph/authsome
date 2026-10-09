@@ -79,6 +79,7 @@ func (p *Plugin) buildAuthServerMetadata() *AuthServerMetadata {
 		ResponseTypesSupported:      []string{"code"},
 		GrantTypesSupported: []string{
 			"authorization_code",
+			"refresh_token",
 			"client_credentials",
 			deviceCodeGrantType,
 			tokenExchangeGrantType,
@@ -93,7 +94,7 @@ func (p *Plugin) buildAuthServerMetadata() *AuthServerMetadata {
 		TokenEndpointAuthMethodsSupported: []string{
 			"client_secret_post", "client_secret_basic", "none",
 		},
-		CodeChallengeMethodsSupported: []string{"S256", "plain"},
+		CodeChallengeMethodsSupported: []string{"S256"},
 		ResourceIndicatorsSupported:   true,
 		DPoPSigningAlgValuesSupported: dpop.SupportedAlgs(),
 	}

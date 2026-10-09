@@ -14,7 +14,7 @@ func testConnectionCRUD(t *testing.T, f Fixture) {
 	c := newConnection(f.UserID, f.AppID)
 	require.NoError(t, f.Store.CreateOAuthConnection(ctx, c))
 
-	got, err := f.Store.GetOAuthConnection(ctx, c.Provider, c.ProviderUserID)
+	got, err := f.Store.GetOAuthConnection(ctx, c.AppID, c.Provider, c.ProviderUserID)
 	require.NoError(t, err)
 	assert.Equal(t, c.ID, got.ID)
 	assert.Equal(t, c.UserID, got.UserID)
@@ -25,7 +25,7 @@ func testConnectionCRUD(t *testing.T, f Fixture) {
 }
 
 func testConnectionNotFound(t *testing.T, f Fixture) {
-	_, err := f.Store.GetOAuthConnection(context.Background(), "google", unique("absent"))
+	_, err := f.Store.GetOAuthConnection(context.Background(), f.AppID, "google", unique("absent"))
 	assert.Error(t, err, "a provider identity nobody has connected must not resolve")
 }
 
@@ -40,7 +40,7 @@ func testTokensRoundTrip(t *testing.T, f Fixture) {
 	c.RefreshToken = "1//0eXaMpLe-_x/+=" + unique("rt")
 	require.NoError(t, f.Store.CreateOAuthConnection(ctx, c))
 
-	got, err := f.Store.GetOAuthConnection(ctx, c.Provider, c.ProviderUserID)
+	got, err := f.Store.GetOAuthConnection(ctx, c.AppID, c.Provider, c.ProviderUserID)
 	require.NoError(t, err)
 	assert.Equal(t, c.AccessToken, got.AccessToken, "the access token must survive byte for byte")
 	assert.Equal(t, c.RefreshToken, got.RefreshToken,
@@ -56,7 +56,7 @@ func testExpiryRoundTrip(t *testing.T, f Fixture) {
 	c.ExpiresAt = now().Add(45 * time.Minute)
 	require.NoError(t, f.Store.CreateOAuthConnection(ctx, c))
 
-	got, err := f.Store.GetOAuthConnection(ctx, c.Provider, c.ProviderUserID)
+	got, err := f.Store.GetOAuthConnection(ctx, c.AppID, c.Provider, c.ProviderUserID)
 	require.NoError(t, err)
 	assert.WithinDuration(t, c.ExpiresAt, got.ExpiresAt, time.Second,
 		"token expiry moved in storage: wrote %v, read %v", c.ExpiresAt, got.ExpiresAt)
@@ -71,7 +71,7 @@ func testMetadataRoundTrip(t *testing.T, f Fixture) {
 	}
 	require.NoError(t, f.Store.CreateOAuthConnection(ctx, c))
 
-	got, err := f.Store.GetOAuthConnection(ctx, c.Provider, c.ProviderUserID)
+	got, err := f.Store.GetOAuthConnection(ctx, c.AppID, c.Provider, c.ProviderUserID)
 	require.NoError(t, err)
 	assert.Equal(t, c.Metadata, got.Metadata)
 }
@@ -82,7 +82,7 @@ func testEmptyMetadataRoundTrip(t *testing.T, f Fixture) {
 	c.Metadata = nil
 	require.NoError(t, f.Store.CreateOAuthConnection(ctx, c))
 
-	got, err := f.Store.GetOAuthConnection(ctx, c.Provider, c.ProviderUserID)
+	got, err := f.Store.GetOAuthConnection(ctx, c.AppID, c.Provider, c.ProviderUserID)
 	require.NoError(t, err)
 	assert.Empty(t, got.Metadata, "a connection with no metadata must not gain phantom entries")
 }
@@ -103,7 +103,7 @@ func testProviderLookupMatchesTheKeys(t *testing.T, f Fixture) {
 	require.NoError(t, f.Store.CreateOAuthConnection(ctx, b))
 
 	for _, want := range []string{a.ProviderUserID, b.ProviderUserID} {
-		got, err := f.Store.GetOAuthConnection(ctx, "google", want)
+		got, err := f.Store.GetOAuthConnection(ctx, f.AppID, "google", want)
 		require.NoError(t, err)
 		assert.Equal(t, want, got.ProviderUserID,
 			"lookup for provider user %s answered with %s", want, got.ProviderUserID)
@@ -151,7 +151,7 @@ func testUpdateReplacesTokens(t *testing.T, f Fixture) {
 	refreshed.UpdatedAt = now()
 	require.NoError(t, f.Store.UpdateOAuthConnection(ctx, &refreshed))
 
-	got, err := f.Store.GetOAuthConnection(ctx, c.Provider, c.ProviderUserID)
+	got, err := f.Store.GetOAuthConnection(ctx, c.AppID, c.Provider, c.ProviderUserID)
 	require.NoError(t, err)
 	assert.Equal(t, refreshed.AccessToken, got.AccessToken, "the refreshed access token was not written")
 	assert.NotEqual(t, oldAccess, got.AccessToken, "the stale access token survived a refresh")
@@ -167,7 +167,7 @@ func testDeleteConnection(t *testing.T, f Fixture) {
 	require.NoError(t, f.Store.CreateOAuthConnection(ctx, c))
 	require.NoError(t, f.Store.DeleteOAuthConnection(ctx, c.ID))
 
-	_, err := f.Store.GetOAuthConnection(ctx, c.Provider, c.ProviderUserID)
+	_, err := f.Store.GetOAuthConnection(ctx, c.AppID, c.Provider, c.ProviderUserID)
 	assert.Error(t, err, "a disconnected provider must stop resolving; the user asked for it to be gone")
 
 	list, err := f.Store.GetOAuthConnectionsByUserID(ctx, f.UserID)
@@ -175,4 +175,29 @@ func testDeleteConnection(t *testing.T, f Fixture) {
 	for _, existing := range list {
 		assert.NotEqual(t, c.ID, existing.ID, "a deleted connection still appears in the user's listing")
 	}
+}
+
+// testProviderIdentityIsAppScoped proves the same provider user can exist
+// in two apps as two connections, and that each app's lookup answers with
+// its own: a login in one app never lands on the other app's account.
+func testProviderIdentityIsAppScoped(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	shared := unique("puid")
+	a := newConnection(f.UserID, f.AppID)
+	a.ProviderUserID = shared
+	require.NoError(t, f.Store.CreateOAuthConnection(ctx, a))
+	b := newConnection(f.OtherAppUser, f.OtherAppID)
+	b.ProviderUserID = shared
+	require.NoError(t, f.Store.CreateOAuthConnection(ctx, b), "the same provider user in another app is a distinct connection")
+
+	gotA, err := f.Store.GetOAuthConnection(ctx, f.AppID, "google", shared)
+	require.NoError(t, err)
+	assert.Equal(t, f.UserID.String(), gotA.UserID.String())
+	gotB, err := f.Store.GetOAuthConnection(ctx, f.OtherAppID, "google", shared)
+	require.NoError(t, err)
+	assert.Equal(t, f.OtherAppUser.String(), gotB.UserID.String())
+
+	dup := newConnection(f.OtherUserID, f.AppID)
+	dup.ProviderUserID = shared
+	assert.Error(t, f.Store.CreateOAuthConnection(ctx, dup), "one provider user binds once per app")
 }

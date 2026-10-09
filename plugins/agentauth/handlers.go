@@ -39,7 +39,7 @@ type StatusResponse struct {
 func (p *Plugin) ListMyGrants(ctx context.Context, userID id.UserID) (*ListGrantsResponse, error) {
 	grants, err := p.store.ListGrantsByUser(ctx, userID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("agentauth: list grants: %w", err))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("agentauth: list grants: %w", err))
 	}
 	now := time.Now()
 	out := &ListGrantsResponse{Grants: []GrantView{}}
@@ -70,7 +70,7 @@ func (p *Plugin) RevokeMyGrant(ctx context.Context, userID id.UserID, grantID id
 		return forge.NotFound("grant not found")
 	}
 	if err != nil {
-		return forge.InternalError(fmt.Errorf("agentauth: load grant: %w", err))
+		return middleware.InternalErrorCtx(ctx, fmt.Errorf("agentauth: load grant: %w", err))
 	}
 	if g.UserID.String() != userID.String() {
 		// Same response as a missing grant, so the endpoint does not confirm
@@ -93,13 +93,13 @@ func (p *Plugin) SetAgentStatus(ctx context.Context, agentID id.AgentID, orgID i
 		return forge.NotFound("agent not found")
 	}
 	if err != nil {
-		return forge.InternalError(fmt.Errorf("agentauth: load agent: %w", err))
+		return middleware.InternalErrorCtx(ctx, fmt.Errorf("agentauth: load agent: %w", err))
 	}
 
 	a.Status = status
 	a.UpdatedAt = time.Now()
 	if updateErr := p.store.UpdateAgent(ctx, a); updateErr != nil {
-		return forge.InternalError(fmt.Errorf("agentauth: update agent: %w", updateErr))
+		return middleware.InternalErrorCtx(ctx, fmt.Errorf("agentauth: update agent: %w", updateErr))
 	}
 
 	if status != StatusBlocked {
@@ -107,7 +107,7 @@ func (p *Plugin) SetAgentStatus(ctx context.Context, agentID id.AgentID, orgID i
 	}
 	revoked, err := p.store.RevokeGrantsByAgent(ctx, agentID, orgID)
 	if err != nil {
-		return forge.InternalError(fmt.Errorf("agentauth: revoke agent grants: %w", err))
+		return middleware.InternalErrorCtx(ctx, fmt.Errorf("agentauth: revoke agent grants: %w", err))
 	}
 	// The cache is keyed by grant id and the revoked grants are not enumerated
 	// here, so clear it wholesale. Blocking an agent is a rare admin action,
@@ -151,7 +151,7 @@ func (p *Plugin) RegisterAgent(ctx context.Context, in *Agent) (*Agent, error) {
 		if errors.Is(err, ErrConflict) {
 			return nil, forge.NewHTTPError(http.StatusConflict, "an agent is already registered for this client_id")
 		}
-		return nil, forge.InternalError(fmt.Errorf("agentauth: create agent: %w", err))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("agentauth: create agent: %w", err))
 	}
 	return a, nil
 }
@@ -320,7 +320,7 @@ func (p *Plugin) handleListAgents(ctx forge.Context, req *ListAgentsRequest) (*L
 	}
 	agents, err := p.store.ListAgents(ctx.Context(), appID, orgID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("agentauth: list agents: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("agentauth: list agents: %w", err))
 	}
 	if agents == nil {
 		agents = []*Agent{}
@@ -401,7 +401,7 @@ func (p *Plugin) handleSetAgentStatus(ctx forge.Context, req *SetAgentStatusRequ
 		return nil, forge.NotFound("agent not found")
 	}
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("agentauth: load agent: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("agentauth: load agent: %w", err))
 	}
 	if agent.AppID.String() != appID.String() {
 		// Same response as a missing agent: a cross-tenant admin caller must
@@ -502,7 +502,7 @@ func (p *Plugin) handlePutOrgPolicy(ctx forge.Context, req *PutOrgPolicyRequest)
 	// same defaults policyFor synthesizes for an org with no policy row.
 	existing, err := p.store.GetOrgPolicy(ctx.Context(), orgID)
 	if err != nil && !errors.Is(err, ErrNotFound) {
-		return nil, forge.InternalError(fmt.Errorf("agentauth: load org policy: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("agentauth: load org policy: %w", err))
 	}
 
 	policy := &OrgAgentPolicy{OrgID: orgID, Mode: mode}
@@ -520,7 +520,7 @@ func (p *Plugin) handlePutOrgPolicy(ctx forge.Context, req *PutOrgPolicyRequest)
 	}
 
 	if err := p.store.PutOrgPolicy(ctx.Context(), policy); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("agentauth: put org policy: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("agentauth: put org policy: %w", err))
 	}
 	return nil, ctx.JSON(http.StatusOK, policy)
 }
@@ -547,7 +547,7 @@ func (p *Plugin) handleGetOrgPolicy(ctx forge.Context, _ *apitypes.Empty) (*OrgA
 	if errors.Is(err, ErrNotFound) {
 		policy = &OrgAgentPolicy{OrgID: orgID, Mode: ModeOpen}
 	} else if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("agentauth: load org policy: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("agentauth: load org policy: %w", err))
 	}
 	return nil, ctx.JSON(http.StatusOK, policy)
 }

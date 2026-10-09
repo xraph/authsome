@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/xraph/authsome/bridge"
 )
@@ -30,7 +31,9 @@ func NewTwilioSender(accountSID, authToken, fromNumber string) *TwilioSender {
 		accountSID: accountSID,
 		authToken:  authToken,
 		fromNumber: fromNumber,
-		client:     &http.Client{},
+		// A deadline on every outbound call: a stalled SMS provider must
+		// not hold a sign-in open indefinitely.
+		client: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 

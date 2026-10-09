@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/store"
 )
 
 func wrongCode(code string) string {
@@ -26,16 +27,26 @@ func TestSignUp_IssuesEmailVerificationCode(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "bob@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 		Username: "bob",
 	})
 	require.NoError(t, err)
 
 	v, err := st.GetActiveEmailVerification(ctx, u.ID)
 	require.NoError(t, err)
-	assert.Len(t, v.Token, 6, "verification should carry a 6-digit code")
+	assert.Empty(t, v.Token, "the store hands back no plaintext")
+	assert.Len(t, v.TokenHash, 64, "verification should carry the code's digest")
 	assert.Equal(t, account.VerificationEmail, v.Type)
 	assert.Equal(t, 0, v.Attempts)
+
+	// A resend issues a 6-digit code and retires the one sign-up issued.
+	code, err := eng.SendEmailVerification(ctx, u)
+	require.NoError(t, err)
+	assert.Len(t, code, 6, "verification should carry a 6-digit code")
+	v2, err := st.GetActiveEmailVerification(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Equal(t, store.HashToken(code), v2.TokenHash)
+	assert.NotEqual(t, v.ID, v2.ID, "the resend retires the earlier code")
 }
 
 func TestVerifyEmailCode_WrongThenRight(t *testing.T) {
@@ -46,14 +57,13 @@ func TestVerifyEmailCode_WrongThenRight(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "carol@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 		Username: "carol",
 	})
 	require.NoError(t, err)
 
-	v, err := st.GetActiveEmailVerification(ctx, u.ID)
+	code, err := eng.SendEmailVerification(ctx, u)
 	require.NoError(t, err)
-	code := v.Token
 
 	// Wrong code fails and increments attempts.
 	err = eng.VerifyEmailCode(ctx, u.ID, wrongCode(code))
@@ -75,21 +85,20 @@ func TestVerifyEmailCode_WrongThenRight(t *testing.T) {
 }
 
 func TestVerifyEmailCode_MaxAttempts(t *testing.T) {
-	eng, st := newTestEngine(t)
+	eng, _ := newTestEngine(t)
 	ctx := context.Background()
 	appID := testAppID(t)
 
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "dave@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 		Username: "dave",
 	})
 	require.NoError(t, err)
 
-	v, err := st.GetActiveEmailVerification(ctx, u.ID)
+	code, err := eng.SendEmailVerification(ctx, u)
 	require.NoError(t, err)
-	code := v.Token
 	wrong := wrongCode(code)
 
 	// Exhaust the attempt budget with wrong codes.

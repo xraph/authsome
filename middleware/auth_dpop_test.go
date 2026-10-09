@@ -111,13 +111,13 @@ func dpopTestSetup(t *testing.T, sess *session.Session, bind middleware.SessionB
 	u := &user.User{ID: sess.UserID, AppID: sess.AppID, Email: "dpop@test.com"}
 
 	mw := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if token == sess.Token {
 				return sess, nil
 			}
 			return nil, errors.New("invalid")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ context.Context, userIDStr string) (*user.User, error) {
 			if userIDStr == sess.UserID.String() {
 				return u, nil
 			}
@@ -157,13 +157,13 @@ func dpopStrategiesSetup(t *testing.T, sess *session.Session, bind middleware.Se
 	u := &user.User{ID: sess.UserID, AppID: sess.AppID, Email: "dpop@test.com"}
 
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if token == sess.Token {
 				return sess, nil
 			}
 			return nil, errors.New("invalid")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ context.Context, userIDStr string) (*user.User, error) {
 			if userIDStr == sess.UserID.String() {
 				return u, nil
 			}
@@ -207,10 +207,10 @@ func dpopJWTSetup(t *testing.T, claims *tokenformat.TokenClaims, bind middleware
 	u := &user.User{ID: id.MustParse(claims.UserID), AppID: id.MustParse(claims.AppID), Email: "dpop-jwt@test.com"}
 
 	mw := middleware.AuthMiddlewareWithJWT(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			return nil, errors.New("not found")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ context.Context, userIDStr string) (*user.User, error) {
 			if userIDStr == claims.UserID {
 				return u, nil
 			}

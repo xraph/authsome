@@ -311,7 +311,7 @@ func TestMemoryStore_CRUD(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get by provider + provider user ID
-	got, err := s.GetOAuthConnection(ctx, "google", "goog-123")
+	got, err := s.GetOAuthConnection(ctx, appID, "google", "goog-123")
 	require.NoError(t, err)
 	assert.Equal(t, conn.ID, got.ID)
 	assert.Equal(t, "google", got.Provider)
@@ -323,7 +323,7 @@ func TestMemoryStore_CRUD(t *testing.T) {
 	assert.Len(t, conns, 1)
 
 	// Not found
-	_, err = s.GetOAuthConnection(ctx, "github", "gh-999")
+	_, err = s.GetOAuthConnection(ctx, appID, "github", "gh-999")
 	assert.ErrorIs(t, err, social.ErrConnectionNotFound)
 
 	// Delete
@@ -331,7 +331,7 @@ func TestMemoryStore_CRUD(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should be gone
-	_, err = s.GetOAuthConnection(ctx, "google", "goog-123")
+	_, err = s.GetOAuthConnection(ctx, appID, "google", "goog-123")
 	assert.ErrorIs(t, err, social.ErrConnectionNotFound)
 
 	// Delete nonexistent
@@ -536,7 +536,7 @@ func TestPlugin_ExistingUserByEmail(t *testing.T) {
 	err = oauthStore.CreateOAuthConnection(ctx, conn)
 	require.NoError(t, err)
 
-	found2, err := oauthStore.GetOAuthConnection(ctx, "google", "goog-456")
+	found2, err := oauthStore.GetOAuthConnection(ctx, appID, "google", "goog-456")
 	require.NoError(t, err)
 	assert.Equal(t, existingUser.ID, found2.UserID)
 }

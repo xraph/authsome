@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/xraph/authsome/id"
 
@@ -117,6 +118,19 @@ func (s *KeysmithStore) FindByPublicKey(ctx context.Context, publicKey string) (
 func (s *KeysmithStore) UpdateAPIKey(ctx context.Context, ak *APIKey) error {
 	k := toKeysmithKey(ak)
 	if err := s.engine.Store().Keys().Update(ctx, k); err != nil {
+		return keysmithError(err)
+	}
+	return nil
+}
+
+// TouchAPIKey implements Store through keysmith's single-column
+// last-used update.
+func (s *KeysmithStore) TouchAPIKey(ctx context.Context, keyID id.APIKeyID, at time.Time) error {
+	kid, err := ksid.ParseKeyID(keyID.String())
+	if err != nil {
+		return fmt.Errorf("apikey: invalid key id %q: %w", keyID.String(), err)
+	}
+	if err := s.engine.Store().Keys().UpdateLastUsed(ctx, kid, at); err != nil {
 		return keysmithError(err)
 	}
 	return nil

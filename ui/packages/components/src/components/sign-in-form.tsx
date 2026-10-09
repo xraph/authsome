@@ -83,7 +83,32 @@ export interface SignInFormComponentProps {
   showPasskey?: boolean;
   /** Callback after successful passkey sign-in. */
   onPasskeySuccess?: () => void;
-  /** Optional logo element rendered above the title. */
+  /**
+   * Offer a passwordless "email me a sign-in link" option. Auto-derived from
+   * `config.magiclink.enabled` when omitted.
+   */
+  showMagicLink?: boolean;
+  /**
+   * SSO connections rendered as "Continue with {name}" buttons. Each `id` is
+   * the SSO provider name passed to `POST /v1/sso/{id}/login`. Auto-derived
+   * from `config.sso.connections` (when `config.sso.enabled`) when omitted.
+   */
+  ssoConnections?: { id: string; name: string }[];
+  /**
+   * Callback when an SSO connection button is clicked. Overrides the built-in
+   * handler, which starts the login and redirects the browser to the IdP.
+   */
+  onSSOLogin?: (connectionId: string) => void;
+  /**
+   * Where the backend lands the browser after the IdP round trip (passed as
+   * `return_url`). Must be allowlisted on the server. Omit it to use the
+   * server's default `/sso/callback` landing.
+   */
+  ssoReturnUrl?: string;
+  /**
+   * Optional logo element rendered above the title. Falls back to
+   * `config.branding.logo_url` when omitted; pass `null` for no logo.
+   */
   logo?: React.ReactNode;
   /** Title and description alignment. */
   align?: AuthCardAlign;
@@ -93,7 +118,8 @@ export interface SignInFormComponentProps {
   className?: string;
   /**
    * Heading shown on the initial sign-in view (email / passwordless steps).
-   * Defaults to "Sign in". Use it to brand the form, e.g. "Sign in to Acme".
+   * Defaults to "Sign in to {app_name}" when `config.branding.app_name` is
+   * set, otherwise "Sign in".
    */
   title?: string;
   /**
@@ -109,7 +135,8 @@ export interface SignInFormComponentProps {
  * - **Social-first**: When social providers are available, they appear at the top.
  * - **Multi-step**: User enters email, clicks "Continue", then enters password.
  * - **Auto-configuration**: When `publishableKey` is set on `AuthProvider`, the form
- *   auto-derives social providers and passkey support from the backend client config.
+ *   auto-derives social providers, SSO connections, passkey and magic link
+ *   support, and branding from the backend client config.
  * - Explicit props always take precedence over auto-discovered values.
  */
 export function SignInForm({
@@ -123,15 +150,22 @@ export function SignInForm({
   socialLayout,
   showPasskey: showPasskeyProp,
   onPasskeySuccess,
+  showMagicLink: showMagicLinkProp,
+  ssoConnections: ssoConnectionsProp,
+  onSSOLogin: onSSOLoginProp,
+  ssoReturnUrl,
   logo,
   align,
   variant,
   className,
-  title = "Sign in",
+  title: titleProp,
   description = "Welcome back. Sign in to your account.",
 }: SignInFormComponentProps) {
-  const { signIn, client, resendVerification } = useAuth();
+  const { signIn, client, resendVerification, startSSOLogin } = useAuth();
   const { config } = useClientConfig();
+
+  const appName = config?.branding?.app_name;
+  const title = titleProp ?? (appName ? `Sign in to ${appName}` : "Sign in");
 
   // Auto-derive social providers from client config when not explicitly provided.
   const socialProviders =
@@ -145,6 +179,15 @@ export function SignInForm({
 
   // Auto-derive password support from client config (default: true).
   const showPassword = config?.password?.enabled ?? true;
+
+  // Auto-derive magic link support from client config when not explicitly provided.
+  const showMagicLink = showMagicLinkProp ?? config?.magiclink?.enabled ?? false;
+
+  // Auto-derive SSO connections from client config when not explicitly provided.
+  const ssoConnections =
+    ssoConnectionsProp ??
+    (config?.sso?.enabled ? config.sso.connections : []);
+  const hasSSO = ssoConnections.length > 0;
 
   // Default social login: popup-based OAuth flow via startOAuth API.
   // Falls back to full-page redirect when popups are blocked.
@@ -163,9 +206,9 @@ export function SignInForm({
   const hasSocial =
     socialProviders && socialProviders.length > 0 && onSocialLogin;
 
-  const [step, setStep] = useState<"email" | "password" | "sso" | "verify">(
-    "email",
-  );
+  const [step, setStep] = useState<
+    "email" | "password" | "sso" | "verify" | "magic-link-sent"
+  >("email");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -174,6 +217,7 @@ export function SignInForm({
   const [isResolvingSSO, setIsResolvingSSO] = useState(false);
   // The resolved IdP handoff once discovery finds SSO for the domain.
   const [sso, setSso] = useState<SSOResolution | null>(null);
+  const [isSendingMagicLink, setIsSendingMagicLink] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [resendStatus, setResendStatus] = useState<"idle" | "sent" | "error">(
     "idle",
@@ -227,6 +271,55 @@ export function SignInForm({
 
   const startSSO = () => {
     if (sso) void sso.continue();
+  };
+
+  // Default SSO connection handler: ask the backend for the IdP login URL and
+  // send the browser there. The backend lands it back on `ssoReturnUrl` (or
+  // its own default) with a one-time code for <SSOCallback> to exchange.
+  const onSSOLogin =
+    onSSOLoginProp ??
+    (async (connectionId: string) => {
+      setError(null);
+      setIsSubmitting(true);
+      try {
+        const url = await startSSOLogin(connectionId, ssoReturnUrl);
+        window.location.assign(url);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Could not start single sign-on. Please try again.",
+        );
+        setIsSubmitting(false);
+      }
+    });
+
+  const sendMagicLink = async () => {
+    setError(null);
+    const target = email.trim();
+    if (!target) {
+      setError("Please enter your email address.");
+      return;
+    }
+
+    setIsSendingMagicLink(true);
+    try {
+      await client.sendMagicLink({ email: target });
+      setStep("magic-link-sent");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to send the sign-in link. Please try again.",
+      );
+    } finally {
+      setIsSendingMagicLink(false);
+    }
+  };
+
+  const handleMagicLinkSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    void sendMagicLink();
   };
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -302,10 +395,64 @@ export function SignInForm({
     </p>
   ) : undefined;
 
+  const ssoButtons = hasSSO ? (
+    <div className="flex flex-col gap-2">
+      {ssoConnections.map((connection) => (
+        <Button
+          key={connection.id}
+          type="button"
+          variant="outline"
+          className="w-full gap-2 text-[13px] font-normal"
+          disabled={isSubmitting || isSendingMagicLink}
+          onClick={() => void onSSOLogin(connection.id)}
+        >
+          Continue with {connection.name}
+        </Button>
+      ))}
+    </div>
+  ) : null;
+
+  /* ── Magic link sent: check your inbox ──────────────── */
+
+  if (step === "magic-link-sent") {
+    return (
+      <AuthCard
+        title="Check your inbox"
+        description={`We sent a sign-in link to ${email}.`}
+        logo={logo}
+        footer={footer}
+        align={align}
+        variant={variant}
+        className={cn(className)}
+      >
+        <div className="grid gap-4">
+          <div className="flex flex-col items-center gap-3 py-2 text-center">
+            <div className="rounded-full bg-muted p-3">
+              <MailCheck className="h-6 w-6 text-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Click the link in the email to sign in. If you don&apos;t see it,
+              check your spam folder.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={goBack}
+            className="inline-flex items-center justify-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Use a different email
+          </button>
+        </div>
+      </AuthCard>
+    );
+  }
+
   /* ── Password disabled: show only alternative methods ── */
 
   if (!showPassword) {
-    const hasAnyMethod = hasSocial || showPasskey;
+    const hasButtons = hasSocial || hasSSO;
+    const hasAnyMethod = hasButtons || showPasskey || showMagicLink;
     return (
       <AuthCard
         title={title}
@@ -317,6 +464,8 @@ export function SignInForm({
         className={cn(className)}
       >
         <div className="grid gap-4">
+          {!showMagicLink && <ErrorDisplay error={error} />}
+
           {hasSocial && (
             <SocialButtons
               providers={socialProviders!}
@@ -327,7 +476,45 @@ export function SignInForm({
             />
           )}
 
-          {hasSocial && showPasskey && <OrDivider />}
+          {ssoButtons}
+
+          {hasButtons && (showMagicLink || showPasskey) && <OrDivider />}
+
+          {showMagicLink && (
+            <form onSubmit={handleMagicLinkSubmit} className="grid gap-3">
+              <ErrorDisplay error={error} />
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="signin-magic-email" className="text-[13px]">
+                  Email address
+                </Label>
+                <Input
+                  id="signin-magic-email"
+                  name="email"
+                  type="email"
+                  placeholder="name@example.com"
+                  autoComplete="email"
+                  required
+                  disabled={isSubmitting || isSendingMagicLink}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isSubmitting || isSendingMagicLink}
+              >
+                {isSendingMagicLink && (
+                  <LoadingSpinner size="sm" className="mr-2" />
+                )}
+                Email me a sign-in link
+              </Button>
+            </form>
+          )}
+
+          {showMagicLink && showPasskey && <OrDivider className="my-2" />}
 
           {showPasskey && (
             <PasskeyLoginButton
@@ -427,7 +614,9 @@ export function SignInForm({
             />
           )}
 
-          {hasSocial && <OrDivider />}
+          {ssoButtons}
+
+          {(hasSocial || hasSSO) && <OrDivider />}
 
           <form onSubmit={handleEmailContinue} className="grid gap-3">
             <ErrorDisplay error={error} />
@@ -609,11 +798,30 @@ export function SignInForm({
           <Button
             type="submit"
             className="w-full"
-            disabled={isSubmitting || (captchaEnabled && !captchaToken)}
+            disabled={
+              isSubmitting ||
+              isSendingMagicLink ||
+              (captchaEnabled && !captchaToken)
+            }
           >
             {isSubmitting && <LoadingSpinner size="sm" className="mr-2" />}
             Continue
           </Button>
+
+          {showMagicLink && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={isSubmitting || isSendingMagicLink}
+              onClick={() => void sendMagicLink()}
+            >
+              {isSendingMagicLink && (
+                <LoadingSpinner size="sm" className="mr-2" />
+              )}
+              Email me a sign-in link instead
+            </Button>
+          )}
         </form>
       </div>
     </AuthCard>

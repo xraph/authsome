@@ -129,7 +129,7 @@ func (p *Plugin) resolveRegistrationAppID(ctx forge.Context) (id.AppID, error) {
 	if p.config.RegistrationAppID != "" {
 		appID, err := id.ParseAppID(p.config.RegistrationAppID)
 		if err != nil {
-			return id.AppID{}, forge.InternalError(
+			return id.AppID{}, middleware.InternalError(ctx,
 				fmt.Errorf("oauth2: RegistrationAppID is not a valid app id: %w", err))
 		}
 		return appID, nil
@@ -227,29 +227,29 @@ func (p *Plugin) handleRegisterClient(ctx forge.Context, req *RegisterClientRequ
 
 	clientIDStr, err := generateSecureToken(16)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: generate client_id: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate client_id: %w", err))
 	}
 
 	var rawSecret, hashedSecret string
 	if !isPublic {
 		rawSecret, err = generateSecureToken(32)
 		if err != nil {
-			return nil, forge.InternalError(fmt.Errorf("oauth2: generate client_secret: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate client_secret: %w", err))
 		}
 		h, hashErr := bcrypt.GenerateFromPassword([]byte(rawSecret), bcrypt.DefaultCost)
 		if hashErr != nil {
-			return nil, forge.InternalError(fmt.Errorf("oauth2: hash client_secret: %w", hashErr))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: hash client_secret: %w", hashErr))
 		}
 		hashedSecret = string(h)
 	}
 
 	rawRegToken, err := generateSecureToken(32)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: generate registration token: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate registration token: %w", err))
 	}
 	regHash, err := bcrypt.GenerateFromPassword([]byte(rawRegToken), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: hash registration token: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: hash registration token: %w", err))
 	}
 
 	now := time.Now()
@@ -272,7 +272,7 @@ func (p *Plugin) handleRegisterClient(ctx forge.Context, req *RegisterClientRequ
 	}
 
 	if err := p.oauth2Store.CreateClient(ctx.Context(), client); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: create dynamic client: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: create dynamic client: %w", err))
 	}
 
 	p.logger.Info("oauth2: dynamic client registered",
@@ -574,7 +574,7 @@ func (p *Plugin) handleUpdateRegistration(ctx forge.Context, req *UpdateRegistra
 	})
 
 	if err := p.oauth2Store.UpdateClient(ctx.Context(), client); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: update registration: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: update registration: %w", err))
 	}
 	return p.clientInfoResponse(client), nil
 }
@@ -594,7 +594,7 @@ func (p *Plugin) handleDeleteRegistration(ctx forge.Context, _ *RegistrationRequ
 		return nil, err
 	}
 	if err := p.oauth2Store.DeleteClient(ctx.Context(), client.ID); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: delete registration: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: delete registration: %w", err))
 	}
 	p.logger.Info("oauth2: dynamic client deleted",
 		log.String("client_id", client.ClientID))

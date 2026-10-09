@@ -25,7 +25,7 @@ func TestRefresh_ConcurrentRotation_ExactlyOneWinner(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "refresh-race@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Race",
 	})
 	require.NoError(t, err)

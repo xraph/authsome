@@ -11,9 +11,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/xraph/authsome"
+	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/principal"
-	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 )
 
@@ -65,14 +66,14 @@ type tokenExchanger interface {
 }
 
 // resolveExchangeToken resolves a subject or actor token to its session.
-func (p *Plugin) resolveExchangeToken(token, tokenType string) (*session.Session, error) {
+func (p *Plugin) resolveExchangeToken(ctx context.Context, token, tokenType string) (*session.Session, error) {
 	if tokenType != tokenTypeAccessToken && tokenType != tokenTypeSession {
 		return nil, errUnsupportedTokenType
 	}
 	if p.engine == nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: no engine"))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("oauth2: no engine"))
 	}
-	sess, err := p.engine.ResolveSessionByToken(token)
+	sess, err := p.engine.ResolveSessionByToken(ctx, token)
 	if err != nil || sess == nil {
 		return nil, forge.BadRequest("invalid_grant")
 	}
@@ -180,7 +181,7 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 	if req.RequestedTokenType != "" && req.RequestedTokenType != tokenTypeAccessToken {
 		return nil, forge.BadRequest("unsupported requested_token_type")
 	}
-	subject, err := p.resolveExchangeToken(req.SubjectToken, req.SubjectTokenType)
+	subject, err := p.resolveExchangeToken(ctx.Context(), req.SubjectToken, req.SubjectTokenType)
 	if err != nil {
 		reason := denyInvalidSubject
 		if errors.Is(err, errUnsupportedTokenType) {
@@ -221,7 +222,7 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 		return nil, e
 	}
 	if req.ActorToken != "" {
-		actorSess, aErr := p.resolveExchangeToken(req.ActorToken, req.ActorTokenType)
+		actorSess, aErr := p.resolveExchangeToken(ctx.Context(), req.ActorToken, req.ActorTokenType)
 		if aErr != nil {
 			reason := denyInvalidSubject
 			if errors.Is(aErr, errUnsupportedTokenType) {
@@ -255,7 +256,7 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 
 	exchanger, ok := p.engine.(tokenExchanger)
 	if !ok {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: engine does not support token exchange"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: engine does not support token exchange"))
 	}
 
 	// 8. The engine owns the grant lookup, the grant's own scope filter, the
@@ -297,10 +298,8 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 
 // recordExchange writes one security event per exchange attempt.
 //
-// Written straight to the store rather than emitted on the hook bus: the bus
-// bridge builds its event from Action, Outcome, Metadata and CreatedAt only
-// and never sets AppID, and securityevent.Query filters on AppID, so anything
-// recorded that way is written and then unreadable.
+// Emitted on the hook bus like every other audit record: the bus fills in the
+// request correlation and the engine's subscriber writes it to Chronicle.
 func (p *Plugin) recordExchange(
 	ctx forge.Context,
 	client *OAuth2Client,
@@ -311,17 +310,8 @@ func (p *Plugin) recordExchange(
 	denialReason string,
 	cause error,
 ) {
-	if p.engine == nil {
+	if p.engine == nil || p.engine.Hooks() == nil {
 		return
-	}
-	events := p.engine.SecurityEvents()
-	if events == nil {
-		return
-	}
-
-	outcome := "success"
-	if denialReason != "" || cause != nil {
-		outcome = "failure"
 	}
 
 	meta := map[string]string{"client_id": client.ClientID}
@@ -351,15 +341,24 @@ func (p *Plugin) recordExchange(
 		meta["chain_depth"] = fmt.Sprintf("%d", len(subject.Actors)+1)
 	}
 
-	//nolint:errcheck // audit is best-effort and must never fail the exchange
-	_ = events.RecordSecurityEvent(ctx.Context(), &securityevent.Event{
-		AppID:     client.AppID,
-		UserID:    userID,
-		Action:    "oauth2.token_exchange",
-		Outcome:   outcome,
-		Metadata:  meta,
-		IPAddress: ctx.Request().RemoteAddr,
-		UserAgent: ctx.Request().UserAgent(),
-		CreatedAt: time.Now(),
-	})
+	// Recorded through the hook bus so the event carries the request's
+	// correlation data and reaches the audit trail like every engine event.
+	ev := &hook.Event{
+		Action:     "oauth2.token_exchange",
+		Resource:   hook.ResourceSession,
+		ResourceID: issuedSessionID,
+		Tenant:     client.AppID.String(),
+		Category:   "oauth2",
+		Metadata:   meta,
+	}
+	if !userID.IsNil() {
+		ev.ActorID = userID.String()
+	}
+	if denialReason != "" || cause != nil {
+		ev.Outcome = hook.OutcomeFailure
+		ev.Severity = hook.SeverityWarning
+		ev.Reason = denialReason
+		ev.Err = cause
+	}
+	p.engine.Hooks().Emit(ctx.Context(), ev)
 }

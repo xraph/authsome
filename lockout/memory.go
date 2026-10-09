@@ -2,6 +2,7 @@ package lockout
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 )
@@ -108,6 +109,18 @@ func (t *MemoryTracker) Reset(_ context.Context, key string) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	delete(t.records, key)
+	return nil
+}
+
+// ResetPrefix clears every key that starts with prefix.
+func (t *MemoryTracker) ResetPrefix(_ context.Context, prefix string) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for k := range t.records {
+		if strings.HasPrefix(k, prefix) {
+			delete(t.records, k)
+		}
+	}
 	return nil
 }
 

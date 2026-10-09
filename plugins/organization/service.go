@@ -11,7 +11,9 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/page"
 	"github.com/xraph/authsome/store"
 )
 
@@ -87,7 +89,25 @@ func (p *Plugin) UpdateOrganization(ctx context.Context, o *organization.Organiz
 		return fmt.Errorf("organization: update organization: %w", err)
 	}
 	p.plugins.EmitAfterOrgUpdate(ctx, o)
+	p.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionOrgUpdate,
+		Resource:   hook.ResourceOrganization,
+		ResourceID: o.ID.String(),
+		ActorID:    actorFromContext(ctx),
+		Tenant:     o.AppID.String(),
+		OrgID:      o.ID.String(),
+		Category:   "org",
+	})
 	return nil
+}
+
+// actorFromContext returns the authenticated user acting on the request, or
+// "" when the call runs outside a request (a system job, a test).
+func actorFromContext(ctx context.Context) string {
+	if uid, ok := middleware.UserIDFrom(ctx); ok {
+		return uid.String()
+	}
+	return ""
 }
 
 // DeleteOrganization deletes an organization and all of its dependent records
@@ -100,6 +120,27 @@ func (p *Plugin) UpdateOrganization(ctx context.Context, o *organization.Organiz
 // fires once the cascade returns nil, so downstream plugins never see an event
 // for an org that wasn't actually deleted.
 func (p *Plugin) DeleteOrganization(ctx context.Context, orgID id.OrgID) error {
+	// The cascade is irreversible, so the trail must hold the record first.
+	tenant := ""
+	meta := map[string]string{}
+	if org, err := p.store.GetOrganization(ctx, orgID); err == nil && org != nil {
+		tenant = org.AppID.String()
+		meta["slug"] = org.Slug
+		meta["app_id"] = org.AppID.String()
+	}
+	if err := p.hooks.EmitCritical(ctx, &hook.Event{
+		Action:     hook.ActionOrgDelete,
+		Resource:   hook.ResourceOrganization,
+		ResourceID: orgID.String(),
+		ActorID:    actorFromContext(ctx),
+		Tenant:     tenant,
+		OrgID:      orgID.String(),
+		Severity:   hook.SeverityCritical,
+		Category:   "org",
+		Metadata:   meta,
+	}); err != nil {
+		return fmt.Errorf("organization: delete organization: audit trail unavailable: %w", err)
+	}
 	if err := p.store.DeleteOrganizationCascade(ctx, orgID); err != nil {
 		return fmt.Errorf("organization: delete organization: %w", err)
 	}
@@ -110,6 +151,11 @@ func (p *Plugin) DeleteOrganization(ctx context.Context, orgID id.OrgID) error {
 // ListUserOrganizations returns all organizations a user belongs to.
 func (p *Plugin) ListUserOrganizations(ctx context.Context, userID id.UserID) ([]*organization.Organization, error) {
 	return p.store.ListUserOrganizations(ctx, userID)
+}
+
+// ListUserOrganizationsPage is the bounded twin for the request path.
+func (p *Plugin) ListUserOrganizationsPage(ctx context.Context, userID id.UserID, opts page.Opts) (page.Page[*organization.Organization], error) {
+	return p.store.ListUserOrganizationsPage(ctx, userID, opts)
 }
 
 // AdminListOrganizations returns all organizations for the given app.
@@ -132,7 +178,30 @@ func (p *Plugin) AddMember(ctx context.Context, m *organization.Member) error {
 		return fmt.Errorf("organization: add member: %w", err)
 	}
 	p.plugins.EmitAfterMemberAdd(ctx, m)
+	p.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionMemberAdd,
+		Resource:   hook.ResourceMember,
+		ResourceID: m.ID.String(),
+		ActorID:    actorFromContext(ctx),
+		Tenant:     p.tenantForOrg(ctx, m.OrgID),
+		OrgID:      m.OrgID.String(),
+		Category:   "org",
+		Metadata: map[string]string{
+			"member_user_id": m.UserID.String(),
+			"role":           string(m.Role),
+		},
+	})
 	return nil
+}
+
+// tenantForOrg resolves the app an organization belongs to for events that
+// only have the org id in hand.
+func (p *Plugin) tenantForOrg(ctx context.Context, orgID id.OrgID) string {
+	org, err := p.store.GetOrganization(ctx, orgID)
+	if err != nil || org == nil {
+		return ""
+	}
+	return org.AppID.String()
 }
 
 // RemoveMember removes a member from an organization.
@@ -166,12 +235,30 @@ func (p *Plugin) RemoveMember(ctx context.Context, memberID id.MemberID) error {
 		return fmt.Errorf("organization: remove member: %w", err)
 	}
 	p.plugins.EmitAfterMemberRemove(ctx, memberID)
+	p.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionMemberRemove,
+		Resource:   hook.ResourceMember,
+		ResourceID: memberID.String(),
+		ActorID:    actorFromContext(ctx),
+		Tenant:     p.tenantForOrg(ctx, member.OrgID),
+		OrgID:      member.OrgID.String(),
+		Category:   "org",
+		Metadata: map[string]string{
+			"member_user_id": member.UserID.String(),
+			"role":           string(member.Role),
+		},
+	})
 	return nil
 }
 
 // ListMembers returns all members of an organization.
 func (p *Plugin) ListMembers(ctx context.Context, orgID id.OrgID) ([]*organization.Member, error) {
 	return p.store.ListMembers(ctx, orgID)
+}
+
+// ListMembersPage is the bounded twin for the request path.
+func (p *Plugin) ListMembersPage(ctx context.Context, orgID id.OrgID, opts page.Opts) (page.Page[*organization.Member], error) {
+	return p.store.ListMembersPage(ctx, orgID, opts)
 }
 
 // UpdateMemberRole updates a member's role within an organization.
@@ -189,25 +276,33 @@ func (p *Plugin) UpdateMemberRole(ctx context.Context, memberID id.MemberID, rol
 
 	p.plugins.EmitAfterMemberRoleChange(ctx, member)
 
-	// Resolve names for notification template variables (best-effort).
+	// Resolve names for notification template variables (best-effort). The
+	// address and name are delivery data and stay out of the trail.
 	hookMeta := map[string]string{
-		"new_role": string(role),
+		"new_role":       string(role),
+		"member_user_id": member.UserID.String(),
 	}
+	private := map[string]string{}
 	if u, err := p.store.GetUser(ctx, member.UserID); err == nil {
-		hookMeta["user_name"] = u.Name()
-		hookMeta["email"] = u.Email
+		private["user_name"] = u.Name()
+		private["email"] = u.Email
 	}
+	tenant := ""
 	if org, err := p.store.GetOrganization(ctx, member.OrgID); err == nil {
 		hookMeta["org_name"] = org.Name
+		tenant = org.AppID.String()
 	}
 
 	p.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionMemberRoleChange,
 		Resource:   hook.ResourceMember,
 		ResourceID: member.ID.String(),
-		ActorID:    member.UserID.String(),
-		Tenant:     member.OrgID.String(),
+		ActorID:    actorFromContext(ctx),
+		Tenant:     tenant,
+		OrgID:      member.OrgID.String(),
+		Category:   "org",
 		Metadata:   hookMeta,
+		Private:    private,
 	})
 	p.relayEvent(ctx, "org.member.role_changed", member.OrgID.String(), map[string]string{
 		"member_id": member.ID.String(),
@@ -235,6 +330,11 @@ func (p *Plugin) CreateInvitation(ctx context.Context, inv *organization.Invitat
 // ListInvitations lists invitations for an organization.
 func (p *Plugin) ListInvitations(ctx context.Context, orgID id.OrgID) ([]*organization.Invitation, error) {
 	return p.store.ListInvitations(ctx, orgID)
+}
+
+// ListInvitationsPage is the bounded twin for the request path.
+func (p *Plugin) ListInvitationsPage(ctx context.Context, orgID id.OrgID, opts page.Opts) (page.Page[*organization.Invitation], error) {
+	return p.store.ListInvitationsPage(ctx, orgID, opts)
 }
 
 // AcceptInvitation accepts a pending invitation by token and creates a member.
@@ -405,6 +505,11 @@ func (p *Plugin) ListTeams(ctx context.Context, orgID id.OrgID) ([]*organization
 	return p.store.ListTeams(ctx, orgID)
 }
 
+// ListTeamsPage is the bounded twin for the request path.
+func (p *Plugin) ListTeamsPage(ctx context.Context, orgID id.OrgID, opts page.Opts) (page.Page[*organization.Team], error) {
+	return p.store.ListTeamsPage(ctx, orgID, opts)
+}
+
 // IsOrgSlugAvailable checks whether a slug is available for an app.
 func (p *Plugin) IsOrgSlugAvailable(ctx context.Context, appID id.AppID, slug string) (bool, error) {
 	_, err := p.store.GetOrganizationBySlug(ctx, appID, slug)
@@ -415,49 +520,6 @@ func (p *Plugin) IsOrgSlugAvailable(ctx context.Context, appID id.AppID, slug st
 		return false, fmt.Errorf("organization: check slug: %w", err)
 	}
 	return false, nil
-}
-
-// canDeleteOrg returns true when actor is allowed to delete org. The creator
-// (org.CreatedBy) always passes as a convenience — note "creator" is not
-// "owner"; the permission-check path is the canonical authority for non-
-// creator actors. Otherwise the actor must hold the engine-level
-// "org.delete" permission on the "org" resource type.
-//
-// RBAC convention: PermissionChecker.HasPermission's third arg is the
-// resource TYPE (e.g. "org"), not an instance ID. rbac/warden_store.go
-// forwards this directly as warden.Resource.Type, and middleware/rbac.go
-// follows the same shape (e.g. HasPermission(..., "manage", "app")).
-// Passing an instance ID here would mean no admin role grant could ever
-// match.
-func (p *Plugin) canDeleteOrg(ctx context.Context, actor id.UserID, org *organization.Organization) bool {
-	if org == nil {
-		return false
-	}
-	// id.UserID is a typed ULID; treat the zero value as "no actor".
-	var zero id.UserID
-	if actor == zero {
-		return false
-	}
-	if actor == org.CreatedBy {
-		return true
-	}
-	if p.permChecker == nil {
-		return false
-	}
-	ok, err := p.permChecker.HasPermission(ctx, actor, "org.delete", "org")
-	return err == nil && ok
-}
-
-// chronicleOrNil returns the cached chronicle, falling back to the engine's
-// current chronicle (so tests that swap the chronicle via Engine.SetChronicle
-// after OnInit are still observed).
-func (p *Plugin) chronicleOrNil() bridge.Chronicle {
-	if p.engine != nil {
-		if ch := p.engine.Chronicle(); ch != nil {
-			return ch
-		}
-	}
-	return p.chronicle
 }
 
 // ──────────────────────────────────────────────────

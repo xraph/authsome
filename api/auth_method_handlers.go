@@ -70,7 +70,7 @@ func (a *API) handleListAuthMethods(ctx forge.Context, _ *ListAuthMethodsRequest
 
 	methods, err := a.engine.ListAuthMethods(ctx.Context(), userID)
 	if err != nil {
-		return nil, forge.InternalError(err)
+		return nil, middleware.InternalError(ctx, err)
 	}
 	if methods == nil {
 		methods = []*plugin.AuthMethod{}

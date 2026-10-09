@@ -10,6 +10,8 @@ import (
 
 	log "github.com/xraph/go-utils/log"
 
+	authsome "github.com/xraph/authsome"
+
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/account"
@@ -96,7 +98,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.engine = engine
 	p.hooks = engine.Hooks()
 	p.relay = engine.Relay()
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.herald = engine.Herald()
 	p.logger = engine.Logger()
 	p.settingsMgr = engine.Settings()
@@ -178,14 +180,16 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	pub := router.Group(p.basePath+"/waitlist", forge.WithGroupTags("Waitlist"))
 
-	if err := pub.POST("/join", p.handleJoin,
+	// Joining writes a row and may send mail, so it is throttled by address.
+	joinRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int { return c.WaitlistJoinLimit })
+	if err := pub.POST("/join", p.handleJoin, append([]forge.RouteOption{
 		forge.WithSummary("Join waitlist"),
 		forge.WithDescription("Submit an email to join the waitlist. Idempotent — returns existing entry if already on the list."),
 		forge.WithOperationID("joinWaitlist"),
 		forge.WithRequestSchema(JoinRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Waitlist entry", WaitlistEntry{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, joinRL...)...); err != nil {
 		return err
 	}
 
@@ -346,7 +350,7 @@ func (p *Plugin) handleJoin(ctx forge.Context, req *JoinRequest) (*WaitlistEntry
 		return nil, ctx.JSON(http.StatusOK, existing)
 	}
 	if !errors.Is(err, ErrNotFound) {
-		return nil, forge.InternalError(fmt.Errorf("failed to check waitlist"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to check waitlist"))
 	}
 
 	now := time.Now()
@@ -369,7 +373,7 @@ func (p *Plugin) handleJoin(ctx forge.Context, req *JoinRequest) (*WaitlistEntry
 				return nil, ctx.JSON(http.StatusOK, existing)
 			}
 		}
-		return nil, forge.InternalError(fmt.Errorf("failed to create waitlist entry"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create waitlist entry"))
 	}
 
 	p.emitHook(ctx.Context(), hook.ActionWaitlistJoin, hook.ResourceWaitlist, entry.ID.String(), "", appID.String())
@@ -402,7 +406,7 @@ func (p *Plugin) handleStatus(ctx forge.Context, req *StatusRequest) (*StatusRes
 		if errors.Is(err, ErrNotFound) {
 			return nil, forge.NotFound("email not found on waitlist")
 		}
-		return nil, forge.InternalError(fmt.Errorf("failed to check waitlist status"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to check waitlist status"))
 	}
 
 	resp := &StatusResponse{
@@ -437,7 +441,7 @@ func (p *Plugin) handleList(ctx forge.Context, req *ListRequest) (*WaitlistList,
 
 	list, err := p.store.ListEntries(ctx.Context(), q)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to list waitlist entries"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list waitlist entries"))
 	}
 
 	return nil, ctx.JSON(http.StatusOK, list)
@@ -451,7 +455,7 @@ func (p *Plugin) handleStats(ctx forge.Context, req *StatsRequest) (*StatsRespon
 
 	pending, approved, rejected, err := p.store.CountByStatus(ctx.Context(), appID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to get waitlist stats"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to get waitlist stats"))
 	}
 
 	resp := &StatsResponse{
@@ -473,12 +477,12 @@ func (p *Plugin) handleApprove(ctx forge.Context, req *ApproveRequest) (*Waitlis
 		if errors.Is(updateErr, ErrNotFound) {
 			return nil, forge.NotFound("waitlist entry not found")
 		}
-		return nil, forge.InternalError(fmt.Errorf("failed to approve entry"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to approve entry"))
 	}
 
 	entry, err := p.store.GetEntry(ctx.Context(), entryID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to retrieve updated entry"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to retrieve updated entry"))
 	}
 
 	actorID := ""
@@ -513,12 +517,12 @@ func (p *Plugin) handleReject(ctx forge.Context, req *RejectRequest) (*WaitlistE
 		if errors.Is(updateErr, ErrNotFound) {
 			return nil, forge.NotFound("waitlist entry not found")
 		}
-		return nil, forge.InternalError(fmt.Errorf("failed to reject entry"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to reject entry"))
 	}
 
 	entry, err := p.store.GetEntry(ctx.Context(), entryID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to retrieve updated entry"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to retrieve updated entry"))
 	}
 
 	actorID := ""
@@ -553,7 +557,7 @@ func (p *Plugin) handleDelete(ctx forge.Context, req *DeleteRequest) (*apitypes.
 		if errors.Is(err, ErrNotFound) {
 			return nil, forge.NotFound("waitlist entry not found")
 		}
-		return nil, forge.InternalError(fmt.Errorf("failed to delete entry"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to delete entry"))
 	}
 
 	actorID := ""

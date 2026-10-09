@@ -1,17 +1,23 @@
 package passkey
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/xraph/forge"
+	log "github.com/xraph/go-utils/log"
+
+	authsome "github.com/xraph/authsome"
 
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
@@ -34,42 +40,45 @@ func cloneWarningError(cred *webauthn.Credential) error {
 // RegisterRoutes registers passkey/WebAuthn HTTP endpoints on a forge.Router.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	g := router.Group("/v1/passkeys", forge.WithGroupTags("Passkeys"))
+	// Every ceremony endpoint takes a guessable secret or mints one, so all
+	// four share the passkey budget.
+	ceremonyRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int { return c.PasskeyLimit })
 
-	if err := g.POST("/register/begin", p.handleRegisterBegin,
+	if err := g.POST("/register/begin", p.handleRegisterBegin, append([]forge.RouteOption{
 		forge.WithSummary("Begin passkey registration"),
 		forge.WithOperationID("passkeyRegisterBegin"),
 		forge.WithResponseSchema(http.StatusOK, "Registration options", RegisterBeginResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, ceremonyRL...)...); err != nil {
 		return err
 	}
 
-	if err := g.POST("/register/finish", p.handleRegisterFinish,
+	if err := g.POST("/register/finish", p.handleRegisterFinish, append([]forge.RouteOption{
 		forge.WithSummary("Complete passkey registration"),
 		forge.WithOperationID("passkeyRegisterFinish"),
 		forge.WithRequestBodySchema(Attestation{}),
 		forge.WithResponseSchema(http.StatusOK, "Registered", RegisterFinishResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, ceremonyRL...)...); err != nil {
 		return err
 	}
 
-	if err := g.POST("/login/begin", p.handleLoginBegin,
+	if err := g.POST("/login/begin", p.handleLoginBegin, append([]forge.RouteOption{
 		forge.WithSummary("Begin passkey login"),
 		forge.WithOperationID("passkeyLoginBegin"),
 		forge.WithResponseSchema(http.StatusOK, "Assertion options", LoginBeginResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, ceremonyRL...)...); err != nil {
 		return err
 	}
 
-	if err := g.POST("/login/finish", p.handleLoginFinish,
+	if err := g.POST("/login/finish", p.handleLoginFinish, append([]forge.RouteOption{
 		forge.WithSummary("Complete passkey login"),
 		forge.WithOperationID("passkeyLoginFinish"),
 		forge.WithRequestBodySchema(Assertion{}),
 		forge.WithResponseSchema(http.StatusOK, "Authenticated", LoginFinishResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, ceremonyRL...)...); err != nil {
 		return err
 	}
 
@@ -223,25 +232,64 @@ func (p *Plugin) resolveUser(ctx forge.Context) (*user.User, error) {
 	return nil, forge.Unauthorized("authentication required")
 }
 
+// requireFreshSession refuses a passkey registration unless the caller
+// signed in within StepUpWindow. Registering a passkey mints a sign-in
+// credential, which a stolen session must not be able to do.
+func (p *Plugin) requireFreshSession(ctx forge.Context) error {
+	var lookup middleware.SessionLookup
+	if p.engine != nil && p.engine.Store() != nil {
+		lookup = p.engine.Store().GetSession
+	}
+	if !middleware.SessionIsFresh(ctx.Context(), time.Now(), p.config.StepUpWindow, lookup) {
+		return forge.Forbidden("recent sign-in required: sign in again to register a passkey")
+	}
+	return nil
+}
+
+// sessionRevoker is the slice of the engine a credential change needs.
+type sessionRevoker interface {
+	RevokeOtherUserSessions(ctx context.Context, userID id.UserID, keep id.SessionID) error
+}
+
+// revokeOtherSessions signs the user out everywhere but the session that
+// registered the passkey, so a session an attacker already holds does not
+// survive the change. A failure is logged, not returned: the credential is
+// already stored.
+func (p *Plugin) revokeOtherSessions(ctx context.Context, userID id.UserID) {
+	if p.revoker == nil {
+		return
+	}
+	keep, _ := middleware.SessionIDFrom(ctx)
+	if err := p.revoker.RevokeOtherUserSessions(ctx, userID, keep); err != nil && p.logger != nil {
+		p.logger.Warn("passkey: revoke other sessions failed",
+			log.String("user_id", userID.String()),
+			log.String("error", err.Error()),
+		)
+	}
+}
+
 // ──────────────────────────────────────────────────
 // Handlers
 // ──────────────────────────────────────────────────
 
 func (p *Plugin) handleRegisterBegin(ctx forge.Context, req *RegisterBeginRequest) (*RegisterBeginResponse, error) {
 	if p.wa == nil {
-		return nil, forge.InternalError(fmt.Errorf("passkey: WebAuthn not initialized"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: WebAuthn not initialized"))
 	}
 
 	u, err := p.resolveUser(ctx)
 	if err != nil {
 		return nil, err
 	}
+	if freshErr := p.requireFreshSession(ctx); freshErr != nil {
+		return nil, freshErr
+	}
 
 	wau := p.toWebAuthnUser(ctx.Context(), u)
 
 	options, session, err := p.waForRequest(ctx.Request()).BeginRegistration(wau)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("passkey: begin registration: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: begin registration: %w", err))
 	}
 
 	// Store session data for the finish step
@@ -257,7 +305,7 @@ func (p *Plugin) handleRegisterBegin(ctx forge.Context, req *RegisterBeginReques
 
 func (p *Plugin) handleRegisterFinish(ctx forge.Context, _ *RegisterFinishRequest) (*RegisterFinishResponse, error) {
 	if p.wa == nil {
-		return nil, forge.InternalError(fmt.Errorf("passkey: WebAuthn not initialized"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: WebAuthn not initialized"))
 	}
 
 	u, err := p.resolveUser(ctx)
@@ -274,7 +322,7 @@ func (p *Plugin) handleRegisterFinish(ctx forge.Context, _ *RegisterFinishReques
 
 	var cs ceremonySession
 	if unmarshalErr := json.Unmarshal(sessionJSON, &cs); unmarshalErr != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to parse session: %w", unmarshalErr))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to parse session: %w", unmarshalErr))
 	}
 
 	wau := p.toWebAuthnUser(ctx.Context(), u)
@@ -292,7 +340,7 @@ func (p *Plugin) handleRegisterFinish(ctx forge.Context, _ *RegisterFinishReques
 	credential := toCredential(u.ID, u.AppID, cred, displayName)
 	if p.store != nil {
 		if err := p.store.CreateCredential(ctx.Context(), credential); err != nil {
-			return nil, forge.InternalError(fmt.Errorf("passkey: store credential: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: store credential: %w", err))
 		}
 	}
 
@@ -301,6 +349,7 @@ func (p *Plugin) handleRegisterFinish(ctx forge.Context, _ *RegisterFinishReques
 	p.audit(ctx.Context(), hook.ActionPasskeyRegister, hook.ResourcePasskey, credIDStr, userIDStr, "", bridge.OutcomeSuccess)
 	p.relayEvent(ctx.Context(), "auth.passkey.registered", "", map[string]string{"user_id": userIDStr})
 	p.emitHook(ctx.Context(), hook.ActionPasskeyRegister, hook.ResourcePasskey, credIDStr, userIDStr, "")
+	p.revokeOtherSessions(ctx.Context(), u.ID)
 
 	return &RegisterFinishResponse{
 		ID:          credential.ID.String(),
@@ -311,7 +360,7 @@ func (p *Plugin) handleRegisterFinish(ctx forge.Context, _ *RegisterFinishReques
 
 func (p *Plugin) handleLoginBegin(ctx forge.Context, _ *LoginBeginRequest) (*LoginBeginResponse, error) {
 	if p.wa == nil {
-		return nil, forge.InternalError(fmt.Errorf("passkey: WebAuthn not initialized"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: WebAuthn not initialized"))
 	}
 
 	wa := p.waForRequest(ctx.Request())
@@ -327,11 +376,11 @@ func (p *Plugin) handleLoginBegin(ctx forge.Context, _ *LoginBeginRequest) (*Log
 	if authErr != nil {
 		options, session, err := wa.BeginDiscoverableLogin()
 		if err != nil {
-			return nil, forge.InternalError(fmt.Errorf("passkey: begin discoverable login: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: begin discoverable login: %w", err))
 		}
 		ceremonyID, err := newCeremonyID()
 		if err != nil {
-			return nil, forge.InternalError(err)
+			return nil, middleware.InternalError(ctx, err)
 		}
 		sessionJSON, _ := json.Marshal(session)                                                                //nolint:errcheck // marshaling known types
 		_ = p.ceremonies.Set(ctx.Context(), discoverableKey(ceremonyID), sessionJSON, p.config.SessionTimeout) //nolint:errcheck // best-effort cache
@@ -343,7 +392,7 @@ func (p *Plugin) handleLoginBegin(ctx forge.Context, _ *LoginBeginRequest) (*Log
 
 	options, session, err := wa.BeginLogin(wau)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("passkey: begin login: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: begin login: %w", err))
 	}
 
 	key := "passkey:login:" + u.ID.String()
@@ -355,7 +404,7 @@ func (p *Plugin) handleLoginBegin(ctx forge.Context, _ *LoginBeginRequest) (*Log
 
 func (p *Plugin) handleLoginFinish(ctx forge.Context, _ *LoginFinishRequest) (*LoginFinishResponse, error) {
 	if p.wa == nil {
-		return nil, forge.InternalError(fmt.Errorf("passkey: WebAuthn not initialized"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: WebAuthn not initialized"))
 	}
 
 	// Passwordless (discoverable) login: correlated by the ceremony cookie set
@@ -380,7 +429,7 @@ func (p *Plugin) handleLoginFinish(ctx forge.Context, _ *LoginFinishRequest) (*L
 
 	var session webauthn.SessionData
 	if unmarshalErr := json.Unmarshal(sessionJSON, &session); unmarshalErr != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to parse session: %w", unmarshalErr))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to parse session: %w", unmarshalErr))
 	}
 
 	wau := p.toWebAuthnUser(ctx.Context(), u)
@@ -427,7 +476,7 @@ func (p *Plugin) handleList(ctx forge.Context, _ *ListRequest) (*ListResponse, e
 
 	creds, err := p.store.ListUserCredentials(ctx.Context(), u.ID)
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
-		return nil, forge.InternalError(fmt.Errorf("passkey: list credentials: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: list credentials: %w", err))
 	}
 
 	var infos []*CredentialInfo
@@ -463,7 +512,7 @@ func (p *Plugin) handleDelete(ctx forge.Context, req *DeleteRequest) (*DeleteRes
 			if errors.Is(err, ErrCredentialNotFound) {
 				return nil, forge.NotFound("credential not found")
 			}
-			return nil, forge.InternalError(fmt.Errorf("passkey: delete credential: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: delete credential: %w", err))
 		}
 	}
 

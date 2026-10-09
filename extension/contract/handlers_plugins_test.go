@@ -9,6 +9,7 @@ import (
 	wardenmem "github.com/xraph/warden/store/memory"
 
 	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/store/memory"
 )
 
@@ -22,6 +23,7 @@ func TestPluginsListHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 	engine, err := authsome.NewEngine(
+		authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(memory.New()),
 		authsome.WithWarden(w),
 		authsome.WithPlugin(inventoryPlugin("zeta")),

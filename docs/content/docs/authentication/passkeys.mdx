@@ -65,7 +65,7 @@ The registration flow runs when an existing user wants to add a passkey to their
 
 `POST /v1/auth/passkey/register/begin`
 
-Request headers must include `Authorization: Bearer {session_token}` (user must be authenticated).
+Request headers must include `Authorization: Bearer {session_token}` (user must be authenticated). The session must also be recent: registration is refused with `403` unless the user signed in within the last five minutes (`Config.StepUpWindow`), because a passkey is itself a sign-in credential. Once a passkey is registered, every other session of the user is signed out.
 
 Response includes the WebAuthn `PublicKeyCredentialCreationOptions` JSON:
 

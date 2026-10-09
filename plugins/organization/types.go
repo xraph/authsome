@@ -13,7 +13,10 @@ type CreateOrgRequest struct {
 }
 
 // ListOrgsRequest is an empty request for GET /orgs (user from context).
-type ListOrgsRequest struct{}
+type ListOrgsRequest struct {
+	Limit  int    `query:"limit" description:"Page size (default 50, max 200)" optional:"true"`
+	Cursor string `query:"cursor" description:"Cursor from the previous page's next_cursor" optional:"true"`
+}
 
 // GetOrgRequest binds the path for GET /orgs/:orgId.
 type GetOrgRequest struct {
@@ -38,7 +41,9 @@ type DeleteOrgRequest struct {
 
 // ListMembersRequest binds the path for GET /orgs/:orgId/members.
 type ListMembersRequest struct {
-	OrgID string `path:"orgId" description:"Organization identifier"`
+	OrgID  string `path:"orgId" description:"Organization identifier"`
+	Limit  int    `query:"limit" description:"Page size (default 50, max 200)" optional:"true"`
+	Cursor string `query:"cursor" description:"Cursor from the previous page's next_cursor" optional:"true"`
 }
 
 // AddMemberRequest binds path + body for POST /orgs/:orgId/members.
@@ -74,7 +79,9 @@ type CreateInvitationRequest struct {
 
 // ListInvitationsRequest binds the path for GET /orgs/:orgId/invitations.
 type ListInvitationsRequest struct {
-	OrgID string `path:"orgId" description:"Organization identifier"`
+	OrgID  string `path:"orgId" description:"Organization identifier"`
+	Limit  int    `query:"limit" description:"Page size (default 50, max 200)" optional:"true"`
+	Cursor string `query:"cursor" description:"Cursor from the previous page's next_cursor" optional:"true"`
 }
 
 // AcceptInvitationRequest binds the body for POST /orgs/invitations/accept.
@@ -100,7 +107,9 @@ type CreateTeamRequest struct {
 
 // ListTeamsRequest binds the path for GET /orgs/:orgId/teams.
 type ListTeamsRequest struct {
-	OrgID string `path:"orgId" description:"Organization identifier"`
+	OrgID  string `path:"orgId" description:"Organization identifier"`
+	Limit  int    `query:"limit" description:"Page size (default 50, max 200)" optional:"true"`
+	Cursor string `query:"cursor" description:"Cursor from the previous page's next_cursor" optional:"true"`
 }
 
 // GetTeamRequest binds the path for GET /orgs/:orgId/teams/:teamId.
@@ -154,21 +163,29 @@ type StatusResponse struct {
 // OrgListResponse wraps a list of organizations.
 type OrgListResponse struct {
 	Organizations any `json:"organizations" description:"List of organizations"`
+	// NextCursor is set when more remain; pass it as cursor to continue.
+	NextCursor string `json:"next_cursor,omitempty" description:"Cursor for the next page, absent on the last"`
 }
 
 // MemberListResponse wraps a list of members.
 type MemberListResponse struct {
 	Members any `json:"members" description:"List of members"`
+	// NextCursor is set when more remain; pass it as cursor to continue.
+	NextCursor string `json:"next_cursor,omitempty" description:"Cursor for the next page, absent on the last"`
 }
 
 // InvitationListResponse wraps a list of invitations.
 type InvitationListResponse struct {
 	Invitations any `json:"invitations" description:"List of invitations"`
+	// NextCursor is set when more remain; pass it as cursor to continue.
+	NextCursor string `json:"next_cursor,omitempty" description:"Cursor for the next page, absent on the last"`
 }
 
 // TeamListResponse wraps a list of teams.
 type TeamListResponse struct {
 	Teams any `json:"teams" description:"List of teams"`
+	// NextCursor is set when more remain; pass it as cursor to continue.
+	NextCursor string `json:"next_cursor,omitempty" description:"Cursor for the next page, absent on the last"`
 }
 
 // SlugAvailableResponse reports whether a slug is available.

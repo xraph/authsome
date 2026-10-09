@@ -15,6 +15,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
@@ -77,6 +78,7 @@ func startSetupEngineWithStore(t *testing.T, setupStore store.Store) *authsome.E
 	cfg := authsome.DefaultConfig()
 	cfg.Password.BcryptCost = bcrypt.MinCost
 	eng, err := authsome.NewEngine(
+		authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(setupStore),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -149,7 +151,7 @@ func TestSetupStatusOmitsDefaultsAfterFirstUser(t *testing.T) {
 	_, _, err := eng.SignUp(context.Background(), &account.SignUpRequest{
 		AppID:    eng.PlatformAppID(),
 		Email:    "owner@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss12",
 	})
 	require.NoError(t, err)
 
@@ -163,7 +165,7 @@ func TestSetupStatusOmitsDefaultsAfterFirstUser(t *testing.T) {
 func completeSetupInput() SetupInput {
 	return SetupInput{
 		Email:    "owner@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss12",
 		Name:     "Ada Lovelace",
 		Platform: &SetupPlatformInput{
 			Name:     "TwinOS Office",
@@ -233,16 +235,22 @@ func TestSetupHandlerAppliesPlatformEnvironmentAndOwner(t *testing.T) {
 
 	userID, err := id.ParseUserID(got.Subject)
 	require.NoError(t, err)
-	roles, err := eng.ListUserRoles(ctx, userID)
-	require.NoError(t, err)
-	require.Condition(t, func() bool {
+	holdsPlatformOwner := func() bool {
+		roles, rerr := eng.ListUserRoles(ctx, userID)
+		require.NoError(t, rerr)
 		for _, role := range roles {
 			if role.Slug == rbac.PlatformOwnerSlug {
 				return true
 			}
 		}
 		return false
-	}, "first setup user must receive platform-owner")
+	}
+	// Platform ownership is claimed on email verification (e0286f4c), so
+	// whoever reaches a fresh deployment first can't take it with an
+	// address they don't control. Setup doesn't get around that.
+	require.False(t, holdsPlatformOwner(), "setup alone must not grant platform-owner")
+	secutil.VerifyEmail(t, eng, userID)
+	require.True(t, holdsPlatformOwner(), "the setup user becomes platform-owner once verified")
 
 	httpCtx, _, _ = withHTTPCtx(t)
 	_, err = h(httpCtx, completeSetupInput(), dashcontract.Principal{})
@@ -261,7 +269,7 @@ func TestSetupHandlerLegacyPayloadPreservesBootstrapConfiguration(t *testing.T) 
 
 	httpCtx, _, _ := withHTTPCtx(t)
 	got, err := setupHandler(Deps{Engine: eng})(httpCtx, SetupInput{
-		Email: "legacy@example.com", Password: "SecureP@ss1",
+		Email: "legacy@example.com", Password: "SecureP@ss12",
 	}, dashcontract.Principal{})
 	require.NoError(t, err)
 	require.True(t, got.OK)

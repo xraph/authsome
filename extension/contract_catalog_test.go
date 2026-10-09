@@ -14,6 +14,7 @@ import (
 	wardenmem "github.com/xraph/warden/store/memory"
 
 	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/plugins/apikey"
 	"github.com/xraph/authsome/store/memory"
 )
@@ -23,7 +24,7 @@ func TestContractServerExportsInstalledPlugins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	engine, err := authsome.NewEngine(authsome.WithStore(memory.New()), authsome.WithWarden(wardenEngine), authsome.WithPlugin(apikey.New()))
+	engine, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()), authsome.WithStore(memory.New()), authsome.WithWarden(wardenEngine), authsome.WithPlugin(apikey.New()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +49,7 @@ func TestRemoteContractCatalogRegistersAndDispatchesPlugin(t *testing.T) {
 			if request.Header.Get("Authorization") != "Bearer service-key" {
 				t.Error("missing service authorization")
 			}
-			_ = json.NewEncoder(writer).Encode(map[string]any{"manifests": []*contract.ContractManifest{manifest("auth", "auth.config"), manifest("apikey", "apikeys.list")}})
+			_ = json.NewEncoder(writer).Encode(map[string]any{"manifests": []*contract.ContractManifest{manifest("authsome", "auth.config"), manifest("apikey", "apikeys.list")}})
 			return
 		}
 		if request.URL.Path != "/authsome/_forge/contract/dispatch" {
@@ -74,7 +75,7 @@ func TestRemoteContractCatalogRegistersAndDispatchesPlugin(t *testing.T) {
 	if err := extension.registerRemoteContractContributor(remoteDispatcher, registry, contract.NewWardenRegistry()); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"auth", "apikey"} {
+	for _, name := range []string{"authsome", "apikey"} {
 		if !registry.IsRemote(name) {
 			t.Fatalf("%s is not registered remotely", name)
 		}

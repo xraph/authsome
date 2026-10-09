@@ -2,6 +2,7 @@ package authsome_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/device"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
@@ -37,7 +39,7 @@ func e2eAppID(t *testing.T) id.AppID {
 	return appID
 }
 
-func e2eEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *memory.Store) { //nolint:unparam // test helper returns store for assertions
+func e2eEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *memory.Store) {
 	t.Helper()
 	s := memory.New()
 
@@ -65,6 +67,7 @@ func e2eEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *memory
 		authsome.WithConfig(testEngineConfig()),
 		authsome.WithAppID("aapp_01jf0000000000000000000000"),
 	}
+	baseOpts = append([]authsome.Option{authsome.WithChronicle(bridge.NewMemoryChronicle())}, baseOpts...)
 	eng, err := authsome.NewEngine(append(baseOpts, opts...)...)
 	require.NoError(t, err)
 
@@ -92,7 +95,7 @@ func TestE2E_SignUpSignInSignOut(t *testing.T) {
 	u, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "alice@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Alice",
 		Username:  "alice",
 	})
@@ -106,7 +109,7 @@ func TestE2E_SignUpSignInSignOut(t *testing.T) {
 	assert.NotEmpty(t, sess.RefreshToken)
 
 	// Step 2: Verify session is valid
-	resolved, err := eng.ResolveSessionByToken(sess.Token)
+	resolved, err := eng.ResolveSessionByToken(context.Background(), sess.Token)
 	require.NoError(t, err)
 	assert.Equal(t, sess.ID, resolved.ID)
 	assert.Equal(t, u.ID, resolved.UserID)
@@ -115,7 +118,7 @@ func TestE2E_SignUpSignInSignOut(t *testing.T) {
 	u2, sess2, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "alice@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, u.ID, u2.ID)
@@ -126,11 +129,11 @@ func TestE2E_SignUpSignInSignOut(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 5: First session should no longer resolve
-	_, err = eng.ResolveSessionByToken(sess.Token)
+	_, err = eng.ResolveSessionByToken(context.Background(), sess.Token)
 	assert.Error(t, err)
 
 	// Step 6: Second session should still be valid
-	resolved2, err := eng.ResolveSessionByToken(sess2.Token)
+	resolved2, err := eng.ResolveSessionByToken(context.Background(), sess2.Token)
 	require.NoError(t, err)
 	assert.Equal(t, sess2.ID, resolved2.ID)
 }
@@ -160,7 +163,7 @@ func e2eEngineWithOrg(t *testing.T) (*authsome.Engine, *memory.Store, *orgplugin
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
 	op := orgplugin.New()
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -186,7 +189,7 @@ func TestE2E_OrgInvitationFlow(t *testing.T) {
 	owner, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "owner@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Owner",
 	})
 	require.NoError(t, err)
@@ -195,7 +198,7 @@ func TestE2E_OrgInvitationFlow(t *testing.T) {
 	_, _, err = eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "invitee@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Invitee",
 	})
 	require.NoError(t, err)
@@ -267,7 +270,7 @@ func TestE2E_DeviceTracking(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "device-user@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "DeviceUser",
 	})
 	require.NoError(t, err)
@@ -329,20 +332,27 @@ func TestE2E_DeviceTracking(t *testing.T) {
 // ──────────────────────────────────────────────────
 
 func TestE2E_WebhookManagement(t *testing.T) {
-	eng, _ := e2eEngine(t)
+	// Webhooks are relay endpoints, so the engine needs a relay that manages
+	// endpoints and a receiver that answers the test delivery; the receiver
+	// lives on loopback, which insecure mode permits.
+	cfg := testEngineConfig()
+	cfg.Webhooks.AllowInsecureURLs = true
+	eng, _ := e2eEngine(t, authsome.WithConfig(cfg), authsome.WithEventRelay(bridge.NewMemoryRelay()))
 	ctx := context.Background()
 	appID := e2eAppID(t)
+	_, rcv := newReceiver(t, http.StatusOK)
 
 	// Step 1: Create webhook
 	w := &webhook.Webhook{
 		AppID:  appID,
-		URL:    "https://example.com/webhook",
+		URL:    rcv.URL + "/webhook",
 		Events: []string{"user.created", "auth.signin"},
+		Active: true,
 	}
 	err := eng.CreateWebhook(ctx, w)
 	require.NoError(t, err)
 	assert.NotEmpty(t, w.ID.String())
-	assert.NotEmpty(t, w.Secret) // auto-generated
+	assert.NotEmpty(t, w.Secret) // shown once
 	assert.True(t, w.Active)
 
 	// Step 2: List webhooks
@@ -354,18 +364,19 @@ func TestE2E_WebhookManagement(t *testing.T) {
 	// Step 3: Get webhook
 	got, err := eng.GetWebhook(ctx, w.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "https://example.com/webhook", got.URL)
+	assert.Equal(t, rcv.URL+"/webhook", got.URL)
 	assert.Equal(t, []string{"user.created", "auth.signin"}, got.Events)
+	assert.Empty(t, got.Secret, "the secret is never read back")
 
 	// Step 4: Update webhook
-	w.URL = "https://example.com/webhook-v2"
+	w.URL = rcv.URL + "/webhook-v2"
 	w.Events = []string{"user.created"}
 	err = eng.UpdateWebhook(ctx, w)
 	require.NoError(t, err)
 
 	got, err = eng.GetWebhook(ctx, w.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "https://example.com/webhook-v2", got.URL)
+	assert.Equal(t, rcv.URL+"/webhook-v2", got.URL)
 	assert.Equal(t, []string{"user.created"}, got.Events)
 
 	// Step 5: Delete webhook
@@ -443,7 +454,7 @@ func TestE2E_SessionManagement(t *testing.T) {
 	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "session-user@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "SessionUser",
 	})
 	require.NoError(t, err)
@@ -452,21 +463,21 @@ func TestE2E_SessionManagement(t *testing.T) {
 	_, sess1, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "session-user@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
 	_, sess2, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "session-user@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
 	_, sess3, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "session-user@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
@@ -480,14 +491,14 @@ func TestE2E_SessionManagement(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 5: Second session should be gone
-	_, err = eng.ResolveSessionByToken(sess2.Token)
+	_, err = eng.ResolveSessionByToken(context.Background(), sess2.Token)
 	assert.Error(t, err)
 
 	// Step 6: First and third sessions should still work
-	_, err = eng.ResolveSessionByToken(sess1.Token)
+	_, err = eng.ResolveSessionByToken(context.Background(), sess1.Token)
 	require.NoError(t, err)
 
-	_, err = eng.ResolveSessionByToken(sess3.Token)
+	_, err = eng.ResolveSessionByToken(context.Background(), sess3.Token)
 	require.NoError(t, err)
 
 	// Step 7: Refresh the first session
@@ -555,7 +566,7 @@ func TestE2E_OrgTeamManagement(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "team-owner@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "TeamOwner",
 	})
 	require.NoError(t, err)
@@ -642,7 +653,7 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "rbac-user@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "RBACUser",
 	})
 	require.NoError(t, err)
@@ -673,7 +684,7 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 4: Add permissions to admin role
-	err = eng.AddPermission(ctx, &rbac.Permission{
+	err = eng.AddPermission(ctx, appID, &rbac.Permission{
 		ID:       id.NewPermissionID().String(),
 		RoleID:   adminRole.ID,
 		Action:   "*",
@@ -682,7 +693,7 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 5: Add permissions to viewer role
-	err = eng.AddPermission(ctx, &rbac.Permission{
+	err = eng.AddPermission(ctx, appID, &rbac.Permission{
 		ID:       id.NewPermissionID().String(),
 		RoleID:   viewerRole.ID,
 		Action:   "read",
@@ -690,7 +701,7 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = eng.AddPermission(ctx, &rbac.Permission{
+	err = eng.AddPermission(ctx, appID, &rbac.Permission{
 		ID:       id.NewPermissionID().String(),
 		RoleID:   viewerRole.ID,
 		Action:   "read",
@@ -704,17 +715,17 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	assert.Len(t, roles, 2)
 
 	// Step 7: List role permissions
-	adminPerms, err := eng.ListRolePermissions(ctx, adminRoleID)
+	adminPerms, err := eng.ListRolePermissions(ctx, appID, adminRoleID)
 	require.NoError(t, err)
 	assert.Len(t, adminPerms, 1)
 	assert.Equal(t, "*", adminPerms[0].Action)
 
-	viewerPerms, err := eng.ListRolePermissions(ctx, viewerRoleID)
+	viewerPerms, err := eng.ListRolePermissions(ctx, appID, viewerRoleID)
 	require.NoError(t, err)
 	assert.Len(t, viewerPerms, 2)
 
 	// Step 8: Assign viewer role to user
-	err = eng.AssignUserRole(ctx, &rbac.UserRole{
+	err = eng.AssignUserRole(ctx, appID, &rbac.UserRole{
 		UserID: u.ID.String(),
 		RoleID: viewerRole.ID,
 	})
@@ -734,7 +745,7 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	assert.True(t, ok)
 
 	// Step 10: Upgrade to admin
-	err = eng.AssignUserRole(ctx, &rbac.UserRole{
+	err = eng.AssignUserRole(ctx, appID, &rbac.UserRole{
 		UserID: u.ID.String(),
 		RoleID: adminRole.ID,
 	})
@@ -755,7 +766,7 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	assert.Len(t, userRoles, 2) // viewer + admin
 
 	// Step 13: Unassign viewer role
-	err = eng.UnassignUserRole(ctx, u.ID, viewerRoleID)
+	err = eng.UnassignUserRole(ctx, appID, u.ID, viewerRoleID)
 	require.NoError(t, err)
 
 	userRoles, err = eng.ListUserRoles(ctx, u.ID)
@@ -763,7 +774,7 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 	assert.Len(t, userRoles, 1) // admin only
 
 	// Step 14: Delete viewer role
-	err = eng.DeleteRole(ctx, viewerRoleID)
+	err = eng.DeleteRole(ctx, appID, viewerRoleID)
 	require.NoError(t, err)
 
 	roles, err = eng.ListRoles(ctx, appID)
@@ -784,7 +795,7 @@ func TestE2E_UserUpdateFlow(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "update-user@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Original Name",
 	})
 	require.NoError(t, err)
@@ -821,7 +832,7 @@ func TestE2E_DeclineInvitation(t *testing.T) {
 	owner, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "org-owner@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "OrgOwner",
 	})
 	require.NoError(t, err)
@@ -953,7 +964,7 @@ func TestE2E_EnvironmentLifecycle(t *testing.T) {
 // ──────────────────────────────────────────────────
 
 func TestE2E_EnvironmentClone(t *testing.T) {
-	eng, _ := e2eEngine(t)
+	eng, _ := e2eEngine(t, authsome.WithConfig(cloneWebhookConfig()), authsome.WithEventRelay(bridge.NewMemoryRelay()))
 	ctx := context.Background()
 	appID := e2eAppID(t)
 
@@ -991,7 +1002,7 @@ func TestE2E_EnvironmentClone(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 3: Add permission to admin role
-	err = eng.AddPermission(ctx, &rbac.Permission{
+	err = eng.AddPermission(ctx, appID, &rbac.Permission{
 		ID:       id.NewPermissionID().String(),
 		RoleID:   adminRole.ID,
 		Action:   "*",
@@ -999,11 +1010,13 @@ func TestE2E_EnvironmentClone(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Step 4: Create webhook with EnvID
+	// Step 4: Create webhook with EnvID. It is a relay endpoint, so a
+	// receiver must answer the test delivery.
+	_, rcv := newReceiver(t, http.StatusOK)
 	w := &webhook.Webhook{
 		AppID:  appID,
 		EnvID:  prod.ID,
-		URL:    "https://prod.example.com/hook",
+		URL:    rcv.URL + "/hook",
 		Events: []string{"user.created"},
 		Active: true,
 	}
@@ -1066,7 +1079,7 @@ func TestE2E_SignIn_EmailNormalization(t *testing.T) {
 	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "MixedCase@Example.COM",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
@@ -1074,7 +1087,7 @@ func TestE2E_SignIn_EmailNormalization(t *testing.T) {
 	u, sess, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "MIXEDCASE@EXAMPLE.COM",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, u)
@@ -1104,7 +1117,7 @@ func TestE2E_SignIn_DefaultEnvResolution(t *testing.T) {
 	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:    appID,
 		Email:    "envtest@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
@@ -1112,10 +1125,17 @@ func TestE2E_SignIn_DefaultEnvResolution(t *testing.T) {
 	_, sess, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "envtest@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 		// EnvID intentionally omitted
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, sess)
 	assert.Equal(t, defaultEnv.ID, sess.EnvID, "session should have the default environment ID")
+}
+
+// cloneWebhookConfig lets the clone test register a receiver on loopback.
+func cloneWebhookConfig() authsome.Config {
+	cfg := testEngineConfig()
+	cfg.Webhooks.AllowInsecureURLs = true
+	return cfg
 }

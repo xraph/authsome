@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,27 +13,17 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/session"
-	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
 )
 
 // rateLimitOpt returns a forge.WithMiddleware option for rate limiting the given endpoint,
 // or nil if rate limiting is not enabled.
 func (a *API) rateLimitOpt(limit int) []forge.RouteOption {
-	rl := a.engine.RateLimiter()
-	cfg := a.engine.Config().RateLimit
-	if rl == nil || !cfg.Enabled {
-		return nil
-	}
-	return []forge.RouteOption{
-		forge.WithMiddleware(middleware.RateLimit(rl, middleware.RateLimitConfig{
-			Limit:  limit,
-			Window: cfg.Window(),
-		})),
-	}
+	return a.engine.RateLimitOptions(limit)
 }
 
 // captchaOpt returns a forge.WithMiddleware option that gates the route on
@@ -55,7 +46,7 @@ func (a *API) captchaOpt(action string) []forge.RouteOption {
 		forge.WithMiddleware(middleware.CaptchaMiddleware(middleware.CaptchaOptions{
 			Settings:  mgr,
 			Action:    action,
-			Chronicle: a.engine.Chronicle(),
+			Chronicle: bridge.NewBusChronicle(a.engine.Hooks()),
 			Logger:    a.engine.Logger(),
 		})),
 	}
@@ -181,7 +172,7 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 			a.consumeDummyHashBudget(req.Password)
 			return nil, ctx.JSON(http.StatusCreated, a.syntheticSignupResponse(req.Email, appID))
 		}
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	a.setSessionCookie(ctx, sess.Token, a.sessionTokenMaxAge())
@@ -194,24 +185,9 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 // error from the hash function is intentionally ignored — this is purely a
 // time-budget consumer.
 func (a *API) consumeDummyHashBudget(password string) {
-	if password == "" {
-		// Match the synthetic case where we still want to spend the
-		// time budget. Hash a fixed sentinel.
-		password = "x"
-	}
-	cfg := a.engine.Config().Password
-	policy := account.PasswordPolicy{
-		BcryptCost: cfg.BcryptCost,
-		Algorithm:  cfg.Algorithm,
-		Argon2Params: account.Argon2Params{
-			Memory:      cfg.Argon2.Memory,
-			Iterations:  cfg.Argon2.Iterations,
-			Parallelism: cfg.Argon2.Parallelism,
-			SaltLength:  cfg.Argon2.SaltLength,
-			KeyLength:   cfg.Argon2.KeyLength,
-		},
-	}
-	_, _ = account.HashPasswordWithPolicy(password, policy) //nolint:errcheck // dummy hash for timing budget
+	// The engine owns the hash and its policy; sign-in's unknown-identifier
+	// path spends the same budget through the same method.
+	policy := a.engine.ConsumeDummyHash(password)
 
 	// Test-only observation point (nil in production). Reports the policy
 	// actually used so a test can assert the duplicate path hashes with the
@@ -304,7 +280,11 @@ func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse
 		DPoPJKT:   dpopJKT,
 	})
 	if err != nil {
-		return nil, mapError(err)
+		var locked *account.LockedError
+		if errors.As(err, &locked) {
+			ctx.Response().Header().Set("Retry-After", strconv.Itoa(locked.RetryAfter(time.Now())))
+		}
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	a.setSessionCookie(ctx, sess.Token, a.sessionTokenMaxAge())
@@ -318,7 +298,7 @@ func (a *API) handleSignOut(ctx forge.Context, _ *SignOutRequest) (*StatusRespon
 	}
 
 	if err := a.engine.SignOut(ctx.Context(), sessID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	a.deleteSessionCookie(ctx)
@@ -336,18 +316,25 @@ func (a *API) handleRefresh(ctx forge.Context, req *RefreshRequest) (*TokenRespo
 		RequestURL: middleware.RequestURL(httpReq),
 	}
 
-	// Cookie-first: when the request carries a valid session cookie, rotate via
-	// that session's *current* server-side refresh token. Browsers commonly lose
-	// track of the rotated refresh token (the cause of repeated /refresh 401s);
-	// this lets them re-sync from their still-valid session. We deliberately do
-	// NOT feed the body token in first — a stale body token trips replay
-	// detection, which cascade-revokes the whole token family and would log the
-	// user out (see Engine.Refresh).
+	// Cookie-first: when the request carries a valid session cookie, rotate
+	// the session behind it. Browsers commonly lose track of the rotated
+	// refresh token (the cause of repeated /refresh 401s); this lets them
+	// re-sync from their still-valid session. We deliberately do NOT feed the
+	// body token in first: a stale body token trips replay detection, which
+	// cascade-revokes the whole token family and would log the user out (see
+	// Engine.Refresh). The store keeps refresh tokens as hashes, so the
+	// session is rotated from the access token rather than by reading its
+	// refresh token back.
 	if cookieTok := a.sessionTokenFromCookie(ctx); cookieTok != "" {
-		if cur, err := a.engine.ResolveSessionByToken(cookieTok); err == nil && cur.RefreshToken != "" {
-			if sess, rerr := a.engine.Refresh(ctx.Context(), cur.RefreshToken, opts); rerr == nil {
-				return a.respondWithTokens(ctx, sess)
-			}
+		// The cookie is the credential on this path: the new access token
+		// goes back in the cookie and the refresh token stays server-side,
+		// where a script on the page cannot read it.
+		if sess, rerr := a.engine.RefreshBySessionToken(ctx.Context(), cookieTok, opts); rerr == nil {
+			a.setSessionCookie(ctx, sess.Token, a.sessionTokenMaxAge())
+			return nil, ctx.JSON(http.StatusOK, &TokenResponse{
+				SessionToken: sess.Token,
+				ExpiresAt:    sess.ExpiresAt.Format("2006-01-02T15:04:05Z07:00"),
+			})
 		}
 	}
 
@@ -359,7 +346,7 @@ func (a *API) handleRefresh(ctx forge.Context, req *RefreshRequest) (*TokenRespo
 	sess, err := a.engine.Refresh(ctx.Context(), req.RefreshToken, opts)
 	if err != nil {
 		a.deleteSessionCookie(ctx)
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	return a.respondWithTokens(ctx, sess)
 }
@@ -402,45 +389,22 @@ type cookieConfig struct {
 	SameSite http.SameSite
 }
 
-// resolveCookieConfig reads cookie settings from the dynamic settings manager.
+// resolveCookieConfig is the engine's session cookie template for this
+// request: the same names and attributes every other cookie writer uses,
+// with the app taken from the request and HTTPS judged through the
+// trusted-proxy check rather than a header anyone can send.
 func (a *API) resolveCookieConfig(ctx forge.Context) cookieConfig {
-	goCtx := ctx.Context()
-	mgr := a.engine.Settings()
-	opts := settings.ResolveOpts{}
-
-	name, _ := settings.Get(goCtx, mgr, authsome.SettingCookieName, opts) //nolint:errcheck // best-effort settings
-	if name == "" {
-		name = "authsome_session_token"
+	appID := ""
+	if app, ok := middleware.AppIDFrom(ctx.Context()); ok {
+		appID = app.String()
 	}
-	domain, _ := settings.Get(goCtx, mgr, authsome.SettingCookieDomain, opts) //nolint:errcheck // best-effort settings
-	path, _ := settings.Get(goCtx, mgr, authsome.SettingCookiePath, opts)     //nolint:errcheck // best-effort settings
-	if path == "" {
-		path = "/"
-	}
-	secureSetting, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSecure, opts) //nolint:errcheck // best-effort settings
-	httpOnly, _ := settings.Get(goCtx, mgr, authsome.SettingCookieHTTPOnly, opts)    //nolint:errcheck // best-effort settings
-	sameSiteStr, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSameSite, opts) //nolint:errcheck // best-effort settings
-
-	// Auto-detect secure: if setting is true but request is plain HTTP, disable for dev.
-	r := ctx.Request()
-	isHTTPS := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
-	secure := secureSetting && isHTTPS
-
-	sameSite := http.SameSiteLaxMode
-	switch sameSiteStr {
-	case "strict":
-		sameSite = http.SameSiteStrictMode
-	case "none":
-		sameSite = http.SameSiteNoneMode
-	}
-
+	c := authsome.SessionCookieTemplate(ctx.Context(), a.engine.Settings(), appID, middleware.IsHTTPS(ctx.Request()))
 	return cookieConfig{
-		Name: name, Domain: domain, Path: path,
-		Secure: secure, HTTPOnly: httpOnly, SameSite: sameSite,
+		Name: c.Name, Domain: c.Domain, Path: c.Path,
+		Secure: c.Secure, HTTPOnly: c.HttpOnly, SameSite: c.SameSite,
 	}
 }
 
-// setSessionCookie sets the httpOnly session token cookie on the response.
 func (a *API) setSessionCookie(ctx forge.Context, token string, maxAge int) {
 	cc := a.resolveCookieConfig(ctx)
 	cookie := &http.Cookie{ // #nosec G124 -- secure/httpOnly/sameSite resolved dynamically via cookieConfig
@@ -484,13 +448,6 @@ func (a *API) sessionTokenMaxAge() int {
 // ──────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────
-
-func (a *API) resolveAppID(raw string) (id.AppID, error) {
-	if raw != "" {
-		return id.ParseAppID(raw)
-	}
-	return id.ParseAppID(a.engine.Config().AppID)
-}
 
 // resolvePublicAppID resolves the app for an unauthenticated public-auth
 // request (signup, signin, forgot-password, resend verification).

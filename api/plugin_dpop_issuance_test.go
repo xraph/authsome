@@ -18,6 +18,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/api"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/dpoptest"
 	"github.com/xraph/authsome/internal/secutil"
@@ -53,7 +54,7 @@ func pluginDPoPFixture(t *testing.T, p routablePlugin) (*authsome.Engine, http.H
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithConfig(testConfig()), authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -89,7 +90,7 @@ func TestMagicLinkVerify_UnderRequiredMode_BindsSession(t *testing.T) {
 	eng, router, appID := pluginDPoPFixture(t, mlPlugin)
 
 	const email = "magiclink-dpop@example.com"
-	_, _, _ = signUp(t, eng, email, "SecureP@ss1")
+	_, _, _ = signUp(t, eng, email, "SecureP@ss123")
 	u, err := eng.Store().GetUserByEmail(context.Background(), appID, id.Nil, email)
 	require.NoError(t, err)
 
@@ -137,7 +138,7 @@ func TestMagicLinkVerify_UnderRequiredMode_RefusesWithoutProof(t *testing.T) {
 	eng, router, appID := pluginDPoPFixture(t, mlPlugin)
 
 	const email = "magiclink-dpop-unbound@example.com"
-	_, _, _ = signUp(t, eng, email, "SecureP@ss1")
+	_, _, _ = signUp(t, eng, email, "SecureP@ss123")
 	u, err := eng.Store().GetUserByEmail(context.Background(), appID, id.Nil, email)
 	require.NoError(t, err)
 
@@ -175,7 +176,7 @@ func TestVerifyEmail_UnderRequiredMode_BindsAutoLoginSession(t *testing.T) {
 	eng, router, appID := pluginDPoPFixture(t, magiclink.New())
 
 	const email = "verify-email-dpop@example.com"
-	_, _, _ = signUp(t, eng, email, "SecureP@ss1")
+	_, _, _ = signUp(t, eng, email, "SecureP@ss123")
 	u, err := eng.Store().GetUserByEmail(context.Background(), appID, id.Nil, email)
 	require.NoError(t, err)
 

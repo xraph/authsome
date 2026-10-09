@@ -13,6 +13,7 @@ import (
 	"time"
 
 	log "github.com/xraph/go-utils/log"
+	"golang.org/x/oauth2"
 
 	"github.com/xraph/forge"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/browserbind"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/plugin"
@@ -185,7 +187,7 @@ func (p *Plugin) Connections() []string {
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.engine = engine
 	p.store = engine.Store()
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.relay = engine.Relay()
 	p.hooks = engine.Hooks()
 	p.logger = engine.Logger()
@@ -393,7 +395,13 @@ func (p *Plugin) entityIDFor(conn *Connection) string {
 
 // RegisterRoutes registers SSO HTTP endpoints on a forge.Router.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
-	g := router.Group("/v1/sso", forge.WithGroupTags("SSO"))
+	// One budget for the public SSO surface: every route here either starts
+	// a federation round-trip or consumes an assertion.
+	groupOpts := []forge.GroupOption{forge.WithGroupTags("SSO")}
+	if mw := authsome.PluginRateLimitMiddleware(p.engine, func(c authsome.RateLimitConfig) int { return c.SSOLimit }); mw != nil {
+		groupOpts = append(groupOpts, forge.WithGroupMiddleware(mw))
+	}
+	g := router.Group("/v1/sso", groupOpts...)
 
 	if err := g.POST("/:provider/login", p.handleLogin,
 		forge.WithSummary("Start SSO login flow"),
@@ -493,7 +501,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	if err := admin.GET("/connections", p.handleAdminListConnections,
 		forge.WithSummary("List SSO connections for an app (admin)"),
-		forge.WithDescription("Returns every SSO connection registered on the target App. Filter by ?app_id=app_..."),
+		forge.WithDescription("Returns every SSO connection registered on the caller's App. An optional ?app_id must name that same app."),
 		forge.WithOperationID("ssoAdminListConnections"),
 		forge.WithRequestSchema(AdminListConnectionsRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Connections", AdminListConnectionsResponse{}),
@@ -558,6 +566,20 @@ type ssoState struct {
 	// domain in several orgs resolves to distinct connections at login, and each
 	// login's state carries its own id.
 	ConnID string `json:"conn_id,omitempty"`
+	// Nonce and CodeVerifier bind an OIDC login to its callback: the
+	// id_token must echo the nonce and the token exchange must present the
+	// verifier. Empty for SAML.
+	Nonce        string `json:"nonce,omitempty"`
+	CodeVerifier string `json:"code_verifier,omitempty"`
+	// Browser marks a login a web browser started. Its callback must carry
+	// the state-binding cookie set at that start.
+	Browser bool `json:"browser,omitempty"`
+}
+
+// pkceProvider is implemented by providers that can carry a nonce and an
+// S256 PKCE challenge on the login URL. The OIDC provider does.
+type pkceProvider interface {
+	LoginURLWithPKCE(state, nonce, verifier string) (loginURL string, err error)
 }
 
 // requestIDProvider is implemented by SAML providers that expose the AuthnRequest
@@ -573,15 +595,15 @@ type ExchangeRequest struct {
 }
 
 // otcPayload is the session handoff stashed under a one-time code by ACS and
-// redeemed once (app-bound) at /v1/sso/exchange.
+// redeemed once (app-bound) at /v1/sso/exchange. It names the session and
+// carries no credential: the exchange rotates that session into fresh tokens,
+// so a copy of the ceremony store yields nothing a browser could present.
 type otcPayload struct {
-	User         json.RawMessage `json:"user,omitempty"`
-	SessionToken string          `json:"session_token"`
-	RefreshToken string          `json:"refresh_token"`
-	ExpiresAt    string          `json:"expires_at,omitempty"`
-	Provider     string          `json:"provider,omitempty"`
-	IsNewUser    bool            `json:"is_new_user,omitempty"`
-	AppID        string          `json:"app_id"`
+	User      json.RawMessage `json:"user,omitempty"`
+	SessionID string          `json:"session_id"`
+	Provider  string          `json:"provider,omitempty"`
+	IsNewUser bool            `json:"is_new_user,omitempty"`
+	AppID     string          `json:"app_id"`
 }
 
 // LoginResponse is returned when the SSO flow is initiated.
@@ -606,6 +628,11 @@ type CallbackResponse struct {
 	ExpiresAt    any    `json:"expires_at"`
 	Provider     string `json:"provider"`
 	IsNewUser    bool   `json:"is_new_user"`
+
+	// sessionID names the session the tokens belong to, for the browser
+	// landing paths that hand the session over by one-time code instead of
+	// returning these tokens in a response body.
+	sessionID id.SessionID
 }
 
 // ──────────────────────────────────────────────────
@@ -616,48 +643,65 @@ type CallbackResponse struct {
 func (p *Plugin) handleLogin(ctx forge.Context, req *LoginRequest) (*LoginResponse, error) {
 	appID, err := p.requestAppID(ctx)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("invalid app_id configuration: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("invalid app_id configuration: %w", err))
 	}
 	provider, conn, err := p.resolveProvider(ctx.Context(), appID, req.Provider)
 	if err != nil {
-		return nil, providerResolveError(req.Provider, err)
+		return nil, providerResolveError(ctx, req.Provider, err)
 	}
 	var connID string
 	if conn != nil {
 		connID = conn.ID.String()
 	}
-	return p.startLogin(ctx.Context(), appID, provider, req.Provider, connID, req.ReturnURL)
+	return p.startLogin(ctx.Context(), appID, provider, req.Provider, connID, req.ReturnURL, ctx.Response(), ctx.Request())
 }
 
 // startLogin generates a CSRF state (carrying the app + return URL), caches it,
 // and returns the IdP login URL. Shared by provider-name and email-domain entry
 // points. The return URL is validated here (login is publishable-key-authed), so
 // the opaque state token that round-trips through the IdP can't be tampered with.
-func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provider, providerName, connID, returnURL string) (*LoginResponse, error) {
+//
+// w and r are the start request's response and request: when r came from a
+// browser the state is bound to it with a cookie written on w. Both may be
+// nil for callers that have no request.
+func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provider, providerName, connID, returnURL string, w http.ResponseWriter, r *http.Request) (*LoginResponse, error) {
 	if returnURL != "" && !p.isAllowedReturnURL(returnURL) {
 		return nil, forge.BadRequest("return_url is not allowed")
 	}
 
 	state, err := generateState()
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to generate state: %w", err))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to generate state: %w", err))
 	}
 
 	// Build the IdP login URL. SAML providers also return the AuthnRequest ID so
 	// we can persist it in the state ceremony and match the assertion's
 	// InResponseTo at the ACS.
-	var loginURL, requestID string
-	if rp, ok := provider.(requestIDProvider); ok {
-		loginURL, requestID, err = rp.LoginURLWithRequestID(state)
-	} else {
+	var loginURL, requestID, nonce, verifier string
+	switch pr := provider.(type) {
+	case requestIDProvider:
+		loginURL, requestID, err = pr.LoginURLWithRequestID(state)
+	case pkceProvider:
+		if nonce, err = generateState(); err == nil {
+			verifier = oauth2.GenerateVerifier()
+			loginURL, err = pr.LoginURLWithPKCE(state, nonce, verifier)
+		}
+	default:
 		loginURL, err = provider.LoginURL(state)
 	}
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to get login URL: %w", err))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to get login URL: %w", err))
 	}
 
-	stateData, _ := json.Marshal(ssoState{Provider: providerName, AppID: appID.String(), ReturnURL: returnURL, RequestID: requestID, ConnID: connID}) //nolint:errcheck // best-effort cache
-	_ = p.ceremonies.Set(ctx, "sso:state:"+state, stateData, 10*time.Minute)                                                                          //nolint:errcheck // best-effort cache
+	fromBrowser := w != nil && browserbind.IsBrowser(r)
+	stateData, _ := json.Marshal(ssoState{ //nolint:errcheck // best-effort cache
+		Provider: providerName, AppID: appID.String(), ReturnURL: returnURL, RequestID: requestID, ConnID: connID,
+		Nonce: nonce, CodeVerifier: verifier, Browser: fromBrowser,
+	})
+	if fromBrowser {
+		browserbind.SetStateCookie(w, r, state)
+	}
+	_ = p.ceremonies.Set(ctx, "sso:state:"+state, stateData, 10*time.Minute) //nolint:errcheck // best-effort cache
 
 	return &LoginResponse{
 		LoginURL: loginURL,
@@ -667,11 +711,11 @@ func (p *Plugin) startLogin(ctx context.Context, appID id.AppID, provider Provid
 
 // providerResolveError maps a resolveProvider failure to the right HTTP status:
 // 400 for an unknown provider, 500 for a build/config failure.
-func providerResolveError(name string, err error) error {
+func providerResolveError(ctx forge.Context, name string, err error) error {
 	if errors.Is(err, errProviderNotFound) {
 		return forge.BadRequest(fmt.Sprintf("unsupported SSO provider: %s", name))
 	}
-	return forge.InternalError(fmt.Errorf("sso: resolve provider %q: %w", name, err))
+	return middleware.InternalError(ctx, fmt.Errorf("sso: resolve provider %q: %w", name, err))
 }
 
 // LoginByDomainRequest carries an email whose domain selects the IdP connection.
@@ -699,7 +743,7 @@ func (p *Plugin) handleLoginByDomain(ctx forge.Context, req *LoginByDomainReques
 	}
 	appID, err := p.requestAppID(ctx)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("invalid app_id configuration: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("invalid app_id configuration: %w", err))
 	}
 	domain := email[at+1:]
 	var conn *Connection
@@ -719,9 +763,9 @@ func (p *Plugin) handleLoginByDomain(ctx forge.Context, req *LoginByDomainReques
 	}
 	provider, err := p.connectionToProvider(conn)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: build provider: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso: build provider: %w", err))
 	}
-	return p.startLogin(ctx.Context(), appID, provider, conn.Provider, conn.ID.String(), req.ReturnURL)
+	return p.startLogin(ctx.Context(), appID, provider, conn.Provider, conn.ID.String(), req.ReturnURL, ctx.Response(), ctx.Request())
 }
 
 // handleSPMetadata serves the SAML SP metadata XML for an IdP to consume. Raw
@@ -735,18 +779,18 @@ func (p *Plugin) handleSPMetadata(ctx forge.Context) error {
 	if connID := ctx.Request().URL.Query().Get("connection"); connID != "" {
 		conn, err := p.connectionByID(ctx.Context(), connID)
 		if err != nil {
-			return providerResolveError(name, err)
+			return providerResolveError(ctx, name, err)
 		}
 		if provider, err = p.connectionToProvider(conn); err != nil {
-			return forge.InternalError(fmt.Errorf("sso: build provider: %w", err))
+			return middleware.InternalError(ctx, fmt.Errorf("sso: build provider: %w", err))
 		}
 	} else {
 		appID, err := p.requestAppID(ctx)
 		if err != nil {
-			return forge.InternalError(fmt.Errorf("invalid app_id configuration: %w", err))
+			return middleware.InternalError(ctx, fmt.Errorf("invalid app_id configuration: %w", err))
 		}
 		if provider, _, err = p.resolveProvider(ctx.Context(), appID, name); err != nil {
-			return providerResolveError(name, err)
+			return providerResolveError(ctx, name, err)
 		}
 	}
 	mp, ok := provider.(SAMLMetadataProvider)
@@ -755,7 +799,7 @@ func (p *Plugin) handleSPMetadata(ctx forge.Context) error {
 	}
 	xmlBytes, contentType, err := mp.Metadata()
 	if err != nil {
-		return forge.InternalError(fmt.Errorf("sso: metadata: %w", err))
+		return middleware.InternalError(ctx, fmt.Errorf("sso: metadata: %w", err))
 	}
 	ctx.Response().Header().Set("Content-Type", contentType)
 	ctx.Response().WriteHeader(http.StatusOK)
@@ -777,7 +821,7 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	}
 	appID, err := p.appIDFromState(st)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("invalid app_id configuration: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("invalid app_id configuration: %w", err))
 	}
 
 	// Prefer the exact connection pinned in the login state (multi-tenant safe);
@@ -792,7 +836,7 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		provider, conn, err = p.resolveProvider(ctx.Context(), appID, req.Provider)
 	}
 	if err != nil {
-		return nil, providerResolveError(req.Provider, err)
+		return nil, providerResolveError(ctx, req.Provider, err)
 	}
 
 	if req.Error != "" {
@@ -804,8 +848,10 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	}
 
 	params := map[string]string{
-		"code":  req.Code,
-		"state": req.State,
+		"code":          req.Code,
+		"state":         req.State,
+		"nonce":         st.Nonce,
+		"code_verifier": st.CodeVerifier,
 	}
 
 	return p.authenticateUser(ctx, appID, provider, conn, params)
@@ -842,6 +888,9 @@ func (p *Plugin) handleOIDCRedirect(ctx forge.Context) error {
 	if serr != nil {
 		return fail("invalid_state")
 	}
+	if st.Browser && !browserbind.Matches(r, state) {
+		return fail("state_cookie_missing")
+	}
 	if providerErr != "" {
 		return fail(providerErr)
 	}
@@ -876,7 +925,7 @@ func (p *Plugin) handleOIDCRedirect(ctx forge.Context) error {
 		return fail("provider_error")
 	}
 
-	params := map[string]string{"code": code, "state": state}
+	params := map[string]string{"code": code, "state": state, "nonce": st.Nonce, "code_verifier": st.CodeVerifier}
 	result, aerr := p.authenticateUser(ctx, conn.AppID, provider, conn, params)
 	if aerr != nil {
 		if p.logger != nil {
@@ -913,16 +962,21 @@ func (p *Plugin) handleACS(ctx forge.Context) error {
 	// IdP-initiated (gated by AllowIDPInitiated).
 	returnURL := ""
 	requestID := ""
+	boundToBrowser := false
 	if relayState != "" {
 		if st, serr := p.loadState(ctx.Context(), relayState, name); serr == nil {
 			returnURL = st.ReturnURL
 			requestID = st.RequestID
+			boundToBrowser = st.Browser
 		}
 	}
 
 	fail := func(reason string) error {
 		http.Redirect(ctx.Response(), r, p.errorRedirect(returnURL, reason), http.StatusFound)
 		return nil
+	}
+	if boundToBrowser && !browserbind.Matches(r, relayState) {
+		return fail("state_cookie_missing")
 	}
 
 	// Resolve the connection (and its app) from `?connection=`; fall back to
@@ -971,6 +1025,88 @@ func (p *Plugin) handleACS(ctx forge.Context) error {
 // account whose email has never been verified. Linking in that case is an
 // account-takeover vector, so the caller refuses.
 var errUnverifiedSSOLink = errors.New("sso: refusing to link to an unverified pre-existing account")
+
+// resolveIdentity turns an asserted identity into the local user it may
+// sign in as, creating one when none exists. The order is the contract:
+//
+//  1. The email must be present, not declared unverified by the provider,
+//     and inside the connection's domains. Nothing is looked up before that.
+//  2. A subject the connection has bound before wins, whatever email the
+//     provider asserts today.
+//  3. Otherwise a verified account holding the email is linked, and the
+//     binding is recorded so step 2 catches the next login.
+//  4. Otherwise a user is created. The IdP subject becomes the local id only
+//     for a connection flagged trusted_federation.
+func (p *Plugin) resolveIdentity(ctx context.Context, appID id.AppID, envID id.EnvironmentID, conn *Connection, ssoUser *User) (*user.User, bool, error) {
+	email := strings.ToLower(strings.TrimSpace(ssoUser.Email))
+	if email == "" {
+		return nil, false, forge.BadRequest("SSO provider did not return an email address")
+	}
+	if ssoUser.EmailVerified != nil && !*ssoUser.EmailVerified {
+		return nil, false, forge.NewHTTPError(http.StatusForbidden,
+			"the identity provider reports this email address as unverified")
+	}
+	if conn != nil && !conn.AllowsEmailDomain(email) {
+		return nil, false, forge.NewHTTPError(http.StatusForbidden,
+			"this email domain is not served by the SSO connection used to sign in")
+	}
+	subject := strings.TrimSpace(ssoUser.ProviderUserID)
+	bindable := conn != nil && subject != "" && p.ssoStore != nil
+
+	if bindable {
+		if ident, identErr := p.ssoStore.GetIdentity(ctx, conn.ID, subject); identErr == nil && ident != nil {
+			bound, getErr := p.store.GetUser(ctx, ident.UserID)
+			if getErr == nil && bound != nil && bound.AppID == appID {
+				return bound, false, nil
+			}
+		}
+	}
+
+	u, err := p.linkableExistingUser(ctx, appID, envID, email)
+	if errors.Is(err, errUnverifiedSSOLink) {
+		return nil, false, forge.NewHTTPError(http.StatusConflict,
+			"an account with this email already exists but is not verified; verify it before signing in with SSO")
+	}
+	if err != nil {
+		return nil, false, middleware.InternalErrorCtx(ctx, fmt.Errorf("sso: resolve existing user: %w", err))
+	}
+	isNew := false
+	if u == nil {
+		localID := id.NewUserID()
+		if conn != nil && conn.TrustedFederation && subject != "" {
+			if parsed, parseErr := id.ParseUserID(subject); parseErr == nil {
+				localID = parsed
+			}
+		}
+		u = &user.User{
+			ID:            localID,
+			AppID:         appID,
+			EnvID:         envID,
+			Email:         email,
+			EmailVerified: true, // SSO-authenticated emails are verified
+			FirstName:     ssoUser.FirstName,
+			LastName:      ssoUser.LastName,
+			CreatedAt:     time.Now(),
+			UpdatedAt:     time.Now(),
+		}
+		if createErr := p.store.CreateUserWithPrimaryEmail(ctx, u, user.NewPrimaryEmail(u, "sso")); createErr != nil {
+			return nil, false, middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to create user: %w", createErr))
+		}
+		if p.engine != nil {
+			p.engine.EnsureDefaultRole(ctx, appID, u.ID)
+		}
+		isNew = true
+	}
+	if bindable {
+		bindErr := p.ssoStore.CreateIdentity(ctx, &Identity{ConnectionID: conn.ID, Subject: subject, UserID: u.ID, CreatedAt: time.Now()})
+		if bindErr != nil && !errors.Is(bindErr, ErrIdentityExists) && p.logger != nil {
+			p.logger.Warn("sso: record identity binding failed",
+				log.String("connection_id", conn.ID.String()),
+				log.String("error", bindErr.Error()))
+		}
+	}
+	return u, isNew, nil
+}
 
 // linkableExistingUser resolves an existing local account for an SSO email and
 // verifies it is safe to link to. It returns:
@@ -1102,7 +1238,10 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 
 	ssoUser, err := provider.HandleCallback(ctx.Context(), params)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: callback failed: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso: callback failed: %w", err))
+	}
+	if ssoUser == nil {
+		return nil, middleware.InternalError(ctx, errors.New("sso: provider returned no user"))
 	}
 
 	goCtx := ctx.Context()
@@ -1116,66 +1255,9 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 
 	// Find or create user by email. Match across all of an account's emails so
 	// a verified SSO email links to the existing account instead of duplicating.
-	var u *user.User
-	isNew := false
-
-	if ssoUser.Email != "" {
-		email := strings.ToLower(ssoUser.Email)
-		u, err = p.linkableExistingUser(goCtx, appID, envID, email)
-		if errors.Is(err, errUnverifiedSSOLink) {
-			// A pre-existing account owns this email but has never verified it.
-			// Linking here would let an attacker who pre-registered the
-			// victim's email capture the victim's SSO login, so refuse.
-			return nil, forge.NewHTTPError(http.StatusConflict,
-				"an account with this email already exists but is not verified; verify it before signing in with SSO")
-		}
-		if err != nil {
-			return nil, forge.InternalError(fmt.Errorf("sso: resolve existing user: %w", err))
-		}
-		if u == nil {
-			// No existing user -- create one. Prefer the upstream
-			// IdP's user_id (sub claim) as the local user_id when
-			// it parses as a valid Authsome UserID. This makes the
-			// federated user's identity stable across Apps: if a
-			// user authenticates from upstream App `studio` (where
-			// they have user_id = ausr_X) into a workspace App via
-			// federation, the local user_id is also ausr_X.
-			//
-			// Stable-across-Apps identity is what makes Warden
-			// assignments + introspect lookups agree. Without this,
-			// the saga would assign roles by the upstream user_id
-			// while the workspace App's introspect returns a fresh
-			// local user_id — guaranteed mismatch on every request.
-			//
-			// Falls back to a fresh local id when the upstream sub
-			// doesn't parse (non-Authsome IdPs like Google / GitHub).
-			localID := id.NewUserID()
-			if ssoUser.ProviderUserID != "" {
-				if parsed, parseErr := id.ParseUserID(ssoUser.ProviderUserID); parseErr == nil {
-					localID = parsed
-				}
-			}
-			u = &user.User{
-				ID:            localID,
-				AppID:         appID,
-				EnvID:         envID,
-				Email:         strings.ToLower(ssoUser.Email),
-				EmailVerified: true, // SSO-authenticated emails are verified
-				FirstName:     ssoUser.FirstName,
-				LastName:      ssoUser.LastName,
-				CreatedAt:     time.Now(),
-				UpdatedAt:     time.Now(),
-			}
-			if createErr := p.store.CreateUserWithPrimaryEmail(goCtx, u, user.NewPrimaryEmail(u, "sso")); createErr != nil {
-				return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", createErr))
-			}
-			if p.engine != nil {
-				p.engine.EnsureDefaultRole(goCtx, appID, u.ID)
-			}
-			isNew = true
-		}
-	} else {
-		return nil, forge.BadRequest("SSO provider did not return an email address")
+	u, isNew, err := p.resolveIdentity(goCtx, appID, envID, conn, ssoUser)
+	if err != nil {
+		return nil, err
 	}
 
 	// Record the upstream (issuer, sub) pair so a later CAEP event naming it
@@ -1229,10 +1311,10 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 		var newErr error
 		sess, newErr = account.NewSession(appID, u.ID, sessCfg)
 		if newErr != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", newErr))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create session: %w", newErr))
 		}
 		if storeErr := p.store.CreateSession(goCtx, sess); storeErr != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to store session: %w", storeErr))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to store session: %w", storeErr))
 		}
 	}
 
@@ -1252,6 +1334,7 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 		ExpiresAt:    sess.ExpiresAt,
 		Provider:     provider.Name(),
 		IsNewUser:    isNew,
+		sessionID:    sess.ID,
 	}, nil
 }
 
@@ -1345,30 +1428,27 @@ func (p *Plugin) appIDFromState(s *ssoState) (id.AppID, error) {
 	return id.ParseAppID(p.appID)
 }
 
-// mintOTC stashes the freshly-issued session under a single-use one-time code
-// (short TTL, app-bound) for the frontend to redeem at /v1/sso/exchange.
+// mintOTC stashes a reference to the freshly-issued session under a
+// single-use one-time code (short TTL, app-bound) for the frontend to redeem
+// at /v1/sso/exchange. The code names the session; it carries no token.
 func (p *Plugin) mintOTC(ctx context.Context, appID id.AppID, r *CallbackResponse) (string, error) {
+	if r == nil || r.sessionID.IsNil() {
+		return "", errors.New("sso: one-time code needs a session to hand over")
+	}
 	code, err := generateState()
 	if err != nil {
 		return "", err
-	}
-	expires := ""
-	if t, ok := r.ExpiresAt.(time.Time); ok {
-		expires = t.Format(time.RFC3339)
 	}
 	var userJSON json.RawMessage
 	if b, merr := json.Marshal(r.User); merr == nil {
 		userJSON = b
 	}
-	// #nosec G117 G101 -- SessionToken/RefreshToken carry freshly-minted runtime session values, not hardcoded credentials. The payload is stashed single-use under a 60s app-bound OTC (mintOTC) so the browser redeems it at /v1/sso/exchange instead of receiving tokens in a redirect URL.
 	payload, err := json.Marshal(otcPayload{
-		User:         userJSON,
-		SessionToken: r.SessionToken,
-		RefreshToken: r.RefreshToken,
-		ExpiresAt:    expires,
-		Provider:     r.Provider,
-		IsNewUser:    r.IsNewUser,
-		AppID:        appID.String(),
+		User:      userJSON,
+		SessionID: r.sessionID.String(),
+		Provider:  r.Provider,
+		IsNewUser: r.IsNewUser,
+		AppID:     appID.String(),
 	})
 	if err != nil {
 		return "", err
@@ -1379,9 +1459,12 @@ func (p *Plugin) mintOTC(ctx context.Context, appID id.AppID, r *CallbackRespons
 	return code, nil
 }
 
-// handleExchange redeems a one-time code (single-use) for the session tokens.
-// The caller presents its publishable key; the code is bound to the app it was
-// minted for, so it can't be redeemed against a different app.
+// handleExchange redeems a one-time code (single-use) for session tokens. The
+// caller presents its publishable key; the code is bound to the app it was
+// minted for, so it can't be redeemed against a different app. The tokens
+// minted at the identity provider callback were never handed to anyone, so
+// the exchange rotates the session and returns the rotated pair; the callback
+// pair is retired in the same step.
 func (p *Plugin) handleExchange(ctx forge.Context, req *ExchangeRequest) (*CallbackResponse, error) {
 	code := strings.TrimSpace(req.Code)
 	if code == "" {
@@ -1393,12 +1476,28 @@ func (p *Plugin) handleExchange(ctx forge.Context, req *ExchangeRequest) (*Callb
 	}
 	_ = p.ceremonies.Delete(ctx.Context(), "sso:otc:"+code) //nolint:errcheck // single-use
 	var pl otcPayload
-	if err := json.Unmarshal(raw, &pl); err != nil {
+	if unmarshalErr := json.Unmarshal(raw, &pl); unmarshalErr != nil {
 		return nil, forge.BadRequest("invalid code")
 	}
 	// App-bind: reject redemption under a different app's publishable key.
 	if appID, ok := middleware.AppIDFrom(ctx.Context()); ok && appID.String() != pl.AppID {
 		return nil, forge.BadRequest("code is not valid for this app")
+	}
+	sessionID, err := id.ParseSessionID(pl.SessionID)
+	if err != nil {
+		return nil, forge.BadRequest("invalid code")
+	}
+	eng, ok := p.engine.(*authsome.Engine)
+	if !ok || eng == nil {
+		return nil, middleware.InternalError(ctx, errors.New("sso: exchange needs the authsome engine"))
+	}
+	r := ctx.Request()
+	sess, err := eng.RefreshBySessionID(ctx.Context(), sessionID, authsome.RefreshOpts{
+		IPAddress: middleware.ClientIP(r),
+		UserAgent: r.UserAgent(),
+	})
+	if err != nil {
+		return nil, forge.BadRequest("invalid or expired code")
 	}
 	var u any
 	if len(pl.User) > 0 {
@@ -1406,11 +1505,12 @@ func (p *Plugin) handleExchange(ctx forge.Context, req *ExchangeRequest) (*Callb
 	}
 	return &CallbackResponse{
 		User:         u,
-		SessionToken: pl.SessionToken,
-		RefreshToken: pl.RefreshToken,
-		ExpiresAt:    pl.ExpiresAt,
+		SessionToken: sess.Token,
+		RefreshToken: sess.RefreshToken,
+		ExpiresAt:    sess.ExpiresAt,
 		Provider:     pl.Provider,
 		IsNewUser:    pl.IsNewUser,
+		sessionID:    sess.ID,
 	}, nil
 }
 
@@ -1552,6 +1652,10 @@ type CreateConnectionInput struct {
 	Enforced bool
 	// DisplayName is an optional admin-set label for the connection (cosmetic).
 	DisplayName string
+	// AllowedDomains and TrustedFederation confine and shape the identities
+	// this connection may assert; see Connection.
+	AllowedDomains    []string
+	TrustedFederation bool
 }
 
 // CreateConnection provisions an SSO connection: it resolves the app's default
@@ -1562,7 +1666,7 @@ type CreateConnectionInput struct {
 // authorization instead of the platform-admin HTTP route.
 func (p *Plugin) CreateConnection(ctx context.Context, in CreateConnectionInput) (*Connection, error) {
 	if p.ssoStore == nil {
-		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("sso plugin: store not wired"))
 	}
 	if in.AppID.IsNil() {
 		return nil, forge.BadRequest("app_id is required")
@@ -1579,23 +1683,26 @@ func (p *Plugin) CreateConnection(ctx context.Context, in CreateConnectionInput)
 	// authsome_environments, so a connection must carry a valid env.
 	env, err := p.store.GetDefaultEnvironment(ctx, in.AppID)
 	if err != nil || env == nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: resolve default environment for app: %w", err))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("sso: resolve default environment for app: %w", err))
 	}
 
 	now := time.Now()
 	conn := &Connection{
-		ID:          id.NewSSOConnectionID(),
-		AppID:       in.AppID,
-		EnvID:       env.ID.String(),
-		OrgID:       in.OrgID,
-		Provider:    in.Provider,
-		Protocol:    in.Protocol,
-		Domain:      in.Domain,
-		Active:      true,
-		Enforced:    in.Enforced,
-		DisplayName: strings.TrimSpace(in.DisplayName),
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:       id.NewSSOConnectionID(),
+		AppID:    in.AppID,
+		EnvID:    env.ID.String(),
+		OrgID:    in.OrgID,
+		Provider: in.Provider,
+		Protocol: in.Protocol,
+		Domain:   in.Domain,
+		Active:   true,
+		Enforced: in.Enforced,
+
+		AllowedDomains:    in.AllowedDomains,
+		TrustedFederation: in.TrustedFederation,
+		DisplayName:       strings.TrimSpace(in.DisplayName),
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	switch in.Protocol {
 	case "oidc":
@@ -1617,14 +1724,14 @@ func (p *Plugin) CreateConnection(ctx context.Context, in CreateConnectionInput)
 		// signed AuthnRequests and SP metadata work out of the box.
 		certPEM, keyPEM, kerr := generateSPKeypair(conn.EntityID)
 		if kerr != nil {
-			return nil, forge.InternalError(fmt.Errorf("sso: generate SP keypair: %w", kerr))
+			return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("sso: generate SP keypair: %w", kerr))
 		}
 		conn.SPCertificate = certPEM
 		conn.SPPrivateKey = keyPEM
 	}
 
 	if err := p.ssoStore.CreateConnection(ctx, conn); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: create connection: %w", err))
+		return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("sso: create connection: %w", err))
 	}
 	return conn, nil
 }
@@ -1639,7 +1746,7 @@ func (p *Plugin) CreateConnection(ctx context.Context, in CreateConnectionInput)
 // the App so the dispatch path (`/v1/sso/:provider/login`) can
 // resolve the right connection.
 type AdminCreateConnectionRequest struct {
-	AppID        string `json:"app_id" description:"Target Application ID"`
+	AppID        string `json:"app_id,omitempty" description:"Application ID; optional, must be the caller's own app"`
 	OrgID        string `json:"org_id,omitempty" description:"Optional Org scope inside the App"`
 	Provider     string `json:"provider" description:"Stable name for this IdP (e.g. 'studio', 'okta')"`
 	Protocol     string `json:"protocol" description:"oidc or saml"`
@@ -1658,6 +1765,8 @@ type AdminCreateConnectionRequest struct {
 	ACSURL            string            `json:"acs_url,omitempty" description:"SP ACS URL override; defaults to the canonical /acs route"`
 	SignRequests      bool              `json:"sign_requests,omitempty" description:"Sign outbound AuthnRequests with the SP key"`
 	AttributeMappings map[string]string `json:"attribute_mappings,omitempty" description:"SAML attribute name → user field (email|first_name|last_name|groups)"`
+	AllowedDomains    []string          `json:"allowed_domains,omitempty" description:"Extra email domains this connection may assert besides domain; logins outside them are refused"`
+	TrustedFederation bool              `json:"trusted_federation,omitempty" description:"Adopt the IdP subject as the local user id when creating users through this connection"`
 }
 
 // AdminCreateConnectionResponse is the response from
@@ -1675,12 +1784,11 @@ type AdminCreateConnectionResponse struct {
 // target App. Mirrors the dashboard's connection-creation flow so
 // the same store-level invariants apply.
 func (p *Plugin) handleAdminCreateConnection(ctx forge.Context, req *AdminCreateConnectionRequest) (*AdminCreateConnectionResponse, error) {
-	if strings.TrimSpace(req.AppID) == "" {
-		return nil, forge.BadRequest("app_id is required")
-	}
-	appID, err := id.ParseAppID(req.AppID)
+	// The connection lands in the caller's own app. A body app_id is
+	// accepted only when it names that same app.
+	appID, err := plugin.ScopedAppID(ctx, strings.TrimSpace(req.AppID))
 	if err != nil {
-		return nil, forge.BadRequest(fmt.Sprintf("invalid app_id: %v", err))
+		return nil, err
 	}
 	var orgID id.OrgID
 	if strings.TrimSpace(req.OrgID) != "" {
@@ -1707,6 +1815,8 @@ func (p *Plugin) handleAdminCreateConnection(ctx forge.Context, req *AdminCreate
 		ACSURL:            req.ACSURL,
 		SignRequests:      req.SignRequests,
 		AttributeMappings: req.AttributeMappings,
+		AllowedDomains:    req.AllowedDomains,
+		TrustedFederation: req.TrustedFederation,
 	})
 	if err != nil {
 		return nil, err
@@ -1744,7 +1854,7 @@ func applySAMLCreate(conn *Connection, in CreateConnectionInput) error {
 
 // AdminListConnectionsRequest binds the query for GET /v1/admin/sso/connections.
 type AdminListConnectionsRequest struct {
-	AppID string `query:"app_id" description:"App identifier; required"`
+	AppID string `query:"app_id,omitempty" description:"App identifier; optional, must be the caller's own app"`
 }
 
 // AdminListConnectionsResponse is the listing response. Returns []
@@ -1781,6 +1891,8 @@ type AdminUpdateConnectionRequest struct {
 	ACSURL            string            `json:"acs_url,omitempty" description:"SP ACS URL override"`
 	SignRequests      *bool             `json:"sign_requests,omitempty" description:"Toggle signing outbound AuthnRequests"`
 	AttributeMappings map[string]string `json:"attribute_mappings,omitempty" description:"Replace the SAML attribute → user field map"`
+	AllowedDomains    []string          `json:"allowed_domains,omitempty" description:"Replace the extra email domains this connection may assert"`
+	TrustedFederation *bool             `json:"trusted_federation,omitempty" description:"Adopt the IdP subject as the local user id for new users"`
 
 	Active *bool `json:"active,omitempty" description:"Activate/deactivate the connection without deleting it"`
 }
@@ -1798,18 +1910,15 @@ type AdminDeleteConnectionResponse struct {
 // safe to surface to authenticated workspace admins.
 func (p *Plugin) handleAdminListConnections(ctx forge.Context, req *AdminListConnectionsRequest) (*AdminListConnectionsResponse, error) {
 	if p.ssoStore == nil {
-		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso plugin: store not wired"))
 	}
-	if strings.TrimSpace(req.AppID) == "" {
-		return nil, forge.BadRequest("app_id is required")
-	}
-	appID, err := id.ParseAppID(req.AppID)
+	appID, err := plugin.ScopedAppID(ctx, strings.TrimSpace(req.AppID))
 	if err != nil {
-		return nil, forge.BadRequest(fmt.Sprintf("invalid app_id: %v", err))
+		return nil, err
 	}
 	conns, err := p.ssoStore.ListConnections(ctx.Context(), appID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: list connections: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso: list connections: %w", err))
 	}
 	if conns == nil {
 		conns = []*Connection{}
@@ -1820,7 +1929,7 @@ func (p *Plugin) handleAdminListConnections(ctx forge.Context, req *AdminListCon
 // handleAdminGetConnection returns a single connection by ID.
 func (p *Plugin) handleAdminGetConnection(ctx forge.Context, req *AdminConnectionPathRequest) (*Connection, error) {
 	if p.ssoStore == nil {
-		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso plugin: store not wired"))
 	}
 	connID, err := id.ParseSSOConnectionID(req.ConnectionID)
 	if err != nil {
@@ -1829,6 +1938,9 @@ func (p *Plugin) handleAdminGetConnection(ctx forge.Context, req *AdminConnectio
 	conn, err := p.ssoStore.GetConnection(ctx.Context(), connID)
 	if err != nil {
 		return nil, forge.NotFound("sso connection not found")
+	}
+	if err := plugin.AssertAppScope(ctx, conn.AppID); err != nil {
+		return nil, err
 	}
 	return conn, nil
 }
@@ -1839,7 +1951,7 @@ func (p *Plugin) handleAdminGetConnection(ctx forge.Context, req *AdminConnectio
 // protocols would orphan the OIDC vs SAML field set.
 func (p *Plugin) handleAdminUpdateConnection(ctx forge.Context, req *AdminUpdateConnectionRequest) (*Connection, error) {
 	if p.ssoStore == nil {
-		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso plugin: store not wired"))
 	}
 	connID, err := id.ParseSSOConnectionID(req.ConnectionID)
 	if err != nil {
@@ -1848,6 +1960,9 @@ func (p *Plugin) handleAdminUpdateConnection(ctx forge.Context, req *AdminUpdate
 	conn, err := p.ssoStore.GetConnection(ctx.Context(), connID)
 	if err != nil {
 		return nil, forge.NotFound("sso connection not found")
+	}
+	if err := plugin.AssertAppScope(ctx, conn.AppID); err != nil {
+		return nil, err
 	}
 
 	if v := strings.TrimSpace(req.Provider); v != "" {
@@ -1886,6 +2001,12 @@ func (p *Plugin) handleAdminUpdateConnection(ctx forge.Context, req *AdminUpdate
 	if req.SignRequests != nil {
 		conn.SignRequests = *req.SignRequests
 	}
+	if req.AllowedDomains != nil {
+		conn.AllowedDomains = req.AllowedDomains
+	}
+	if req.TrustedFederation != nil {
+		conn.TrustedFederation = *req.TrustedFederation
+	}
 	if req.AttributeMappings != nil {
 		conn.AttributeMappings = req.AttributeMappings
 	}
@@ -1895,7 +2016,7 @@ func (p *Plugin) handleAdminUpdateConnection(ctx forge.Context, req *AdminUpdate
 	conn.UpdatedAt = time.Now()
 
 	if err := p.ssoStore.UpdateConnection(ctx.Context(), conn); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: update connection: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso: update connection: %w", err))
 	}
 	return conn, nil
 }
@@ -1904,14 +2025,21 @@ func (p *Plugin) handleAdminUpdateConnection(ctx forge.Context, req *AdminUpdate
 // PUT endpoint with `active=false` if a soft-disable is preferred.
 func (p *Plugin) handleAdminDeleteConnection(ctx forge.Context, req *AdminConnectionPathRequest) (*AdminDeleteConnectionResponse, error) {
 	if p.ssoStore == nil {
-		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso plugin: store not wired"))
 	}
 	connID, err := id.ParseSSOConnectionID(req.ConnectionID)
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid connection_id: %v", err))
 	}
+	conn, err := p.ssoStore.GetConnection(ctx.Context(), connID)
+	if err != nil {
+		return nil, forge.NotFound("sso connection not found")
+	}
+	if err := plugin.AssertAppScope(ctx, conn.AppID); err != nil {
+		return nil, err
+	}
 	if err := p.ssoStore.DeleteConnection(ctx.Context(), connID); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("sso: delete connection: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("sso: delete connection: %w", err))
 	}
 	return &AdminDeleteConnectionResponse{Status: "deleted"}, nil
 }

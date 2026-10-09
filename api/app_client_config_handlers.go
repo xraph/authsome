@@ -76,7 +76,7 @@ func (a *API) handleGetAppClientConfig(ctx forge.Context, req *GetAppClientConfi
 		if errors.Is(err, appclientconfig.ErrNotFound) {
 			return nil, forge.NotFound("no client config found for this app")
 		}
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return cfg, nil
@@ -93,7 +93,7 @@ func (a *API) handleSetAppClientConfig(ctx forge.Context, req *SetAppClientConfi
 	// Try to load existing config to preserve the ID and creation timestamp.
 	existing, err := a.engine.Store().GetAppClientConfig(ctx.Context(), appID)
 	if err != nil && !errors.Is(err, appclientconfig.ErrNotFound) {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	cfg := &appclientconfig.Config{
@@ -124,7 +124,7 @@ func (a *API) handleSetAppClientConfig(ctx forge.Context, req *SetAppClientConfi
 	}
 
 	if err := a.engine.Store().SetAppClientConfig(ctx.Context(), cfg); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return cfg, nil
@@ -140,7 +140,7 @@ func (a *API) handleDeleteAppClientConfig(ctx forge.Context, req *DeleteAppClien
 		if errors.Is(err, appclientconfig.ErrNotFound) {
 			return nil, forge.NotFound("no client config found for this app")
 		}
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "deleted"}

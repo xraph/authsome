@@ -101,7 +101,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	}
 
 	// Discover bridges.
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.relay = engine.Relay()
 	p.settingsMgr = engine.Settings()
 

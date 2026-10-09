@@ -25,19 +25,3 @@ queries:
   passwordPolicy:
     intent: password.policy
     cache: { staleTime: 60s }
-
-graph:
-  # Direct deep-link page for password settings. Uses the same
-  # settings.panel renderer as the global /settings page, just scoped
-  # to the password namespace and with the scope picker hidden (the
-  # tab-strip context disambiguates).
-  - route: /auth/password
-    intent: page.shell
-    title: Password
-    nav: { group: Auth, icon: lock, priority: 0 }
-    slots:
-      main:
-        - intent: settings.panel
-          props:
-            namespace: password
-            scope: app

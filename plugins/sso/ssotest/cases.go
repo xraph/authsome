@@ -279,3 +279,54 @@ func testDomainLookupIsOrgScoped(t *testing.T, f Fixture) {
 	assert.Equal(t, theirs.ID, still.ID,
 		"deactivating one organization's connection removed another's")
 }
+
+// testIdentityBindingRoundTrip proves the connection fields that confine a
+// login survive the store, and that a provider subject binds to one user per
+// connection: the same subject on another connection is a different binding,
+// a second binding of one subject is refused, and an unknown subject is
+// reported as such.
+func testIdentityBindingRoundTrip(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	c := newConnection(f.AppID, f.EnvID)
+	c.AllowedDomains = []string{"corp.example", "Sub.Corp.Example"}
+	c.TrustedFederation = true
+	require.NoError(t, f.Store.CreateConnection(ctx, c))
+	got, err := f.Store.GetConnection(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"corp.example", "Sub.Corp.Example"}, got.AllowedDomains)
+	assert.True(t, got.TrustedFederation)
+	got.AllowedDomains = nil
+	got.TrustedFederation = false
+	require.NoError(t, f.Store.UpdateConnection(ctx, got))
+	again, err := f.Store.GetConnection(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Empty(t, again.AllowedDomains, "an update clears the list")
+	assert.False(t, again.TrustedFederation)
+
+	other := newConnection(f.AppID, f.EnvID)
+	other.Domain = "other-" + other.Domain
+	other.Provider = "other-" + other.Provider
+	require.NoError(t, f.Store.CreateConnection(ctx, other))
+
+	userID := id.NewUserID()
+	_, err = f.Store.GetIdentity(ctx, c.ID, "idp-subject-1")
+	require.ErrorIs(t, err, sso.ErrIdentityNotFound)
+	require.NoError(t, f.Store.CreateIdentity(ctx, &sso.Identity{ConnectionID: c.ID, Subject: "idp-subject-1", UserID: userID}))
+	ident, err := f.Store.GetIdentity(ctx, c.ID, "idp-subject-1")
+	require.NoError(t, err)
+	assert.Equal(t, userID.String(), ident.UserID.String())
+	assert.Equal(t, c.ID.String(), ident.ConnectionID.String())
+	assert.False(t, ident.CreatedAt.IsZero())
+
+	err = f.Store.CreateIdentity(ctx, &sso.Identity{ConnectionID: c.ID, Subject: "idp-subject-1", UserID: id.NewUserID()})
+	require.ErrorIs(t, err, sso.ErrIdentityExists, "one subject binds once per connection")
+
+	otherUser := id.NewUserID()
+	require.NoError(t, f.Store.CreateIdentity(ctx, &sso.Identity{ConnectionID: other.ID, Subject: "idp-subject-1", UserID: otherUser}),
+		"the same subject on another connection is a distinct binding")
+	viaOther, err := f.Store.GetIdentity(ctx, other.ID, "idp-subject-1")
+	require.NoError(t, err)
+	assert.Equal(t, otherUser.String(), viaOther.UserID.String())
+	_, err = f.Store.GetIdentity(ctx, c.ID, "")
+	require.ErrorIs(t, err, sso.ErrIdentityNotFound, "an empty subject never matches")
+}

@@ -11,6 +11,7 @@ import (
 	"github.com/xraph/forge"
 
 	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/bridge"
 	mfa "github.com/xraph/authsome/plugins/mfa"
 	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/store/memory"
@@ -33,7 +34,7 @@ func newMFARateLimited(t *testing.T, limit int) http.Handler {
 	require.NoError(t, err)
 
 	p := mfa.New()
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(memory.New()),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),

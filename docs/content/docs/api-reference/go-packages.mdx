@@ -68,15 +68,15 @@ The central engine with all authentication and management operations.
 | `Engine.DeleteWebhook(ctx, webhookID)` | Delete a webhook |
 | `Engine.ListWebhooks(ctx, appID)` | List webhooks for an app |
 | `Engine.CreateRole(ctx, role)` | Create an RBAC role |
-| `Engine.GetRole(ctx, roleID)` | Get role by ID |
+| `Engine.GetRole(ctx, appID, roleID)` | Get one of the app's roles by ID |
 | `Engine.UpdateRole(ctx, role)` | Update a role |
-| `Engine.DeleteRole(ctx, roleID)` | Delete a role |
+| `Engine.DeleteRole(ctx, appID, roleID)` | Delete one of the app's roles |
 | `Engine.ListRoles(ctx, appID)` | List roles for an app |
-| `Engine.AddPermission(ctx, perm)` | Add permission to a role |
-| `Engine.ListRolePermissions(ctx, roleID)` | List role permissions |
-| `Engine.RemovePermission(ctx, permID)` | Remove a permission |
-| `Engine.AssignUserRole(ctx, userRole)` | Assign role to user |
-| `Engine.UnassignUserRole(ctx, userID, roleID)` | Unassign role |
+| `Engine.AddPermission(ctx, appID, perm)` | Add permission to one of the app's roles |
+| `Engine.ListRolePermissions(ctx, appID, roleID)` | List role permissions |
+| `Engine.RemovePermission(ctx, appID, permID)` | Remove a permission |
+| `Engine.AssignUserRole(ctx, appID, userRole)` | Assign one of the app's roles to a user |
+| `Engine.UnassignUserRole(ctx, appID, userID, roleID)` | Unassign role |
 | `Engine.ListUserRoles(ctx, userID)` | List user roles |
 
 ## Entity packages
