@@ -72,6 +72,51 @@ export const NoConfig: Story = {
   args: defaultArgs,
 };
 
+/** You see the waitlist message after entering an email awaiting approval. */
+export const PendingWaitlist: Story = {
+  decorators: [
+    (Story) => (
+      <MockAuthProvider
+        clientConfig={{ waitlist: { enabled: true } }}
+        waitlistStatus="pending"
+      >
+        <Story />
+      </MockAuthProvider>
+    ),
+  ],
+  args: defaultArgs,
+};
+
+/** An approved email continues to the signup details. */
+export const ApprovedWaitlist: Story = {
+  decorators: [
+    (Story) => (
+      <MockAuthProvider
+        clientConfig={{ waitlist: { enabled: true } }}
+        waitlistStatus="approved"
+      >
+        <Story />
+      </MockAuthProvider>
+    ),
+  ],
+  args: defaultArgs,
+};
+
+/** A rejected entry keeps the signup details hidden. */
+export const RejectedWaitlist: Story = {
+  decorators: [
+    (Story) => (
+      <MockAuthProvider
+        clientConfig={{ waitlist: { enabled: true } }}
+        waitlistStatus="rejected"
+      >
+        <Story />
+      </MockAuthProvider>
+    ),
+  ],
+  args: defaultArgs,
+};
+
 /**
  * Explicit props override auto-derived config values.
  *

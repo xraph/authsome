@@ -28,6 +28,7 @@ import '../widgets/loading_indicator.dart';
 /// - `password.enabled: false` leaves only social sign-up.
 /// - `signup_fields` replaces the name field with the app's own fields.
 /// - `captcha` adds a challenge before the account is created.
+/// - `waitlist.enabled` checks approval when you continue from email.
 /// - `email_verification.required` swaps to an [EmailVerificationForm]
 ///   after sign-up instead of signing the user in.
 /// - `branding.appName` names the app in the default title.
@@ -122,6 +123,7 @@ class _SignUpFormState extends State<SignUpForm> {
   int _step = 0; // 0 = email, 1 = details
   String? _error;
   bool _isSubmitting = false;
+  WaitlistStatus? _waitlistStatus;
   String? _captchaToken;
 
   /// Email awaiting verification, set once sign-up lands in
@@ -185,19 +187,53 @@ class _SignUpFormState extends State<SignUpForm> {
         _error = auth.error;
         _isSubmitting = false;
       });
+      return;
     }
+    setState(() {});
   }
 
-  void _onContinue() {
-    final email = _emailController.text.trim();
+  Future<void> _onContinue() async {
+    if (_isSubmitting) return;
+    final email = _emailController.text.trim().toLowerCase();
     if (email.isEmpty) {
       setState(() => _error = 'Please enter your email');
       return;
     }
     setState(() {
       _error = null;
-      _step = 1;
+      _isSubmitting = true;
     });
+
+    try {
+      var config = _auth?.clientConfig;
+      if (config == null && _auth!.client.publishableKey != null) {
+        config = await _auth!.manager.fetchClientConfig();
+        if (!mounted) return;
+      }
+      if (config?.waitlist?.enabled == true) {
+        final status = await _auth!.client.joinWaitlistWithStatus(email);
+        if (!mounted) return;
+        setState(() => _waitlistStatus = status);
+        if (status != WaitlistStatus.approved) return;
+      }
+      if (!mounted) return;
+      setState(() {
+        _emailController.text = email;
+        _waitlistStatus = null;
+        _step = 1;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e is AuthClientException
+            ? e.message
+            : 'Unable to check waitlist status. Please try again.';
+      });
+      return;
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+    if (!mounted) return;
     Future.delayed(const Duration(milliseconds: 350), () {
       if (mounted) _nameFocusNode.requestFocus();
     });
@@ -320,8 +356,7 @@ class _SignUpFormState extends State<SignUpForm> {
         logo: widget.logo,
         align: widget.align,
         child: const ErrorDisplay(
-          error:
-              'AuthProvider not found in widget tree. Wrap your app in '
+          error: 'AuthProvider not found in widget tree. Wrap your app in '
               'AuthProvider, or pass an `auth:` notifier to SignUpForm.',
         ),
       );
@@ -343,10 +378,20 @@ class _SignUpFormState extends State<SignUpForm> {
     final providers = _resolveSocialProviders();
     final config = _auth?.clientConfig;
     final showPassword = config?.password?.enabled ?? true;
+    final waiting = _waitlistStatus != null;
+    final rejected = _waitlistStatus == WaitlistStatus.rejected;
 
     return AuthCard(
-      title: _resolveTitle(),
-      description: widget.descriptionText,
+      title: waiting
+          ? rejected
+              ? "Signup isn't available"
+              : "You're on the waitlist"
+          : _resolveTitle(),
+      description: waiting
+          ? rejected
+              ? "Access hasn't been approved for this email address."
+              : "We'll email ${_emailController.text.trim()} when access is approved."
+          : widget.descriptionText,
       logo: widget.logo,
       branding: config?.branding,
       align: widget.align,
@@ -355,12 +400,42 @@ class _SignUpFormState extends State<SignUpForm> {
         duration: const Duration(milliseconds: 300),
         switchInCurve: Curves.easeOut,
         switchOutCurve: Curves.easeIn,
-        child: !showPassword
-            ? _buildSocialOnly(context, theme, colorScheme, providers)
-            : _step == 0
-                ? _buildEmailStep(context, theme, colorScheme, providers)
-                : _buildDetailsStep(context, theme, colorScheme),
+        child: waiting
+            ? _buildWaitlistStep(theme)
+            : !showPassword
+                ? _buildSocialOnly(context, theme, colorScheme, providers)
+                : _step == 0
+                    ? _buildEmailStep(context, theme, colorScheme, providers)
+                    : _buildDetailsStep(context, theme, colorScheme),
       ),
+    );
+  }
+
+  Widget _buildWaitlistStep(AuthThemeData theme) {
+    return Column(
+      key: const ValueKey('sign-up-waitlist-step'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ErrorDisplay(error: _error),
+        if (_error != null) SizedBox(height: theme.fieldSpacing),
+        FilledButton(
+          onPressed: _isSubmitting ? null : _onContinue,
+          child: _isSubmitting
+              ? const LoadingIndicator(size: LoadingSize.sm)
+              : const Text('Check status'),
+        ),
+        TextButton(
+          onPressed: _isSubmitting
+              ? null
+              : () => setState(() {
+                    _waitlistStatus = null;
+                    _error = null;
+                    _step = 0;
+                  }),
+          child: const Text('Use another email'),
+        ),
+      ],
     );
   }
 

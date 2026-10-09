@@ -16,6 +16,9 @@ import 'types.dart';
 // Re-exports for convenience.
 export 'generated/api_client.dart' show AuthClientConfig, AuthClientException;
 
+/// Approval status for an email on the app's waitlist.
+enum WaitlistStatus { pending, approved, rejected }
+
 /// AuthSomeClient extends the auto-generated client with backward-compatible
 /// convenience methods that [AuthManager] depends on.
 ///
@@ -150,6 +153,21 @@ class AuthSomeClient extends generated.AuthClient {
     });
   }
 
+  /// Join once, or return the existing entry's status before signup.
+  Future<WaitlistStatus> joinWaitlistWithStatus(String email) async {
+    final entry = await _rawPost('/v1/waitlist/join', body: {
+      'email': email.trim().toLowerCase(),
+    });
+    return switch (entry['status']) {
+      'pending' => WaitlistStatus.pending,
+      'approved' => WaitlistStatus.approved,
+      'rejected' => WaitlistStatus.rejected,
+      _ => throw const AuthClientException(
+          'Unable to check waitlist status. Please try again.',
+        ),
+    };
+  }
+
   /// Splits a display name on its first space into first and last name.
   static (String?, String?) _splitName(String? name) {
     if (name == null || name.trim().isEmpty) return (null, null);
@@ -234,7 +252,8 @@ class AuthSomeClient extends generated.AuthClient {
   /// disclose whether an address has passkeys registered, which the
   /// discoverable flow avoids by design.
   Future<Map<String, dynamic>> passkeyLoginBeginWithEmail({
-    @Deprecated('Never read by the server; will be removed in a future release.')
+    @Deprecated(
+        'Never read by the server; will be removed in a future release.')
     String? email,
   }) async {
     final res = await super.passkeyLoginBegin();
@@ -319,8 +338,7 @@ class AuthSomeClient extends generated.AuthClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       String errorMessage;
       try {
-        final errorBody =
-            jsonDecode(response.body) as Map<String, dynamic>;
+        final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
         errorMessage = (errorBody['error'] as String?) ??
             'Request failed with status ${response.statusCode}';
       } catch (_) {

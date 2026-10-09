@@ -2,7 +2,12 @@
 
 import * as React from "react";
 import { useState } from "react";
-import { useAuth, useClientConfig, type SignupFieldConfig } from "@authsome/ui-react";
+import {
+  useAuth,
+  useClientConfig,
+  type SignupFieldConfig,
+} from "@authsome/ui-react";
+import type { WaitlistStatus } from "@authsome/ui-core";
 import { cn } from "../lib/utils";
 import { Button } from "../primitives/button";
 import { Input } from "../primitives/input";
@@ -15,7 +20,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../primitives/select";
-import { AuthCard, type AuthCardAlign, type AuthCardVariant } from "./auth-card";
+import {
+  AuthCard,
+  type AuthCardAlign,
+  type AuthCardVariant,
+} from "./auth-card";
 import { ErrorDisplay } from "./error-display";
 import { LoadingSpinner } from "./loading-spinner";
 import { PasswordInput } from "./password-input";
@@ -57,7 +66,6 @@ export interface SignUpFormComponentProps {
    */
   title?: string;
 }
-
 
 /**
  * Renders a single dynamic signup field based on its type.
@@ -103,7 +111,11 @@ function DynamicField({
           {label}
           <Select value={value} onValueChange={onChange} disabled={disabled}>
             <SelectTrigger id={fieldId}>
-              <SelectValue placeholder={field.placeholder || `Select ${field.label.toLowerCase()}`} />
+              <SelectValue
+                placeholder={
+                  field.placeholder || `Select ${field.label.toLowerCase()}`
+                }
+              />
             </SelectTrigger>
             <SelectContent>
               {field.options?.map((opt) => (
@@ -161,8 +173,7 @@ function DynamicField({
 
     default: {
       // text, email, number, tel, url, date, radio — all use Input
-      const inputType =
-        field.type === "radio" ? "text" : field.type || "text";
+      const inputType = field.type === "radio" ? "text" : field.type || "text";
       return (
         <div className="grid gap-1.5">
           {label}
@@ -197,6 +208,7 @@ function DynamicField({
  * - **Dynamic fields**: When the backend has custom signup fields configured, they are rendered automatically.
  * - **Auto-configuration**: When `publishableKey` is set on `AuthProvider`, the form
  *   auto-derives social providers and signup fields from the backend client config.
+ * - When the waitlist is enabled, Continue checks approval before showing signup details.
  * - Explicit props always take precedence over auto-discovered values.
  */
 export function SignUpForm({
@@ -212,7 +224,7 @@ export function SignUpForm({
   className,
   title: titleProp,
 }: SignUpFormComponentProps) {
-  const { signUp, client } = useAuth();
+  const { signUp, client, manager } = useAuth();
   const { config } = useClientConfig();
 
   const appName = config?.branding?.app_name;
@@ -251,7 +263,12 @@ export function SignUpForm({
     return [...fields].sort((a, b) => a.order - b.order);
   }, [config?.signup_fields]);
 
-  const [step, setStep] = useState<"email" | "details" | "verify">("email");
+  const [step, setStep] = useState<"email" | "details" | "waitlist" | "verify">(
+    "email",
+  );
+  const [waitlistStatus, setWaitlistStatus] = useState<WaitlistStatus | null>(
+    null,
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -300,16 +317,43 @@ export function SignUpForm({
   const [fallbackFirstName, setFallbackFirstName] = useState("");
   const [fallbackLastName, setFallbackLastName] = useState("");
 
-  const handleEmailContinue = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleEmailContinue = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setError(null);
 
-    if (!email.trim()) {
+    const signupEmail = email.trim().toLowerCase();
+    if (!signupEmail) {
       setError("Please enter your email address.");
       return;
     }
 
-    setStep("details");
+    setEmail(signupEmail);
+    setIsSubmitting(true);
+    try {
+      const signupConfig =
+        config ??
+        (client.getPublishableKey?.()
+          ? await manager.fetchClientConfig()
+          : null);
+      if (signupConfig?.waitlist?.enabled) {
+        const entry = await client.joinWaitlist({ email: signupEmail });
+        setWaitlistStatus(entry.status);
+        if (entry.status !== "approved") {
+          setStep("waitlist");
+          return;
+        }
+      }
+      setStep("details");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to check waitlist status. Please try again.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -352,6 +396,7 @@ export function SignUpForm({
     setStep("email");
     setPassword("");
     setError(null);
+    setWaitlistStatus(null);
   };
 
   const footer = signInUrl ? (
@@ -365,6 +410,41 @@ export function SignUpForm({
       </a>
     </p>
   ) : undefined;
+
+  if (step === "waitlist") {
+    const rejected = waitlistStatus === "rejected";
+    return (
+      <AuthCard
+        title={rejected ? "Signup isn't available" : "You're on the waitlist"}
+        description={
+          rejected
+            ? "Access hasn't been approved for this email address."
+            : `We'll email ${email} when access is approved.`
+        }
+        logo={logo}
+        footer={footer}
+        align={align}
+        variant={variant}
+        className={cn(className)}
+      >
+        <form onSubmit={handleEmailContinue} className="grid gap-3">
+          <ErrorDisplay error={error} />
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting && <LoadingSpinner size="sm" className="mr-2" />}
+            Check status
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={isSubmitting}
+            onClick={goBack}
+          >
+            Use another email
+          </Button>
+        </form>
+      </AuthCard>
+    );
+  }
 
   /* -- Password disabled: show only social sign-up ----------- */
 
@@ -474,11 +554,8 @@ export function SignUpForm({
               />
             </div>
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isSubmitting}
-            >
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting && <LoadingSpinner size="sm" className="mr-2" />}
               Continue
             </Button>
           </form>

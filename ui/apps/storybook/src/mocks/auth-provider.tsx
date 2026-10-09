@@ -7,6 +7,7 @@ import type {
   AuthClient,
   ClientConfig,
   Organization,
+  WaitlistStatus,
 } from "@authsome/ui-core";
 
 /** Mock user for Storybook stories. */
@@ -215,6 +216,7 @@ export interface MockAuthProviderProps {
     | "mfa_required"
     | "email_verification_required";
   signUpBehavior?: "authenticated" | "email_verification_required";
+  waitlistStatus?: WaitlistStatus;
 }
 
 /**
@@ -231,6 +233,7 @@ export function MockAuthProvider({
   clientConfig = null,
   signInBehavior = "authenticated",
   signUpBehavior = "authenticated",
+  waitlistStatus = "pending",
 }: MockAuthProviderProps) {
   const [state, setState] = useState<AuthState>(
     stateFromPreset(initialState, user, MOCK_SESSION),
@@ -316,6 +319,11 @@ export function MockAuthProvider({
 
   const mockClient = useMemo(() => {
     const client = {
+      joinWaitlist: async ({ email }: { email: string; name?: string }) => {
+        await wait();
+        if (simulateError) throw new Error("Unable to check waitlist status");
+        return { email, status: waitlistStatus };
+      },
       verifyEmail: async () => {
         await wait();
         if (simulateError) throw new Error("Invalid verification code");
@@ -418,7 +426,7 @@ export function MockAuthProvider({
       },
     };
     return client as unknown as AuthClient;
-  }, [wait, simulateError, user]);
+  }, [wait, simulateError, user, waitlistStatus]);
 
   const currentUser = state.status === "authenticated" ? state.user : null;
   const currentSession =

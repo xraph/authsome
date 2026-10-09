@@ -108,6 +108,14 @@ export interface ListResponse<T> {
   total: number;
 }
 
+/** The signup decision returned by the app's waitlist. */
+export type WaitlistStatus = "pending" | "approved" | "rejected";
+
+export interface WaitlistJoinResponse {
+  email: string;
+  status: WaitlistStatus;
+}
+
 // ── AuthClient adapter ──────────────────────────────
 
 /**
@@ -119,6 +127,9 @@ export interface ListResponse<T> {
  * the auth state machine.
  */
 export class AuthClient extends GeneratedClient {
+  private readonly waitlistURL: string;
+  private readonly waitlistFetch: typeof globalThis.fetch;
+
   constructor(config: AuthClientConfig) {
     const fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis);
     let baseURL = config.baseURL;
@@ -130,11 +141,52 @@ export class AuthClient extends GeneratedClient {
         // Device approval supports cookie sessions as well as bearer tokens.
         // Keep that transport option while using the generated form contract.
         const isDeviceCompletion =
-          input === deviceCompletionURL &&
-          init?.method === "POST";
-        return fetchFn(input, isDeviceCompletion ? { ...init, credentials: "include" } : init);
+          input === deviceCompletionURL && init?.method === "POST";
+        return fetchFn(
+          input,
+          isDeviceCompletion ? { ...init, credentials: "include" } : init,
+        );
       },
     });
+    this.waitlistURL = `${baseURL}/v1/waitlist/join`;
+    this.waitlistFetch = fetchFn;
+  }
+
+  /** Join the waitlist, or return the existing entry and its approval status. */
+  async joinWaitlist(body: {
+    email: string;
+    name?: string;
+  }): Promise<WaitlistJoinResponse> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+    const key = this.getPublishableKey();
+    if (key) headers["X-Publishable-Key"] = key;
+
+    const response = await this.waitlistFetch(this.waitlistURL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ ...body, email: body.email.trim().toLowerCase() }),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new AuthClientError(
+        data?.error ?? `Request failed with status ${response.status}`,
+        response.status,
+        data?.type,
+        data ?? undefined,
+      );
+    }
+    if (
+      typeof data?.email !== "string" ||
+      !["pending", "approved", "rejected"].includes(data?.status)
+    ) {
+      throw new AuthClientError(
+        "Unable to check waitlist status. Please try again.",
+      );
+    }
+    return data as WaitlistJoinResponse;
   }
 
   /**
@@ -143,7 +195,9 @@ export class AuthClient extends GeneratedClient {
    * Accepts a raw refresh-token string (used by auth.ts) or the full
    * RefreshRequest body.
    */
-  override async refresh(body: RefreshRequest | string): Promise<ApiTokenResponse> {
+  override async refresh(
+    body: RefreshRequest | string,
+  ): Promise<ApiTokenResponse> {
     const req = typeof body === "string" ? { refresh_token: body } : body;
     return super.refresh(req);
   }
@@ -156,7 +210,10 @@ export class AuthClient extends GeneratedClient {
    * two-argument form is still accepted and its first argument ignored rather
    * than breaking callers outside this package.
    */
-  override async signOut(bodyOrToken: unknown, token?: string): Promise<ApiStatusResponse> {
+  override async signOut(
+    bodyOrToken: unknown,
+    token?: string,
+  ): Promise<ApiStatusResponse> {
     if (typeof bodyOrToken === "string") {
       return super.signOut(bodyOrToken);
     }
@@ -168,7 +225,9 @@ export class AuthClient extends GeneratedClient {
     body: ChallengeMFARequest | { enrollment_id?: string; code: string },
   ): Promise<ChallengeResponse> {
     if (!("mfa_ticket" in body) || !body.mfa_ticket) {
-      throw new Error("MFA challenge requires an authentication ticket, not an enrollment ID");
+      throw new Error(
+        "MFA challenge requires an authentication ticket, not an enrollment ID",
+      );
     }
     return super.challengeMFA(body);
   }
@@ -177,7 +236,9 @@ export class AuthClient extends GeneratedClient {
   override async verifyRecoveryCode(
     body: VerifyRecoveryCodeRequest | string,
   ): Promise<RecoveryVerifyResponse> {
-    return super.verifyRecoveryCode(typeof body === "string" ? { code: body } : body);
+    return super.verifyRecoveryCode(
+      typeof body === "string" ? { code: body } : body,
+    );
   }
 
   /** Send an SMS code for the authenticated session. */
@@ -186,7 +247,10 @@ export class AuthClient extends GeneratedClient {
   }
 
   /** Verify an SMS code without issuing a session. */
-  async verifySMSCodeForMFA(code: string, token: string): Promise<SMSVerifyResponse> {
+  async verifySMSCodeForMFA(
+    code: string,
+    token: string,
+  ): Promise<SMSVerifyResponse> {
     return super.verifySMSCode({ code }, token);
   }
 
@@ -196,7 +260,10 @@ export class AuthClient extends GeneratedClient {
     action: "approve" | "deny",
     token?: string,
   ): Promise<DeviceCompleteResponse> {
-    return super.oauth2DeviceComplete({ user_code: userCode, action }, token ?? "");
+    return super.oauth2DeviceComplete(
+      { user_code: userCode, action },
+      token ?? "",
+    );
   }
 
   /**

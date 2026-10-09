@@ -18,12 +18,15 @@ MockAuthNotifier buildIdleMock({
   when(() => mock.state).thenReturn(state);
   when(() => mock.error).thenReturn(error);
   when(() => mock.clientConfig).thenReturn(clientConfig);
+  when(() => mock.client)
+      .thenReturn(AuthSomeClient.fromUrl('http://test.local'));
   when(() => mock.isAuthenticated).thenReturn(state is AuthAuthenticated);
   when(() => mock.isLoading).thenReturn(state is AuthLoading);
   when(() => mock.isMfaRequired).thenReturn(state is AuthMfaRequired);
   when(() => mock.isConfigLoaded).thenReturn(clientConfig != null);
-  when(() => mock.signIn(any(), any(),
-      captchaToken: any(named: 'captchaToken'))).thenAnswer((_) async {});
+  when(() =>
+          mock.signIn(any(), any(), captchaToken: any(named: 'captchaToken')))
+      .thenAnswer((_) async {});
   when(() => mock.signUp(
         any(),
         any(),

@@ -7,7 +7,11 @@ import { cn } from "../lib/utils";
 import { Button } from "../primitives/button";
 import { Input } from "../primitives/input";
 import { Label } from "../primitives/label";
-import { AuthCard, type AuthCardAlign, type AuthCardVariant } from "./auth-card";
+import {
+  AuthCard,
+  type AuthCardAlign,
+  type AuthCardVariant,
+} from "./auth-card";
 import { ErrorDisplay } from "./error-display";
 import { LoadingSpinner } from "./loading-spinner";
 import { CheckCircle2 } from "lucide-react";
@@ -58,23 +62,7 @@ export function WaitlistForm({
     setIsSubmitting(true);
 
     try {
-      // There is no waitlist method on the generated client and no public
-      // accessor for its base URL, so this reads the field directly — the same
-      // reach-in that ui-core's own client.ts uses for /v1/client-config. Named
-      // shape rather than `any`, so what is being assumed is written down.
-      const baseURL = (client as unknown as { baseURL?: string }).baseURL ?? "";
-      const res = await fetch(baseURL + "/v1/waitlist/join", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, name: name || undefined }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(
-          data?.error ?? "Something went wrong. Please try again.",
-        );
-      }
+      await client.joinWaitlist({ email, name: name || undefined });
 
       setIsSuccess(true);
       onSuccess?.();
@@ -186,11 +174,7 @@ export function WaitlistForm({
             />
           </div>
 
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={isSubmitting}
-          >
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
             {isSubmitting && <LoadingSpinner size="sm" className="mr-2" />}
             Join Waitlist
           </Button>

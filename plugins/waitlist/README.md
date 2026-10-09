@@ -30,6 +30,15 @@ authsome.WithPlugin(waitlist.New()),
 `Enabled` controls whether the gate actually blocks. Turning it off leaves the endpoints up so
 you can keep collecting emails without refusing signups.
 
+With `waitlist.enabled` in client config, the React and Flutter signup forms check approval when
+you enter an email and press Continue. An approved address opens the signup details. A new address
+joins the queue, and pending entries show the waitlist message. Rejected entries show that access
+hasn't been approved. You can check again or use another email from either message.
+
+The forms use the idempotent join endpoint, which returns an existing entry without changing its
+status or sending another join notification. Failed checks keep you on the current step for retry.
+The server checks approval again when you submit signup.
+
 ## Config
 
 | Field | Type | Default | What it does |
