@@ -136,6 +136,7 @@ func (p *SessionProvider) Authenticate(ctx context.Context, r *http.Request) (*a
 		return &auth.AuthContext{
 			Subject:      ref.ID,
 			ProviderName: "session",
+			Metadata:     map[string]any{"credential_scheme": scheme},
 			// Same reasoning as the user branch below: forge's authorizer does
 			// set membership over this field, so a route declaring
 			// forge.WithAnyRole denies a machine caller until it is populated.
@@ -161,6 +162,7 @@ func (p *SessionProvider) Authenticate(ctx context.Context, r *http.Request) (*a
 	return &auth.AuthContext{
 		Subject:      u.ID.String(),
 		ProviderName: "session",
+		Metadata:     map[string]any{"credential_scheme": scheme},
 		// Roles were stamped onto the session when it was issued (see
 		// engine_session_roles.go). Forge's authorizer does set membership
 		// over exactly this field, and its RequireRole interceptors read the
