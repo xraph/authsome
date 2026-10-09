@@ -191,7 +191,7 @@ function FullAuthFlowRenderer() {
       <PageShell>
         {step === "sign-in" && (
           <div className="flex min-h-[70vh] items-center justify-center">
-            <div className="w-full max-w-[380px] max-w-full">
+            <div className="w-full max-w-[380px]">
               <SignInForm
                 signUpUrl="/sign-up"
                 forgotPasswordUrl="/forgot-password"
@@ -203,7 +203,7 @@ function FullAuthFlowRenderer() {
 
         {step === "mfa" && (
           <div className="flex min-h-[70vh] items-center justify-center">
-            <div className="w-full max-w-[380px] max-w-full">
+            <div className="w-full max-w-[380px]">
               <MFAChallengeFormStyled
                 enrollmentId="enroll_mock_totp"
                 onSuccess={() => setStep("dashboard")}

@@ -16,6 +16,8 @@ The packaging check first reproduced a missing advertised dist/index.mjs and ext
 
 Storybook now targets chrome87, edge88, es2020, firefox78 and safari14.1 for build and dependency optimization. Its prior Safari14 target cannot compile with the corrected esbuild behavior because of the [older Safari destructuring bug](https://github.com/evanw/esbuild/issues/4436). This developer artifact floor changes from Safari14 to 14.1; SDK and published UI browser contracts do not change. The browser checks ran in Chromium, so they do not establish Safari execution support.
 
+The focused review corrected two competing maximum widths in FullAuthFlow. Its sign-in and MFA containers/cards now measure 380 px at a 1440 px viewport and 358 px at a 390 px viewport, with no horizontal overflow. The rebuilt static sign-up verification story was also exercised from submitted registration through code verification into the authenticated mock user. These selected checks do not cover every story or error/retry branch.
+
 The docs tokenizer restoration helper uses explicit NUL/SOH delimiters. Equivalence checks passed 10,017 bounded placeholder cases and eight markup/highlighting cases against the prior implementation. Existing docs lint findings were repaired without changing copy or adding dummy controls. Storybook callbacks use existing observable action spies.
 
 Commands:
@@ -54,3 +56,5 @@ GOTOOLCHAIN=go1.26.9 GOWORK=off go test ./typescript
 The SDK developer graph requires Node 20.19+ or 22.12+; these gates are not new consumer requirements. Use the selected Node runtime for subprocesses too. The UI Turbo checks used a task-local pnpm 9.15.0 shim to preserve the workspace package manager in spawned processes.
 
 Zero audit findings are one gate. No deployed docs or Storybook host was verified, Windows-specific advisory behavior was not exercised, and no new Go/provider functional changes or composed Go security analysis belong to this dependency task. Docs has no active CI coverage, so its local gates are required. Seven existing shipped UI core no-explicit-any warnings expose MFA contract drift and are assigned to a separate client-contract correction. They remain unresolved. Storybook mock success does not establish live authentication or security qualification. Final remote CI status must be read from the exact commit run; a cancelled predecessor is not complete suite evidence.
+
+Developer build output retains ignored use-client directives, Storybook runtime eval and chunk-size notices. The unchanged UI tests retain timeout overflow and React act warnings. These diagnostics remain visible and the core test warnings belong to the separate client-contract follow-up.
