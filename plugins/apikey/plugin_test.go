@@ -782,11 +782,15 @@ func TestPlugin_Strategy_Authenticate_GateObservesAllow(t *testing.T) {
 func TestPlugin_Strategy_Authenticate_GateObservesAllow_ServiceAccount(t *testing.T) {
 	p, store := newTestPlugin()
 	gate := &fakeGate{}
-	require.NoError(t, p.OnInit(context.Background(), &mockEngine{logger: log.NewNoopLogger(), store: store, gate: gate}))
-	s := p.Strategy()
-
 	appID := id.NewAppID()
 	svcID := id.NewServiceAccountID()
+	require.NoError(t, p.OnInit(context.Background(), &mockEngine{
+		logger: log.NewNoopLogger(), store: store, gate: gate,
+		principals: map[string]*principal.Principal{
+			svcID.String(): {Ref: principal.Ref{Kind: principal.KindService, ID: svcID.String()}, AppID: appID},
+		},
+	}))
+	s := p.Strategy()
 
 	raw, hash, prefix, err := apikey.GenerateKey()
 	require.NoError(t, err)
@@ -866,24 +870,25 @@ func TestPlugin_Strategy_Authenticate_UsesTheRegisteredPrincipalKind(t *testing.
 		"the risk plugins must be told the real kind, or a policy on principal_kind never matches")
 }
 
-// With no resolver wired, the kind falls back to KindService, which is what an
-// unclassified machine caller has always been and what the service account
-// store itself defaults to.
+// An active legacy principal without a registered kind defaults to service.
 func TestPlugin_Strategy_Authenticate_FallsBackToServiceKind(t *testing.T) {
 	p, store := newTestPlugin()
-	require.NoError(t, p.OnInit(context.Background(),
-		&mockEngine{logger: log.NewNoopLogger(), store: store}))
-	s := p.Strategy()
-
 	appID := id.NewAppID()
 	svcID := id.NewServiceAccountID()
+	require.NoError(t, p.OnInit(context.Background(), &mockEngine{
+		logger: log.NewNoopLogger(), store: store,
+		principals: map[string]*principal.Principal{
+			svcID.String(): {Ref: principal.Ref{ID: svcID.String()}, AppID: appID},
+		},
+	}))
+	s := p.Strategy()
 	raw, hash, prefix, err := apikey.GenerateKey()
 	require.NoError(t, err)
 
 	now := time.Now()
 	require.NoError(t, store.CreateAPIKey(context.Background(), &apikey.APIKey{
 		ID: id.NewAPIKeyID(), AppID: appID, ServiceAccountID: svcID,
-		Name: "Unresolvable Key", KeyHash: hash, KeyPrefix: prefix,
+		Name: "Legacy Principal Key", KeyHash: hash, KeyPrefix: prefix,
 		CreatedAt: now, UpdatedAt: now,
 	}))
 

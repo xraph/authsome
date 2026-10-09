@@ -164,6 +164,18 @@ When a request includes an API key:
 
 The `X-App-ID` header or `app_id` query parameter is required for API key authentication to scope the key lookup.
 
+For service-account keys, you must initialize the plugin with an engine that
+resolves the account through `ResolvePrincipal`. A missing resolver, lookup error,
+nil result, deleted account, or disabled or expired account refuses authentication
+with `apikey: service account is not active`. The response does not include lookup
+error details. No session is created and the principal gate's `Observe` callback
+does not run on refusal, even if the optional gate would allow the request.
+
+If you supply a test engine, return an explicit active principal for each machine
+key you expect to authenticate. Successfully resolved accounts keep their registered
+kind, including `agent`; an active legacy account with no kind defaults to
+`service_account`. User-bound keys continue to resolve their associated user.
+
 ## API routes
 
 All routes below require an authenticated session. Callers are confined to

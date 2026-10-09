@@ -106,10 +106,8 @@ type Plugin struct {
 	defaultAppID string
 
 	resolveUser UserResolver
-	// resolvePrincipal reads a service account's real kind off the principal
-	// store. Without it a service-account key authenticates as KindService
-	// whatever the account was actually registered as, and the caller's kind
-	// then disagrees with itself within a single request.
+	// resolvePrincipal reads the service account's registered kind and state.
+	// Service-account keys require successful resolution before authentication.
 	resolvePrincipal PrincipalResolver
 	chronicle        bridge.Chronicle
 	relay            bridge.EventRelay
@@ -604,9 +602,8 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeKeyRequest) (*apityp
 type apikeyStrategy struct {
 	store       apikey.Store
 	resolveUser UserResolver
-	// resolvePrincipal reads the service account's registered kind. Nil in
-	// minimal test wiring, in which case Authenticate falls back to
-	// KindService and says so in the session it mints.
+	// resolvePrincipal must resolve an active account before a machine session
+	// can be created with that account's registered kind.
 	resolvePrincipal PrincipalResolver
 	// gate scores the caller through the principal-auth hooks. Nil when the
 	// engine does not provide one (e.g. in isolated unit tests), in which
@@ -647,20 +644,18 @@ func (s *apikeyStrategy) refuse(ctx context.Context, r *http.Request, err error)
 }
 
 // serviceAccountState returns the service account's registered kind and
-// whether it may authenticate at now. Without a principal resolver the kind
-// falls back to KindService and the account is taken as active, which is
-// what minimal test wiring expects; with one, a resolved principal that
-// reports inactive (disabled or expired) refuses the key.
+// whether it may authenticate at now. Missing, failed and inactive principal
+// resolution refuses the key.
 func (s *apikeyStrategy) serviceAccountState(ctx context.Context, saID id.ServiceAccountID, now time.Time) (principal.Kind, bool) {
 	if s.resolvePrincipal == nil {
-		return principal.KindService, true
+		return principal.KindService, false
 	}
 	// The store resolves any non-user ref by ID and ignores the kind on the
 	// way in, so seeding the lookup with KindService is not an assumption
 	// about the answer.
 	p, err := s.resolvePrincipal(ctx, principal.Ref{Kind: principal.KindService, ID: saID.String()})
 	if err != nil || p == nil {
-		return principal.KindService, true
+		return principal.KindService, false
 	}
 	kind := p.Kind
 	if kind == "" {
@@ -764,7 +759,7 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 		var active bool
 		subjectKind, active = s.serviceAccountState(ctx, key.ServiceAccountID, now)
 		if !active {
-			// A disabled or expired service account keeps no working keys.
+			// Only a successfully resolved, active service account can use keys.
 			return s.refuse(ctx, r, fmt.Errorf("apikey: service account is not active"))
 		}
 		subject = principal.Ref{Kind: subjectKind, ID: key.ServiceAccountID.String()}
