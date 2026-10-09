@@ -17,7 +17,7 @@ require (
 	github.com/xraph/chronicle v1.7.0
 	github.com/xraph/dispatch v1.7.0
 	github.com/xraph/forge v1.12.3
-	github.com/xraph/forge/extensions/auth v1.12.3
+	github.com/xraph/forge/extensions/auth v1.12.4-0.20261009184218-9ec7ce62855a
 	github.com/xraph/go-utils v1.3.0
 	github.com/xraph/grove v1.7.1
 	github.com/xraph/grove/drivers/mongodriver v1.7.1

@@ -10,6 +10,7 @@ import (
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/forge"
+	forgeauth "github.com/xraph/forge/extensions/auth"
 
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/dpop"
@@ -1103,6 +1104,11 @@ func ExtractCredentialFromContext(ctx context.Context, r *http.Request, cookieNa
 // the strict rule that goes with it.
 func extractCredentialCtx(ctx context.Context, r *http.Request, cookieName string) (scheme, token string) {
 	scheme, token = extractCredential(r, cookieName)
+	// Only Authorization extraction returns Bearer or DPoP. Cookie fallback
+	// must keep its provenance even if a stale frame marker matches its token.
+	if (scheme == schemeBearer || scheme == schemeDPoP) && forgeauth.MatchesExplicitFrameCredential(ctx, scheme, token) {
+		return scheme, token
+	}
 	if scheme == schemeBearer && token != "" && token == cookieBridgedTokenFrom(ctx) {
 		return schemeCookie, token
 	}
