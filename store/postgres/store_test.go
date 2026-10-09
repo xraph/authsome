@@ -8,8 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moby/moby/api/types/container"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
 	pgmodule "github.com/testcontainers/testcontainers-go/modules/postgres"
 
 	"github.com/xraph/grove"
@@ -36,6 +38,12 @@ import (
 
 func setupTestStore(t *testing.T) *pgstore.Store {
 	t.Helper()
+	s, _ := setupTestDatabase(t, true)
+	return s
+}
+
+func setupTestDatabase(t *testing.T, migrated bool) (*pgstore.Store, *pgdriver.PgDB) {
+	t.Helper()
 	ctx := context.Background()
 
 	container, err := pgmodule.Run(ctx, "postgres:16-alpine",
@@ -44,8 +52,10 @@ func setupTestStore(t *testing.T) *pgstore.Store {
 		pgmodule.WithPassword("test"),
 		pgmodule.BasicWaitStrategies(),
 		pgmodule.WithSQLDriver("pgx"),
+		testcontainers.WithHostConfigModifier(func(h *container.HostConfig) { h.Memory = 512 * 1024 * 1024; h.NanoCPUs = 1_000_000_000 }),
 	)
 	require.NoError(t, err, "start postgres container")
+	t.Logf("owned postgres container %s: memory=536870912 bytes cpu=1", container.GetContainerID())
 
 	t.Cleanup(func() {
 		require.NoError(t, container.Terminate(ctx), "terminate container")
@@ -65,9 +75,11 @@ func setupTestStore(t *testing.T) *pgstore.Store {
 	})
 
 	s := pgstore.New(db)
-	require.NoError(t, s.Migrate(ctx), "run migrations")
+	if migrated {
+		require.NoError(t, s.Migrate(ctx), "run migrations")
+	}
 
-	return s
+	return s, pgdb
 }
 
 // testEnvByApp records the default environment created for each test app so

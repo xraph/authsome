@@ -14,6 +14,22 @@ import (
 
 // CreateServiceAccount creates a new service account for an app.
 func (e *Engine) CreateServiceAccount(ctx context.Context, appID id.AppID, name, description string, scopes []string) (*serviceaccount.ServiceAccount, error) {
+	return e.createServiceAccount(ctx, appID, id.Nil, name, description, scopes)
+}
+
+// CreateServiceAccountInEnvironment creates an account bound to a persisted
+// environment in the app. Its API keys inherit that binding.
+func (e *Engine) CreateServiceAccountInEnvironment(ctx context.Context, appID id.AppID, envID id.EnvironmentID, name, description string, scopes []string) (*serviceaccount.ServiceAccount, error) {
+	if err := e.requireStarted(); err != nil {
+		return nil, err
+	}
+	if envID.IsNil() {
+		return nil, ErrServiceAccountEnvironmentRequired
+	}
+	return e.createServiceAccount(ctx, appID, envID, name, description, scopes)
+}
+
+func (e *Engine) createServiceAccount(ctx context.Context, appID id.AppID, envID id.EnvironmentID, name, description string, scopes []string) (*serviceaccount.ServiceAccount, error) {
 	if err := e.requireStarted(); err != nil {
 		return nil, err
 	}
@@ -24,10 +40,21 @@ func (e *Engine) CreateServiceAccount(ctx context.Context, appID id.AppID, name,
 		return nil, fmt.Errorf("authsome: name is required")
 	}
 
+	if !envID.IsNil() {
+		env, err := e.store.GetEnvironment(ctx, envID)
+		if err != nil {
+			return nil, fmt.Errorf("authsome: get service account environment: %w", err)
+		}
+		if env.AppID != appID {
+			return nil, fmt.Errorf("authsome: service account environment: %w", store.ErrNotFound)
+		}
+	}
+
 	now := time.Now()
 	svc := &serviceaccount.ServiceAccount{
 		ID:          id.NewServiceAccountID(),
 		AppID:       appID,
+		EnvID:       envID,
 		Name:        name,
 		Description: description,
 		Scopes:      scopes,
@@ -99,6 +126,10 @@ func (e *Engine) DeleteServiceAccount(ctx context.Context, svcID id.ServiceAccou
 // scopes wider than the identity it belongs to.
 var ErrScopeEscalation = errors.New("authsome: requested scopes exceed the service account's scopes")
 
+// ErrServiceAccountEnvironmentRequired is returned when a machine key has no
+// persisted account environment to inherit.
+var ErrServiceAccountEnvironmentRequired = errors.New("authsome: service account environment is required to issue an api key")
+
 // CreateServiceAccountAPIKey mints an API key bound to a service account (not a user).
 // Returns the persisted APIKey and the plaintext secret (only returned once — not stored).
 func (e *Engine) CreateServiceAccountAPIKey(ctx context.Context, svcAcctID id.ServiceAccountID, name string, scopes []string, expiresAt *time.Time) (*apikey.APIKey, string, error) {
@@ -118,6 +149,10 @@ func (e *Engine) CreateServiceAccountAPIKey(ctx context.Context, svcAcctID id.Se
 		return nil, "", fmt.Errorf("%w: %w", ErrScopeEscalation, scopeErr)
 	}
 
+	if svc.EnvID.IsNil() {
+		return nil, "", ErrServiceAccountEnvironmentRequired
+	}
+
 	// Generate a key pair.
 	publicKey, secretKey, secretHash, publicPrefix, secretPrefix, err := apikey.GenerateKeyPair()
 	if err != nil {
@@ -128,6 +163,7 @@ func (e *Engine) CreateServiceAccountAPIKey(ctx context.Context, svcAcctID id.Se
 	k := &apikey.APIKey{
 		ID:               id.NewAPIKeyID(),
 		AppID:            svc.AppID,
+		EnvID:            svc.EnvID,
 		ServiceAccountID: svcAcctID,
 		Name:             name,
 		KeyHash:          secretHash,

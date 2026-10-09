@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/principal"
@@ -32,9 +33,12 @@ func seedMintChildParent(
 
 	svcID := id.NewServiceAccountID()
 	now := time.Now()
+	env := &environment.Environment{ID: id.NewEnvironmentID(), AppID: appID, Name: "Mint tests", Slug: svcID.String(), Type: environment.TypeProduction, CreatedAt: now, UpdatedAt: now}
+	require.NoError(t, eng.Store().CreateEnvironment(ctx, env))
 	svc := &serviceaccount.ServiceAccount{
 		ID:        svcID,
 		AppID:     appID,
+		EnvID:     env.ID,
 		Name:      "mint-child-parent-" + svcID.String(),
 		Kind:      principal.KindAgent,
 		Scopes:    []string{"repo:read"},
@@ -178,4 +182,29 @@ func TestMintChildAPI_Success_Returns201(t *testing.T) {
 	key, _ := resp["key"].(string)
 	assert.NotEmpty(t, key, "the response must carry the one-time secret")
 	assert.Equal(t, parent.ID.String(), resp["parent_id"])
+}
+
+func TestMintChildAPI_MissingEnvironmentReturns400WithoutSideEffects(t *testing.T) {
+	a, eng := newTestAPI(t)
+	parent := seedMintChildParent(t, eng, func(svc *serviceaccount.ServiceAccount) { svc.EnvID = id.Nil })
+	ctx := context.Background()
+	before, err := eng.ListServiceAccounts(ctx, parent.AppID, 100)
+	require.NoError(t, err)
+	req := mintChildRequest(parent.ID.String(), map[string]any{"name": "no-env-child", "ttl_seconds": 3600})
+	req = asServiceAccount(t, req, eng, parent.ID)
+	rec := httptest.NewRecorder()
+	withTestKey(a.Handler()).ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Contains(t, rec.Body.String(), "service account environment is required to issue an api key")
+	after, err := eng.ListServiceAccounts(ctx, parent.AppID, 100)
+	require.NoError(t, err)
+	require.Equal(t, before.Total, after.Total)
+	keys, err := eng.APIKeyStore().ListAPIKeysByApp(ctx, parent.AppID)
+	require.NoError(t, err)
+	require.Empty(t, keys)
+	child, key, secret, err := eng.MintChildPrincipal(ctx, parent.ID, "also-no-env", nil, time.Hour)
+	require.ErrorIs(t, err, authsome.ErrServiceAccountEnvironmentRequired)
+	require.Nil(t, child)
+	require.Nil(t, key)
+	require.Empty(t, secret)
 }

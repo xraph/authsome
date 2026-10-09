@@ -4,6 +4,9 @@ import (
 	"context"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/xraph/authsome/environment"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,7 +32,9 @@ func TestEngine_DeletedServiceAccountAPIKeyIsRefused(t *testing.T) {
 	store := eng.APIKeyStore()
 	appID, err := id.ParseAppID(cfg.AppID)
 	require.NoError(t, err)
-	sa, err := eng.CreateServiceAccount(ctx, appID, "build runner", "", nil)
+	env := &environment.Environment{ID: id.NewEnvironmentID(), AppID: appID, Name: "Production", Slug: "production", Type: environment.TypeProduction, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	require.NoError(t, eng.Store().CreateEnvironment(ctx, env))
+	sa, err := eng.CreateServiceAccountInEnvironment(ctx, appID, env.ID, "build runner", "", nil)
 	require.NoError(t, err)
 	key, raw, err := eng.CreateServiceAccountAPIKey(ctx, sa.ID, "build key", nil, nil)
 	require.NoError(t, err)

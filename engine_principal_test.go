@@ -15,6 +15,7 @@ import (
 	wardenid "github.com/xraph/warden/id"
 
 	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/rbac"
@@ -134,6 +135,8 @@ func TestMintChildRecordsTheParent(t *testing.T) {
 	assert.Equal(t, appID.String(), child.AppID.String())
 	assert.NotEmpty(t, secret, "the secret is returned once and never stored")
 	assert.Equal(t, child.ID.String(), key.ServiceAccountID.String())
+	assert.Equal(t, parent.EnvID, child.EnvID)
+	assert.Equal(t, parent.EnvID, key.EnvID)
 }
 
 func TestReapRemovesExpiredChildrenOnly(t *testing.T) {
@@ -208,11 +211,14 @@ func setupParentFixture(t *testing.T, scopes []string) (*authsome.Engine, id.App
 	eng, s := newTestEngine(t)
 	appID := testTenantID(t, eng)
 
+	env := &environment.Environment{ID: id.NewEnvironmentID(), AppID: appID, Name: "Principal tests", Slug: "principals", Type: environment.TypeProduction, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	require.NoError(t, s.CreateEnvironment(context.Background(), env))
 	svcID := id.NewServiceAccountID()
 	now := time.Now()
 	parent := &serviceaccount.ServiceAccount{
 		ID:        svcID,
 		AppID:     appID,
+		EnvID:     env.ID,
 		Name:      "parent-" + svcID.String(),
 		Kind:      principal.KindAgent,
 		Scopes:    scopes,
@@ -232,12 +238,15 @@ func setupParentFixtureExpiring(t *testing.T, ttl time.Duration) (*authsome.Engi
 	eng, s := newTestEngine(t)
 	appID := testTenantID(t, eng)
 
+	env := &environment.Environment{ID: id.NewEnvironmentID(), AppID: appID, Name: "Principal tests", Slug: "principals", Type: environment.TypeProduction, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	require.NoError(t, s.CreateEnvironment(context.Background(), env))
 	svcID := id.NewServiceAccountID()
 	now := time.Now()
 	expires := now.Add(ttl)
 	parent := &serviceaccount.ServiceAccount{
 		ID:        svcID,
 		AppID:     appID,
+		EnvID:     env.ID,
 		Name:      "parent-" + svcID.String(),
 		Kind:      principal.KindAgent,
 		Active:    true,

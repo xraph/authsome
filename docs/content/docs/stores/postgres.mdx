@@ -240,3 +240,43 @@ The response includes a `NextCursor` field set to the last-seen ID when more res
 - **Staging environments** — Mirror production behaviour exactly.
 - **Multi-instance deployments** — All application instances share the same database; no sticky sessions required.
 - **High-traffic applications** — pgdriver's connection pool handles hundreds of concurrent authentication requests efficiently.
+
+## Machine API keys and schema compatibility
+
+Use `Engine.CreateServiceAccountInEnvironment(ctx, appID, envID, name, description,
+scopes)` to create a machine-key account. It checks that the environment exists and
+belongs to the app before persisting the account. Then call
+`Engine.CreateServiceAccountAPIKey` with the returned account ID. This is the
+supported Engine bootstrap sequence; you do not need to write the store directly.
+
+The admin HTTP create route and `Engine.CreateServiceAccount` still create app-wide
+accounts. The admin API cannot assign an account environment yet.
+
+`CreateServiceAccountAPIKey` copies the account's app and
+environment and checks the requested scopes against its scopes. An app-wide account
+is still valid, but key issuance returns `ErrServiceAccountEnvironmentRequired`
+when its environment is empty. Choose the intended environment explicitly when
+you create an account for API-key use. `MintChildPrincipal` rejects an unbound parent
+before creating a child, and HTTP child minting returns 400 for this condition.
+
+Machine keys require migration `20261009000001` and an Authsome artifact containing
+`api_key_machine_owners`. Apply the migration before starting that artifact. The
+migration preserves human keys and adds nullable `user_id` and `service_account_id`
+ownership with exactly one owner. Foreign keys bind human owners to the key's app,
+machine owners to its app and environment, and the key environment to its app.
+Malformed existing rows stop the upgrade without changing or deleting credentials.
+
+Deleting a service account cascades to its machine keys. Deleting an app removes its
+keys and accounts; human user deletion retains the existing soft-delete behavior.
+Updating an account's app or environment fails while keys still reference that
+binding. Retire those keys deliberately before moving the account.
+
+Rollback refuses while any machine key remains, including expired or revoked keys.
+You can downgrade a human-only database without losing its keys. The check and schema
+reversal share an exclusive table lock in one database statement, so concurrent
+issuance cannot slip a machine row past the check.
+
+An older reader sees a machine key's `user_id` as SQL NULL. It either fails the read
+or rejects the missing human binding. It cannot authenticate that key as a human,
+but it also cannot serve machine keys. Deploy compatible readers before enabling
+machine-key traffic; no global capability floor is required for this migration.

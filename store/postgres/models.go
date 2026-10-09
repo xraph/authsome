@@ -1029,21 +1029,22 @@ func fromNotification(n *notification.Notification) *NotificationModel {
 type APIKeyModel struct {
 	grove.BaseModel `grove:"table:authsome_api_keys,alias:ak"`
 
-	ID              string       `grove:"id,pk"`
-	AppID           string       `grove:"app_id,notnull"`
-	EnvID           string       `grove:"env_id,notnull"`
-	UserID          string       `grove:"user_id,notnull"`
-	Name            string       `grove:"name,notnull"`
-	KeyHash         string       `grove:"key_hash,notnull"`
-	KeyPrefix       string       `grove:"key_prefix,notnull"`
-	PublicKey       string       `grove:"public_key,notnull"`
-	PublicKeyPrefix string       `grove:"public_key_prefix,notnull"`
-	Scopes          string       `grove:"scopes"` // comma-separated
-	ExpiresAt       sql.NullTime `grove:"expires_at"`
-	LastUsedAt      sql.NullTime `grove:"last_used_at"`
-	Revoked         bool         `grove:"revoked"`
-	CreatedAt       time.Time    `grove:"created_at,notnull,default:now()"`
-	UpdatedAt       time.Time    `grove:"updated_at,notnull,default:now()"`
+	ID               string         `grove:"id,pk"`
+	AppID            string         `grove:"app_id,notnull"`
+	EnvID            string         `grove:"env_id,notnull"`
+	UserID           sql.NullString `grove:"user_id"`
+	ServiceAccountID sql.NullString `grove:"service_account_id"`
+	Name             string         `grove:"name,notnull"`
+	KeyHash          string         `grove:"key_hash,notnull"`
+	KeyPrefix        string         `grove:"key_prefix,notnull"`
+	PublicKey        string         `grove:"public_key,notnull"`
+	PublicKeyPrefix  string         `grove:"public_key_prefix,notnull"`
+	Scopes           string         `grove:"scopes"` // comma-separated
+	ExpiresAt        sql.NullTime   `grove:"expires_at"`
+	LastUsedAt       sql.NullTime   `grove:"last_used_at"`
+	Revoked          bool           `grove:"revoked"`
+	CreatedAt        time.Time      `grove:"created_at,notnull,default:now()"`
+	UpdatedAt        time.Time      `grove:"updated_at,notnull,default:now()"`
 }
 
 func toAPIKey(m *APIKeyModel) (*apikey.APIKey, error) {
@@ -1055,11 +1056,7 @@ func toAPIKey(m *APIKeyModel) (*apikey.APIKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	// env_id and user_id can be empty for legacy rows (dashboard
-	// pre-UserID-binding fix). Tolerate empty strings as zero IDs;
-	// the auth strategy emits a specific "no user binding" error
-	// for keys with Nil UserID so operators see exactly what to
-	// repair instead of a generic 401 with no diagnostic.
+	// Nullable owners preserve the distinction between human and machine keys.
 	var envID id.EnvironmentID
 	if m.EnvID != "" {
 		parsed, perr := id.ParseEnvironmentID(m.EnvID)
@@ -1069,26 +1066,35 @@ func toAPIKey(m *APIKeyModel) (*apikey.APIKey, error) {
 		envID = parsed
 	}
 	var userID id.UserID
-	if m.UserID != "" {
-		parsed, perr := id.ParseUserID(m.UserID)
+	if m.UserID.Valid {
+		parsed, perr := id.ParseUserID(m.UserID.String)
 		if perr != nil {
 			return nil, perr
 		}
 		userID = parsed
 	}
+	var svcID id.ServiceAccountID
+	if m.ServiceAccountID.Valid {
+		parsed, perr := id.ParseServiceAccountID(m.ServiceAccountID.String)
+		if perr != nil {
+			return nil, perr
+		}
+		svcID = parsed
+	}
 	k := &apikey.APIKey{
-		ID:              keyID,
-		AppID:           appID,
-		EnvID:           envID,
-		UserID:          userID,
-		Name:            m.Name,
-		KeyHash:         m.KeyHash,
-		KeyPrefix:       m.KeyPrefix,
-		PublicKey:       m.PublicKey,
-		PublicKeyPrefix: m.PublicKeyPrefix,
-		Revoked:         m.Revoked,
-		CreatedAt:       m.CreatedAt,
-		UpdatedAt:       m.UpdatedAt,
+		ID:               keyID,
+		AppID:            appID,
+		EnvID:            envID,
+		UserID:           userID,
+		ServiceAccountID: svcID,
+		Name:             m.Name,
+		KeyHash:          m.KeyHash,
+		KeyPrefix:        m.KeyPrefix,
+		PublicKey:        m.PublicKey,
+		PublicKeyPrefix:  m.PublicKeyPrefix,
+		Revoked:          m.Revoked,
+		CreatedAt:        m.CreatedAt,
+		UpdatedAt:        m.UpdatedAt,
 	}
 	if m.Scopes != "" {
 		k.Scopes = strings.Split(m.Scopes, ",")
@@ -1104,18 +1110,19 @@ func toAPIKey(m *APIKeyModel) (*apikey.APIKey, error) {
 
 func fromAPIKey(k *apikey.APIKey) *APIKeyModel {
 	m := &APIKeyModel{
-		ID:              k.ID.String(),
-		AppID:           k.AppID.String(),
-		EnvID:           k.EnvID.String(),
-		UserID:          k.UserID.String(),
-		Name:            k.Name,
-		KeyHash:         k.KeyHash,
-		KeyPrefix:       k.KeyPrefix,
-		PublicKey:       k.PublicKey,
-		PublicKeyPrefix: k.PublicKeyPrefix,
-		Revoked:         k.Revoked,
-		CreatedAt:       k.CreatedAt,
-		UpdatedAt:       k.UpdatedAt,
+		ID:               k.ID.String(),
+		AppID:            k.AppID.String(),
+		EnvID:            k.EnvID.String(),
+		UserID:           sql.NullString{String: k.UserID.String(), Valid: !k.UserID.IsNil()},
+		ServiceAccountID: sql.NullString{String: k.ServiceAccountID.String(), Valid: !k.ServiceAccountID.IsNil()},
+		Name:             k.Name,
+		KeyHash:          k.KeyHash,
+		KeyPrefix:        k.KeyPrefix,
+		PublicKey:        k.PublicKey,
+		PublicKeyPrefix:  k.PublicKeyPrefix,
+		Revoked:          k.Revoked,
+		CreatedAt:        k.CreatedAt,
+		UpdatedAt:        k.UpdatedAt,
 	}
 	if len(k.Scopes) > 0 {
 		m.Scopes = strings.Join(k.Scopes, ",")

@@ -348,6 +348,10 @@ func (e *Engine) MintChildPrincipal(
 		return nil, nil, "", fmt.Errorf("authsome: mint child: %w: %w", ErrChildScopeExceedsParent, scopeErr)
 	}
 
+	if parent.EnvID.IsNil() {
+		return nil, nil, "", ErrServiceAccountEnvironmentRequired
+	}
+
 	now := time.Now()
 	expires := now.Add(ttl)
 	if parent.ExpiresAt != nil && expires.After(*parent.ExpiresAt) {
