@@ -117,9 +117,24 @@ jobs:
             sleep 2
           done
 
+      # TESTCONTAINERS_RYUK_DISABLED turns off the reaper, the container
+      # testcontainers starts to clean up after a test process that dies without
+      # tidying up after itself. The reaper is a flake source here. On
+      # 2026-09-06 it failed to come up inside its own 60 second deadline and
+      # took both postgres conformance suites down with it, before a line of
+      # authsome code ran:
+      #
+      #   create container: reaper: wait for reaper: context deadline exceeded
+      #
+      # What it guards against cannot happen on this job. Every container start
+      # in the tree pairs with an explicit Terminate in t.Cleanup, and this
+      # runner is destroyed when the job ends, so a leaked container has nowhere
+      # to leak to. Nothing sets this outside CI, so a local run still gets the
+      # reaper, which is where the guard is worth having.
       - name: Run store conformance suite
         env:
           AUTHSOME_MONGO_URI: mongodb://localhost:27017/authsome_test?replicaSet=rs0&directConnection=true
+          TESTCONTAINERS_RYUK_DISABLED: "true"
         run: go test -tags integration -p 1 -run '^TestConformance$|^TestStoreConformance_|^TestMigration_' -count=1 -timeout 15m ./store/... ./plugins/...
 
   # ─── Lint ───────────────────────────────────────────────────────────
