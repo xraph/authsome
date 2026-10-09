@@ -22,83 +22,83 @@ function codeInput(container: HTMLElement): HTMLInputElement {
 }
 
 describe("DeviceAuthorizationForm", () => {
-  it("takes the code from ?user_code, stripping the dashes", () => {
+  it("takes the code from ?user_code, stripping the dashes", async () => {
     at("?user_code=ABCD-EFGH");
     const { fetchFn } = routedFetch({});
-    const { container } = render(
+    const { container } = await act(async () => render(
       withProvider(<DeviceAuthorizationForm autoSubmit={false} />, {
         fetch: fetchFn,
       }),
-    );
+    ));
     expect(codeInput(container).value).toBe("ABCDEFGH");
   });
 
-  it("also accepts ?code", () => {
+  it("also accepts ?code", async () => {
     at("?code=WXYZ1234");
     const { fetchFn } = routedFetch({});
-    const { container } = render(
+    const { container } = await act(async () => render(
       withProvider(<DeviceAuthorizationForm autoSubmit={false} />, {
         fetch: fetchFn,
       }),
-    );
+    ));
     expect(codeInput(container).value).toBe("WXYZ1234");
   });
 
-  it("follows popstate to a new user_code", () => {
+  it("follows popstate to a new user_code", async () => {
     at("?user_code=AAAA1111");
     const { fetchFn } = routedFetch({});
-    const { container } = render(
+    const { container } = await act(async () => render(
       withProvider(<DeviceAuthorizationForm autoSubmit={false} />, {
         fetch: fetchFn,
       }),
-    );
+    ));
     expect(codeInput(container).value).toBe("AAAA1111");
 
     navigate("?user_code=BBBB2222");
     expect(codeInput(container).value).toBe("BBBB2222");
   });
 
-  it("adopts a new initialCode prop", () => {
+  it("adopts a new initialCode prop", async () => {
     at("");
     const { fetchFn } = routedFetch({});
-    const { container, rerender } = render(
+    const { container, rerender } = await act(async () => render(
       withProvider(
         <DeviceAuthorizationForm autoSubmit={false} initialCode="aaaa1111" />,
         { fetch: fetchFn },
       ),
-    );
+    ));
     expect(codeInput(container).value).toBe("AAAA1111");
 
-    rerender(
+    await act(async () => rerender(
       withProvider(
         <DeviceAuthorizationForm autoSubmit={false} initialCode="cccc3333" />,
         { fetch: fetchFn },
       ),
-    );
+    ));
     expect(codeInput(container).value).toBe("CCCC3333");
   });
 
-  it("keeps what the user typed when the props have not changed", () => {
+  it("keeps what the user typed when the props have not changed", async () => {
     // Family C regression guard. Deriving the code from the prop on every
     // render, rather than only when the prop changes, silently throws away
     // typing the moment anything else re-renders the form.
     at("?user_code=AAAA1111");
     const { fetchFn } = routedFetch({});
-    const { container, rerender } = render(
+    const { container, rerender } = await act(async () => render(
       withProvider(<DeviceAuthorizationForm autoSubmit={false} />, {
         fetch: fetchFn,
       }),
-    );
+    ));
     expect(codeInput(container).value).toBe("AAAA1111");
 
     fireEvent.change(codeInput(container), { target: { value: "ZZZZ9999" } });
     expect(codeInput(container).value).toBe("ZZZZ9999");
 
-    rerender(
+    await act(async () => rerender(
       withProvider(<DeviceAuthorizationForm autoSubmit={false} />, {
         fetch: fetchFn,
       }),
-    );
+    ));
     expect(codeInput(container).value).toBe("ZZZZ9999");
   });
 
@@ -112,9 +112,9 @@ describe("DeviceAuthorizationForm", () => {
       },
     });
 
-    render(
+    await act(async () => render(
       withProvider(<DeviceAuthorizationForm />, { fetch: fetchFn }),
-    );
+    ));
 
     await waitFor(() =>
       expect(screen.getByText("Device authorized successfully")).toBeTruthy(),
@@ -128,12 +128,12 @@ describe("DeviceAuthorizationForm", () => {
       "POST /v1/oauth/device/complete": () => ({ status: "approved" }),
     });
 
-    render(
+    await act(async () => render(
       withProvider(<DeviceAuthorizationForm />, {
         fetch: fetchFn,
         clientConfig: { device_authorization: { enabled: false } },
       }),
-    );
+    ));
 
     expect(screen.getByText("Device sign-in unavailable")).toBeTruthy();
     expect(

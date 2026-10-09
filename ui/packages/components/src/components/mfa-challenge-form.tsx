@@ -27,6 +27,7 @@ export interface MFAChallengeFormStyledProps {
    * that still pass this prop are tolerated; the value is ignored.
    */
   enrollmentId?: string;
+  /** Called after ticket-based login completes, not authenticated SMS verification. */
   onSuccess?: () => void;
   /** Optional logo element rendered above the title. */
   logo?: React.ReactNode;
@@ -129,7 +130,7 @@ function TOTPView({
 
 // ── SMS View ───────────────────────────────────────────
 
-function SMSView({ onSuccess }: { onSuccess?: () => void }) {
+function SMSView() {
   const { sendSMSCode, submitSMSCode } = useAuth();
   const [smsState, setSmsState] = React.useState<"idle" | "code_sent">("idle");
   const [phoneMasked, setPhoneMasked] = React.useState("");
@@ -138,6 +139,7 @@ function SMSView({ onSuccess }: { onSuccess?: () => void }) {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isSending, setIsSending] = React.useState(false);
   const [resendCooldown, setResendCooldown] = React.useState(0);
+  const [verified, setVerified] = React.useState(false);
 
   // Countdown timer for resend cooldown.
   React.useEffect(() => {
@@ -173,7 +175,7 @@ function SMSView({ onSuccess }: { onSuccess?: () => void }) {
       setIsSubmitting(true);
       try {
         await submitSMSCode(otpCode);
-        onSuccess?.();
+        setVerified(true);
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Invalid SMS code. Please try again.";
@@ -183,7 +185,7 @@ function SMSView({ onSuccess }: { onSuccess?: () => void }) {
         setIsSubmitting(false);
       }
     },
-    [isSubmitting, onSuccess, submitSMSCode],
+    [isSubmitting, submitSMSCode],
   );
 
   const handleResend = React.useCallback(async () => {
@@ -199,6 +201,8 @@ function SMSView({ onSuccess }: { onSuccess?: () => void }) {
       setIsSending(false);
     }
   }, [resendCooldown, isSending, sendSMSCode]);
+
+  if (verified) return <p role="status">Phone verification complete.</p>;
 
   if (smsState === "idle") {
     return (
@@ -452,26 +456,36 @@ export function MFAChallengeForm({
   methods: methodsProp,
   defaultMethod,
 }: MFAChallengeFormStyledProps) {
-  const { clientConfig } = useAuth();
+  const { clientConfig, state } = useAuth();
+  const isAuthenticated = state.status === "authenticated";
 
   // Derive available methods from prop, clientConfig, or fallback to TOTP only.
   const availableMethods = React.useMemo(() => {
-    const raw = methodsProp ?? clientConfig?.mfa?.methods ?? ["totp"];
-    return raw.filter((m): m is MFAMethod => m === "totp" || m === "sms");
-  }, [methodsProp, clientConfig]);
+    const raw = methodsProp ??
+      (state.status === "mfa_required" ? state.availableMethods : clientConfig?.mfa?.methods) ??
+      ["totp"];
+    return raw.filter((m): m is MFAMethod =>
+      isAuthenticated ? m === "sms" : m === "totp",
+    );
+  }, [methodsProp, clientConfig, state, isAuthenticated]);
 
   const hasTOTP = availableMethods.includes("totp");
   const hasSMS = availableMethods.includes("sms");
 
   const initialMethod: MFAMethod =
-    (defaultMethod as MFAMethod) ?? availableMethods[0] ?? "totp";
+    defaultMethod === "recovery" && !isAuthenticated ? "recovery" :
+    availableMethods.find((method) => method === defaultMethod) ?? availableMethods[0] ?? "recovery";
 
-  const [currentMethod, setCurrentMethod] = React.useState<MFAMethod>(initialMethod);
+  const [selectedMethod, setCurrentMethod] = React.useState<MFAMethod>(initialMethod);
+  // A session can change while the form stays mounted. Never keep SMS selected
+  // after sign-out or treat its verification result as a login success.
+  const currentMethod = availableMethods.includes(selectedMethod) ||
+    (selectedMethod === "recovery" && !isAuthenticated) ? selectedMethod : initialMethod;
 
   const meta = METHOD_META[currentMethod];
 
   // Show method switcher when there's more than one method OR recovery codes are available.
-  const showSwitcher = availableMethods.length > 1 || currentMethod !== "recovery";
+  const showSwitcher = !isAuthenticated && (availableMethods.length > 1 || currentMethod !== "recovery");
 
   return (
     <AuthCard
@@ -485,7 +499,7 @@ export function MFAChallengeForm({
         {currentMethod === "totp" && (
           <TOTPView onSuccess={onSuccess} />
         )}
-        {currentMethod === "sms" && <SMSView onSuccess={onSuccess} />}
+        {currentMethod === "sms" && <SMSView />}
         {currentMethod === "recovery" && <RecoveryView onSuccess={onSuccess} />}
       </div>
 

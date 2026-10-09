@@ -346,14 +346,14 @@ import type {
 
 ## Handling MFA state
 
-When `state.status` is `"mfa_required"`, the user has authenticated with valid credentials but must complete an MFA challenge before the session becomes fully active.
+When `state.status` is `"mfa_required"`, you have a short-lived authentication ticket, not a session. Use `submitMFAChallenge(code)` for an authenticator code or `submitRecoveryCode(code)` for a recovery code. Both send `{ mfa_ticket, code }` to `/v1/mfa/challenge` and persist the session the server issues. A rejected code throws to your form and keeps the ticket so you can retry.
 
 ```tsx
 function AuthFlow() {
-  const { state, signIn, submitMFACode } = useAuth();
+  const { state } = useAuth();
 
   if (state.status === "mfa_required") {
-    return <MFAChallengePage session={state.session} />;
+    return <MFAChallengePage />;
   }
 
   if (state.status === "authenticated") {
@@ -363,3 +363,9 @@ function AuthFlow() {
   return <SignInPage />;
 }
 ```
+
+The deprecated client helper `mfaChallenge` accepts the same ticket request. Enrollment-only requests are rejected before sending. `verifyRecoveryCode` remains an authenticated recovery verification call returning `challenge_passed` and `codes_remaining`; you cannot use that result to sign in.
+
+SMS send and verification require an existing authenticated session. `sendSMSCode()` returns the masked phone and expiry; `submitSMSCode(code)` verifies the result without changing your user, tokens or stored session. Both throw on failure. A response that arrives after the session changes also fails, so your form cannot report completion for an old identity. SMS login MFA is not supported by the current backend, and the challenge form only offers SMS while authenticated. Its SMS success message confirms phone verification and does not call the login `onSuccess` callback.
+
+`completeDeviceAuthorization(code, action, token?)` uses the generated form-encoded OAuth2 endpoint and shared publishable-key/error handling. You can pass a bearer token or omit it for an existing cookie session; this request retains `credentials: "include"`.

@@ -151,6 +151,7 @@ export class AuthManager {
   private refreshPromise: Promise<void> | null = null;
   private refreshLockKey: string;
   private active = true;
+  private smsCeremonyVersion = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private onError?: (error: { error: string; code?: number; type?: string }) => void;
 
@@ -427,6 +428,7 @@ export class AuthManager {
 
   /** Sign out and clear the session. */
   async signOut(): Promise<void> {
+    this.smsCeremonyVersion++;
     const token = this.getSessionToken();
     if (token) {
       try {
@@ -484,36 +486,42 @@ export class AuthManager {
     return this.submitMFAChallenge(code);
   }
 
-  /** Submit an MFA recovery code. */
+  /** Submit a recovery code against the active login ticket. */
   async submitRecoveryCode(code: string): Promise<void> {
-    this.setState({ status: "loading" });
-    try {
-      const res = await this.client.verifyRecoveryCode(code);
-      const session: Session = toSession(res);
-      await this.handleAuthResponse(res.user, session);
-    } catch (err) {
-      this.handleError(err);
+    return this.submitMFAChallenge(code);
+  }
+
+  /** Send an SMS code for an already authenticated session. */
+  async sendSMSCode(): Promise<{ sent: boolean; phone_masked: string; expires_in_seconds: number }> {
+    const state = this.requireSMSAuthState();
+    const version = this.smsCeremonyVersion;
+    const result = await this.client.sendSMSCodeForMFA(state.session.session_token);
+    this.checkSMSAuthState(state, version);
+    if (!result.sent) throw new Error("SMS code was not sent");
+    return result;
+  }
+
+  /** Verify an SMS ceremony without replacing the authenticated session. */
+  async submitSMSCode(code: string): Promise<void> {
+    const state = this.requireSMSAuthState();
+    const version = this.smsCeremonyVersion;
+    const result = await this.client.verifySMSCodeForMFA(code, state.session.session_token);
+    this.checkSMSAuthState(state, version);
+    if (!result.verified || result.method !== "sms") {
+      throw new Error("SMS verification failed");
     }
   }
 
-  /** Send an SMS code for MFA verification. Returns masked phone + expiry info. */
-  async sendSMSCode(): Promise<{ sent: boolean; phone_masked: string; expires_in_seconds: number }> {
-    const token = this.getSessionToken();
-    if (!token) throw new Error("No session token available");
-    return this.client.sendSMSCodeForMFA(token);
+  private requireSMSAuthState(): Extract<AuthState, { status: "authenticated" }> {
+    if (!this.active || this.state.status !== "authenticated" || !this.state.session.session_token) {
+      throw new Error("SMS verification requires an authenticated session");
+    }
+    return this.state;
   }
 
-  /** Submit an SMS verification code during MFA challenge. */
-  async submitSMSCode(code: string): Promise<void> {
-    this.setState({ status: "loading" });
-    try {
-      const token = this.getSessionToken();
-      if (!token) throw new Error("No session token available");
-      const res = await this.client.verifySMSCodeForMFA(code, token);
-      const session: Session = toSession(res);
-      await this.handleAuthResponse(res.user, session);
-    } catch (err) {
-      this.handleError(err);
+  private checkSMSAuthState(state: AuthState, version: number): void {
+    if (!this.active || this.state !== state || this.smsCeremonyVersion !== version) {
+      throw new Error("Session changed during SMS verification");
     }
   }
 

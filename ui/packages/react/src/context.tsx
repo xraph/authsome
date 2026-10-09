@@ -79,9 +79,9 @@ export interface AuthContextValue {
   submitMFACode: (enrollmentId: string, code: string) => Promise<void>;
   /** Submit MFA recovery code. */
   submitRecoveryCode: (code: string) => Promise<void>;
-  /** Send an SMS code for MFA verification. */
+  /** Send an SMS code in an authenticated session. */
   sendSMSCode: () => Promise<{ sent: boolean; phone_masked: string; expires_in_seconds: number }>;
-  /** Submit an SMS verification code for MFA. */
+  /** Verify an SMS code without issuing or replacing a session. */
   submitSMSCode: (code: string) => Promise<void>;
 }
 

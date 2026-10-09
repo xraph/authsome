@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ClientConfig } from "@authsome/ui-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -15,7 +15,7 @@ const ssoOn: ClientConfig = {
   },
 };
 
-function mount(props: SignInFormComponentProps, clientConfig: ClientConfig) {
+async function mount(props: SignInFormComponentProps, clientConfig: ClientConfig) {
   const routed = routedFetch({
     // A hash URL, because jsdom implements same-document navigation and
     // nothing else. That makes window.location.assign observable here.
@@ -24,13 +24,13 @@ function mount(props: SignInFormComponentProps, clientConfig: ClientConfig) {
       state: "st_1",
     }),
   });
-  render(
+  await act(async () => render(
     withProvider(<SignInForm {...props} />, {
       fetch: routed.fetchFn,
       session: null,
       clientConfig,
     }),
-  );
+  ));
   return routed;
 }
 
@@ -43,21 +43,21 @@ describe("SignInForm SSO connections", () => {
     window.history.pushState({}, "", "/");
   });
 
-  it("renders a button per configured connection", () => {
-    mount({}, ssoOn);
+  it("renders a button per configured connection", async () => {
+    await mount({}, ssoOn);
     expect(screen.getByRole("button", { name: "Continue with Okta" })).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Continue with Azure AD" }),
     ).toBeTruthy();
   });
 
-  it("hides the buttons when sso.enabled is false", () => {
-    mount({}, { sso: { ...ssoOn.sso!, enabled: false } });
+  it("hides the buttons when sso.enabled is false", async () => {
+    await mount({}, { sso: { ...ssoOn.sso!, enabled: false } });
     expect(screen.queryByRole("button", { name: /continue with okta/i })).toBeNull();
   });
 
   it("starts the login with the connection id and return URL, then redirects", async () => {
-    const { urls } = mount(
+    const { urls } = await mount(
       { ssoReturnUrl: "https://app.example.test/sso/callback" },
       ssoOn,
     );
@@ -71,9 +71,9 @@ describe("SignInForm SSO connections", () => {
     );
   });
 
-  it("lets onSSOLogin replace the built-in handler", () => {
+  it("lets onSSOLogin replace the built-in handler", async () => {
     const onSSOLogin = vi.fn();
-    const { calls } = mount({ onSSOLogin }, ssoOn);
+    const { calls } = await mount({ onSSOLogin }, ssoOn);
 
     fireEvent.click(
       screen.getByRole("button", { name: "Continue with Azure AD" }),
@@ -83,8 +83,8 @@ describe("SignInForm SSO connections", () => {
     expect(calls.some((c) => c.includes("/v1/sso/"))).toBe(false);
   });
 
-  it("shows SSO buttons in the password-disabled view", () => {
-    mount({}, { ...ssoOn, password: { enabled: false } });
+  it("shows SSO buttons in the password-disabled view", async () => {
+    await mount({}, { ...ssoOn, password: { enabled: false } });
     expect(screen.getByRole("button", { name: "Continue with Okta" })).toBeTruthy();
     expect(screen.queryByText(/no sign-in methods/i)).toBeNull();
   });

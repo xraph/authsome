@@ -21,27 +21,27 @@ function navigate(pathname: string): void {
  * without the routing being re-checked.
  */
 describe("SignIn routing", () => {
-  const mount = () => {
+  const mount = async () => {
     const { fetchFn } = routedFetch({});
-    return render(withProvider(<SignIn />, { fetch: fetchFn, session: null }));
+    return await act(async () => render(withProvider(<SignIn />, { fetch: fetchFn, session: null })));
   };
 
-  it("shows the forgot-password screen at /sign-in/forgot-password", () => {
+  it("shows the forgot-password screen at /sign-in/forgot-password", async () => {
     at("/sign-in/forgot-password");
-    mount();
+    await mount();
     expect(screen.getByText("Forgot password")).toBeTruthy();
   });
 
-  it("shows the reset-password screen at /sign-in/reset-password", () => {
+  it("shows the reset-password screen at /sign-in/reset-password", async () => {
     at("/sign-in/reset-password?token=abc");
-    mount();
+    await mount();
     // The title and the submit button share this label.
     expect(screen.getAllByText("Reset password").length).toBeGreaterThan(0);
   });
 
-  it("leaves the sub-screens when the user navigates back", () => {
+  it("leaves the sub-screens when the user navigates back", async () => {
     at("/sign-in/forgot-password");
-    mount();
+    await mount();
     expect(screen.getByText("Forgot password")).toBeTruthy();
 
     navigate("/sign-in");

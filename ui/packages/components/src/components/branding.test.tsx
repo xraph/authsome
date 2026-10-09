@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import type { ClientConfig } from "@authsome/ui-core";
 import { describe, expect, it } from "vitest";
 
@@ -11,9 +11,9 @@ const branded: ClientConfig = {
   branding: { app_name: "Acme", logo_url: "https://cdn.example.test/acme.png" },
 };
 
-function mount(ui: React.ReactElement, clientConfig?: ClientConfig) {
+async function mount(ui: React.ReactElement, clientConfig?: ClientConfig) {
   const { fetchFn } = routedFetch({});
-  return render(withProvider(ui, { fetch: fetchFn, session: null, clientConfig }));
+  return await act(async () => render(withProvider(ui, { fetch: fetchFn, session: null, clientConfig })));
 }
 
 /**
@@ -22,8 +22,8 @@ function mount(ui: React.ReactElement, clientConfig?: ClientConfig) {
  * still win so a host app can always override it.
  */
 describe("branding from client config", () => {
-  it("falls back to the configured logo when no logo prop is passed", () => {
-    mount(
+  it("falls back to the configured logo when no logo prop is passed", async () => {
+    await mount(
       <AuthCard title="Hello">
         <p>body</p>
       </AuthCard>,
@@ -35,8 +35,8 @@ describe("branding from client config", () => {
     expect(img.alt).toBe("Acme");
   });
 
-  it("renders no logo when logo={null}, even with branding configured", () => {
-    mount(
+  it("renders no logo when logo={null}, even with branding configured", async () => {
+    await mount(
       <AuthCard title="Hello" logo={null}>
         <p>body</p>
       </AuthCard>,
@@ -57,24 +57,24 @@ describe("branding from client config", () => {
     expect(screen.queryByRole("img")).toBeNull();
   });
 
-  it("titles the sign-in form with the app name", () => {
-    mount(<SignInForm />, branded);
+  it("titles the sign-in form with the app name", async () => {
+    await mount(<SignInForm />, branded);
     expect(screen.getByText("Sign in to Acme")).toBeTruthy();
   });
 
-  it("keeps an explicit sign-in title over the app name", () => {
-    mount(<SignInForm title="Welcome back" />, branded);
+  it("keeps an explicit sign-in title over the app name", async () => {
+    await mount(<SignInForm title="Welcome back" />, branded);
     expect(screen.getByText("Welcome back")).toBeTruthy();
     expect(screen.queryByText("Sign in to Acme")).toBeNull();
   });
 
-  it("uses the plain sign-in title without branding", () => {
-    mount(<SignInForm />);
+  it("uses the plain sign-in title without branding", async () => {
+    await mount(<SignInForm />);
     expect(screen.getByText("Sign in")).toBeTruthy();
   });
 
-  it("titles the sign-up form with the app name", () => {
-    mount(<SignUpForm />, branded);
+  it("titles the sign-up form with the app name", async () => {
+    await mount(<SignUpForm />, branded);
     expect(screen.getByText("Create your Acme account")).toBeTruthy();
   });
 });

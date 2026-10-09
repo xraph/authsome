@@ -15,6 +15,13 @@ import {
 import type {
   ApiStatusResponse,
   ApiTokenResponse,
+  ChallengeMFARequest,
+  ChallengeResponse,
+  DeviceCompleteResponse,
+  RecoveryVerifyResponse,
+  SMSSendResponse,
+  SMSVerifyResponse,
+  VerifyRecoveryCodeRequest,
   RefreshRequest,
 } from "./generated/api-types";
 import type { ClientConfig } from "./types";
@@ -112,6 +119,24 @@ export interface ListResponse<T> {
  * the auth state machine.
  */
 export class AuthClient extends GeneratedClient {
+  constructor(config: AuthClientConfig) {
+    const fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis);
+    let baseURL = config.baseURL;
+    while (baseURL.endsWith("/")) baseURL = baseURL.slice(0, -1);
+    const deviceCompletionURL = `${baseURL}/v1/oauth/device/complete`;
+    super({
+      ...config,
+      fetch: (input, init) => {
+        // Device approval supports cookie sessions as well as bearer tokens.
+        // Keep that transport option while using the generated form contract.
+        const isDeviceCompletion =
+          input === deviceCompletionURL &&
+          init?.method === "POST";
+        return fetchFn(input, isDeviceCompletion ? { ...init, credentials: "include" } : init);
+      },
+    });
+  }
+
   /**
    * Refresh session tokens.
    *
@@ -138,80 +163,40 @@ export class AuthClient extends GeneratedClient {
     return super.signOut(token!);
   }
 
-  /**
-   * MFA challenge — bridge for auth.ts.
-   *
-   * auth.ts calls `mfaChallenge({ enrollment_id, code })` and expects
-   * an AuthResponse back.  The generated client uses `challengeMFA`.
-   */
-  async mfaChallenge(body: { enrollment_id?: string; code: string }): Promise<any> {
-    return super.challengeMFA(body as any);
+  /** @deprecated Use challengeMFA with the ticket from sign-in. */
+  async mfaChallenge(
+    body: ChallengeMFARequest | { enrollment_id?: string; code: string },
+  ): Promise<ChallengeResponse> {
+    if (!("mfa_ticket" in body) || !body.mfa_ticket) {
+      throw new Error("MFA challenge requires an authentication ticket, not an enrollment ID");
+    }
+    return super.challengeMFA(body);
   }
 
-  /**
-   * Verify an MFA recovery code.
-   *
-   * Accepts a raw code string (used by auth.ts) or the full request body.
-   */
-  override async verifyRecoveryCode(body: { code: string } | string): Promise<any> {
-    const req = typeof body === "string" ? { code: body } : body;
-    return super.verifyRecoveryCode(req);
+  /** Verify a recovery code in an existing cookie-authenticated session. */
+  override async verifyRecoveryCode(
+    body: VerifyRecoveryCodeRequest | string,
+  ): Promise<RecoveryVerifyResponse> {
+    return super.verifyRecoveryCode(typeof body === "string" ? { code: body } : body);
   }
 
-  /**
-   * Send an SMS code for MFA — bridge for auth.ts.
-   *
-   * Simplifies the call-site by accepting just the session token.
-   */
-  async sendSMSCodeForMFA(token: string): Promise<any> {
+  /** Send an SMS code for the authenticated session. */
+  async sendSMSCodeForMFA(token: string): Promise<SMSSendResponse> {
     return super.sendSMSCode({}, token);
   }
 
-  /**
-   * Verify an SMS code for MFA — bridge for auth.ts.
-   *
-   * Simplifies the call-site by accepting code + token directly.
-   */
-  async verifySMSCodeForMFA(code: string, token: string): Promise<any> {
+  /** Verify an SMS code without issuing a session. */
+  async verifySMSCodeForMFA(code: string, token: string): Promise<SMSVerifyResponse> {
     return super.verifySMSCode({ code }, token);
   }
 
-  /**
-   * Complete a device authorization (RFC 8628).
-   *
-   * Approves or denies a device code. Requires an authenticated session —
-   * pass the session token so the backend can identify the user.
-   */
+  /** Approve or deny a device using a bearer token or the existing session cookie. */
   async completeDeviceAuthorization(
     userCode: string,
     action: "approve" | "deny",
     token?: string,
-  ): Promise<{ status: string }> {
-    const base = (this as any).baseURL as string;
-    const fetchFn = (this as any).fetchFn as typeof globalThis.fetch;
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-
-    const res = await fetchFn(`${base}/v1/oauth/device/complete`, {
-      method: "POST",
-      headers,
-      credentials: "include",
-      body: JSON.stringify({ user_code: userCode, action }),
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new AuthClientError(
-        (body as Record<string, string>).error || "Failed to authorize device",
-        res.status,
-      );
-    }
-    return res.json();
+  ): Promise<DeviceCompleteResponse> {
+    return super.oauth2DeviceComplete({ user_code: userCode, action }, token ?? "");
   }
 
   /**
