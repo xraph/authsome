@@ -37,7 +37,10 @@ type OrgService interface {
 	UpdateOrganization(ctx context.Context, o *organization.Organization) error
 	DeleteOrganization(ctx context.Context, orgID id.OrgID) error
 	ListMembers(ctx context.Context, orgID id.OrgID) ([]*organization.Member, error)
+	AddMember(ctx context.Context, m *organization.Member) error
 	RemoveMember(ctx context.Context, memberID id.MemberID) error
+	ListInvitations(ctx context.Context, orgID id.OrgID) ([]*organization.Invitation, error)
+	CreateInvitation(ctx context.Context, inv *organization.Invitation) error
 }
 
 // Deps carries the typed plugin handle alongside the engine so the
@@ -91,8 +94,17 @@ func Register(
 	if err := dispatcher.RegisterQuery(d, c, "orgs.members", 1, orgsMembersListHandler(deps)); err != nil {
 		return fmt.Errorf("organization/contract: register orgs.members: %w", err)
 	}
+	if err := dispatcher.RegisterCommand(d, c, "orgs.addMember", 1, orgsAddMemberHandler(deps)); err != nil {
+		return fmt.Errorf("organization/contract: register orgs.addMember: %w", err)
+	}
 	if err := dispatcher.RegisterCommand(d, c, "orgs.removeMember", 1, orgsRemoveMemberHandler(deps)); err != nil {
 		return fmt.Errorf("organization/contract: register orgs.removeMember: %w", err)
+	}
+	if err := dispatcher.RegisterQuery(d, c, "orgs.invitations", 1, orgsInvitationsHandler(deps)); err != nil {
+		return fmt.Errorf("organization/contract: register orgs.invitations: %w", err)
+	}
+	if err := dispatcher.RegisterCommand(d, c, "orgs.createInvitation", 1, orgsCreateInvitationHandler(deps)); err != nil {
+		return fmt.Errorf("organization/contract: register orgs.createInvitation: %w", err)
 	}
 	return nil
 }

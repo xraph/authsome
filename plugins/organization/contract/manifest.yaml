@@ -17,7 +17,10 @@ intents:
   - { name: orgs.update,       kind: command, version: 1, capability: write, invalidates: [orgs.list, orgs.detail] }
   - { name: orgs.delete,       kind: command, version: 1, capability: write, invalidates: [orgs.list] }
   - { name: orgs.members,      kind: query,   version: 1, capability: read  }
+  - { name: orgs.addMember,    kind: command, version: 1, capability: write, invalidates: [orgs.members] }
   - { name: orgs.removeMember, kind: command, version: 1, capability: write, invalidates: [orgs.members] }
+  - { name: orgs.invitations,  kind: query,   version: 1, capability: read  }
+  - { name: orgs.createInvitation, kind: command, version: 1, capability: write, invalidates: [orgs.invitations] }
 
 queries:
   orgList:

@@ -16,6 +16,27 @@ intents:
   - { name: plans.archive,      kind: command, version: 1, capability: write, invalidates: [plans.list, plans.detail] }
   - { name: plans.activate,     kind: command, version: 1, capability: write, invalidates: [plans.list, plans.detail] }
   - { name: subscriptions.list, kind: query,   version: 1, capability: read  }
+  - { name: plans.create, kind: command, version: 1, capability: write, invalidates: [plans.list] }
+  - { name: plans.update, kind: command, version: 1, capability: write, invalidates: [plans.list, plans.detail] }
+  - { name: subscriptions.all, kind: query, version: 1, capability: read }
+  - { name: subscriptions.detail, kind: query, version: 1, capability: read }
+  - { name: subscriptions.create, kind: command, version: 1, capability: write, invalidates: [subscriptions.all, subscriptions.list] }
+  - { name: subscriptions.change, kind: command, version: 1, capability: write, invalidates: [subscriptions.all, subscriptions.list] }
+  - { name: subscriptions.pause, kind: command, version: 1, capability: write, invalidates: [subscriptions.all, subscriptions.list] }
+  - { name: subscriptions.resume, kind: command, version: 1, capability: write, invalidates: [subscriptions.all, subscriptions.list] }
+  - { name: subscriptions.cancel, kind: command, version: 1, capability: write, invalidates: [subscriptions.all, subscriptions.list] }
+  - { name: invoices.list, kind: query, version: 1, capability: read }
+  - { name: invoices.detail, kind: query, version: 1, capability: read }
+  - { name: invoices.generate, kind: command, version: 1, capability: write, invalidates: [invoices.list] }
+  - { name: invoices.markPaid, kind: command, version: 1, capability: write, invalidates: [invoices.list] }
+  - { name: invoices.void, kind: command, version: 1, capability: write, invalidates: [invoices.list] }
+  - { name: coupons.list, kind: query, version: 1, capability: read }
+  - { name: coupons.create, kind: command, version: 1, capability: write, invalidates: [coupons.list] }
+  - { name: coupons.delete, kind: command, version: 1, capability: write, invalidates: [coupons.list] }
+  - { name: features.list, kind: query, version: 1, capability: read }
+  - { name: features.create, kind: command, version: 1, capability: write, invalidates: [features.list] }
+  - { name: features.update, kind: command, version: 1, capability: write, invalidates: [features.list] }
+  - { name: features.archive, kind: command, version: 1, capability: write, invalidates: [features.list] }
 
 queries:
   planList:

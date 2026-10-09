@@ -16,11 +16,10 @@ func TestManifest_Loads(t *testing.T) {
 	if m.Contributor.Name != "authsome" {
 		t.Errorf("contributor name = %q, want authsome", m.Contributor.Name)
 	}
-	// 68 intents: 66 prior + 2 new feature-toggle intents
-	// (auth.featureToggles, auth.toggleFeature). apikeys.* are owned
+	// Includes the installed-plugin inventory query. apikeys.* are owned
 	// by the apikey plugin manifest, not declared here.
-	if got := len(m.Intents); got != 68 {
-		t.Errorf("intents = %d, want 68 (with feature toggles)", got)
+	if got := len(m.Intents); got != 69 {
+		t.Errorf("intents = %d, want 69 (with feature toggles and plugins.list)", got)
 	}
 }
 
@@ -53,7 +52,13 @@ func TestManifest_RegistersWithRegistry(t *testing.T) {
 	if !ok || q.Intent != "auth.config" {
 		t.Errorf("expected queries.config -> auth.config, got %+v (present=%v)", q, ok)
 	}
-	if _, ok := reg.Intent("authsome", "auth.config", 1); !ok {
-		t.Error("expected auth.config v1 to be registered")
+	for _, name := range []string{"auth.config", "plugins.list"} {
+		intent, ok := reg.Intent("authsome", name, 1)
+		if !ok {
+			t.Fatalf("expected %s v1 to be registered", name)
+		}
+		if intent.Kind != "query" {
+			t.Errorf("%s kind = %q, want query", name, intent.Kind)
+		}
 	}
 }
