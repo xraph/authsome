@@ -1,0 +1,20 @@
+# gitleaks reads this file from the repository root. It keeps the default
+# rules and allowlists test fixtures that look like credentials but aren't.
+#
+# Each entry matches one exact value. A real key in the same file still
+# fails the scan, and a squash merge (which rewrites the commit and with it
+# the finding's fingerprint) doesn't bring the finding back.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fake credentials in Go tests"
+regexTarget = "secret"
+regexes = [
+  # plugins/apikey/failure_limit_test.go: a made-up test-mode API key.
+  '''^sk_test_0123456789abcdef0123456789abcdef$''',
+  # plugins/social/apple_test.go: base64 of {"alg":"RS256"}, the header of
+  # a JWT the test assembles around a generated payload.
+  '''^eyJhbGciOiJSUzI1NiJ9\.$''',
+]
