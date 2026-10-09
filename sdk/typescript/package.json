@@ -10,7 +10,7 @@
     "src"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --emitDeclarationOnly && esbuild src/index.ts --bundle --platform=neutral --target=es2020 --format=cjs --sourcemap --outfile=dist/index.js && esbuild src/index.ts --bundle --platform=neutral --target=es2020 --format=esm --sourcemap --outfile=dist/index.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -30,6 +30,7 @@
     "directory": "sdk/typescript"
   },
   "devDependencies": {
+    "esbuild": "0.28.2",
     "typescript": "^5.0.0",
     "vitest": "4.1.11"
   }
