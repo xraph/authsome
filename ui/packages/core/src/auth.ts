@@ -21,6 +21,7 @@ export const SESSION_STORAGE_KEY = "authsome:session";
 const SESSION_KEY = SESSION_STORAGE_KEY;
 const CONFIG_KEY = "authsome:client_config";
 const REFRESH_BEFORE_MS = 60_000; // Refresh 60 s before expiry.
+const MAX_TIMEOUT_MS = 2_147_483_647; // Browser and Node timer limit.
 const CONFIG_TTL_MS = 5 * 60_000; // Cache client config for 5 minutes.
 // Used only when a server response omits expires_at.
 const DEFAULT_SESSION_TTL_MS = 3600_000;
@@ -429,6 +430,7 @@ export class AuthManager {
   /** Sign out and clear the session. */
   async signOut(): Promise<void> {
     this.smsCeremonyVersion++;
+    this.clearRefreshTimer();
     const token = this.getSessionToken();
     if (token) {
       try {
@@ -698,9 +700,11 @@ export class AuthManager {
       return;
     }
 
+    // Long sessions need several bounded waits. Check the deadline again at
+    // each boundary so a timer limit cannot trigger an early token rotation.
     this.refreshTimer = setTimeout(() => {
-      void this.refreshSession(session.refresh_token);
-    }, delay);
+      this.scheduleRefresh(session);
+    }, Math.min(delay, MAX_TIMEOUT_MS));
   }
 
   private clearRefreshTimer(): void {

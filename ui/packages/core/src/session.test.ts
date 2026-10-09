@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { AuthManager } from "./auth";
 import type { AuthResponse } from "./generated/api-types";
@@ -8,6 +8,8 @@ import type { AuthResponse } from "./generated/api-types";
 // hour meant that timer was set against a lifetime the token did not have.
 // These assert the derivation directly via a stubbed client.
 describe("session expiry derivation", () => {
+  const managers: AuthManager[] = [];
+  afterEach(() => managers.splice(0).forEach((manager) => manager.destroy()));
   function managerWithSignInResponse(res: Partial<AuthResponse>) {
     const store = new Map<string, string>();
     const mgr = new AuthManager({
@@ -18,6 +20,7 @@ describe("session expiry derivation", () => {
         removeItem: (k) => void store.delete(k),
       },
     });
+    managers.push(mgr);
     const client = mgr.getClient() as unknown as Record<string, unknown>;
     client.signIn = async () => ({
       user: { id: "u_1", email: "a@b.c" },
