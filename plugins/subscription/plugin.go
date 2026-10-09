@@ -219,7 +219,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 
 	// Core engine references.
 	p.authStore = engine.Store()
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.relay = engine.Relay()
 	p.hooks = engine.Hooks()
 	p.logger = engine.Logger()

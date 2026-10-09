@@ -38,6 +38,16 @@ type Config struct {
 	// Account lockout after failed attempts.
 	Lockout LockoutConfig `json:"lockout" mapstructure:"lockout" yaml:"lockout"`
 
+	// Retention sets how long expired rows are kept before the sweeper
+	// removes them. Zero values take the engine defaults.
+	Retention RetentionConfig `json:"retention" mapstructure:"retention" yaml:"retention"`
+
+	// Webhooks governs webhook URL checks; see authsome.WebhookConfig.
+	Webhooks WebhookConfig `json:"webhooks" mapstructure:"webhooks" yaml:"webhooks"`
+
+	// CSRF governs the cross-site check on cookie sessions; see authsome.CSRFConfig.
+	CSRF CSRFConfig `json:"csrf" mapstructure:"csrf" yaml:"csrf"`
+
 	// Mailer configuration for transactional email delivery.
 	Mailer MailerConfig `json:"mailer" mapstructure:"mailer" yaml:"mailer"`
 
@@ -244,11 +254,15 @@ type SessionConfig struct {
 	// RotateRefreshToken controls whether refresh operations issue a new
 	// refresh token (invalidating the old one). Default: true.
 	RotateRefreshToken *bool `json:"rotate_refresh_token" mapstructure:"rotate_refresh_token" yaml:"rotate_refresh_token"`
+
+	// CleanupInterval is how often the retention sweeper runs (default: 1h).
+	// A negative value disables it.
+	CleanupInterval time.Duration `json:"cleanup_interval" mapstructure:"cleanup_interval" yaml:"cleanup_interval"`
 }
 
 // PasswordConfig configures password validation.
 type PasswordConfig struct {
-	// MinLength is the minimum password length (default: 8).
+	// MinLength is the minimum password length (default: 12).
 	MinLength int `json:"min_length" mapstructure:"min_length" yaml:"min_length"`
 
 	// RequireUppercase requires at least one uppercase letter.
@@ -287,8 +301,40 @@ type Argon2Config struct {
 
 // RateLimitConfig configures per-endpoint rate limits.
 type RateLimitConfig struct {
-	// Enabled enables rate limiting.
-	Enabled bool `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
+	// Enabled turns rate limiting on or off. Unset means on: an explicit
+	// false is the only way to switch the limits off.
+	Enabled *bool `json:"enabled,omitempty" mapstructure:"enabled" yaml:"enabled,omitempty"`
+
+	// FailOpen lets requests through when the limiter itself fails. Off by
+	// default: a limiter outage answers 503.
+	FailOpen bool `json:"fail_open" mapstructure:"fail_open" yaml:"fail_open"`
+
+	// ResetPasswordLimit caps reset-password submissions per window (default: 5).
+	ResetPasswordLimit int `json:"reset_password_limit" mapstructure:"reset_password_limit" yaml:"reset_password_limit"`
+
+	// ChangePasswordLimit caps change-password submissions per window (default: 5).
+	ChangePasswordLimit int `json:"change_password_limit" mapstructure:"change_password_limit" yaml:"change_password_limit"`
+
+	// OAuthTokenLimit caps OAuth2 token, revoke and device requests per window (default: 30).
+	OAuthTokenLimit int `json:"oauth_token_limit" mapstructure:"oauth_token_limit" yaml:"oauth_token_limit"`
+
+	// OAuthAuthorizeLimit caps OAuth2 authorize requests per window (default: 30).
+	OAuthAuthorizeLimit int `json:"oauth_authorize_limit" mapstructure:"oauth_authorize_limit" yaml:"oauth_authorize_limit"`
+
+	// PasskeyLimit caps passkey ceremonies per window (default: 10).
+	PasskeyLimit int `json:"passkey_limit" mapstructure:"passkey_limit" yaml:"passkey_limit"`
+
+	// SSOLimit caps public SSO requests per window (default: 20).
+	SSOLimit int `json:"sso_limit" mapstructure:"sso_limit" yaml:"sso_limit"`
+
+	// SCIMLimit caps SCIM requests per window (default: 60).
+	SCIMLimit int `json:"scim_limit" mapstructure:"scim_limit" yaml:"scim_limit"`
+
+	// WaitlistJoinLimit caps waitlist joins per window (default: 5).
+	WaitlistJoinLimit int `json:"waitlist_join_limit" mapstructure:"waitlist_join_limit" yaml:"waitlist_join_limit"`
+
+	// APIKeyFailureLimit caps failed API-key authentications per address per window (default: 20).
+	APIKeyFailureLimit int `json:"api_key_failure_limit" mapstructure:"api_key_failure_limit" yaml:"api_key_failure_limit"`
 
 	// SignInLimit is the max sign-in attempts per window (default: 5).
 	SignInLimit int `json:"signin_limit" mapstructure:"signin_limit" yaml:"signin_limit"`
@@ -316,8 +362,9 @@ func (c RateLimitConfig) Window() time.Duration {
 
 // LockoutConfig configures account lockout after failed authentication attempts.
 type LockoutConfig struct {
-	// Enabled enables account lockout.
-	Enabled bool `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
+	// Enabled turns account lockout on or off. Unset means on: an explicit
+	// false is the only way to switch lockout off.
+	Enabled *bool `json:"enabled,omitempty" mapstructure:"enabled" yaml:"enabled,omitempty"`
 
 	// MaxAttempts is the number of failed attempts before lockout (default: 5).
 	MaxAttempts int `json:"max_attempts" mapstructure:"max_attempts" yaml:"max_attempts"`
@@ -327,6 +374,31 @@ type LockoutConfig struct {
 
 	// ResetAfterSeconds resets the failure count after this many seconds of no failures (default: 3600 = 1h).
 	ResetAfterSeconds int `json:"reset_after_seconds" mapstructure:"reset_after_seconds" yaml:"reset_after_seconds"`
+}
+
+// RetentionConfig mirrors authsome.RetentionConfig: how many days rows of
+// each kind are kept past their expiry. Zero takes the engine default and a
+// negative value keeps that kind forever.
+type RetentionConfig struct {
+	SessionsDays             int `json:"sessions_days" mapstructure:"sessions_days" yaml:"sessions_days"`
+	VerificationsDays        int `json:"verifications_days" mapstructure:"verifications_days" yaml:"verifications_days"`
+	PasswordResetsDays       int `json:"password_resets_days" mapstructure:"password_resets_days" yaml:"password_resets_days"`
+	RevokedRefreshTokensDays int `json:"revoked_refresh_tokens_days" mapstructure:"revoked_refresh_tokens_days" yaml:"revoked_refresh_tokens_days"`
+	DeviceCodesDays          int `json:"device_codes_days" mapstructure:"device_codes_days" yaml:"device_codes_days"`
+	AuthCodesDays            int `json:"auth_codes_days" mapstructure:"auth_codes_days" yaml:"auth_codes_days"`
+	BatchSize                int `json:"batch_size" mapstructure:"batch_size" yaml:"batch_size"`
+}
+
+// CSRFConfig mirrors authsome.CSRFConfig.
+type CSRFConfig struct {
+	Enabled        *bool    `json:"enabled,omitempty" mapstructure:"enabled" yaml:"enabled,omitempty"`
+	AllowedOrigins []string `json:"allowed_origins" mapstructure:"allowed_origins" yaml:"allowed_origins"`
+}
+
+// WebhookConfig mirrors authsome.WebhookConfig.
+type WebhookConfig struct {
+	AllowInsecureURLs bool          `json:"allow_insecure_urls" mapstructure:"allow_insecure_urls" yaml:"allow_insecure_urls"`
+	VerifyTimeout     time.Duration `json:"verify_timeout" mapstructure:"verify_timeout" yaml:"verify_timeout"`
 }
 
 // LockoutDuration returns the lockout duration as a time.Duration.
@@ -354,7 +426,7 @@ func DefaultConfig() Config {
 			RefreshTokenTTL: 30 * 24 * time.Hour,
 		},
 		Password: PasswordConfig{
-			MinLength:        8,
+			MinLength:        12,
 			RequireUppercase: true,
 			RequireLowercase: true,
 			RequireDigit:     true,

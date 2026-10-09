@@ -7,15 +7,3 @@ contributor:
   capabilities: [auth.read]
 
 intents: []
-
-graph:
-  - route: /auth/magiclink
-    intent: page.shell
-    title: Magic Link
-    nav: { group: Auth, icon: link, priority: 3 }
-    slots:
-      main:
-        - intent: settings.panel
-          props:
-            namespace: magiclink
-            scope: app

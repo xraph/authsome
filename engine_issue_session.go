@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
+	log "github.com/xraph/go-utils/log"
+
 	"github.com/xraph/authsome/account"
-	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/hook"
@@ -122,8 +124,9 @@ type mfaTicketPayload struct {
 	// construction (it is a hash of a public key), so it needs no more
 	// protection here than the ticket itself already has.
 	DPoPJKT string `json:"dpop_jkt,omitempty"`
-	// Attempts counts wrong codes submitted against this ticket.
-	Attempts int `json:"attempts"`
+	// Attempts is kept for tickets written before the counter moved to its
+	// own ceremony key; it is no longer read.
+	Attempts int `json:"attempts,omitempty"`
 }
 
 // MaxMFATicketAttempts caps wrong codes against a single ticket before it is
@@ -164,6 +167,11 @@ type MFATicketPayload struct {
 func (e *Engine) IssueSession(ctx context.Context, req *IssueSessionRequest) (*IssueSessionResult, error) {
 	if req == nil || req.User == nil {
 		return nil, fmt.Errorf("authsome: IssueSession: nil request or user")
+	}
+	// Every sign-in path mints here, so this is the one place a ban has to
+	// hold for passkeys, magic links, SSO and social alike.
+	if req.User.IsBanned(time.Now()) {
+		return nil, account.ErrUserBanned
 	}
 	if req.AppID.IsNil() {
 		req.AppID = req.User.AppID
@@ -231,30 +239,28 @@ func (e *Engine) IssueSession(ctx context.Context, req *IssueSessionRequest) (*I
 	if hookErr := e.plugins.EmitBeforeSessionCreate(ctx, sess); hookErr != nil {
 		return nil, fmt.Errorf("authsome: before session create: %w", hookErr)
 	}
+	e.enforceSessionCap(ctx, req.User.ID, sessCfg.MaxActiveSessions)
 	if storeErr := e.store.CreateSession(ctx, sess); storeErr != nil {
 		return nil, fmt.Errorf("authsome: persist session: %w", storeErr)
 	}
 	e.plugins.EmitAfterSessionCreate(ctx, sess)
 
-	// Global hook bus parity with SignIn.
+	// Every sign-in path mints here, so this is the one sign-in record on
+	// the audit trail.
 	e.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionSignIn,
 		Resource:   hook.ResourceSession,
 		ResourceID: sess.ID.String(),
 		ActorID:    req.User.ID.String(),
 		Tenant:     req.AppID.String(),
+		Category:   "auth",
+		SessionID:  sess.ID.String(),
 		Metadata: map[string]string{
-			"auth_method": req.AuthMethod,
-			"session_id":  sess.ID.String(),
+			"auth_method":       req.AuthMethod,
+			"session_id":        sess.ID.String(),
+			"mfa_just_verified": fmt.Sprintf("%v", req.MFAJustVerified),
 		},
 	})
-
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "issue_session", "session",
-		sess.ID.String(), req.User.ID.String(), req.AppID.String(), "auth",
-		map[string]string{
-			"auth_method":       req.AuthMethod,
-			"mfa_just_verified": fmt.Sprintf("%v", req.MFAJustVerified),
-		})
 
 	return &IssueSessionResult{User: req.User, Session: sess}, nil
 }
@@ -417,22 +423,25 @@ func (e *Engine) FailMFATicket(ctx context.Context, ticket string) (exhausted bo
 		return true, fmt.Errorf("authsome: decode mfa ticket: %w", decodeErr)
 	}
 
-	pl.Attempts++
 	remaining := time.Until(pl.IssuedAt.Add(MFATicketTTL))
-	if pl.Attempts >= MaxMFATicketAttempts || remaining <= 0 {
+	if remaining <= 0 {
 		return true, store.Delete(ctx, key)
 	}
 
-	encoded, err := json.Marshal(pl)
-	if err != nil {
+	// One atomic increment per wrong code, bounded by the ticket's own
+	// deadline. Rewriting the ticket with a bumped count let two replicas
+	// each count one guess as one and let a guess slip in uncounted between
+	// the read and the write.
+	attempts, incErr := store.Increment(ctx, key+":attempts", remaining)
+	if incErr != nil {
+		// Can't count the attempt — drop the ticket rather than leave it
+		// standing with the guess uncounted.
 		_ = store.Delete(ctx, key) //nolint:errcheck // best-effort
-		return true, err
+		return true, incErr
 	}
-	if setErr := store.Set(ctx, key, encoded, remaining); setErr != nil {
-		// Can't persist the count — drop the ticket rather than leave it
-		// standing with the attempt uncounted.
-		_ = store.Delete(ctx, key) //nolint:errcheck // best-effort
-		return true, setErr
+	if attempts >= MaxMFATicketAttempts {
+		_ = store.Delete(ctx, key+":attempts") //nolint:errcheck // best-effort
+		return true, store.Delete(ctx, key)
 	}
 	return false, nil
 }
@@ -451,4 +460,50 @@ func IsMFATicketNotFound(err error) bool {
 // MFA-gated logins).
 func (e *Engine) ceremonyStoreOrFallback() ceremony.Store {
 	return e.ceremonyStore
+}
+
+// enforceSessionCap makes room for one more session under maxActive by
+// revoking the user's oldest sessions, so a cap of N is N, not N plus
+// however many sign-ins nobody counted. Each eviction is audited like any
+// other revocation, with the cap as the reason. A zero or negative cap is
+// no cap. Failures are logged and do not block the sign-in: the cap is a
+// hygiene control, and a listing error must not lock a user out.
+func (e *Engine) enforceSessionCap(ctx context.Context, userID id.UserID, maxActive int) {
+	if maxActive <= 0 {
+		return
+	}
+	sessions, err := e.store.ListUserSessions(ctx, userID)
+	if err != nil {
+		e.logger.Warn("authsome: session cap: list sessions", log.String("error", err.Error()))
+		return
+	}
+	now := time.Now()
+	live := sessions[:0]
+	for _, s := range sessions {
+		if now.Before(s.ExpiresAt) || now.Before(s.RefreshTokenExpiresAt) {
+			live = append(live, s)
+		}
+	}
+	if len(live) < maxActive {
+		return
+	}
+	sort.Slice(live, func(i, j int) bool { return live[i].CreatedAt.Before(live[j].CreatedAt) })
+	for _, s := range live[:len(live)-maxActive+1] {
+		if delErr := e.store.DeleteSession(ctx, s.ID); delErr != nil {
+			e.logger.Warn("authsome: session cap: revoke oldest", log.String("session_id", s.ID.String()), log.String("error", delErr.Error()))
+			continue
+		}
+		e.plugins.EmitAfterSessionRevoke(ctx, s.ID)
+		e.hooks.Emit(ctx, &hook.Event{
+			Action:     hook.ActionSessionRevoke,
+			Resource:   hook.ResourceSession,
+			ResourceID: s.ID.String(),
+			ActorID:    userID.String(),
+			Tenant:     s.AppID.String(),
+			Metadata:   map[string]string{"reason": "max_active_sessions"},
+		})
+		e.relayEvent(ctx, "session.revoked", s.AppID.String(), map[string]string{
+			"user_id": userID.String(), "session_id": s.ID.String(), "reason": "max_active_sessions",
+		})
+	}
 }

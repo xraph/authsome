@@ -1,7 +1,8 @@
 /// Sign-up form screen with multi-step email → details flow.
 ///
 /// Step 1: Social login buttons (auto-discovered from config), email input.
-/// Step 2: Name and password inputs with sign-up submission.
+/// Step 2: The app's configured signup fields (or a name field when there
+/// are none), password, and the captcha when one is required.
 /// Uses [AnimatedSwitcher] for smooth step transitions.
 library;
 
@@ -10,17 +11,26 @@ import 'package:authsome_flutter/authsome_flutter.dart';
 
 import '../theme/auth_theme.dart';
 import '../widgets/auth_card.dart';
+import '../widgets/captcha_field.dart';
 import '../widgets/error_display.dart';
 import '../widgets/password_input.dart';
+import '../widgets/signup_field_input.dart';
+import 'email_verification_form.dart';
 import '../widgets/social_buttons.dart';
 import '../widgets/or_divider.dart';
 import '../widgets/loading_indicator.dart';
 
 /// A multi-step sign-up form wrapped in an [AuthCard].
 ///
-/// Supports social signup, and email/password registration with an
-/// optional name field. Social providers are auto-discovered from
-/// the server's [ClientConfig] unless explicitly overridden.
+/// Supports social signup and email/password registration. Follows the
+/// server's [ClientConfig] the way React's `sign-up-form.tsx` does:
+///
+/// - `password.enabled: false` leaves only social sign-up.
+/// - `signup_fields` replaces the name field with the app's own fields.
+/// - `captcha` adds a challenge before the account is created.
+/// - `email_verification.required` swaps to an [EmailVerificationForm]
+///   after sign-up instead of signing the user in.
+/// - `branding.appName` names the app in the default title.
 class SignUpForm extends StatefulWidget {
   /// Called when sign-up completes successfully.
   final VoidCallback? onSuccess;
@@ -37,13 +47,20 @@ class SignUpForm extends StatefulWidget {
   /// Layout for social buttons (default: [SocialButtonLayout.grid]).
   final SocialButtonLayout socialLayout;
 
-  /// Optional logo widget displayed above the title.
+  /// Renders the captcha on platforms or providers the built-in widget
+  /// doesn't cover. See [CaptchaBuilder].
+  final CaptchaBuilder? captchaBuilder;
+
+  /// Optional logo widget displayed above the title. When null, the app's
+  /// branding logo shows if one is configured.
   final Widget? logo;
 
   // ── Localization overrides ──
 
-  /// Card title (default: "Create an account").
-  final String titleText;
+  /// Card title. Defaults to "Create your {app name} account" when the
+  /// client config carries a branding app name, otherwise
+  /// "Create an account".
+  final String? titleText;
 
   /// Card description (default: "Enter your email to get started").
   final String descriptionText;
@@ -79,8 +96,9 @@ class SignUpForm extends StatefulWidget {
     this.socialProviders,
     this.onSocialLogin,
     this.socialLayout = SocialButtonLayout.grid,
+    this.captchaBuilder,
     this.logo,
-    this.titleText = 'Create an account',
+    this.titleText,
     this.descriptionText = 'Enter your email to get started',
     this.emailLabel = 'Email',
     this.nameLabel = 'Full name',
@@ -104,6 +122,18 @@ class _SignUpFormState extends State<SignUpForm> {
   int _step = 0; // 0 = email, 1 = details
   String? _error;
   bool _isSubmitting = false;
+  String? _captchaToken;
+
+  /// Email awaiting verification, set once sign-up lands in
+  /// [AuthVerificationPending].
+  String? _verifyEmail;
+
+  /// Values of the configured signup fields, keyed by field key.
+  final Map<String, String> _fieldValues = {};
+  final Map<String, String> _fieldErrors = {};
+
+  /// Field list the defaults were last seeded from.
+  List<SignupFieldConfig>? _seededFields;
 
   AuthNotifier? _auth;
   bool _missingProvider = false;
@@ -141,6 +171,15 @@ class _SignUpFormState extends State<SignUpForm> {
       return;
     }
 
+    final state = auth.state;
+    if (state is AuthVerificationPending && mounted) {
+      setState(() {
+        _verifyEmail = state.email;
+        _isSubmitting = false;
+      });
+      return;
+    }
+
     if (auth.error != null && mounted) {
       setState(() {
         _error = auth.error;
@@ -167,22 +206,55 @@ class _SignUpFormState extends State<SignUpForm> {
   Future<void> _onSignUp() async {
     final name = _nameController.text.trim();
     final password = _passwordController.text;
+    final fields = _signupFields();
+
+    final errors = <String, String>{};
+    for (final field in fields ?? const <SignupFieldConfig>[]) {
+      final problem = validateSignupField(field, _fieldValues[field.key] ?? '');
+      if (problem != null) errors[field.key] = problem;
+    }
+    if (errors.isNotEmpty) {
+      setState(() {
+        _fieldErrors
+          ..clear()
+          ..addAll(errors);
+        _error = null;
+      });
+      return;
+    }
 
     if (password.isEmpty) {
-      setState(() => _error = 'Please enter a password');
+      setState(() {
+        _fieldErrors.clear();
+        _error = 'Please enter a password';
+      });
+      return;
+    }
+
+    if (CaptchaField.isRequired(_auth?.clientConfig?.captcha) &&
+        _captchaToken == null) {
+      setState(() => _error = 'Please complete the captcha');
       return;
     }
 
     setState(() {
       _error = null;
+      _fieldErrors.clear();
       _isSubmitting = true;
     });
 
     try {
+      final values = <String, String>{
+        for (final e in _fieldValues.entries)
+          if (e.value.isNotEmpty) e.key: e.value,
+      };
       await _auth!.signUp(
         _emailController.text.trim(),
         password,
-        name: name.isNotEmpty ? name : null,
+        // The name field only shows when no signup fields are configured.
+        name: fields == null && name.isNotEmpty ? name : null,
+        fields: fields != null && values.isNotEmpty ? values : null,
+        captchaToken: _captchaToken,
       );
     } catch (e) {
       if (mounted) {
@@ -203,6 +275,33 @@ class _SignUpFormState extends State<SignUpForm> {
     });
   }
 
+  /// The configured signup fields sorted by order, or null when there are
+  /// none (the form then falls back to a single name field).
+  List<SignupFieldConfig>? _signupFields() {
+    final fields = _auth?.clientConfig?.signupFields;
+    if (fields == null || fields.isEmpty) return null;
+    final sorted = [...fields]..sort((a, b) => a.order.compareTo(b.order));
+    // Seed configured defaults the first time a field list is seen, and
+    // again if the config changes. A default only fills a field the user
+    // hasn't touched.
+    if (!identical(fields, _seededFields)) {
+      _seededFields = fields;
+      for (final f in sorted) {
+        final d = f.defaultValue;
+        if (d != null && d.isNotEmpty) _fieldValues.putIfAbsent(f.key, () => d);
+      }
+    }
+    return sorted;
+  }
+
+  String _resolveTitle() {
+    if (widget.titleText != null) return widget.titleText!;
+    final appName = _auth?.clientConfig?.branding?.appName;
+    return appName != null && appName.isNotEmpty
+        ? 'Create your $appName account'
+        : 'Create an account';
+  }
+
   List<SocialProvider> _resolveSocialProviders() {
     if (widget.socialProviders != null) return widget.socialProviders!;
     final config = _auth?.clientConfig;
@@ -216,7 +315,7 @@ class _SignUpFormState extends State<SignUpForm> {
   Widget build(BuildContext context) {
     if (_missingProvider) {
       return AuthCard(
-        title: widget.titleText,
+        title: widget.titleText ?? 'Create an account',
         description: widget.descriptionText,
         logo: widget.logo,
         align: widget.align,
@@ -228,24 +327,75 @@ class _SignUpFormState extends State<SignUpForm> {
       );
     }
 
+    final verifyEmail = _verifyEmail;
+    if (verifyEmail != null) {
+      return EmailVerificationForm(
+        auth: _auth,
+        email: verifyEmail,
+        logo: widget.logo,
+        align: widget.align,
+        onSuccess: widget.onSuccess,
+      );
+    }
+
     final theme = AuthTheme.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     final providers = _resolveSocialProviders();
+    final config = _auth?.clientConfig;
+    final showPassword = config?.password?.enabled ?? true;
 
     return AuthCard(
-      title: widget.titleText,
+      title: _resolveTitle(),
       description: widget.descriptionText,
       logo: widget.logo,
+      branding: config?.branding,
       align: widget.align,
       footer: _buildFooter(context),
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
         switchInCurve: Curves.easeOut,
         switchOutCurve: Curves.easeIn,
-        child: _step == 0
-            ? _buildEmailStep(context, theme, colorScheme, providers)
-            : _buildDetailsStep(context, theme, colorScheme),
+        child: !showPassword
+            ? _buildSocialOnly(context, theme, colorScheme, providers)
+            : _step == 0
+                ? _buildEmailStep(context, theme, colorScheme, providers)
+                : _buildDetailsStep(context, theme, colorScheme),
       ),
+    );
+  }
+
+  /// Passwords are off: social sign-up is the only way in, as in React.
+  Widget _buildSocialOnly(
+    BuildContext context,
+    AuthThemeData theme,
+    ColorScheme colorScheme,
+    List<SocialProvider> providers,
+  ) {
+    return Column(
+      key: const ValueKey('sign-up-social-only'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (providers.isNotEmpty)
+          SocialButtons(
+            providers: providers,
+            onProviderClick: (id) => widget.onSocialLogin?.call(id),
+            isLoading: _isSubmitting,
+            layout: widget.socialLayout,
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text(
+              'No sign-up methods are currently available. Please contact '
+              'your administrator.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -303,6 +453,11 @@ class _SignUpFormState extends State<SignUpForm> {
     AuthThemeData theme,
     ColorScheme colorScheme,
   ) {
+    final fields = _signupFields();
+    final captcha = _auth?.clientConfig?.captcha;
+    final captchaRequired = CaptchaField.isRequired(captcha);
+    final canSubmit =
+        !_isSubmitting && (!captchaRequired || _captchaToken != null);
     return Column(
       key: const ValueKey('sign-up-details-step'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -335,17 +490,32 @@ class _SignUpFormState extends State<SignUpForm> {
         SizedBox(height: theme.fieldSpacing),
         ErrorDisplay(error: _error),
         if (_error != null) SizedBox(height: theme.fieldSpacing),
-        TextField(
-          controller: _nameController,
-          focusNode: _nameFocusNode,
-          enabled: !_isSubmitting,
-          textInputAction: TextInputAction.next,
-          decoration: InputDecoration(
-            labelText: widget.nameLabel,
-            border: const OutlineInputBorder(),
+        if (fields == null) ...[
+          TextField(
+            controller: _nameController,
+            focusNode: _nameFocusNode,
+            enabled: !_isSubmitting,
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(
+              labelText: widget.nameLabel,
+              border: const OutlineInputBorder(),
+            ),
           ),
-        ),
-        SizedBox(height: theme.fieldSpacing),
+          SizedBox(height: theme.fieldSpacing),
+        ] else
+          for (final field in fields) ...[
+            SignupFieldInput(
+              field: field,
+              value: _fieldValues[field.key] ?? '',
+              enabled: !_isSubmitting,
+              errorText: _fieldErrors[field.key],
+              onChanged: (v) => setState(() {
+                _fieldValues[field.key] = v;
+                _fieldErrors.remove(field.key);
+              }),
+            ),
+            SizedBox(height: theme.fieldSpacing),
+          ],
         PasswordInput(
           controller: _passwordController,
           hintText: 'Create a password',
@@ -353,9 +523,17 @@ class _SignUpFormState extends State<SignUpForm> {
           textInputAction: TextInputAction.done,
           onSubmitted: _onSignUp,
         ),
+        if (captchaRequired) ...[
+          SizedBox(height: theme.fieldSpacing),
+          CaptchaField(
+            config: captcha!,
+            builder: widget.captchaBuilder,
+            onToken: (token) => setState(() => _captchaToken = token),
+          ),
+        ],
         SizedBox(height: theme.fieldSpacing),
         FilledButton(
-          onPressed: _isSubmitting ? null : _onSignUp,
+          onPressed: canSubmit ? _onSignUp : null,
           child: _isSubmitting
               ? const LoadingIndicator(size: LoadingSize.sm)
               : Text(widget.signUpLabel),

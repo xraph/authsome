@@ -31,7 +31,6 @@ import (
 	"github.com/xraph/authsome/plugin"
 	apikeyPlugin "github.com/xraph/authsome/plugins/apikey"
 	"github.com/xraph/authsome/principal"
-	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -104,20 +103,22 @@ func (m *mockEngine) SessionConfigForApp(_ context.Context, _ id.AppID, _ ...id.
 func (m *mockEngine) TokenFormatForApp(_ string) tokenformat.Format { return nil }
 func (m *mockEngine) CeremonyStore() ceremony.Store                 { return nil }
 func (m *mockEngine) APIKeyStore() apikey.Store                     { return m.store }
-func (m *mockEngine) SecurityEvents() securityevent.Store           { return nil }
 func (m *mockEngine) DPoPValidator() *dpop.Validator                { return nil }
 func (m *mockEngine) DPoPNonceSigner() *dpop.NonceSigner            { return nil }
 func (m *mockEngine) DPoPModeForApp(_ context.Context, _ id.AppID) dpop.Mode {
 	return dpop.ModeOff
 }
 func (m *mockEngine) DPoPNonceRequiredForApp(_ context.Context, _ id.AppID) bool { return false }
-func (m *mockEngine) ResolveSessionByToken(_ string) (*session.Session, error) {
+func (m *mockEngine) ResolveSessionByToken(_ context.Context, _ string) (*session.Session, error) {
 	return nil, errors.New("not implemented")
 }
 func (m *mockEngine) GetUser(_ context.Context, _ id.UserID) (*user.User, error) {
 	return nil, errors.New("not implemented")
 }
 func (m *mockEngine) EnsureDefaultRole(_ context.Context, _ id.AppID, _ id.UserID) {}
+func (m *mockEngine) RevokeOtherUserSessions(context.Context, id.UserID, id.SessionID) error {
+	return nil
+}
 func (m *mockEngine) ResolvePrincipal(_ context.Context, ref principal.Ref) (*principal.Principal, error) {
 	if p, ok := m.principals[ref.ID]; ok {
 		return p, nil
@@ -133,7 +134,7 @@ func (m *mockEngine) AuthRegistry() auth.Registry      { return nil }
 func (m *mockEngine) PlatformAppID() id.AppID          { return id.AppID{} }
 func (m *mockEngine) DefaultAppID() string             { return "" }
 func (m *mockEngine) BasePath() string                 { return "" }
-func (m *mockEngine) ResolveUser(userID string) (*user.User, error) {
+func (m *mockEngine) ResolveUser(_ context.Context, userID string) (*user.User, error) {
 	uid, err := id.ParseUserID(userID)
 	if err != nil {
 		return nil, err
@@ -913,7 +914,7 @@ func TestPlugin_OnInit_PrincipalAuthGateSignatureMatchesRealEngine(t *testing.T)
 	s := memoryStore.New()
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),

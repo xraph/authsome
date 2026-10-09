@@ -26,13 +26,18 @@ type SCIMConfig struct { //nolint:revive // stutter: cannot rename to Config; co
 
 // Token represents a bearer token for authenticating SCIM API requests.
 type Token struct {
-	ID         id.SCIMTokenID  `json:"id"`
-	ConfigID   id.SCIMConfigID `json:"config_id"`
-	Name       string          `json:"name"`
-	TokenHash  string          `json:"-"`
-	LastUsedAt *time.Time      `json:"last_used_at,omitempty"`
-	ExpiresAt  *time.Time      `json:"expires_at,omitempty"`
-	CreatedAt  time.Time       `json:"created_at"`
+	ID        id.SCIMTokenID  `json:"id"`
+	ConfigID  id.SCIMConfigID `json:"config_id"`
+	Name      string          `json:"name"`
+	TokenHash string          `json:"-"`
+	// TokenLookup is the hex SHA-256 of the plaintext, the indexed column a
+	// presented token is resolved by; TokenHash, a salted bcrypt digest, is
+	// then compared on that single row. Empty on rows written before the
+	// column existed, which are found by scanning and upgraded on use.
+	TokenLookup string     `json:"-"`
+	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 // IsExpired reports whether the token has expired.

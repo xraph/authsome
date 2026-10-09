@@ -27,6 +27,7 @@ import (
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/browserbind"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/session"
@@ -269,7 +270,7 @@ func (p *Plugin) Name() string { return "social" }
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.engine = engine
 	p.store = engine.Store()
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.relay = engine.Relay()
 	p.hooks = engine.Hooks()
 	p.logger = engine.Logger()
@@ -374,20 +375,6 @@ func (p *Plugin) loadDBProviderSettings(ctx context.Context) []ProviderSetting {
 		return nil
 	}
 	return providers
-}
-
-// saveDBProviderSettings writes dynamic providers to the settings store.
-func (p *Plugin) saveDBProviderSettings(ctx context.Context, providers []ProviderSetting) error {
-	if p.settingsMgr == nil {
-		return fmt.Errorf("social: settings manager not available")
-	}
-	// #nosec G117 -- marshalling a value this package constructed itself.
-	raw, err := json.Marshal(providers)
-	if err != nil {
-		return err
-	}
-	return p.settingsMgr.Set(ctx, SettingSocialProviders.Def.Key, raw,
-		settings.ScopeGlobal, "", "", "", "dashboard")
 }
 
 // providerFromSetting creates a Provider from a ProviderSetting.
@@ -572,24 +559,12 @@ func (p *Plugin) rateLimitOpts(target rateLimitTarget) []forge.RouteOption {
 	if !ok || eng == nil {
 		return nil
 	}
-	rl := eng.RateLimiter()
 	cfg := eng.Config().RateLimit
-	if rl == nil || !cfg.Enabled {
-		return nil
-	}
 	limit := cfg.SignUpLimit
 	if target == rateLimitForCallback {
 		limit = cfg.SignInLimit
 	}
-	if limit <= 0 {
-		return nil
-	}
-	return []forge.RouteOption{
-		forge.WithMiddleware(middleware.RateLimit(rl, middleware.RateLimitConfig{
-			Limit:  limit,
-			Window: cfg.Window(),
-		})),
-	}
+	return eng.RateLimitOptions(limit)
 }
 
 // ──────────────────────────────────────────────────
@@ -681,7 +656,7 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 
 	state, err := generateState()
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to generate state: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to generate state: %w", err))
 	}
 
 	// Validate the redirect URL. The trust authority is gated by the
@@ -725,7 +700,7 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 	// proxy), without the verifier they can't exchange it.
 	pkceVerifier, err := generateState()
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to generate PKCE verifier: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to generate PKCE verifier: %w", err))
 	}
 
 	// OIDC nonce (OpenID Connect Core §3.1.2.1): per-flow random value
@@ -735,7 +710,7 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 	// silently ignore it.
 	oidcNonce, err := generateState()
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to generate OIDC nonce: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to generate OIDC nonce: %w", err))
 	}
 
 	stateInfo := map[string]string{
@@ -747,6 +722,13 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		"callback_url":  callbackURL,
 		"pkce_verifier": pkceVerifier,
 		"oidc_nonce":    oidcNonce,
+	}
+	// A login started by a browser is bound to that browser: the callback
+	// must carry the cookie set below. A native client sends neither fetch
+	// metadata nor an Origin and stays bound by state and PKCE alone.
+	fromBrowser := browserbind.IsBrowser(ctx.Request())
+	if fromBrowser {
+		stateInfo["browser"] = "1"
 	}
 	stateData, _ := json.Marshal(stateInfo) //nolint:errcheck // marshaling known types
 	// Namespace the state key by app so a state minted for app A can't
@@ -765,6 +747,9 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		oauth2.SetAuthURLParam("nonce", oidcNonce),
 	)
 
+	if fromBrowser {
+		browserbind.SetStateCookie(ctx.Response(), ctx.Request(), state)
+	}
 	return &StartResponse{AuthURL: authURL}, nil
 }
 
@@ -871,6 +856,9 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	if unmarshalErr := json.Unmarshal(stateData, &stateInfo); unmarshalErr != nil || stateInfo["provider"] != req.Provider {
 		return nil, forge.BadRequest("invalid state parameter")
 	}
+	if stateInfo["browser"] == "1" && !browserbind.Matches(ctx.Request(), req.State) {
+		return nil, forge.BadRequest("this login was started in a different browser; start again")
+	}
 
 	// Resolve the app ID from the state (set during handleStart).
 	appIDStr := stateInfo["app_id"]
@@ -883,7 +871,7 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	}
 	appID, err := id.ParseAppID(appIDStr)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("invalid app_id in OAuth state: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("invalid app_id in OAuth state: %w", err))
 	}
 
 	// This request is the provider redirecting the user agent, so the client
@@ -942,7 +930,7 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	// Fetch user profile from provider
 	providerUser, err := provider.FetchUser(ctx.Context(), token)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to fetch user from provider: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to fetch user from provider: %w", err))
 	}
 
 	goCtx := ctx.Context()
@@ -1004,11 +992,11 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		var newErr error
 		sess, newErr = account.NewSession(appID, u.ID, sessCfg)
 		if newErr != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", newErr))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create session: %w", newErr))
 		}
 		sess.EnvID = envID
 		if err := p.store.CreateSession(goCtx, sess); err != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to store session: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to store session: %w", err))
 		}
 	}
 
@@ -1357,7 +1345,7 @@ type AdminDeleteProviderResponse struct {
 // endpoint would return.
 func (p *Plugin) handleAdminListProviders(ctx forge.Context, req *AdminListProvidersRequest) (*AdminListProvidersResponse, error) {
 	if p.settingsMgr == nil {
-		return nil, forge.InternalError(fmt.Errorf("social: settings manager not wired"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("social: settings manager not wired"))
 	}
 	opts := settings.ResolveOpts{}
 	if v := strings.TrimSpace(req.AppID); v != "" {
@@ -1367,7 +1355,7 @@ func (p *Plugin) handleAdminListProviders(ctx forge.Context, req *AdminListProvi
 	if err != nil {
 		// Cascade returns the default ([]) when no override exists; a
 		// real error means the store is broken.
-		return nil, forge.InternalError(fmt.Errorf("social: read providers: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("social: read providers: %w", err))
 	}
 	out := make([]AdminProvider, 0, len(providers))
 	for _, prov := range providers {
@@ -1390,7 +1378,7 @@ func (p *Plugin) handleAdminCatalog(_ forge.Context, _ *apitypes.Empty) (*AdminC
 // stored secret unchanged so the UI can re-save without echoing it.
 func (p *Plugin) handleAdminUpsertProvider(ctx forge.Context, req *AdminUpsertProviderRequest) (*AdminProviderResponse, error) {
 	if p.settingsMgr == nil {
-		return nil, forge.InternalError(fmt.Errorf("social: settings manager not wired"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("social: settings manager not wired"))
 	}
 	name := strings.ToLower(strings.TrimSpace(req.Provider))
 	if name == "" {
@@ -1435,7 +1423,7 @@ func (p *Plugin) handleAdminUpsertProvider(ctx forge.Context, req *AdminUpsertPr
 
 	out := replaceOrAppend(current, updated)
 	if err := p.writeScope(ctx.Context(), scope, scopeID, out); err != nil {
-		return nil, forge.InternalError(err)
+		return nil, middleware.InternalError(ctx, err)
 	}
 	return &AdminProviderResponse{Provider: maskProvider(updated)}, nil
 }
@@ -1445,7 +1433,7 @@ func (p *Plugin) handleAdminUpsertProvider(ctx forge.Context, req *AdminUpsertPr
 // missing.
 func (p *Plugin) handleAdminDeleteProvider(ctx forge.Context, req *AdminDeleteProviderRequest) (*AdminDeleteProviderResponse, error) {
 	if p.settingsMgr == nil {
-		return nil, forge.InternalError(fmt.Errorf("social: settings manager not wired"))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("social: settings manager not wired"))
 	}
 	name := strings.ToLower(strings.TrimSpace(req.Provider))
 	if name == "" {
@@ -1461,7 +1449,7 @@ func (p *Plugin) handleAdminDeleteProvider(ctx forge.Context, req *AdminDeletePr
 		out = append(out, prov)
 	}
 	if err := p.writeScope(ctx.Context(), scope, scopeID, out); err != nil {
-		return nil, forge.InternalError(err)
+		return nil, middleware.InternalError(ctx, err)
 	}
 	return &AdminDeleteProviderResponse{Status: "deleted"}, nil
 }
@@ -1542,4 +1530,22 @@ func maskProvider(p ProviderSetting) AdminProvider {
 		out.ClientSecret = "***"
 	}
 	return out
+}
+
+// OnBeforeUserDelete removes a deleted user's provider connections and the
+// provider tokens they carry.
+func (p *Plugin) OnBeforeUserDelete(ctx context.Context, userID id.UserID) error {
+	if p.oauthStore == nil {
+		return nil
+	}
+	conns, err := p.oauthStore.GetOAuthConnectionsByUserID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("social: list connections for erasure: %w", err)
+	}
+	for _, c := range conns {
+		if err := p.oauthStore.DeleteOAuthConnection(ctx, c.ID); err != nil {
+			return fmt.Errorf("social: delete connection %s: %w", c.ID, err)
+		}
+	}
+	return nil
 }

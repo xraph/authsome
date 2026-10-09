@@ -76,7 +76,7 @@ func (a *API) handleGetAppSessionConfig(ctx forge.Context, req *GetAppSessionCon
 		if errors.Is(err, appsessionconfig.ErrNotFound) {
 			return nil, forge.NotFound("no session config found for this app")
 		}
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return cfg, nil
@@ -93,7 +93,7 @@ func (a *API) handleSetAppSessionConfig(ctx forge.Context, req *SetAppSessionCon
 	// Try to load existing config to preserve the ID and creation timestamp.
 	existing, err := a.engine.Store().GetAppSessionConfig(ctx.Context(), appID)
 	if err != nil && !errors.Is(err, appsessionconfig.ErrNotFound) {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	cfg := &appsessionconfig.Config{
@@ -118,7 +118,7 @@ func (a *API) handleSetAppSessionConfig(ctx forge.Context, req *SetAppSessionCon
 	}
 
 	if err := a.engine.Store().SetAppSessionConfig(ctx.Context(), cfg); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return cfg, nil
@@ -134,7 +134,7 @@ func (a *API) handleDeleteAppSessionConfig(ctx forge.Context, req *DeleteAppSess
 		if errors.Is(err, appsessionconfig.ErrNotFound) {
 			return nil, forge.NotFound("no session config found for this app")
 		}
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "deleted"}

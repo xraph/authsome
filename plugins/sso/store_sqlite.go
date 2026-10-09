@@ -146,3 +146,45 @@ func ssoSqliteError(err error) error {
 	}
 	return err
 }
+
+func (s *SqliteStore) GetIdentity(ctx context.Context, connID id.SSOConnectionID, subject string) (*Identity, error) {
+	if subject == "" {
+		return nil, ErrIdentityNotFound
+	}
+	m := new(ssoIdentityModel)
+	err := s.sdb.NewSelect(m).
+		Where("connection_id = ?", connID.String()).
+		Where("subject = ?", subject).
+		Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrIdentityNotFound
+		}
+		return nil, ssoSqliteError(err)
+	}
+	return toIdentity(m)
+}
+
+func (s *SqliteStore) CreateIdentity(ctx context.Context, ident *Identity) error {
+	if ident == nil || ident.Subject == "" {
+		return errors.New("sso: identity needs a subject")
+	}
+	// Round(0) drops the monotonic reading, which the sqlite driver would
+	// otherwise write into the column.
+	if ident.CreatedAt.IsZero() {
+		ident.CreatedAt = time.Now()
+	}
+	ident.CreatedAt = ident.CreatedAt.UTC().Round(0)
+	// Check before insert: the unique index still guards the race, and a
+	// duplicate then surfaces as the driver's own error rather than as a
+	// second binding.
+	if _, err := s.GetIdentity(ctx, ident.ConnectionID, ident.Subject); err == nil {
+		return ErrIdentityExists
+	} else if !errors.Is(err, ErrIdentityNotFound) {
+		return err
+	}
+	if _, err := s.sdb.NewInsert(fromIdentity(ident)).Exec(ctx); err != nil {
+		return ssoSqliteError(err)
+	}
+	return nil
+}

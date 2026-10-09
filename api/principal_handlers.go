@@ -122,7 +122,7 @@ func (a *API) handleTokenExchange(ctx forge.Context, req *TokenExchangeRequest) 
 		if errors.Is(err, authsome.ErrExchangeRefused) {
 			return nil, forge.Forbidden(err.Error())
 		}
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	expiresIn := int64(0)
@@ -155,7 +155,7 @@ func (a *API) handleListMyDelegations(ctx forge.Context, _ *apitypes.Empty) (*De
 
 	delegations, err := a.engine.ListDelegationsForSubject(ctx.Context(), appID, caller.Ref)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &DelegationListResponse{Delegations: make([]DelegationResponse, 0, len(delegations))}
@@ -227,7 +227,7 @@ func (a *API) handleMintChild(ctx forge.Context, req *MintChildRequest) (*MintCh
 		if errors.Is(err, authsome.ErrChildMintNotPermitted) {
 			return nil, forge.Forbidden("parent principal is not permitted to mint children")
 		}
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusCreated, &MintChildResponse{

@@ -18,10 +18,13 @@ import (
 
 	log "github.com/xraph/go-utils/log"
 
+	authsome "github.com/xraph/authsome"
+
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apitypes"
+	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
@@ -125,6 +128,9 @@ type Plugin struct {
 	oauth2Store Store
 	logger      log.Logger
 	engine      plugin.Engine
+	// ceremonies holds pending consent requests between the authorization
+	// request and the user's decision.
+	ceremonies ceremony.Store
 
 	// regLimiter is a process-local fallback used for POST /register when
 	// the engine has no rate limiter configured (extension.Config.RateLimit
@@ -171,6 +177,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.engine = engine
 	p.store = engine.Store()
 	p.logger = engine.Logger()
+	p.ceremonies = engine.CeremonyStore()
 	if p.logger == nil {
 		p.logger = log.NewNoopLogger()
 	}
@@ -257,35 +264,40 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Public OAuth2 endpoints
 	g := router.Group("/v1/oauth", forge.WithGroupTags("OAuth2"))
 
-	if err := g.GET("/authorize", p.handleAuthorize,
+	authorizeRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int { return c.OAuthAuthorizeLimit })
+	tokenRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int { return c.OAuthTokenLimit })
+
+	if err := g.GET("/authorize", p.handleAuthorize, append([]forge.RouteOption{
 		forge.WithSummary("OAuth2 Authorization"),
 		forge.WithDescription("Authorization endpoint for the OAuth2 authorization code flow."),
 		forge.WithOperationID("oauth2Authorize"),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, authorizeRL...)...); err != nil {
 		return err
 	}
 
-	if err := g.POST("/token", p.handleToken,
+	if err := g.POST("/token", p.handleToken, append([]forge.RouteOption{
 		forge.WithSummary("OAuth2 Token"),
 		forge.WithDescription("Token endpoint for exchanging authorization codes or client credentials for access tokens."),
 		forge.WithOperationID("oauth2Token"),
 		forge.WithResponseSchema(http.StatusOK, "Token response", TokenResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, tokenRL...)...); err != nil {
 		return err
 	}
 
-	if err := g.POST("/revoke", p.handleRevoke,
+	if err := g.POST("/revoke", p.handleRevoke, append([]forge.RouteOption{
+		forge.WithMiddleware(middleware.RequireScope()),
 		forge.WithSummary("Revoke token"),
 		forge.WithDescription("Revokes an access or refresh token."),
 		forge.WithOperationID("oauth2Revoke"),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, tokenRL...)...); err != nil {
 		return err
 	}
 
 	if err := g.GET("/userinfo", p.handleUserInfo,
+		forge.WithMiddleware(middleware.RequireScope("openid")),
 		forge.WithSummary("OIDC UserInfo"),
 		forge.WithDescription("Returns claims about the authenticated user."),
 		forge.WithOperationID("oauth2UserInfo"),
@@ -296,13 +308,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	// Device Authorization Grant (RFC 8628) — public endpoint
-	if err := g.POST("/device/authorize", p.handleDeviceAuthorize,
+	if err := g.POST("/device/authorize", p.handleDeviceAuthorize, append([]forge.RouteOption{
 		forge.WithSummary("Device Authorization"),
 		forge.WithDescription("Device authorization endpoint (RFC 8628). Returns a device_code and user_code for device/CLI authentication."),
 		forge.WithOperationID("oauth2DeviceAuthorize"),
 		forge.WithResponseSchema(http.StatusOK, "Device authorization response", DeviceAuthResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}, tokenRL...)...); err != nil {
 		return err
 	}
 
@@ -412,6 +424,44 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithGroupAuth("session"),
 		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
 	)
+
+	if err := authG.GET("/consent", p.handleConsentPage,
+		forge.WithSummary("OAuth2 consent"),
+		forge.WithDescription("Shows the pending authorization request for the signed-in user to approve or deny. Renders HTML, or JSON when Accept asks for it."),
+		forge.WithOperationID("oauth2ConsentPage"),
+	); err != nil {
+		return err
+	}
+	if err := authG.POST("/consent", p.handleConsentDecision,
+		forge.WithSummary("OAuth2 consent decision"),
+		forge.WithDescription("Records the signed-in user's approval or denial of a pending authorization request and completes it."),
+		forge.WithOperationID("oauth2ConsentDecision"),
+	); err != nil {
+		return err
+	}
+
+	me := router.Group("/v1/me/oauth",
+		forge.WithGroupTags("OAuth2"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
+	)
+	if err := me.GET("/grants", p.handleListMyGrants,
+		forge.WithSummary("List my OAuth2 grants"),
+		forge.WithDescription("Lists the clients the signed-in user has approved and the scopes each holds."),
+		forge.WithOperationID("oauth2ListMyGrants"),
+		forge.WithResponseSchema(http.StatusOK, "Grants", ListGrantsResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+	if err := me.DELETE("/grants/:clientId", p.handleRevokeMyGrant,
+		forge.WithSummary("Revoke an OAuth2 grant"),
+		forge.WithDescription("Withdraws the signed-in user's approval of a client; its next authorization request shows the consent page again."),
+		forge.WithOperationID("oauth2RevokeMyGrant"),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
 
 	if err := authG.POST("/device/complete", p.handleDeviceComplete,
 		forge.WithSummary("Complete device authorization"),
@@ -557,6 +607,13 @@ type AuthorizeRequest struct {
 	// only a declared field reaches the OpenAPI document, and only a described
 	// parameter reaches the generated clients.
 	Resource []string `query:"resource,omitempty"`
+	// Prompt=consent forces the consent page even when a grant covers the
+	// request (OpenID Connect Core 3.1.2.1).
+	//
+	// It stays last. The generated clients take query parameters positionally
+	// in field order, so a field added above Resource moves it, and a caller
+	// passing resources by position would hand them to this one instead.
+	Prompt string `query:"prompt,omitempty"`
 }
 
 // TokenRequest is the OAuth2 token request.
@@ -568,6 +625,7 @@ type TokenRequest struct {
 	ClientSecret string `json:"client_secret,omitempty" form:"client_secret"`
 	CodeVerifier string `json:"code_verifier,omitempty" form:"code_verifier"`
 	DeviceCode   string `json:"device_code,omitempty" form:"device_code"`
+	RefreshToken string `json:"refresh_token,omitempty" form:"refresh_token"`
 	// RFC 8707, repeatable. RFC 6749 section 4.1.3 sends token-endpoint
 	// parameters as a form body, and a JSON body is accepted too, so the field
 	// carries both tags.
@@ -638,6 +696,9 @@ type CreateClientRequest struct {
 	GrantTypes   []string `json:"grant_types,omitempty"`
 	Public       bool     `json:"public,omitempty"`
 	DPoPMode     string   `json:"dpop_mode,omitempty"`
+	// FirstParty marks a client the operator owns; authorization skips the
+	// consent page for it.
+	FirstParty bool `json:"first_party,omitempty"`
 }
 
 // CreateClientResponse is returned when an OAuth2 client is created.
@@ -795,15 +856,13 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 	// custom-scheme hijack, a shared browser — can redeem it without one.
 	// Enforcing only when a challenge happens to be present lets a client opt
 	// out of its own protection by simply omitting it.
-	if client.Public {
-		if req.CodeChallenge == "" {
-			return nil, forge.BadRequest("code_challenge required (PKCE) for public clients")
-		}
-		// "plain" leaves the verifier recoverable anywhere the challenge is
-		// observable — the authorize URL lands in history, logs, and Referer.
-		if req.CodeChallengeMethod != "" && req.CodeChallengeMethod != "S256" {
-			return nil, forge.BadRequest("code_challenge_method must be S256 for public clients")
-		}
+	if client.Public && req.CodeChallenge == "" {
+		return nil, forge.BadRequest("code_challenge required (PKCE) for public clients")
+	}
+	// Only S256 is accepted from any client: a plain challenge is the
+	// verifier itself, recoverable wherever the authorization URL is logged.
+	if req.CodeChallenge != "" && req.CodeChallengeMethod != "" && req.CodeChallengeMethod != "S256" {
+		return nil, forge.BadRequest("code_challenge_method must be S256")
 	}
 
 	// Require authenticated user. No resource_metadata hint here, unlike
@@ -818,6 +877,9 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 	if !ok {
 		return nil, forge.Unauthorized("authentication required to authorize")
 	}
+	if !p.callerAppMatches(ctx, client.AppID) {
+		return nil, forge.NewHTTPError(http.StatusForbidden, "this client belongs to a different app than the signed-in session")
+	}
 
 	// Give a registered gate (e.g. an agent-delegation policy) a chance to
 	// veto the authorization before a code is issued. orgID is whatever the
@@ -827,32 +889,23 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		return nil, gateErr
 	}
 
+	// A third-party client needs the user's recorded approval for every
+	// scope it asks for; otherwise the user decides on the consent page and
+	// the code is issued from there.
+	if p.needsConsent(ctx.Context(), client, userID, scopes, req.Prompt) {
+		return nil, p.redirectToConsent(ctx, pendingConsent{
+			ClientID: req.ClientID, UserID: userID.String(), AppID: client.AppID.String(), OrgID: orgID.String(),
+			RedirectURI: redirectURI, Scopes: scopes, Resources: resources, State: req.State,
+			CodeChallenge: req.CodeChallenge, CodeChallengeMethod: req.CodeChallengeMethod,
+		})
+	}
+
 	// Generate authorization code.
-	codeStr, err := generateSecureToken(32)
-	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: generate auth code: %w", err))
-	}
-
-	authCode := &AuthorizationCode{
-		ID:                  id.NewAuthCodeID(),
-		Code:                codeStr,
-		ClientID:            req.ClientID,
-		UserID:              userID,
-		AppID:               client.AppID,
-		RedirectURI:         redirectURI,
-		Scopes:              scopes,
-		Resources:           resources,
-		CodeChallenge:       req.CodeChallenge,
-		CodeChallengeMethod: req.CodeChallengeMethod,
-		ExpiresAt:           time.Now().Add(p.config.AuthCodeTTL),
-		CreatedAt:           time.Now(),
-	}
-
-	if createErr := p.oauth2Store.CreateAuthCode(ctx.Context(), authCode); createErr != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: store auth code: %w", createErr))
-	}
-
-	redirectURL, err := buildRedirect(redirectURI, codeStr, req.State)
+	redirectURL, err := p.issueAuthorizationCode(ctx.Context(), pendingConsent{
+		ClientID: req.ClientID, UserID: userID.String(), AppID: client.AppID.String(),
+		RedirectURI: redirectURI, Scopes: scopes, Resources: resources, State: req.State,
+		CodeChallenge: req.CodeChallenge, CodeChallengeMethod: req.CodeChallengeMethod,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1071,8 +1124,13 @@ func callerOwnsSession(caller, target *session.Session) bool {
 // next() call sees it, the same reason handleUserInfo below sets its own
 // header instead of relying on that middleware.
 func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
-	// Runs before the grant switch so all three grants authenticate the same
-	// way, and so a malformed header is answered once rather than three times.
+	// Token responses carry credentials and must never be cached by a
+	// browser or an intermediary (RFC 6749 section 5.1).
+	ctx.SetHeader("Cache-Control", "no-store")
+	ctx.SetHeader("Pragma", "no-cache")
+
+	// Runs before the grant switch so every grant authenticates the same
+	// way, and so a malformed header is answered once rather than per grant.
 	if err := applyBasicClientAuth(ctx.Request(), &req.ClientID, &req.ClientSecret); err != nil {
 		return nil, err
 	}
@@ -1080,6 +1138,8 @@ func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (*TokenRespon
 	switch req.GrantType {
 	case "authorization_code":
 		return p.handleAuthorizationCodeGrant(ctx, req)
+	case "refresh_token":
+		return p.handleRefreshTokenGrant(ctx, req)
 	case "client_credentials":
 		return p.handleClientCredentialsGrant(ctx, req)
 	case "urn:ietf:params:oauth:grant-type:device_code":
@@ -1089,6 +1149,70 @@ func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (*TokenRespon
 	default:
 		return nil, forge.BadRequest("unsupported grant_type")
 	}
+}
+
+// handleRefreshTokenGrant rotates a token the provider issued (RFC 6749
+// section 6). The client authenticates as it did to obtain the token, the
+// refresh token must belong to that client, and a DPoP-bound token must
+// present a proof for its key before anything is rotated. The engine
+// handles replay detection and the rotation itself.
+func (p *Plugin) handleRefreshTokenGrant(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
+	if req.RefreshToken == "" {
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_request", "refresh_token required")
+	}
+	client, err := p.authenticateClient(ctx.Context(), req.ClientID, req.ClientSecret)
+	if err != nil {
+		return nil, err
+	}
+	// Any client that can obtain a code can refresh what the code produced;
+	// a client registered only for other grants cannot.
+	if !clientAllowsGrant(client, "refresh_token") && !clientAllowsGrant(client, "authorization_code") &&
+		!p.clientSupportsGrant(client, deviceCodeGrantType) {
+		return nil, newOAuth2Error(http.StatusBadRequest, "unauthorized_client", "client is not authorized for the refresh_token grant")
+	}
+	eng, ok := p.engine.(*authsome.Engine)
+	if !ok || eng == nil {
+		return nil, middleware.InternalError(ctx, errors.New("oauth2: refresh grant needs the authsome engine"))
+	}
+	r := ctx.Request()
+	sess, err := eng.RefreshForClient(ctx.Context(), req.RefreshToken, client.ClientID, authsome.RefreshOpts{
+		IPAddress:  middleware.ClientIP(r),
+		UserAgent:  r.UserAgent(),
+		DPoPProof:  r.Header.Get("DPoP"),
+		Method:     r.Method,
+		RequestURL: middleware.RequestURL(r),
+	})
+	if err != nil {
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "invalid refresh token")
+	}
+	tokenType := "Bearer"
+	if sess.DPoPJKT != "" {
+		tokenType = "DPoP"
+	}
+	return &TokenResponse{
+		AccessToken:  sess.Token,
+		TokenType:    tokenType,
+		ExpiresIn:    int(time.Until(sess.ExpiresAt).Seconds()),
+		RefreshToken: sess.RefreshToken,
+		Scope:        strings.Join(sess.Scopes, " "),
+	}, nil
+}
+
+// callerAppMatches reports whether the signed-in caller belongs to appID,
+// the client's app. A session from another app must not authorize a client
+// of this one. The app comes from the context the auth middleware built,
+// else from the user record; a caller with neither is not a session the
+// middleware built and is left to the session guard.
+func (p *Plugin) callerAppMatches(ctx forge.Context, appID id.AppID) bool {
+	if fromCtx, ok := middleware.AppIDFrom(ctx.Context()); ok {
+		return fromCtx == appID
+	}
+	if userID, ok := middleware.UserIDFrom(ctx.Context()); ok && p.store != nil {
+		if u, err := p.store.GetUser(ctx.Context(), userID); err == nil && u != nil {
+			return u.AppID == appID
+		}
+	}
+	return true
 }
 
 func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
@@ -1172,7 +1296,7 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 	// tokens from one code.
 	consumed, err := p.oauth2Store.ConsumeAuthCode(ctx.Context(), req.Code)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: consume auth code: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: consume auth code: %w", err))
 	}
 	if !consumed {
 		return nil, forge.BadRequest("authorization code already used")
@@ -1280,7 +1404,12 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeRequest) (*apitypes.
 	// client can revoke any token it holds a copy of. Narrower than the
 	// anonymous hole it replaces, and left tracked rather than fixed here
 	// because that column reaches all four store backends.
-	if !authenticatedClient && !callerOwnsSession(caller, sess) {
+	// A client may revoke only the tokens issued to it; a user may revoke
+	// only their own. Either way an unowned token is answered as revoked
+	// without touching it (RFC 7009 section 2.2).
+	owned := (authenticatedClient && sess.ClientID != "" && sess.ClientID == req.ClientID) ||
+		(!authenticatedClient && callerOwnsSession(caller, sess))
+	if !owned {
 		p.logger.Debug("oauth2: revoke ignored for a token the caller does not own",
 			log.String("session_id", sess.ID.String()),
 		)
@@ -1319,16 +1448,27 @@ func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInf
 
 	u, err := p.store.GetUser(ctx.Context(), userID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: get user: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: get user: %w", err))
 	}
 
-	return &UserInfo{
-		Sub:           u.ID.String(),
-		Email:         u.Email,
-		EmailVerified: u.EmailVerified,
-		Name:          u.Name(),
-		Phone:         u.Phone,
-	}, nil
+	// An OAuth2 token sees only the claims its scopes cover (OpenID Connect
+	// Core 5.4); a first-party session sees them all.
+	sess, _ := middleware.SessionFrom(ctx.Context())
+	granted := func(scope string) bool {
+		return sess == nil || sess.ClientID == "" || middleware.HasScopes(sess, scope)
+	}
+	info := &UserInfo{Sub: u.ID.String()}
+	if granted("profile") {
+		info.Name = u.Name()
+	}
+	if granted("email") {
+		info.Email = u.Email
+		info.EmailVerified = u.EmailVerified
+	}
+	if granted("phone") {
+		info.Phone = u.Phone
+	}
+	return info, nil
 }
 
 // handleDiscovery derives the OIDC discovery document from
@@ -1394,7 +1534,7 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 	// Generate client credentials.
 	clientIDStr, err := generateSecureToken(16)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: generate client_id: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate client_id: %w", err))
 	}
 
 	var rawSecret string
@@ -1402,11 +1542,11 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 	if !req.Public {
 		rawSecret, err = generateSecureToken(32)
 		if err != nil {
-			return nil, forge.InternalError(fmt.Errorf("oauth2: generate client_secret: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate client_secret: %w", err))
 		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(rawSecret), bcrypt.DefaultCost)
 		if err != nil {
-			return nil, forge.InternalError(fmt.Errorf("oauth2: hash client_secret: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: hash client_secret: %w", err))
 		}
 		hashedSecret = string(hash)
 	}
@@ -1449,6 +1589,7 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 		Resources:               req.Resources,
 		GrantTypes:              grantTypes,
 		Public:                  req.Public,
+		FirstParty:              req.FirstParty,
 		TokenEndpointAuthMethod: authMethodForPublic(req.Public),
 		DPoPMode:                dpopMode,
 		CreatedAt:               time.Now(),
@@ -1456,7 +1597,7 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 	}
 
 	if err := p.oauth2Store.CreateClient(ctx.Context(), client); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: create client: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: create client: %w", err))
 	}
 
 	resp := &CreateClientResponse{
@@ -1489,7 +1630,7 @@ func (p *Plugin) handleListClients(ctx forge.Context, req *ListClientsRequest) (
 
 	clients, err := p.oauth2Store.ListClients(ctx.Context(), appID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: list clients: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: list clients: %w", err))
 	}
 	if clients == nil {
 		clients = []*OAuth2Client{}
@@ -1517,14 +1658,14 @@ func (p *Plugin) handleDeleteClient(ctx forge.Context, req *DeleteClientRequest)
 		if errors.Is(err, ErrClientNotFound) {
 			return nil, forge.NotFound("oauth2 client not found")
 		}
-		return nil, forge.InternalError(fmt.Errorf("oauth2: load client: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: load client: %w", err))
 	}
 	if err := plugin.AssertAppScope(ctx, client.AppID); err != nil {
 		return nil, err
 	}
 
 	if err := p.oauth2Store.DeleteClient(ctx.Context(), clientID); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: delete client: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: delete client: %w", err))
 	}
 
 	return &DeleteClientResponse{Status: "deleted"}, nil
@@ -1598,7 +1739,7 @@ func (p *Plugin) bindDPoP(ctx forge.Context, client *OAuth2Client, appID id.AppI
 // retried: the retry the RFC requires would arrive against a code the
 // store already rejects as used. See handleAuthorizationCodeGrant and
 // handleDeviceCodeGrant for where jkt is actually resolved.
-func (p *Plugin) issueTokens(ctx forge.Context, _ *OAuth2Client, userID id.UserID, appID id.AppID, scopes, resources []string, jkt string) (*TokenResponse, error) {
+func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.UserID, appID id.AppID, scopes, resources []string, jkt string) (*TokenResponse, error) {
 	// Resolve session config for the app.
 	sessCfg := account.SessionConfig{
 		TokenTTL:        p.config.AccessTokenTTL,
@@ -1610,9 +1751,15 @@ func (p *Plugin) issueTokens(ctx forge.Context, _ *OAuth2Client, userID id.UserI
 
 	sess, err := account.NewSession(appID, userID, sessCfg)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: create session: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: create session: %w", err))
 	}
 	sess.DPoPJKT = jkt
+	// The token belongs to this client: the auth middleware parks the
+	// session until a RequireScope route admits it, only this client may
+	// refresh or revoke it, and the session refresh route refuses it.
+	if client != nil {
+		sess.ClientID = client.ClientID
+	}
 
 	// Stamp the granted scopes. Without this they exist only in the JWT claims
 	// and the response body, so an opaque token loses them and token exchange
@@ -1645,14 +1792,14 @@ func (p *Plugin) issueTokens(ctx forge.Context, _ *OAuth2Client, userID id.UserI
 				ExpiresAt: sess.ExpiresAt,
 			})
 			if err != nil {
-				return nil, forge.InternalError(fmt.Errorf("oauth2: generate JWT: %w", err))
+				return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate JWT: %w", err))
 			}
 			sess.Token = jwtToken
 		}
 	}
 
 	if err := p.store.CreateSession(ctx.Context(), sess); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: save session: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: save session: %w", err))
 	}
 
 	tokenType := "Bearer"
@@ -1684,7 +1831,7 @@ func (p *Plugin) issueClientToken(ctx forge.Context, client *OAuth2Client, resou
 	// Use an empty user ID for machine-to-machine tokens.
 	sess, err := account.NewSession(client.AppID, id.Nil, sessCfg)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: create client session: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: create client session: %w", err))
 	}
 	sess.DPoPJKT = jkt
 
@@ -1700,7 +1847,7 @@ func (p *Plugin) issueClientToken(ctx forge.Context, client *OAuth2Client, resou
 	sess.Audience = resources
 
 	if err := p.store.CreateSession(ctx.Context(), sess); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: save client session: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: save client session: %w", err))
 	}
 
 	tokenType := "Bearer"
@@ -1742,13 +1889,13 @@ func (p *Plugin) handleDeviceAuthorize(ctx forge.Context, req *DeviceAuthRequest
 	// Generate device code (256-bit, hex-encoded).
 	deviceCodeStr, err := generateSecureToken(32)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: generate device_code: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate device_code: %w", err))
 	}
 
 	// Generate human-readable user code (XXXX-XXXX format).
 	userCodeStr, err := generateUserCode()
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: generate user_code: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate user_code: %w", err))
 	}
 
 	// Compute verification URI.
@@ -1757,7 +1904,12 @@ func (p *Plugin) handleDeviceAuthorize(ctx forge.Context, req *DeviceAuthRequest
 		verificationURI = p.issuerURL() + "/v1/oauth/device"
 	}
 
-	scopes := strings.Fields(req.Scope)
+	// The client's registration bounds the scopes a device may ask for,
+	// exactly as it bounds an authorization request.
+	scopes, err := resolveScopes(client, req.Scope)
+	if err != nil {
+		return nil, err
+	}
 
 	// There is no prior authorization to narrow against at this endpoint
 	// either, so the client's own allowlist bounds what may be requested,
@@ -1783,7 +1935,7 @@ func (p *Plugin) handleDeviceAuthorize(ctx forge.Context, req *DeviceAuthRequest
 	}
 
 	if err := p.oauth2Store.CreateDeviceCode(ctx.Context(), dc); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: store device code: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: store device code: %w", err))
 	}
 
 	resp := &DeviceAuthResponse{
@@ -1889,7 +2041,7 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 		// If this update fails, do NOT issue tokens to prevent double-use.
 		dc.Status = DeviceCodeStatusConsumed
 		if err := p.oauth2Store.UpdateDeviceCode(ctx.Context(), dc); err != nil {
-			return nil, forge.InternalError(fmt.Errorf("oauth2: consume device code: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: consume device code: %w", err))
 		}
 
 		resources, resErr := narrowResources(dc.Resources, req.Resource)
@@ -1942,6 +2094,9 @@ func (p *Plugin) handleDeviceComplete(ctx forge.Context, req *DeviceCompleteRequ
 	}
 
 	// Apply the user's decision.
+	if req.Action == "approve" && !p.callerAppMatches(ctx, dc.AppID) {
+		return nil, forge.NewHTTPError(http.StatusForbidden, "this device request belongs to a different app than the signed-in session")
+	}
 	if req.Action == "approve" {
 		// Same veto point as the authorization-code flow: a gate refusal
 		// must block the approval, not be undone after the fact.
@@ -1956,7 +2111,7 @@ func (p *Plugin) handleDeviceComplete(ctx forge.Context, req *DeviceCompleteRequ
 	}
 
 	if err := p.oauth2Store.UpdateDeviceCode(ctx.Context(), dc); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: update device code: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: update device code: %w", err))
 	}
 
 	return &DeviceCompleteResponse{Status: dc.Status}, nil
@@ -2004,9 +2159,9 @@ func verifyPKCE(challenge, method, verifier string) bool {
 		h := sha256.Sum256([]byte(verifier))
 		computed := base64.RawURLEncoding.EncodeToString(h[:])
 		return computed == challenge
-	case "plain":
-		return verifier == challenge
 	default:
+		// "plain" leaves the verifier recoverable anywhere the challenge is
+		// logged and is not accepted.
 		return false
 	}
 }

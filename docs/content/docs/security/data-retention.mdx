@@ -1,0 +1,59 @@
+---
+title: Erasure and Retention
+description: What deleting a user leaves behind, and how expired rows are removed on a schedule.
+---
+
+Authsome keeps as little as it still needs. Deleting a user erases what every plugin holds about them, and a sweeper removes rows that have outlived their purpose.
+
+## Deleting a user
+
+`DELETE /v1/auth/me` (self-service) and the admin deletion both run the same erasure:
+
+1. Every delegation the user is party to, as subject or actor, is revoked.
+2. The user's devices are removed.
+3. Every plugin that implements `plugin.BeforeUserDelete` forgets the user: MFA enrollments and recovery codes, passkeys, social provider connections and their tokens, and consent proofs are handled this way.
+4. All sessions, refresh tokens, and API keys are revoked.
+5. The user row stays as an anonymised tombstone: `deleted_at` is set, the email becomes `deleted_<id>@deleted.local`, and the name, password hash, and profile fields are cleared.
+
+Consent records are kept as proof that a decision was made, but the IP address on them is truncated to its `/24` (IPv4) or `/64` (IPv6) network. A second erasure pass changes nothing.
+
+```go
+err := engine.DeleteAccount(ctx, userID)          // self-service
+err := engine.AdminDeleteUser(ctx, adminID, userID) // admin; same erasure
+```
+
+## Retention windows
+
+`Config.Retention` sets, in days, how long rows are kept past their expiry before the sweeper removes them:
+
+| Field | Default | Rows |
+|-------|---------|------|
+| `SessionsDays` | 30 | Sessions whose access and refresh tokens have both expired |
+| `VerificationsDays` | 7 | Email and phone verification codes, consumed or not |
+| `PasswordResetsDays` | 7 | Password reset tokens, consumed or not |
+| `RevokedRefreshTokensDays` | 90 | Refresh-token revocation records used for replay detection |
+| `DeviceCodesDays` | 1 | OAuth2 device codes |
+| `AuthCodesDays` | 1 | OAuth2 authorization codes |
+| `BatchSize` | 1000 | Rows one delete statement removes |
+
+Zero takes the default. A negative value keeps that kind forever. `RevokedRefreshTokensDays` must cover the refresh token lifetime, or a replayed token could outlive its own revocation record.
+
+```go
+cfg := authsome.DefaultConfig()
+cfg.Retention.SessionsDays = 14
+cfg.Session.CleanupInterval = 30 * time.Minute
+```
+
+## The sweeper
+
+The engine runs a sweep every `Session.CleanupInterval` (an hour by default; a negative value disables it). One replica sweeps at a time: the sweep takes a lease in the store for half the interval, and the other replicas skip. Each kind is removed in batches of `BatchSize` until a batch comes back short, so a large table is never held under one long delete. Expired ceremony state is swept in the same pass, and plugins that implement `plugin.RetentionSweeper` are asked to sweep what they keep; the OAuth2 plugin sweeps its codes.
+
+The first sweep runs one full interval after start, so a restart is never slowed by one.
+
+`engine.SweepRetention(ctx)` runs a sweep on demand and returns how many rows went. It honours the lease, so a second call inside the lease window does nothing.
+
+On MongoDB the store also sets TTL indexes for each window when the engine starts, so the database drops most rows itself and the sweeper only catches what the TTL monitor has not reached.
+
+## In-memory state
+
+The impossible-travel, anomaly, and IP reputation plugins keep per-principal or per-address state in memory. Each table is a least-recently-used map with a capacity (`MaxTrackedPrincipals` and `MaxCachedIPs`, 10000 by default), and the travel plugin keeps only its newest `MaxEvents` alerts. A principal that falls out of the table is simply checked afresh on its next login.

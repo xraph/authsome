@@ -2,6 +2,7 @@ package sso
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/xraph/grove"
@@ -41,6 +42,10 @@ type ssoConnectionModel struct {
 	SPPrivateKey      string `grove:"sp_private_key,notnull"`
 	SignRequests      bool   `grove:"sign_requests,notnull"`
 	AttributeMappings string `grove:"attribute_mappings,notnull"`
+	// AllowedDomains is a JSON array of domains; TrustedFederation adopts
+	// the IdP subject as the local id on first creation.
+	AllowedDomains    string `grove:"allowed_domains,notnull"`
+	TrustedFederation bool   `grove:"trusted_federation,notnull"`
 
 	CreatedAt time.Time `grove:"created_at,notnull,default:now()"`
 	UpdatedAt time.Time `grove:"updated_at,notnull,default:now()"`
@@ -75,6 +80,8 @@ func toConnection(m *ssoConnectionModel) (*Connection, error) {
 		Active:       m.Active,
 		Enforced:     m.Enforced,
 
+		TrustedFederation: m.TrustedFederation,
+
 		IDPMetadataXML: m.IDPMetadataXML,
 		IDPSSOURL:      m.IDPSSOURL,
 		IDPCertificate: m.IDPCertificate,
@@ -88,6 +95,11 @@ func toConnection(m *ssoConnectionModel) (*Connection, error) {
 		UpdatedAt: m.UpdatedAt,
 	}
 
+	if m.AllowedDomains != "" {
+		if err := json.Unmarshal([]byte(m.AllowedDomains), &c.AllowedDomains); err != nil {
+			return nil, fmt.Errorf("sso: decode allowed_domains: %w", err)
+		}
+	}
 	if m.AttributeMappings != "" {
 		if err := json.Unmarshal([]byte(m.AttributeMappings), &c.AttributeMappings); err != nil {
 			return nil, err
@@ -121,6 +133,8 @@ func fromConnection(c *Connection) *ssoConnectionModel {
 		Active:       c.Active,
 		Enforced:     c.Enforced,
 
+		TrustedFederation: c.TrustedFederation,
+
 		IDPMetadataXML: c.IDPMetadataXML,
 		IDPSSOURL:      c.IDPSSOURL,
 		IDPCertificate: c.IDPCertificate,
@@ -133,6 +147,11 @@ func fromConnection(c *Connection) *ssoConnectionModel {
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
 	}
+	if len(c.AllowedDomains) > 0 {
+		if b, err := json.Marshal(c.AllowedDomains); err == nil {
+			m.AllowedDomains = string(b)
+		}
+	}
 	if len(c.AttributeMappings) > 0 {
 		if b, err := json.Marshal(c.AttributeMappings); err == nil {
 			m.AttributeMappings = string(b)
@@ -142,4 +161,42 @@ func fromConnection(c *Connection) *ssoConnectionModel {
 		m.OrgID = c.OrgID.String()
 	}
 	return m
+}
+
+// ssoIdentityModel is one subject-to-user binding. The primary key is the
+// connection id and subject joined, which is also the unique pair.
+type ssoIdentityModel struct {
+	grove.BaseModel `grove:"table:authsome_sso_identities,alias:si"`
+
+	ID           string    `grove:"id,pk"`
+	ConnectionID string    `grove:"connection_id,notnull"`
+	Subject      string    `grove:"subject,notnull"`
+	UserID       string    `grove:"user_id,notnull"`
+	CreatedAt    time.Time `grove:"created_at,notnull,default:now()"`
+}
+
+func identityRowID(connID id.SSOConnectionID, subject string) string {
+	return connID.String() + ":" + subject
+}
+
+func fromIdentity(i *Identity) *ssoIdentityModel {
+	return &ssoIdentityModel{
+		ID:           identityRowID(i.ConnectionID, i.Subject),
+		ConnectionID: i.ConnectionID.String(),
+		Subject:      i.Subject,
+		UserID:       i.UserID.String(),
+		CreatedAt:    i.CreatedAt,
+	}
+}
+
+func toIdentity(m *ssoIdentityModel) (*Identity, error) {
+	connID, err := id.ParseSSOConnectionID(m.ConnectionID)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := id.ParseUserID(m.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return &Identity{ConnectionID: connID, Subject: m.Subject, UserID: userID, CreatedAt: m.CreatedAt}, nil
 }

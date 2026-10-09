@@ -15,13 +15,11 @@ import (
 // admin API calls from the dashboard host (this process, in client mode) to
 // the upstream authsome service at PortalURL.
 //
-// Why: Forge's dashboard remote-contributor proxy only forwards the
-// contributor protocol routes (/_forge/dashboard/{manifest,pages,widgets,
-// settings}). The HTML pages it returns are loaded into the dashboard
-// host's origin, but they call admin APIs at <basePath>/v1/admin/... via
+// Why: the dashboard's contract calls are forwarded upstream by the remote
+// contract dispatcher, but browser code running on the dashboard host's
+// origin can still call admin APIs at <basePath>/v1/admin/... via
 // same-origin fetch. Without a local handler for that path the dashboard
-// host returns 404 and every admin XHR (settings save, app client-config
-// toggle, etc.) breaks in client mode.
+// host returns 404 and those calls break in client mode.
 //
 // This proxy reuses authsome's PortalURL — the operator already
 // configured it via WithClientMode(portalURL). It forwards the user's auth
@@ -31,9 +29,9 @@ import (
 // is needed.
 //
 // Mount path: <BasePath>/v1/  (default /authsome/v1/). Restricted to /v1/
-// rather than the full <BasePath>/ to avoid colliding with the auth pages
-// (/login, /callback) and the contributor protocol (/_forge/dashboard/...)
-// that the upstream serves under the same BasePath in non-client setups.
+// rather than the full <BasePath>/ to avoid colliding with the contract
+// surface (/_forge/contract/...) and the social callback routes that the
+// upstream serves under the same BasePath in non-client setups.
 //
 // No-ops cleanly when client mode isn't active or PortalURL is unset.
 func (e *Extension) registerClientAPIProxy(router forge.Router) error {

@@ -341,8 +341,12 @@ func (s *Store) ListUsers(ctx context.Context, q *user.Query) (*user.List, error
 
 func (s *Store) CreateSession(ctx context.Context, sess *session.Session) error {
 	m := fromSession(sess)
-	_, err := s.pg.NewInsert(m).Exec(ctx)
-	return pgError(err)
+	if _, err := s.pg.NewInsert(m).Exec(ctx); err != nil {
+		return pgError(err)
+	}
+	sess.TokenHash = m.TokenHash.String
+	sess.RefreshTokenHash = m.RefreshTokenHash.String
+	return nil
 }
 
 func (s *Store) GetSession(ctx context.Context, sessionID id.SessionID) (*session.Session, error) {
@@ -355,21 +359,29 @@ func (s *Store) GetSession(ctx context.Context, sessionID id.SessionID) (*sessio
 }
 
 func (s *Store) GetSessionByToken(ctx context.Context, token string) (*session.Session, error) {
-	m := new(SessionModel)
-	err := s.pg.NewSelect(m).Where("token = ?", token).Scan(ctx)
+	m, err := s.findSessionByCredential(ctx, "token_hash", "token", token)
 	if err != nil {
-		return nil, pgError(err)
+		return nil, err
 	}
-	return toSession(m)
+	sess, err := toSession(m)
+	if err != nil {
+		return nil, err
+	}
+	sess.Token = token
+	return sess, nil
 }
 
 func (s *Store) GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*session.Session, error) {
-	m := new(SessionModel)
-	err := s.pg.NewSelect(m).Where("refresh_token = ?", refreshToken).Scan(ctx)
+	m, err := s.findSessionByCredential(ctx, "refresh_token_hash", "refresh_token", refreshToken)
 	if err != nil {
-		return nil, pgError(err)
+		return nil, err
 	}
-	return toSession(m)
+	sess, err := toSession(m)
+	if err != nil {
+		return nil, err
+	}
+	sess.RefreshToken = refreshToken
+	return sess, nil
 }
 
 func (s *Store) UpdateSession(ctx context.Context, sess *session.Session) error {
@@ -383,16 +395,32 @@ func (s *Store) UpdateSession(ctx context.Context, sess *session.Session) error 
 	return nil
 }
 
-func (s *Store) RotateSession(ctx context.Context, sess *session.Session, expectedToken string) (bool, error) {
+func (s *Store) RotateSession(ctx context.Context, sess *session.Session, expectedTokenHash string) (bool, error) {
+	if expectedTokenHash == "" {
+		return false, nil
+	}
+	// The caller's sess carries the rotated plaintext; drop the stale hashes
+	// so fromSession derives fresh ones from it.
+	sess.TokenHash = ""
+	// The refresh hash is dropped only when a new refresh token was minted;
+	// a rotation that keeps the refresh token (auto-refresh with the token
+	// hidden from the client) carries no plaintext and must keep the hash.
+	if sess.RefreshToken != "" {
+		sess.RefreshTokenHash = ""
+	}
 	m := fromSession(sess)
 	m.UpdatedAt = time.Now()
-	// Compare-and-swap: only rotate if the stored access token is still the
-	// pre-rotation value, so two concurrent refreshes cannot both win.
-	res, err := s.pg.NewUpdate(m).WherePK().Where("token = ?", expectedToken).Exec(ctx)
+	// Compare-and-swap: only rotate if the stored access token hash is still
+	// the pre-rotation value, so two concurrent refreshes cannot both win.
+	res, err := s.pg.NewUpdate(m).WherePK().Where("token_hash = ?", expectedTokenHash).Exec(ctx)
 	if err != nil {
 		return false, pgError(err)
 	}
 	n, _ := res.RowsAffected() //nolint:errcheck // RowsAffected always succeeds for pgx
+	if n > 0 {
+		sess.TokenHash = m.TokenHash.String
+		sess.RefreshTokenHash = m.RefreshTokenHash.String
+	}
 	return n > 0, nil
 }
 
@@ -491,36 +519,42 @@ func (s *Store) ListSessions(ctx context.Context, limit int) ([]*session.Session
 
 func (s *Store) CreateVerification(ctx context.Context, v *account.Verification) error {
 	m := fromVerification(v)
-	_, err := s.pg.NewInsert(m).Exec(ctx)
-	return pgError(err)
+	if _, err := s.pg.NewInsert(m).Exec(ctx); err != nil {
+		return pgError(err)
+	}
+	v.TokenHash = m.TokenHash.String
+	return nil
 }
 
 func (s *Store) GetVerification(ctx context.Context, token string) (*account.Verification, error) {
 	m := new(VerificationModel)
-	err := s.pg.NewSelect(m).Where("token = ?", token).Scan(ctx)
+	legacy, err := s.selectByToken(ctx, m, token)
 	if err != nil {
-		return nil, pgError(err)
+		return nil, err
 	}
-	return toVerification(m)
+	if legacy {
+		if upErr := s.upgradeLegacyToken(ctx, (*VerificationModel)(nil), m.ID, token); upErr != nil {
+			return nil, upErr
+		}
+		m.Token = ""
+	}
+	v, err := toVerification(m)
+	if err != nil {
+		return nil, err
+	}
+	v.Token, v.TokenHash = token, store.HashToken(token)
+	return v, nil
 }
 
 func (s *Store) ConsumeVerification(ctx context.Context, token string) error {
-	res, err := s.pg.NewUpdate((*VerificationModel)(nil)).
-		Set("consumed = TRUE").
-		Where("token = ?", token).
-		Where("consumed = FALSE").
-		Exec(ctx)
-	if err != nil {
-		return pgError(err)
-	}
 	// Zero rows means the token was missing or already consumed. Reporting
 	// that as success let two concurrent redemptions of one token both
 	// proceed; callers rely on ErrNotFound to reject the replay.
-	n, err := res.RowsAffected()
+	consumed, err := s.consumeByToken(ctx, (*VerificationModel)(nil), token)
 	if err != nil {
-		return pgError(err)
+		return err
 	}
-	if n == 0 {
+	if !consumed {
 		return store.ErrNotFound
 	}
 	return nil
@@ -553,26 +587,36 @@ func (s *Store) UpdateVerification(ctx context.Context, v *account.Verification)
 
 func (s *Store) CreatePasswordReset(ctx context.Context, pr *account.PasswordReset) error {
 	m := fromPasswordReset(pr)
-	_, err := s.pg.NewInsert(m).Exec(ctx)
-	return pgError(err)
+	if _, err := s.pg.NewInsert(m).Exec(ctx); err != nil {
+		return pgError(err)
+	}
+	pr.TokenHash = m.TokenHash.String
+	return nil
 }
 
 func (s *Store) GetPasswordReset(ctx context.Context, token string) (*account.PasswordReset, error) {
 	m := new(PasswordResetModel)
-	err := s.pg.NewSelect(m).Where("token = ?", token).Scan(ctx)
+	legacy, err := s.selectByToken(ctx, m, token)
 	if err != nil {
-		return nil, pgError(err)
+		return nil, err
 	}
-	return toPasswordReset(m)
+	if legacy {
+		if upErr := s.upgradeLegacyToken(ctx, (*PasswordResetModel)(nil), m.ID, token); upErr != nil {
+			return nil, upErr
+		}
+		m.Token = ""
+	}
+	pr, err := toPasswordReset(m)
+	if err != nil {
+		return nil, err
+	}
+	pr.Token, pr.TokenHash = token, store.HashToken(token)
+	return pr, nil
 }
 
 func (s *Store) ConsumePasswordReset(ctx context.Context, token string) error {
-	_, err := s.pg.NewUpdate((*PasswordResetModel)(nil)).
-		Set("consumed = TRUE").
-		Where("token = ?", token).
-		Where("consumed = FALSE").
-		Exec(ctx)
-	return pgError(err)
+	_, err := s.consumeByToken(ctx, (*PasswordResetModel)(nil), token)
+	return err
 }
 
 // ──────────────────────────────────────────────────
@@ -732,8 +776,11 @@ func (s *Store) ListMembers(ctx context.Context, orgID id.OrgID) ([]*organizatio
 
 func (s *Store) CreateInvitation(ctx context.Context, inv *organization.Invitation) error {
 	m := fromInvitation(inv)
-	_, err := s.pg.NewInsert(m).Exec(ctx)
-	return pgError(err)
+	if _, err := s.pg.NewInsert(m).Exec(ctx); err != nil {
+		return pgError(err)
+	}
+	inv.TokenHash = m.TokenHash.String
+	return nil
 }
 
 func (s *Store) GetInvitation(ctx context.Context, invID id.InvitationID) (*organization.Invitation, error) {
@@ -747,11 +794,22 @@ func (s *Store) GetInvitation(ctx context.Context, invID id.InvitationID) (*orga
 
 func (s *Store) GetInvitationByToken(ctx context.Context, token string) (*organization.Invitation, error) {
 	m := new(InvitationModel)
-	err := s.pg.NewSelect(m).Where("token = ?", token).Scan(ctx)
+	legacy, err := s.selectByToken(ctx, m, token)
 	if err != nil {
-		return nil, pgError(err)
+		return nil, err
 	}
-	return toInvitation(m)
+	if legacy {
+		if upErr := s.upgradeLegacyToken(ctx, (*InvitationModel)(nil), m.ID, token); upErr != nil {
+			return nil, upErr
+		}
+		m.Token = ""
+	}
+	inv, err := toInvitation(m)
+	if err != nil {
+		return nil, err
+	}
+	inv.Token, inv.TokenHash = token, store.HashToken(token)
+	return inv, nil
 }
 
 func (s *Store) UpdateInvitation(ctx context.Context, inv *organization.Invitation) error {
@@ -1092,6 +1150,21 @@ func (s *Store) UpdateAPIKey(ctx context.Context, k *apikey.APIKey) error {
 		return pgError(err)
 	}
 	k.UpdatedAt = now
+	return nil
+}
+
+// TouchAPIKey writes last_used_at alone.
+func (s *Store) TouchAPIKey(ctx context.Context, keyID id.APIKeyID, at time.Time) error {
+	res, err := s.pg.NewUpdate((*APIKeyModel)(nil)).
+		Set("last_used_at = ?", at).
+		Where("id = ?", keyID.String()).
+		Exec(ctx)
+	if err != nil {
+		return pgError(err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 { //nolint:errcheck // the driver always reports rows affected
+		return store.ErrNotFound
+	}
 	return nil
 }
 

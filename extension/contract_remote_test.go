@@ -18,7 +18,7 @@ import (
 // production wiring shape: PortalURL is passed in already containing the
 // authsome basePath (e.g. http://identity:7902/authsome), matching how
 // twinos sets TWINOS_AUTH_IDENTITY_URL, the SDK's authclient.NewClient,
-// the client API proxy, and the legacy dashboard contributor fetch.
+// and the client API proxy.
 //
 // Regression: an earlier version of registerRemoteContractContributor did
 // `remoteBaseURL := portalURL + basePath`, producing a doubled /authsome
@@ -33,12 +33,12 @@ func TestRegisterRemoteContractContributor_PortalURLWithBasePath(t *testing.T) {
 	mux.HandleFunc("/authsome/_forge/contract/manifest", func(w http.ResponseWriter, _ *http.Request) {
 		manifestHits++
 		w.Header().Set("Content-Type", "application/json")
-		// Minimal valid manifest shape — schemaVersion 1, the auth
+		// Minimal valid manifest shape — schemaVersion 1, the authsome
 		// contributor, three intents. JSON form (not YAML) so the
 		// transport decoder path is identical to production.
 		_, _ = io.WriteString(w, `{
 			"schemaVersion": 1,
-			"contributor": {"name": "auth", "envelope": {"supports": ["v1"], "preferred": "v1"}},
+			"contributor": {"name": "authsome", "envelope": {"supports": ["v1"], "preferred": "v1"}},
 			"intents": [
 				{"name": "auth.login",  "kind": "command", "version": 1, "capability": "write"},
 				{"name": "auth.logout", "kind": "command", "version": 1, "capability": "write"},
@@ -78,7 +78,7 @@ func TestRegisterRemoteContractContributor_PortalURLWithBasePath(t *testing.T) {
 
 	// The function returns nil on fetch failure too (non-fatal). Assert the
 	// intent actually landed in the registry — that's the real success signal.
-	if _, ok := hostReg.Intent("auth", "auth.login", 1); !ok {
+	if _, ok := hostReg.Intent("authsome", "auth.login", 1); !ok {
 		t.Fatalf("auth.login not registered in host registry; manifestHits=%d", manifestHits)
 	}
 	if manifestHits != 1 {
@@ -90,7 +90,7 @@ func TestRegisterRemoteContractContributor_PortalURLWithBasePath(t *testing.T) {
 	data, _, err := hostDisp.Dispatch(context.Background(), dashcontract.Request{
 		Envelope:      "v1",
 		Kind:          dashcontract.KindCommand,
-		Contributor:   "auth",
+		Contributor:   "authsome",
 		Intent:        "auth.login",
 		IntentVersion: 1,
 		Payload:       json.RawMessage(`{"email":"a@b","password":"x"}`),

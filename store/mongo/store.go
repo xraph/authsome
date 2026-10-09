@@ -43,6 +43,7 @@ const (
 	colBrandingConfigs      = "authsome_branding_configs"
 	colAppSessionConfigs    = "authsome_app_session_configs"
 	colRevokedRefreshTokens = "authsome_revoked_refresh_tokens"
+	colKV                   = "authsome_kv"
 	colServiceAccounts      = "authsome_service_accounts"
 	colDelegations          = "authsome_delegations"
 	colUserEmails           = "authsome_user_emails"
@@ -528,34 +529,19 @@ func migrationIndexes() map[string][]mongo.IndexModel {
 			},
 			{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "created_at", Value: -1}}},
 		},
-		colSessions: {
-			{
-				Keys:    bson.D{{Key: "token", Value: 1}},
-				Options: options.Index().SetUnique(true),
-			},
-			{
-				Keys:    bson.D{{Key: "refresh_token", Value: 1}},
-				Options: options.Index().SetUnique(true),
-			},
-			{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "created_at", Value: -1}}},
-			{Keys: bson.D{{Key: "expires_at", Value: 1}}},
-			{Keys: bson.D{{Key: "family_id", Value: 1}}},
-		},
+		colSessions: append(sessionTokenIndexes(),
+			mongo.IndexModel{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "created_at", Value: -1}}},
+			mongo.IndexModel{Keys: bson.D{{Key: "expires_at", Value: 1}}},
+			mongo.IndexModel{Keys: bson.D{{Key: "family_id", Value: 1}}},
+		),
 		colRevokedRefreshTokens: {
 			{Keys: bson.D{{Key: "family_id", Value: 1}}},
 		},
-		colVerifications: {
-			{
-				Keys:    bson.D{{Key: "token", Value: 1}},
-				Options: options.Index().SetUnique(true),
-			},
+		colKV: {
+			{Keys: bson.D{{Key: "expires_at", Value: 1}}},
 		},
-		colPasswordResets: {
-			{
-				Keys:    bson.D{{Key: "token", Value: 1}},
-				Options: options.Index().SetUnique(true),
-			},
-		},
+		colVerifications:  credentialTokenIndexes(false),
+		colPasswordResets: credentialTokenIndexes(true),
 		colOrganizations: {
 			{
 				Keys:    bson.D{{Key: "app_id", Value: 1}, {Key: "slug", Value: 1}},
@@ -570,13 +556,9 @@ func migrationIndexes() map[string][]mongo.IndexModel {
 			},
 			{Keys: bson.D{{Key: "org_id", Value: 1}}},
 		},
-		colInvitations: {
-			{
-				Keys:    bson.D{{Key: "token", Value: 1}},
-				Options: options.Index().SetUnique(true),
-			},
-			{Keys: bson.D{{Key: "org_id", Value: 1}, {Key: "status", Value: 1}}},
-		},
+		colInvitations: append(credentialTokenIndexes(true),
+			mongo.IndexModel{Keys: bson.D{{Key: "org_id", Value: 1}, {Key: "status", Value: 1}}},
+		),
 		colTeams: {
 			{
 				Keys:    bson.D{{Key: "org_id", Value: 1}, {Key: "slug", Value: 1}},

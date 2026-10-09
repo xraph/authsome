@@ -26,7 +26,6 @@ import (
 	"github.com/xraph/authsome/plugins/agentauth"
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/ratelimit"
-	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -99,7 +98,6 @@ func (*stubEngine) DPoPModeForApp(context.Context, id.AppID) dpop.Mode     { ret
 func (*stubEngine) DPoPNonceRequiredForApp(context.Context, id.AppID) bool { return false }
 func (*stubEngine) PrincipalStore() principal.Store                        { return nil }
 func (*stubEngine) RateLimiter() ratelimit.Limiter                         { return nil }
-func (*stubEngine) SecurityEvents() securityevent.Store                    { return nil }
 func (*stubEngine) ResolvePrincipal(context.Context, principal.Ref) (*principal.Principal, error) {
 	return nil, nil
 }
@@ -129,21 +127,24 @@ func (e *stubEngine) SessionConfigForApp(_ context.Context, _ id.AppID, _ ...id.
 func (e *stubEngine) TokenFormatForApp(_ string) tokenformat.Format { return nil }
 func (e *stubEngine) CeremonyStore() ceremony.Store                 { return nil }
 func (e *stubEngine) APIKeyStore() apikey.Store                     { return nil }
-func (e *stubEngine) ResolveSessionByToken(_ string) (*session.Session, error) {
+func (e *stubEngine) ResolveSessionByToken(_ context.Context, _ string) (*session.Session, error) {
 	return nil, errors.New("not implemented")
 }
-func (e *stubEngine) ResolveUser(_ string) (*user.User, error) {
+func (e *stubEngine) ResolveUser(_ context.Context, _ string) (*user.User, error) {
 	return nil, errors.New("not implemented")
 }
 func (e *stubEngine) GetUser(ctx context.Context, userID id.UserID) (*user.User, error) {
 	return e.store.GetUser(ctx, userID)
 }
 func (e *stubEngine) EnsureDefaultRole(_ context.Context, _ id.AppID, _ id.UserID) {}
-func (e *stubEngine) AuthMiddleware() forge.Middleware                             { return nil }
-func (e *stubEngine) AuthRegistry() auth.Registry                                  { return nil }
-func (e *stubEngine) PlatformAppID() id.AppID                                      { return id.AppID{} }
-func (e *stubEngine) DefaultAppID() string                                         { return "" }
-func (e *stubEngine) BasePath() string                                             { return "" }
+func (e *stubEngine) RevokeOtherUserSessions(context.Context, id.UserID, id.SessionID) error {
+	return nil
+}
+func (e *stubEngine) AuthMiddleware() forge.Middleware { return nil }
+func (e *stubEngine) AuthRegistry() auth.Registry      { return nil }
+func (e *stubEngine) PlatformAppID() id.AppID          { return id.AppID{} }
+func (e *stubEngine) DefaultAppID() string             { return "" }
+func (e *stubEngine) BasePath() string                 { return "" }
 
 // The risk plugins subscribe to BeforeSessionCreate and AfterSignIn. The API
 // key plugin hand-builds a synthetic session at plugins/apikey/plugin.go:567

@@ -71,6 +71,27 @@ func PublishableKeyMiddleware(resolver AppResolver, logger log.Logger) forge.Mid
 			}
 
 			goCtx := ctx.Context()
+
+			// An authenticated caller already has a tenant on the context,
+			// set by the auth middleware from the credential. A publishable
+			// key is public, so it must never move that caller into another
+			// app: a matching key is redundant and a different one is an
+			// attempt to switch tenants.
+			if existing, ok := AppIDFrom(goCtx); ok && !existing.IsNil() {
+				if existing.String() != a.ID.String() {
+					if logger != nil {
+						logger.Warn("publishable key: app mismatch with the authenticated tenant",
+							log.String("prefix", publishableKeyPrefix(key)),
+							log.String("path", ctx.Request().URL.Path))
+					}
+					return forge.Unauthorized("session app mismatch")
+				}
+				if _, hasApp := AppFrom(goCtx); !hasApp {
+					ctx.WithContext(WithApp(goCtx, a))
+				}
+				return next(ctx)
+			}
+
 			goCtx = WithApp(goCtx, a)
 			goCtx = WithAppID(goCtx, a.ID)
 			ctx.WithContext(goCtx)

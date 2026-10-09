@@ -15,11 +15,11 @@ import (
 	"github.com/xraph/forge/extensions/dashboard/contract"
 )
 
-// dashboardCookieName mirrors the constant in extension/auth_pages.go. It's
-// duplicated here rather than exported because the legacy templ flow and
-// the contract flow both need to write the SAME cookie (the contract
-// log-in must satisfy a subsequent /principal call going through the
-// existing authChecker).
+// dashboardCookieName mirrors the constant in extension/dashboard_auth.go.
+// It's duplicated here rather than exported to keep this package free of an
+// import on the extension package. Both must name the SAME cookie: the
+// contract log-in writes it and the next /principal call reads it through
+// the extension's authChecker.
 const dashboardCookieName = "auth_token"
 
 // LoginInput is the wire shape for the auth.login command. The React
@@ -103,7 +103,7 @@ func logoutHandler(deps Deps) func(ctx context.Context, _ struct{}, p contract.P
 		// server-side session. Best-effort: even if SignOut errors we still
 		// clear the client cookie so the shell stops thinking it's signed in.
 		if token := extractToken(httpReq); token != "" {
-			if sess, err := eng.ResolveSessionByToken(token); err == nil && sess != nil {
+			if sess, err := eng.ResolveSessionByToken(ctx, token); err == nil && sess != nil {
 				_ = eng.SignOut(ctx, sess.ID) //nolint:errcheck // best-effort sign out
 			}
 		}
@@ -113,9 +113,8 @@ func logoutHandler(deps Deps) func(ctx context.Context, _ struct{}, p contract.P
 }
 
 // mapSignInError translates authsome's domain errors into wire codes the
-// React shell's LoginScreen / form.edit can render. The legacy templ flow
-// surfaces the same set; the message strings stay short so they fit in
-// the inline error block.
+// dashboard's React login form can render. The message strings stay short
+// so they fit in the inline error block.
 func mapSignInError(err error) error {
 	switch {
 	case errors.Is(err, account.ErrInvalidCredentials):
@@ -201,8 +200,8 @@ func secureForRequest(r *http.Request, deps Deps) bool {
 	return r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 }
 
-// setSessionCookie writes the dashboard auth_token cookie matching the
-// templ flow's attributes (resolved through SessionCookieTemplate). The
+// setSessionCookie writes the dashboard auth_token cookie with the engine's
+// session cookie attributes (resolved through SessionCookieTemplate). The
 // __Host- prefix is honoured when SettingCookieUseHostPrefix is on.
 func setSessionCookie(w http.ResponseWriter, r *http.Request, eng *authsome.Engine, token string, secure bool) {
 	c := dashboardCookieTemplate(r.Context(), eng, secure) // #nosec G124 -- template sets HttpOnly+SameSite+Secure

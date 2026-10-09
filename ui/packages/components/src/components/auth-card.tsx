@@ -1,4 +1,7 @@
+"use client";
+
 import * as React from "react";
+import { AuthContext } from "@authsome/ui-react";
 import { cn } from "../lib/utils";
 import {
   Card,
@@ -15,7 +18,11 @@ export type AuthCardVariant = "default" | "flat" | "bordered" | "borderless";
 export interface AuthCardProps {
   title: string;
   description?: string;
-  /** Optional logo element rendered above the title. */
+  /**
+   * Optional logo element rendered above the title. When omitted, the card
+   * falls back to `branding.logo_url` from the client config. Pass `null` to
+   * render no logo at all.
+   */
   logo?: React.ReactNode;
   footer?: React.ReactNode;
   /** Title and description alignment (only affects title/description, footer is always centered). */
@@ -45,6 +52,21 @@ export function AuthCard({
 }: AuthCardProps) {
   const isCenter = align === "center";
 
+  // Read the context directly rather than through useClientConfig, which
+  // throws outside an AuthProvider. The card is also rendered standalone
+  // (Storybook, host apps composing their own screens).
+  const branding = React.useContext(AuthContext)?.clientConfig?.branding;
+  const resolvedLogo =
+    logo === undefined && branding?.logo_url ? (
+      <img
+        src={branding.logo_url}
+        alt={branding.app_name ?? ""}
+        className="h-8 w-auto"
+      />
+    ) : (
+      logo
+    );
+
   return (
     <Card
       className={cn(
@@ -62,8 +84,10 @@ export function AuthCard({
           isCenter ? "text-center" : "text-left",
         )}
       >
-        {logo && (
-          <div className={cn("mb-3", isCenter && "mx-auto")}>{logo}</div>
+        {resolvedLogo && (
+          <div className={cn("mb-3", isCenter && "mx-auto")}>
+            {resolvedLogo}
+          </div>
         )}
         <CardTitle className="text-lg font-semibold tracking-tight">
           {title}

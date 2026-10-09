@@ -16,6 +16,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/api"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/store/memory"
@@ -52,7 +53,7 @@ func newIntrospectAudienceEngine(t *testing.T, jwtFmt *tokenformat.JWT) *authsom
 		opts = append(opts, authsome.WithDefaultTokenFormat(jwtFmt))
 	}
 
-	eng, err := authsome.NewEngine(opts...)
+	eng, err := authsome.NewEngine(append([]authsome.Option{authsome.WithConfig(testConfig()), authsome.WithChronicle(bridge.NewMemoryChronicle())}, opts...)...)
 	require.NoError(t, err)
 	require.NoError(t, eng.Start(context.Background()))
 	secutil.RelaxAuthDefaults(t, eng)
@@ -70,13 +71,14 @@ func newHMACJWTFormat(t *testing.T) *tokenformat.JWT {
 	return j
 }
 
-func postIntrospect(t *testing.T, router http.Handler, token string) *httptest.ResponseRecorder {
+func postIntrospect(t *testing.T, router http.Handler, eng *authsome.Engine, token string) *httptest.ResponseRecorder {
 	t.Helper()
 	body, err := json.Marshal(map[string]string{"token": token})
 	require.NoError(t, err)
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost,
 		"/v1/introspect", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req = asCaller(t, req, eng)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	return rec
@@ -94,7 +96,7 @@ func signUpForAudience(t *testing.T, eng *authsome.Engine, email string) string 
 	_, sess, err := eng.SignUp(context.Background(), &account.SignUpRequest{
 		AppID:     appID,
 		Email:     email,
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Aud",
 	})
 	require.NoError(t, err)
@@ -121,7 +123,7 @@ func TestIntrospectAudience(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		rec := postIntrospect(t, router, token)
+		rec := postIntrospect(t, router, eng, token)
 		require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 		var resp api.IntrospectResponse
@@ -141,7 +143,7 @@ func TestIntrospectAudience(t *testing.T) {
 		sess.Audience = []string{audResAPI, audResFiles}
 		require.NoError(t, eng.Store().UpdateSession(context.Background(), sess))
 
-		rec := postIntrospect(t, router, token)
+		rec := postIntrospect(t, router, eng, token)
 		require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 		var resp api.IntrospectResponse
@@ -156,7 +158,7 @@ func TestIntrospectAudience(t *testing.T) {
 
 		token := signUpForAudience(t, eng, "aud-none@example.com")
 
-		rec := postIntrospect(t, router, token)
+		rec := postIntrospect(t, router, eng, token)
 		require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 		// A struct unmarshal can't distinguish an absent key from a present

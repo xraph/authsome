@@ -37,6 +37,8 @@ namespace "platform" {
       "device:*",
       "environment:*",
       "org:*",
+      "organization:*",
+      "apikey:*",
       "document:*",
       "role:*",
       "permission:*",
@@ -44,9 +46,13 @@ namespace "platform" {
     ]
   }
 
+  // Settings can weaken every other control, so only owners hold them.
   role platform-owner : platform-admin {
     name        = "Platform Owner"
     description = "Full cross-app platform access"
     is_system   = true
+    grants     += [
+      "settings:*",
+    ]
   }
 }

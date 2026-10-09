@@ -7,15 +7,3 @@ contributor:
   capabilities: [auth.read]
 
 intents: []
-
-graph:
-  - route: /enterprise/sso
-    intent: page.shell
-    title: SSO
-    nav: { group: Enterprise, icon: log-in, priority: 1 }
-    slots:
-      main:
-        - intent: settings.panel
-          props:
-            namespace: sso
-            scope: app

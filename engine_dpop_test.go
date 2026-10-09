@@ -33,10 +33,8 @@ func TestEngine_DPoPNonceSignerAbsentByDefault(t *testing.T) {
 // TestEngine_DPoPNonceSignerPresentWhenSecretAvailable configures the test
 // engine with an HMAC JWT format via the option the codebase actually
 // provides (WithJWTFormat), the same input Engine.NonceSecret reads from in
-// production. This is the real "secret available" branch: unlike
-// secutil.InitTestNonceSigner (which only touches the unrelated dashboard
-// package's own nonce signer), this actually puts a key where NonceSecret
-// looks for one.
+// production. This is the real "secret available" branch: it puts a key
+// where NonceSecret looks for one.
 func TestEngine_DPoPNonceSignerPresentWhenSecretAvailable(t *testing.T) {
 	jwtFmt, err := tokenformat.NewJWT(tokenformat.JWTConfig{
 		SigningMethod: jwt.SigningMethodHS256,

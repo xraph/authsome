@@ -34,7 +34,7 @@ func TestEngine_SessionAuthProviderEnforcesDPoP(t *testing.T) {
 	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "provider-dpop@test.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "Provider",
 	})
 	require.NoError(t, err)

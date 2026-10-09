@@ -12,6 +12,8 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/page"
+	"github.com/xraph/authsome/plugin"
 )
 
 // RegisterRoutes registers organization management routes on a forge.Router.
@@ -269,9 +271,10 @@ func (p *Plugin) handleCreateOrg(ctx forge.Context, req *CreateOrgRequest) (*org
 		return nil, forge.BadRequest("name and slug are required")
 	}
 
-	appID, err := p.resolveAppID(req.AppID)
+	// The org lives in the caller's app. A body app_id may only restate it.
+	appID, err := plugin.ScopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	// Resolve the env to stamp on the new org. Order:
@@ -314,27 +317,23 @@ func (p *Plugin) handleCreateOrg(ctx forge.Context, req *CreateOrgRequest) (*org
 				log.String("error", err.Error()),
 			)
 		}
-		return nil, p.mapError(err)
+		return nil, p.mapError(ctx, err)
 	}
 
 	return o, ctx.JSON(http.StatusCreated, o)
 }
 
-func (p *Plugin) handleListOrgs(ctx forge.Context, _ *ListOrgsRequest) (*OrgListResponse, error) {
+func (p *Plugin) handleListOrgs(ctx forge.Context, req *ListOrgsRequest) (*OrgListResponse, error) {
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
 		return nil, forge.Unauthorized("authentication required")
 	}
 
-	orgs, err := p.ListUserOrganizations(ctx.Context(), userID)
+	pg, err := p.ListUserOrganizationsPage(ctx.Context(), userID, page.Opts{Limit: req.Limit, Cursor: req.Cursor})
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
-
-	if orgs == nil {
-		orgs = []*organization.Organization{}
-	}
-	resp := &OrgListResponse{Organizations: orgs}
+	resp := &OrgListResponse{Organizations: pg.Items, NextCursor: pg.NextCursor}
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
@@ -350,7 +349,7 @@ func (p *Plugin) handleGetOrg(ctx forge.Context, _ *GetOrgRequest) (*organizatio
 
 	o, err := p.GetOrganization(ctx.Context(), orgID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return o, ctx.JSON(http.StatusOK, o)
@@ -368,7 +367,7 @@ func (p *Plugin) handleUpdateOrg(ctx forge.Context, req *UpdateOrgRequest) (*org
 
 	o, err := p.GetOrganization(ctx.Context(), orgID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	if req.Name != nil {
@@ -379,7 +378,7 @@ func (p *Plugin) handleUpdateOrg(ctx forge.Context, req *UpdateOrgRequest) (*org
 	}
 
 	if err := p.UpdateOrganization(ctx.Context(), o); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return o, ctx.JSON(http.StatusOK, o)
@@ -396,7 +395,7 @@ func (p *Plugin) handleDeleteOrg(ctx forge.Context, _ *DeleteOrgRequest) (*Statu
 	}
 
 	if err := p.DeleteOrganization(ctx.Context(), orgID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "deleted"}
@@ -407,25 +406,19 @@ func (p *Plugin) handleDeleteOrg(ctx forge.Context, _ *DeleteOrgRequest) (*Statu
 // Member handlers
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) handleListMembers(ctx forge.Context, _ *ListMembersRequest) (*MemberListResponse, error) {
+func (p *Plugin) handleListMembers(ctx forge.Context, req *ListMembersRequest) (*MemberListResponse, error) {
 	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
-
 	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
 		return nil, err
 	}
-
-	members, err := p.ListMembers(ctx.Context(), orgID)
+	pg, err := p.ListMembersPage(ctx.Context(), orgID, page.Opts{Limit: req.Limit, Cursor: req.Cursor})
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
-
-	if members == nil {
-		members = []*organization.Member{}
-	}
-	resp := &MemberListResponse{Members: members}
+	resp := &MemberListResponse{Members: pg.Items, NextCursor: pg.NextCursor}
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
@@ -465,7 +458,7 @@ func (p *Plugin) handleAddMember(ctx forge.Context, req *AddMemberRequest) (*org
 	}
 
 	if err := p.AddMember(ctx.Context(), m); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return m, ctx.JSON(http.StatusCreated, m)
@@ -488,16 +481,12 @@ func (p *Plugin) handleRemoveMember(ctx forge.Context, _ *RemoveMemberRequest) (
 	if merr := p.assertMemberInOrg(ctx, memberID, orgID); merr != nil {
 		return nil, merr
 	}
-	target, err := p.store.GetMember(ctx.Context(), memberID)
-	if err != nil {
-		return nil, mapError(err)
-	}
-	if rerr := mayRemoveMember(caller.Role, target.Role); rerr != nil {
-		return nil, rerr
+	if err := p.requireRemovable(ctx, caller, memberID, orgID); err != nil {
+		return nil, err
 	}
 
 	if err := p.RemoveMember(ctx.Context(), memberID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "removed"}
@@ -529,7 +518,7 @@ func (p *Plugin) handleUpdateMember(ctx forge.Context, req *UpdateMemberRequest)
 
 	member, err := p.UpdateMemberRole(ctx.Context(), memberID, organization.MemberRole(req.Role))
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return member, ctx.JSON(http.StatusOK, member)
@@ -565,7 +554,7 @@ func (p *Plugin) handleCreateInvitation(ctx forge.Context, req *CreateInvitation
 
 	token, err := account.GenerateVerificationToken()
 	if err != nil {
-		return nil, forge.InternalError(err)
+		return nil, middleware.InternalError(ctx, err)
 	}
 
 	inv := &organization.Invitation{
@@ -579,31 +568,25 @@ func (p *Plugin) handleCreateInvitation(ctx forge.Context, req *CreateInvitation
 	}
 
 	if err := p.CreateInvitation(ctx.Context(), inv); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return inv, ctx.JSON(http.StatusCreated, inv)
 }
 
-func (p *Plugin) handleListInvitations(ctx forge.Context, _ *ListInvitationsRequest) (*InvitationListResponse, error) {
+func (p *Plugin) handleListInvitations(ctx forge.Context, req *ListInvitationsRequest) (*InvitationListResponse, error) {
 	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
-
 	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleAdmin); err != nil {
 		return nil, err
 	}
-
-	invitations, err := p.ListInvitations(ctx.Context(), orgID)
+	pg, err := p.ListInvitationsPage(ctx.Context(), orgID, page.Opts{Limit: req.Limit, Cursor: req.Cursor})
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
-
-	if invitations == nil {
-		invitations = []*organization.Invitation{}
-	}
-	resp := &InvitationListResponse{Invitations: invitations}
+	resp := &InvitationListResponse{Invitations: pg.Items, NextCursor: pg.NextCursor}
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
@@ -614,7 +597,7 @@ func (p *Plugin) handleAcceptInvitation(ctx forge.Context, req *AcceptInvitation
 
 	member, err := p.AcceptInvitation(ctx.Context(), req.Token)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return member, ctx.JSON(http.StatusCreated, member)
@@ -626,7 +609,7 @@ func (p *Plugin) handleDeclineInvitation(ctx forge.Context, req *DeclineInvitati
 	}
 
 	if err := p.DeclineInvitation(ctx.Context(), req.Token); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "declined"}
@@ -659,31 +642,25 @@ func (p *Plugin) handleCreateTeam(ctx forge.Context, req *CreateTeamRequest) (*o
 	}
 
 	if err := p.CreateTeam(ctx.Context(), t); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return t, ctx.JSON(http.StatusCreated, t)
 }
 
-func (p *Plugin) handleListTeams(ctx forge.Context, _ *ListTeamsRequest) (*TeamListResponse, error) {
+func (p *Plugin) handleListTeams(ctx forge.Context, req *ListTeamsRequest) (*TeamListResponse, error) {
 	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
-
 	if _, err = p.requireOrgRole(ctx, orgID, organization.RoleMember); err != nil {
 		return nil, err
 	}
-
-	teams, err := p.ListTeams(ctx.Context(), orgID)
+	pg, err := p.ListTeamsPage(ctx.Context(), orgID, page.Opts{Limit: req.Limit, Cursor: req.Cursor})
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
-
-	if teams == nil {
-		teams = []*organization.Team{}
-	}
-	resp := &TeamListResponse{Teams: teams}
+	resp := &TeamListResponse{Teams: pg.Items, NextCursor: pg.NextCursor}
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
@@ -706,7 +683,7 @@ func (p *Plugin) handleGetTeam(ctx forge.Context, _ *GetTeamRequest) (*organizat
 
 	t, err := p.GetTeam(ctx.Context(), teamID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return t, ctx.JSON(http.StatusOK, t)
@@ -731,7 +708,7 @@ func (p *Plugin) handleUpdateTeam(ctx forge.Context, req *UpdateTeamRequest) (*o
 
 	t, err := p.GetTeam(ctx.Context(), teamID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	if req.Name != nil {
@@ -742,7 +719,7 @@ func (p *Plugin) handleUpdateTeam(ctx forge.Context, req *UpdateTeamRequest) (*o
 	}
 
 	if err := p.UpdateTeam(ctx.Context(), t); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return t, ctx.JSON(http.StatusOK, t)
@@ -766,7 +743,7 @@ func (p *Plugin) handleDeleteTeam(ctx forge.Context, _ *DeleteTeamRequest) (*Sta
 	}
 
 	if err := p.DeleteTeam(ctx.Context(), teamID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "deleted"}
@@ -793,7 +770,7 @@ func (p *Plugin) handleCheckSlug(ctx forge.Context, req *CheckSlugRequest) (*Slu
 
 	available, err := p.IsOrgSlugAvailable(ctx.Context(), appID, req.Slug)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &SlugAvailableResponse{Available: available}
@@ -805,14 +782,14 @@ func (p *Plugin) handleCheckSlug(ctx forge.Context, req *CheckSlugRequest) (*Slu
 // ──────────────────────────────────────────────────
 
 func (p *Plugin) handleAdminListOrgs(ctx forge.Context, req *AdminListOrgsRequest) (*OrgListResponse, error) {
-	appID, err := p.resolveAppID(req.AppID)
+	appID, err := plugin.ScopedAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	orgs, err := p.AdminListOrganizations(ctx.Context(), appID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &OrgListResponse{Organizations: orgs}
@@ -828,11 +805,13 @@ func (p *Plugin) handleAdminListOrgs(ctx forge.Context, req *AdminListOrgsReques
 // receiver access; new call sites prefer (*Plugin).mapError so the
 // error gets logged with structured context before being collapsed
 // to a generic 500.
-func mapError(err error) error {
+// mapErrorCtx maps domain errors to HTTP errors; an unknown error is ours and
+// answers a generic 500 with the request id.
+func mapErrorCtx(ctx forge.Context, err error) error {
 	if err == nil {
 		return nil
 	}
-	return forge.InternalError(err)
+	return middleware.InternalError(ctx, err)
 }
 
 // mapError on *Plugin logs the underlying error before mapping it
@@ -840,7 +819,7 @@ func mapError(err error) error {
 // error with rich field context (org_id, app_id, etc.) can still
 // call this — the duplicate `error` line is cheap and keeps the
 // final cause adjacent to the HTTP-conversion boundary.
-func (p *Plugin) mapError(err error) error {
+func (p *Plugin) mapError(ctx forge.Context, err error) error {
 	if err == nil {
 		return nil
 	}
@@ -849,5 +828,5 @@ func (p *Plugin) mapError(err error) error {
 			log.String("error", err.Error()),
 		)
 	}
-	return forge.InternalError(err)
+	return middleware.InternalError(ctx, err)
 }

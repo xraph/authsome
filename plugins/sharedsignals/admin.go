@@ -390,7 +390,7 @@ func (p *Plugin) handleListStreams(ctx forge.Context) error {
 	}
 	streams, lerr := p.store.ListInboundStreams(ctx.Context(), appID)
 	if lerr != nil {
-		return forge.InternalError(lerr)
+		return middleware.InternalError(ctx, lerr)
 	}
 	views := make([]StreamView, 0, len(streams))
 	for _, s := range streams {
@@ -468,7 +468,7 @@ func (p *Plugin) handleDeleteStream(ctx forge.Context) error {
 		if errors.Is(err, ErrNotFound) {
 			return forge.NotFound("stream not found")
 		}
-		return forge.InternalError(err)
+		return middleware.InternalError(ctx, err)
 	}
 	ctx.Response().WriteHeader(http.StatusNoContent)
 	return nil

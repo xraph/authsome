@@ -5,47 +5,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xraph/authsome/internal/mask"
+
 	log "github.com/xraph/go-utils/log"
 )
 
 // ──────────────────────────────────────────────────
 // Standalone stubs — minimal fallbacks for standalone mode
 // ──────────────────────────────────────────────────
-
-// SlogChronicle is a standalone Chronicle stub that logs audit events to slog.
-type SlogChronicle struct {
-	Logger log.Logger
-}
-
-// NewSlogChronicle creates a Chronicle that logs to the given logger.
-func NewSlogChronicle(logger log.Logger) *SlogChronicle {
-	return &SlogChronicle{Logger: logger}
-}
-
-// Record implements Chronicle by logging the event.
-func (c *SlogChronicle) Record(_ context.Context, event *AuditEvent) error {
-	c.Logger.Info("authsome audit",
-		log.String("action", event.Action),
-		log.String("resource", event.Resource),
-		log.String("resource_id", event.ResourceID),
-		log.String("actor_id", event.ActorID),
-		log.String("tenant", event.Tenant),
-		log.String("outcome", event.Outcome),
-		log.String("severity", event.Severity),
-	)
-	return nil
-}
-
-// NoopAuthorizer is a standalone Authorizer stub that always allows.
-type NoopAuthorizer struct{}
-
-// NewNoopAuthorizer creates an Authorizer that always returns allowed.
-func NewNoopAuthorizer() *NoopAuthorizer { return &NoopAuthorizer{} }
-
-// Check implements Authorizer.
-func (a *NoopAuthorizer) Check(_ context.Context, _ *AuthzRequest) (*AuthzResult, error) {
-	return &AuthzResult{Allowed: true, Reason: "standalone mode: always allowed"}, nil
-}
 
 // NoopKeyManager is a standalone KeyManager stub that returns errors.
 type NoopKeyManager struct{}
@@ -152,7 +119,7 @@ func NewNoopMailer(logger log.Logger) *NoopMailer {
 // SendEmail implements Mailer.
 func (m *NoopMailer) SendEmail(_ context.Context, msg *EmailMessage) error {
 	m.Logger.Debug("authsome mailer (noop)",
-		log.String("to", strings.Join(msg.To, ",")),
+		log.String("to", strings.Join(mask.Emails(msg.To), ",")),
 		log.String("subject", msg.Subject),
 	)
 	return nil

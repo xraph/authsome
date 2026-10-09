@@ -46,9 +46,10 @@ func (s *SqliteStore) CreateOAuthConnection(ctx context.Context, c *OAuthConnect
 	return socialSqliteError(err)
 }
 
-func (s *SqliteStore) GetOAuthConnection(ctx context.Context, provider, providerUserID string) (*OAuthConnection, error) {
+func (s *SqliteStore) GetOAuthConnection(ctx context.Context, appID id.AppID, provider, providerUserID string) (*OAuthConnection, error) {
 	m := new(oauthConnectionModel)
 	err := s.sdb.NewSelect(m).
+		Where("app_id = ?", appID.String()).
 		Where("provider = ?", provider).
 		Where("provider_user_id = ?", providerUserID).
 		Scan(ctx)

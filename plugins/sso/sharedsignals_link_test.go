@@ -23,7 +23,6 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/principal"
-	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -69,21 +68,20 @@ func (s stubEngineWithPlugin) Plugin(name string) plugin.Plugin {
 	}
 	return nil
 }
-func (s stubEngineWithPlugin) Hooks() *hook.Bus                    { return nil }
-func (s stubEngineWithPlugin) Logger() log.Logger                  { return log.NewNoopLogger() }
-func (s stubEngineWithPlugin) Settings() *settings.Manager         { return nil }
-func (s stubEngineWithPlugin) Chronicle() bridge.Chronicle         { return nil }
-func (s stubEngineWithPlugin) Relay() bridge.EventRelay            { return nil }
-func (s stubEngineWithPlugin) Herald() bridge.Herald               { return nil }
-func (s stubEngineWithPlugin) Mailer() bridge.Mailer               { return nil }
-func (s stubEngineWithPlugin) SMSSender() bridge.SMSSender         { return nil }
-func (s stubEngineWithPlugin) Ledger() bridge.Ledger               { return nil }
-func (s stubEngineWithPlugin) TokenEncryptor() bridge.Encryptor    { return nil }
-func (s stubEngineWithPlugin) CeremonyStore() ceremony.Store       { return nil }
-func (s stubEngineWithPlugin) APIKeyStore() apikey.Store           { return nil }
-func (s stubEngineWithPlugin) SecurityEvents() securityevent.Store { return nil }
-func (s stubEngineWithPlugin) DPoPValidator() *dpop.Validator      { return nil }
-func (s stubEngineWithPlugin) DPoPNonceSigner() *dpop.NonceSigner  { return nil }
+func (s stubEngineWithPlugin) Hooks() *hook.Bus                   { return nil }
+func (s stubEngineWithPlugin) Logger() log.Logger                 { return log.NewNoopLogger() }
+func (s stubEngineWithPlugin) Settings() *settings.Manager        { return nil }
+func (s stubEngineWithPlugin) Chronicle() bridge.Chronicle        { return nil }
+func (s stubEngineWithPlugin) Relay() bridge.EventRelay           { return nil }
+func (s stubEngineWithPlugin) Herald() bridge.Herald              { return nil }
+func (s stubEngineWithPlugin) Mailer() bridge.Mailer              { return nil }
+func (s stubEngineWithPlugin) SMSSender() bridge.SMSSender        { return nil }
+func (s stubEngineWithPlugin) Ledger() bridge.Ledger              { return nil }
+func (s stubEngineWithPlugin) TokenEncryptor() bridge.Encryptor   { return nil }
+func (s stubEngineWithPlugin) CeremonyStore() ceremony.Store      { return nil }
+func (s stubEngineWithPlugin) APIKeyStore() apikey.Store          { return nil }
+func (s stubEngineWithPlugin) DPoPValidator() *dpop.Validator     { return nil }
+func (s stubEngineWithPlugin) DPoPNonceSigner() *dpop.NonceSigner { return nil }
 
 func (s stubEngineWithPlugin) DPoPModeForApp(context.Context, id.AppID) dpop.Mode {
 	return dpop.ModeOff
@@ -101,14 +99,19 @@ func (s stubEngineWithPlugin) TokenFormatForApp(string) tokenformat.Format { ret
 func (s stubEngineWithPlugin) SessionConfigForApp(context.Context, id.AppID, ...id.EnvironmentID) account.SessionConfig {
 	return account.SessionConfig{}
 }
-func (s stubEngineWithPlugin) ResolveSessionByToken(string) (*session.Session, error) {
+func (s stubEngineWithPlugin) ResolveSessionByToken(context.Context, string) (*session.Session, error) {
 	return nil, nil
 }
-func (s stubEngineWithPlugin) ResolveUser(string) (*user.User, error) { return nil, nil }
+func (s stubEngineWithPlugin) ResolveUser(context.Context, string) (*user.User, error) {
+	return nil, nil
+}
 func (s stubEngineWithPlugin) GetUser(context.Context, id.UserID) (*user.User, error) {
 	return nil, nil
 }
 func (s stubEngineWithPlugin) EnsureDefaultRole(context.Context, id.AppID, id.UserID) {}
+func (s stubEngineWithPlugin) RevokeOtherUserSessions(context.Context, id.UserID, id.SessionID) error {
+	return nil
+}
 func (s stubEngineWithPlugin) ResolvePrincipal(context.Context, principal.Ref) (*principal.Principal, error) {
 	return nil, principal.ErrNotFound
 }

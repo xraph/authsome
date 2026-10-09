@@ -12,10 +12,11 @@ import (
 	"encoding/xml"
 	"fmt"
 	"math/big"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/xraph/authsome/plugins/sharedsignals/jwksclient"
 
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
@@ -197,7 +198,9 @@ func resolveIDPMetadata(cfg SAMLConfig) (*saml.EntityDescriptor, error) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), metadataFetchTimeout)
 		defer cancel()
-		md, err := samlsp.FetchMetadata(ctx, http.DefaultClient, *u)
+		// The hardened client: a deadline, no redirects into private space,
+		// and a bounded body, the same as OIDC discovery.
+		md, err := samlsp.FetchMetadata(ctx, jwksclient.NewHTTPClient(metadataFetchTimeout), *u)
 		if err != nil {
 			return nil, fmt.Errorf("sso/saml: fetch metadata: %w", err)
 		}

@@ -7,15 +7,3 @@ contributor:
   capabilities: [auth.read]
 
 intents: []
-
-graph:
-  - route: /auth/mfa
-    intent: page.shell
-    title: Multi-Factor Auth
-    nav: { group: Auth, icon: shield-check, priority: 4 }
-    slots:
-      main:
-        - intent: settings.panel
-          props:
-            namespace: mfa
-            scope: app

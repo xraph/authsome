@@ -142,6 +142,14 @@ export function useAuth() {
     });
   }
 
+  async function startSSOLogin(connectionId: string, returnUrl?: string) {
+    return manager.startSSOLogin(connectionId, returnUrl);
+  }
+
+  async function completeSSOLogin(code: string) {
+    await manager.completeSSOLogin(code);
+  }
+
   async function signUp(
     email: string,
     password: string,
@@ -188,6 +196,8 @@ export function useAuth() {
     error,
     client: manager.getClient(),
     signIn,
+    startSSOLogin,
+    completeSSOLogin,
     signUp,
     signOut,
     resendVerification,

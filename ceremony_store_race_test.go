@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/store/memory"
 
 	"github.com/xraph/warden"
@@ -16,7 +17,7 @@ func newEngineForCeremonyTest(t *testing.T) *Engine {
 	t.Helper()
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := NewEngine(
+	eng, err := NewEngine(WithChronicle(bridge.NewMemoryChronicle()),
 		WithStore(memory.New()),
 		WithWarden(w),
 		WithDisableMigrate(),

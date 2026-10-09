@@ -2,11 +2,19 @@ package scim
 
 import (
 	"context"
+	"errors"
 
 	"github.com/xraph/authsome/id"
 )
 
 // Store defines the persistence interface for SCIM entities.
+// Sentinel errors every store returns for a missing row, so callers and the
+// conformance suite can tell absence from failure.
+var (
+	ErrConfigNotFound = errors.New("scim: config not found")
+	ErrTokenNotFound  = errors.New("scim: token not found")
+)
+
 type Store interface {
 	// Config CRUD
 	CreateConfig(ctx context.Context, c *SCIMConfig) error

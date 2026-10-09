@@ -71,6 +71,12 @@ type Store interface {
 	// UpdateAPIKey updates an existing API key.
 	UpdateAPIKey(ctx context.Context, key *APIKey) error
 
+	// TouchAPIKey records that the key was used at the given instant with
+	// a single-column write. The validation path calls it at most once a
+	// minute per key, so a busy key costs one small write per minute
+	// rather than a full-row rewrite per request.
+	TouchAPIKey(ctx context.Context, keyID id.APIKeyID, at time.Time) error
+
 	// DeleteAPIKey permanently deletes an API key.
 	DeleteAPIKey(ctx context.Context, keyID id.APIKeyID) error
 

@@ -126,13 +126,13 @@ func TestAuthMiddleware_Audience_OpaqueSession(t *testing.T) {
 			}
 
 			mw := middleware.AuthMiddlewareWithStrategies(
-				func(token string) (*session.Session, error) {
+				func(_ context.Context, token string) (*session.Session, error) {
 					if token == "audience-token" {
 						return testSession, nil
 					}
 					return nil, errors.New("invalid")
 				},
-				func(userIDStr string) (*user.User, error) {
+				func(_ context.Context, userIDStr string) (*user.User, error) {
 					if userIDStr == testUserID.String() {
 						return testUser, nil
 					}
@@ -187,10 +187,10 @@ func TestAuthMiddleware_Audience_JWT(t *testing.T) {
 			}
 
 			mw := middleware.AuthMiddlewareWithJWT(
-				func(_ string) (*session.Session, error) {
+				func(_ context.Context, _ string) (*session.Session, error) {
 					return nil, errors.New("not found")
 				},
-				func(userIDStr string) (*user.User, error) {
+				func(_ context.Context, userIDStr string) (*user.User, error) {
 					if userIDStr == testUserID.String() {
 						return &user.User{ID: testUserID, AppID: testAppID, Email: "jwt-audience@test.com"}, nil
 					}
@@ -283,13 +283,13 @@ func TestAuthMiddleware_Audience_BareConstructor(t *testing.T) {
 			}
 
 			mw := middleware.AuthMiddleware(
-				func(token string) (*session.Session, error) {
+				func(_ context.Context, token string) (*session.Session, error) {
 					if token == "bare-audience-token" {
 						return testSession, nil
 					}
 					return nil, errors.New("invalid")
 				},
-				func(userIDStr string) (*user.User, error) {
+				func(_ context.Context, userIDStr string) (*user.User, error) {
 					if userIDStr == testUserID.String() {
 						return testUser, nil
 					}
@@ -350,13 +350,13 @@ func TestAuthMiddleware_Audience_ResolverReceivesTokenAppID(t *testing.T) {
 		}
 
 		mw := middleware.AuthMiddlewareWithStrategies(
-			func(token string) (*session.Session, error) {
+			func(_ context.Context, token string) (*session.Session, error) {
 				if token == "token-appid" {
 					return testSession, nil
 				}
 				return nil, errors.New("invalid")
 			},
-			func(_ string) (*user.User, error) {
+			func(_ context.Context, _ string) (*user.User, error) {
 				return &user.User{ID: testUserID, AppID: testAppID, Email: "appid@test.com"}, nil
 			},
 			nil,
@@ -385,10 +385,10 @@ func TestAuthMiddleware_Audience_ResolverReceivesTokenAppID(t *testing.T) {
 		}
 
 		mw := middleware.AuthMiddlewareWithJWT(
-			func(_ string) (*session.Session, error) {
+			func(_ context.Context, _ string) (*session.Session, error) {
 				return nil, errors.New("not found")
 			},
-			func(_ string) (*user.User, error) {
+			func(_ context.Context, _ string) (*user.User, error) {
 				return &user.User{ID: testUserID, AppID: testAppID, Email: "appid-jwt@test.com"}, nil
 			},
 			nil,
@@ -417,13 +417,13 @@ func TestAuthMiddleware_Audience_ResolverReceivesTokenAppID(t *testing.T) {
 		}
 
 		mw := middleware.AuthMiddleware(
-			func(token string) (*session.Session, error) {
+			func(_ context.Context, token string) (*session.Session, error) {
 				if token == "bare-token-appid" {
 					return testSession, nil
 				}
 				return nil, errors.New("invalid")
 			},
-			func(_ string) (*user.User, error) {
+			func(_ context.Context, _ string) (*user.User, error) {
 				return &user.User{ID: testUserID, AppID: testAppID, Email: "appid-bare@test.com"}, nil
 			},
 			log.NewNoopLogger(),
@@ -513,14 +513,14 @@ func TestAuthMiddleware_Audience_JWTRefusalIsNotRescuedBySessionLookup(t *testin
 
 			var sessionLookups int
 			mw := middleware.AuthMiddlewareWithJWT(
-				func(token string) (*session.Session, error) {
+				func(_ context.Context, token string) (*session.Session, error) {
 					sessionLookups++
 					if token == jwtToken {
 						return backingSession, nil
 					}
 					return nil, errors.New("not found")
 				},
-				func(_ string) (*user.User, error) {
+				func(_ context.Context, _ string) (*user.User, error) {
 					return &user.User{ID: testUserID, AppID: testAppID, Email: "rescue@test.com"}, nil
 				},
 				nil,
@@ -561,13 +561,13 @@ func TestAuthMiddleware_JWTLookalikeStillFallsThrough(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddlewareWithJWT(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if token == lookalike {
 				return backingSession, nil
 			}
 			return nil, errors.New("not found")
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			return &user.User{ID: testUserID, AppID: testAppID, Email: "lookalike@test.com"}, nil
 		},
 		nil,

@@ -40,6 +40,21 @@ func (a *Adapter) Record(ctx context.Context, event *bridge.AuditEvent) error {
 	if event.Tenant != "" {
 		builder = builder.AppID(event.Tenant)
 	}
+	if event.OrgID != "" {
+		builder = builder.TenantID(event.OrgID)
+	}
+	if event.IP != "" {
+		builder = builder.IP(event.IP)
+	}
+	if event.UserAgent != "" {
+		builder = builder.UserAgent(event.UserAgent)
+	}
+	if event.RequestID != "" {
+		builder = builder.RequestID(event.RequestID)
+	}
+	if event.SessionID != "" {
+		builder = builder.SessionID(event.SessionID)
+	}
 	if event.Outcome != "" {
 		builder = builder.Outcome(event.Outcome)
 	}

@@ -18,4 +18,9 @@ type Tracker interface {
 
 	// Reset clears the failure count for a key (called on successful auth).
 	Reset(ctx context.Context, key string) error
+
+	// ResetPrefix clears every key that starts with prefix. Lockout keys
+	// end in the client's network, so an operator unlocking an account
+	// clears all of that account's networks at once.
+	ResetPrefix(ctx context.Context, prefix string) error
 }

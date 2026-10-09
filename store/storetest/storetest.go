@@ -68,11 +68,16 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"UpdateTeamWritesBackTimestamp", testUpdateTeamWritesBackTimestamp},
 		{"UpdateDeviceWritesBackTimestamp", testUpdateDeviceWritesBackTimestamp},
 		{"UpdateWebhookWritesBackTimestamp", testUpdateWebhookWritesBackTimestamp},
+		{"WebhookSecretNotStored", testWebhookSecretNotStored},
 		{"UpdateAPIKeyWritesBackTimestamp", testUpdateAPIKeyWritesBackTimestamp},
+		{"TouchAPIKeyWritesLastUsed", testTouchAPIKeyWritesLastUsed},
 		{"UpdateEnvironmentWritesBackTimestamp", testUpdateEnvironmentWritesBackTimestamp},
 		{"UpdateFormConfigWritesBackTimestamp", testUpdateFormConfigWritesBackTimestamp},
 		{"UpdateServiceAccountWritesBackTimestamp", testUpdateServiceAccountWritesBackTimestamp},
 		{"SessionCRUD", testSessionCRUD},
+		{"RotateSessionKeepsRefreshHashWithoutNewToken", testRotateSessionKeepsRefreshHashWithoutNewToken},
+		{"RetentionDeletesOnlyExpiredRows", testRetentionDeletesOnlyExpiredRows},
+		{"RetentionHonoursBatch", testRetentionHonoursBatch},
 		{"SessionLookupByTokenIsScoped", testSessionLookupByTokenIsScoped},
 		{"SessionRolesRoundTrip", testSessionRolesRoundTrip},
 		{"SessionAudienceRoundTrip", testSessionAudienceRoundTrip},
@@ -86,6 +91,12 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"RefreshTokenReplayIsIdempotent", testRefreshTokenReplayIsIdempotent},
 		{"OrgMemberLookupAndCascade", testOrgMemberLookupAndCascade},
 		{"ListUserSessionsIsScopedToUser", testListUserSessionsIsScopedToUser},
+		{"ListUserSessionsPage", testListUserSessionsPage},
+		{"ListOrganizationsPage", testListOrganizationsPage},
+		{"ListUserOrganizationsPage", testListUserOrganizationsPage},
+		{"ListMembersPage", testListMembersPage},
+		{"ListInvitationsPage", testListInvitationsPage},
+		{"ListTeamsPage", testListTeamsPage},
 		{"PrincipalRoundTrip", testPrincipalRoundTrip},
 		{"EphemeralPrincipalExpiry", testEphemeralPrincipalExpiry},
 		{"DelegationLifecycle", testDelegationLifecycle},
@@ -94,6 +105,17 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"ServiceAccountKindDefaultsToService", testServiceAccountKindDefaultsToService},
 		{"SessionDPoPJKTRoundTrip", testSessionDPoPJKTRoundTrip},
 		{"ExpiredEmailVerificationIsNotActive", testExpiredEmailVerificationIsNotActive},
+		{"KVRoundTrip", testKVRoundTrip},
+		{"KVSetNXHonoursExpiry", testKVSetNXHonoursExpiry},
+		{"KVIncrementWindow", testKVIncrementWindow},
+		{"KVDeleteExpired", testKVDeleteExpired},
+		{"SessionTokensStoredAsHashes", testSessionTokensStoredAsHashes},
+		{"LegacyPlaintextSessionUpgrades", testLegacyPlaintextSessionUpgrades},
+		{"RevokeFamilyUsesStoredHashes", testRevokeFamilyUsesStoredHashes},
+		{"CredentialTokensStoredAsHashes", testCredentialTokensStoredAsHashes},
+		{"LegacyPlaintextCredentialsUpgrade", testLegacyPlaintextCredentialsUpgrade},
+		{"HashLegacyTokensConverts", testHashLegacyTokensConverts},
+		{"SessionClientIDRoundTrip", testSessionClientIDRoundTrip},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -945,18 +967,23 @@ func testRotateSessionCAS(t *testing.T, s store.Store) {
 	stale := *sess
 	stale.Token = "new-tok-a"
 	stale.RefreshToken = "new-rtok-a"
-	swapped, err := s.RotateSession(ctx, &stale, "WRONG-old-tok")
+	swapped, err := s.RotateSession(ctx, &stale, store.HashToken("WRONG-old-tok"))
 	require.NoError(t, err)
 	assert.False(t, swapped, "rotation with a mismatched expected token must not swap")
 	unchanged, err := s.GetSessionByToken(ctx, "old-tok")
 	require.NoError(t, err, "the original token must still be valid after a failed CAS")
 	assert.Equal(t, sess.ID.String(), unchanged.ID.String())
 
-	// Rotate with the correct expected token: must swap atomically.
+	// A caller who passes the plaintext instead of its hash must lose too.
+	swapped, err = s.RotateSession(ctx, &stale, "old-tok")
+	require.NoError(t, err)
+	assert.False(t, swapped, "the compare-and-swap keys on the hash, never the plaintext")
+
+	// Rotate with the correct expected hash: must swap atomically.
 	fresh := *sess
 	fresh.Token = "new-tok-b"
 	fresh.RefreshToken = "new-rtok-b"
-	swapped, err = s.RotateSession(ctx, &fresh, "old-tok")
+	swapped, err = s.RotateSession(ctx, &fresh, store.HashToken("old-tok"))
 	require.NoError(t, err)
 	assert.True(t, swapped, "rotation with the correct expected token must swap")
 	_, err = s.GetSessionByToken(ctx, "old-tok")
@@ -1855,4 +1882,96 @@ func testUpdateServiceAccountWritesBackTimestamp(t *testing.T, s store.Store) {
 	require.NoError(t, err)
 	assert.WithinDuration(t, svc.UpdatedAt, got.UpdatedAt, time.Second,
 		"the timestamp written back onto the caller must match what was persisted")
+}
+
+// testWebhookSecretNotStored proves a webhook that delivers through a relay
+// endpoint never has its secret at rest: the row keeps the endpoint id and
+// a hash, and reads back with an empty secret. A row without an endpoint,
+// the shape releases before this wrote, keeps its plaintext readable so
+// the adoption sweep can hand that same secret to the relay.
+func testWebhookSecretNotStored(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	wh := &webhook.Webhook{
+		ID: id.NewWebhookID(), AppID: tn.AppID, EnvID: tn.EnvID, URL: "https://example.test/hook",
+		Events: []string{"user.created"}, Active: true, CreatedAt: now(), UpdatedAt: now(),
+		Secret: "whsec_plain", SecretHash: store.HashToken("whsec_plain"), RelayEndpointID: "ep_1",
+	}
+	require.NoError(t, s.CreateWebhook(ctx, wh))
+	assert.Equal(t, "whsec_plain", wh.Secret, "the caller's copy keeps the plaintext for the one-time reveal")
+
+	got, err := s.GetWebhook(ctx, wh.ID)
+	require.NoError(t, err)
+	assert.Empty(t, got.Secret, "no secret at rest")
+	assert.Equal(t, store.HashToken("whsec_plain"), got.SecretHash)
+	assert.Equal(t, "ep_1", got.RelayEndpointID)
+
+	got.Active = false
+	got.Secret = "whsec_rotated"
+	got.SecretHash = store.HashToken("whsec_rotated")
+	require.NoError(t, s.UpdateWebhook(ctx, got))
+	again, err := s.GetWebhook(ctx, wh.ID)
+	require.NoError(t, err)
+	assert.Empty(t, again.Secret, "an update never writes the secret either")
+	assert.Equal(t, store.HashToken("whsec_rotated"), again.SecretHash)
+	assert.Equal(t, "ep_1", again.RelayEndpointID)
+	assert.False(t, again.Active)
+
+	// #nosec G101 -- a fixture, not a credential.
+	legacy := &webhook.Webhook{
+		ID: id.NewWebhookID(), AppID: tn.AppID, EnvID: tn.EnvID, URL: "https://example.test/legacy",
+		Events: []string{"user.created"}, Active: true, CreatedAt: now(), UpdatedAt: now(), Secret: "whsec_legacy",
+	}
+	require.NoError(t, s.CreateWebhook(ctx, legacy))
+	gotLegacy, err := s.GetWebhook(ctx, legacy.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "whsec_legacy", gotLegacy.Secret, "a row with no endpoint keeps its plaintext for adoption")
+	assert.Empty(t, gotLegacy.RelayEndpointID)
+}
+
+// testTouchAPIKeyWritesLastUsed proves the single-column touch records the
+// instant and leaves the rest of the row alone.
+func testTouchAPIKeyWritesLastUsed(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "apikey-touch@test.com")
+	sfx := suffix(id.NewAPIKeyID().String())
+	k := &apikey.APIKey{ID: id.NewAPIKeyID(), AppID: tn.AppID, EnvID: tn.EnvID, UserID: u.ID, Name: "Touch", KeyHash: "hash-" + sfx, KeyPrefix: "pfx_" + sfx, CreatedAt: now(), UpdatedAt: now()}
+	require.NoError(t, s.CreateAPIKey(ctx, k))
+
+	at := now().Add(time.Minute)
+	require.NoError(t, s.TouchAPIKey(ctx, k.ID, at))
+	got, err := s.GetAPIKey(ctx, k.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got.LastUsedAt)
+	assert.WithinDuration(t, at, *got.LastUsedAt, time.Second)
+	assert.Equal(t, "hash-"+sfx, got.KeyHash, "the touch writes nothing else")
+	assert.False(t, got.Revoked)
+
+	assert.ErrorIs(t, s.TouchAPIKey(ctx, id.NewAPIKeyID(), at), store.ErrNotFound)
+}
+
+// testRotateSessionKeepsRefreshHashWithoutNewToken proves a rotation that
+// mints only a new access token (auto-refresh with the refresh token hidden
+// from the client) leaves the stored refresh hash in place, so the refresh
+// token the client holds keeps working.
+func testRotateSessionKeepsRefreshHashWithoutNewToken(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "rotate-keep@test.com")
+	sfx := suffix(u.ID.String())
+	seeded := seedSession(t, s, tn, u.ID, "acc-"+sfx, "ref-"+sfx)
+
+	loaded, err := s.GetSession(ctx, seeded.ID)
+	require.NoError(t, err)
+	require.Empty(t, loaded.RefreshToken, "a session from the store carries no refresh plaintext")
+	loaded.Token = "acc2-" + sfx
+	rotated, err := s.RotateSession(ctx, loaded, store.HashToken("acc-"+sfx))
+	require.NoError(t, err)
+	require.True(t, rotated)
+
+	byRefresh, err := s.GetSessionByRefreshToken(ctx, "ref-"+sfx)
+	require.NoError(t, err, "the refresh token the client holds still resolves")
+	assert.Equal(t, seeded.ID.String(), byRefresh.ID.String())
+	assert.Equal(t, store.HashToken("acc2-"+sfx), byRefresh.TokenHash, "the access token did rotate")
 }

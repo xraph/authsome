@@ -142,7 +142,7 @@ func jwtFallthroughCases() []jwtFallthroughCase {
 			},
 			rescue: jwtFallthroughRescue(appID, userID),
 			bind: middleware.SessionBindingConfig{
-				JWTSessionChecker: func(_ string) (*session.Session, error) {
+				JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 					return nil, errors.New("session revoked")
 				},
 			},
@@ -172,7 +172,7 @@ func jwtFallthroughCases() []jwtFallthroughCase {
 			rescue: rescue,
 			bind: middleware.SessionBindingConfig{
 				BindToIP: true,
-				JWTSessionChecker: func(_ string) (*session.Session, error) {
+				JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 					return bound, nil
 				},
 			},
@@ -202,7 +202,7 @@ func jwtFallthroughCases() []jwtFallthroughCase {
 			rescue: rescue,
 			bind: middleware.SessionBindingConfig{
 				BindToDevice: true,
-				JWTSessionChecker: func(_ string) (*session.Session, error) {
+				JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 					return bound, nil
 				},
 			},
@@ -218,13 +218,13 @@ func jwtFallthroughCases() []jwtFallthroughCase {
 func (tc jwtFallthroughCase) run(t *testing.T, validator middleware.JWTValidator) *httptest.ResponseRecorder {
 	t.Helper()
 
-	resolveSession := func(token string) (*session.Session, error) {
+	resolveSession := func(_ context.Context, token string) (*session.Session, error) {
 		if token == jwtFallthroughToken {
 			return tc.rescue, nil
 		}
 		return nil, errors.New("no session for token")
 	}
-	resolveUser := func(userID string) (*user.User, error) {
+	resolveUser := func(_ context.Context, userID string) (*user.User, error) {
 		if userID == tc.rescue.UserID.String() {
 			return &user.User{ID: tc.rescue.UserID, AppID: tc.rescue.AppID, Email: "fallthrough@test.com"}, nil
 		}

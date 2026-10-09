@@ -136,3 +136,13 @@ func (s *EncryptedStore) decryptInPlace(c *Connection) (*Connection, error) {
 	}
 	return c, nil
 }
+
+// GetIdentity delegates: identity bindings hold no secret.
+func (s *EncryptedStore) GetIdentity(ctx context.Context, connID id.SSOConnectionID, subject string) (*Identity, error) {
+	return s.inner.GetIdentity(ctx, connID, subject)
+}
+
+// CreateIdentity delegates: identity bindings hold no secret.
+func (s *EncryptedStore) CreateIdentity(ctx context.Context, ident *Identity) error {
+	return s.inner.CreateIdentity(ctx, ident)
+}

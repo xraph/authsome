@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/xraph/authsome/internal/mask"
+
 	"github.com/xraph/forge"
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/user"
 
 	"golang.org/x/oauth2"
@@ -31,18 +34,18 @@ import (
 func (p *Plugin) resolveUserForCallback(ctx context.Context, appID id.AppID, envID id.EnvironmentID, provider string, pu *ProviderUser, token *oauth2.Token) (*user.User, error) {
 	// STEP 1 — provider-account-id match (authoritative).
 	if p.oauthStore != nil {
-		conn, connErr := p.oauthStore.GetOAuthConnection(ctx, provider, pu.ProviderUserID)
+		conn, connErr := p.oauthStore.GetOAuthConnection(ctx, appID, provider, pu.ProviderUserID)
 		if connErr == nil {
 			u, err := p.store.GetUser(ctx, conn.UserID)
 			if err != nil {
-				return nil, forge.InternalError(fmt.Errorf("failed to resolve user: %w", err))
+				return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to resolve user: %w", err))
 			}
 			conn.AccessToken = token.AccessToken
 			conn.RefreshToken = token.RefreshToken
 			conn.ExpiresAt = token.Expiry
 			conn.Email = pu.Email
 			if updErr := p.oauthStore.UpdateOAuthConnection(ctx, conn); updErr != nil {
-				return nil, forge.InternalError(fmt.Errorf("failed to update oauth connection: %w", updErr))
+				return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to update oauth connection: %w", updErr))
 			}
 			p.reconcileProviderEmails(ctx, u, appID, envID, provider, pu)
 			return u, nil
@@ -114,7 +117,7 @@ func (p *Plugin) createUserFromProvider(ctx context.Context, appID id.AppID, env
 	if primary == nil {
 		// No claimable email — create a user without an email row.
 		if err := p.store.CreateUser(ctx, u); err != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", err))
+			return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to create user: %w", err))
 		}
 	} else {
 		u.Email = primary.Email
@@ -129,7 +132,7 @@ func (p *Plugin) createUserFromProvider(ctx context.Context, appID id.AppID, env
 			IsPrimary: true,
 			Source:    source,
 		}); err != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", err))
+			return nil, middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to create user: %w", err))
 		}
 		for _, pe := range claimable {
 			if pe.Email == primary.Email {
@@ -146,7 +149,7 @@ func (p *Plugin) createUserFromProvider(ctx context.Context, appID id.AppID, env
 				Source:   source,
 			}); err != nil && p.logger != nil {
 				p.logger.Debug("social: skip attaching provider email",
-					log.String("email", pe.Email),
+					log.String("email", mask.Email(pe.Email)),
 					log.String("error", err.Error()),
 				)
 			}
@@ -183,7 +186,7 @@ func (p *Plugin) createConnection(ctx context.Context, u *user.User, appID id.Ap
 		UpdatedAt:      now,
 	}
 	if err := p.oauthStore.CreateOAuthConnection(ctx, conn); err != nil {
-		return forge.InternalError(fmt.Errorf("failed to store oauth connection: %w", err))
+		return middleware.InternalErrorCtx(ctx, fmt.Errorf("failed to store oauth connection: %w", err))
 	}
 	return nil
 }
@@ -208,7 +211,7 @@ func (p *Plugin) reconcileProviderEmails(ctx context.Context, u *user.User, appI
 					Source:   source,
 				}); err != nil && p.logger != nil {
 					p.logger.Debug("social: skip attaching provider email",
-						log.String("email", pe.Email),
+						log.String("email", mask.Email(pe.Email)),
 						log.String("error", err.Error()),
 					)
 				}
@@ -218,7 +221,7 @@ func (p *Plugin) reconcileProviderEmails(ctx context.Context, u *user.User, appI
 		if rec.UserID.String() == u.ID.String() && !rec.Verified && pe.Verified {
 			if err := p.store.MarkUserEmailVerified(ctx, u.ID, pe.Email); err != nil && p.logger != nil {
 				p.logger.Debug("social: failed to upgrade email verification",
-					log.String("email", pe.Email),
+					log.String("email", mask.Email(pe.Email)),
 					log.String("error", err.Error()),
 				)
 			}

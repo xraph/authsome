@@ -1,13 +1,11 @@
 // Package contract wires authsome into the Forge dashboard's contract path.
 // It registers the `auth` contributor with the dashboard's contract registry,
-// declares the auth.login + auth.logout command intents, and ships the
-// /login graph route the React shell renders inside its AuthGate.
+// and declares the auth.* intents the React plugin calls, including the
+// auth.login + auth.logout commands behind its login gate.
 //
-// Authsome continues to expose its templ-based pages and AuthChecker via
-// RegisterDashboardAuth; this package is the parallel contract surface so
-// the slice (l) React shell can sign in without falling back to its
-// built-in LoginScreen. The two paths share the engine: both call
-// engine.SignIn and the same dashboard auth_token cookie scheme.
+// This is authsome's only dashboard surface. The extension's
+// RegisterDashboardAuth installs the AuthChecker that /principal answers
+// from; auth.login here writes the auth_token cookie that checker reads.
 package contract
 
 import (
@@ -88,7 +86,7 @@ func Register(
 		return fmt.Errorf("authsome/contract: register manifest: %w", err)
 	}
 
-	const c = "auth"
+	const c = "authsome"
 	if err := dispatcher.RegisterCommand(d, c, "auth.login", 1, loginHandler(deps)); err != nil {
 		return fmt.Errorf("authsome/contract: register auth.login: %w", err)
 	}
@@ -237,6 +235,9 @@ func Register(
 	}
 	if err := dispatcher.RegisterCommand(d, c, "webhooks.delete", 1, webhooksDeleteHandler(deps)); err != nil {
 		return fmt.Errorf("authsome/contract: register webhooks.delete: %w", err)
+	}
+	if err := dispatcher.RegisterCommand(d, c, "webhooks.rotateSecret", 1, webhooksRotateSecretHandler(deps)); err != nil {
+		return fmt.Errorf("authsome/contract: register webhooks.rotateSecret: %w", err)
 	}
 
 	// Phase C.9 — Form Configs

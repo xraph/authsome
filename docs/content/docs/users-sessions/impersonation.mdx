@@ -98,8 +98,9 @@ import "github.com/xraph/authsome/rbac"
 
 // Create an admin role with impersonation permission
 role := &rbac.Role{
-    Name: "Admin",
-    Slug: "admin",
+    AppID: appID.String(),
+    Name:  "Admin",
+    Slug:  "admin",
 }
 engine.CreateRole(ctx, role)
 
@@ -108,7 +109,7 @@ perm := &rbac.Permission{
     Action:   "impersonate",
     Resource: "users",
 }
-engine.AddPermission(ctx, perm)
+engine.AddPermission(ctx, appID, perm)
 ```
 
 ## Audit trail

@@ -22,7 +22,7 @@ func TestGetAppClientConfig_RejectsCrossTenant(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, ownerToken, _ := signUp(t, eng, "cfg-get-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "cfg-get-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/admin/apps/"+otherAppID(t).String()+"/client-config", nil)
@@ -37,7 +37,7 @@ func TestSetAppClientConfig_RejectsCrossTenant(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, ownerToken, _ := signUp(t, eng, "cfg-set-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "cfg-set-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	body := []byte(`{"signup_enabled":false}`)
@@ -58,7 +58,7 @@ func TestSetAppClientConfig_SameAppSucceeds(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, ownerToken, _ := signUp(t, eng, "cfg-same-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "cfg-same-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	appID, err := id.ParseAppID(testAppIDStr)
@@ -80,7 +80,7 @@ func TestSetAppSessionConfig_RejectsCrossTenant(t *testing.T) {
 	a, eng := newBootstrappedAPI(t)
 	handler := withTestKey(a.Handler())
 
-	_, ownerToken, _ := signUp(t, eng, "sess-cfg-owner@test.com", "SecureP@ss1")
+	_, ownerToken, _ := signUp(t, eng, "sess-cfg-owner@test.com", "SecureP@ss123")
 	ownerID := userIDFor(t, eng, ownerToken)
 
 	body := []byte(`{}`)

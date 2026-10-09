@@ -4,6 +4,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:authsome_flutter/authsome_flutter.dart';
 
 import '../theme/auth_theme.dart';
 
@@ -31,7 +32,18 @@ class AuthCard extends StatelessWidget {
   final String? description;
 
   /// Optional logo widget above the title.
+  ///
+  /// When null, the card shows the app's branding logo
+  /// (`clientConfig.branding.logoUrl`) if one is configured. Set
+  /// [showBrandingLogo] to false to keep the card logo-free.
   final Widget? logo;
+
+  /// Branding to fall back on when [logo] is null. When omitted, the card
+  /// reads it from the surrounding [AuthProvider]'s client config.
+  final BrandingConfig? branding;
+
+  /// Whether to fall back to the branding logo when [logo] is null.
+  final bool showBrandingLogo;
 
   /// Optional footer widget below the content.
   final Widget? footer;
@@ -51,12 +63,29 @@ class AuthCard extends StatelessWidget {
     required this.title,
     this.description,
     this.logo,
+    this.branding,
+    this.showBrandingLogo = true,
     this.footer,
     required this.child,
     this.maxWidth,
     this.align = AuthCardAlign.center,
     super.key,
   });
+
+  Widget? _resolveLogo(BuildContext context) {
+    if (logo != null || !showBrandingLogo) return logo;
+    final brand =
+        branding ?? AuthProvider.maybeOf(context)?.clientConfig?.branding;
+    final url = brand?.logoUrl;
+    if (url == null || url.isEmpty) return null;
+    return Image.network(
+      url,
+      height: 32,
+      semanticLabel: brand?.appName,
+      // A broken logo URL must not break the sign-in screen.
+      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,6 +101,7 @@ class AuthCard extends StatelessWidget {
     final logoAlignment = align == AuthCardAlign.left
         ? Alignment.centerLeft
         : Alignment.center;
+    final logo = _resolveLogo(context);
 
     return Center(
       child: ConstrainedBox(
@@ -89,7 +119,7 @@ class AuthCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (logo != null) ...[
-                  Align(alignment: logoAlignment, child: logo!),
+                  Align(alignment: logoAlignment, child: logo),
                   SizedBox(height: theme.fieldSpacing),
                 ],
                 Text(

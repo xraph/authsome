@@ -62,9 +62,23 @@ type ssoConnectionDoc struct {
 	AttributeMappings string    `bson:"attribute_mappings"`
 	Active            bool      `bson:"active"`
 	Enforced          bool      `bson:"enforced"`
+	AllowedDomains    []string  `bson:"allowed_domains,omitempty"`
+	TrustedFederation bool      `bson:"trusted_federation"`
 	CreatedAt         time.Time `bson:"created_at"`
 	UpdatedAt         time.Time `bson:"updated_at"`
 }
+
+// ssoIdentityDoc is one subject-to-user binding; _id joins the connection
+// id and subject so the pair is unique without an extra index.
+type ssoIdentityDoc struct {
+	ID           string    `bson:"_id"`
+	ConnectionID string    `bson:"connection_id"`
+	Subject      string    `bson:"subject"`
+	UserID       string    `bson:"user_id"`
+	CreatedAt    time.Time `bson:"created_at"`
+}
+
+const ssoIdentitiesColl = "authsome_sso_identities"
 
 // ──────────────────────────────────────────────────
 // Converters
@@ -102,8 +116,11 @@ func ssoDocToConnection(d *ssoConnectionDoc) (*Connection, error) {
 		SignRequests:   d.SignRequests,
 		Active:         d.Active,
 		Enforced:       d.Enforced,
-		CreatedAt:      d.CreatedAt,
-		UpdatedAt:      d.UpdatedAt,
+		AllowedDomains: append([]string(nil), d.AllowedDomains...),
+
+		TrustedFederation: d.TrustedFederation,
+		CreatedAt:         d.CreatedAt,
+		UpdatedAt:         d.UpdatedAt,
 	}
 
 	if d.AttributeMappings != "" {
@@ -146,8 +163,11 @@ func ssoConnectionToDoc(c *Connection) *ssoConnectionDoc {
 		SignRequests:   c.SignRequests,
 		Active:         c.Active,
 		Enforced:       c.Enforced,
-		CreatedAt:      c.CreatedAt,
-		UpdatedAt:      c.UpdatedAt,
+		AllowedDomains: append([]string(nil), c.AllowedDomains...),
+
+		TrustedFederation: c.TrustedFederation,
+		CreatedAt:         c.CreatedAt,
+		UpdatedAt:         c.UpdatedAt,
 	}
 	if len(c.AttributeMappings) > 0 {
 		if b, err := json.Marshal(c.AttributeMappings); err == nil {
@@ -286,6 +306,8 @@ func (s *MongoStore) UpdateConnection(ctx context.Context, c *Connection) error 
 			"attribute_mappings": doc.AttributeMappings,
 			"active":             doc.Active,
 			"enforced":           doc.Enforced,
+			"allowed_domains":    doc.AllowedDomains,
+			"trusted_federation": doc.TrustedFederation,
 			"updated_at":         doc.UpdatedAt,
 		}},
 	)
@@ -315,4 +337,49 @@ func ssoMongoError(err error) error {
 		return ErrConnectionNotFound
 	}
 	return err
+}
+
+func (s *MongoStore) GetIdentity(ctx context.Context, connID id.SSOConnectionID, subject string) (*Identity, error) {
+	if subject == "" {
+		return nil, ErrIdentityNotFound
+	}
+	doc := new(ssoIdentityDoc)
+	err := s.mdb.Collection(ssoIdentitiesColl).FindOne(ctx, bson.M{"_id": identityRowID(connID, subject)}).Decode(doc)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, ErrIdentityNotFound
+		}
+		return nil, ssoMongoError(err)
+	}
+	userID, err := id.ParseUserID(doc.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return &Identity{ConnectionID: connID, Subject: doc.Subject, UserID: userID, CreatedAt: doc.CreatedAt}, nil
+}
+
+func (s *MongoStore) CreateIdentity(ctx context.Context, ident *Identity) error {
+	if ident == nil || ident.Subject == "" {
+		return errors.New("sso: identity needs a subject")
+	}
+	// Round(0) drops the monotonic reading, which the sqlite driver would
+	// otherwise write into the column.
+	if ident.CreatedAt.IsZero() {
+		ident.CreatedAt = time.Now()
+	}
+	ident.CreatedAt = ident.CreatedAt.UTC().Round(0)
+	_, err := s.mdb.Collection(ssoIdentitiesColl).InsertOne(ctx, &ssoIdentityDoc{
+		ID:           identityRowID(ident.ConnectionID, ident.Subject),
+		ConnectionID: ident.ConnectionID.String(),
+		Subject:      ident.Subject,
+		UserID:       ident.UserID.String(),
+		CreatedAt:    ident.CreatedAt,
+	})
+	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return ErrIdentityExists
+		}
+		return ssoMongoError(err)
+	}
+	return nil
 }

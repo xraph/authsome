@@ -171,7 +171,7 @@ func (a *API) handleCreateEnvironment(ctx forge.Context, req *CreateEnvironmentR
 	env.Settings = environment.MergeSettings(typeDefaults, req.Settings)
 
 	if err := a.engine.Store().CreateEnvironment(ctx.Context(), env); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusCreated, env)
@@ -185,7 +185,7 @@ func (a *API) handleListEnvironments(ctx forge.Context, req *ListEnvironmentsReq
 
 	envs, err := a.engine.Store().ListEnvironments(ctx.Context(), appID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	if envs == nil {
@@ -203,7 +203,7 @@ func (a *API) handleGetEnvironment(ctx forge.Context, _ *GetEnvironmentRequest) 
 
 	env, err := a.engine.Store().GetEnvironment(ctx.Context(), envID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	if err := a.assertAppScope(ctx, env.AppID); err != nil {
 		return nil, err
@@ -220,7 +220,7 @@ func (a *API) handleUpdateEnvironment(ctx forge.Context, req *UpdateEnvironmentR
 
 	env, err := a.engine.Store().GetEnvironment(ctx.Context(), envID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	if err := a.assertAppScope(ctx, env.AppID); err != nil {
 		return nil, err
@@ -237,7 +237,7 @@ func (a *API) handleUpdateEnvironment(ctx forge.Context, req *UpdateEnvironmentR
 	}
 
 	if err := a.engine.Store().UpdateEnvironment(ctx.Context(), env); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return env, nil
@@ -252,7 +252,7 @@ func (a *API) handleDeleteEnvironment(ctx forge.Context, _ *DeleteEnvironmentReq
 	// Check if this is the default environment.
 	env, err := a.engine.Store().GetEnvironment(ctx.Context(), envID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	if err := a.assertAppScope(ctx, env.AppID); err != nil {
 		return nil, err
@@ -262,7 +262,7 @@ func (a *API) handleDeleteEnvironment(ctx forge.Context, _ *DeleteEnvironmentReq
 	}
 
 	if err := a.engine.Store().DeleteEnvironment(ctx.Context(), envID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "deleted"}
@@ -278,7 +278,7 @@ func (a *API) handleCloneEnvironment(ctx forge.Context, req *CloneEnvironmentReq
 	// The source environment must belong to the caller's app.
 	srcEnv, err := a.engine.Store().GetEnvironment(ctx.Context(), srcEnvID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	if scopeErr := a.assertAppScope(ctx, srcEnv.AppID); scopeErr != nil {
 		return nil, scopeErr
@@ -311,7 +311,7 @@ func (a *API) handleCloneEnvironment(ctx forge.Context, req *CloneEnvironmentReq
 
 	result, err := a.engine.CloneEnvironment(ctx.Context(), cloneReq)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &CloneEnvironmentResponse{
@@ -332,7 +332,7 @@ func (a *API) handleGetEnvironmentSettings(ctx forge.Context, _ *GetEnvironmentS
 
 	env, err := a.engine.Store().GetEnvironment(ctx.Context(), envID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	if err := a.assertAppScope(ctx, env.AppID); err != nil {
 		return nil, err
@@ -363,7 +363,7 @@ func (a *API) handleUpdateEnvironmentSettings(ctx forge.Context, req *UpdateEnvi
 
 	env, err := a.engine.Store().GetEnvironment(ctx.Context(), envID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	if err := a.assertAppScope(ctx, env.AppID); err != nil {
 		return nil, err
@@ -374,7 +374,7 @@ func (a *API) handleUpdateEnvironmentSettings(ctx forge.Context, req *UpdateEnvi
 	env.Settings = environment.MergeSettings(env.Settings, &settings)
 
 	if err := a.engine.Store().UpdateEnvironment(ctx.Context(), env); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	return env, nil
@@ -388,14 +388,14 @@ func (a *API) handleSetDefaultEnvironment(ctx forge.Context, _ *SetDefaultEnviro
 
 	env, err := a.engine.Store().GetEnvironment(ctx.Context(), envID)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 	if err := a.assertAppScope(ctx, env.AppID); err != nil {
 		return nil, err
 	}
 
 	if err := a.engine.Store().SetDefaultEnvironment(ctx.Context(), env.AppID, envID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "default environment updated"}

@@ -69,7 +69,22 @@ func (p *appleProvider) FetchUser(_ context.Context, token *oauth2.Token) (*Prov
 	return &ProviderUser{
 		ProviderUserID: sub,
 		Email:          email,
+		EmailVerified:  appleEmailVerified(claims["email_verified"]),
 	}, nil
+}
+
+// appleEmailVerified reads Apple's email_verified claim, which arrives as a
+// JSON boolean or as the string "true" depending on the token. Anything
+// else, including absence, is unverified: Apple's private relay addresses
+// and unverified addresses must not be trusted as proof of ownership.
+func appleEmailVerified(v any) bool {
+	switch t := v.(type) {
+	case bool:
+		return t
+	case string:
+		return t == "true"
+	}
+	return false
 }
 
 // decodeJWTClaims extracts the claims payload from a JWT without verifying the

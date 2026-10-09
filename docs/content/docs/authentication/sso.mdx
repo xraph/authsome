@@ -220,3 +220,5 @@ When a user enters `alice@acme.com` on the sign-in page, the engine automaticall
 | `GET` | `/admin/sso/connections` | List SSO connections (admin) |
 | `PUT` | `/admin/sso/connections/{id}` | Update SSO connection (admin) |
 | `DELETE` | `/admin/sso/connections/{id}` | Delete SSO connection (admin) |
+
+The admin routes act only on the caller's own app. `app_id` in the create body and the list query is optional and must name that app; any other value is refused. A connection that belongs to another app is answered as not found.

@@ -2,6 +2,7 @@ package passkey
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sync"
@@ -112,21 +113,29 @@ type Config struct {
 
 	// SessionTimeout is how long a WebAuthn ceremony session lives (default: 5 minutes).
 	SessionTimeout time.Duration
+
+	// StepUpWindow is how recently the caller must have signed in to
+	// register a passkey (default: 5 minutes). A passkey is a sign-in
+	// credential, so adding one on a possibly stolen session is refused.
+	StepUpWindow time.Duration
 }
 
 // Plugin is the passkey/WebAuthn plugin.
 type Plugin struct {
-	config       Config
-	store        Store
-	wa           *webauthn.WebAuthn
-	ceremonies   ceremony.Store
-	chronicle    bridge.Chronicle
-	relay        bridge.EventRelay
-	hooks        *hook.Bus
-	logger       log.Logger
-	settingsMgr  *settings.Manager
-	engine       plugin.Engine // used to resolve users and issue sessions for passwordless login
-	originWAOnce sync.Map      // map[string]*webauthn.WebAuthn — per-origin webauthn cache for localhost dev
+	config      Config
+	store       Store
+	wa          *webauthn.WebAuthn
+	ceremonies  ceremony.Store
+	chronicle   bridge.Chronicle
+	relay       bridge.EventRelay
+	hooks       *hook.Bus
+	logger      log.Logger
+	settingsMgr *settings.Manager
+	engine      plugin.Engine // used to resolve users and issue sessions for passwordless login
+	// revoker ends the user's other sessions after a passkey is registered.
+	// Nil in minimal test wiring, in which case nothing is revoked.
+	revoker      sessionRevoker
+	originWAOnce sync.Map // map[string]*webauthn.WebAuthn — per-origin webauthn cache for localhost dev
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -219,7 +228,8 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 
 	if engine != nil {
 		p.engine = engine
-		p.chronicle = engine.Chronicle()
+		p.revoker = engine
+		p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 		p.relay = engine.Relay()
 		p.hooks = engine.Hooks()
 		p.logger = engine.Logger()
@@ -539,4 +549,22 @@ func (p *Plugin) emitHook(ctx context.Context, action, resource, resourceID, act
 		ActorID:    actorID,
 		Tenant:     tenant,
 	})
+}
+
+// OnBeforeUserDelete removes a deleted user's passkeys. A credential that
+// outlives its account is a way back in that nobody owns.
+func (p *Plugin) OnBeforeUserDelete(ctx context.Context, userID id.UserID) error {
+	if p.store == nil {
+		return nil
+	}
+	creds, err := p.store.ListUserCredentials(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("passkey: list credentials for erasure: %w", err)
+	}
+	for _, c := range creds {
+		if err := p.store.DeleteCredential(ctx, c.CredentialID); err != nil {
+			return fmt.Errorf("passkey: delete credential %s: %w", c.ID, err)
+		}
+	}
+	return nil
 }

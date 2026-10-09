@@ -1,0 +1,57 @@
+---
+title: Secrets at Rest
+description: What a copy of the database yields, which credentials are hashed, how provider tokens are encrypted and rotated, and the API key pepper.
+---
+
+Authsome is designed so that a copy of its database gives an attacker nothing they can present. Credentials that only need to be checked are stored as digests. Secrets that must be read back, such as a social provider's refresh token, are encrypted under a key the database never holds.
+
+## Hashed credentials
+
+Every credential column holds a hex SHA-256 digest of the value, never the value:
+
+| Credential | Table | Digest column |
+| --- | --- | --- |
+| Session and refresh tokens | `authsome_sessions` | `token_hash`, `refresh_token_hash` |
+| Email verification codes and magic link tokens | `authsome_verifications` | `token_hash` |
+| Password reset tokens | `authsome_password_resets` | `token_hash` |
+| Organization invitation tokens | `authsome_invitations` | `token_hash` |
+| OAuth2 authorization, device and user codes | `authsome_oauth2_auth_codes`, `authsome_oauth2_device_codes` | `code`, `device_code`, `user_code` |
+| API keys | `authsome_api_keys` | `key_hash` |
+
+A lookup hashes the value the client presented and matches the digest. The tokens carry at least 128 bits of entropy, so an unsalted digest is enough: nothing can be guessed from it, and the lookup stays a single indexed equality. The object the store hands back carries the plaintext it was given and nothing else. A session read by id has an empty `Token` and `RefreshToken` and only the hashes; that is why the refresh handler rotates a cookie session through `RefreshBySessionToken` rather than reading a refresh token back.
+
+### Upgrading from plaintext rows
+
+Sessions, verifications, resets and invitations written by a release before hashing still work. A lookup that misses on the digest falls back to the plaintext column and rewrites the row it finds, so a token is upgraded the first time it is used. The engine also runs a background sweep after migrations at every start, converting the remaining rows in batches of five hundred and logging the total, so the window in which a database copy holds live credentials closes on its own.
+
+OAuth2 codes get no fallback. They live for minutes, so a code minted by the previous release fails once and the client repeats the authorization request.
+
+## Encrypted secrets
+
+Provider tokens saved by the social plugin, TOTP secrets saved by the MFA plugin and the client secrets and signing keys of SSO connections are encrypted with AES-256-GCM before they reach the store. The engine needs a key at construction. Without one, and without an explicit encryptor, `NewEngine` returns `ErrTokenEncryptionKeyRequired` instead of writing secrets in the clear.
+
+```bash
+# one key: 64 hex characters (32 bytes)
+export AUTHSOME_TOKEN_ENCRYPTION_KEY=$(openssl rand -hex 32)
+
+# a ring: "kid:hex,kid:hex"; the first seals new values, every key decrypts
+export AUTHSOME_TOKEN_ENCRYPTION_KEYS="2026q4:$(openssl rand -hex 32),2026q3:<previous key>"
+```
+
+The same values can be set in code through `Config.TokenEncryption.Keys`, which takes precedence over the environment. A development setup that deliberately wants no encryption passes `authsome.WithTokenEncryptor(bridge.NoopEncryptor{})`; there is no way to reach that state by omission.
+
+### Rotating a key
+
+1. Generate a new key and list it first in `AUTHSOME_TOKEN_ENCRYPTION_KEYS`, keeping the old key after it.
+2. Deploy. New writes are sealed under the new key and tagged with its id in a `v2:<kid>:` envelope; rows written under the old key, including rows in the single-key `v1:` envelope, keep decrypting.
+3. Rewrite the rows you care about (any update re-encrypts under the current writer), then drop the old key from the list. A row that still names a dropped key fails to decrypt with `ErrUnknownKeyID` rather than reading as garbage.
+
+### Strict mode
+
+A row written before encryption was deployed carries no envelope, and the encryptor passes it through so those rows stay readable. Once every such row has been rewritten, turn on strict mode with `Config.TokenEncryption.Strict` or `AUTHSOME_TOKEN_ENCRYPTION_STRICT=true`. From then on a value that reads back without an envelope is refused with `ErrPlaintextRefused`: after the migration it can only be tampering or a write that bypassed encryption. `Engine.LegacyPlaintextSecretReads` counts the unenveloped values read since the process started; when it stays at zero across a full cycle of the workload, strict mode is safe. A refusal takes that connection or factor out of service until the row is fixed.
+
+## API key pepper
+
+API keys are random 256-bit values and their digests are already unguessable, but a pepper removes even the theoretical option of checking a leaked key against a leaked table. Set `AUTHSOME_API_KEY_PEPPER` (hex or any string, at least 32 bytes) or `Config.APIKeyPepper`, and digests become HMAC-SHA256 under that secret.
+
+Keys hashed before the pepper keep verifying, and each one is rewritten under the pepper the next time it authenticates, so no key needs to be reissued. Keep the pepper for as long as any key exists: a peppered digest cannot be checked without it.

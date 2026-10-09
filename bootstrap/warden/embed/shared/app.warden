@@ -30,6 +30,8 @@ namespace "app" {
       "device:*",
       "environment:*",
       "org:*",
+      "organization:*",
+      "apikey:*",
       "document:*",
       "role:*",
       "permission:*",
@@ -37,9 +39,14 @@ namespace "app" {
     ]
   }
 
+  // Settings can weaken every other control (password policy, verification,
+  // session lifetimes), so only owners hold them.
   role owner : admin {
     name        = "Owner"
     description = "Full app ownership"
     is_system   = true
+    grants     += [
+      "settings:*",
+    ]
   }
 }

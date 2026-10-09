@@ -25,6 +25,9 @@ sdk/**/node_modules/
 # General
 .DS_Store
 *.pem
+.env
+.env.*
+!.env.example
 .env*.local
 
 # Build artifacts (binaries built into the repo root, e.g. /specgen
@@ -62,6 +65,9 @@ _project_files/
 # Superpowers working documents: design specs and implementation plans.
 # Kept on disk for whoever is mid-task against them, but not committed.
 docs/superpowers/
+
+# Local Go workspace overrides (used to point at sibling module checkouts).
+go.work*
 
 # The cloud control plane. Private by policy, and this is enforced by
 # scripts/check-private-paths.sh rather than trusted to this file alone.

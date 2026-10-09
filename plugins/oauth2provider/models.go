@@ -32,6 +32,10 @@ type OAuth2Client struct {
 	// against. Zero for every client that only uses the other grants.
 	PrincipalID id.ServiceAccountID `json:"principal_id,omitempty"`
 	Public      bool                `json:"public"` // Public clients (SPAs, mobile) don't have a secret
+	// FirstParty marks a client the operator owns. Authorization skips the
+	// consent page for it, since the user already trusts the application
+	// they are signing in to. Only the admin API can set it.
+	FirstParty bool `json:"first_party"`
 
 	// TokenEndpointAuthMethod is RFC 7591 token_endpoint_auth_method:
 	// "none", "client_secret_basic" or "client_secret_post". Every
@@ -149,4 +153,34 @@ type UserInfo struct {
 	EmailVerified bool   `json:"email_verified,omitempty"`
 	Name          string `json:"name,omitempty"`
 	Phone         string `json:"phone_number,omitempty"`
+}
+
+// Grant records that a user approved a client for a set of scopes in an app.
+// Authorization consults it to decide whether to show the consent page, and
+// the user can list and revoke grants at /v1/me/oauth/grants.
+type Grant struct {
+	ID        id.OAuth2GrantID `json:"id"`
+	AppID     id.AppID         `json:"app_id"`
+	UserID    id.UserID        `json:"user_id"`
+	ClientID  string           `json:"client_id"`
+	Scopes    []string         `json:"scopes"`
+	CreatedAt time.Time        `json:"created_at"`
+	UpdatedAt time.Time        `json:"updated_at"`
+}
+
+// Covers reports whether the grant already approves every scope in scopes.
+func (g *Grant) Covers(scopes []string) bool {
+	if g == nil {
+		return false
+	}
+	have := make(map[string]bool, len(g.Scopes))
+	for _, s := range g.Scopes {
+		have[s] = true
+	}
+	for _, s := range scopes {
+		if !have[s] {
+			return false
+		}
+	}
+	return true
 }

@@ -55,6 +55,7 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"ListByUserIsScopedToUser", testListByUserIsScopedToUser},
 		{"UpdateReplacesTokens", testUpdateReplacesTokens},
 		{"DeleteConnection", testDeleteConnection},
+		{"ProviderIdentityIsAppScoped", testProviderIdentityIsAppScoped},
 	}
 	for _, tc := range cases {
 		if skipSet[tc.name] {

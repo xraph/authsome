@@ -306,6 +306,36 @@ export class AuthManager {
     }
   }
 
+  /**
+   * Begin an SSO login against one of the app's configured connections.
+   *
+   * Resolves to the IdP `login_url`; the caller navigates the browser there.
+   * `returnUrl` is where the backend lands the browser after the IdP round
+   * trip, with `?code=` on success or `?sso_error=` on failure. It must be an
+   * allowlisted https origin (or localhost). Omit it to use the server's
+   * default `/sso/callback` landing.
+   */
+  async startSSOLogin(connectionId: string, returnUrl?: string): Promise<string> {
+    const res = await this.client.startSSOLogin(connectionId, returnUrl);
+    return res.login_url;
+  }
+
+  /**
+   * Finish an SSO login by exchanging the one-time `code` from the callback
+   * URL for a session. The exchange is publishable-key authed, so no bearer
+   * token is sent.
+   */
+  async completeSSOLogin(code: string): Promise<void> {
+    try {
+      const res = await this.client.ssoExchange({ code }, "");
+      const session: Session = toSession(res);
+      await this.handleAuthResponse(res.user, session);
+    } catch (err) {
+      this.handleError(err);
+      throw err;
+    }
+  }
+
   /** Sign up with email & password. */
   async signUp(data: SignUpRequest): Promise<void> {
     // See signIn() comment — forms manage their own loading state.

@@ -3,13 +3,12 @@ package memory
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/xraph/authsome/account"
@@ -78,6 +77,10 @@ type Store struct {
 	// presented token has already been rotated — replay detected.
 	revokedRefreshTokens map[string]*session.RevokedRefreshToken
 
+	// kv backs store.KV: rate-limit windows, lockout counters and ceremony
+	// state, keyed by caller-chosen strings with millisecond expiry.
+	kv map[string]*kvEntry
+
 	// faults is a TEST-ONLY one-shot fault map. Keys are method names
 	// (e.g. "DeleteTeam"); the named method consumes and returns the
 	// stored error on its next call. Production code MUST NOT depend on
@@ -112,6 +115,7 @@ func New() *Store {
 		userEmails:           make(map[string]*user.UserEmail),
 		revokedRefreshTokens: make(map[string]*session.RevokedRefreshToken),
 		faults:               make(map[string]error),
+		kv:                   make(map[string]*kvEntry),
 	}
 }
 
@@ -379,8 +383,99 @@ func (s *Store) CreateSession(_ context.Context, sess *session.Session) error {
 		sess.CreatedAt = time.Now()
 	}
 	sess.UpdatedAt = sess.CreatedAt
-	s.sessions[sess.ID.String()] = sess
+	s.sessions[sess.ID.String()] = atRest(sess)
 	return nil
+}
+
+// atRest returns the copy of sess the store keeps: token hashes filled in
+// from whichever plaintext the caller supplied, and the plaintext itself
+// dropped. The caller's struct keeps its plaintext and learns the hashes, so
+// a freshly created session can still be handed to its owner.
+func atRest(sess *session.Session) *session.Session {
+	if sess.TokenHash == "" && sess.Token != "" {
+		sess.TokenHash = store.HashToken(sess.Token)
+	}
+	if sess.RefreshTokenHash == "" && sess.RefreshToken != "" {
+		sess.RefreshTokenHash = store.HashToken(sess.RefreshToken)
+	}
+	stored := *sess
+	stored.Token = ""
+	stored.RefreshToken = ""
+	return &stored
+}
+
+// SeedLegacySession writes sess exactly as a release before token hashing
+// did: plaintext tokens and no hashes. It exists so the conformance suite can
+// prove the upgrade path and is refused outside `go test`.
+func (s *Store) SeedLegacySession(_ context.Context, sess *session.Session) error {
+	if !testing.Testing() {
+		return errors.New("authsome/memory: SeedLegacySession is a test seam")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	legacy := *sess
+	legacy.TokenHash = ""
+	legacy.RefreshTokenHash = ""
+	s.sessions[sess.ID.String()] = &legacy
+	return nil
+}
+
+// HashLegacyTokens implements store.LegacyTokenHasher.
+func (s *Store) HashLegacyTokens(_ context.Context, batch int) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var n int64
+	room := func() bool { return batch <= 0 || n < int64(batch) }
+	for _, sess := range s.sessions {
+		if !room() {
+			return n, nil
+		}
+		if (sess.TokenHash == "" && sess.Token != "") || (sess.RefreshTokenHash == "" && sess.RefreshToken != "") {
+			upgradeLegacy(sess)
+			n++
+		}
+	}
+	for _, v := range s.verifications {
+		if !room() {
+			return n, nil
+		}
+		if v.TokenHash == "" && v.Token != "" {
+			v.TokenHash, v.Token = store.HashToken(v.Token), ""
+			n++
+		}
+	}
+	for _, pr := range s.passwordResets {
+		if !room() {
+			return n, nil
+		}
+		if pr.TokenHash == "" && pr.Token != "" {
+			pr.TokenHash, pr.Token = store.HashToken(pr.Token), ""
+			n++
+		}
+	}
+	for _, inv := range s.invitations {
+		if !room() {
+			return n, nil
+		}
+		if inv.TokenHash == "" && inv.Token != "" {
+			inv.TokenHash, inv.Token = store.HashToken(inv.Token), ""
+			n++
+		}
+	}
+	return n, nil
+}
+
+// upgradeLegacy hashes a stored session's plaintext tokens in place. Callers
+// hold the write lock.
+func upgradeLegacy(sess *session.Session) {
+	if sess.Token != "" {
+		sess.TokenHash = store.HashToken(sess.Token)
+		sess.Token = ""
+	}
+	if sess.RefreshToken != "" {
+		sess.RefreshTokenHash = store.HashToken(sess.RefreshToken)
+		sess.RefreshToken = ""
+	}
 }
 
 func (s *Store) GetSession(_ context.Context, sessionID id.SessionID) (*session.Session, error) {
@@ -394,26 +489,39 @@ func (s *Store) GetSession(_ context.Context, sessionID id.SessionID) (*session.
 }
 
 func (s *Store) GetSessionByToken(_ context.Context, token string) (*session.Session, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	if token == "" {
+		return nil, store.ErrNotFound
+	}
+	h := store.HashToken(token)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, sess := range s.sessions {
-		if sess.Token == token {
-			return sess, nil
+		if sess.TokenHash == h || (sess.TokenHash == "" && sess.Token == token) {
+			upgradeLegacy(sess)
+			// Return a copy carrying the presented plaintext: the refresh flow
+			// mutates the returned session in place before persisting via
+			// RotateSession, and the CAS there must still observe the
+			// pre-rotation hash. Sharing the map pointer would defeat it.
+			copied := *sess
+			copied.Token = token
+			return &copied, nil
 		}
 	}
 	return nil, store.ErrNotFound
 }
 
 func (s *Store) GetSessionByRefreshToken(_ context.Context, refreshToken string) (*session.Session, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	if refreshToken == "" {
+		return nil, store.ErrNotFound
+	}
+	h := store.HashToken(refreshToken)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, sess := range s.sessions {
-		if sess.RefreshToken == refreshToken {
-			// Return a copy: the refresh flow mutates the returned session in
-			// place before persisting via RotateSession, and the CAS there must
-			// still be able to observe the pre-rotation token. Sharing the map
-			// pointer would let that mutation defeat the compare-and-swap.
+		if sess.RefreshTokenHash == h || (sess.RefreshTokenHash == "" && sess.RefreshToken == refreshToken) {
+			upgradeLegacy(sess)
 			copied := *sess
+			copied.RefreshToken = refreshToken
 			return &copied, nil
 		}
 	}
@@ -427,25 +535,33 @@ func (s *Store) UpdateSession(_ context.Context, sess *session.Session) error {
 		return store.ErrNotFound
 	}
 	sess.UpdatedAt = time.Now()
-	s.sessions[sess.ID.String()] = sess
+	s.sessions[sess.ID.String()] = atRest(sess)
 	return nil
 }
 
-func (s *Store) RotateSession(_ context.Context, sess *session.Session, expectedToken string) (bool, error) {
+func (s *Store) RotateSession(_ context.Context, sess *session.Session, expectedTokenHash string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	stored, ok := s.sessions[sess.ID.String()]
 	if !ok {
 		return false, store.ErrNotFound
 	}
-	// Compare-and-swap on the access token: only apply if the stored token is
-	// still the pre-rotation value the caller observed.
-	if stored.Token != expectedToken {
+	// Compare-and-swap on the access token hash: only apply if the stored
+	// hash is still the pre-rotation value the caller observed.
+	if expectedTokenHash == "" || stored.TokenHash != expectedTokenHash {
 		return false, nil
 	}
-	updated := *sess
-	updated.UpdatedAt = time.Now()
-	s.sessions[sess.ID.String()] = &updated
+	// The caller's sess carries the rotated plaintext; drop stale hashes so
+	// atRest derives fresh ones from it.
+	sess.TokenHash = ""
+	// The refresh hash is dropped only when a new refresh token was minted;
+	// a rotation that keeps the refresh token (auto-refresh with the token
+	// hidden from the client) carries no plaintext and must keep the hash.
+	if sess.RefreshToken != "" {
+		sess.RefreshTokenHash = ""
+	}
+	sess.UpdatedAt = time.Now()
+	s.sessions[sess.ID.String()] = atRest(sess)
 	return true, nil
 }
 
@@ -589,8 +705,7 @@ func (s *Store) RevokeRefreshTokenFamily(_ context.Context, familyID id.SessionF
 		if sess.FamilyID.String() != familyID.String() {
 			continue
 		}
-		if sess.RefreshToken != "" {
-			h := hashRefreshToken(sess.RefreshToken)
+		if h := sess.RefreshTokenHash; h != "" {
 			if _, exists := s.revokedRefreshTokens[h]; !exists {
 				s.revokedRefreshTokens[h] = &session.RevokedRefreshToken{
 					TokenHash: h,
@@ -623,32 +738,57 @@ func (s *Store) MarkRefreshTokenReplayed(_ context.Context, tokenHash string) (b
 	return true, nil
 }
 
-// hashRefreshToken returns the hex-encoded SHA-256 of a refresh token. Kept as
-// a small helper so memory + service share the exact same canonicalisation.
-func hashRefreshToken(tok string) string {
-	sum := sha256.Sum256([]byte(tok))
-	return hex.EncodeToString(sum[:])
-}
-
 // ──────────────────────────────────────────────────
 // Account Store (Verification + PasswordReset)
 // ──────────────────────────────────────────────────
 
+// credentialKey is the map key for a verification or reset: the hash the
+// caller carries, or the digest of the plaintext when only that is known.
+func credentialKey(hash, plaintext string) string {
+	if hash == "" && plaintext != "" {
+		return store.HashToken(plaintext)
+	}
+	return hash
+}
+
 func (s *Store) CreateVerification(_ context.Context, v *account.Verification) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.verifications[v.Token] = v
+	v.TokenHash = credentialKey(v.TokenHash, v.Token)
+	stored := *v
+	stored.Token = ""
+	s.verifications[stored.TokenHash] = &stored
+	return nil
+}
+
+// SeedLegacyVerification writes v the way releases before token hashing did:
+// plaintext and no hash. Test seam for the conformance suite.
+func (s *Store) SeedLegacyVerification(_ context.Context, v *account.Verification) error {
+	if !testing.Testing() {
+		return errors.New("authsome/memory: SeedLegacyVerification is a test seam")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	legacy := *v
+	legacy.TokenHash = ""
+	s.verifications[store.HashToken(v.Token)] = &legacy
 	return nil
 }
 
 func (s *Store) GetVerification(_ context.Context, token string) (*account.Verification, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	v, ok := s.verifications[token]
+	if token == "" {
+		return nil, store.ErrNotFound
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.verifications[store.HashToken(token)]
 	if !ok {
 		return nil, store.ErrNotFound
 	}
-	return v, nil
+	v.TokenHash, v.Token = store.HashToken(token), ""
+	copied := *v
+	copied.Token = token
+	return &copied, nil
 }
 
 // ConsumeVerification marks a verification consumed, returning ErrNotFound if
@@ -658,7 +798,7 @@ func (s *Store) GetVerification(_ context.Context, token string) (*account.Verif
 func (s *Store) ConsumeVerification(_ context.Context, token string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	v, ok := s.verifications[token]
+	v, ok := s.verifications[store.HashToken(token)]
 	if !ok || v.Consumed {
 		return store.ErrNotFound
 	}
@@ -685,40 +825,70 @@ func (s *Store) GetActiveEmailVerification(_ context.Context, userID id.UserID) 
 	if latest == nil {
 		return nil, store.ErrNotFound
 	}
-	return latest, nil
+	copied := *latest
+	copied.TokenHash = credentialKey(copied.TokenHash, copied.Token)
+	copied.Token = ""
+	return &copied, nil
 }
 
 func (s *Store) UpdateVerification(_ context.Context, v *account.Verification) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.verifications[v.Token]; !ok {
+	key := credentialKey(v.TokenHash, v.Token)
+	if _, ok := s.verifications[key]; !ok {
 		return store.ErrNotFound
 	}
-	s.verifications[v.Token] = v
+	v.TokenHash = key
+	stored := *v
+	stored.Token = ""
+	s.verifications[key] = &stored
 	return nil
 }
 
 func (s *Store) CreatePasswordReset(_ context.Context, pr *account.PasswordReset) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.passwordResets[pr.Token] = pr
+	pr.TokenHash = credentialKey(pr.TokenHash, pr.Token)
+	stored := *pr
+	stored.Token = ""
+	s.passwordResets[stored.TokenHash] = &stored
+	return nil
+}
+
+// SeedLegacyPasswordReset writes pr the way releases before token hashing
+// did: plaintext and no hash. Test seam for the conformance suite.
+func (s *Store) SeedLegacyPasswordReset(_ context.Context, pr *account.PasswordReset) error {
+	if !testing.Testing() {
+		return errors.New("authsome/memory: SeedLegacyPasswordReset is a test seam")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	legacy := *pr
+	legacy.TokenHash = ""
+	s.passwordResets[store.HashToken(pr.Token)] = &legacy
 	return nil
 }
 
 func (s *Store) GetPasswordReset(_ context.Context, token string) (*account.PasswordReset, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	pr, ok := s.passwordResets[token]
+	if token == "" {
+		return nil, store.ErrNotFound
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	pr, ok := s.passwordResets[store.HashToken(token)]
 	if !ok {
 		return nil, store.ErrNotFound
 	}
-	return pr, nil
+	pr.TokenHash, pr.Token = store.HashToken(token), ""
+	copied := *pr
+	copied.Token = token
+	return &copied, nil
 }
 
 func (s *Store) ConsumePasswordReset(_ context.Context, token string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	pr, ok := s.passwordResets[token]
+	pr, ok := s.passwordResets[store.HashToken(token)]
 	if !ok {
 		return store.ErrNotFound
 	}
@@ -1085,7 +1255,24 @@ func (s *Store) CreateInvitation(_ context.Context, inv *organization.Invitation
 	if inv.CreatedAt.IsZero() {
 		inv.CreatedAt = time.Now()
 	}
-	s.invitations[inv.ID.String()] = inv
+	inv.TokenHash = credentialKey(inv.TokenHash, inv.Token)
+	stored := *inv
+	stored.Token = ""
+	s.invitations[inv.ID.String()] = &stored
+	return nil
+}
+
+// SeedLegacyInvitation writes inv the way releases before token hashing did:
+// plaintext and no hash. Test seam for the conformance suite.
+func (s *Store) SeedLegacyInvitation(_ context.Context, inv *organization.Invitation) error {
+	if !testing.Testing() {
+		return errors.New("authsome/memory: SeedLegacyInvitation is a test seam")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	legacy := *inv
+	legacy.TokenHash = ""
+	s.invitations[inv.ID.String()] = &legacy
 	return nil
 }
 
@@ -1100,11 +1287,18 @@ func (s *Store) GetInvitation(_ context.Context, invID id.InvitationID) (*organi
 }
 
 func (s *Store) GetInvitationByToken(_ context.Context, token string) (*organization.Invitation, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	if token == "" {
+		return nil, store.ErrNotFound
+	}
+	h := store.HashToken(token)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, inv := range s.invitations {
-		if inv.Token == token {
-			return inv, nil
+		if inv.TokenHash == h || (inv.TokenHash == "" && inv.Token == token) {
+			inv.TokenHash, inv.Token = h, ""
+			copied := *inv
+			copied.Token = token
+			return &copied, nil
 		}
 	}
 	return nil, store.ErrNotFound
@@ -1116,7 +1310,10 @@ func (s *Store) UpdateInvitation(_ context.Context, inv *organization.Invitation
 	if _, ok := s.invitations[inv.ID.String()]; !ok {
 		return store.ErrNotFound
 	}
-	s.invitations[inv.ID.String()] = inv
+	inv.TokenHash = credentialKey(inv.TokenHash, inv.Token)
+	stored := *inv
+	stored.Token = ""
+	s.invitations[inv.ID.String()] = &stored
 	return nil
 }
 
@@ -1292,7 +1489,9 @@ func (s *Store) CreateWebhook(_ context.Context, w *webhook.Webhook) error {
 		w.CreatedAt = time.Now()
 	}
 	w.UpdatedAt = w.CreatedAt
-	s.webhooks[w.ID.String()] = w
+	stored := *w
+	stored.Secret = webhook.StoredSecret(w)
+	s.webhooks[w.ID.String()] = &stored
 	return nil
 }
 
@@ -1303,7 +1502,10 @@ func (s *Store) GetWebhook(_ context.Context, webhookID id.WebhookID) (*webhook.
 	if !ok {
 		return nil, store.ErrNotFound
 	}
-	return w, nil
+	// A copy, like the database stores hand back: a caller that edits the
+	// row before saving it must not be writing to the stored one.
+	cp := *w
+	return &cp, nil
 }
 
 func (s *Store) UpdateWebhook(_ context.Context, w *webhook.Webhook) error {
@@ -1313,7 +1515,9 @@ func (s *Store) UpdateWebhook(_ context.Context, w *webhook.Webhook) error {
 		return store.ErrNotFound
 	}
 	w.UpdatedAt = time.Now()
-	s.webhooks[w.ID.String()] = w
+	stored := *w
+	stored.Secret = webhook.StoredSecret(w)
+	s.webhooks[w.ID.String()] = &stored
 	return nil
 }
 
@@ -1330,7 +1534,8 @@ func (s *Store) ListWebhooks(_ context.Context, appID id.AppID) ([]*webhook.Webh
 	var result []*webhook.Webhook
 	for _, w := range s.webhooks {
 		if w.AppID.String() == appID.String() {
-			result = append(result, w)
+			cp := *w
+			result = append(result, &cp)
 		}
 	}
 	return result, nil
@@ -1451,6 +1656,17 @@ func (s *Store) UpdateAPIKey(_ context.Context, k *apikey.APIKey) error {
 	}
 	k.UpdatedAt = time.Now()
 	s.apikeys[k.ID.String()] = k
+	return nil
+}
+
+func (s *Store) TouchAPIKey(_ context.Context, keyID id.APIKeyID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k, ok := s.apikeys[keyID.String()]
+	if !ok {
+		return store.ErrNotFound
+	}
+	k.LastUsedAt = &at
 	return nil
 }
 

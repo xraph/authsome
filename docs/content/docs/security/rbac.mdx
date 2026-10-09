@@ -1,287 +1,140 @@
 ---
-title: Role-Based Access Control
-description: Hierarchical role and permission management with global and organization-scoped assignments, Warden integration, and RBAC middleware.
+title: Roles and Permissions
+description: Roles carry permissions, users hold roles, and every check goes through Warden. What the built-in roles are, how to define your own, and how routes and code ask the question.
 ---
 
-Authsome includes a production-grade RBAC system. Roles are organized in a parent-child hierarchy so you can compose complex permission sets from simpler building blocks. Permissions are expressed as `action:resource` pairs (e.g. `read:document`, `delete:invoice`). Users can be assigned roles globally or within a specific organization.
+Authsome answers "may this caller do this to that" through [Warden](https://github.com/xraph/warden), the Forge authorization engine. Roles and their permissions are stored in Warden, a session carries the caller's role slugs, and both the HTTP routes and your own code ask the same function. Warden is required: the engine does not start without one.
 
-## Architecture
-
-```
-RBAC
-  ├── Role               (named collection of permissions, optional parent)
-  ├── Permission         (action + resource pair)
-  ├── GlobalRoleAssignment   (user → role, no org scope)
-  └── OrgRoleAssignment      (user → role, scoped to an org)
-
-Permission check: user.globalRoles ∪ user.orgRoles(currentOrg) → match action:resource
-```
-
-## The Role model
+## The model
 
 ```go
 import "github.com/xraph/authsome/rbac"
 
 type Role struct {
-    ID          id.ID         `json:"id"`            // arol_ prefix
-    AppID       string        `json:"app_id"`
-    Name        string        `json:"name"`          // machine-readable, e.g. "admin"
-    DisplayName string        `json:"display_name"`  // human-readable
-    Description string        `json:"description"`
-    ParentID    *id.ID        `json:"parent_id,omitempty"`
-    IsSystem    bool          `json:"is_system"`     // protected system roles
-    Permissions []Permission  `json:"permissions,omitempty"`
-    CreatedAt   time.Time     `json:"created_at"`
-    UpdatedAt   time.Time     `json:"updated_at"`
+    ID          string
+    AppID       string
+    EnvID       string
+    ParentID    string // empty for a root role
+    Name        string
+    Slug        string
+    Description string
 }
-```
 
-| Field | Description |
-|-------|-------------|
-| `Name` | Machine-readable identifier used in code, e.g. `"admin"`, `"editor"`, `"viewer"` |
-| `DisplayName` | Human-readable label shown in UIs |
-| `ParentID` | When set, this role inherits all permissions from the parent role |
-| `IsSystem` | System roles (like `superadmin`) are protected and cannot be deleted |
-| `Permissions` | The permissions directly assigned to this role (not including inherited ones) |
-
-### Hierarchical inheritance
-
-When a role has a `ParentID`, it inherits all permissions from the parent. Inheritance is deep and recursive -- if the parent has its own parent, those permissions are inherited too.
-
-```
-superadmin
-  └── admin (inherits all superadmin permissions)
-        └── editor (inherits all admin permissions)
-              └── viewer (inherits all editor permissions)
-```
-
-When checking `Can(ctx, userID, "delete", "post")`, Authsome walks the full role hierarchy and returns `true` if any role in the chain grants `delete:post`.
-
-## The Permission model
-
-```go
 type Permission struct {
-    ID          id.ID     `json:"id"`        // aprm_ prefix
-    RoleID      id.ID     `json:"role_id"`
-    Action      string    `json:"action"`    // e.g. "read", "write", "delete", "manage"
-    Resource    string    `json:"resource"`  // e.g. "document", "invoice", "user"
-    CreatedAt   time.Time `json:"created_at"`
+    ID       string
+    RoleID   string
+    Action   string // read, update, delete, manage, ...
+    Resource string // user, session, app, organization, role, ...
+}
+
+type UserRole struct {
+    UserID string
+    RoleID string
+    OrgID  string // empty means the whole app
 }
 ```
 
-A permission is the combination of `Action` and `Resource`. Authsome treats them as strings -- you define your own action and resource vocabulary. Common conventions:
+A role belongs to one app. A permission is one action on one resource, granted to one role. A user holds roles either across the app or within one organization. A role may have a parent; a child inherits the parent's permissions.
 
-| Action | Meaning |
-|--------|---------|
-| `read` | View/list the resource |
-| `create` | Create new instances |
-| `update` | Modify existing instances |
-| `delete` | Remove instances |
-| `manage` | Full control (superset of read/create/update/delete) |
-| `export` | Export or download resource data |
-| `publish` | Publish or make resource public |
+Actions and resources are not free text. Warden holds a schema per resource that names its relations and which of them satisfy each action. The core schemas are:
 
-## Creating roles
+| Resource | Actions |
+|----------|---------|
+| `user` | `read`, `update`, `delete`, `manage`, `ban`, `impersonate` |
+| `session` | `read`, `create`, `delete`, `revoke` |
+| `device` | `read`, `create`, `update`, `delete`, `trust` |
+| `app` | `read`, `update`, `delete`, `manage`, `manage_roles`, `manage_envs` |
+| `organization` | `read`, `update`, `delete`, `manage`, `manage_members` |
+| `role` | `read`, `create`, `update`, `delete`, `assign`, `unassign` |
+| `permission` | `read`, `create`, `delete` |
+| `environment` | `read`, `create`, `update`, `delete` |
 
-```go
-import "github.com/xraph/authsome/rbac"
+One consequence worth knowing: `read` on `user` is satisfied by the `app` relation, which every user of an app holds. It gates nothing. The entitlement every admin surface checks is `manage` on `app`.
 
-// Create a viewer role.
-viewerRole, err := auth.RBAC().CreateRole(ctx, &rbac.CreateRoleInput{
-    Name:        "viewer",
-    DisplayName: "Viewer",
-    Description: "Read-only access to documents and reports",
-    Permissions: []rbac.PermissionInput{
-        {Action: "read", Resource: "document"},
-        {Action: "read", Resource: "report"},
-    },
-})
+## Built-in roles
 
-// Create an editor role that inherits from viewer.
-editorRole, err := auth.RBAC().CreateRole(ctx, &rbac.CreateRoleInput{
-    Name:        "editor",
-    DisplayName: "Editor",
-    Description: "Can create and update documents",
-    ParentID:    &viewerRole.ID,
-    Permissions: []rbac.PermissionInput{
-        {Action: "create", Resource: "document"},
-        {Action: "update", Resource: "document"},
-    },
-})
+Bootstrap creates three roles per app, with the slugs in the `rbac` package:
 
-// Create an admin role that inherits from editor.
-adminRole, err := auth.RBAC().CreateRole(ctx, &rbac.CreateRoleInput{
-    Name:        "admin",
-    DisplayName: "Administrator",
-    Description: "Full access to all resources",
-    ParentID:    &editorRole.ID,
-    Permissions: []rbac.PermissionInput{
-        {Action: "delete", Resource: "document"},
-        {Action: "manage", Resource: "user"},
-        {Action: "manage", Resource: "billing"},
-    },
-})
-```
+| Slug | Constant | Who |
+|------|----------|-----|
+| `owner` | `rbac.AppOwnerSlug` | The app's owner. Holds `manage` on `app` and everything under it. |
+| `admin` | `rbac.AppAdminSlug` | Administrators. Holds `manage` on `app` but not `delete`. |
+| `user` | `rbac.AppUserSlug` | Every signed-up user. Assigned on sign-up by `EnsureDefaultRole`. |
 
-## Adding and removing permissions
+The platform app has its own three (`platform-user`, `platform-admin`, `platform-owner`, with `rbac.IsPlatformRole` to tell them apart). The first user to sign up on the platform app becomes its owner once their email is verified.
+
+## Defining roles
 
 ```go
-// Add a permission to an existing role.
-err := auth.RBAC().AddPermission(ctx, roleID, &rbac.PermissionInput{
-    Action:   "export",
-    Resource: "report",
-})
-
-// Remove a permission from a role.
-err := auth.RBAC().RemovePermission(ctx, roleID, permissionID)
+role := &rbac.Role{AppID: appID.String(), Name: "Support", Slug: "support"}
+if err := engine.CreateRole(ctx, role); err != nil {
+    return err
+}
+if err := engine.AddPermission(ctx, appID, &rbac.Permission{RoleID: role.ID, Action: "read", Resource: "session"}); err != nil {
+    return err
+}
+if err := engine.AddPermission(ctx, appID, &rbac.Permission{RoleID: role.ID, Action: "revoke", Resource: "session"}); err != nil {
+    return err
+}
 ```
 
-## Assigning roles to users
+`GetRole`, `GetRoleBySlug`, `UpdateRole`, `DeleteRole`, `ListRoles`, `ListRolePermissions`, `RemovePermission` and `GetRoleChildren` complete the set. A role slug is unique within its app.
 
-### Global assignment
+Every call that takes a role or permission ID also takes the app that owns it. Pass another app's ID and the role reads as not found: nothing is returned, changed or deleted, so holding an ID from another tenant gets you nothing.
+
+## Assigning roles
 
 ```go
-// Assign a role globally (applies across all orgs).
-err := auth.RBAC().AssignRole(ctx, &rbac.AssignRoleInput{
-    UserID: userID,
-    RoleID: editorRole.ID,
-})
-
-// Revoke a global role assignment.
-err := auth.RBAC().RevokeRole(ctx, userID, roleID)
+err := engine.AssignUserRole(ctx, appID, &rbac.UserRole{UserID: userID.String(), RoleID: role.ID})
 ```
 
-### Org-scoped assignment
+Set `OrgID` to confine the assignment to one organization. `UnassignUserRole`, `ListUserRoles`, `ListUserRolesInApp`, `ListUsersWithRole` and `ListUserRoleSlugs` read and undo it. A session minted after the change carries the new slugs; a session already open carries the slugs it was minted with until it is refreshed.
 
-```go
-// Assign a role within a specific organization.
-err := auth.RBAC().AssignOrgRole(ctx, &rbac.AssignOrgRoleInput{
-    UserID: userID,
-    OrgID:  orgID,
-    RoleID: billingManagerRole.ID,
-})
+## Ceilings
 
-// Revoke the org-scoped assignment.
-err := auth.RBAC().RevokeOrgRole(ctx, &rbac.RevokeOrgRoleInput{
-    UserID: userID,
-    OrgID:  orgID,
-    RoleID: billingManagerRole.ID,
-})
-```
-
-See [Org-Scoped Roles](/docs/organizations/org-scoped-roles) for the full org-scoped RBAC documentation.
+A caller cannot hand out more than they hold. Assigning a role, granting an organization role, or minting a session for a service account checks that the target is no wider than the caller's own; a request that would escalate is refused. The OAuth2 provider applies the same rule to scopes: a client cannot be granted scopes the consenting user does not hold.
 
 ## Checking permissions
 
-### Programmatic check
+In code:
 
 ```go
-// Can the user perform "delete" on "document"?
-allowed, err := auth.RBAC().Can(ctx, userID, "delete", "document")
-if err != nil {
-    return err
-}
-if !allowed {
-    return ErrForbidden
-}
+allowed, err := engine.HasPermission(ctx, userID, "manage", "app")
 ```
 
-The `Can` method automatically includes the org context if `authsome.WithOrgID(ctx, orgID)` has been called.
-
-### Checking multiple permissions
+`HasPermission` is for a user. `Can` takes any principal (a user, a service account, an agent) and the actor chain behind it, and requires that every link in the chain is allowed, so a delegated caller can never do more than either party could alone:
 
 ```go
-// Check multiple permissions at once -- returns true only if ALL pass.
-allowed, err := auth.RBAC().CanAll(ctx, userID, []rbac.PermissionPair{
-    {Action: "read",   Resource: "document"},
-    {Action: "update", Resource: "document"},
-})
-
-// Returns true if ANY of the permissions pass.
-allowed, err := auth.RBAC().CanAny(ctx, userID, []rbac.PermissionPair{
-    {Action: "manage", Resource: "user"},
-    {Action: "update", Resource: "user"},
-})
+allowed, err := engine.Can(ctx, principal.UserRef(userID), nil, "revoke", "session")
 ```
 
-### Listing a user's effective permissions
+On a route:
 
 ```go
-// Get all effective permissions for a user (global + org-scoped, deduplicated).
-ctx = authsome.WithOrgID(ctx, orgID)
-permissions, err := auth.RBAC().EffectivePermissions(ctx, userID)
-
-for _, p := range permissions {
-    fmt.Printf("  %s:%s\n", p.Action, p.Resource)
-}
+g := router.Group("/v1", forge.WithGroupMiddleware(
+    middleware.RequireAuth(),
+    middleware.RequirePermission(engine, "manage", "app"),
+))
 ```
 
-## RBAC middleware
+`RequirePermission` answers `403` when the check fails and `401` when nobody is signed in. It is chain-aware: when the session carries an actor chain, each actor is checked too.
 
-Use the built-in middleware to enforce permissions at the HTTP layer:
+## Routes
 
-```go
-import "github.com/xraph/authsome/middleware"
+Each route requires the matching action on `role` or `permission`, checked with `RequirePermission`:
 
-// Require the "read:document" permission for GET /documents/*.
-router.With(
-    middleware.RequirePermission(auth, "read", "document"),
-).Get("/documents/{id}", getDocumentHandler)
+| Method | Path | Requires | What it does |
+|--------|------|----------|--------------|
+| `POST` | `/v1/roles` | `create` on `role` | Create a role |
+| `GET` | `/v1/roles` | `read` on `role` | List the app's roles |
+| `GET` | `/v1/roles/:roleId` | `read` on `role` | One role |
+| `PATCH` | `/v1/roles/:roleId` | `update` on `role` | Rename or re-parent it |
+| `DELETE` | `/v1/roles/:roleId` | `delete` on `role` | Delete it |
+| `POST` | `/v1/roles/:roleId/permissions` | `create` on `permission` | Grant an action on a resource |
+| `GET` | `/v1/roles/:roleId/permissions` | `read` on `permission` | List the role's permissions |
+| `DELETE` | `/v1/roles/:roleId/permissions/:permissionId` | `delete` on `permission` | Revoke one |
+| `POST` | `/v1/roles/:roleId/assign` | `assign` on `role` | Give the role to a user |
+| `POST` | `/v1/roles/:roleId/unassign` | `unassign` on `role` | Take it away |
+| `GET` | `/v1/users/:userId/roles` | `read` on `role` | A user's roles |
 
-// Require the "manage:user" permission.
-router.With(
-    middleware.RequirePermission(auth, "manage", "user"),
-).Post("/admin/users", createUserHandler)
-```
-
-The `RequirePermission` middleware:
-1. Extracts the user ID from the authenticated session (requires the session middleware to run first)
-2. Extracts the org context if the `OrgContext` middleware has set it
-3. Calls `auth.RBAC().Can(ctx, userID, action, resource)`
-4. Returns `403 Forbidden` with a JSON error body if the check fails
-
-### Role-based middleware
-
-```go
-// Require that the user has a specific role (by name).
-router.With(
-    middleware.RequireRole(auth, "admin"),
-).Post("/admin/settings", updateSettingsHandler)
-```
-
-## Warden integration
-
-Authsome integrates with [Warden](https://github.com/xraph/warden), the Forge-ecosystem's dedicated RBAC service, for larger deployments where role and permission management needs to be centralized across multiple services.
-
-```go
-import (
-    "github.com/xraph/authsome"
-    "github.com/xraph/authsome/warden"
-)
-
-auth := authsome.New(
-    authsome.WithWardenRBAC(warden.NewClient(
-        warden.WithEndpoint("https://warden.internal:8080"),
-        warden.WithAPIKey(os.Getenv("WARDEN_API_KEY")),
-    )),
-)
-```
-
-When Warden is configured, all `auth.RBAC()` calls are proxied to the Warden service instead of the local database. This lets you manage roles and permissions in Warden's dashboard and have Authsome enforce them.
-
-## HTTP API endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/roles` | Create a new role |
-| `GET` | `/roles` | List all roles |
-| `GET` | `/roles/:role_id` | Get a role by ID |
-| `PATCH` | `/roles/:role_id` | Update a role |
-| `DELETE` | `/roles/:role_id` | Delete a role |
-| `POST` | `/roles/:role_id/permissions` | Add a permission to a role |
-| `DELETE` | `/roles/:role_id/permissions/:perm_id` | Remove a permission from a role |
-| `POST` | `/users/:user_id/roles` | Assign a global role to a user |
-| `DELETE` | `/users/:user_id/roles/:role_id` | Revoke a global role from a user |
-| `GET` | `/users/:user_id/roles` | List a user's global role assignments |
-| `GET` | `/users/:user_id/permissions` | Get a user's effective permissions |
-| `POST` | `/rbac/check` | Check if the authenticated user has a permission |
+Every create, update, delete, assign and unassign is on the audit trail with the role, the user and who did it.

@@ -123,8 +123,14 @@ type SwitchOrgResponse struct {
 // Session requests
 // ---------------------------------------------------------------------------
 
-// ListSessionsRequest is an empty request for GET /sessions (user from context).
-type ListSessionsRequest struct{}
+// ListSessionsRequest binds the paging query params for GET /sessions (user from context).
+type ListSessionsRequest struct {
+	Limit  int    `query:"limit" description:"Page size (default 50, max 200)" optional:"true"`
+	Cursor string `query:"cursor" description:"Cursor from the previous page's next_cursor" optional:"true"`
+}
+
+// RevokeOtherSessionsRequest binds DELETE /sessions, which takes no input.
+type RevokeOtherSessionsRequest struct{}
 
 // RevokeSessionRequest binds the path for DELETE /sessions/:sessionId.
 type RevokeSessionRequest struct {
@@ -180,6 +186,8 @@ type StatusResponse struct {
 // SessionListResponse wraps a list of sessions.
 type SessionListResponse struct {
 	Sessions any `json:"sessions" description:"List of sessions"`
+	// NextCursor is set when more remain; pass it as cursor to continue.
+	NextCursor string `json:"next_cursor,omitempty" description:"Cursor for the next page, absent on the last"`
 }
 
 // DeviceListResponse wraps a list of devices.
@@ -196,6 +204,26 @@ type CreateWebhookRequest struct {
 	AppID  string   `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
 	URL    string   `json:"url" description:"Webhook endpoint URL"`
 	Events []string `json:"events" description:"Event types to subscribe to"`
+}
+
+// CreateWebhookResponse is the answer to POST /webhooks: the webhook and
+// its signing secret, shown this once and never again. Store it with the
+// receiver; a lost secret is replaced through the rotate-secret route.
+type CreateWebhookResponse struct {
+	Webhook any    `json:"webhook" description:"The created webhook"`
+	Secret  string `json:"secret" description:"Signing secret, shown only in this response"`
+}
+
+// RotateWebhookSecretRequest binds the path for POST /webhooks/:webhookId/rotate-secret.
+type RotateWebhookSecretRequest struct {
+	WebhookID string `path:"webhookId" description:"Webhook identifier"`
+}
+
+// RotateWebhookSecretResponse carries the new signing secret, shown once.
+// Deliveries are signed with it from this moment; the old secret stops
+// verifying at once.
+type RotateWebhookSecretResponse struct {
+	Secret string `json:"secret" description:"New signing secret, shown only in this response"`
 }
 
 // ListWebhooksRequest binds query params for GET /webhooks.
@@ -260,7 +288,7 @@ type CreateRoleRequest struct {
 	Name        string `json:"name" description:"Role name"`
 	Slug        string `json:"slug" description:"URL-safe role slug"`
 	Description string `json:"description,omitempty" description:"Role description"`
-	ParentID    string `json:"parent_id,omitempty" description:"Parent role ID for inheritance"`
+	ParentID    string `json:"parent_id,omitempty" description:"Must be omitted; creating a role with a parent is refused with 400"`
 }
 
 // ListRolesRequest binds query params for GET /roles.
@@ -278,7 +306,7 @@ type UpdateRoleRequest struct {
 	RoleID      string  `path:"roleId" description:"Role identifier"`
 	Name        *string `json:"name,omitempty" description:"Role name"`
 	Description *string `json:"description,omitempty" description:"Role description"`
-	ParentID    *string `json:"parent_id,omitempty" description:"Parent role ID for inheritance (empty string to clear)"`
+	ParentID    *string `json:"parent_id,omitempty" description:"Must be omitted or equal the role's current parent; re-parenting is refused with 400"`
 }
 
 // DeleteRoleRequest binds the path for DELETE /roles/:roleId.
@@ -375,6 +403,11 @@ type AdminBanUserRequest struct {
 
 // AdminUnbanUserRequest binds the path for POST /admin/users/:userId/unban.
 type AdminUnbanUserRequest struct {
+	UserID string `path:"userId" description:"User identifier"`
+}
+
+// AdminUnlockUserRequest binds the path for POST /admin/users/:userId/unlock.
+type AdminUnlockUserRequest struct {
 	UserID string `path:"userId" description:"User identifier"`
 }
 
@@ -677,7 +710,8 @@ type IntrospectResponse struct {
 	SessionID string          `json:"session_id,omitempty" description:"Session ID"`
 	ExpiresAt string          `json:"expires_at,omitempty" description:"Token expiration time (RFC 3339)"`
 	Audience  []string        `json:"aud,omitempty" description:"Resource identifiers this token is valid for (RFC 8707)"`
-	User      *IntrospectUser `json:"user,omitempty" description:"Resolved user details"`
+	Scope     string          `json:"scope,omitempty" description:"Space-separated scopes the token was issued with"`
+	User      *IntrospectUser `json:"user,omitempty" description:"Resolved user details (callers with manage on app only)"`
 
 	// Confirmation carries the RFC 7800 cnf claim for a DPoP-bound token
 	// (RFC 9449 section 7.3). A resource server that validates tokens by

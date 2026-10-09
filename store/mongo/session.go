@@ -20,6 +20,8 @@ func (s *Store) CreateSession(ctx context.Context, sess *session.Session) error 
 	if err != nil {
 		return fmt.Errorf("authsome/mongo: create session: %w", err)
 	}
+	sess.TokenHash = m.TokenHash
+	sess.RefreshTokenHash = m.RefreshTokenHash
 
 	return nil
 }
@@ -44,38 +46,30 @@ func (s *Store) GetSession(ctx context.Context, sessionID id.SessionID) (*sessio
 
 // GetSessionByToken returns a session by its access token.
 func (s *Store) GetSessionByToken(ctx context.Context, token string) (*session.Session, error) {
-	var m sessionModel
-
-	err := s.mdb.NewFind(&m).
-		Filter(bson.M{"token": token}).
-		Scan(ctx)
+	m, err := s.findSessionByCredential(ctx, "token_hash", "token", token)
 	if err != nil {
-		if isNoDocuments(err) {
-			return nil, store.ErrNotFound
-		}
-
-		return nil, fmt.Errorf("authsome/mongo: get session by token: %w", err)
+		return nil, err
 	}
-
-	return fromSessionModel(&m)
+	sess, err := fromSessionModel(m)
+	if err != nil {
+		return nil, err
+	}
+	sess.Token = token
+	return sess, nil
 }
 
 // GetSessionByRefreshToken returns a session by its refresh token.
 func (s *Store) GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*session.Session, error) {
-	var m sessionModel
-
-	err := s.mdb.NewFind(&m).
-		Filter(bson.M{"refresh_token": refreshToken}).
-		Scan(ctx)
+	m, err := s.findSessionByCredential(ctx, "refresh_token_hash", "refresh_token", refreshToken)
 	if err != nil {
-		if isNoDocuments(err) {
-			return nil, store.ErrNotFound
-		}
-
-		return nil, fmt.Errorf("authsome/mongo: get session by refresh token: %w", err)
+		return nil, err
 	}
-
-	return fromSessionModel(&m)
+	sess, err := fromSessionModel(m)
+	if err != nil {
+		return nil, err
+	}
+	sess.RefreshToken = refreshToken
+	return sess, nil
 }
 
 // UpdateSession modifies an existing session.
@@ -99,19 +93,35 @@ func (s *Store) UpdateSession(ctx context.Context, sess *session.Session) error 
 	return nil
 }
 
-// RotateSession atomically persists sess only if the stored access token still
-// equals expectedToken. Returns false when no document matched (a concurrent
+// RotateSession atomically persists sess only if the stored access token hash
+// still equals expectedTokenHash. Returns false when no document matched (a concurrent
 // refresh already rotated the session), which prevents two concurrent refreshes
 // from both winning.
-func (s *Store) RotateSession(ctx context.Context, sess *session.Session, expectedToken string) (bool, error) {
+func (s *Store) RotateSession(ctx context.Context, sess *session.Session, expectedTokenHash string) (bool, error) {
+	if expectedTokenHash == "" {
+		return false, nil
+	}
+	// The caller's sess carries the rotated plaintext; drop the stale hashes
+	// so toSessionModel derives fresh ones from it.
+	sess.TokenHash = ""
+	// The refresh hash is dropped only when a new refresh token was minted;
+	// a rotation that keeps the refresh token (auto-refresh with the token
+	// hidden from the client) carries no plaintext and must keep the hash.
+	if sess.RefreshToken != "" {
+		sess.RefreshTokenHash = ""
+	}
 	m := toSessionModel(sess)
 	m.UpdatedAt = now()
 
 	res, err := s.mdb.NewUpdate(m).
-		Filter(bson.M{"_id": m.ID, "token": expectedToken}).
+		Filter(bson.M{"_id": m.ID, "token_hash": expectedTokenHash}).
 		Exec(ctx)
 	if err != nil {
 		return false, fmt.Errorf("authsome/mongo: rotate session: %w", err)
+	}
+	if res.MatchedCount() > 0 {
+		sess.TokenHash = m.TokenHash
+		sess.RefreshTokenHash = m.RefreshTokenHash
 	}
 
 	return res.MatchedCount() > 0, nil

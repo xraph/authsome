@@ -36,10 +36,9 @@ func TestRFC8693_SuccessWritesSecurityEvent(t *testing.T) {
 	ev := f.events.events[0]
 	assert.Equal(t, "oauth2.token_exchange", ev.Action)
 	assert.Equal(t, "success", ev.Outcome)
-	// AppID must be populated. The hook-bus bridge never sets it and
-	// securityevent.Query filters on it, which is why this writes to the
-	// store directly rather than emitting a hook.
-	assert.Equal(t, f.appID, ev.AppID)
+	// The tenant must be populated or the event cannot be found by the app
+	// it concerns.
+	assert.Equal(t, f.appID.String(), ev.Tenant)
 	assert.Equal(t, "a", ev.Metadata["granted_scopes"])
 	assert.Equal(t, xchgClientID, ev.Metadata["client_id"])
 	assert.NotEmpty(t, ev.Metadata["issued_session_id"])
@@ -148,7 +147,7 @@ func TestRFC8693_DenialReasons(t *testing.T) {
 			assert.Equal(t, "oauth2.token_exchange", ev.Action)
 			assert.Equal(t, "failure", ev.Outcome)
 			assert.Equal(t, tt.reason, ev.Metadata["denial_reason"])
-			assert.Equal(t, f.appID, ev.AppID, "AppID must be set or the event is unqueryable")
+			assert.Equal(t, f.appID.String(), ev.Tenant, "the tenant must be set or the event is unqueryable")
 			assert.NotContains(t, ev.Metadata, "issued_session_id")
 		})
 	}

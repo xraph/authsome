@@ -50,13 +50,13 @@ func newBoundProvider(t *testing.T, jkt string, bind ...authmw.SessionBindingCon
 	u := &user.User{ID: sess.UserID, AppID: sess.AppID, Email: "dpop-provider@test.com"}
 
 	p := authprovider.NewSessionProvider(
-		func(token string) (*session.Session, error) {
+		func(_ context.Context, token string) (*session.Session, error) {
 			if token == sess.Token {
 				return sess, nil
 			}
 			return nil, errors.New("invalid token")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ context.Context, userIDStr string) (*user.User, error) {
 			if userIDStr == sess.UserID.String() {
 				return u, nil
 			}

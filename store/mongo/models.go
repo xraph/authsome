@@ -204,8 +204,15 @@ type sessionModel struct {
 	ServiceAccountID string `grove:"service_account_id"        bson:"service_account_id,omitempty"`
 	OrgID            string `grove:"org_id"                    bson:"org_id,omitempty"`
 	FamilyID         string `grove:"family_id"                 bson:"family_id,omitempty"`
+	// Token and RefreshToken are empty on every document written since
+	// hash_session_tokens; they hold plaintext only on documents older than
+	// that migration, which the first lookup rewrites. TokenHash and
+	// RefreshTokenHash are absent on those legacy documents, which the
+	// partial unique indexes skip.
 	Token            string `grove:"token"                     bson:"token"`
 	RefreshToken     string `grove:"refresh_token"             bson:"refresh_token"`
+	TokenHash        string `grove:"token_hash"                bson:"token_hash,omitempty"`
+	RefreshTokenHash string `grove:"refresh_token_hash"        bson:"refresh_token_hash,omitempty"`
 	IPAddress        string `grove:"ip_address"                bson:"ip_address"`
 	UserAgent        string `grove:"user_agent"                bson:"user_agent"`
 	DeviceID         string `grove:"device_id"                 bson:"device_id,omitempty"`
@@ -239,6 +246,7 @@ type sessionModel struct {
 	CreatedAt             time.Time `grove:"created_at"                bson:"created_at"`
 	UpdatedAt             time.Time `grove:"updated_at"                bson:"updated_at"`
 	DPoPJKT               string    `grove:"dpop_jkt"                  bson:"dpop_jkt,omitempty"`
+	ClientID              string    `grove:"client_id"                 bson:"client_id,omitempty"`
 }
 
 func toSessionModel(s *session.Session) *sessionModel {
@@ -248,8 +256,8 @@ func toSessionModel(s *session.Session) *sessionModel {
 		EnvID:                 s.EnvID.String(),
 		UserID:                s.UserID.String(),
 		PrincipalKind:         string(s.PrincipalKind),
-		Token:                 s.Token,
-		RefreshToken:          s.RefreshToken,
+		TokenHash:             hashOrDerive(s.TokenHash, s.Token),
+		RefreshTokenHash:      hashOrDerive(s.RefreshTokenHash, s.RefreshToken),
 		IPAddress:             s.IPAddress,
 		UserAgent:             s.UserAgent,
 		LastActivityAt:        s.LastActivityAt,
@@ -258,6 +266,7 @@ func toSessionModel(s *session.Session) *sessionModel {
 		CreatedAt:             s.CreatedAt,
 		UpdatedAt:             s.UpdatedAt,
 		DPoPJKT:               s.DPoPJKT,
+		ClientID:              s.ClientID,
 	}
 	if !s.ServiceAccountID.IsNil() {
 		m.ServiceAccountID = s.ServiceAccountID.String()
@@ -327,6 +336,8 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 		PrincipalKind:         principal.Kind(m.PrincipalKind),
 		Token:                 m.Token,
 		RefreshToken:          m.RefreshToken,
+		TokenHash:             hashOrDerive(m.TokenHash, m.Token),
+		RefreshTokenHash:      hashOrDerive(m.RefreshTokenHash, m.RefreshToken),
 		IPAddress:             m.IPAddress,
 		UserAgent:             m.UserAgent,
 		LastActivityAt:        m.LastActivityAt,
@@ -335,6 +346,7 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 		CreatedAt:             m.CreatedAt,
 		UpdatedAt:             m.UpdatedAt,
 		DPoPJKT:               m.DPoPJKT,
+		ClientID:              m.ClientID,
 	}
 	// Guarded like every other optional id below rather than parsed up front:
 	// a service-account session stores no user_id, and an unguarded parse
@@ -462,11 +474,15 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 type verificationModel struct {
 	grove.BaseModel `grove:"table:authsome_verifications"`
 
-	ID        string    `grove:"id,pk"       bson:"_id"`
-	AppID     string    `grove:"app_id"      bson:"app_id"`
-	EnvID     string    `grove:"env_id"      bson:"env_id"`
-	UserID    string    `grove:"user_id"     bson:"user_id"`
-	Token     string    `grove:"token"       bson:"token"`
+	ID     string `grove:"id,pk"       bson:"_id"`
+	AppID  string `grove:"app_id"      bson:"app_id"`
+	EnvID  string `grove:"env_id"      bson:"env_id"`
+	UserID string `grove:"user_id"     bson:"user_id"`
+	Token  string `grove:"token"       bson:"token"`
+	// TokenHash is store.HashToken of the code; Token is empty on documents
+	// written since hash_credential_tokens and an absent hash marks a legacy
+	// document.
+	TokenHash string    `grove:"token_hash"  bson:"token_hash,omitempty"`
 	Type      string    `grove:"type"        bson:"type"`
 	Attempts  int       `grove:"attempts"    bson:"attempts"`
 	ExpiresAt time.Time `grove:"expires_at"  bson:"expires_at"`
@@ -480,7 +496,7 @@ func toVerificationModel(v *account.Verification) *verificationModel {
 		AppID:     v.AppID.String(),
 		EnvID:     v.EnvID.String(),
 		UserID:    v.UserID.String(),
-		Token:     v.Token,
+		TokenHash: hashOrDerive(v.TokenHash, v.Token),
 		Type:      string(v.Type),
 		Attempts:  v.Attempts,
 		ExpiresAt: v.ExpiresAt,
@@ -509,6 +525,7 @@ func fromVerificationModel(m *verificationModel) (*account.Verification, error) 
 		EnvID:     envID,
 		UserID:    userID,
 		Token:     m.Token,
+		TokenHash: hashOrDerive(m.TokenHash, m.Token),
 		Type:      account.VerificationType(m.Type),
 		Attempts:  m.Attempts,
 		ExpiresAt: m.ExpiresAt,
@@ -529,6 +546,7 @@ type passwordResetModel struct {
 	EnvID     string    `grove:"env_id"      bson:"env_id"`
 	UserID    string    `grove:"user_id"     bson:"user_id"`
 	Token     string    `grove:"token"       bson:"token"`
+	TokenHash string    `grove:"token_hash"  bson:"token_hash,omitempty"`
 	ExpiresAt time.Time `grove:"expires_at"  bson:"expires_at"`
 	Consumed  bool      `grove:"consumed"    bson:"consumed"`
 	CreatedAt time.Time `grove:"created_at"  bson:"created_at"`
@@ -540,7 +558,7 @@ func toPasswordResetModel(pr *account.PasswordReset) *passwordResetModel {
 		AppID:     pr.AppID.String(),
 		EnvID:     pr.EnvID.String(),
 		UserID:    pr.UserID.String(),
-		Token:     pr.Token,
+		TokenHash: hashOrDerive(pr.TokenHash, pr.Token),
 		ExpiresAt: pr.ExpiresAt,
 		Consumed:  pr.Consumed,
 		CreatedAt: pr.CreatedAt,
@@ -567,6 +585,7 @@ func fromPasswordResetModel(m *passwordResetModel) (*account.PasswordReset, erro
 		EnvID:     envID,
 		UserID:    userID,
 		Token:     m.Token,
+		TokenHash: hashOrDerive(m.TokenHash, m.Token),
 		ExpiresAt: m.ExpiresAt,
 		Consumed:  m.Consumed,
 		CreatedAt: m.CreatedAt,
@@ -703,6 +722,7 @@ type invitationModel struct {
 	InviterID string    `grove:"inviter_id"   bson:"inviter_id"`
 	Status    string    `grove:"status"       bson:"status"`
 	Token     string    `grove:"token"        bson:"token"`
+	TokenHash string    `grove:"token_hash"   bson:"token_hash,omitempty"`
 	ExpiresAt time.Time `grove:"expires_at"   bson:"expires_at"`
 	CreatedAt time.Time `grove:"created_at"   bson:"created_at"`
 }
@@ -715,7 +735,7 @@ func toInvitationModel(inv *organization.Invitation) *invitationModel {
 		Role:      string(inv.Role),
 		InviterID: inv.InviterID.String(),
 		Status:    string(inv.Status),
-		Token:     inv.Token,
+		TokenHash: hashOrDerive(inv.TokenHash, inv.Token),
 		ExpiresAt: inv.ExpiresAt,
 		CreatedAt: inv.CreatedAt,
 	}
@@ -742,6 +762,7 @@ func fromInvitationModel(m *invitationModel) (*organization.Invitation, error) {
 		InviterID: inviterID,
 		Status:    organization.InvitationStatus(m.Status),
 		Token:     m.Token,
+		TokenHash: hashOrDerive(m.TokenHash, m.Token),
 		ExpiresAt: m.ExpiresAt,
 		CreatedAt: m.CreatedAt,
 	}, nil
@@ -873,28 +894,33 @@ func fromDeviceModel(m *deviceModel) (*device.Device, error) {
 type webhookModel struct {
 	grove.BaseModel `grove:"table:authsome_webhooks"`
 
-	ID        string    `grove:"id,pk"       bson:"_id"`
-	AppID     string    `grove:"app_id"      bson:"app_id"`
-	EnvID     string    `grove:"env_id"      bson:"env_id"`
-	URL       string    `grove:"url"         bson:"url"`
-	Events    []string  `grove:"events"      bson:"events,omitempty"`
-	Secret    string    `grove:"secret"      bson:"secret"`
-	Active    bool      `grove:"active"      bson:"active"`
-	CreatedAt time.Time `grove:"created_at" bson:"created_at"`
-	UpdatedAt time.Time `grove:"updated_at" bson:"updated_at"`
+	ID     string   `grove:"id,pk"       bson:"_id"`
+	AppID  string   `grove:"app_id"      bson:"app_id"`
+	EnvID  string   `grove:"env_id"      bson:"env_id"`
+	URL    string   `grove:"url"         bson:"url"`
+	Events []string `grove:"events"      bson:"events,omitempty"`
+	// Secret is empty once the row has a relay endpoint; see webhook.Webhook.
+	Secret          string    `grove:"secret"            bson:"secret"`
+	SecretHash      string    `grove:"secret_hash"       bson:"secret_hash"`
+	RelayEndpointID string    `grove:"relay_endpoint_id" bson:"relay_endpoint_id"`
+	Active          bool      `grove:"active"            bson:"active"`
+	CreatedAt       time.Time `grove:"created_at" bson:"created_at"`
+	UpdatedAt       time.Time `grove:"updated_at" bson:"updated_at"`
 }
 
 func toWebhookModel(w *webhook.Webhook) *webhookModel {
 	return &webhookModel{
-		ID:        w.ID.String(),
-		AppID:     w.AppID.String(),
-		EnvID:     w.EnvID.String(),
-		URL:       w.URL,
-		Events:    w.Events,
-		Secret:    w.Secret,
-		Active:    w.Active,
-		CreatedAt: w.CreatedAt,
-		UpdatedAt: w.UpdatedAt,
+		ID:              w.ID.String(),
+		AppID:           w.AppID.String(),
+		EnvID:           w.EnvID.String(),
+		URL:             w.URL,
+		Events:          w.Events,
+		Secret:          webhook.StoredSecret(w),
+		SecretHash:      w.SecretHash,
+		RelayEndpointID: w.RelayEndpointID,
+		Active:          w.Active,
+		CreatedAt:       w.CreatedAt,
+		UpdatedAt:       w.UpdatedAt,
 	}
 }
 
@@ -909,15 +935,17 @@ func fromWebhookModel(m *webhookModel) (*webhook.Webhook, error) {
 	}
 	envID, _ := id.ParseEnvironmentID(m.EnvID) //nolint:errcheck // best-effort parse
 	return &webhook.Webhook{
-		ID:        whID,
-		AppID:     appID,
-		EnvID:     envID,
-		URL:       m.URL,
-		Events:    m.Events,
-		Secret:    m.Secret,
-		Active:    m.Active,
-		CreatedAt: m.CreatedAt,
-		UpdatedAt: m.UpdatedAt,
+		ID:              whID,
+		AppID:           appID,
+		EnvID:           envID,
+		URL:             m.URL,
+		Events:          m.Events,
+		Secret:          m.Secret,
+		SecretHash:      m.SecretHash,
+		RelayEndpointID: m.RelayEndpointID,
+		Active:          m.Active,
+		CreatedAt:       m.CreatedAt,
+		UpdatedAt:       m.UpdatedAt,
 	}, nil
 }
 

@@ -22,9 +22,22 @@ MockAuthNotifier buildIdleMock({
   when(() => mock.isLoading).thenReturn(state is AuthLoading);
   when(() => mock.isMfaRequired).thenReturn(state is AuthMfaRequired);
   when(() => mock.isConfigLoaded).thenReturn(clientConfig != null);
-  when(() => mock.signIn(any(), any())).thenAnswer((_) async {});
-  when(() => mock.signUp(any(), any(), name: any(named: 'name')))
+  when(() => mock.signIn(any(), any(),
+      captchaToken: any(named: 'captchaToken'))).thenAnswer((_) async {});
+  when(() => mock.signUp(
+        any(),
+        any(),
+        name: any(named: 'name'),
+        fields: any(named: 'fields'),
+        captchaToken: any(named: 'captchaToken'),
+      )).thenAnswer((_) async {});
+  when(() => mock.startSSOLogin(any(), returnUrl: any(named: 'returnUrl')))
+      .thenAnswer((_) async => 'https://idp.example.com/login');
+  when(() => mock.completeSSOLogin(any())).thenAnswer((_) async {});
+  when(() => mock.sendMagicLink(any())).thenAnswer((_) async {});
+  when(() => mock.joinWaitlist(any(), name: any(named: 'name')))
       .thenAnswer((_) async {});
+  when(() => mock.approveDeviceAuthorization(any())).thenAnswer((_) async {});
   when(() => mock.signOut()).thenAnswer((_) async {});
   when(() => mock.refreshNow()).thenAnswer((_) async {});
   when(() => mock.resendVerification(any())).thenAnswer((_) async {});

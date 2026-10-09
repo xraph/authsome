@@ -163,7 +163,10 @@ type OAuthConnection struct {
 // Store persists OAuth connections.
 type Store interface {
 	CreateOAuthConnection(ctx context.Context, c *OAuthConnection) error
-	GetOAuthConnection(ctx context.Context, provider, providerUserID string) (*OAuthConnection, error)
+	// GetOAuthConnection resolves a provider identity inside one app. The
+	// same provider user in two apps is two connections; without the app in
+	// the key, a login in one app would land on the other's account.
+	GetOAuthConnection(ctx context.Context, appID id.AppID, provider, providerUserID string) (*OAuthConnection, error)
 	GetOAuthConnectionsByUserID(ctx context.Context, userID id.UserID) ([]*OAuthConnection, error)
 	// UpdateOAuthConnection persists changes to an existing connection
 	// (refreshed access/refresh tokens, expiry, email).

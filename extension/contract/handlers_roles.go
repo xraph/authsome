@@ -89,11 +89,11 @@ func rolesDetailHandler(deps Deps) func(ctx context.Context, in GetRoleInput, _ 
 		if err != nil {
 			return RoleDetail{}, err
 		}
-		r, err := deps.Engine.GetRole(ctx, rid)
+		r, err := deps.Engine.GetRole(ctx, defaultAppID(deps.Engine), rid)
 		if err != nil {
 			return RoleDetail{}, mapEngineError(err)
 		}
-		perms, _ := deps.Engine.ListRolePermissions(ctx, rid) //nolint:errcheck // partial detail is acceptable
+		perms, _ := deps.Engine.ListRolePermissions(ctx, defaultAppID(deps.Engine), rid) //nolint:errcheck // partial detail is acceptable
 		d := RoleDetail{
 			RoleSummary: projectRoleSummary(r),
 			AppID:       r.AppID,
@@ -138,7 +138,7 @@ func rolesUpdateHandler(deps Deps) func(ctx context.Context, in UpdateRoleInput,
 		if err != nil {
 			return AckResponse{}, err
 		}
-		current, err := deps.Engine.GetRole(ctx, rid)
+		current, err := deps.Engine.GetRole(ctx, defaultAppID(deps.Engine), rid)
 		if err != nil {
 			return AckResponse{}, mapEngineError(err)
 		}
@@ -164,7 +164,7 @@ func rolesDeleteHandler(deps Deps) func(ctx context.Context, in DeleteRoleInput,
 		if err != nil {
 			return AckResponse{}, err
 		}
-		if err := deps.Engine.DeleteRole(ctx, rid); err != nil {
+		if err := deps.Engine.DeleteRole(ctx, defaultAppID(deps.Engine), rid); err != nil {
 			return AckResponse{}, mapEngineError(err)
 		}
 		return AckResponse{OK: true, ID: rid.String()}, nil
@@ -184,7 +184,7 @@ func rolesAssignHandler(deps Deps) func(ctx context.Context, in AssignRoleInput,
 		if err != nil {
 			return AckResponse{}, err
 		}
-		if err := deps.Engine.AssignUserRole(ctx, &rbac.UserRole{UserID: uid.String(), RoleID: rid.String()}); err != nil {
+		if err := deps.Engine.AssignUserRole(ctx, defaultAppID(deps.Engine), &rbac.UserRole{UserID: uid.String(), RoleID: rid.String()}); err != nil {
 			return AckResponse{}, mapEngineError(err)
 		}
 		return AckResponse{OK: true, ID: rid.String()}, nil
@@ -204,7 +204,7 @@ func rolesUnassignHandler(deps Deps) func(ctx context.Context, in UnassignRoleIn
 		if err != nil {
 			return AckResponse{}, err
 		}
-		if err := deps.Engine.UnassignUserRole(ctx, uid, rid); err != nil {
+		if err := deps.Engine.UnassignUserRole(ctx, defaultAppID(deps.Engine), uid, rid); err != nil {
 			return AckResponse{}, mapEngineError(err)
 		}
 		return AckResponse{OK: true, ID: rid.String()}, nil

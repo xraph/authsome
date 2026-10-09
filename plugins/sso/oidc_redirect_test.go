@@ -49,7 +49,7 @@ func TestStartLogin_CarriesConnID(t *testing.T) {
 	}
 	conn := &Connection{ID: id.NewSSOConnectionID(), Provider: "example.com"}
 
-	resp, err := p.startLogin(context.Background(), id.NewAppID(), stubProvider{}, conn.Provider, conn.ID.String(), "")
+	resp, err := p.startLogin(context.Background(), id.NewAppID(), stubProvider{}, conn.Provider, conn.ID.String(), "", nil, nil)
 	if err != nil {
 		t.Fatalf("startLogin: %v", err)
 	}

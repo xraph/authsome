@@ -3,7 +3,6 @@ package subscription
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 
 	"github.com/xraph/authsome/apitypes"
 	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 )
 
@@ -516,7 +516,7 @@ func (p *Plugin) handleListPlans(ctx forge.Context, req *ListPlansRequest) (*Lis
 
 	plans, err := p.service.ListPlans(ctx.Context(), appID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to list plans: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list plans: %w", err))
 	}
 
 	items := make([]PlanResponse, 0, len(plans))
@@ -596,7 +596,7 @@ func (p *Plugin) handleCreatePlan(ctx forge.Context, req *CreatePlanRequest) (*P
 	}
 
 	if err := p.service.CreatePlan(ctx.Context(), pl); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to create plan: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create plan: %w", err))
 	}
 
 	p.audit(ctx.Context(), "plan.create", "plan", pl.ID.String(), "", "", bridge.OutcomeSuccess)
@@ -613,7 +613,7 @@ func (p *Plugin) handleArchivePlan(ctx forge.Context, req *PlanIDRequest) (*apit
 	}
 
 	if err := p.service.ArchivePlan(ctx.Context(), planID); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to archive plan: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to archive plan: %w", err))
 	}
 
 	p.audit(ctx.Context(), "plan.archive", "plan", planID.String(), "", "", bridge.OutcomeSuccess)
@@ -627,7 +627,7 @@ func (p *Plugin) handleActivatePlan(ctx forge.Context, req *PlanIDRequest) (*api
 	}
 
 	if err := p.service.ActivatePlan(ctx.Context(), planID); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to activate plan: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to activate plan: %w", err))
 	}
 
 	p.audit(ctx.Context(), "plan.activate", "plan", planID.String(), "", "", bridge.OutcomeSuccess)
@@ -647,7 +647,7 @@ func (p *Plugin) handleListSubscriptions(ctx forge.Context, req *ListSubscriptio
 
 	subs, err := p.service.ListSubscriptions(ctx.Context(), req.TenantID, appID, opts)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to list subscriptions: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list subscriptions: %w", err))
 	}
 
 	items := make([]Response, 0, len(subs))
@@ -684,7 +684,7 @@ func (p *Plugin) handleCreateSubscription(ctx forge.Context, req *CreateSubscrip
 
 	sub, err := p.service.Subscribe(ctx.Context(), req.TenantID, planID, req.AppID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to create subscription: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create subscription: %w", err))
 	}
 
 	p.audit(ctx.Context(), "subscription.create", "subscription", sub.ID.String(), req.TenantID, req.TenantID, bridge.OutcomeSuccess)
@@ -706,7 +706,7 @@ func (p *Plugin) handleChangePlan(ctx forge.Context, req *ChangePlanRequest) (*a
 	}
 
 	if err := p.service.ChangePlan(ctx.Context(), subID, newPlanID); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to change plan: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to change plan: %w", err))
 	}
 
 	p.audit(ctx.Context(), "subscription.plan_changed", "subscription", subID.String(), "", "", bridge.OutcomeSuccess)
@@ -722,7 +722,7 @@ func (p *Plugin) handleCancelSubscription(ctx forge.Context, req *CancelSubscrip
 	}
 
 	if err := p.service.CancelSubscription(ctx.Context(), subID, req.Immediately); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to cancel subscription: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to cancel subscription: %w", err))
 	}
 
 	p.audit(ctx.Context(), "subscription.canceled", "subscription", subID.String(), "", "", bridge.OutcomeSuccess)
@@ -740,7 +740,7 @@ func (p *Plugin) handlePauseSubscription(ctx forge.Context, req *SubIDRequest) (
 	}
 
 	if err := p.service.PauseSubscription(ctx.Context(), subID); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to pause subscription: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to pause subscription: %w", err))
 	}
 
 	p.audit(ctx.Context(), "subscription.paused", "subscription", subID.String(), "", "", bridge.OutcomeSuccess)
@@ -754,7 +754,7 @@ func (p *Plugin) handleResumeSubscription(ctx forge.Context, req *SubIDRequest) 
 	}
 
 	if err := p.service.ResumeSubscription(ctx.Context(), subID); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to resume subscription: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to resume subscription: %w", err))
 	}
 
 	p.audit(ctx.Context(), "subscription.resumed", "subscription", subID.String(), "", "", bridge.OutcomeSuccess)
@@ -769,7 +769,7 @@ func (p *Plugin) handleListInvoices(ctx forge.Context, req *ListInvoicesRequest)
 
 	invoices, err := p.service.ListAllInvoices(ctx.Context(), appID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to list invoices: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list invoices: %w", err))
 	}
 
 	items := make([]InvoiceResponse, 0, len(invoices))
@@ -824,7 +824,7 @@ func (p *Plugin) handleMarkInvoicePaid(ctx forge.Context, req *MarkInvoicePaidRe
 	}
 
 	if err := p.service.MarkInvoicePaid(ctx.Context(), invID, paymentRef); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to mark invoice paid: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to mark invoice paid: %w", err))
 	}
 
 	p.audit(ctx.Context(), "invoice.paid", "invoice", invID.String(), "", "", bridge.OutcomeSuccess)
@@ -840,7 +840,7 @@ func (p *Plugin) handleVoidInvoice(ctx forge.Context, req *VoidInvoiceRequest) (
 	}
 
 	if err := p.service.MarkInvoiceVoided(ctx.Context(), invID, req.Reason); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to void invoice: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to void invoice: %w", err))
 	}
 
 	p.audit(ctx.Context(), "invoice.voided", "invoice", invID.String(), "", "", bridge.OutcomeSuccess)
@@ -855,7 +855,7 @@ func (p *Plugin) handleListCoupons(ctx forge.Context, req *ListCouponsRequest) (
 
 	coupons, err := p.service.ListCoupons(ctx.Context(), appID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to list coupons: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list coupons: %w", err))
 	}
 
 	items := make([]CouponResponse, 0, len(coupons))
@@ -907,7 +907,7 @@ func (p *Plugin) handleCreateCoupon(ctx forge.Context, req *CreateCouponRequest)
 	}
 
 	if err := p.service.CreateCoupon(ctx.Context(), c); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to create coupon: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create coupon: %w", err))
 	}
 
 	p.audit(ctx.Context(), "coupon.create", "coupon", c.ID.String(), "", "", bridge.OutcomeSuccess)
@@ -923,7 +923,7 @@ func (p *Plugin) handleDeleteCoupon(ctx forge.Context, req *DeleteCouponRequest)
 	}
 
 	if err := p.service.DeleteCoupon(ctx.Context(), couponID); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to delete coupon: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to delete coupon: %w", err))
 	}
 
 	p.audit(ctx.Context(), "coupon.delete", "coupon", couponID.String(), "", "", bridge.OutcomeSuccess)
@@ -933,7 +933,7 @@ func (p *Plugin) handleDeleteCoupon(ctx forge.Context, req *DeleteCouponRequest)
 func (p *Plugin) handleCheckEntitlement(ctx forge.Context, req *CheckEntitlementRequest) (*EntitlementResponse, error) {
 	result, err := p.service.CheckEntitlement(ctx.Context(), req.FeatureKey)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to check entitlement: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to check entitlement: %w", err))
 	}
 
 	return &EntitlementResponse{
@@ -953,7 +953,7 @@ func (p *Plugin) handleGetUsageSummary(ctx forge.Context, req *UsageSummaryReque
 
 	summaries, err := p.service.GetUsageSummary(ctx.Context(), req.TenantID, req.AppID)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to get usage summary: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to get usage summary: %w", err))
 	}
 
 	items := make([]UsageItemResponse, 0, len(summaries))
@@ -1041,25 +1041,4 @@ func toCouponResponse(c *coupon.Coupon) CouponResponse {
 		resp.ValidUntil = &vu
 	}
 	return resp
-}
-
-// parseAmountCents parses a dollar string like "9.99" into cents (999).
-func parseAmountCents(s string) int64 {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0
-	}
-	parts := strings.SplitN(s, ".", 2)
-	dollars, _ := strconv.ParseInt(parts[0], 10, 64) //nolint:errcheck // best-effort parse
-	var cents int64
-	if len(parts) == 2 {
-		c := parts[1]
-		if len(c) == 1 {
-			c += "0"
-		} else if len(c) > 2 {
-			c = c[:2]
-		}
-		cents, _ = strconv.ParseInt(c, 10, 64) //nolint:errcheck // best-effort parse
-	}
-	return dollars*100 + cents
 }

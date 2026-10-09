@@ -8,6 +8,7 @@ import (
 
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/page"
 	"github.com/xraph/authsome/session"
 )
 
@@ -28,6 +29,16 @@ func (a *API) registerSessionRoutes(router forge.Router) error {
 		return err
 	}
 
+	if err := g.DELETE("/sessions", a.handleRevokeOtherSessions,
+		forge.WithSummary("Revoke other sessions"),
+		forge.WithDescription("Revokes every session of the authenticated user except the one making the request."),
+		forge.WithOperationID("revokeOtherSessions"),
+		forge.WithResponseSchema(http.StatusOK, "Sessions revoked", StatusResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
 	return g.DELETE("/sessions/:sessionId", a.handleRevokeSession,
 		forge.WithSummary("Revoke session"),
 		forge.WithDescription("Revokes a specific session by ID."),
@@ -37,22 +48,37 @@ func (a *API) registerSessionRoutes(router forge.Router) error {
 	)
 }
 
+// handleRevokeOtherSessions signs the user out everywhere but here. The
+// current session is identified from the request context, so a caller
+// authenticated without a session row (an API key) revokes them all.
+func (a *API) handleRevokeOtherSessions(ctx forge.Context, _ *RevokeOtherSessionsRequest) (*StatusResponse, error) {
+	userID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+	keep, _ := middleware.SessionIDFrom(ctx.Context())
+	if err := a.engine.RevokeOtherUserSessions(ctx.Context(), userID, keep); err != nil {
+		return nil, mapErrorCtx(ctx, err)
+	}
+	return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "revoked"})
+}
+
 // ──────────────────────────────────────────────────
 // Session handlers
 // ──────────────────────────────────────────────────
 
-func (a *API) handleListSessions(ctx forge.Context, _ *ListSessionsRequest) (*SessionListResponse, error) {
+func (a *API) handleListSessions(ctx forge.Context, req *ListSessionsRequest) (*SessionListResponse, error) {
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
 		return nil, forge.Unauthorized("authentication required")
 	}
 
-	sessions, err := a.engine.ListSessions(ctx.Context(), userID)
+	pg, err := a.engine.ListSessionsPage(ctx.Context(), userID, page.Opts{Limit: req.Limit, Cursor: req.Cursor})
 	if err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
-	resp := &SessionListResponse{Sessions: safeSessionSlice(sessions)}
+	resp := &SessionListResponse{Sessions: safeSessionSlice(pg.Items), NextCursor: pg.NextCursor}
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
@@ -77,7 +103,7 @@ func (a *API) handleRevokeSession(ctx forge.Context, _ *RevokeSessionRequest) (*
 	}
 
 	if err := a.engine.RevokeSession(ctx.Context(), sessID); err != nil {
-		return nil, mapError(err)
+		return nil, mapErrorCtx(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "revoked"}

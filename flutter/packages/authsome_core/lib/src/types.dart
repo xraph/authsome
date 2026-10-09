@@ -166,6 +166,21 @@ class ClientConfig {
   final SsoConfig? sso;
   final List<String>? supportedPlugins;
 
+  /// Custom signup form fields configured for this app.
+  final List<SignupFieldConfig>? signupFields;
+
+  /// Waitlist configuration.
+  final ToggleConfig? waitlist;
+
+  /// Email verification configuration.
+  final EmailVerificationConfig? emailVerification;
+
+  /// Device authorization (OAuth 2.0 device code flow).
+  final ToggleConfig? deviceAuthorization;
+
+  /// Captcha challenge (e.g. Cloudflare Turnstile).
+  final CaptchaConfig? captcha;
+
   const ClientConfig({
     this.version,
     this.appId,
@@ -177,6 +192,11 @@ class ClientConfig {
     this.magiclink,
     this.sso,
     this.supportedPlugins,
+    this.signupFields,
+    this.waitlist,
+    this.emailVerification,
+    this.deviceAuthorization,
+    this.captcha,
   });
 
   factory ClientConfig.fromJson(Map<String, dynamic> json) {
@@ -214,6 +234,26 @@ class ClientConfig {
       supportedPlugins: (json['supported_plugins'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList(),
+      signupFields: (json['signup_fields'] as List<dynamic>?)
+          ?.map((e) =>
+              SignupFieldConfig.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+      waitlist: json['waitlist'] != null
+          ? ToggleConfig.fromJson(
+              Map<String, dynamic>.from(json['waitlist'] as Map))
+          : null,
+      emailVerification: json['email_verification'] != null
+          ? EmailVerificationConfig.fromJson(
+              Map<String, dynamic>.from(json['email_verification'] as Map))
+          : null,
+      deviceAuthorization: json['device_authorization'] != null
+          ? ToggleConfig.fromJson(
+              Map<String, dynamic>.from(json['device_authorization'] as Map))
+          : null,
+      captcha: json['captcha'] != null
+          ? CaptchaConfig.fromJson(
+              Map<String, dynamic>.from(json['captcha'] as Map))
+          : null,
     );
   }
 
@@ -228,6 +268,180 @@ class ClientConfig {
         if (magiclink != null) 'magiclink': magiclink!.toJson(),
         if (sso != null) 'sso': sso!.toJson(),
         if (supportedPlugins != null) 'supported_plugins': supportedPlugins,
+        if (signupFields != null)
+          'signup_fields': signupFields!.map((f) => f.toJson()).toList(),
+        if (waitlist != null) 'waitlist': waitlist!.toJson(),
+        if (emailVerification != null)
+          'email_verification': emailVerification!.toJson(),
+        if (deviceAuthorization != null)
+          'device_authorization': deviceAuthorization!.toJson(),
+        if (captcha != null) 'captcha': captcha!.toJson(),
+      };
+}
+
+/// A plain enabled/disabled toggle (waitlist, device authorization).
+class ToggleConfig {
+  final bool enabled;
+
+  const ToggleConfig({required this.enabled});
+
+  factory ToggleConfig.fromJson(Map<String, dynamic> json) {
+    return ToggleConfig(enabled: json['enabled'] as bool? ?? false);
+  }
+
+  Map<String, dynamic> toJson() => {'enabled': enabled};
+}
+
+class EmailVerificationConfig {
+  final bool enabled;
+  final bool required;
+
+  const EmailVerificationConfig({required this.enabled, required this.required});
+
+  factory EmailVerificationConfig.fromJson(Map<String, dynamic> json) {
+    return EmailVerificationConfig(
+      enabled: json['enabled'] as bool? ?? false,
+      required: json['required'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {'enabled': enabled, 'required': required};
+}
+
+/// Captcha settings. Only public-safe fields: the secret never leaves the
+/// server.
+class CaptchaConfig {
+  final bool required;
+  final String? provider;
+  final String? siteKey;
+
+  const CaptchaConfig({required this.required, this.provider, this.siteKey});
+
+  factory CaptchaConfig.fromJson(Map<String, dynamic> json) {
+    return CaptchaConfig(
+      required: json['required'] as bool? ?? false,
+      provider: json['provider'] as String?,
+      siteKey: json['site_key'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'required': required,
+        if (provider != null) 'provider': provider,
+        if (siteKey != null) 'site_key': siteKey,
+      };
+}
+
+/// A single option for select/radio signup fields.
+class SignupFieldOption {
+  final String label;
+  final String value;
+
+  const SignupFieldOption({required this.label, required this.value});
+
+  factory SignupFieldOption.fromJson(Map<String, dynamic> json) {
+    return SignupFieldOption(
+      label: json['label'] as String,
+      value: json['value'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {'label': label, 'value': value};
+}
+
+/// Validation rules for a signup field.
+class SignupFieldValidation {
+  final bool required;
+  final int? minLen;
+  final int? maxLen;
+  final String? pattern;
+  final num? min;
+  final num? max;
+
+  const SignupFieldValidation({
+    this.required = false,
+    this.minLen,
+    this.maxLen,
+    this.pattern,
+    this.min,
+    this.max,
+  });
+
+  factory SignupFieldValidation.fromJson(Map<String, dynamic> json) {
+    return SignupFieldValidation(
+      required: json['required'] as bool? ?? false,
+      minLen: json['min_len'] as int?,
+      maxLen: json['max_len'] as int?,
+      pattern: json['pattern'] as String?,
+      min: json['min'] as num?,
+      max: json['max'] as num?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        if (required) 'required': required,
+        if (minLen != null) 'min_len': minLen,
+        if (maxLen != null) 'max_len': maxLen,
+        if (pattern != null) 'pattern': pattern,
+        if (min != null) 'min': min,
+        if (max != null) 'max': max,
+      };
+}
+
+/// A custom signup form field from the backend.
+class SignupFieldConfig {
+  final String key;
+  final String label;
+  final String type;
+  final String? placeholder;
+  final String? description;
+  final List<SignupFieldOption>? options;
+  final String? defaultValue;
+  final SignupFieldValidation? validation;
+  final int order;
+
+  const SignupFieldConfig({
+    required this.key,
+    required this.label,
+    required this.type,
+    this.placeholder,
+    this.description,
+    this.options,
+    this.defaultValue,
+    this.validation,
+    this.order = 0,
+  });
+
+  factory SignupFieldConfig.fromJson(Map<String, dynamic> json) {
+    return SignupFieldConfig(
+      key: json['key'] as String,
+      label: json['label'] as String,
+      type: json['type'] as String? ?? 'text',
+      placeholder: json['placeholder'] as String?,
+      description: json['description'] as String?,
+      options: (json['options'] as List<dynamic>?)
+          ?.map((e) =>
+              SignupFieldOption.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+      defaultValue: json['default'] as String?,
+      validation: json['validation'] != null
+          ? SignupFieldValidation.fromJson(
+              Map<String, dynamic>.from(json['validation'] as Map))
+          : null,
+      order: json['order'] as int? ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'label': label,
+        'type': type,
+        if (placeholder != null) 'placeholder': placeholder,
+        if (description != null) 'description': description,
+        if (options != null) 'options': options!.map((o) => o.toJson()).toList(),
+        if (defaultValue != null) 'default': defaultValue,
+        if (validation != null) 'validation': validation!.toJson(),
+        'order': order,
       };
 }
 

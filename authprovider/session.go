@@ -103,7 +103,7 @@ func (p *SessionProvider) Authenticate(ctx context.Context, r *http.Request) (*a
 	}
 
 	// 2. Resolve session from token
-	sess, err := p.resolveSession(token)
+	sess, err := p.resolveSession(ctx, token)
 	if err != nil {
 		p.logger.Debug("session auth: invalid token",
 			log.String("error", err.Error()),
@@ -149,7 +149,7 @@ func (p *SessionProvider) Authenticate(ctx context.Context, r *http.Request) (*a
 	}
 
 	// 5. Resolve user from session
-	u, err := p.resolveUser(sess.UserID.String())
+	u, err := p.resolveUser(ctx, sess.UserID.String())
 	if err != nil {
 		p.logger.Debug("session auth: failed to resolve user",
 			log.String("user_id", sess.UserID.String()),

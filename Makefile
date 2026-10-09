@@ -88,7 +88,14 @@ check:
 	@$(MAKE) fmt
 	@$(MAKE) vet
 	@$(MAKE) lint
+	@$(MAKE) vuln
 	@echo "$(GREEN)✓ All checks passed$(NC)"
+
+## vuln: Check dependencies and the standard library against the Go vulnerability database
+vuln:
+	@echo "$(BLUE)Running govulncheck...$(NC)"
+	$(GO) run golang.org/x/vuln/cmd/govulncheck@latest ./...
+	@echo "$(GREEN)✓ No known vulnerabilities reached$(NC)"
 
 ## test (t): Run tests
 test t:

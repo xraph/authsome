@@ -2,14 +2,22 @@ package scim
 
 import (
 	"github.com/xraph/forge"
+
+	authsome "github.com/xraph/authsome"
 )
 
 // RegisterRoutes registers SCIM 2.0 API routes on a forge.Router.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	prefix := p.config.BasePath
 
-	// SCIM discovery endpoints.
-	scim := router.Group(prefix, forge.WithGroupTags("SCIM 2.0"))
+	// One budget for the whole SCIM surface, keyed by client address: an
+	// IdP provisions in bursts, a guessed bearer token does not get to
+	// try unlimited times.
+	groupOpts := []forge.GroupOption{forge.WithGroupTags("SCIM 2.0")}
+	if mw := authsome.PluginRateLimitMiddleware(p.engine, func(c authsome.RateLimitConfig) int { return c.SCIMLimit }); mw != nil {
+		groupOpts = append(groupOpts, forge.WithGroupMiddleware(mw))
+	}
+	scim := router.Group(prefix, groupOpts...)
 
 	if err := scim.GET("/ServiceProviderConfig", p.handleServiceProviderConfig,
 		forge.WithSummary("SCIM Service Provider Configuration"),

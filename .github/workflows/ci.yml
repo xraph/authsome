@@ -21,7 +21,7 @@ jobs:
   # probes for Makefile targets per step and falls back to the plain go
   # commands these jobs used to run inline.
   ci:
-    uses: xraph/workflows/.github/workflows/go-ci.yml@v1
+    uses: xraph/workflows/.github/workflows/go-ci.yml@1fb7007e92faefba7fa820084412d853d552aad6 # v1
     with:
       # Deliberately a bare minor. The matrix job name embeds this string and the
       # branch ruleset requires "ci / Test (ubuntu-latest, go1.26)", so pinning a
@@ -90,10 +90,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
@@ -152,7 +152,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Check no forbidden path is tracked
         run: ./scripts/check-private-paths.sh
@@ -164,20 +164,115 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
           cache-dependency-path: go.sum
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
           version: latest
           args: --timeout 10m
+
+  # ─── Vulnerability Check ───────────────────────────────────────────
+  # govulncheck reports only vulnerabilities in code paths this module
+  # actually reaches, so a finding here is one to act on, not to triage.
+  vuln:
+    name: Vulnerability check
+    runs-on: ubuntu-latest
+    needs: ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  # ─── Dependency Review ─────────────────────────────────────────────
+  # On a pull request, refuse a dependency change that introduces a known
+  # high-severity vulnerability or a disallowed licence.
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
+  # ─── Secret Scan ───────────────────────────────────────────────────
+  # gitleaks scans the commits a pull request adds, and the commits a push
+  # to main lands, for anything shaped like a credential. Fixtures that only
+  # look like one are allowlisted by value in .gitleaks.toml.
+  #
+  # It runs the gitleaks CLI directly. gitleaks-action wants a paid licence
+  # key on an organization account and stopped every run without one. The
+  # binary is pinned by version and checksum, the same way the actions in
+  # this file are pinned by commit.
+  gitleaks:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl -sSfL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      # A push to main can't be a force push (the ruleset blocks it), so
+      # BEFORE is always an ancestor. It's all zeros only on the first push
+      # of a branch, and then everything reachable is new.
+      - name: gitleaks
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            range="$PR_BASE..$PR_HEAD"
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            range="$BEFORE..$AFTER"
+          else
+            range="$AFTER"
+          fi
+          echo "Scanning $range"
+          gitleaks git --no-banner --redact --verbose --log-opts="--no-merges $range" .
 
   # ─── Format Check ──────────────────────────────────────────────────
   format:
@@ -186,10 +281,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
@@ -215,10 +310,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
@@ -255,7 +350,7 @@ jobs:
           echo "Committed SDKs are up to date."
 
       - name: Upload SDK artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: authsome-sdk
           path: sdk/
@@ -268,20 +363,23 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 9
 
       - name: Install dependencies
         run: cd ui && pnpm install --frozen-lockfile
+
+      - name: Audit dependencies
+        run: cd ui && pnpm audit --audit-level=high
 
       - name: Build
         run: cd ui && pnpm run build
@@ -316,15 +414,21 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
 
       - name: Get dependencies (workspace)
         run: cd flutter && flutter pub get
+
+      # The example bundles .env as an asset and the file is not in git, so
+      # analyze warns about a missing asset. Do what the example's README
+      # asks a developer to do.
+      - name: Provide the example's .env
+        run: cp flutter/example/.env.example flutter/example/.env
 
       - name: Analyze (workspace)
         run: cd flutter && flutter analyze --no-fatal-infos

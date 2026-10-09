@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xraph/authsome/internal/boundedmap"
+
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/account"
@@ -112,9 +114,16 @@ type Config struct {
 
 	// BlockMessage is the error message on block.
 	BlockMessage string
+
+	// MaxCachedIPs bounds the in-memory reputation cache; the least
+	// recently used address is dropped when it is full (default: 10000).
+	MaxCachedIPs int
 }
 
 func (c *Config) defaults() {
+	if c.MaxCachedIPs == 0 {
+		c.MaxCachedIPs = 10000
+	}
 	if c.BlockThreshold == 0 {
 		c.BlockThreshold = 80
 	}
@@ -138,7 +147,7 @@ type Plugin struct {
 	settingsMgr *settings.Manager
 
 	mu    sync.RWMutex
-	cache map[string]*cachedReputation
+	cache *boundedmap.Map[string, *cachedReputation]
 }
 
 type cachedReputation struct {
@@ -155,7 +164,7 @@ func New(cfg ...Config) *Plugin {
 	c.defaults()
 	return &Plugin{
 		config: c,
-		cache:  make(map[string]*cachedReputation),
+		cache:  boundedmap.New[string, *cachedReputation](c.MaxCachedIPs),
 	}
 }
 
@@ -184,7 +193,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		p.logger = log.NewNoopLogger()
 	}
 
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.relay = engine.Relay()
 	p.settingsMgr = engine.Settings()
 
@@ -281,9 +290,11 @@ func (p *Plugin) check(ctx context.Context, ipAddress, appID string) error {
 // request sees, and that write races every concurrent getCached because it
 // happens outside the lock.
 func (p *Plugin) getCached(ip string) *IPReputation {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	entry, ok := p.cache[ip]
+	// A write lock, not a read lock: a hit marks the entry recently used,
+	// which reorders the cache.
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	entry, ok := p.cache.Get(ip)
 	if !ok || time.Now().After(entry.expiresAt) {
 		return nil
 	}
@@ -299,10 +310,10 @@ func (p *Plugin) setCache(ip string, rep *IPReputation) {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.cache[ip] = &cachedReputation{
+	p.cache.Put(ip, &cachedReputation{
 		rep:       cloneReputation(rep),
 		expiresAt: time.Now().Add(p.config.CacheTTL),
-	}
+	})
 }
 
 // cloneReputation deep-copies rep, Categories included. Categories is a

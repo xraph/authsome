@@ -2,8 +2,6 @@ package mongo
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -126,10 +124,10 @@ func (s *Store) RevokeRefreshTokenFamily(ctx context.Context, familyID id.Sessio
 
 	for i := range sessions {
 		sess := sessions[i]
-		if sess.RefreshToken == "" {
+		h := hashOrDerive(sess.RefreshTokenHash, sess.RefreshToken)
+		if h == "" {
 			continue
 		}
-		h := hashRefreshTokenMongo(sess.RefreshToken)
 		rec := &revokedRefreshTokenModel{
 			TokenHash: h,
 			FamilyID:  famStr,
@@ -174,10 +172,4 @@ func (s *Store) MarkRefreshTokenReplayed(ctx context.Context, tokenHash string) 
 		return false, fmt.Errorf("authsome/mongo: mark refresh token replayed: %w", err)
 	}
 	return res.MatchedCount() > 0, nil
-}
-
-// hashRefreshTokenMongo returns hex(SHA-256(tok)).
-func hashRefreshTokenMongo(tok string) string {
-	sum := sha256.Sum256([]byte(tok))
-	return hex.EncodeToString(sum[:])
 }

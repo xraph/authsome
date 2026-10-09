@@ -52,10 +52,10 @@ func TestJWTAuth_SessionChecker_Disabled_PassesThrough(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddlewareWithJWT(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			return nil, errors.New("not found")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ context.Context, userIDStr string) (*user.User, error) {
 			if userIDStr == testUserID.String() {
 				return &user.User{ID: testUserID, AppID: testAppID, Email: "jwt@test.com"}, nil
 			}
@@ -65,7 +65,7 @@ func TestJWTAuth_SessionChecker_Disabled_PassesThrough(t *testing.T) {
 		validator,
 		log.NewNoopLogger(),
 		middleware.SessionBindingConfig{
-			JWTSessionChecker: func(_ string) (*session.Session, error) {
+			JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 				// nil, nil = feature disabled
 				return nil, nil
 			},
@@ -104,10 +104,10 @@ func TestJWTAuth_SessionChecker_SessionNotFound_Rejects(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddlewareWithJWT(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			return nil, errors.New("not found")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ context.Context, userIDStr string) (*user.User, error) {
 			if userIDStr == testUserID.String() {
 				return &user.User{ID: testUserID}, nil
 			}
@@ -117,7 +117,7 @@ func TestJWTAuth_SessionChecker_SessionNotFound_Rejects(t *testing.T) {
 		validator,
 		log.NewNoopLogger(),
 		middleware.SessionBindingConfig{
-			JWTSessionChecker: func(_ string) (*session.Session, error) {
+			JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 				// Session not found — revoked
 				return nil, errors.New("session not found")
 			},
@@ -155,10 +155,10 @@ func TestJWTAuth_SessionChecker_IPMismatch_Rejects(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddlewareWithJWT(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			return nil, errors.New("not found")
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			return &user.User{ID: testUserID}, nil
 		},
 		nil,
@@ -166,7 +166,7 @@ func TestJWTAuth_SessionChecker_IPMismatch_Rejects(t *testing.T) {
 		log.NewNoopLogger(),
 		middleware.SessionBindingConfig{
 			BindToIP: true,
-			JWTSessionChecker: func(_ string) (*session.Session, error) {
+			JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 				return &session.Session{
 					ID:        testSessID,
 					IPAddress: "10.0.0.1",
@@ -207,10 +207,10 @@ func TestJWTAuth_SessionChecker_DeviceMismatch_Rejects(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddlewareWithJWT(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			return nil, errors.New("not found")
 		},
-		func(_ string) (*user.User, error) {
+		func(_ context.Context, _ string) (*user.User, error) {
 			return &user.User{ID: testUserID}, nil
 		},
 		nil,
@@ -218,7 +218,7 @@ func TestJWTAuth_SessionChecker_DeviceMismatch_Rejects(t *testing.T) {
 		log.NewNoopLogger(),
 		middleware.SessionBindingConfig{
 			BindToDevice: true,
-			JWTSessionChecker: func(_ string) (*session.Session, error) {
+			JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 				return &session.Session{
 					ID:        testSessID,
 					UserAgent: "OriginalBrowser/1.0",
@@ -259,10 +259,10 @@ func TestJWTAuth_SessionChecker_Matches_Allows(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddlewareWithJWT(
-		func(_ string) (*session.Session, error) {
+		func(_ context.Context, _ string) (*session.Session, error) {
 			return nil, errors.New("not found")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ context.Context, userIDStr string) (*user.User, error) {
 			if userIDStr == testUserID.String() {
 				return &user.User{ID: testUserID, AppID: testAppID, Email: "jwt@test.com"}, nil
 			}
@@ -274,7 +274,7 @@ func TestJWTAuth_SessionChecker_Matches_Allows(t *testing.T) {
 		middleware.SessionBindingConfig{
 			BindToIP:     true,
 			BindToDevice: true,
-			JWTSessionChecker: func(_ string) (*session.Session, error) {
+			JWTSessionChecker: func(_, _ string) (*session.Session, error) {
 				return &session.Session{
 					ID:        testSessID,
 					IPAddress: "10.0.0.1",
@@ -321,7 +321,7 @@ func jwtRouter(t *testing.T, claims *tokenformat.TokenClaims, resolveUser middle
 	t.Helper()
 
 	mw := middleware.AuthMiddlewareWithJWT(
-		func(string) (*session.Session, error) { return nil, errors.New("not found") },
+		func(context.Context, string) (*session.Session, error) { return nil, errors.New("not found") },
 		resolveUser,
 		&mockStrategyAuth{},
 		&mockJWTValidator{claims: claims},
@@ -360,7 +360,7 @@ func TestJWTAuth_MachineSubjectAuthenticatesWithoutPanic(t *testing.T) {
 				SessionID:     id.NewSessionID().String(),
 				PrincipalKind: string(kind),
 				PrincipalID:   svcID.String(),
-			}, func(string) (*user.User, error) {
+			}, func(context.Context, string) (*user.User, error) {
 				t.Fatal("resolveUser must not be called for a machine subject")
 				return nil, nil
 			})
@@ -393,7 +393,7 @@ func TestJWTAuth_MalformedClaimIDsRefusedNotPanicked(t *testing.T) {
 			}
 			tc.mutate(claims)
 
-			rec := jwtRouter(t, claims, func(string) (*user.User, error) {
+			rec := jwtRouter(t, claims, func(context.Context, string) (*user.User, error) {
 				return nil, errors.New("not found")
 			})
 			assert.Equal(t, http.StatusUnauthorized, rec.Code,
@@ -408,7 +408,7 @@ func TestJWTAuth_EmptySubjectRefused(t *testing.T) {
 		UserID:    "",
 		AppID:     id.NewAppID().String(),
 		SessionID: id.NewSessionID().String(),
-	}, func(string) (*user.User, error) {
+	}, func(context.Context, string) (*user.User, error) {
 		return nil, errors.New("not found")
 	})
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)

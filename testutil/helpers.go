@@ -128,7 +128,7 @@ func (f *TestUserFactory) Next(t *testing.T) (resp *authclient.AuthResponse, tok
 	t.Helper()
 	f.counter++
 	email := fmt.Sprintf("testuser-%d@example.com", f.counter)
-	return f.ts.CreateUser(t, email, "SecureP@ss1")
+	return f.ts.CreateUser(t, email, "SecureP@ss123")
 }
 
 // NextClient creates the next test user and returns a pre-authed client.
@@ -136,7 +136,7 @@ func (f *TestUserFactory) NextClient(t *testing.T) *authclient.Client {
 	t.Helper()
 	f.counter++
 	email := fmt.Sprintf("testuser-%d@example.com", f.counter)
-	return f.ts.CreateUserClient(t, email, "SecureP@ss1")
+	return f.ts.CreateUserClient(t, email, "SecureP@ss123")
 }
 
 // SwitchOrg flips the active organization on a session by calling the

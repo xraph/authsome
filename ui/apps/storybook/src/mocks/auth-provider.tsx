@@ -382,6 +382,14 @@ export function MockAuthProvider({
       clientConfig: clientConfig ?? null,
       isConfigLoaded: clientConfig !== null,
       signIn,
+      startSSOLogin: async () => {
+        await wait();
+        return "#sso-login";
+      },
+      completeSSOLogin: async () => {
+        await wait();
+        setState({ status: "authenticated", user, session: MOCK_SESSION });
+      },
       signUp,
       signOut,
       submitMFACode,
@@ -400,6 +408,8 @@ export function MockAuthProvider({
       signOut,
       submitMFACode,
       submitRecoveryCode,
+      wait,
+      user,
     ],
   );
 

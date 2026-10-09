@@ -17,6 +17,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 )
 
@@ -57,6 +58,10 @@ type UpdateClientRequest struct {
 	// field on its own would let the two disagree, which is the bug that
 	// comment exists to prevent.
 	BodyTokenEndpointAuthMethod *string `json:"token_endpoint_auth_method,omitempty"`
+
+	// FirstParty marks a client the operator owns; authorization skips the
+	// consent page for it.
+	FirstParty *bool `json:"first_party,omitempty"`
 }
 
 // UpdateClientResponse echoes the client as it stands after the edit. It
@@ -127,7 +132,7 @@ func (p *Plugin) handleRotateClientSecret(ctx forge.Context, _ *RotateClientSecr
 		if errors.Is(err, ErrClientNotFound) {
 			return nil, forge.NotFound("oauth2 client not found")
 		}
-		return nil, forge.InternalError(fmt.Errorf("oauth2: load client: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: load client: %w", err))
 	}
 	// Scope before doing anything else. Rotating another app's secret would
 	// lock that app's client out, so this is a denial-of-service reachable by
@@ -145,16 +150,16 @@ func (p *Plugin) handleRotateClientSecret(ctx forge.Context, _ *RotateClientSecr
 
 	rawSecret, err := generateSecureToken(32)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: generate client_secret: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate client_secret: %w", err))
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(rawSecret), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: hash client_secret: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: hash client_secret: %w", err))
 	}
 	client.ClientSecret = string(hash)
 
 	if err := p.oauth2Store.UpdateClient(ctx.Context(), client); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: rotate client secret: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: rotate client secret: %w", err))
 	}
 
 	return &RotateClientSecretResponse{
@@ -218,7 +223,7 @@ func (p *Plugin) handleUpdateClient(ctx forge.Context, req *UpdateClientRequest)
 		if errors.Is(err, ErrClientNotFound) {
 			return nil, forge.NotFound("oauth2 client not found")
 		}
-		return nil, forge.InternalError(fmt.Errorf("oauth2: load client: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: load client: %w", err))
 	}
 	// Same tenancy rule handleDeleteClient applies. A mismatch answers 404 so
 	// the route cannot be used to probe for another app's clients.
@@ -230,6 +235,9 @@ func (p *Plugin) handleUpdateClient(ctx forge.Context, req *UpdateClientRequest)
 	// explicitly-sent empty slice is what makes "clear this" expressible.
 	if req.Name != nil {
 		client.Name = *req.Name
+	}
+	if req.FirstParty != nil {
+		client.FirstParty = *req.FirstParty
 	}
 	if req.RedirectURIs != nil {
 		uris := *req.RedirectURIs
@@ -273,7 +281,7 @@ func (p *Plugin) handleUpdateClient(ctx forge.Context, req *UpdateClientRequest)
 	// UpdateClient is a full-record replace on every backend, so the write
 	// has to carry the whole client, not just the edited fields.
 	if err := p.oauth2Store.UpdateClient(ctx.Context(), client); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("oauth2: update client: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: update client: %w", err))
 	}
 
 	return &UpdateClientResponse{

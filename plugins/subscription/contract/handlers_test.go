@@ -21,9 +21,6 @@ func TestManifest_Loads(t *testing.T) {
 	if got := len(m.Intents); got != 5 {
 		t.Errorf("intents = %d, want 5 (plans list/detail/archive/activate + subscriptions.list)", got)
 	}
-	if got := len(m.Graph); got != 2 {
-		t.Errorf("graph routes = %d, want 2 (/plans + /plans/:id)", got)
-	}
 }
 
 func TestManifest_Validates(t *testing.T) {

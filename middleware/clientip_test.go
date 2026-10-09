@@ -2,6 +2,7 @@ package middleware_test
 
 import (
 	"context"
+	"net"
 	"net/http/httptest"
 	"net/url"
 	"testing"
@@ -155,4 +156,36 @@ func TestRequestURL_EmptyHostFailsClosed(t *testing.T) {
 	parsed, err := url.Parse(got)
 	require.NoError(t, err)
 	assert.Empty(t, parsed.Host, "an empty request Host must produce a URL with no host, which normalizeHTU rejects rather than silently matching")
+}
+
+// IsHTTPS believes the socket, and a forwarded scheme only from a trusted
+// proxy.
+func TestIsHTTPS(t *testing.T) {
+	_, trusted, err := net.ParseCIDR("10.0.0.0/8")
+	require.NoError(t, err)
+	middleware.SetTrustedProxies([]*net.IPNet{trusted})
+	t.Cleanup(func() { middleware.SetTrustedProxies(nil) })
+
+	plain := httptest.NewRequestWithContext(context.Background(), "GET", "http://api.test/", nil)
+	plain.RemoteAddr = "203.0.113.9:1234"
+	plain.Header.Set("X-Forwarded-Proto", "https")
+	assert.False(t, middleware.IsHTTPS(plain), "a header from an untrusted peer is ignored")
+
+	viaProxy := httptest.NewRequestWithContext(context.Background(), "GET", "http://api.test/", nil)
+	viaProxy.RemoteAddr = "10.1.2.3:1234"
+	viaProxy.Header.Set("X-Forwarded-Proto", "https, http")
+	assert.True(t, middleware.IsHTTPS(viaProxy), "a trusted proxy's word, first hop, is believed")
+
+	tlsReq := httptest.NewRequestWithContext(context.Background(), "GET", "https://api.test/", nil)
+	assert.True(t, middleware.IsHTTPS(tlsReq), "TLS on the socket")
+}
+
+func TestTrustedProxiesAreDefault(t *testing.T) {
+	middleware.SetTrustedProxies(nil)
+	assert.True(t, middleware.TrustedProxiesAreDefault(), "nothing configured means the built-in set")
+	_, one, err := net.ParseCIDR("203.0.113.0/24")
+	require.NoError(t, err)
+	middleware.SetTrustedProxies([]*net.IPNet{one})
+	t.Cleanup(func() { middleware.SetTrustedProxies(nil) })
+	assert.False(t, middleware.TrustedProxiesAreDefault())
 }

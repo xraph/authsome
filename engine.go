@@ -9,11 +9,16 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
@@ -42,7 +47,6 @@ import (
 	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/rbac"
-	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -65,6 +69,11 @@ type Engine struct {
 	config Config
 	store  store.Store
 	logger log.Logger
+
+	// retentionStop ends the retention sweeper; retentionDone closes once
+	// it has. Both are nil while no sweeper runs.
+	retentionStop chan struct{}
+	retentionDone chan struct{}
 
 	// Plugin system
 	plugins            *plugin.Registry
@@ -129,7 +138,6 @@ type Engine struct {
 	rateLimiter     ratelimit.Limiter
 	lockout         lockout.Tracker
 	passwordHistory account.PasswordHistoryStore
-	securityEvents  securityevent.Store
 
 	// Dynamic settings manager (optional).
 	settingsMgr *settings.Manager
@@ -137,6 +145,12 @@ type Engine struct {
 	// Bootstrap configuration (nil = disabled).
 	bootstrapCfg  *BootstrapConfig
 	platformAppID id.AppID
+	// ownerMu serialises platform-owner promotion so two users verifying at
+	// the same instant cannot both claim the last owner slot.
+	ownerMu sync.Mutex
+
+	// dummyHashObserver is a test seam; see SetDummyHashObserver.
+	dummyHashObserver func(account.PasswordPolicy)
 
 	// Database reference for plugins that need direct database access
 	// to create their own persistent stores.
@@ -150,7 +164,37 @@ type Engine struct {
 	authRegistry auth.Registry
 
 	pluginsInitialized bool
-	started            bool
+	started            atomic.Bool
+
+	// background counts the goroutines the engine started (legacy token
+	// hashing, webhook adoption, the retention sweeper) so Stop can wait
+	// for them instead of leaving them writing to a store that is closing.
+	background sync.WaitGroup
+}
+
+// spawn runs fn on a goroutine Stop waits for.
+func (e *Engine) spawn(fn func()) {
+	e.background.Add(1)
+	go func() {
+		defer e.background.Done()
+		fn()
+	}()
+}
+
+// waitBackground blocks until every background goroutine has returned or
+// ctx is done, and reports whether they all returned.
+func (e *Engine) waitBackground(ctx context.Context) bool {
+	done := make(chan struct{})
+	go func() {
+		e.background.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 // NewEngine creates a new AuthSome engine with the given options.
@@ -167,6 +211,11 @@ func NewEngine(opts ...Option) (*Engine, error) {
 	if e.store == nil {
 		return nil, errors.New("authsome: store is required")
 	}
+	if e.chronicle == nil {
+		return nil, ErrChronicleRequired
+	}
+	// Causes of generic 500s are logged here, keyed by request id.
+	middleware.SetInternalErrorLogger(e.logger)
 	if e.wardenEng == nil {
 		return nil, errors.New("authsome: warden engine is required (use WithWarden option)")
 	}
@@ -177,11 +226,22 @@ func NewEngine(opts ...Option) (*Engine, error) {
 	// place that covers every one of them. See engine_session_roles.go.
 	e.store = newRoleStampingStore(e.store, e.sessionRoleSlugs, e.logger)
 
-	// Eagerly allocate the MFA ceremony store when none was configured, so it
-	// is never lazily created on a request goroutine (which would be a data
-	// race between concurrent MFA-gated logins and could drop tickets).
+	// Shared abuse state lives in the store's KV table unless the caller
+	// wired something else, so limits, locks and ceremonies hold across every
+	// replica that shares the database. Allocated here, never lazily on a
+	// request goroutine.
 	if e.ceremonyStore == nil {
-		e.ceremonyStore = ceremony.NewMemory()
+		e.ceremonyStore = ceremony.NewKV(e.store)
+	}
+	if e.rateLimiter == nil && e.config.RateLimit.Enabled {
+		e.rateLimiter = ratelimit.NewKVLimiter(e.store)
+	}
+	if e.lockout == nil && e.config.Lockout.Enabled {
+		e.lockout = lockout.NewKVTracker(e.store,
+			lockout.WithMaxAttempts(e.config.Lockout.MaxAttempts),
+			lockout.WithLockoutDuration(e.config.Lockout.LockoutDuration()),
+			lockout.WithResetAfter(e.config.Lockout.ResetAfter()),
+		)
 	}
 
 	// Initialize subsystems
@@ -223,7 +283,22 @@ func NewEngine(opts ...Option) (*Engine, error) {
 
 	// Register core session settings.
 	if err := registerCoreSessionSettings(e.settingsMgr); err != nil {
-		return nil, fmt.Errorf("authsome: failed to register core session settings: %w", err)
+		return nil, fmt.Errorf("authsome: register session settings: %w", err)
+	}
+	// SameSite=None makes the cookie ride along on cross-site requests; it
+	// is only safe with the CSRF check standing in front of them.
+	if def := e.settingsMgr.Definition(SettingCookieSameSite.Def.Key); def != nil {
+		csrfOn := e.config.CSRF.IsEnabled()
+		def.Validate = func(raw json.RawMessage) error {
+			var v string
+			if err := json.Unmarshal(raw, &v); err != nil {
+				return fmt.Errorf("session.cookie_same_site: %w", err)
+			}
+			if v == "none" && !csrfOn {
+				return errors.New("session.cookie_same_site: \"none\" needs the CSRF check on (csrf.enabled)")
+			}
+			return nil
+		}
 	}
 
 	// Register captcha settings (Phase 2B.2).
@@ -236,9 +311,21 @@ func NewEngine(opts ...Option) (*Engine, error) {
 	// indirectly, the latter via NonceSecret) are established by this point.
 	e.initDPoP()
 
-	// Resolve token encryptor: WithTokenEncryptor wins, otherwise read env.
+	// Resolve token encryptor: WithTokenEncryptor wins, then configuration,
+	// then the environment. A production boot with no key fails here; only a
+	// test process may run without one.
 	if e.tokenEncryptor == nil {
-		e.tokenEncryptor = resolveTokenEncryptor(e.logger)
+		enc, err := resolveTokenEncryptor(e.config.TokenEncryption, e.logger, testing.Testing())
+		if err != nil {
+			return nil, err
+		}
+		e.tokenEncryptor = enc
+	}
+
+	// The API key pepper is process-wide because key digests are computed
+	// by the apikey package wherever a key is minted or checked.
+	if pepper := resolveAPIKeyPepper(e.config.APIKeyPepper); pepper != nil {
+		apikey.SetPepper(pepper)
 	}
 
 	// Register pending plugins
@@ -259,6 +346,11 @@ func NewEngine(opts ...Option) (*Engine, error) {
 // ErrNotStarted is returned when a service method is called before Start().
 var ErrNotStarted = errors.New("authsome: engine not started, please wait for initialization to complete")
 
+// ErrChronicleRequired is returned by NewEngine when no audit trail was
+// configured. Authsome does not run without one: every security-relevant
+// action is recorded through Chronicle and there is no fallback sink.
+var ErrChronicleRequired = errors.New("authsome: a Chronicle audit trail is required; pass WithChronicle")
+
 // EnsureMigrated runs store migrations (core + plugin groups) if not disabled.
 // This is idempotent — safe to call multiple times. Use this to ensure tables
 // exist before the engine is fully started (e.g. during extension init).
@@ -272,7 +364,7 @@ func (e *Engine) EnsureMigrated(ctx context.Context) error {
 
 // requireStarted returns ErrNotStarted if the engine has not been started.
 func (e *Engine) requireStarted() error {
-	if !e.started {
+	if !e.started.Load() {
 		return ErrNotStarted
 	}
 	return nil
@@ -299,12 +391,20 @@ func (e *Engine) DPoPBindingConfig() middleware.SessionBindingConfig {
 			return e.DPoPNonceRequiredForApp(ctx, parsed)
 		},
 		DPoPAudit: func(ctx context.Context, action string, md map[string]string) {
-			severity := bridge.SeverityInfo
+			severity := hook.SeverityInfo
 			if action == hook.ActionDPoPProofReplayed {
-				severity = bridge.SeverityWarning
+				severity = hook.SeverityWarning
 			}
-			e.audit(ctx, severity, bridge.OutcomeFailure, action, "session",
-				md["session_id"], "", md["app_id"], "auth", md)
+			e.hooks.Emit(ctx, &hook.Event{
+				Action:     action,
+				Resource:   hook.ResourceSession,
+				ResourceID: md["session_id"],
+				Tenant:     md["app_id"],
+				Severity:   severity,
+				Outcome:    hook.OutcomeFailure,
+				Category:   "auth",
+				Metadata:   md,
+			})
 		},
 	}
 }
@@ -331,7 +431,7 @@ func (e *Engine) buildAuthMiddleware() {
 
 	bindCfg := e.DPoPBindingConfig()
 	bindCfg.CookieNameResolver = e.resolveSessionCookieName
-	bindCfg.JWTSessionChecker = e.jwtSessionChecker
+	bindCfg.JWTSessionChecker = e.JWTSessionChecker
 	bindCfg.ExpectedAudienceResolver = e.resolveExpectedAudience
 	bindCfg.PrincipalResolver = e.ResolvePrincipalByRef
 
@@ -483,24 +583,33 @@ func (e *Engine) resolveExpectedAudience(ctx context.Context, appID string) []st
 	}
 	opts := settings.ResolveOpts{AppID: appID}
 	identifier, err := settings.Get(ctx, mgr, SettingResourceIdentifier, opts)
-	if err != nil || identifier == "" {
+	if err != nil {
+		e.count("control.degraded", appID)
+		return nil
+	}
+	if identifier == "" {
 		return nil
 	}
 	return []string{identifier}
 }
 
-// jwtSessionChecker checks whether a JWT's session ID still exists in the
-// store. This enables JWT revocation — revoked sessions are rejected even if
-// the JWT signature is valid. The SettingJWTRequireActiveSession setting
-// controls whether this check is active; when disabled, a non-nil sentinel
-// session is returned to skip binding checks.
-func (e *Engine) jwtSessionChecker(sessionIDStr string) (*session.Session, error) {
+// JWTSessionChecker checks whether a JWT's session ID still exists in the
+// store. This enables JWT revocation: revoked sessions are rejected even if
+// the JWT signature is valid. The SettingJWTRequireActiveSession setting,
+// resolved under the token's own app, controls whether this check is
+// active; when it is off, nil, nil is returned to skip the store lookup and
+// the binding checks. The setting defaults to on.
+func (e *Engine) JWTSessionChecker(appIDStr, sessionIDStr string) (*session.Session, error) {
 	ctx := context.Background()
 
 	// Check if the feature is enabled via dynamic settings.
 	mgr := e.Settings()
 	if mgr != nil {
-		enabled, _ := settings.Get(ctx, mgr, SettingJWTRequireActiveSession, settings.ResolveOpts{}) //nolint:errcheck // best-effort
+		opts := settings.ResolveOpts{}
+		if appID, err := id.ParseAppID(appIDStr); err == nil && !appID.IsNil() {
+			opts.AppID = appID.String()
+		}
+		enabled, _ := settings.Get(ctx, mgr, SettingJWTRequireActiveSession, opts) //nolint:errcheck // best-effort
 		if !enabled {
 			return nil, nil //nolint:nilnil // nil,nil signals "feature disabled, skip check"
 		}
@@ -548,7 +657,7 @@ func (e *Engine) InitPlugins(ctx context.Context) error {
 
 // Start initializes the engine, runs migrations, and starts plugins.
 func (e *Engine) Start(ctx context.Context) error {
-	if e.started {
+	if e.started.Load() {
 		return nil
 	}
 
@@ -556,6 +665,16 @@ func (e *Engine) Start(ctx context.Context) error {
 	if err := e.EnsureMigrated(ctx); err != nil {
 		return err
 	}
+	// Credentials written before token hashing are converted in the
+	// background: lookups already upgrade a row on first use, so nothing
+	// waits on the sweep, and a large table must not hold up boot. The
+	// start context's values travel with the sweep but its cancellation
+	// does not, since Start returning is not a reason to stop converting.
+	sweepCtx := context.WithoutCancel(ctx)
+	e.spawn(func() { e.hashLegacyTokens(sweepCtx) })
+	// Webhook rows from before webhooks became Relay endpoints are given
+	// one in the background, for the same reasons.
+	e.spawn(func() { e.adoptLegacyWebhooks(sweepCtx) })
 
 	// Register webhook event catalog with relay (before bootstrap so
 	// events emitted during bootstrap are recognized).
@@ -634,36 +753,61 @@ func (e *Engine) Start(ctx context.Context) error {
 		}
 	}
 
+	// Register the audit trail as the first hook handler so a refused record
+	// surfaces to EmitCritical callers before anything else runs.
+	e.hooks.On("chronicle", func(ctx context.Context, event *hook.Event) error {
+		if err := e.chronicle.Record(ctx, auditEventFromHook(event)); err != nil {
+			e.logger.Error("authsome: audit record failed",
+				log.String("action", event.Action),
+				log.String("request_id", event.RequestID),
+				log.String("error", err.Error()),
+			)
+			if e.metrics != nil {
+				e.metrics.IncrementCounter("audit.record.failed", event.Tenant)
+			}
+			return err
+		}
+		return nil
+	})
+
 	// Register metrics collector as a hook handler
 	if e.metrics != nil {
 		e.hooks.On("metrics", func(_ context.Context, event *hook.Event) error {
-			outcome := "success"
-			if event.Err != nil {
-				outcome = "failure"
-			}
-			e.metrics.RecordEvent(event.Action, event.Resource, outcome, event.Tenant, 0)
+			e.metrics.RecordEvent(event.Action, event.Resource, event.Outcome, event.Tenant, 0)
 			return nil
 		})
 	}
 
-	// Register security event recorder as a hook handler
-	if e.securityEvents != nil {
-		e.hooks.On("security_events", func(ctx context.Context, event *hook.Event) error {
-			outcome := "success"
-			if event.Err != nil {
-				outcome = "failure"
-			}
-			return e.securityEvents.RecordSecurityEvent(ctx, &securityevent.Event{
-				Action:    event.Action,
-				Outcome:   outcome,
-				Metadata:  event.Metadata,
-				CreatedAt: event.Timestamp,
-			})
-		})
-	}
+	// Expired rows are swept on a timer for as long as the engine runs;
+	// see engine_retention.go. As with the token sweep above, the start
+	// context's cancellation is not a reason to stop.
+	e.startRetentionSweeper(context.WithoutCancel(ctx))
 
-	e.started = true
+	e.started.Store(true)
 	return nil
+}
+
+// auditEventFromHook maps a bus event to the audit sink's shape. Private is
+// deliberately not copied: it exists so a token can reach a notification
+// handler without being written to the trail.
+func auditEventFromHook(event *hook.Event) *bridge.AuditEvent {
+	return &bridge.AuditEvent{
+		Action:     event.Action,
+		Resource:   event.Resource,
+		ResourceID: event.ResourceID,
+		ActorID:    event.ActorID,
+		Tenant:     event.Tenant,
+		OrgID:      event.OrgID,
+		Outcome:    event.Outcome,
+		Severity:   event.Severity,
+		Category:   event.Category,
+		Metadata:   event.Metadata,
+		Reason:     event.Reason,
+		IP:         event.IP,
+		UserAgent:  event.UserAgent,
+		RequestID:  event.RequestID,
+		SessionID:  event.SessionID,
+	}
 }
 
 // Health checks the health of the engine by pinging its store.
@@ -673,11 +817,14 @@ func (e *Engine) Health(ctx context.Context) error {
 
 // Stop gracefully shuts down the engine and all plugins.
 func (e *Engine) Stop(ctx context.Context) error {
-	if !e.started {
+	if !e.started.Swap(false) {
 		return nil
 	}
+	e.stopRetentionSweeper()
+	if !e.waitBackground(ctx) {
+		e.logger.Warn("authsome: stop: background work still running at deadline")
+	}
 	e.plugins.EmitOnShutdown(ctx)
-	e.started = false
 	return nil
 }
 
@@ -841,7 +988,33 @@ func (e *Engine) Chronicle() bridge.Chronicle { return e.chronicle }
 
 // SetChronicle replaces the chronicle implementation. Intended for tests;
 // not safe for concurrent use after Start.
-func (e *Engine) SetChronicle(ch bridge.Chronicle) { e.chronicle = ch }
+func (e *Engine) SetChronicle(ch bridge.Chronicle) {
+	// A test seam only. Production code never swaps the audit sink after
+	// construction; importing "testing" registers no flags, so the check
+	// costs nothing outside test binaries.
+	if !testing.Testing() {
+		panic("authsome: SetChronicle is only available in tests")
+	}
+	e.chronicle = ch
+}
+
+// SetRateLimiter replaces the rate limiter. A test seam only, like
+// SetChronicle: tests relax the on-by-default limits without rebuilding the
+// engine's configuration.
+func (e *Engine) SetRateLimiter(rl ratelimit.Limiter) {
+	if !testing.Testing() {
+		panic("authsome: SetRateLimiter is only available in tests")
+	}
+	e.rateLimiter = rl
+}
+
+// SetLockoutTracker replaces the lockout tracker. A test seam only.
+func (e *Engine) SetLockoutTracker(t lockout.Tracker) {
+	if !testing.Testing() {
+		panic("authsome: SetLockoutTracker is only available in tests")
+	}
+	e.lockout = t
+}
 
 // Authorizer returns the authorization bridge (may be nil).
 func (e *Engine) Authorizer() bridge.Authorizer { return e.authorizer }
@@ -866,15 +1039,23 @@ func (e *Engine) Vault() bridge.Vault { return e.vault }
 
 // TokenEncryptor returns the at-rest Encryptor used for sensitive opaque
 // payloads such as third-party OAuth access/refresh tokens. Always non-nil
-// after NewEngine — falls back to bridge.NoopEncryptor when no key is
-// configured. Plugins that persist provider tokens should wrap their store
-// using this encryptor (see plugins/social.NewEncryptedStore).
+// after NewEngine: a boot with no key configured fails rather than falling
+// back to plaintext, except under `go test`. Plugins that persist provider
+// tokens should wrap their store using this encryptor (see
+// plugins/social.NewEncryptedStore).
 func (e *Engine) TokenEncryptor() bridge.Encryptor {
 	if e.tokenEncryptor == nil {
 		return bridge.NoopEncryptor{}
 	}
 	return e.tokenEncryptor
 }
+
+// LegacyPlaintextSecretReads reports how many stored secrets have been read
+// back without an encryption envelope since this process started: rows
+// written before at-rest encryption was deployed. When it stays at zero
+// across a full cycle of the workload, every such row has been rewritten and
+// Config.TokenEncryption.Strict can be turned on.
+func (e *Engine) LegacyPlaintextSecretReads() uint64 { return bridge.LegacyPlaintextReads() }
 
 // Dispatcher returns the job queue bridge (may be nil).
 func (e *Engine) Dispatcher() bridge.Dispatcher { return e.dispatcher }
@@ -961,9 +1142,6 @@ func (e *Engine) Lockout() lockout.Tracker { return e.lockout }
 
 // PasswordHistory returns the password history store (may be nil).
 func (e *Engine) PasswordHistory() account.PasswordHistoryStore { return e.passwordHistory }
-
-// SecurityEvents returns the security event store (may be nil).
-func (e *Engine) SecurityEvents() securityevent.Store { return e.securityEvents }
 
 // Warden returns the first-class authorization engine (may be nil).
 func (e *Engine) Warden() *warden.Engine { return e.wardenEng }
@@ -1625,10 +1803,64 @@ func hkdfLike(base []byte, info string) []byte {
 	return h.Sum(nil)
 }
 
+// count adds one to a named counter when a collector is configured.
+func (e *Engine) count(name, tenant string) {
+	if e.metrics != nil {
+		e.metrics.IncrementCounter(name, tenant)
+	}
+}
+
 // Metrics returns the current engine metrics.
 func (e *Engine) Metrics() Metrics {
 	return Metrics{
 		PluginsLoaded: len(e.plugins.Plugins()),
 		Strategies:    len(e.strategies.Strategies()),
 	}
+}
+
+// hashLegacyTokens sweeps plaintext credential rows into hashes in batches
+// until the store reports none left, logging the total. It stops on the
+// first error; the next start resumes where it left off, and lookups keep
+// upgrading rows one at a time in the meantime.
+func (e *Engine) hashLegacyTokens(ctx context.Context) {
+	const batch = 500
+	var total int64
+	for {
+		n, err := e.store.HashLegacyTokens(ctx, batch)
+		total += n
+		if err != nil {
+			e.logger.Warn("authsome: hashing legacy credential rows stopped",
+				log.Int64("converted", total),
+				log.String("error", err.Error()),
+			)
+			return
+		}
+		if n == 0 {
+			break
+		}
+	}
+	if total > 0 {
+		e.logger.Info("authsome: hashed legacy credential rows", log.Int64("converted", total))
+	}
+}
+
+// envAPIKeyPepper names the server-side secret mixed into API key digests.
+// #nosec G101 -- not a credential: an environment variable name.
+const envAPIKeyPepper = "AUTHSOME_API_KEY_PEPPER"
+
+// resolveAPIKeyPepper returns the pepper bytes from configuration or the
+// environment. A value that is valid hex is decoded; anything else is used
+// as given, so an operator may paste either form.
+func resolveAPIKeyPepper(configured string) []byte {
+	raw := strings.TrimSpace(configured)
+	if raw == "" {
+		raw = strings.TrimSpace(os.Getenv(envAPIKeyPepper))
+	}
+	if raw == "" {
+		return nil
+	}
+	if b, err := hex.DecodeString(raw); err == nil && len(b) >= 16 {
+		return b
+	}
+	return []byte(raw)
 }

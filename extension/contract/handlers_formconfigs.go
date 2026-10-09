@@ -1,7 +1,6 @@
 // handlers_formconfigs.go: Phase C.9 — Form Configs dashboard.
 //
-// Surfaces the signup-form customization the legacy templ dashboard
-// exposed via /signup-forms. Today the engine only ships
+// Surfaces signup-form customization to the dashboard. Today the engine only ships
 // SignupFormConfig methods; other form types can layer on later.
 package contract
 

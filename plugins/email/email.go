@@ -3,6 +3,8 @@ package email
 import (
 	"context"
 
+	"github.com/xraph/authsome/internal/mask"
+
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/bridge"
@@ -149,7 +151,7 @@ func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, _ *session.Ses
 		Text:    text,
 	}); err != nil {
 		p.logger.Warn("email plugin: failed to send welcome email",
-			log.String("email", u.Email),
+			log.String("email", mask.Email(u.Email)),
 			log.String("error", err.Error()),
 		)
 	}
@@ -184,7 +186,7 @@ func (p *Plugin) OnAfterUserCreate(ctx context.Context, u *user.User) error {
 		Text:    text,
 	}); err != nil {
 		p.logger.Warn("email plugin: failed to send verification email",
-			log.String("email", u.Email),
+			log.String("email", mask.Email(u.Email)),
 			log.String("error", err.Error()),
 		)
 	}

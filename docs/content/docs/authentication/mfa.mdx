@@ -76,6 +76,8 @@ By default, 8 recovery codes are generated per enrollment. Each code is 8 charac
 
 TOTP (Time-based One-Time Password) works with authenticator apps such as Google Authenticator, Authy, and 1Password. The setup flow is a two-step process: enroll, then verify.
 
+Enrolling a factor is a step-up action. A user with no verified factor yet must have signed in within the last five minutes (`Config.StepUpWindow`), otherwise the request is refused with `403` and the client should re-authenticate first. A user who already holds a verified TOTP factor must send a current code, or a recovery code, in the `code` field when enrolling a further factor; without it the request is refused with `401`. Once a factor is verified, or removed, every other session of the user is signed out.
+
 
 
 **Enroll**: Generate a TOTP secret and return the provisioning URI.

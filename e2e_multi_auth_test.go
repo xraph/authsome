@@ -15,6 +15,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/middleware"
@@ -54,7 +55,7 @@ func e2eEngineWithAPIKey(t *testing.T) (*authsome.Engine, *memory.Store) {
 	akPlugin := apikeyPlugin.New()
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	eng, err := authsome.NewEngine(
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
@@ -124,7 +125,7 @@ func TestE2E_MultiAuth_BearerSessionAuth(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "session-auth@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "SessionUser",
 	})
 	require.NoError(t, err)
@@ -133,7 +134,7 @@ func TestE2E_MultiAuth_BearerSessionAuth(t *testing.T) {
 	_, sess, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,
 		Email:    "session-auth@example.com",
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, sess.Token)
@@ -182,7 +183,7 @@ func TestE2E_MultiAuth_APIKeyAuth(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "apikey-auth@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "APIKeyUser",
 	})
 	require.NoError(t, err)
@@ -235,7 +236,7 @@ func TestE2E_MultiAuth_BearerFailsAPIKeySucceeds(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "fallback-auth@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "FallbackUser",
 	})
 	require.NoError(t, err)
@@ -349,7 +350,7 @@ func TestE2E_MultiAuth_APIKeyInXAPIKeyHeader(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "xapikey-user@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "XAPIKeyUser",
 	})
 	require.NoError(t, err)
@@ -402,7 +403,7 @@ func TestE2E_MultiAuth_APIKeyWithAskPrefixInBearer(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "bearer-ask@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "BearerAskUser",
 	})
 	require.NoError(t, err)
@@ -457,7 +458,7 @@ func TestE2E_MultiAuth_RevokedAPIKeyRejected(t *testing.T) {
 	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "revoked-key@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "RevokedKeyUser",
 	})
 	require.NoError(t, err)
@@ -504,7 +505,7 @@ func e2eResolveUserID(t *testing.T, eng *authsome.Engine, email string, appID id
 	u, _, err := eng.SignIn(context.Background(), &account.SignInRequest{
 		AppID:    appID,
 		Email:    email,
-		Password: "SecureP@ss1",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	return u.ID
@@ -523,7 +524,7 @@ func TestE2E_MultiAuth_ContextValuesCorrect(t *testing.T) {
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "context-check@example.com",
-		Password:  "SecureP@ss1",
+		Password:  "SecureP@ss123",
 		FirstName: "ContextUser",
 	})
 	require.NoError(t, err)

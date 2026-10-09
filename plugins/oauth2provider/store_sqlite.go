@@ -10,6 +10,7 @@ import (
 	"github.com/xraph/grove/drivers/sqlitedriver"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/store"
 )
 
 // SqliteStore implements oauth2provider.Store using the Grove ORM with SQLite.
@@ -129,18 +130,23 @@ func (s *SqliteStore) CreateAuthCode(ctx context.Context, code *AuthorizationCod
 func (s *SqliteStore) GetAuthCode(ctx context.Context, code string) (*AuthorizationCode, error) {
 	m := new(authCodeModel)
 	err := s.sdb.NewSelect(m).
-		Where("code = ?", code).
+		Where("code = ?", store.HashToken(code)).
 		Scan(ctx)
 	if err != nil {
 		return nil, oauth2SqliteError(err)
 	}
-	return toAuthCode(m)
+	ac, err := toAuthCode(m)
+	if err != nil {
+		return nil, err
+	}
+	ac.Code = code
+	return ac, nil
 }
 
 func (s *SqliteStore) ConsumeAuthCode(ctx context.Context, code string) (bool, error) {
 	res, err := s.sdb.NewUpdate((*authCodeModel)(nil)).
 		Set("consumed = ?", true).
-		Where("code = ?", code).
+		Where("code = ?", store.HashToken(code)).
 		Where("consumed = ?", false).
 		Exec(ctx)
 	if err != nil {
@@ -169,7 +175,7 @@ func (s *SqliteStore) CreateDeviceCode(ctx context.Context, dc *DeviceCode) erro
 func (s *SqliteStore) GetDeviceCodeByDeviceCode(ctx context.Context, deviceCode string) (*DeviceCode, error) {
 	m := new(deviceCodeModel)
 	err := s.sdb.NewSelect(m).
-		Where("device_code = ?", deviceCode).
+		Where("device_code = ?", store.HashToken(deviceCode)).
 		Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -177,13 +183,18 @@ func (s *SqliteStore) GetDeviceCodeByDeviceCode(ctx context.Context, deviceCode 
 		}
 		return nil, oauth2SqliteError(err)
 	}
-	return toDeviceCode(m)
+	dc, err := toDeviceCode(m)
+	if err != nil {
+		return nil, err
+	}
+	dc.DeviceCode, dc.UserCode = deviceCode, ""
+	return dc, nil
 }
 
 func (s *SqliteStore) GetDeviceCodeByUserCode(ctx context.Context, userCode string) (*DeviceCode, error) {
 	m := new(deviceCodeModel)
 	err := s.sdb.NewSelect(m).
-		Where("user_code = ?", userCode).
+		Where("user_code = ?", store.HashToken(userCode)).
 		Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -191,13 +202,23 @@ func (s *SqliteStore) GetDeviceCodeByUserCode(ctx context.Context, userCode stri
 		}
 		return nil, oauth2SqliteError(err)
 	}
-	return toDeviceCode(m)
+	dc, err := toDeviceCode(m)
+	if err != nil {
+		return nil, err
+	}
+	dc.UserCode, dc.DeviceCode = userCode, ""
+	return dc, nil
 }
 
 func (s *SqliteStore) UpdateDeviceCode(ctx context.Context, dc *DeviceCode) error {
-	m := fromDeviceCode(dc)
-	_, err := s.sdb.NewUpdate(m).
-		WherePK().
+	// Only the fields the flow mutates. dc may carry a plaintext code from
+	// the lookup that found it, and rewriting the code columns from it would
+	// hash that plaintext a second time and orphan the row.
+	_, err := s.sdb.NewUpdate((*deviceCodeModel)(nil)).
+		Set("status = ?", dc.Status).
+		Set("user_id = ?", dc.UserID.String()).
+		Set("last_polled_at = ?", dc.LastPolledAt).
+		Where("id = ?", dc.ID.String()).
 		Exec(ctx)
 	return oauth2SqliteError(err)
 }
@@ -224,4 +245,94 @@ func oauth2SqliteError(err error) error {
 		return ErrClientNotFound
 	}
 	return err
+}
+
+// ──────────────────────────────────────────────────
+// Grants
+// ──────────────────────────────────────────────────
+
+func (s *SqliteStore) UpsertGrant(ctx context.Context, g *Grant) error {
+	now := time.Now()
+	existing, err := s.GetGrant(ctx, g.AppID, g.UserID, g.ClientID)
+	switch {
+	case err == nil:
+		g.ID = existing.ID
+		g.CreatedAt = existing.CreatedAt
+		g.UpdatedAt = now
+		m := fromGrant(g)
+		_, err = s.sdb.NewUpdate((*grantModel)(nil)).
+			Set("scopes = ?", m.Scopes).
+			Set("updated_at = ?", m.UpdatedAt).
+			Where("id = ?", m.ID).
+			Exec(ctx)
+		return oauth2SqliteError(err)
+	case errors.Is(err, ErrGrantNotFound):
+		if g.ID.IsNil() {
+			g.ID = id.NewOAuth2GrantID()
+		}
+		if g.CreatedAt.IsZero() {
+			g.CreatedAt = now
+		}
+		g.UpdatedAt = now
+		_, err = s.sdb.NewInsert(fromGrant(g)).Exec(ctx)
+		return oauth2SqliteError(err)
+	default:
+		return err
+	}
+}
+
+func (s *SqliteStore) GetGrant(ctx context.Context, appID id.AppID, userID id.UserID, clientID string) (*Grant, error) {
+	m := new(grantModel)
+	err := s.sdb.NewSelect(m).
+		Where("app_id = ?", appID.String()).
+		Where("user_id = ?", userID.String()).
+		Where("client_id = ?", clientID).
+		Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGrantNotFound
+		}
+		return nil, oauth2SqliteError(err)
+	}
+	return toGrant(m)
+}
+
+func (s *SqliteStore) ListGrantsByUser(ctx context.Context, appID id.AppID, userID id.UserID) ([]*Grant, error) {
+	var models []grantModel
+	err := s.sdb.NewSelect(&models).
+		Where("app_id = ?", appID.String()).
+		Where("user_id = ?", userID.String()).
+		OrderExpr("created_at DESC").
+		Scan(ctx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, oauth2SqliteError(err)
+	}
+	out := make([]*Grant, 0, len(models))
+	for i := range models {
+		g, convErr := toGrant(&models[i])
+		if convErr != nil {
+			return nil, convErr
+		}
+		out = append(out, g)
+	}
+	return out, nil
+}
+
+func (s *SqliteStore) DeleteGrant(ctx context.Context, appID id.AppID, userID id.UserID, clientID string) error {
+	res, err := s.sdb.NewDelete((*grantModel)(nil)).
+		Where("app_id = ?", appID.String()).
+		Where("user_id = ?", userID.String()).
+		Where("client_id = ?", clientID).
+		Exec(ctx)
+	if err != nil {
+		return oauth2SqliteError(err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return oauth2SqliteError(err)
+	}
+	if n == 0 {
+		return ErrGrantNotFound
+	}
+	return nil
 }

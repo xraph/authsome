@@ -114,3 +114,35 @@ func (f EventRelayFunc) Send(ctx context.Context, event *WebhookEvent) error {
 func (f EventRelayFunc) RegisterEventTypes(context.Context, []WebhookDefinition) error {
 	return nil
 }
+
+// EndpointInput describes a delivery endpoint to create or replace.
+type EndpointInput struct {
+	// TenantID is the Relay tenant the endpoint belongs to. Authsome uses
+	// the app id, which is also what it sends events under, so an endpoint
+	// only ever receives its own app's events.
+	TenantID    string
+	URL         string
+	Description string
+	// Secret signs deliveries. Empty on create lets Relay generate one.
+	Secret string
+	// EventTypes are the event names (or glob patterns) delivered.
+	EventTypes []string
+	Metadata   map[string]string
+}
+
+// EndpointRelay is offered by a relay that lets authsome manage delivery
+// endpoints, so a webhook registered with authsome is a real endpoint that
+// delivers. Every id is the relay's own endpoint id, kept on the webhook
+// row. A relay that only sends (EventRelayFunc, the no-op relay) does not
+// implement it, and webhooks are then unavailable rather than silently
+// inert.
+type EndpointRelay interface {
+	CreateEndpoint(ctx context.Context, in EndpointInput) (string, error)
+	UpdateEndpoint(ctx context.Context, endpointID string, in EndpointInput) error
+	SetEndpointEnabled(ctx context.Context, endpointID string, enabled bool) error
+	// DeleteEndpoint removes the endpoint; an endpoint that is already gone
+	// is not an error.
+	DeleteEndpoint(ctx context.Context, endpointID string) error
+	// RotateEndpointSecret gives the endpoint a fresh secret and returns it.
+	RotateEndpointSecret(ctx context.Context, endpointID string) (string, error)
+}

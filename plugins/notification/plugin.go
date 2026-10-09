@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xraph/authsome/internal/mask"
+
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/bridge"
@@ -85,6 +87,20 @@ type Plugin struct {
 	logger    log.Logger
 	mappings  map[string]*Mapping
 	engine    plugin.Engine
+	// dispatcher is the engine's job queue when it has one; its presence
+	// is what decides that the welcome notification goes out asynchronously.
+	dispatcher bridge.Dispatcher
+}
+
+// welcomeSendTimeout bounds an inline welcome notification, so a slow
+// provider cannot hold a sign-up open.
+const welcomeSendTimeout = 10 * time.Second
+
+// sendAsync decides how the welcome notification is sent: through the
+// queue when the operator asked for it or the engine has a dispatcher to
+// back it, inline under a deadline otherwise.
+func sendAsync(configured bool, dispatcher bridge.Dispatcher) bool {
+	return configured || dispatcher != nil
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -149,6 +165,9 @@ func (p *Plugin) Name() string { return "notification" }
 // initialization.
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.engine = engine
+	if dp, ok := engine.(plugin.DispatcherProvider); ok {
+		p.dispatcher = dp.Dispatcher()
+	}
 
 	// Discover Herald bridge (required).
 	p.herald = engine.Herald()
@@ -227,13 +246,20 @@ func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, _ *session.Ses
 		name = u.Email
 	}
 
-	if err := p.herald.Notify(ctx, &bridge.HeraldNotifyRequest{
+	async := sendAsync(p.config.Async, p.dispatcher)
+	sendCtx := ctx
+	if !async {
+		var cancel context.CancelFunc
+		sendCtx, cancel = context.WithTimeout(ctx, welcomeSendTimeout)
+		defer cancel()
+	}
+	if err := p.herald.Notify(sendCtx, &bridge.HeraldNotifyRequest{
 		Template: m.Template,
 		Channels: m.Channels,
 		To:       []string{u.Email},
 		UserID:   u.ID.String(),
 		Locale:   p.config.DefaultLocale,
-		Async:    p.config.Async,
+		Async:    async,
 		Data: map[string]any{
 			"user_name": name,
 			"app_name":  p.config.AppName,
@@ -241,7 +267,7 @@ func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, _ *session.Ses
 		},
 	}); err != nil {
 		p.logger.Warn("notification plugin: failed to send welcome notification",
-			log.String("email", u.Email),
+			log.String("email", mask.Email(u.Email)),
 			log.String("error", err.Error()),
 		)
 	}
@@ -331,9 +357,13 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 		return nil
 	}
 
-	// Build recipient list from event metadata.
+	// Build recipient list from the event's delivery data. Addresses live in
+	// Private so they never reach the audit trail; Metadata is checked for
+	// events emitted by code that predates that split.
 	var to []string
-	if email, ok := event.Metadata["email"]; ok && email != "" {
+	if email := event.Private["email"]; email != "" {
+		to = []string{email}
+	} else if email, ok := event.Metadata["email"]; ok && email != "" {
 		to = []string{email}
 	}
 
@@ -354,9 +384,13 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 		return nil
 	}
 
-	// Build template data from event metadata.
-	data := make(map[string]any, len(event.Metadata)+2)
+	// Build template data from event metadata plus the delivery-only values
+	// (address, name, token, code) that travel in Private.
+	data := make(map[string]any, len(event.Metadata)+len(event.Private)+2)
 	for k, v := range event.Metadata {
+		data[k] = v
+	}
+	for k, v := range event.Private {
 		data[k] = v
 	}
 	data["app_name"] = p.config.AppName
@@ -376,7 +410,7 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 	if event.Action == hook.ActionEmailVerificationRequested {
 		if existing, ok := data["verify_url"].(string); !ok || existing == "" {
 			verifyURL := strings.TrimRight(p.config.BaseURL, "/") + p.config.EmailVerifyPath
-			if email := event.Metadata["email"]; email != "" {
+			if email := deliveryValue(event, "email"); email != "" {
 				verifyURL += "?email=" + url.QueryEscape(email)
 			}
 			data["verify_url"] = verifyURL
@@ -389,7 +423,7 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 	if event.Action == hook.ActionPasswordReset {
 		if existing, ok := data["reset_url"].(string); !ok || existing == "" {
 			resetURL := strings.TrimRight(p.config.BaseURL, "/") + p.config.PasswordResetPath
-			if token := event.Metadata["token"]; token != "" {
+			if token := deliveryValue(event, "token"); token != "" {
 				resetURL += "?token=" + url.QueryEscape(token)
 			}
 			data["reset_url"] = resetURL
@@ -423,3 +457,13 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 // its detached context. Generous enough to absorb a slow provider response
 // without inheriting the originating request's (possibly tiny) remaining budget.
 const notifyDeliveryTimeout = 30 * time.Second
+
+// deliveryValue returns a delivery-only value (address, token, code) from the
+// event's Private map, falling back to Metadata for events emitted by code
+// that predates the split between audit data and delivery data.
+func deliveryValue(event *hook.Event, key string) string {
+	if v := event.Private[key]; v != "" {
+		return v
+	}
+	return event.Metadata[key]
+}

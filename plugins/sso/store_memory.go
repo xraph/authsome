@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/xraph/authsome/id"
 )
@@ -11,16 +12,30 @@ import (
 // ErrConnectionNotFound is returned when an SSO connection is not found.
 var ErrConnectionNotFound = errors.New("sso: connection not found")
 
+// ErrIdentityNotFound is returned when a connection has never bound the
+// presented subject to a user.
+var ErrIdentityNotFound = errors.New("sso: identity not found")
+
+// ErrIdentityExists is returned when a connection already binds the subject
+// to a user.
+var ErrIdentityExists = errors.New("sso: identity already bound")
+
 // MemoryStore is an in-memory Store for testing.
 type MemoryStore struct {
-	mu    sync.RWMutex
-	conns map[id.SSOConnectionID]*Connection
+	mu         sync.RWMutex
+	conns      map[id.SSOConnectionID]*Connection
+	identities map[string]*Identity // keyed by identityKey
+}
+
+func identityKey(connID id.SSOConnectionID, subject string) string {
+	return connID.String() + "\x00" + subject
 }
 
 // NewMemoryStore creates a new in-memory SSO connection store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		conns: make(map[id.SSOConnectionID]*Connection),
+		conns:      make(map[id.SSOConnectionID]*Connection),
+		identities: make(map[string]*Identity),
 	}
 }
 
@@ -131,5 +146,40 @@ func cloneConnection(c *Connection) *Connection {
 			cp.AttributeMappings[k] = v
 		}
 	}
+	if c.AllowedDomains != nil {
+		cp.AllowedDomains = append([]string(nil), c.AllowedDomains...)
+	}
 	return &cp
+}
+
+func (s *MemoryStore) GetIdentity(_ context.Context, connID id.SSOConnectionID, subject string) (*Identity, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	ident, ok := s.identities[identityKey(connID, subject)]
+	if !ok {
+		return nil, ErrIdentityNotFound
+	}
+	cp := *ident
+	return &cp, nil
+}
+
+func (s *MemoryStore) CreateIdentity(_ context.Context, ident *Identity) error {
+	if ident == nil || ident.Subject == "" {
+		return errors.New("sso: identity needs a subject")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := identityKey(ident.ConnectionID, ident.Subject)
+	if _, exists := s.identities[key]; exists {
+		return ErrIdentityExists
+	}
+	// Round(0) drops the monotonic reading, which the sqlite driver would
+	// otherwise write into the column.
+	if ident.CreatedAt.IsZero() {
+		ident.CreatedAt = time.Now()
+	}
+	ident.CreatedAt = ident.CreatedAt.UTC().Round(0)
+	cp := *ident
+	s.identities[key] = &cp
+	return nil
 }

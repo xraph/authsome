@@ -215,7 +215,7 @@ func (p *Plugin) SetStore(s Store) { p.store = s }
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.engine = engine
 	p.authStore = engine.Store()
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.relay = engine.Relay()
 	p.hooks = engine.Hooks()
 	p.settingsMgr = engine.Settings()

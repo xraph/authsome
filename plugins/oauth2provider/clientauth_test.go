@@ -35,6 +35,7 @@ func registerRawClient(t *testing.T, st oauth2provider.Store, clientID, secret s
 		ID:           id.NewOAuth2ClientID(),
 		AppID:        id.NewAppID(),
 		ClientID:     clientID,
+		FirstParty:   true,
 		ClientSecret: string(hashed),
 		Name:         "Raw",
 		RedirectURIs: []string{registeredURI},

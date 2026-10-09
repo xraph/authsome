@@ -11,6 +11,10 @@ import (
 // ErrConnectionNotFound is returned when an OAuth connection is not found.
 var ErrConnectionNotFound = errors.New("social: oauth connection not found")
 
+// ErrConnectionExists is returned when an app already holds a connection
+// for the provider user, the memory store's counterpart of the unique index.
+var ErrConnectionExists = errors.New("social: oauth connection already exists for this provider user")
+
 // MemoryStore is an in-memory Store for testing.
 type MemoryStore struct {
 	mu    sync.RWMutex
@@ -30,16 +34,21 @@ var _ Store = (*MemoryStore)(nil)
 func (s *MemoryStore) CreateOAuthConnection(_ context.Context, c *OAuthConnection) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	for _, existing := range s.conns {
+		if existing.AppID == c.AppID && existing.Provider == c.Provider && existing.ProviderUserID == c.ProviderUserID {
+			return ErrConnectionExists
+		}
+	}
 	s.conns[c.ID] = c
 	return nil
 }
 
 // GetOAuthConnection finds a connection by provider and provider user ID.
-func (s *MemoryStore) GetOAuthConnection(_ context.Context, provider, providerUserID string) (*OAuthConnection, error) {
+func (s *MemoryStore) GetOAuthConnection(_ context.Context, appID id.AppID, provider, providerUserID string) (*OAuthConnection, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, c := range s.conns {
-		if c.Provider == provider && c.ProviderUserID == providerUserID {
+		if c.AppID == appID && c.Provider == provider && c.ProviderUserID == providerUserID {
 			return c, nil
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/xraph/forge"
 	"github.com/xraph/warden"
@@ -71,12 +72,12 @@ func (s *WardenStore) CreateRole(ctx context.Context, r *Role) error {
 	return nil
 }
 
-func (s *WardenStore) GetRole(ctx context.Context, roleID string) (*Role, error) {
+func (s *WardenStore) GetRole(ctx context.Context, appID, roleID string) (*Role, error) {
 	wid, err := convertToWardenRoleID(roleID)
 	if err != nil {
 		return nil, fmt.Errorf("rbac: invalid role id %q: %w", roleID, err)
 	}
-	wr, err := s.engine.Store().GetRole(ctx, wid)
+	wr, err := s.engine.Store().GetRole(ctx, appID, wid)
 	if err != nil {
 		return nil, mapWardenError(err)
 	}
@@ -85,11 +86,12 @@ func (s *WardenStore) GetRole(ctx context.Context, roleID string) (*Role, error)
 
 func (s *WardenStore) GetRoleBySlug(ctx context.Context, appID, slug string) (*Role, error) {
 	// Warden now requires an explicit namespace path. Authsome roles can live
-	// in the root namespace ("") or in the "platform" namespace (DSL-seeded
-	// platform roles). Try root first for backward compat, then fall back to
-	// "platform" so DSL-created roles are always resolvable without the caller
-	// needing to know the namespace.
-	for _, ns := range []string{"", "platform"} {
+	// in the root namespace (""), in the "app" namespace (the per-app
+	// user/admin/owner roles seeded from app.warden) or in the "platform"
+	// namespace (DSL-seeded platform roles). Try root first for backward
+	// compat, then the two seeded namespaces, so DSL-created roles are always
+	// resolvable without the caller needing to know the namespace.
+	for _, ns := range []string{"", "app", "platform"} {
 		wr, err := s.engine.Store().GetRoleBySlug(ctx, appID, ns, slug)
 		if err == nil {
 			return FromWardenRole(wr), nil
@@ -98,20 +100,47 @@ func (s *WardenStore) GetRoleBySlug(ctx context.Context, appID, slug string) (*R
 	return nil, ErrRoleNotFound
 }
 
+// UpdateRole writes the fields authsome edits, name and description, onto
+// the stored warden role and keeps everything else. Warden's store replaces
+// the whole row, and a Role has no room for the namespace, parent, default
+// flag, member cap or metadata, so writing a converted Role would wipe them.
+// Slug stays too, since child roles find their parent by it.
+//
+// A system role is refused, as warden's own write paths refuse it. On
+// success r is refreshed from what was written.
 func (s *WardenStore) UpdateRole(ctx context.Context, r *Role) error {
-	wr := ToWardenRole(r)
+	wid, err := convertToWardenRoleID(r.ID)
+	if err != nil {
+		return fmt.Errorf("rbac: invalid role id %q: %w", r.ID, err)
+	}
+	wr, err := s.engine.Store().GetRole(ctx, r.AppID, wid)
+	if err != nil {
+		return mapWardenError(err)
+	}
+	// A role is changed only from the app that owns it.
+	if wr.TenantID != r.AppID {
+		return ErrRoleNotFound
+	}
+	if wr.IsSystem {
+		return ErrSystemRoleImmutable
+	}
+
+	wr.Name = r.Name
+	wr.Description = r.Description
+	wr.UpdatedAt = time.Now().UTC()
 	if err := s.engine.Store().UpdateRole(ctx, wr); err != nil {
 		return mapWardenError(err)
 	}
+	*r = *FromWardenRole(wr)
 	return nil
 }
 
-func (s *WardenStore) DeleteRole(ctx context.Context, roleID string) error {
+func (s *WardenStore) DeleteRole(ctx context.Context, appID, roleID string) error {
 	wid, err := convertToWardenRoleID(roleID)
 	if err != nil {
 		return fmt.Errorf("rbac: invalid role id %q: %w", roleID, err)
 	}
-	if err := s.engine.Store().DeleteRole(ctx, wid); err != nil {
+	if err := s.engine.Store().DeleteRole(ctx, appID, wid); err != nil {
 		return mapWardenError(err)
 	}
 	return nil
@@ -133,13 +162,13 @@ func (s *WardenStore) ListRoles(ctx context.Context, appID string) ([]*Role, err
 // Permissions
 // ──────────────────────────────────────────────────
 
-func (s *WardenStore) AddPermission(ctx context.Context, p *Permission) error {
-	// Resolve the role to find its TenantID (needed for the warden permission).
+func (s *WardenStore) AddPermission(ctx context.Context, appID string, p *Permission) error {
+	// The role must belong to appID; its TenantID scopes the permission.
 	roleID, err := convertToWardenRoleID(p.RoleID)
 	if err != nil {
 		return fmt.Errorf("rbac: invalid role id %q: %w", p.RoleID, err)
 	}
-	wr, err := s.engine.Store().GetRole(ctx, roleID)
+	wr, err := s.engine.Store().GetRole(ctx, appID, roleID)
 	if err != nil {
 		return mapWardenError(err)
 	}
@@ -160,7 +189,7 @@ func (s *WardenStore) AddPermission(ctx context.Context, p *Permission) error {
 	// the link already exists). Warden's role-permission junction now uses
 	// natural keys (NamespacePath + Name) instead of permission IDs.
 	ref := wardenperm.Ref{NamespacePath: wp.NamespacePath, Name: wp.Name}
-	if err := s.engine.Store().AttachPermission(ctx, roleID, ref); err != nil {
+	if err := s.engine.Store().AttachPermission(ctx, wr.TenantID, roleID, ref); err != nil {
 		return mapWardenError(err)
 	}
 
@@ -169,26 +198,26 @@ func (s *WardenStore) AddPermission(ctx context.Context, p *Permission) error {
 	return nil
 }
 
-func (s *WardenStore) RemovePermission(ctx context.Context, permID string) error {
+func (s *WardenStore) RemovePermission(ctx context.Context, appID, permID string) error {
 	wid, err := convertToWardenPermissionID(permID)
 	if err != nil {
 		return fmt.Errorf("rbac: invalid permission id %q: %w", permID, err)
 	}
 	// Deleting the permission entity in warden also detaches it from any roles.
-	if err := s.engine.Store().DeletePermission(ctx, wid); err != nil {
+	if err := s.engine.Store().DeletePermission(ctx, appID, wid); err != nil {
 		return mapWardenError(err)
 	}
 	return nil
 }
 
-func (s *WardenStore) ListRolePermissions(ctx context.Context, roleID string) ([]*Permission, error) {
+func (s *WardenStore) ListRolePermissions(ctx context.Context, appID, roleID string) ([]*Permission, error) {
 	wRoleID, err := convertToWardenRoleID(roleID)
 	if err != nil {
 		return nil, fmt.Errorf("rbac: invalid role id %q: %w", roleID, err)
 	}
 
 	// Warden's ListRolePermissions returns full Permission records now.
-	wperms, err := s.engine.Store().ListRolePermissions(ctx, wRoleID)
+	wperms, err := s.engine.Store().ListRolePermissions(ctx, appID, wRoleID)
 	if err != nil {
 		return nil, mapWardenError(err)
 	}
@@ -204,13 +233,13 @@ func (s *WardenStore) ListRolePermissions(ctx context.Context, roleID string) ([
 // Role assignment
 // ──────────────────────────────────────────────────
 
-func (s *WardenStore) AssignUserRole(ctx context.Context, ur *UserRole) error {
-	// Resolve the role to find its TenantID for the assignment.
+func (s *WardenStore) AssignUserRole(ctx context.Context, appID string, ur *UserRole) error {
+	// The role must belong to appID; its TenantID scopes the assignment.
 	roleID, err := convertToWardenRoleID(ur.RoleID)
 	if err != nil {
 		return fmt.Errorf("rbac: invalid role id %q: %w", ur.RoleID, err)
 	}
-	wr, err := s.engine.Store().GetRole(ctx, roleID)
+	wr, err := s.engine.Store().GetRole(ctx, appID, roleID)
 	if err != nil {
 		return mapWardenError(err)
 	}
@@ -222,7 +251,7 @@ func (s *WardenStore) AssignUserRole(ctx context.Context, ur *UserRole) error {
 	return nil
 }
 
-func (s *WardenStore) UnassignUserRole(ctx context.Context, userID, roleID string) error {
+func (s *WardenStore) UnassignUserRole(ctx context.Context, appID, userID, roleID string) error {
 	wRoleID, err := convertToWardenRoleID(roleID)
 	if err != nil {
 		return fmt.Errorf("rbac: invalid role id %q: %w", roleID, err)
@@ -230,6 +259,7 @@ func (s *WardenStore) UnassignUserRole(ctx context.Context, userID, roleID strin
 
 	// Find the matching assignment by filtering on subject + role.
 	assignments, err := s.engine.Store().ListAssignments(ctx, &wardenassign.ListFilter{
+		TenantID:    appID,
 		SubjectKind: "user",
 		SubjectID:   userID,
 		RoleID:      &wRoleID,
@@ -242,7 +272,7 @@ func (s *WardenStore) UnassignUserRole(ctx context.Context, userID, roleID strin
 	}
 
 	// Delete the first matching assignment.
-	if err := s.engine.Store().DeleteAssignment(ctx, assignments[0].ID); err != nil {
+	if err := s.engine.Store().DeleteAssignment(ctx, appID, assignments[0].ID); err != nil {
 		return mapWardenError(err)
 	}
 	return nil
@@ -267,14 +297,40 @@ func (s *WardenStore) listUserRolesWithTenant(ctx context.Context, tenantID, use
 		return nil, mapWardenError(err)
 	}
 
-	roles := make([]*Role, 0, len(roleIDs))
+	ids := make([]string, 0, len(roleIDs))
 	for _, rid := range roleIDs {
-		wr, err := s.engine.Store().GetRole(ctx, rid)
-		if err != nil {
-			// Skip roles that cannot be loaded (deleted concurrently, etc.).
-			continue
+		ids = append(ids, rid.String())
+	}
+	return s.GetRoles(ctx, tenantID, ids)
+}
+
+// GetRoles implements Store with one warden round trip. Ids that do not
+// parse, no longer exist, or belong to another app are left out.
+func (s *WardenStore) GetRoles(ctx context.Context, appID string, roleIDs []string) ([]*Role, error) {
+	wids := make([]wardenid.RoleID, 0, len(roleIDs))
+	for _, rid := range roleIDs {
+		if wid, err := convertToWardenRoleID(rid); err == nil {
+			wids = append(wids, wid)
 		}
-		roles = append(roles, FromWardenRole(wr))
+	}
+	if len(wids) == 0 {
+		return []*Role{}, nil
+	}
+	wrs, err := s.engine.Store().GetRoles(ctx, appID, wids)
+	if err != nil {
+		return nil, mapWardenError(err)
+	}
+	// Warden leaves the order undefined; callers get the order they asked in.
+	byID := make(map[wardenid.RoleID]*wardenrole.Role, len(wrs))
+	for _, wr := range wrs {
+		byID[wr.ID] = wr
+	}
+	roles := make([]*Role, 0, len(wrs))
+	for _, wid := range wids {
+		if wr, ok := byID[wid]; ok {
+			roles = append(roles, FromWardenRole(wr))
+			delete(byID, wid)
+		}
 	}
 	return roles, nil
 }
@@ -294,14 +350,14 @@ func resolveTenantFromContext(ctx context.Context) string {
 // Hierarchy
 // ──────────────────────────────────────────────────
 
-func (s *WardenStore) GetRoleChildren(ctx context.Context, roleID string) ([]*Role, error) {
+func (s *WardenStore) GetRoleChildren(ctx context.Context, appID, roleID string) ([]*Role, error) {
 	wid, err := convertToWardenRoleID(roleID)
 	if err != nil {
 		return nil, fmt.Errorf("rbac: invalid role id %q: %w", roleID, err)
 	}
 	// ListChildRoles is now keyed by (tenantID, parentSlug). Look the
 	// parent role up first to translate the ID we hold into those keys.
-	parent, err := s.engine.Store().GetRole(ctx, wid)
+	parent, err := s.engine.Store().GetRole(ctx, appID, wid)
 	if err != nil {
 		return nil, mapWardenError(err)
 	}
@@ -353,6 +409,9 @@ func mapWardenError(err error) error {
 	}
 	if errors.Is(err, warden.ErrDuplicateAssignment) {
 		return ErrRoleAlreadyAssigned
+	}
+	if errors.Is(err, warden.ErrSystemRoleImmutable) {
+		return ErrSystemRoleImmutable
 	}
 	return err
 }

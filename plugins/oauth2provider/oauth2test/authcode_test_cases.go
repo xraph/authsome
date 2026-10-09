@@ -11,6 +11,7 @@ import (
 
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugins/oauth2provider"
+	"github.com/xraph/authsome/store"
 )
 
 func newAuthCode(f Fixture, clientID string) *oauth2provider.AuthorizationCode {
@@ -141,4 +142,25 @@ func testConsumeAuthCodeUnknown(t *testing.T, f Fixture) {
 	// Logged rather than asserted, so the divergence stays visible in test
 	// output without pinning a contract the backends do not agree on.
 	t.Logf("unknown-code error for this backend: %v", err)
+}
+
+// testAuthCodeStoredAsHash proves the store keeps only a digest: presenting
+// the digest itself resolves nothing, presenting the plaintext resolves the
+// code and hands the plaintext back, and consumption keys on the same digest.
+func testAuthCodeStoredAsHash(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	ac := seedCode(t, f)
+
+	_, err := f.Store.GetAuthCode(ctx, store.HashToken(ac.Code))
+	require.Error(t, err, "the stored digest must not redeem as a code")
+	consumed, _ := f.Store.ConsumeAuthCode(ctx, store.HashToken(ac.Code)) //nolint:errcheck // a miss may surface as an error or as false
+	assert.False(t, consumed, "the stored digest must not consume the code")
+
+	got, err := f.Store.GetAuthCode(ctx, ac.Code)
+	require.NoError(t, err)
+	assert.Equal(t, ac.Code, got.Code, "the presented plaintext rides back on the code")
+
+	consumed, err = f.Store.ConsumeAuthCode(ctx, ac.Code)
+	require.NoError(t, err)
+	assert.True(t, consumed)
 }

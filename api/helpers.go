@@ -3,11 +3,14 @@ package api
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/xraph/forge"
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/store"
 )
 
@@ -63,13 +66,32 @@ func newCodedErrorWithExtras(status int, typeStr, message string, extras map[str
 	return &codedHTTPError{status: status, typeStr: typeStr, message: message, extras: extras}
 }
 
-// mapError converts domain errors into Forge HTTP errors.
-func mapError(err error) error {
+// mapErrorCtx converts domain errors into Forge HTTP errors. An error that
+// is not one of the known kinds is ours: it is logged with the request id
+// and the client sees a generic 500 carrying that id.
+func mapErrorCtx(ctx forge.Context, err error) error {
 	if err == nil {
 		return nil
 	}
 	if errors.Is(err, store.ErrNotFound) {
 		return forge.NotFound(err.Error())
+	}
+	// Another app's role or permission is reported exactly like a missing one.
+	if errors.Is(err, rbac.ErrRoleNotFound) {
+		return forge.NotFound("role not found")
+	}
+	if errors.Is(err, rbac.ErrPermissionNotFound) {
+		return forge.NotFound("permission not found")
+	}
+	if errors.Is(err, rbac.ErrSystemRoleImmutable) {
+		return forge.Forbidden("system roles cannot be changed")
+	}
+	if errors.Is(err, authsome.ErrWebhooksUnavailable) {
+		// A webhook that cannot deliver is not registered at all.
+		return forge.NewHTTPError(http.StatusNotImplemented, "webhooks are unavailable: no relay can manage delivery endpoints")
+	}
+	if errors.Is(err, authsome.ErrWebhookURLRejected) || errors.Is(err, authsome.ErrWebhookEvents) {
+		return forge.BadRequest(err.Error())
 	}
 	if errors.Is(err, account.ErrInvalidCredentials) {
 		return forge.Unauthorized("invalid credentials")
@@ -123,8 +145,27 @@ func mapError(err error) error {
 	if errors.Is(err, account.ErrSessionExpired) {
 		return forge.Unauthorized("session expired")
 	}
+	if errors.Is(err, account.ErrRateLimited) {
+		return newCodedError(http.StatusTooManyRequests, "rate_limited",
+			"too many attempts for this account, try again later")
+	}
+	if errors.Is(err, account.ErrAccountLocked) {
+		extras := map[string]any{}
+		var locked *account.LockedError
+		if errors.As(err, &locked) {
+			extras["retry_after"] = locked.RetryAfter(time.Now())
+		}
+		return newCodedErrorWithExtras(http.StatusLocked, "account_locked",
+			"account temporarily locked after too many failed attempts", extras)
+	}
 	if errors.Is(err, account.ErrWeakPassword) {
 		return forge.BadRequest(err.Error())
 	}
-	return forge.InternalError(err)
+	if errors.Is(err, authsome.ErrPlatformAppProtected) {
+		return forge.Forbidden("the platform app cannot be deleted")
+	}
+	if errors.Is(err, authsome.ErrScopeEscalation) {
+		return forge.BadRequest("requested scopes exceed the service account's scopes")
+	}
+	return middleware.InternalError(ctx, err)
 }

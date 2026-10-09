@@ -10,6 +10,8 @@ import (
 
 	log "github.com/xraph/go-utils/log"
 
+	authsome "github.com/xraph/authsome"
+
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/apikey"
@@ -21,6 +23,7 @@ import (
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -85,8 +88,11 @@ type Config struct {
 	DefaultExpiry time.Duration
 }
 
+// apiKeyTouchInterval is how often a key's last use is written.
+const apiKeyTouchInterval = time.Minute
+
 // UserResolver resolves a user by ID string.
-type UserResolver func(userID string) (*user.User, error)
+type UserResolver func(ctx context.Context, userID string) (*user.User, error)
 
 // PrincipalResolver resolves any caller, human or otherwise, by ref. Taken as
 // a function rather than the whole engine so the strategy keeps its narrow
@@ -111,6 +117,13 @@ type Plugin struct {
 	logger           log.Logger
 	engine           plugin.Engine
 	permChecker      plugin.PermissionChecker
+
+	// failLimiter counts failed key authentications per client address so
+	// a guessed key does not get unlimited tries. Nil when the engine has
+	// rate limiting off.
+	failLimiter ratelimit.Limiter
+	failLimit   int
+	failWindow  time.Duration
 
 	// gate scores every machine caller through the principal-auth hooks
 	// before a session is minted. Populated from the engine during OnInit
@@ -149,7 +162,7 @@ func (p *Plugin) SetStore(s apikey.Store) { p.store = s }
 // OnInit captures bridge references from the engine.
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.store = engine.APIKeyStore()
-	p.chronicle = engine.Chronicle()
+	p.chronicle = bridge.NewBusChronicle(engine.Hooks())
 	p.relay = engine.Relay()
 	p.hooks = engine.Hooks()
 	p.logger = engine.Logger()
@@ -157,6 +170,11 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.resolvePrincipal = engine.ResolvePrincipal
 	p.defaultAppID = engine.DefaultAppID()
 	p.engine = engine
+	if rl, cfg, ok := authsome.PluginLimiter(engine); ok {
+		p.failLimiter = rl
+		p.failLimit = cfg.APIKeyFailureLimit
+		p.failWindow = cfg.Window()
+	}
 
 	if pc, ok := engine.(plugin.PermissionChecker); ok {
 		p.permChecker = pc
@@ -196,6 +214,9 @@ func (p *Plugin) Strategy() strategy.Strategy {
 		resolveUser:      p.resolveUser,
 		resolvePrincipal: p.resolvePrincipal,
 		gate:             p.gate,
+		failLimiter:      p.failLimiter,
+		failLimit:        p.failLimit,
+		failWindow:       p.failWindow,
 	}
 }
 
@@ -269,6 +290,26 @@ func (p *Plugin) callerIsKeyAdmin(ctx context.Context, caller id.UserID) bool {
 // authorizeSubject resolves whose keys a request may act on. An empty subject
 // means "my own". Naming another user requires manage/apikey — otherwise any
 // authenticated user could mint a key that authenticates as somebody else.
+// ownerAppID resolves the app a new key belongs to from the key owner's
+// identity: the authenticated user on the context when the owner is the
+// caller, the engine's user record otherwise, then the session's app. It
+// returns the nil id only when none of those exist (a bare test router).
+func (p *Plugin) ownerAppID(ctx forge.Context, ownerID id.UserID) id.AppID {
+	goCtx := ctx.Context()
+	if u, ok := middleware.UserFrom(goCtx); ok && u != nil && u.ID.String() == ownerID.String() && !u.AppID.IsNil() {
+		return u.AppID
+	}
+	if p.engine != nil {
+		if u, err := p.engine.GetUser(goCtx, ownerID); err == nil && u != nil && !u.AppID.IsNil() {
+			return u.AppID
+		}
+	}
+	if sess, ok := middleware.SessionFrom(goCtx); ok && sess != nil && !sess.AppID.IsNil() {
+		return sess.AppID
+	}
+	return id.AppID{}
+}
+
 func (p *Plugin) authorizeSubject(ctx forge.Context, subject string) (id.UserID, error) {
 	caller, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok || caller.IsNil() {
@@ -352,14 +393,10 @@ type RevokeKeyRequest struct {
 // ──────────────────────────────────────────────────
 
 func (p *Plugin) handleCreate(ctx forge.Context, req *CreateKeyRequest) (*CreateKeyResponse, error) {
-	if req.AppID == "" || req.Name == "" {
-		return nil, forge.BadRequest("app_id and name are required")
+	if req.Name == "" {
+		return nil, forge.BadRequest("name is required")
 	}
 
-	appID, err := id.ParseAppID(req.AppID)
-	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
-	}
 	// user_id is optional and defaults to the caller. Minting a key for
 	// another user requires manage/apikey.
 	userID, err := p.authorizeSubject(ctx, req.UserID)
@@ -367,11 +404,29 @@ func (p *Plugin) handleCreate(ctx forge.Context, req *CreateKeyRequest) (*Create
 		return nil, err
 	}
 
+	// The key is stamped with the owner's app, never a body-supplied one:
+	// a key's app decides which tenant every request made with it runs in.
+	// A body app_id may only restate the resolved app.
+	appID := p.ownerAppID(ctx, userID)
+	if req.AppID != "" {
+		requested, parseErr := id.ParseAppID(req.AppID)
+		if parseErr != nil {
+			return nil, forge.BadRequest("invalid app_id")
+		}
+		if !appID.IsNil() && requested.String() != appID.String() {
+			return nil, forge.BadRequest("app_id must match the key owner's app")
+		}
+		appID = requested
+	}
+	if appID.IsNil() {
+		return nil, forge.BadRequest("app_id is required")
+	}
+
 	// Check max keys limit
 	if p.config.MaxKeysPerUser > 0 {
 		existing, listErr := p.store.ListAPIKeysByUser(ctx.Context(), appID, userID)
 		if listErr != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to check existing keys: %w", listErr))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to check existing keys: %w", listErr))
 		}
 		activeCount := 0
 		for _, k := range existing {
@@ -387,7 +442,7 @@ func (p *Plugin) handleCreate(ctx forge.Context, req *CreateKeyRequest) (*Create
 	// Generate key pair (public + secret).
 	publicKey, secretKey, secretHash, publicPrefix, secretPrefix, err := apikey.GenerateKeyPair()
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to generate key pair: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to generate key pair: %w", err))
 	}
 
 	now := time.Now()
@@ -411,7 +466,7 @@ func (p *Plugin) handleCreate(ctx forge.Context, req *CreateKeyRequest) (*Create
 	}
 
 	if err := p.store.CreateAPIKey(ctx.Context(), key); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to create key: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create key: %w", err))
 	}
 
 	p.audit(ctx.Context(), hook.ActionAPIKeyCreate, hook.ResourceAPIKey, key.ID.String(), userID.String(), "", bridge.OutcomeSuccess)
@@ -457,7 +512,7 @@ func (p *Plugin) handleList(ctx forge.Context, req *ListKeysRequest) (*ListKeysR
 	if req.UserID == "" && p.callerIsKeyAdmin(ctx.Context(), caller) {
 		keys, err = p.store.ListAPIKeysByApp(ctx.Context(), appID)
 		if err != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to list keys: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list keys: %w", err))
 		}
 	} else {
 		userID, authErr := p.authorizeSubject(ctx, req.UserID)
@@ -466,7 +521,7 @@ func (p *Plugin) handleList(ctx forge.Context, req *ListKeysRequest) (*ListKeysR
 		}
 		keys, err = p.store.ListAPIKeysByUser(ctx.Context(), appID, userID)
 		if err != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to list keys: %w", err))
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list keys: %w", err))
 		}
 	}
 
@@ -511,7 +566,7 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeKeyRequest) (*apityp
 		if errors.Is(err, store.ErrNotFound) || errors.Is(err, apikey.ErrNotFound) {
 			return nil, forge.NotFound("key not found")
 		}
-		return nil, forge.InternalError(fmt.Errorf("failed to get key: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to get key: %w", err))
 	}
 
 	// Only the key's owner (or an apikey admin) may revoke it. Report a
@@ -527,7 +582,7 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeKeyRequest) (*apityp
 	key.Revoked = true
 	key.UpdatedAt = time.Now()
 	if err := p.store.UpdateAPIKey(ctx.Context(), key); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to revoke key: %w", err))
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to revoke key: %w", err))
 	}
 
 	principalID := key.UserID.String()
@@ -557,29 +612,61 @@ type apikeyStrategy struct {
 	// engine does not provide one (e.g. in isolated unit tests), in which
 	// case Authenticate does not score at all.
 	gate PrincipalAuthGate
+
+	// failLimiter, failLimit and failWindow throttle failed authentications
+	// per client address. Nil limiter means no throttle.
+	failLimiter ratelimit.Limiter
+	failLimit   int
+	failWindow  time.Duration
 }
 
-// serviceAccountKind returns the kind the service account was registered
-// with, falling back to KindService.
-//
-// The fallback is not a silent one in spirit: KindService is what an
-// unclassified machine caller has always been, and it is also the kind the
-// serviceaccount store itself defaults to, so a resolution failure lands on
-// the same value the row would most likely have carried anyway. The lookup is
-// one read against the principal store, on a path that already does one for
-// the key itself.
-func (s *apikeyStrategy) serviceAccountKind(ctx context.Context, saID id.ServiceAccountID) principal.Kind {
+func failureKey(r *http.Request) string { return "apikey-fail:" + middleware.ClientIP(r) }
+
+// exhausted reports whether the client address has already spent its
+// failed-attempt budget for the window.
+func (s *apikeyStrategy) exhausted(ctx context.Context, r *http.Request) bool {
+	if s.failLimiter == nil || s.failLimit <= 0 {
+		return false
+	}
+	remaining, err := s.failLimiter.Remaining(ctx, failureKey(r), s.failLimit, s.failWindow)
+	if err != nil {
+		// A limiter that cannot answer refuses: the same fail-closed rule
+		// the route middleware applies.
+		return true
+	}
+	return remaining <= 0
+}
+
+// refuse counts a failed authentication against the client address and
+// returns err unchanged.
+func (s *apikeyStrategy) refuse(ctx context.Context, r *http.Request, err error) (*strategy.Result, error) {
+	if s.failLimiter != nil && s.failLimit > 0 {
+		_, _ = s.failLimiter.Allow(ctx, failureKey(r), s.failLimit, s.failWindow) //nolint:errcheck // counting only
+	}
+	return nil, err
+}
+
+// serviceAccountState returns the service account's registered kind and
+// whether it may authenticate at now. Without a principal resolver the kind
+// falls back to KindService and the account is taken as active, which is
+// what minimal test wiring expects; with one, a resolved principal that
+// reports inactive (disabled or expired) refuses the key.
+func (s *apikeyStrategy) serviceAccountState(ctx context.Context, saID id.ServiceAccountID, now time.Time) (principal.Kind, bool) {
 	if s.resolvePrincipal == nil {
-		return principal.KindService
+		return principal.KindService, true
 	}
 	// The store resolves any non-user ref by ID and ignores the kind on the
 	// way in, so seeding the lookup with KindService is not an assumption
 	// about the answer.
 	p, err := s.resolvePrincipal(ctx, principal.Ref{Kind: principal.KindService, ID: saID.String()})
-	if err != nil || p == nil || p.Kind == "" {
-		return principal.KindService
+	if err != nil || p == nil {
+		return principal.KindService, true
 	}
-	return p.Kind
+	kind := p.Kind
+	if kind == "" {
+		kind = principal.KindService
+	}
+	return kind, p.IsActive(now)
 }
 
 var _ strategy.Strategy = (*apikeyStrategy)(nil)
@@ -594,6 +681,13 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 	rawKey := extractAPIKey(r)
 	if rawKey == "" {
 		return nil, strategy.NotApplicableError{}
+	}
+
+	// An address that has spent its failed-attempt budget is refused before
+	// any lookup, so guessing keys costs the guesser the window, not the
+	// store a query per guess.
+	if s.exhausted(ctx, r) {
+		return nil, fmt.Errorf("apikey: too many failed attempts from this address")
 	}
 
 	// Reject public keys — they are not for authentication.
@@ -623,22 +717,32 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 
 	key, err := s.store.GetAPIKeyByPrefix(ctx, appID, prefix)
 	if err != nil {
-		return nil, fmt.Errorf("apikey: key not found")
+		return s.refuse(ctx, r, fmt.Errorf("apikey: key not found"))
 	}
 
 	// Verify the raw key against stored hash
 	if !apikey.VerifyKey(rawKey, key.KeyHash) {
-		return nil, fmt.Errorf("apikey: invalid key")
+		return s.refuse(ctx, r, fmt.Errorf("apikey: invalid key"))
 	}
 
 	if !key.IsValid() {
-		return nil, fmt.Errorf("apikey: key is revoked or expired")
+		return s.refuse(ctx, r, fmt.Errorf("apikey: key is revoked or expired"))
 	}
 
-	// Update last used timestamp (best-effort, don't fail auth)
+	// Record the use (best-effort, never failing auth): a single-column
+	// touch, and only when the last one is more than a minute old, so a
+	// busy key is one small write a minute rather than a row rewrite per
+	// request. A key hashed before the pepper was set is rewritten under
+	// it, once, so the legacy digest disappears with use.
 	now := time.Now()
-	key.LastUsedAt = &now
-	_ = s.store.UpdateAPIKey(ctx, key) //nolint:errcheck // best-effort update
+	if key.LastUsedAt == nil || now.Sub(*key.LastUsedAt) >= apiKeyTouchInterval {
+		_ = s.store.TouchAPIKey(ctx, key.ID, now) //nolint:errcheck // best-effort update
+		key.LastUsedAt = &now
+	}
+	if apikey.NeedsRehash(rawKey, key.KeyHash) {
+		key.KeyHash = apikey.HashKey(rawKey)
+		_ = s.store.UpdateAPIKey(ctx, key) //nolint:errcheck // best-effort rehash
+	}
 
 	// Score this machine caller through the principal-auth hooks before
 	// minting a session. Static API key traffic used to reach here and fire
@@ -657,7 +761,12 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 	subject := principal.Ref{Kind: principal.KindUser, ID: key.UserID.String()}
 	subjectKind := principal.KindUser
 	if !key.ServiceAccountID.IsNil() {
-		subjectKind = s.serviceAccountKind(ctx, key.ServiceAccountID)
+		var active bool
+		subjectKind, active = s.serviceAccountState(ctx, key.ServiceAccountID, now)
+		if !active {
+			// A disabled or expired service account keeps no working keys.
+			return s.refuse(ctx, r, fmt.Errorf("apikey: service account is not active"))
+		}
 		subject = principal.Ref{Kind: subjectKind, ID: key.ServiceAccountID.String()}
 	}
 	att := &principal.AuthAttempt{
@@ -706,9 +815,12 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 	if key.UserID.IsNil() {
 		return nil, fmt.Errorf("apikey: key %s has no user binding (re-mint via /v1/keys or the dashboard)", key.KeyPrefix)
 	}
-	u, err := s.resolveUser(key.UserID.String())
+	u, err := s.resolveUser(ctx, key.UserID.String())
 	if err != nil {
 		return nil, fmt.Errorf("apikey: resolve user: %w", err)
+	}
+	if u.IsBanned(now) {
+		return s.refuse(ctx, r, fmt.Errorf("apikey: user is banned"))
 	}
 
 	// Create a synthetic (non-persisted) session for context propagation.

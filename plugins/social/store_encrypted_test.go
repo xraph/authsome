@@ -62,7 +62,7 @@ func TestEncryptedStore_RoundTrip(t *testing.T) {
 	require.NotEqual(t, plainAccess, rawConns[0].AccessToken)
 
 	// Through the wrapper, reads must yield plaintext.
-	got, err := wrapped.GetOAuthConnection(context.Background(), "google", "google-uid-123")
+	got, err := wrapped.GetOAuthConnection(context.Background(), conn.AppID, "google", "google-uid-123")
 	require.NoError(t, err)
 	require.Equal(t, plainAccess, got.AccessToken)
 	require.Equal(t, plainRefresh, got.RefreshToken)
@@ -81,7 +81,7 @@ func TestEncryptedStore_LegacyPlaintextRead(t *testing.T) {
 	legacy := newTestConn(t)
 	require.NoError(t, inner.CreateOAuthConnection(context.Background(), legacy))
 
-	got, err := wrapped.GetOAuthConnection(context.Background(), "google", "google-uid-123")
+	got, err := wrapped.GetOAuthConnection(context.Background(), legacy.AppID, "google", "google-uid-123")
 	require.NoError(t, err)
 	require.Equal(t, "plain-access-token-secret", got.AccessToken)
 	require.Equal(t, "plain-refresh-token-secret", got.RefreshToken)

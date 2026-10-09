@@ -45,10 +45,9 @@ Organization-scoped operations act on members and resources within that organiza
 members, _ := engine.ListOrganizationMembers(ctx, acmeOrgID)
 
 // Assign a role scoped to the organization.
-engine.AssignUserRole(ctx, &rbac.UserRole{
+engine.AssignUserRole(ctx, appID, &rbac.UserRole{
     UserID: alice.ID.String(),
     RoleID: adminRoleID.String(),
-    AppID:  appID.String(),
     OrgID:  acmeOrgID.String(), // scoped to Acme only
 })
 ```
