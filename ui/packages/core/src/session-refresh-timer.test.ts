@@ -81,6 +81,85 @@ describe("session refresh deadlines", () => {
     }
   });
 
+  it("refreshes a malformed persisted expiry without rearming an immediate timer", async () => {
+    const { manager, routes, store, session } = setup(3_600_000);
+    const malformed = { ...session, expires_at: "invalid-date" };
+    store.set(SESSION_STORAGE_KEY, JSON.stringify(malformed));
+    let finish!: (response: Response) => void;
+    const refresh = vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    routes.set("POST /v1/refresh", refresh);
+    const timeout = vi.spyOn(globalThis, "setTimeout");
+
+    await manager.initialize();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(timeout).not.toHaveBeenCalled();
+    expect(store.get(SESSION_STORAGE_KEY)).toBe(JSON.stringify(malformed));
+
+    const issued = {
+      session_token: "recovered", refresh_token: "recovered-refresh",
+      expires_at: new Date(Date.now() + 7_200_000).toISOString(),
+    };
+    finish(json(issued));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.get(SESSION_STORAGE_KEY)).toBe(JSON.stringify(issued));
+    expect(manager.getSessionToken()).toBe("recovered");
+    expect(timeout).toHaveBeenCalledTimes(1);
+    expect(timeout).toHaveBeenLastCalledWith(expect.any(Function), 7_140_000);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(timeout).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps malformed expiry through a network failure and recovers after the existing retry delay", async () => {
+    const { manager, refresh, store, session } = setup(3_600_000);
+    const malformed = { ...session, expires_at: "invalid-date" };
+    store.set(SESSION_STORAGE_KEY, JSON.stringify(malformed));
+    refresh.mockImplementationOnce(() => { throw new TypeError("offline"); });
+    const timeout = vi.spyOn(globalThis, "setTimeout");
+
+    await manager.initialize();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(manager.getState()).toEqual({ status: "unknown", session: malformed });
+    expect(store.get(SESSION_STORAGE_KEY)).toBe(JSON.stringify(malformed));
+    expect(timeout).toHaveBeenCalledTimes(1);
+    expect(timeout).toHaveBeenLastCalledWith(expect.any(Function), 30_000);
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(manager.getSessionToken()).toBe("rotated");
+    expect(JSON.parse(store.get(SESSION_STORAGE_KEY)!).expires_at).toBe(
+      new Date(Date.now() + 3_600_000).toISOString(),
+    );
+    expect(timeout).toHaveBeenLastCalledWith(expect.any(Function), 3_540_000);
+  });
+
+  it("bounds repeated network failures for malformed expiry with the existing backoff and retry cap", async () => {
+    const { manager, refresh, store, session } = setup(3_600_000);
+    const malformed = { ...session, expires_at: "invalid-date" };
+    store.set(SESSION_STORAGE_KEY, JSON.stringify(malformed));
+    refresh.mockImplementation(() => { throw new TypeError("offline"); });
+    const timeout = vi.spyOn(globalThis, "setTimeout");
+
+    await manager.initialize();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    for (const [index, delay] of [30_000, 60_000, 120_000, 240_000, 480_000].entries()) {
+      expect(timeout).toHaveBeenLastCalledWith(expect.any(Function), delay);
+      expect(vi.getTimerCount()).toBe(1);
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(refresh).toHaveBeenCalledTimes(index + 1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(refresh).toHaveBeenCalledTimes(index + 2);
+    }
+    expect(timeout.mock.calls.map(([, delay]) => delay)).toEqual([30_000, 60_000, 120_000, 240_000, 480_000]);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(manager.getState()).toEqual({ status: "unknown", session: malformed });
+    expect(store.get(SESSION_STORAGE_KEY)).toBe(JSON.stringify(malformed));
+  });
+
   it("refreshes a session already inside the sixty-second window", async () => {
     const { manager, refresh } = setup(30_000);
     await manager.initialize();

@@ -694,8 +694,8 @@ export class AuthManager {
     const expiresAt = new Date(session.expires_at).getTime();
     const delay = expiresAt - Date.now() - REFRESH_BEFORE_MS;
 
-    if (delay <= 0) {
-      // Already near expiry — refresh immediately.
+    if (!Number.isFinite(expiresAt) || delay <= 0) {
+      // Missing a usable deadline or already near expiry: refresh now.
       void this.refreshSession(session.refresh_token);
       return;
     }
