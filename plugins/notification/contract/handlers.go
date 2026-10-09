@@ -5,9 +5,10 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/xraph/forge/extensions/dashboard/contract"
+
 	"github.com/xraph/authsome/bridge"
 	authcontract "github.com/xraph/authsome/extension/contract"
-	"github.com/xraph/forge/extensions/dashboard/contract"
 )
 
 type templateIDInput struct {
@@ -153,7 +154,10 @@ func templatePreview(deps Deps) func(context.Context, previewInput, contract.Pri
 		if _, err := scopedTemplate(ctx, deps, p, in.ID); err != nil {
 			return nil, err
 		}
-		m, _ := manager(deps)
+		m, err := manager(deps)
+		if err != nil {
+			return nil, err
+		}
 		out, err := m.RenderTemplate(ctx, in.ID, in.Locale, in.Data)
 		return out, failure(err)
 	}
@@ -200,7 +204,10 @@ func templateUpdate(deps Deps) func(context.Context, updateTemplateInput, contra
 		t.Name = strings.TrimSpace(in.Name)
 		t.Category = strings.TrimSpace(in.Category)
 		t.Enabled = in.Enabled
-		m, _ := manager(deps)
+		m, err := manager(deps)
+		if err != nil {
+			return ack{}, err
+		}
 		if err := m.UpdateTemplate(ctx, t); err != nil {
 			return ack{}, failure(err)
 		}
@@ -216,7 +223,10 @@ func templateDelete(deps Deps) func(context.Context, templateIDInput, contract.P
 		if t.IsSystem {
 			return ack{}, invalid("system templates cannot be deleted")
 		}
-		m, _ := manager(deps)
+		m, err := manager(deps)
+		if err != nil {
+			return ack{}, err
+		}
 		if err := m.DeleteTemplate(ctx, in.ID); err != nil {
 			return ack{}, failure(err)
 		}
@@ -239,7 +249,10 @@ func versionCreate(deps Deps) func(context.Context, versionInput, contract.Princ
 		if strings.TrimSpace(in.Locale) == "" {
 			return ack{}, invalid("locale is required")
 		}
-		m, _ := manager(deps)
+		m, err := manager(deps)
+		if err != nil {
+			return ack{}, err
+		}
 		v := &bridge.HeraldTemplateVersion{TemplateID: in.TemplateID, Locale: strings.TrimSpace(in.Locale), Subject: in.Subject, Title: in.Title, HTML: in.HTML, Text: in.Text, Active: true}
 		if err := m.CreateVersion(ctx, v); err != nil {
 			return ack{}, failure(err)
@@ -259,7 +272,10 @@ func versionUpdate(deps Deps) func(context.Context, versionInput, contract.Princ
 		if strings.TrimSpace(in.Locale) == "" {
 			return ack{}, invalid("locale is required")
 		}
-		m, _ := manager(deps)
+		m, err := manager(deps)
+		if err != nil {
+			return ack{}, err
+		}
 		v := &bridge.HeraldTemplateVersion{ID: in.ID, TemplateID: in.TemplateID, Locale: in.Locale, Subject: in.Subject, Title: in.Title, HTML: in.HTML, Text: in.Text, Active: in.Active}
 		if err := m.UpdateVersion(ctx, v); err != nil {
 			return ack{}, failure(err)
@@ -276,7 +292,10 @@ func versionDelete(deps Deps) func(context.Context, versionInput, contract.Princ
 		if !versionFor(t, in.ID) {
 			return ack{}, missing()
 		}
-		m, _ := manager(deps)
+		m, err := manager(deps)
+		if err != nil {
+			return ack{}, err
+		}
 		if err := m.DeleteVersion(ctx, in.ID); err != nil {
 			return ack{}, failure(err)
 		}
@@ -298,7 +317,10 @@ func sendNotification(deps Deps) func(context.Context, sendInput, contract.Princ
 		}
 		req := &bridge.HeraldSendRequest{AppID: appID(deps, p), Channel: t.Channel, Template: t.Slug, Locale: in.Locale, To: []string{recipient}, Data: in.Data}
 		if in.Test {
-			m, _ := manager(deps)
+			m, err := manager(deps)
+			if err != nil {
+				return ack{}, err
+			}
 			req.Metadata = map[string]string{"test": "true"}
 			if err := m.TestSend(ctx, req); err != nil {
 				return ack{}, failure(err)

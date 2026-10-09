@@ -6,11 +6,12 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/xraph/forge/extensions/dashboard/contract"
+	"github.com/xraph/forge/extensions/dashboard/contract/loader"
+
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
-	"github.com/xraph/forge/extensions/dashboard/contract"
-	"github.com/xraph/forge/extensions/dashboard/contract/loader"
 )
 
 type managerStub struct {

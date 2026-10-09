@@ -7,16 +7,17 @@ import (
 	"errors"
 	"testing"
 
-	authsome "github.com/xraph/authsome"
-	"github.com/xraph/authsome/id"
-	"github.com/xraph/authsome/organization"
-	"github.com/xraph/authsome/store/memory"
-	"github.com/xraph/authsome/user"
 	dashauth "github.com/xraph/forge/extensions/dashboard/auth"
 	"github.com/xraph/forge/extensions/dashboard/contract"
 	"github.com/xraph/forge/extensions/dashboard/contract/loader"
 	"github.com/xraph/warden"
 	wardenmem "github.com/xraph/warden/store/memory"
+
+	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/store/memory"
+	"github.com/xraph/authsome/user"
 )
 
 type invitationService struct {
@@ -96,8 +97,8 @@ func TestInvitationHandlers_OneTimeTokenAndAppScope(t *testing.T) {
 	deps := Deps{Engine: engine, Plugin: service}
 	p := contract.Principal{User: &dashauth.UserInfo{Subject: id.NewUserID().String()}, Claims: map[string]any{"app_id": appID.String()}}
 	existing := &user.User{ID: id.NewUserID(), AppID: appID, Email: "member@example.com"}
-	if err := mem.CreateUserWithPrimaryEmail(context.Background(), existing, user.NewPrimaryEmail(existing, "admin")); err != nil {
-		t.Fatal(err)
+	if createErr := mem.CreateUserWithPrimaryEmail(context.Background(), existing, user.NewPrimaryEmail(existing, "admin")); createErr != nil {
+		t.Fatal(createErr)
 	}
 	added, err := orgsAddMemberHandler(deps)(context.Background(), AddMemberInput{OrgID: org.ID.String(), Email: " Member@Example.com "}, p)
 	if err != nil || !added.OK || len(service.members) != 1 || service.members[0].UserID != existing.ID {

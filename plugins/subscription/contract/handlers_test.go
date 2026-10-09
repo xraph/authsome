@@ -49,7 +49,7 @@ func TestPricingTiersRequirePlanFeature(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pricing: %v", err)
 	}
-	if err := validateTierFeatures(price, nil); err == nil {
+	if validateErr := validateTierFeatures(price, nil); validateErr == nil {
 		t.Fatal("expected missing feature to be rejected")
 	}
 	features, err := planFeatures([]PlanFeature{{Key: "requests", Name: "Requests", Type: "metered", Limit: 1000, Period: "monthly"}})

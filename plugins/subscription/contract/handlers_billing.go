@@ -13,8 +13,9 @@ import (
 	"github.com/xraph/ledger/subscription"
 	"github.com/xraph/ledger/types"
 
-	authcontract "github.com/xraph/authsome/extension/contract"
 	"github.com/xraph/forge/extensions/dashboard/contract"
+
+	authcontract "github.com/xraph/authsome/extension/contract"
 )
 
 type planWriteInput struct {
@@ -342,7 +343,7 @@ func subscriptionsDetailHandler(deps Deps) func(context.Context, detailInput, co
 		if deps.Usage != nil {
 			active, activeErr := deps.Service.GetActiveSubscription(ctx, item.TenantID, scopedApp(deps, p))
 			if activeErr == nil && active != nil && active.ID == item.ID {
-				if usage, err := deps.Usage(ctx, item.TenantID, scopedApp(deps, p)); err == nil {
+				if usage, usageErr := deps.Usage(ctx, item.TenantID, scopedApp(deps, p)); usageErr == nil {
 					out.Usage = usage
 				}
 			}

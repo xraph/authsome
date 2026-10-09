@@ -78,8 +78,5 @@ func Register(
 	if err := dispatcher.RegisterCommand(d, c, "notification.templates.resetDefaults", 1, resetDefaultTemplates(deps)); err != nil {
 		return err
 	}
-	if err := dispatcher.RegisterQuery(d, c, "notification.mappings.list", 1, mappingsList(deps)); err != nil {
-		return err
-	}
-	return nil
+	return dispatcher.RegisterQuery(d, c, "notification.mappings.list", 1, mappingsList(deps))
 }
