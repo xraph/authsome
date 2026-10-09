@@ -1,4 +1,11 @@
 {
   "title": "Guides",
-  "pages": ["full-example", "forge-extension", "custom-store", "custom-plugin", "nextjs-app", "migration-guide"]
+  "pages": [
+    "full-example",
+    "forge-extension",
+    "custom-store",
+    "custom-plugin",
+    "nextjs-app",
+    "migration-guide"
+  ]
 }

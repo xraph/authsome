@@ -1,9 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { cn } from "@/lib/cn";
 import { SectionHeader } from "./section-header";
-import { CodeBlock } from "./code-block";
 
 interface FeatureCard {
   title: string;

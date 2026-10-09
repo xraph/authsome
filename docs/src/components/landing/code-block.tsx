@@ -16,8 +16,22 @@ function createTokenizer() {
     tokens.push(`<span class="${cls}">${text}</span>`);
     return `\x00${i}\x01`;
   };
-  const restore = (result: string): string =>
-    result.replace(/\x00(\d+)\x01/g, (_, idx) => tokens[parseInt(idx)]);
+  const restore = (result: string): string => {
+    const [prefix, ...segments] = result.split("\x00");
+    return (
+      prefix +
+      segments
+        .map((segment) => {
+          const end = segment.indexOf("\x01");
+          const index = segment.slice(0, end);
+          if (end < 0 || !/^\d+$/.test(index)) {
+            return `\x00${segment}`;
+          }
+          return `${tokens[Number.parseInt(index, 10)]}${segment.slice(end + 1)}`;
+        })
+        .join("")
+    );
+  };
   return { wrap, restore };
 }
 
@@ -181,21 +195,24 @@ function highlightTSX(code: string): string {
   }
 
   // JSX tags: &lt;ComponentName or &lt;/ComponentName
-  result = result.replace(/(&lt;\/?)([\w.]+)/g, (_, prefix, tag) =>
-    `${prefix}${wrap("text-blue-400", tag)}`,
+  result = result.replace(
+    /(&lt;\/?)([\w.]+)/g,
+    (_, prefix, tag) => `${prefix}${wrap("text-blue-400", tag)}`,
   );
 
   // JSX props: propName=
-  result = result.replace(/\b([a-zA-Z][\w]*)(=)/g, (_, prop, eq) =>
-    `${wrap("text-cyan-400", prop)}${eq}`,
+  result = result.replace(
+    /\b([a-zA-Z][\w]*)(=)/g,
+    (_, prop, eq) => `${wrap("text-cyan-400", prop)}${eq}`,
   );
 
   // Arrow functions
   result = result.replace(/(=&gt;)/g, (_, m) => wrap("text-purple-400", m));
 
   // Destructured/type imports in curly braces
-  result = result.replace(/\{([^}]+)\}/g, (_, inner) =>
-    `{${wrap("text-amber-300", inner)}}`,
+  result = result.replace(
+    /\{([^}]+)\}/g,
+    (_, inner) => `{${wrap("text-amber-300", inner)}}`,
   );
 
   return restore(result);

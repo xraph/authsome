@@ -85,7 +85,12 @@ function MiniAuthFlow() {
               className="flex items-center gap-0"
             >
               <FlowLine length={28} color="green" delay={3} />
-              <FlowNode label="auth.signup" color="gray" size="sm" delay={1.1} />
+              <FlowNode
+                label="auth.signup"
+                color="gray"
+                size="sm"
+                delay={1.1}
+              />
               <FlowLine length={24} color="green" delay={4} />
               <StatusBadge status="delivered" label="created" />
             </motion.div>

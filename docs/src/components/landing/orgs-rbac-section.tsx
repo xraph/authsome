@@ -1,9 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { cn } from "@/lib/cn";
-import { SectionHeader } from "./section-header";
 import { CodeBlock } from "./code-block";
+import { SectionHeader } from "./section-header";
 
 interface FeatureCard {
   title: string;
@@ -161,11 +160,7 @@ export function OrgsRbacSection() {
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
           >
-            <CodeBlock
-              code={orgCode}
-              filename="orgs.go"
-              language="go"
-            />
+            <CodeBlock code={orgCode} filename="orgs.go" language="go" />
           </motion.div>
 
           {/* Right: Feature cards */}

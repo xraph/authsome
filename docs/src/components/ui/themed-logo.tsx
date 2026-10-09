@@ -25,7 +25,14 @@ export function ThemedLogo() {
           className="fill-white/90"
         />
         {/* Lock body */}
-        <rect x="13" y="15" width="6" height="5" rx="1" className="fill-indigo-500 dark:fill-indigo-400" />
+        <rect
+          x="13"
+          y="15"
+          width="6"
+          height="5"
+          rx="1"
+          className="fill-indigo-500 dark:fill-indigo-400"
+        />
         {/* Lock shackle */}
         <path
           d="M14 15V13C14 11.9 14.9 11 16 11C17.1 11 18 11.9 18 13V15"

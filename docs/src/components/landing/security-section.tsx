@@ -2,8 +2,8 @@
 
 import { motion } from "framer-motion";
 import { cn } from "@/lib/cn";
-import { SectionHeader } from "./section-header";
 import { CodeBlock } from "./code-block";
+import { SectionHeader } from "./section-header";
 
 const securityCode = `engine, _ := authsome.NewEngine(
   authsome.WithPlugins(

@@ -1,1 +1,4 @@
-{"title": "Organizations", "pages": ["overview", "members", "teams", "invitations", "org-scoped-roles"]}
+{
+  "title": "Organizations",
+  "pages": ["overview", "members", "teams", "invitations", "org-scoped-roles"]
+}

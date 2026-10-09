@@ -106,11 +106,7 @@ export function CodeShowcase() {
                 React Frontend
               </span>
             </div>
-            <CodeBlock
-              code={frontendCode}
-              filename="App.tsx"
-              language="tsx"
-            />
+            <CodeBlock code={frontendCode} filename="App.tsx" language="tsx" />
           </motion.div>
         </div>
       </div>

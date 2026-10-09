@@ -1,1 +1,4 @@
-{"title": "Dynamic Forms", "pages": ["custom-schemas", "branding", "form-editor"]}
+{
+  "title": "Dynamic Forms",
+  "pages": ["custom-schemas", "branding", "form-editor"]
+}

@@ -1,14 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { cn } from "@/lib/cn";
+import { FlowLine, FlowNode, StatusBadge } from "./flow-primitives";
 import { SectionHeader } from "./section-header";
-import {
-  FlowNode,
-  FlowLine,
-  FlowParticleStream,
-  StatusBadge,
-} from "./flow-primitives";
 
 const features = [
   {
@@ -111,13 +105,7 @@ function AuthPipelineDiagram() {
           <FlowLine length={28} color="blue" delay={1} />
           <FlowNode label="Plugins" color="teal" size="sm" delay={0.4} />
           <FlowLine length={28} color="green" delay={2} />
-          <FlowNode
-            label="Session"
-            color="green"
-            size="sm"
-            pulse
-            delay={0.6}
-          />
+          <FlowNode label="Session" color="green" size="sm" pulse delay={0.6} />
         </div>
 
         {/* Event stream */}
@@ -130,12 +118,7 @@ function AuthPipelineDiagram() {
             className="flex items-center gap-0"
           >
             <FlowLine length={24} color="green" delay={3} />
-            <FlowNode
-              label="user.created"
-              color="gray"
-              size="sm"
-              delay={0.9}
-            />
+            <FlowNode label="user.created" color="gray" size="sm" delay={0.9} />
             <FlowLine length={20} color="green" delay={4} />
             <StatusBadge status="delivered" label="webhook" />
           </motion.div>

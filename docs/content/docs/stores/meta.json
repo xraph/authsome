@@ -1,1 +1,4 @@
-{"title": "Store Backends", "pages": ["overview", "postgres", "sqlite", "mongodb", "memory"]}
+{
+  "title": "Store Backends",
+  "pages": ["overview", "postgres", "sqlite", "mongodb", "memory"]
+}

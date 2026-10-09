@@ -1,1 +1,4 @@
-{"title": "Environments", "pages": ["overview", "cloning", "per-env-isolation"]}
+{
+  "title": "Environments",
+  "pages": ["overview", "cloning", "per-env-isolation"]
+}

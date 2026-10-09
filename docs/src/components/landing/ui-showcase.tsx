@@ -1,9 +1,9 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { SectionHeader } from "./section-header";
-import Link from "next/link";
 
 interface UICard {
   title: string;
@@ -14,7 +14,6 @@ interface UICard {
 function MockInput({
   label,
   placeholder,
-  type = "text",
 }: {
   label: string;
   placeholder: string;
@@ -22,9 +21,9 @@ function MockInput({
 }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-[11px] font-medium text-fd-foreground">
+      <span className="text-[11px] font-medium text-fd-foreground">
         {label}
-      </label>
+      </span>
       <div className="rounded-md border border-fd-border bg-fd-background px-3 py-1.5 text-[11px] text-fd-muted-foreground">
         {placeholder}
       </div>
@@ -142,9 +141,21 @@ const uiCards: UICard[] = [
           Active Sessions
         </div>
         {[
-          { device: "Chrome on macOS", location: "San Francisco", current: true },
-          { device: "Safari on iPhone", location: "San Francisco", current: false },
-          { device: "Firefox on Windows", location: "New York", current: false },
+          {
+            device: "Chrome on macOS",
+            location: "San Francisco",
+            current: true,
+          },
+          {
+            device: "Safari on iPhone",
+            location: "San Francisco",
+            current: false,
+          },
+          {
+            device: "Firefox on Windows",
+            location: "New York",
+            current: false,
+          },
         ].map((session) => (
           <div
             key={session.device}

@@ -20,10 +20,7 @@ interface StatCard {
 const sidebarSections: { heading: string; items: SidebarItem[] }[] = [
   {
     heading: "Security",
-    items: [
-      { label: "SSO" },
-      { label: "Anomaly Detection" },
-    ],
+    items: [{ label: "SSO" }, { label: "Anomaly Detection" }],
   },
   {
     heading: "Configuration",
@@ -36,31 +33,19 @@ const sidebarSections: { heading: string; items: SidebarItem[] }[] = [
   },
   {
     heading: "Authentication",
-    items: [
-      { label: "Organizations" },
-      { label: "Social Login" },
-    ],
+    items: [{ label: "Organizations" }, { label: "Social Login" }],
   },
   {
     heading: "Provisioning",
-    items: [
-      { label: "SCIM" },
-      { label: "SCIM Logs" },
-    ],
+    items: [{ label: "SCIM" }, { label: "SCIM Logs" }],
   },
   {
     heading: "Billing",
-    items: [
-      { label: "Plans" },
-      { label: "Subscriptions" },
-    ],
+    items: [{ label: "Plans" }, { label: "Subscriptions" }],
   },
   {
     heading: "Authsome",
-    items: [
-      { label: "Overview", active: true },
-      { label: "Passkeys" },
-    ],
+    items: [{ label: "Overview", active: true }, { label: "Passkeys" }],
   },
 ];
 

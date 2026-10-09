@@ -1,4 +1,21 @@
 {
   "title": "Plugins",
-  "pages": ["overview", "creating-plugins", "password", "email", "magiclink", "mfa", "passkey", "social", "sso", "oauth2provider", "organization", "consent", "phone", "notification", "apikey", "device"]
+  "pages": [
+    "overview",
+    "creating-plugins",
+    "password",
+    "email",
+    "magiclink",
+    "mfa",
+    "passkey",
+    "social",
+    "sso",
+    "oauth2provider",
+    "organization",
+    "consent",
+    "phone",
+    "notification",
+    "apikey",
+    "device"
+  ]
 }

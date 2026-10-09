@@ -96,7 +96,15 @@ export function FlowNode({
 interface FlowLineProps {
   direction?: "horizontal" | "vertical";
   length?: number;
-  color?: "teal" | "amber" | "green" | "red" | "blue" | "gray" | "violet" | "purple";
+  color?:
+    | "teal"
+    | "amber"
+    | "green"
+    | "red"
+    | "blue"
+    | "gray"
+    | "violet"
+    | "purple";
   animated?: boolean;
   className?: string;
   delay?: number;
