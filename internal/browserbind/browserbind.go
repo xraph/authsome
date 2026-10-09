@@ -75,14 +75,23 @@ func SetStateCookie(w http.ResponseWriter, r *http.Request, state string) {
 }
 
 // ClearStateCookie expires the binding cookie once the ceremony completed.
+//
+// It is built the way SetStateCookie builds the cookie it clears: the
+// plain-http variant first, then the __Host- name and Secure over https.
 func ClearStateCookie(w http.ResponseWriter, r *http.Request) {
-	name := InsecureCookieName
-	secure := false
-	if IsHTTPS(r) {
-		name = CookieName
-		secure = true
+	c := &http.Cookie{
+		Name:     InsecureCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
 	}
-	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode}) // #nosec G124 -- expiring the cookie; Secure mirrors the cookie being cleared
+	if IsHTTPS(r) {
+		c.Name = CookieName
+		c.Secure = true
+	}
+	http.SetCookie(w, c)
 }
 
 // Matches reports whether r carries the binding cookie for state.

@@ -1,9 +1,0 @@
-go 1.26.0
-
-toolchain go1.26.6
-
-use .
-
-replace github.com/xraph/chronicle => ../chronicle
-
-replace github.com/xraph/warden => /Users/rexraphael/Work/xraph/forgery/warden
