@@ -273,6 +273,13 @@ type SetupEnvironmentInput struct {
 type SetupResponse struct {
 	OK      bool   `json:"ok"`
 	Subject string `json:"subject"`
+	// VerificationRequired is true while the new account's email is
+	// unverified. The account becomes platform-owner when that email is
+	// verified, not at sign-up: setup runs unauthenticated on a fresh
+	// install, so granting it here would hand the deployment to whoever
+	// reached setup first. A dashboard reads this to tell you why you
+	// can't administer anything yet.
+	VerificationRequired bool `json:"verification_required"`
 }
 
 func setupStatusHandler(deps Deps) func(ctx context.Context, _ struct{}, _ contract.Principal) (SetupStatusResponse, error) {
@@ -576,7 +583,7 @@ func setupHandler(deps Deps) func(ctx context.Context, in SetupInput, _ contract
 		if u != nil {
 			subject = u.ID.String()
 		}
-		return SetupResponse{OK: true, Subject: subject}, nil
+		return SetupResponse{OK: true, Subject: subject, VerificationRequired: u != nil && !u.EmailVerified}, nil
 	}
 }
 
