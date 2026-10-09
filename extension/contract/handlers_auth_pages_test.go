@@ -248,6 +248,7 @@ func TestSetupHandlerAppliesPlatformEnvironmentAndOwner(t *testing.T) {
 	// Platform ownership is claimed on email verification (e0286f4c), so
 	// whoever reaches a fresh deployment first can't take it with an
 	// address they don't control. Setup doesn't get around that.
+	require.True(t, got.VerificationRequired, "setup must tell the caller the owner still has to verify")
 	require.False(t, holdsPlatformOwner(), "setup alone must not grant platform-owner")
 	secutil.VerifyEmail(t, eng, userID)
 	require.True(t, holdsPlatformOwner(), "the setup user becomes platform-owner once verified")
