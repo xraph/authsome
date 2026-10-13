@@ -1,7 +1,8 @@
 /** Convenience hooks built on top of useAuth. */
 
 import { useCallback, useEffect, useState } from "react";
-import type { ClientConfig, Organization, User, ListResponse } from "@authsome/ui-core";
+import { readOrganizationList } from "@authsome/ui-core";
+import type { ClientConfig, Organization, OrganizationList, User } from "@authsome/ui-core";
 import { useAuth } from "./context";
 
 /**
@@ -51,12 +52,15 @@ export function useUser(): {
  */
 export function useOrganizations(): {
   organizations: Organization[];
+  /** How many organizations were loaded. */
   total: number;
+  /** Cursor for the next page, when the server has more. */
+  nextCursor?: string;
   isLoading: boolean;
   reload: () => Promise<void>;
 } {
   const { client, session, isAuthenticated } = useAuth();
-  const [data, setData] = useState<ListResponse<Organization>>({ items: [], total: 0 });
+  const [data, setData] = useState<OrganizationList>({ organizations: [], total: 0 });
   const token = session?.session_token ?? null;
 
   // Which token the list we are holding was fetched for. Comparing it against
@@ -75,10 +79,8 @@ export function useOrganizations(): {
     if (!session) return;
     setIsRefreshing(true);
     try {
-      const res = (await client.listOrganizations(
-        session.session_token,
-      )) as unknown as ListResponse<Organization>;
-      setData(res);
+      const res = await client.listOrganizations(session.session_token);
+      setData(readOrganizationList(res));
       setLoadedFor(session.session_token);
     } finally {
       setIsRefreshing(false);
@@ -94,10 +96,8 @@ export function useOrganizations(): {
     let ignore = false;
     void (async () => {
       try {
-        const res = (await client.listOrganizations(
-          session.session_token,
-        )) as unknown as ListResponse<Organization>;
-        if (!ignore) setData(res);
+        const res = await client.listOrganizations(session.session_token);
+        if (!ignore) setData(readOrganizationList(res));
       } finally {
         if (!ignore) setLoadedFor(session.session_token);
       }
@@ -108,8 +108,9 @@ export function useOrganizations(): {
   }, [isAuthenticated, client, session]);
 
   return {
-    organizations: data.items,
+    organizations: data.organizations,
     total: data.total,
+    nextCursor: data.nextCursor,
     isLoading,
     reload: load,
   };

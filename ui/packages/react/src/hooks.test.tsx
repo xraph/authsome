@@ -45,7 +45,7 @@ function json(body: unknown) {
  * hydrates to authenticated. `calls` records paths so a test can prove a fetch
  * happened (or did not).
  */
-function harness(opts: { signedIn?: boolean } = {}) {
+function harness(opts: { signedIn?: boolean; legacyOrgList?: boolean } = {}) {
   const signedIn = opts.signedIn ?? true;
   const store = new Map<string, string>();
   if (signedIn) store.set("authsome:session", JSON.stringify(liveSession));
@@ -53,12 +53,19 @@ function harness(opts: { signedIn?: boolean } = {}) {
   const calls: string[] = [];
   let meFirstName = "Ada";
   let orgs = [{ id: "org_1", name: "Acme" }];
+  let nextCursor: string | undefined;
 
   const fetchFn = (async (url: string | URL) => {
     const path = new URL(String(url)).pathname;
     calls.push(path);
     if (path === "/v1/me") return json(makeUser(meFirstName));
-    if (path === "/v1/orgs") return json({ items: orgs, total: orgs.length });
+    // The API pages the list as { organizations, next_cursor }. Servers
+    // before that answered { items, total }, which legacyOrgList serves.
+    if (path === "/v1/orgs") {
+      return json(opts.legacyOrgList
+        ? { items: orgs, total: orgs.length }
+        : { organizations: orgs, next_cursor: nextCursor });
+    }
     return new Response("{}", { status: 404 });
   }) as unknown as typeof fetch;
 
@@ -76,6 +83,7 @@ function harness(opts: { signedIn?: boolean } = {}) {
     calls,
     setMeFirstName: (n: string) => { meFirstName = n; },
     setOrgs: (o: typeof orgs) => { orgs = o; },
+    setNextCursor: (c: string | undefined) => { nextCursor = c; },
     async mount(Probe: () => ReactNode) {
       let out!: ReturnType<typeof render>;
       await act(async () => { out = render(wrap(<Probe />)); });
@@ -201,5 +209,35 @@ describe("useOrganizations", () => {
 
     expect(seen.organizations).toHaveLength(2);
     expect(seen.total).toBe(2);
+  });
+
+  // The hook read { items, total } after the API moved to
+  // { organizations, next_cursor }, so the list came back empty and
+  // OrgSwitcher showed nothing.
+  it("reads the paged { organizations, next_cursor } list", async () => {
+    const h = harness();
+    h.setOrgs([{ id: "org_1", name: "Acme" }, { id: "org_2", name: "Globex" }]);
+    h.setNextCursor("cur_2");
+    let seen = null as unknown as ReturnType<typeof useOrganizations>;
+    await h.mount(function Probe() {
+      seen = useOrganizations();
+      return null;
+    });
+    await waitFor(() => expect(seen.organizations).toHaveLength(2));
+    expect(seen.organizations.map((o) => o.name)).toEqual(["Acme", "Globex"]);
+    expect(seen.total).toBe(2);
+    expect(seen.nextCursor).toBe("cur_2");
+  });
+
+  it("still reads the older { items, total } list", async () => {
+    const h = harness({ legacyOrgList: true });
+    let seen = null as unknown as ReturnType<typeof useOrganizations>;
+    await h.mount(function Probe() {
+      seen = useOrganizations();
+      return null;
+    });
+    await waitFor(() => expect(seen.organizations).toHaveLength(1));
+    expect(seen.total).toBe(1);
+    expect(seen.nextCursor).toBeUndefined();
   });
 });

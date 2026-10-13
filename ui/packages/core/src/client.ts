@@ -18,6 +18,7 @@ import type {
   ChallengeMFARequest,
   ChallengeResponse,
   DeviceCompleteResponse,
+  Organization,
   RecoveryVerifyResponse,
   SMSSendResponse,
   SMSVerifyResponse,
@@ -106,6 +107,36 @@ export interface ListOptions {
 export interface ListResponse<T> {
   items: T[];
   total: number;
+}
+
+/** The organization list as the UI hooks expose it. */
+export interface OrganizationList {
+  organizations: Organization[];
+  /** Cursor for the next page, when the server has more. */
+  nextCursor?: string;
+  /** How many organizations this list holds. */
+  total: number;
+}
+
+/**
+ * Reads a GET /v1/orgs response. The API pages the list as
+ * `{ organizations, next_cursor }`; servers before that answered
+ * `{ items, total }`. Either shape gives the same result, and anything else
+ * reads as an empty list.
+ */
+export function readOrganizationList(res: unknown): OrganizationList {
+  const body = (res ?? {}) as {
+    organizations?: Organization[] | null;
+    next_cursor?: string;
+    items?: Organization[] | null;
+    total?: number;
+  };
+  const organizations = body.organizations ?? body.items ?? [];
+  return {
+    organizations,
+    nextCursor: body.next_cursor || undefined,
+    total: typeof body.total === "number" ? body.total : organizations.length,
+  };
 }
 
 /** The signup decision returned by the app's waitlist. */

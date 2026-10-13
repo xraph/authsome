@@ -25,13 +25,13 @@ import {
 } from "vue";
 import {
   AuthManager,
+  readOrganizationList,
   type AuthConfig,
   type AuthState,
   type ClientConfig,
   type User,
   type Session,
   type Organization,
-  type ListResponse,
 } from "@authsome/ui-core";
 
 /** Injection key for the AuthManager. */
@@ -264,10 +264,10 @@ export function useOrganizations() {
     if (!session.value) return;
     isLoading.value = true;
     try {
-      const res = await manager
-        .getClient()
-        .listOrganizations(session.value.session_token) as unknown as ListResponse<Organization>;
-      organizations.value = res.items;
+      const res = readOrganizationList(
+        await manager.getClient().listOrganizations(session.value.session_token),
+      );
+      organizations.value = res.organizations;
       total.value = res.total;
     } finally {
       isLoading.value = false;
