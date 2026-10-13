@@ -8,8 +8,8 @@ toolchain go1.26.9
 
 require (
 	github.com/crewjam/saml v0.5.1
-	github.com/go-webauthn/webauthn v0.17.4
-	github.com/moby/moby/api v1.55.0
+	github.com/go-webauthn/webauthn v0.18.2
+	github.com/moby/moby/api v1.56.1
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/pquerna/otp v1.5.0
 	github.com/russellhaering/goxmldsig v1.6.1
@@ -17,24 +17,24 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	github.com/xraph/chronicle v1.7.0
 	github.com/xraph/dispatch v1.7.0
-	github.com/xraph/forge v1.12.5
-	github.com/xraph/forge/extensions/auth v1.12.5
+	github.com/xraph/forge v1.12.6
+	github.com/xraph/forge/extensions/auth v1.12.6
 	github.com/xraph/go-utils v1.3.0
-	github.com/xraph/grove v1.7.1
-	github.com/xraph/grove/drivers/mongodriver v1.7.1
-	github.com/xraph/grove/drivers/pgdriver v1.7.1
-	github.com/xraph/grove/drivers/sqlitedriver v1.7.1
+	github.com/xraph/grove v1.7.2
+	github.com/xraph/grove/drivers/mongodriver v1.7.2
+	github.com/xraph/grove/drivers/pgdriver v1.7.2
+	github.com/xraph/grove/drivers/sqlitedriver v1.7.2
 	github.com/xraph/herald v1.7.0
 	github.com/xraph/keysmith v1.7.0
 	github.com/xraph/ledger v1.7.0
-	github.com/xraph/relay v1.7.0
+	github.com/xraph/relay v1.7.1
 	github.com/xraph/vault v1.7.0
 	github.com/xraph/vessel v1.0.4
 	github.com/xraph/warden v1.7.0
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
-	go.mongodb.org/mongo-driver/v2 v2.9.1
-	golang.org/x/crypto v0.57.0
-	golang.org/x/oauth2 v0.36.0
+	go.mongodb.org/mongo-driver/v2 v2.9.2
+	golang.org/x/crypto v0.58.0
+	golang.org/x/oauth2 v0.37.0
 	gotest.tools/v3 v3.5.2
 )
 
@@ -118,7 +118,7 @@ require (
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
-	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
+	github.com/fxamacker/cbor/v2 v2.9.4 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -130,7 +130,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.30.3 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
-	github.com/go-webauthn/x v0.2.6 // indirect
+	github.com/go-webauthn/x v0.3.1 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.4.0 // indirect
@@ -196,10 +196,10 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp v0.0.0-20260727155853-b88d891fe743 // indirect
 	golang.org/x/net v0.60.0 // indirect
-	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/term v0.46.0 // indirect
-	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/term v0.47.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
