@@ -94,6 +94,8 @@ type customClaims struct {
 	// Both stay absent on a human token.
 	PrincipalKind string `json:"pk,omitempty"`
 	PrincipalID   string `json:"pid,omitempty"`
+	// ClientID is the RFC 9068 client_id claim, absent on a first-party token.
+	ClientID string `json:"client_id,omitempty"`
 	// Confirmation is a pointer with omitempty so an unbound token carries no
 	// cnf member at all, rather than an empty object. Anything reading these
 	// tokens treats the presence of cnf as the signal that a proof is required.
@@ -117,6 +119,7 @@ func (j *JWT) GenerateAccessToken(claims TokenClaims) (string, error) {
 		Act:           claims.Act,
 		PrincipalKind: claims.PrincipalKind,
 		PrincipalID:   claims.PrincipalID,
+		ClientID:      claims.ClientID,
 	}
 
 	if claims.DPoPJKT != "" {
@@ -190,6 +193,7 @@ func (j *JWT) ValidateAccessToken(tokenStr string) (*TokenClaims, error) {
 		Act:           claims.Act,
 		PrincipalKind: claims.PrincipalKind,
 		PrincipalID:   claims.PrincipalID,
+		ClientID:      claims.ClientID,
 		IssuedAt:      issuedAt,
 		ExpiresAt:     expiresAt,
 	}, nil

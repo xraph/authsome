@@ -707,6 +707,27 @@ func tryJWTAuth(
 	}
 	goCtx = WithUser(goCtx, u)
 
+	// A token issued to an OAuth2 client must be parked like its opaque
+	// counterpart, and parking keys off the session on the context. The
+	// opaque path gets that session from its row; this path loads no row, so
+	// rebuild the part parking and RequireScope read from the claims. Without
+	// it a third-party token authenticated as the user on every route.
+	if claims.ClientID != "" {
+		sess := &session.Session{
+			AppID:     appID,
+			UserID:    subjectID,
+			ClientID:  claims.ClientID,
+			Scopes:    claims.Scopes,
+			Audience:  claims.Audience,
+			DPoPJKT:   claims.DPoPJKT,
+			ExpiresAt: claims.ExpiresAt,
+		}
+		if sid, sidOK := SessionIDFrom(goCtx); sidOK {
+			sess.ID = sid
+		}
+		goCtx = WithSession(goCtx, sess)
+	}
+
 	goCtx = parkOAuthSession(ctx.Context(), goCtx)
 	ctx.WithContext(goCtx)
 	return jwtAuthAuthenticated, nil
