@@ -23,7 +23,7 @@ func (s *Store) CreateOrganization(ctx context.Context, o *organization.Organiza
 
 	_, err := s.mdb.NewInsert(m).Exec(ctx)
 	if err != nil {
-		return fmt.Errorf("authsome/mongo: create organization: %w", err)
+		return fmt.Errorf("authsome/mongo: create organization: %w", mapWriteErr(err))
 	}
 
 	return nil

@@ -1107,6 +1107,14 @@ func (s *Store) CreateOrganization(_ context.Context, o *organization.Organizati
 	if o.CreatedAt.IsZero() {
 		o.CreatedAt = time.Now()
 	}
+	// The SQL and mongo backends hold a unique (app_id, slug) index, so a
+	// second org with a taken slug fails there. Refuse it here too, so code
+	// tested against memory sees the same conflict.
+	for _, existing := range s.orgs {
+		if existing.AppID.String() == o.AppID.String() && existing.Slug == o.Slug {
+			return store.ErrConflict
+		}
+	}
 	o.UpdatedAt = o.CreatedAt
 	s.orgs[o.ID.String()] = o
 	return nil

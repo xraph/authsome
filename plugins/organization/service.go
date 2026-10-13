@@ -29,7 +29,16 @@ func (p *Plugin) CreateOrganization(ctx context.Context, o *organization.Organiz
 		o.UpdatedAt = now
 	}
 
+	// Checked up front so every backend answers a taken slug the same way.
+	// The store's unique index still catches a create that races this check.
+	if existing, err := p.store.GetOrganizationBySlug(ctx, o.AppID, o.Slug); err == nil && existing != nil {
+		return fmt.Errorf("organization: create organization: %w", ErrSlugTaken)
+	}
+
 	if err := p.store.CreateOrganization(ctx, o); err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			return fmt.Errorf("organization: create organization: %w: %w", ErrSlugTaken, err)
+		}
 		if p.logger != nil {
 			p.logger.Error("organization store: create failed",
 				log.String("org_id", o.ID.String()),

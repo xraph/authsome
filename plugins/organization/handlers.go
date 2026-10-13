@@ -1,6 +1,7 @@
 package organization
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/page"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/store"
 )
 
 // RegisterRoutes registers organization management routes on a forge.Router.
@@ -304,6 +306,9 @@ func (p *Plugin) handleCreateOrg(ctx forge.Context, req *CreateOrgRequest) (*org
 	}
 
 	if err := p.CreateOrganization(ctx.Context(), o); err != nil {
+		if errors.Is(err, ErrSlugTaken) {
+			return nil, forge.NewHTTPError(http.StatusConflict, "organization slug is already taken")
+		}
 		// Structured log so the next 500 carries the org context
 		// (id, app, env, slug, creator) regardless of which layer
 		// blew up. Inner store errors are also logged in service.go.
@@ -811,6 +816,9 @@ func mapErrorCtx(ctx forge.Context, err error) error {
 	if err == nil {
 		return nil
 	}
+	if errors.Is(err, store.ErrConflict) {
+		return forge.NewHTTPError(http.StatusConflict, "conflicts with an existing record")
+	}
 	return middleware.InternalError(ctx, err)
 }
 
@@ -822,6 +830,9 @@ func mapErrorCtx(ctx forge.Context, err error) error {
 func (p *Plugin) mapError(ctx forge.Context, err error) error {
 	if err == nil {
 		return nil
+	}
+	if errors.Is(err, store.ErrConflict) {
+		return forge.NewHTTPError(http.StatusConflict, "conflicts with an existing record")
 	}
 	if p != nil && p.logger != nil {
 		p.logger.Error("organization plugin: handler error",
