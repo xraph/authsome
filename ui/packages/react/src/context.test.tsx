@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { AuthProvider, useAuth } from "./context";
 
@@ -105,6 +105,30 @@ describe("AuthProvider", () => {
     await waitFor(() =>
       expect(screen.getByTestId("status").textContent).toBe("unauthenticated"),
     );
+  });
+
+  // The provider passes its props to the manager untouched, so a cookie
+  // session needs nothing of its own here. This pins that: the mount asks
+  // /v1/me with the cookie and no token, where the default mode would ask
+  // nothing and settle on unauthenticated.
+  it("passes session=\"cookie\" through to the manager", async () => {
+    const sent: { url: string; init?: RequestInit }[] = [];
+    const fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      sent.push({ url: String(url), init });
+      return new Response(JSON.stringify({ id: "ausr_1", email: "ada@example.com" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    const c = capture();
+    await c.mount({ session: "cookie", fetch });
+    await waitFor(() =>
+      expect(screen.getByTestId("status").textContent).toBe("authenticated"),
+    );
+    expect(sent.map((s) => s.url)).toEqual([`${BASE}/v1/me`]);
+    expect(sent[0].init?.credentials).toBe("include");
+    expect(new Headers(sent[0].init?.headers).get("Authorization")).toBeNull();
   });
 
   it("exposes the client and the action callbacks", async () => {

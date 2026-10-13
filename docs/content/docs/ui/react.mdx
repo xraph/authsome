@@ -39,6 +39,7 @@ function App() {
 |------|------|---------|-------------|
 | `baseURL` | `string` | -- | Base URL of your Authsome API |
 | `storage` | `TokenStorage` | in-memory | Token persistence. Defaults to memory so tokens never reach a store other scripts can read; pass `createLocalStorage()` to persist across reloads, or let the backend set httpOnly cookies (preferred) |
+| `session` | `"token" \| "cookie"` | `"token"` | Where the session lives. `"cookie"` keeps it in the httpOnly cookie your backend sets on sign-in, so no token is stored or reaches JavaScript (see below) |
 | `publishableKey` | `string` | -- | Publishable key for auto-discovering enabled auth methods |
 | `initialClientConfig` | `ClientConfig` | -- | Pre-fetched client config (avoids client-side fetch on mount) |
 | `fetch` | `typeof fetch` | `globalThis.fetch` | Custom fetch implementation |
@@ -46,6 +47,18 @@ function App() {
 | `onError` | `(error: APIError) => void` | -- | Callback on auth errors |
 
 When `publishableKey` is provided, the `AuthManager` automatically fetches the client configuration from the backend to discover which auth methods are enabled (social, passkey, MFA, etc.). If you pre-fetch the config server-side (e.g. with `getClientConfig()` in Next.js), pass it as `initialClientConfig` to skip the client-side fetch.
+
+### Cookie sessions
+
+```tsx
+<AuthProvider baseURL="https://api.example.com" session="cookie">
+  <App />
+</AuthProvider>
+```
+
+With `session="cookie"` every request goes out with `credentials: "include"`, and you never see a token. On mount the provider asks `GET /v1/me` who's signed in: a 200 means authenticated, a 401 or 403 means signed out, and a backend it can't reach leaves the state `unknown` and tries again in 30 seconds. Nothing is refreshed from the browser, since the backend's auto-refresh middleware renews the cookie for you, and `signOut()` calls `POST /v1/signout` so the backend can clear it. `useSessionToken()` returns an empty string in this mode.
+
+If your app and API are on different origins, the API has to allow credentialed CORS from your app's origin, and the cookie needs a `SameSite` setting that lets it travel.
 
 ## Core hooks
 
