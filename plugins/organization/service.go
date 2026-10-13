@@ -244,6 +244,7 @@ func (p *Plugin) RemoveMember(ctx context.Context, memberID id.MemberID) error {
 	if err := p.store.DeleteMember(ctx, memberID); err != nil {
 		return fmt.Errorf("organization: remove member: %w", err)
 	}
+	p.clearActiveOrg(ctx, member.UserID, member.OrgID)
 	p.plugins.EmitAfterMemberRemove(ctx, memberID)
 	p.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionMemberRemove,
@@ -259,6 +260,50 @@ func (p *Plugin) RemoveMember(ctx context.Context, memberID id.MemberID) error {
 		},
 	})
 	return nil
+}
+
+// clearActiveOrg drops orgID as the active organization from every session
+// userID holds, so a removed member's existing sessions stop acting in the
+// org they just left. The sessions themselves stay signed in, with no active
+// org, the same as SwitchActiveOrg to an empty org.
+//
+// The membership is already gone when this runs, so a failure here is logged
+// and not returned: reporting the removal as failed would be wrong, and
+// requests from those sessions are refused by the membership checks anyway.
+//
+// An access token minted before the removal still carries its org_id claim
+// until it expires. The next refresh mints one from the cleared session.
+func (p *Plugin) clearActiveOrg(ctx context.Context, userID id.UserID, orgID id.OrgID) {
+	sessions, err := p.store.ListUserSessions(ctx, userID)
+	if err != nil {
+		p.warn("organization: remove member: list sessions failed",
+			log.String("user_id", userID.String()),
+			log.String("org_id", orgID.String()),
+			log.String("error", err.Error()),
+		)
+		return
+	}
+	for _, sess := range sessions {
+		if sess == nil || sess.OrgID.String() != orgID.String() {
+			continue
+		}
+		// Work on a copy: a store may hand back the record it holds.
+		cleared := *sess
+		cleared.OrgID = id.OrgID{}
+		if err := p.store.UpdateSession(ctx, &cleared); err != nil {
+			p.warn("organization: remove member: clear active org failed",
+				log.String("session_id", sess.ID.String()),
+				log.String("org_id", orgID.String()),
+				log.String("error", err.Error()),
+			)
+		}
+	}
+}
+
+func (p *Plugin) warn(msg string, fields ...log.Field) {
+	if p.logger != nil {
+		p.logger.Warn(msg, fields...)
+	}
 }
 
 // ListMembers returns all members of an organization.
