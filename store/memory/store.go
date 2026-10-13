@@ -529,6 +529,9 @@ func (s *Store) GetSessionByRefreshToken(_ context.Context, refreshToken string)
 }
 
 func (s *Store) UpdateSession(_ context.Context, sess *session.Session) error {
+	if err := s.takeFault("UpdateSession"); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.sessions[sess.ID.String()]; !ok {

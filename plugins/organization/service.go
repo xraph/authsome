@@ -129,6 +129,10 @@ func actorFromContext(ctx context.Context) string {
 // MongoTx) so a midway failure rolls back atomically. EmitAfterOrgDelete only
 // fires once the cascade returns nil, so downstream plugins never see an event
 // for an org that wasn't actually deleted.
+//
+// Once the org is gone, every session its members hold that names it as the
+// active org has that org cleared, the same as RemoveMember does for one
+// member. A failure there is logged, not returned.
 func (p *Plugin) DeleteOrganization(ctx context.Context, orgID id.OrgID) error {
 	// The cascade is irreversible, so the trail must hold the record first.
 	tenant := ""
@@ -151,11 +155,45 @@ func (p *Plugin) DeleteOrganization(ctx context.Context, orgID id.OrgID) error {
 	}); err != nil {
 		return fmt.Errorf("organization: delete organization: audit trail unavailable: %w", err)
 	}
+	// The cascade deletes the membership rows, so read who belonged first.
+	// Their sessions are cleared once the org is actually gone.
+	memberUsers := p.orgMemberUsers(ctx, orgID)
 	if err := p.store.DeleteOrganizationCascade(ctx, orgID); err != nil {
 		return fmt.Errorf("organization: delete organization: %w", err)
 	}
+	for _, userID := range memberUsers {
+		p.clearActiveOrg(ctx, "delete organization", userID, orgID)
+	}
 	p.plugins.EmitAfterOrgDelete(ctx, orgID)
 	return nil
+}
+
+// orgMemberUsers returns the distinct users who hold a membership in orgID.
+// A failure is logged and yields nil: clearing sessions is cleanup after the
+// delete, and it must not stop the delete itself.
+func (p *Plugin) orgMemberUsers(ctx context.Context, orgID id.OrgID) []id.UserID {
+	members, err := p.store.ListMembers(ctx, orgID)
+	if err != nil {
+		p.warn("organization: delete organization: list members failed",
+			log.String("org_id", orgID.String()),
+			log.String("error", err.Error()),
+		)
+		return nil
+	}
+	seen := make(map[string]struct{}, len(members))
+	users := make([]id.UserID, 0, len(members))
+	for _, m := range members {
+		if m == nil {
+			continue
+		}
+		key := m.UserID.String()
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		users = append(users, m.UserID)
+	}
+	return users
 }
 
 // ListUserOrganizations returns all organizations a user belongs to.
@@ -244,7 +282,7 @@ func (p *Plugin) RemoveMember(ctx context.Context, memberID id.MemberID) error {
 	if err := p.store.DeleteMember(ctx, memberID); err != nil {
 		return fmt.Errorf("organization: remove member: %w", err)
 	}
-	p.clearActiveOrg(ctx, member.UserID, member.OrgID)
+	p.clearActiveOrg(ctx, "remove member", member.UserID, member.OrgID)
 	p.plugins.EmitAfterMemberRemove(ctx, memberID)
 	p.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionMemberRemove,
@@ -264,8 +302,9 @@ func (p *Plugin) RemoveMember(ctx context.Context, memberID id.MemberID) error {
 
 // clearActiveOrg drops orgID as the active organization from every session
 // userID holds, so a removed member's existing sessions stop acting in the
-// org they just left. The sessions themselves stay signed in, with no active
-// org, the same as SwitchActiveOrg to an empty org.
+// org they just left (or that was just deleted). The sessions themselves stay
+// signed in, with no active org, the same as SwitchActiveOrg to an empty org.
+// op names the caller in the log lines.
 //
 // The membership is already gone when this runs, so a failure here is logged
 // and not returned: reporting the removal as failed would be wrong, and
@@ -273,10 +312,10 @@ func (p *Plugin) RemoveMember(ctx context.Context, memberID id.MemberID) error {
 //
 // An access token minted before the removal still carries its org_id claim
 // until it expires. The next refresh mints one from the cleared session.
-func (p *Plugin) clearActiveOrg(ctx context.Context, userID id.UserID, orgID id.OrgID) {
+func (p *Plugin) clearActiveOrg(ctx context.Context, op string, userID id.UserID, orgID id.OrgID) {
 	sessions, err := p.store.ListUserSessions(ctx, userID)
 	if err != nil {
-		p.warn("organization: remove member: list sessions failed",
+		p.warn("organization: "+op+": list sessions failed",
 			log.String("user_id", userID.String()),
 			log.String("org_id", orgID.String()),
 			log.String("error", err.Error()),
@@ -291,7 +330,7 @@ func (p *Plugin) clearActiveOrg(ctx context.Context, userID id.UserID, orgID id.
 		cleared := *sess
 		cleared.OrgID = id.OrgID{}
 		if err := p.store.UpdateSession(ctx, &cleared); err != nil {
-			p.warn("organization: remove member: clear active org failed",
+			p.warn("organization: "+op+": clear active org failed",
 				log.String("session_id", sess.ID.String()),
 				log.String("org_id", orgID.String()),
 				log.String("error", err.Error()),
