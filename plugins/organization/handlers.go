@@ -320,7 +320,7 @@ func (p *Plugin) handleCreateOrg(ctx forge.Context, req *CreateOrgRequest) (*org
 		return nil, p.mapError(ctx, err)
 	}
 
-	return o, ctx.JSON(http.StatusCreated, o)
+	return nil, ctx.JSON(http.StatusCreated, o)
 }
 
 func (p *Plugin) handleListOrgs(ctx forge.Context, req *ListOrgsRequest) (*OrgListResponse, error) {
@@ -352,7 +352,7 @@ func (p *Plugin) handleGetOrg(ctx forge.Context, _ *GetOrgRequest) (*organizatio
 		return nil, mapErrorCtx(ctx, err)
 	}
 
-	return o, ctx.JSON(http.StatusOK, o)
+	return nil, ctx.JSON(http.StatusOK, o)
 }
 
 func (p *Plugin) handleUpdateOrg(ctx forge.Context, req *UpdateOrgRequest) (*organization.Organization, error) {
@@ -381,7 +381,7 @@ func (p *Plugin) handleUpdateOrg(ctx forge.Context, req *UpdateOrgRequest) (*org
 		return nil, mapErrorCtx(ctx, err)
 	}
 
-	return o, ctx.JSON(http.StatusOK, o)
+	return nil, ctx.JSON(http.StatusOK, o)
 }
 
 func (p *Plugin) handleDeleteOrg(ctx forge.Context, _ *DeleteOrgRequest) (*StatusResponse, error) {
@@ -461,7 +461,7 @@ func (p *Plugin) handleAddMember(ctx forge.Context, req *AddMemberRequest) (*org
 		return nil, mapErrorCtx(ctx, err)
 	}
 
-	return m, ctx.JSON(http.StatusCreated, m)
+	return nil, ctx.JSON(http.StatusCreated, m)
 }
 
 func (p *Plugin) handleRemoveMember(ctx forge.Context, _ *RemoveMemberRequest) (*StatusResponse, error) {
@@ -521,7 +521,7 @@ func (p *Plugin) handleUpdateMember(ctx forge.Context, req *UpdateMemberRequest)
 		return nil, mapErrorCtx(ctx, err)
 	}
 
-	return member, ctx.JSON(http.StatusOK, member)
+	return nil, ctx.JSON(http.StatusOK, member)
 }
 
 // ──────────────────────────────────────────────────
@@ -571,7 +571,7 @@ func (p *Plugin) handleCreateInvitation(ctx forge.Context, req *CreateInvitation
 		return nil, mapErrorCtx(ctx, err)
 	}
 
-	return inv, ctx.JSON(http.StatusCreated, inv)
+	return nil, ctx.JSON(http.StatusCreated, inv)
 }
 
 func (p *Plugin) handleListInvitations(ctx forge.Context, req *ListInvitationsRequest) (*InvitationListResponse, error) {
@@ -600,7 +600,7 @@ func (p *Plugin) handleAcceptInvitation(ctx forge.Context, req *AcceptInvitation
 		return nil, mapErrorCtx(ctx, err)
 	}
 
-	return member, ctx.JSON(http.StatusCreated, member)
+	return nil, ctx.JSON(http.StatusCreated, member)
 }
 
 func (p *Plugin) handleDeclineInvitation(ctx forge.Context, req *DeclineInvitationRequest) (*StatusResponse, error) {
@@ -645,7 +645,7 @@ func (p *Plugin) handleCreateTeam(ctx forge.Context, req *CreateTeamRequest) (*o
 		return nil, mapErrorCtx(ctx, err)
 	}
 
-	return t, ctx.JSON(http.StatusCreated, t)
+	return nil, ctx.JSON(http.StatusCreated, t)
 }
 
 func (p *Plugin) handleListTeams(ctx forge.Context, req *ListTeamsRequest) (*TeamListResponse, error) {
@@ -686,7 +686,7 @@ func (p *Plugin) handleGetTeam(ctx forge.Context, _ *GetTeamRequest) (*organizat
 		return nil, mapErrorCtx(ctx, err)
 	}
 
-	return t, ctx.JSON(http.StatusOK, t)
+	return nil, ctx.JSON(http.StatusOK, t)
 }
 
 func (p *Plugin) handleUpdateTeam(ctx forge.Context, req *UpdateTeamRequest) (*organization.Team, error) {
@@ -722,7 +722,7 @@ func (p *Plugin) handleUpdateTeam(ctx forge.Context, req *UpdateTeamRequest) (*o
 		return nil, mapErrorCtx(ctx, err)
 	}
 
-	return t, ctx.JSON(http.StatusOK, t)
+	return nil, ctx.JSON(http.StatusOK, t)
 }
 
 func (p *Plugin) handleDeleteTeam(ctx forge.Context, _ *DeleteTeamRequest) (*StatusResponse, error) {
