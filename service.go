@@ -1996,6 +1996,7 @@ func (e *Engine) TrustDevice(ctx context.Context, deviceID id.DeviceID) (*device
 		Resource:   hook.ResourceDevice,
 		ResourceID: d.ID.String(),
 		ActorID:    d.UserID.String(),
+		Category:   hook.CategoryAuth,
 	})
 	e.relayEvent(ctx, "device.trusted", d.AppID.String(), map[string]string{
 		"device_id": d.ID.String(),
@@ -2043,6 +2044,7 @@ func (e *Engine) RegisterDevice(ctx context.Context, d *device.Device) (*device.
 		Resource:   hook.ResourceDevice,
 		ResourceID: d.ID.String(),
 		ActorID:    d.UserID.String(),
+		Category:   hook.CategoryAuth,
 	})
 	e.relayEvent(ctx, "device.registered", d.AppID.String(), map[string]string{
 		"device_id": d.ID.String(),
@@ -2091,6 +2093,7 @@ func (e *Engine) CreateRole(ctx context.Context, r *rbac.Role) error {
 		Resource:   hook.ResourceRole,
 		ResourceID: r.ID,
 		Tenant:     r.AppID,
+		Category:   hook.CategoryAccess,
 	})
 	e.relayEvent(ctx, "rbac.role.created", r.AppID, map[string]string{
 		"role_id":   r.ID,
@@ -2146,6 +2149,7 @@ func (e *Engine) UpdateRole(ctx context.Context, r *rbac.Role) error {
 		Resource:   hook.ResourceRole,
 		ResourceID: r.ID,
 		Tenant:     r.AppID,
+		Category:   hook.CategoryAccess,
 	})
 
 	return nil
@@ -2163,6 +2167,7 @@ func (e *Engine) DeleteRole(ctx context.Context, appID id.AppID, roleID id.RoleI
 		Resource:   hook.ResourceRole,
 		ResourceID: roleID.String(),
 		Tenant:     appID.String(),
+		Category:   hook.CategoryAccess,
 	})
 
 	return nil
@@ -2217,6 +2222,7 @@ func (e *Engine) AssignUserRole(ctx context.Context, appID id.AppID, ur *rbac.Us
 		ActorID:    ur.UserID,
 		Tenant:     appID.String(),
 		Metadata:   hookMeta,
+		Category:   hook.CategoryAccess,
 	})
 
 	return nil
@@ -2239,6 +2245,7 @@ func (e *Engine) UnassignUserRole(ctx context.Context, appID id.AppID, userID id
 		ActorID:    userID.String(),
 		Tenant:     appID.String(),
 		Metadata:   hookMeta,
+		Category:   hook.CategoryAccess,
 	})
 
 	return nil

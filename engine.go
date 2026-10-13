@@ -945,6 +945,7 @@ func (e *Engine) SwitchActiveOrg(ctx context.Context, sessionID id.SessionID, ne
 		ActorID:    sess.UserID.String(),
 		Tenant:     newOrgID.String(),
 		Metadata:   map[string]string{"event": "switch_active_org"},
+		Category:   hook.CategoryAuth,
 	})
 
 	return sess, nil

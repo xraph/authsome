@@ -77,6 +77,7 @@ func (p *Plugin) CreateOrganization(ctx context.Context, o *organization.Organiz
 		ResourceID: o.ID.String(),
 		ActorID:    o.CreatedBy.String(),
 		Tenant:     o.AppID.String(),
+		Category:   hook.CategoryOrg,
 	})
 	p.relayEvent(ctx, "org.created", o.AppID.String(), map[string]string{
 		"org_id":   o.ID.String(),
@@ -402,6 +403,7 @@ func (p *Plugin) AcceptInvitation(ctx context.Context, token string) (*organizat
 		ResourceID: inv.ID.String(),
 		ActorID:    u.ID.String(),
 		Tenant:     inv.OrgID.String(),
+		Category:   hook.CategoryOrg,
 	})
 	p.relayEvent(ctx, "org.invitation.accepted", inv.OrgID.String(), map[string]string{
 		"invitation_id": inv.ID.String(),
@@ -433,6 +435,7 @@ func (p *Plugin) DeclineInvitation(ctx context.Context, token string) error {
 		Resource:   hook.ResourceInvitation,
 		ResourceID: inv.ID.String(),
 		Tenant:     inv.OrgID.String(),
+		Category:   hook.CategoryOrg,
 	})
 	p.relayEvent(ctx, "org.invitation.declined", inv.OrgID.String(), map[string]string{
 		"invitation_id": inv.ID.String(),
@@ -463,6 +466,7 @@ func (p *Plugin) CreateTeam(ctx context.Context, t *organization.Team) error {
 		Resource:   hook.ResourceTeam,
 		ResourceID: t.ID.String(),
 		Tenant:     t.OrgID.String(),
+		Category:   hook.CategoryOrg,
 	})
 	p.relayEvent(ctx, "org.team.created", t.OrgID.String(), map[string]string{
 		"team_id":   t.ID.String(),
@@ -489,6 +493,7 @@ func (p *Plugin) UpdateTeam(ctx context.Context, t *organization.Team) error {
 		Resource:   hook.ResourceTeam,
 		ResourceID: t.ID.String(),
 		Tenant:     t.OrgID.String(),
+		Category:   hook.CategoryOrg,
 	})
 
 	return nil
@@ -504,6 +509,7 @@ func (p *Plugin) DeleteTeam(ctx context.Context, teamID id.TeamID) error {
 		Action:     hook.ActionTeamDelete,
 		Resource:   hook.ResourceTeam,
 		ResourceID: teamID.String(),
+		Category:   hook.CategoryOrg,
 	})
 
 	return nil

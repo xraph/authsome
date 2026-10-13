@@ -45,7 +45,9 @@ type Event struct {
 	Err        error             `json:"-"`
 
 	// Audit shape. Severity defaults to info and Outcome is derived from Err
-	// when left empty. Category groups events for reporting ("auth", "admin").
+	// when left empty. Category groups events for reporting ("auth", "admin");
+	// when left empty it is filled from CategoryFor, because an audit sink
+	// refuses a record without one.
 	Severity string `json:"severity,omitempty"`
 	Category string `json:"category,omitempty"`
 	Outcome  string `json:"outcome,omitempty"`
@@ -83,7 +85,8 @@ func (b *Bus) On(name string, handler Handler) {
 }
 
 // enrich fills the defaults every event carries: timestamp, outcome from Err,
-// info severity, and the request correlation fields from the context. It
+// info severity, a category from CategoryFor, and the request correlation
+// fields from the context. It
 // also warns about an event with no tenant, because such an event cannot be
 // found again by the tenant it concerns.
 func (b *Bus) enrich(ctx context.Context, event *Event) {
@@ -99,6 +102,9 @@ func (b *Bus) enrich(ctx context.Context, event *Event) {
 	}
 	if event.Severity == "" {
 		event.Severity = SeverityInfo
+	}
+	if event.Category == "" {
+		event.Category = CategoryFor(event.Action, event.Resource)
 	}
 	if event.Reason == "" && event.Err != nil {
 		event.Reason = event.Err.Error()
