@@ -353,8 +353,26 @@ func (p *Plugin) ListInvitationsPage(ctx context.Context, orgID id.OrgID, opts p
 	return p.store.ListInvitationsPage(ctx, orgID, opts)
 }
 
-// AcceptInvitation accepts a pending invitation by token and creates a member.
+// AcceptInvitation accepts a pending invitation by token and adds whichever
+// account owns the invited email (primary or secondary) as a member. It does
+// not check who is asking, so call it only from code you trust. The HTTP
+// endpoint uses AcceptInvitationAs instead.
 func (p *Plugin) AcceptInvitation(ctx context.Context, token string) (*organization.Member, error) {
+	return p.acceptInvitation(ctx, token, id.UserID{}, false)
+}
+
+// AcceptInvitationAs accepts a pending invitation on behalf of userID, the
+// signed-in caller. It succeeds only when userID owns the invited email,
+// primary or secondary. Anyone else gets ErrInvitationEmailMismatch and the
+// invitation stays pending for the person it was sent to.
+func (p *Plugin) AcceptInvitationAs(ctx context.Context, token string, userID id.UserID) (*organization.Member, error) {
+	if userID.IsNil() {
+		return nil, fmt.Errorf("organization: accept invitation: %w", ErrInvitationEmailMismatch)
+	}
+	return p.acceptInvitation(ctx, token, userID, true)
+}
+
+func (p *Plugin) acceptInvitation(ctx context.Context, token string, callerID id.UserID, requireCaller bool) (*organization.Member, error) {
 	inv, err := p.store.GetInvitationByToken(ctx, token)
 	if err != nil {
 		return nil, fmt.Errorf("organization: accept invitation: %w", err)
@@ -370,12 +388,6 @@ func (p *Plugin) AcceptInvitation(ctx context.Context, token string) (*organizat
 		return nil, fmt.Errorf("organization: accept invitation: %w", ErrInvitationExpired)
 	}
 
-	// Mark invitation as accepted
-	inv.Status = organization.InvitationAccepted
-	if updateErr := p.store.UpdateInvitation(ctx, inv); updateErr != nil {
-		return nil, fmt.Errorf("organization: accept invitation: %w", updateErr)
-	}
-
 	// Get organization to resolve AppID for the user lookup
 	org, err := p.store.GetOrganization(ctx, inv.OrgID)
 	if err != nil {
@@ -384,8 +396,22 @@ func (p *Plugin) AcceptInvitation(ctx context.Context, token string) (*organizat
 
 	// Look up user by any of their emails to get their user ID
 	u, err := p.store.GetUserByAnyEmail(ctx, org.AppID, id.Nil, inv.Email)
+	if requireCaller {
+		// Whoever holds the token is not necessarily who it was sent to. Only
+		// the account that owns the invited address may take the seat.
+		if errors.Is(err, store.ErrNotFound) || (err == nil && u.ID.String() != callerID.String()) {
+			return nil, fmt.Errorf("organization: accept invitation: %w", ErrInvitationEmailMismatch)
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("organization: accept invitation: user not found for email: %w", err)
+	}
+
+	// Mark the invitation accepted only once we know who is taking it, so a
+	// refused attempt leaves it pending.
+	inv.Status = organization.InvitationAccepted
+	if updateErr := p.store.UpdateInvitation(ctx, inv); updateErr != nil {
+		return nil, fmt.Errorf("organization: accept invitation: %w", updateErr)
 	}
 
 	// Create member

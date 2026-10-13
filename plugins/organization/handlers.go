@@ -132,7 +132,7 @@ func (p *Plugin) registerOrgRoutes(router forge.Router) error {
 	// Invitations
 	if err := g.POST("/orgs/invitations/accept", p.handleAcceptInvitation,
 		forge.WithSummary("Accept invitation"),
-		forge.WithDescription("Accepts a pending organization invitation using the invitation token."),
+		forge.WithDescription("Accepts a pending organization invitation using the invitation token. The signed-in user must own the email the invitation was sent to."),
 		forge.WithOperationID("acceptInvitation"),
 		forge.WithRequestSchema(AcceptInvitationRequest{}),
 		forge.WithCreatedResponse(organization.Member{}),
@@ -596,14 +596,21 @@ func (p *Plugin) handleListInvitations(ctx forge.Context, req *ListInvitationsRe
 }
 
 func (p *Plugin) handleAcceptInvitation(ctx forge.Context, req *AcceptInvitationRequest) (*organization.Member, error) {
+	userID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
 	if req.Token == "" {
 		return nil, forge.BadRequest("token is required")
 	}
 
-	member, err := p.AcceptInvitation(ctx.Context(), req.Token)
+	member, err := p.AcceptInvitationAs(ctx.Context(), req.Token, userID)
 	if err != nil {
-		if errors.Is(err, ErrInvitationExpired) {
+		switch {
+		case errors.Is(err, ErrInvitationExpired):
 			return nil, forge.NewHTTPError(http.StatusGone, "invitation has expired")
+		case errors.Is(err, ErrInvitationEmailMismatch):
+			return nil, forge.Forbidden("this invitation was sent to a different email address; sign in with that address to accept it")
 		}
 		return nil, mapErrorCtx(ctx, err)
 	}
