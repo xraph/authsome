@@ -40,6 +40,7 @@ authsome.WithPlugin(organization.New(organization.Config{
 | Field | Type | Default | What it does |
 |---|---|---|---|
 | `PathPrefix` | `string` | engine `BasePath` | Where organisation routes are mounted |
+| `InvitationTTL` | `time.Duration` | 7 days | How long an invitation can be accepted. Accepting a lapsed one answers 410. Set it negative and invitations never expire |
 
 ## Endpoints
 

@@ -602,6 +602,9 @@ func (p *Plugin) handleAcceptInvitation(ctx forge.Context, req *AcceptInvitation
 
 	member, err := p.AcceptInvitation(ctx.Context(), req.Token)
 	if err != nil {
+		if errors.Is(err, ErrInvitationExpired) {
+			return nil, forge.NewHTTPError(http.StatusGone, "invitation has expired")
+		}
 		return nil, mapErrorCtx(ctx, err)
 	}
 

@@ -326,10 +326,16 @@ func (p *Plugin) UpdateMemberRole(ctx context.Context, memberID id.MemberID, rol
 // Invitation Management
 // ──────────────────────────────────────────────────
 
-// CreateInvitation creates an organization invitation.
+// CreateInvitation creates an organization invitation. An invitation with no
+// ExpiresAt gets one from Config.InvitationTTL (seven days by default).
 func (p *Plugin) CreateInvitation(ctx context.Context, inv *organization.Invitation) error {
 	if inv.CreatedAt.IsZero() {
 		inv.CreatedAt = time.Now()
+	}
+	if inv.ExpiresAt.IsZero() {
+		if ttl := p.config.invitationTTL(); ttl > 0 {
+			inv.ExpiresAt = inv.CreatedAt.Add(ttl)
+		}
 	}
 	if err := p.store.CreateInvitation(ctx, inv); err != nil {
 		return fmt.Errorf("organization: create invitation: %w", err)
@@ -361,7 +367,7 @@ func (p *Plugin) AcceptInvitation(ctx context.Context, token string) (*organizat
 	if !inv.ExpiresAt.IsZero() && time.Now().After(inv.ExpiresAt) {
 		inv.Status = organization.InvitationExpired
 		_ = p.store.UpdateInvitation(ctx, inv) //nolint:errcheck // best-effort revoke
-		return nil, fmt.Errorf("organization: invitation has expired")
+		return nil, fmt.Errorf("organization: accept invitation: %w", ErrInvitationExpired)
 	}
 
 	// Mark invitation as accepted

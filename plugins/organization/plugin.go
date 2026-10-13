@@ -3,6 +3,7 @@ package organization
 import (
 	"context"
 	"fmt"
+	"time"
 
 	log "github.com/xraph/go-utils/log"
 
@@ -26,6 +27,29 @@ type Config struct {
 	// PathPrefix is the HTTP path prefix for organization routes.
 	// Defaults to the engine's BasePath.
 	PathPrefix string
+
+	// InvitationTTL is how long an invitation can be accepted after it is
+	// created. Zero means DefaultInvitationTTL (seven days). A negative value
+	// turns expiry off, so invitations never lapse, which was the behaviour
+	// before this option existed.
+	InvitationTTL time.Duration
+}
+
+// DefaultInvitationTTL is how long an invitation stays acceptable when
+// Config.InvitationTTL is left at zero.
+const DefaultInvitationTTL = 7 * 24 * time.Hour
+
+// invitationTTL resolves Config.InvitationTTL: the default for zero, and
+// zero (no expiry) for a negative value.
+func (c Config) invitationTTL() time.Duration {
+	switch {
+	case c.InvitationTTL == 0:
+		return DefaultInvitationTTL
+	case c.InvitationTTL < 0:
+		return 0
+	default:
+		return c.InvitationTTL
+	}
 }
 
 // Plugin is the organization management plugin.
