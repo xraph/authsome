@@ -157,8 +157,10 @@ type Engine struct {
 	db *grove.DB
 
 	// Cached auth middleware — built once during InitPlugins() with full
-	// capability detection (JWT + strategies + cookie bridge).
-	authMiddleware forge.Middleware
+	// capability detection (JWT + strategies + cookie bridge). Held in an
+	// atomic so the lazy middleware AuthMiddleware hands out before then can
+	// read it from request goroutines.
+	authMiddleware atomic.Pointer[forge.Middleware]
 
 	// Forge auth provider registry — plugins register their providers here.
 	authRegistry auth.Registry
@@ -468,7 +470,7 @@ func (e *Engine) buildAuthMiddleware() {
 	// proof rather than a scheme it has no way to set. Losing that fact in here
 	// made every bound cookie session a permanent 401, which since sign-in
 	// started binding is every first-party sign-in under mode required.
-	e.authMiddleware = func(next forge.Handler) forge.Handler {
+	var built forge.Middleware = func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
 			r := ctx.Request()
 			if r.Header.Get("Authorization") == "" {
@@ -490,13 +492,33 @@ func (e *Engine) buildAuthMiddleware() {
 			return inner(next)(ctx)
 		}
 	}
+	e.authMiddleware.Store(&built)
 }
 
 // AuthMiddleware returns the engine's fully-configured non-blocking
 // authentication middleware (cookie bridge + JWT + strategies). Populates
 // user context when a valid token is present, passes through otherwise.
 // Applied globally by the extension.
-func (e *Engine) AuthMiddleware() forge.Middleware { return e.authMiddleware }
+//
+// It never returns nil. The real middleware is built by InitPlugins (which
+// Start calls). Ask for it before that and you get a middleware that looks
+// the real one up on every request, so you can mount it while you wire your
+// router and it starts authenticating once the engine is initialized. Until
+// then it passes requests through unauthenticated, which routes that need a
+// signed-in user already refuse.
+func (e *Engine) AuthMiddleware() forge.Middleware {
+	if mw := e.authMiddleware.Load(); mw != nil {
+		return *mw
+	}
+	return func(next forge.Handler) forge.Handler {
+		return func(ctx forge.Context) error {
+			if mw := e.authMiddleware.Load(); mw != nil {
+				return (*mw)(next)(ctx)
+			}
+			return next(ctx)
+		}
+	}
+}
 
 // AuthRegistry returns the forge auth provider registry. Plugins can register
 // their own auth providers and create middleware via registry.Middleware().
