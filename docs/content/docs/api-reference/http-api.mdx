@@ -1,6 +1,6 @@
 ---
 title: HTTP API Reference
-description: Complete reference for all Authsome REST endpoints: authentication, users, sessions, MFA, devices, organizations, RBAC, webhooks, and OAuth2.
+description: "Complete reference for all Authsome REST endpoints: authentication, users, sessions, MFA, devices, organizations, RBAC, webhooks, and OAuth2."
 ---
 
 Paths on this page are relative to `/v1`. Standalone, the API is mounted at `/v1`; with the Forge extension it's under `<base_path>/v1`, which is `/authsome/v1` by default. Plugin routes exist only when the plugin is registered (and, standalone, when you mount its routes). Everything returns JSON. Authentication is via `Authorization: Bearer <session_token>` header unless noted otherwise. Tenant resolution depends on your Forge middleware configuration.

@@ -1,6 +1,6 @@
 ---
 title: Relay Bridge
-description: Reliable webhook delivery: sends auth event payloads to Relay for fan-out with retry semantics.
+description: "Reliable webhook delivery: sends auth event payloads to Relay for fan-out with retry semantics."
 ---
 
 The Relay bridge connects Authsome to the Relay webhook delivery extension. When configured, every auth event that triggers a webhook (sign-in, sign-up, org changes, MFA enrollment, API key creation, and more) is sent to Relay, which handles reliable fan-out to all registered subscriber endpoints with configurable retry policies.
