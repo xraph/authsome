@@ -258,6 +258,11 @@ type SessionConfig struct {
 	// CleanupInterval is how often the retention sweeper runs (default: 1h).
 	// A negative value disables it.
 	CleanupInterval time.Duration `json:"cleanup_interval" mapstructure:"cleanup_interval" yaml:"cleanup_interval"`
+
+	// AuthTokenCookie accepts a session token from a cookie named
+	// auth_token (default: false). The forge dashboard turns it on by
+	// itself; see authsome.SessionConfig.AuthTokenCookie.
+	AuthTokenCookie bool `json:"auth_token_cookie" mapstructure:"auth_token_cookie" yaml:"auth_token_cookie"`
 }
 
 // PasswordConfig configures password validation.
