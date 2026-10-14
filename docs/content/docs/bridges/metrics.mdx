@@ -1,9 +1,9 @@
 ---
 title: Metrics Bridge
-description: Observability integration — emits authentication metrics to Prometheus, OpenTelemetry, or any collector backend.
+description: Observability integration: emits authentication metrics to Prometheus, OpenTelemetry, or any collector backend.
 ---
 
-The Metrics bridge connects Authsome to your observability stack. When configured, Authsome emits metrics for every authentication event: event counts by action and outcome, sign-in latency, session counts, active user gauges, and more. The bridge is a thin interface — you wire it to Prometheus, OpenTelemetry, Datadog, or any other metrics backend.
+The Metrics bridge connects Authsome to your observability stack. When configured, Authsome emits metrics for every authentication event: event counts by action and outcome, sign-in latency, session counts, active user gauges, and more. The bridge is a thin interface: you wire it to Prometheus, OpenTelemetry, Datadog, or any other metrics backend.
 
 ## Interface
 
@@ -86,7 +86,8 @@ func (c *PrometheusCollector) IncrementGauge(name, tenant string, delta int) {
 }
 
 // Register with Authsome.
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(pgStore),
     authsome.WithMetrics(NewPrometheusCollector(prometheus.DefaultRegisterer)),
 )
@@ -175,4 +176,4 @@ The following events and gauges are emitted when the Metrics bridge is configure
 
 ## When no metrics bridge is configured
 
-Without a metrics bridge, Authsome performs all operations normally. No metrics overhead is incurred — the bridge check is a single nil pointer check. Configuring metrics is purely additive.
+Without a metrics bridge, Authsome performs all operations normally. No metrics overhead is incurred: the bridge check is a single nil pointer check. Configuring metrics is purely additive.

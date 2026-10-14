@@ -59,16 +59,16 @@ The `Engine` is the top-level orchestrator. It holds references to the store, pl
 ```go
 import "github.com/xraph/authsome"
 
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
     authsome.WithStore(myStore),
     authsome.WithPlugin(passwordPlugin),
-    authsome.WithWarden(wardenEngine),    // optional: Warden for RBAC
-    authsome.WithChronicle(chronicle),    // optional: audit trail
+    authsome.WithWarden(wardenEngine),    // required: authorization
+    authsome.WithChronicle(chronicle),    // required: audit trail
     authsome.WithMailer(mailer),          // optional: transactional email
 )
 ```
 
-The engine is constructed with `authsome.New(opts...)` and activated with `eng.Start(ctx)`. It exposes the full service API as methods on `*Engine`.
+The engine is constructed with `authsome.NewEngine(opts...)` and activated with `eng.Start(ctx)`. It exposes the full service API as methods on `*Engine`.
 
 ## Store abstraction
 
@@ -76,41 +76,24 @@ All persistence goes through the `store.Store` composite interface. Swap the bac
 
 ```go
 // Development: no external dependencies
-store := memory.New()
+st := memory.New()
 
-// Production: PostgreSQL
-store, err := postgres.New(ctx, "postgres://user:pass@host:5432/db")
+// Production: PostgreSQL, on a Grove database opened with pgdriver
+st := postgres.New(groveDB)
 
-// Alternative: SQLite for embedded applications
-store, err := sqlite.New(ctx, "./auth.db")
-
-// Alternative: MongoDB for document-oriented workloads
-store, err := mongo.New(ctx, "mongodb://localhost:27017", "authdb")
+// SQLite (sqlitedriver) or MongoDB (mongodriver) work the same way
+st := sqlite.New(groveDB)
+st := mongo.New(groveDB)
 ```
 
-The composite interface covers:
-
-| Sub-interface | Responsibility |
-|---------------|----------------|
-| `UserStore` | User CRUD, lookup by email/username/phone |
-| `SessionStore` | Session CRUD, lookup by token/refresh token |
-| `DeviceStore` | Device fingerprinting and trusted device management |
-| `WebhookStore` | Webhook endpoint registration and delivery records |
-| `OrganizationStore` | Orgs, members, teams, invitations |
-| `EnvironmentStore` | Environment isolation per app |
-| `RBACStore` | Roles, permissions, user role assignments |
-| `FormConfigStore` | Dynamic form field definitions |
-| `AppSessionConfigStore` | Per-app session configuration overrides |
-| `PasswordResetStore` | Password reset tokens |
-| `VerificationStore` | Email/phone verification tokens |
-| `PasswordHistoryStore` | Historic password hashes for reuse prevention |
+Each SQL or Mongo store takes a `*grove.DB`; [Store Backends](/docs/stores/overview) shows how to open one and lists the domain stores that `store.Store` is made of (users, sessions, accounts, apps, organizations, devices, webhooks, notifications, API keys, environments, form and branding configs, per-app session and client configs, settings, service accounts, principals, KV, retention and paging).
 
 ## Plugin system
 
 Plugins are the primary extension point. Each plugin implements the `plugin.Plugin` base interface and any combination of optional lifecycle interfaces.
 
 ```go
-// Base interface — all plugins must implement this.
+// Base interface: all plugins must implement this.
 type Plugin interface {
     Name() string
 }
@@ -193,30 +176,32 @@ The hook bus defines 40+ named action constants:
 
 ## Strategy registry
 
-Authentication strategies are registered with a priority. When a sign-in request arrives, the engine selects the highest-priority strategy that accepts the request.
+Authentication strategies are registered with a priority, and the registry tries them in priority order.
 
 ```go
 import "github.com/xraph/authsome/strategy"
 
-// Plugins register strategies through the plugin.AuthMethodContributor interface.
-// You can also register strategies directly:
-eng.RegisterStrategy(myStrategy, 5)
+// Plugins register their strategies themselves. To add your own:
+authsome.WithStrategy(myStrategy, 5)
+
+// or, on a built engine:
+eng.Strategies().Register(myStrategy, 5)
 ```
 
 Lower priority values are evaluated first (priority 1 runs before priority 10). This allows you to insert custom strategies that intercept before built-in ones.
 
 ## Bridges
 
-Bridges are optional integration interfaces. When a bridge is not configured, the corresponding functionality is silently skipped (fail-open).
+Bridges are the interfaces Authsome uses to reach other systems. Chronicle and Warden are required: `NewEngine` returns an error without them. The rest are optional, and when one isn't configured Authsome uses a no-op and skips that work.
 
 | Bridge | Interface | Used for |
 |--------|-----------|----------|
-| `Chronicle` | `bridge.Chronicle` | Audit trail — records every auth event with severity and outcome |
-| `Relay` | `bridge.EventRelay` | Webhook delivery — forwards hook events to registered endpoints |
+| `Chronicle` | `bridge.Chronicle` | Audit trail: records every auth event with severity and outcome |
+| `Relay` | `bridge.EventRelay` | Webhook delivery: forwards hook events to registered endpoints |
 | `Mailer` | `bridge.Mailer` | Transactional email for magic links, verifications, password resets |
 | `SMSSender` | `bridge.SMSSender` | SMS delivery for phone OTP and MFA SMS codes |
 | `Herald` | `bridge.Herald` | Unified multi-channel notification system (replaces Mailer + SMS) |
-| `Warden` | `bridge.Authorizer` | Authorization engine for RBAC/ReBAC/ABAC policy evaluation |
+| `Warden` | `*warden.Engine` (`WithWarden`), or a `bridge.Authorizer` (`WithAuthorizer`) | Authorization for RBAC/ReBAC/ABAC policy evaluation |
 | `Keysmith` | `bridge.KeyManager` | API key management with rotation, scopes, and usage tracking |
 | `Vault` | `bridge.Vault` | Secrets management and feature flag access |
 | `Dispatch` | `bridge.Dispatcher` | Background job queue for async tasks |
@@ -239,11 +224,11 @@ import (
 authsome.WithChronicle(chronicleadapter.New(chronicleEngine))
 
 // Mailer: SMTP or Resend
-authsome.WithMailer(maileradapter.NewSMTP(smtpConfig))
-authsome.WithMailer(maileradapter.NewResend(resendAPIKey))
+authsome.WithMailer(maileradapter.NewSMTPMailer("smtp.example.com", "587", user, pass, "noreply@example.com"))
+authsome.WithMailer(maileradapter.NewResendMailer(resendAPIKey, "noreply@example.com"))
 
 // SMS: Twilio
-authsome.WithSMSSender(smsadapter.NewTwilio(twilioConfig))
+authsome.WithSMSSender(smsadapter.NewTwilioSender(accountSID, authToken, "+15550001111"))
 
 // Relay: wrap a Relay engine
 authsome.WithEventRelay(relayadapter.New(relayEngine))
@@ -251,32 +236,45 @@ authsome.WithEventRelay(relayadapter.New(relayEngine))
 
 ## API layer and middleware
 
-The engine integrates with Forge-based HTTP applications through the extension system.
+The HTTP API is a set of Forge routes. In a Forge app, register the extension and it mounts them for you:
 
 ```go
-import "github.com/xraph/authsome/extension"
+import authsomeext "github.com/xraph/authsome/extension"
 
-// Register as a Forge extension (auto-wires store from DI container).
-app.Register(extension.New(
-    extension.WithPlugin(password.New()),
-    extension.WithPlugin(social.New(socialCfg)),
+app.RegisterExtension(authsomeext.New(
+    authsomeext.WithPlugin(password.New()),
+    authsomeext.WithPlugin(social.New(socialCfg)),
 ))
 ```
 
-Standalone middleware is available for non-Forge applications:
+Without the extension, mount the API on a Forge router yourself, with the auth middleware in front:
 
 ```go
-import "github.com/xraph/authsome/middleware"
-
-// Extract and validate Bearer token, inject user into context.
-mux.Handle("/api/", middleware.RequireAuth(eng)(apiHandler))
-
-// Require a specific permission (delegates to Warden if configured).
-mux.Handle("/api/admin/", middleware.RequirePermission(eng, "admin", "users")(adminHandler))
-
-// Apply per-endpoint rate limiting.
-mux.Handle("/api/", middleware.RateLimit(eng)(apiHandler))
+router := forge.NewRouter()
+router.Use(middleware.AuthMiddleware(eng.ResolveSessionByToken, eng.ResolveUser, nil))
+if err := api.New(eng).RegisterRoutes(router); err != nil {
+    log.Fatal(err)
+}
+for _, rp := range eng.Plugins().RouteProviders() { // plugin routes
+    if err := rp.RegisterRoutes(router); err != nil {
+        log.Fatal(err)
+    }
+}
+http.ListenAndServe(":8080", router.Handler())
 ```
+
+The `middleware` package also has guards for your own routes, all `forge.Middleware`:
+
+```go
+// Reject requests without an authenticated user.
+router.GET("/api/me", handler, forge.WithMiddleware(middleware.RequireAuth()))
+
+// Require a permission. The engine implements PermissionChecker through Warden.
+router.GET("/api/admin/users", adminHandler,
+    forge.WithMiddleware(middleware.RequirePermission(eng, "read", "users")))
+```
+
+`middleware.RateLimit(limiter, cfg)`, `RequireScope`, `RequireAnyRole`, `CSRF` and `SecurityHeaders` are there too.
 
 ## Token formats
 
@@ -285,17 +283,18 @@ Access tokens are opaque 64-character hex strings by default. Switch to signed J
 ```go
 import "github.com/xraph/authsome/tokenformat"
 
-// JWT format with RSA-256 signing key.
+// JWT format with an RS256 signing key (jwt is github.com/golang-jwt/jwt/v5).
 jwtFmt, err := tokenformat.NewJWT(tokenformat.JWTConfig{
-    Algorithm:  "RS256",
-    PrivateKey: rsaPrivateKey,
-    PublicKey:  rsaPublicKey,
-    Issuer:     "https://auth.myapp.com",
-    Audience:   []string{"https://api.myapp.com"},
+    SigningMethod: jwt.SigningMethodRS256,
+    SigningKey:    rsaPrivateKey,
+    VerifyKey:     &rsaPrivateKey.PublicKey,
+    KeyID:         "key-1",
+    Issuer:        "https://auth.myapp.com",
+    Audience:      "https://api.myapp.com",
 })
 
-// Register JWT format for a specific app.
-authsome.WithJWTFormat("myapp", jwtFmt)
+// Use JWTs for one app.
+authsome.WithJWTFormat(appID.String(), jwtFmt)
 ```
 
 When JWT is configured for an app, all sessions created for that app receive a signed JWT as the access token. The refresh token remains opaque.
@@ -304,7 +303,7 @@ When JWT is configured for an app, all sessions created for that app receive a s
 
 | Package | Import path | Purpose |
 |---------|-------------|---------|
-| `authsome` | `github.com/xraph/authsome` | Root — Engine, Config, Option, entity type aliases |
+| `authsome` | `github.com/xraph/authsome` | Root: Engine, Config, Option, entity type aliases |
 | `id` | `github.com/xraph/authsome/id` | TypeID-based identifiers with 27 prefixes |
 | `account` | `github.com/xraph/authsome/account` | SignUpRequest, SignInRequest, session creation, password hashing |
 | `user` | `github.com/xraph/authsome/user` | User entity and UserQuery/UserList pagination types |

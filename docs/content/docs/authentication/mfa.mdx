@@ -3,37 +3,30 @@ title: Multi-Factor Authentication
 description: Add TOTP, SMS OTP, and recovery codes as a second authentication factor with the MFA plugin.
 ---
 
-The `mfa` plugin adds a second authentication factor to any sign-in flow. It supports TOTP (Time-based One-Time Passwords) for authenticator apps, SMS OTP for phone-based verification, and one-time recovery codes as a fallback. MFA is enforced after primary authentication succeeds — the user signs in with their password (or other primary method), receives an MFA challenge, and must complete it before a session is issued.
+The `mfa` plugin adds a second authentication factor to any sign-in flow. It supports TOTP (Time-based One-Time Passwords) for authenticator apps, SMS OTP for phone-based verification, and one-time recovery codes as a fallback. MFA runs after primary authentication succeeds: the user signs in with their password (or other primary method), receives an MFA challenge, and must complete it before a session is issued.
 
 ## Setup
 
 ```go
 import (
     "github.com/xraph/authsome"
-    "github.com/xraph/authsome/plugins/mfa"
     "github.com/xraph/authsome/bridge/smsadapter"
+    "github.com/xraph/authsome/plugins/mfa"
+    "github.com/xraph/authsome/plugins/password"
 )
 
-eng, err := authsome.New(
-    authsome.WithStore(store),
+eng, err := authsome.NewEngine(
+    // plus WithStore, WithChronicle and WithWarden (see Getting Started)
+    authsome.WithDB(db), // where enrollments are stored; memory without it
     authsome.WithPlugin(password.New()),
-    authsome.WithMFAStore(mfaStore),       // mfa.Store implementation
-    authsome.WithSMSSender(smsSender),      // required for SMS OTP
-    authsome.WithConfig(authsome.Config{
-        AppID: "myapp",
-        MFA: authsome.MFAConfig{
-            Enabled:            true,
-            Issuer:             "MyApp",          // shown in authenticator apps
-            RecoveryCodeCount:  8,                // number of backup codes
-            SMSCodeLength:      6,                // digits in SMS codes
-            SMSCodeTTL:         "5m",             // SMS code validity window
-            EnforceForAllUsers: false,            // true = require MFA for every user
-        },
-    }),
+    authsome.WithPlugin(mfa.New(mfa.Config{
+        Issuer: "MyApp", // shown in authenticator apps; the mfa.issuer setting overrides it
+    })),
+    authsome.WithSMSSender(smsadapter.NewTwilioSender(sid, token, "+15559876543")), // for SMS codes
 )
 ```
 
-> **Note:** The MFA plugin requires a dedicated `mfa.Store` for enrollment and recovery code persistence. All store backends (PostgreSQL, SQLite, MongoDB, memory) ship with MFA store implementations.
+`mfa.Config` has two fields, `Issuer` and `StepUpWindow`. The plugin stores enrollments and recovery codes itself: in the engine's database (PostgreSQL, SQLite or MongoDB, chosen from `WithDB`), wrapped in the token encryptor, or in memory when the engine has no database. Each enrollment gets 8 recovery codes. Whether MFA is required for an app is the `mfa_required` field of its client config.
 
 ## Concepts
 
@@ -57,7 +50,7 @@ The `Secret` field stores the Base32-encoded TOTP secret (for TOTP enrollments) 
 
 ### Recovery codes
 
-Recovery codes are single-use backup codes that allow account access when the primary MFA device is unavailable. They are bcrypt-hashed before storage — only the plaintext codes are shown to the user once, at generation time.
+Recovery codes are single-use backup codes that allow account access when the primary MFA device is unavailable. They are bcrypt-hashed before storage: only the plaintext codes are shown to the user once, at generation time.
 
 ```go
 type RecoveryCode struct {
@@ -70,7 +63,7 @@ type RecoveryCode struct {
 }
 ```
 
-By default, 8 recovery codes are generated per enrollment. Each code is 8 characters long, drawn from an unambiguous alphabet (`abcdefghjkmnpqrstuvwxyz23456789` — no `0`, `o`, `1`, `l`, `i`).
+By default, 8 recovery codes are generated per enrollment. Each code is 8 characters long, drawn from an unambiguous alphabet (`abcdefghjkmnpqrstuvwxyz23456789`: no `0`, `o`, `1`, `l`, `i`).
 
 ## TOTP setup flow
 
@@ -82,7 +75,7 @@ Enrolling a factor is a step-up action. A user with no verified factor yet must 
 
 **Enroll**: Generate a TOTP secret and return the provisioning URI.
 
-`POST /v1/auth/mfa/enroll`
+`POST /v1/mfa/enroll`
 
 ```json
 {
@@ -115,12 +108,12 @@ Enrolling a factor is a step-up action. A user with no verified factor yet must 
 }
 ```
 
-The `totp_uri` can be rendered as a QR code for the user to scan. The `recovery_codes` are shown exactly once — instruct the user to save them securely.
+The `totp_uri` can be rendered as a QR code for the user to scan. The `recovery_codes` are shown exactly once: instruct the user to save them securely.
 
 
 **Verify**: Confirm enrollment by submitting a valid TOTP code from the authenticator app.
 
-`POST /v1/auth/mfa/verify`
+`POST /v1/mfa/verify`
 
 ```json
 {
@@ -161,7 +154,7 @@ SMS OTP sends a 6-digit numeric code to the user's verified phone number. It req
 
 **Enroll**: Register the user's phone number for SMS MFA.
 
-`POST /v1/auth/mfa/enroll`
+`POST /v1/mfa/enroll`
 
 ```json
 {
@@ -175,7 +168,7 @@ The engine sends an initial verification code to confirm the phone number is val
 
 **Verify**: Confirm enrollment by submitting the SMS code.
 
-`POST /v1/auth/mfa/verify`
+`POST /v1/mfa/verify`
 
 ```json
 {
@@ -199,7 +192,8 @@ smsSender := smsadapter.NewTwilioSender(
     "+15559876543",                         // From number
 )
 
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithSMSSender(smsSender),
     // ... other options
 )
@@ -228,7 +222,7 @@ When MFA is enabled for a user, the sign-in flow becomes a two-phase process:
 
 **Primary authentication**: The user signs in with email/password (or any primary method).
 
-`POST /v1/auth/signin`
+`POST /v1/signin`
 
 ```json
 {
@@ -254,7 +248,7 @@ The `challenge_token` is a short-lived opaque token (default 5 minutes) that pro
 
 **MFA verification**: The user submits the challenge token along with their MFA code.
 
-`POST /v1/auth/mfa/challenge`
+`POST /v1/mfa/challenge`
 
 ```json
 {
@@ -271,7 +265,8 @@ On success, the engine creates and returns a full session:
   "user": {
     "id": "ausr_01j9...",
     "email": "alice@example.com",
-    "name": "Alice Liddell"
+    "first_name": "Alice",
+    "last_name": "Liddell"
   },
   "session_token": "a3f8c9d4...",
   "refresh_token": "d72b1ef8...",
@@ -301,7 +296,7 @@ The recovery code is consumed (marked as `used`) on success. Each code can only 
 
 Users can regenerate their recovery codes at any time. This invalidates all previous codes.
 
-`POST /v1/auth/mfa/recovery-codes/regenerate`
+`POST /v1/mfa/recovery/regenerate`
 
 ```json
 {
@@ -336,7 +331,7 @@ valid := mfa.VerifyRecoveryCode("a3b8c9d4", recoveryCodeRecord)
 
 Users can disable MFA by deleting their enrollment:
 
-`DELETE /v1/auth/mfa/enrollment`
+`DELETE /v1/mfa/enrollment`
 
 This removes the enrollment record and all associated recovery codes. The user will no longer be prompted for MFA on sign-in.
 
@@ -378,7 +373,7 @@ Built-in implementations are provided in `plugins/mfa/store_postgres.go`, `plugi
 
 ## API routes
 
-All MFA routes are registered under `BasePath` (default `/v1/auth`):
+All MFA routes are registered under `BasePath` (default `/v1`):
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -386,5 +381,4 @@ All MFA routes are registered under `BasePath` (default `/v1/auth`):
 | `POST` | `/mfa/verify` | Verify enrollment with a code |
 | `POST` | `/mfa/challenge` | Complete an MFA challenge during sign-in |
 | `DELETE` | `/mfa/enrollment` | Remove MFA enrollment and recovery codes |
-| `POST` | `/mfa/recovery-codes/regenerate` | Generate new recovery codes (invalidates old ones) |
-| `GET` | `/mfa/enrollments` | List active enrollments for the current user |
+| `POST` | `/mfa/recovery/regenerate` | Generate new recovery codes (invalidates old ones) |

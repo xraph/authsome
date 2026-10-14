@@ -91,7 +91,7 @@ func (p *Plugin) OnBeforeSignUp(ctx context.Context, req *account.SignUpRequest)
 }
 ```
 
-**After-hooks** run after the operation completes. Errors are logged but never propagated -- they must not block the pipeline.
+**After-hooks** run after the operation completes. Errors are logged but never propagated: they must not block the pipeline.
 
 ## Step 4: Add database migrations
 
@@ -148,7 +148,7 @@ func (p *Plugin) RegisterRoutes(r any) error {
         return fmt.Errorf("auditlog: expected forge.Router, got %T", r)
     }
 
-    g := router.Group("/v1/auth/audit", forge.WithGroupTags("Audit Log"))
+    g := router.Group("/v1/audit", forge.WithGroupTags("Audit Log"))
 
     return g.GET("/events", p.handleListEvents,
         forge.WithSummary("List audit events"),
@@ -200,6 +200,7 @@ Add your plugin to the engine during construction:
 
 ```go
 eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
     authsome.WithPlugin(password.New()),
     authsome.WithPlugin(auditlog.New(auditStore)),
@@ -232,6 +233,7 @@ For integration tests, create a full engine with your plugin and exercise it thr
 ```go
 func TestAuditLogIntegration(t *testing.T) {
     eng, err := authsome.NewEngine(
+        // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
         authsome.WithStore(memoryStore),
         authsome.WithPlugin(auditlog.New(memoryAuditStore)),
     )

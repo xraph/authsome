@@ -9,31 +9,32 @@ The device tracking plugin records information about the devices users sign in f
 
 ```go
 type Device struct {
-    ID          id.DeviceID      `json:"id"`
-    UserID      id.UserID        `json:"user_id"`
-    AppID       id.AppID         `json:"app_id"`
-    EnvID       id.EnvironmentID `json:"env_id"`
-    Name        string           `json:"name,omitempty"`
-    Type        string           `json:"type,omitempty"`
-    Browser     string           `json:"browser,omitempty"`
-    OS          string           `json:"os,omitempty"`
-    IPAddress   string           `json:"ip_address,omitempty"`
-    Fingerprint string           `json:"fingerprint,omitempty"`
-    Trusted     bool             `json:"trusted"`
-    LastSeenAt  time.Time        `json:"last_seen_at"`
-    CreatedAt   time.Time        `json:"created_at"`
-    UpdatedAt   time.Time        `json:"updated_at"`
+    ID           id.DeviceID      `json:"id"`
+    UserID       id.UserID        `json:"user_id"`
+    AppID        id.AppID         `json:"app_id"`
+    EnvID        id.EnvironmentID `json:"env_id"`
+    Name         string           `json:"name,omitempty"`
+    Type         string           `json:"type,omitempty"`
+    Browser      string           `json:"browser,omitempty"`
+    OS           string           `json:"os,omitempty"`
+    IPAddress    string           `json:"ip_address,omitempty"`
+    Fingerprint  string           `json:"fingerprint,omitempty"`
+    Trusted      bool             `json:"trusted"`
+    TrustedUntil *time.Time       `json:"trusted_until,omitempty"`
+    LastSeenAt   time.Time        `json:"last_seen_at"`
+    CreatedAt    time.Time        `json:"created_at"`
+    UpdatedAt    time.Time        `json:"updated_at"`
 }
 ```
 
 Key fields:
 
-- **`Type`** — device category: `"desktop"`, `"mobile"`, `"tablet"`, `"unknown"`
-- **`Browser`** — parsed browser name from the User-Agent header (e.g., `"Chrome"`, `"Safari"`, `"Firefox"`)
-- **`OS`** — parsed operating system from the User-Agent (e.g., `"macOS"`, `"Windows 11"`, `"iOS 17"`)
-- **`Fingerprint`** — a unique identifier for the device, typically derived from client-side fingerprinting
-- **`Trusted`** — when `true`, MFA challenges may be skipped for this device
-- **`LastSeenAt`** — updated on every authenticated request from this device
+- `Type`: the device category, one of `"desktop"`, `"mobile"`, `"tablet"`, `"unknown"`
+- `Browser`: parsed browser name from the User-Agent header (e.g., `"Chrome"`, `"Safari"`, `"Firefox"`)
+- `OS`: parsed operating system from the User-Agent (e.g., `"macOS"`, `"Windows 11"`, `"iOS 17"`)
+- `Fingerprint`: a unique identifier for the device, typically derived from client-side fingerprinting
+- `Trusted`: when `true`, MFA challenges may be skipped for this device
+- `LastSeenAt`: updated on every authenticated request from this device
 - Device IDs have the prefix `adev_`.
 
 ## How device tracking works
@@ -55,7 +56,7 @@ To enable device identification across sessions, the client should send a finger
 X-Device-Fingerprint: abc123def456
 ```
 
-The fingerprint can be generated using any client-side fingerprinting library. The value should be stable across sessions but unique per device. Authsome does not prescribe a specific fingerprinting algorithm — popular choices include:
+The fingerprint can be generated using any client-side fingerprinting library. The value should be stable across sessions but unique per device. Authsome does not prescribe a specific fingerprinting algorithm: popular choices include:
 
 - [FingerprintJS](https://fingerprint.com) for browsers
 - Device identifier (IDFV/Android ID) for mobile apps
@@ -67,12 +68,12 @@ If no fingerprint header is sent, the engine falls back to IP address + User-Age
 
 Marking a device as trusted has two effects:
 
-1. **MFA bypass** — when a device is trusted and the MFA configuration allows it, the user may skip the MFA challenge on subsequent sign-ins from that device
-2. **Security signals** — sign-ins from new (untrusted) devices can trigger notifications or additional verification
+1. MFA bypass: when a device is trusted and the MFA configuration allows it, the user may skip the MFA challenge on subsequent sign-ins from that device
+2. Security signals: sign-ins from new (untrusted) devices can trigger notifications or additional verification
 
 ### Trust a device
 
-`PATCH /v1/auth/devices/:deviceId/trust`
+`PATCH /v1/devices/:deviceId/trust`
 
 ```
 Authorization: Bearer <session_token>
@@ -130,7 +131,7 @@ This prevents session token theft from being useful across devices. Even if an a
 
 Users can view all tracked devices:
 
-`GET /v1/auth/devices`
+`GET /v1/devices`
 
 ```
 Authorization: Bearer <session_token>
@@ -171,13 +172,13 @@ Authorization: Bearer <session_token>
 
 ## Get device details
 
-`GET /v1/auth/devices/:deviceId`
+`GET /v1/devices/:deviceId`
 
 Returns the full device record for a specific device.
 
 ## Remove a device
 
-`DELETE /v1/auth/devices/:deviceId`
+`DELETE /v1/devices/:deviceId`
 
 ```
 Authorization: Bearer <session_token>
@@ -213,7 +214,7 @@ type Store interface {
 
 ## API routes
 
-All device routes are registered under `BasePath` (default `/v1/auth`):
+All device routes are registered under `BasePath` (default `/v1`):
 
 | Method | Path | Description |
 |--------|------|-------------|

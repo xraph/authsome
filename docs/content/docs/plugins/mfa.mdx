@@ -14,6 +14,7 @@ import (
 )
 
 eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
     authsome.WithSMSSender(smsBridge),       // Required for SMS MFA
     authsome.WithPlugin(mfa.New(mfa.Config{
@@ -34,7 +35,7 @@ eng, err := authsome.NewEngine(
 |-----------|---------|
 | `Plugin` | Base plugin identity (`"mfa"`) |
 | `OnInit` | Captures SMS sender, Chronicle, Relay, hooks, logger, and ceremony store |
-| `RouteProvider` | Registers all MFA endpoints under `/v1/auth/mfa` |
+| `RouteProvider` | Registers all MFA endpoints under `/v1/mfa` |
 | `MigrationProvider` | Contributes `mfa_enrollments` and `mfa_recovery_codes` tables |
 
 ## TOTP enrollment
@@ -43,7 +44,7 @@ TOTP (RFC 6238) is the recommended MFA method. It works with any authenticator a
 
 ### Step 1: Start enrollment
 
-`POST /v1/auth/mfa/enroll`
+`POST /v1/mfa/enroll`
 
 ```json
 {"method": "totp"}
@@ -64,7 +65,7 @@ The `otpauth_url` can be rendered as a QR code for the user to scan with their a
 
 ### Step 2: Verify enrollment
 
-`POST /v1/auth/mfa/verify`
+`POST /v1/mfa/verify`
 
 ```json
 {"code": "123456"}
@@ -94,7 +95,7 @@ SMS OTP provides a second factor using text messages. It requires an SMS bridge 
 
 ### Enroll via SMS
 
-`POST /v1/auth/mfa/enroll`
+`POST /v1/mfa/enroll`
 
 ```json
 {"method": "sms", "phone": "+14155551234"}
@@ -104,7 +105,7 @@ The plugin sends an initial verification code to the provided phone number.
 
 ### Send SMS code
 
-`POST /v1/auth/mfa/sms/send`
+`POST /v1/mfa/sms/send`
 
 ```json
 {"phone": "+14155551234"}
@@ -122,7 +123,7 @@ The plugin sends an initial verification code to the provided phone number.
 
 ### Verify SMS code
 
-`POST /v1/auth/mfa/sms/verify`
+`POST /v1/mfa/sms/verify`
 
 ```json
 {"code": "123456"}
@@ -132,7 +133,7 @@ The plugin sends an initial verification code to the provided phone number.
 
 During sign-in, if the user has MFA enrolled, the engine requires an MFA challenge before issuing a full session.
 
-`POST /v1/auth/mfa/challenge`
+`POST /v1/mfa/challenge`
 
 ```json
 {"code": "123456"}
@@ -155,7 +156,7 @@ Recovery codes are generated when MFA is first verified. Each code is one-time u
 
 ### Verify a recovery code
 
-`POST /v1/auth/mfa/recovery/verify`
+`POST /v1/mfa/recovery/verify`
 
 ```json
 {"code": "a1b2c3d4e5"}
@@ -172,7 +173,7 @@ Recovery codes are generated when MFA is first verified. Each code is one-time u
 
 ### Regenerate recovery codes
 
-`POST /v1/auth/mfa/recovery/regenerate`
+`POST /v1/mfa/recovery/regenerate`
 
 Generates a fresh set of recovery codes, replacing all existing codes. Requires an active MFA enrollment.
 
@@ -186,7 +187,7 @@ Generates a fresh set of recovery codes, replacing all existing codes. Requires 
 
 ## Disable MFA
 
-`DELETE /v1/auth/mfa/enrollment`
+`DELETE /v1/mfa/enrollment`
 
 Removes the MFA enrollment for the authenticated user. Recovery codes are not automatically deleted.
 
@@ -207,22 +208,22 @@ This checks both TOTP and SMS enrollments.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/v1/auth/mfa/enroll` | Start MFA enrollment (TOTP or SMS) |
-| `POST` | `/v1/auth/mfa/verify` | Verify TOTP code to confirm enrollment |
-| `POST` | `/v1/auth/mfa/challenge` | Verify TOTP code during sign-in challenge |
-| `DELETE` | `/v1/auth/mfa/enrollment` | Disable MFA for the authenticated user |
-| `POST` | `/v1/auth/mfa/recovery/verify` | Verify a recovery code |
-| `POST` | `/v1/auth/mfa/recovery/regenerate` | Generate new recovery codes |
-| `POST` | `/v1/auth/mfa/sms/send` | Send an SMS verification code |
-| `POST` | `/v1/auth/mfa/sms/verify` | Verify an SMS code |
+| `POST` | `/v1/mfa/enroll` | Start MFA enrollment (TOTP or SMS) |
+| `POST` | `/v1/mfa/verify` | Verify TOTP code to confirm enrollment |
+| `POST` | `/v1/mfa/challenge` | Verify TOTP code during sign-in challenge |
+| `DELETE` | `/v1/mfa/enrollment` | Disable MFA for the authenticated user |
+| `POST` | `/v1/mfa/recovery/verify` | Verify a recovery code |
+| `POST` | `/v1/mfa/recovery/regenerate` | Generate new recovery codes |
+| `POST` | `/v1/mfa/sms/send` | Send an SMS verification code |
+| `POST` | `/v1/mfa/sms/verify` | Verify an SMS code |
 
 ## Observability
 
 The MFA plugin emits audit events to Chronicle, webhook events to Relay, and hook events on the global bus for:
 
-- `auth.mfa.enrolled` -- MFA enrollment started
-- `auth.mfa.verified` -- MFA enrollment confirmed
-- `auth.mfa.challenged` -- MFA challenge passed
-- `auth.mfa.disabled` -- MFA enrollment removed
-- `auth.mfa.recovery_used` -- Recovery code consumed
-- `auth.mfa.recovery_regenerated` -- Recovery codes regenerated
+- `auth.mfa.enrolled`: MFA enrollment started
+- `auth.mfa.verified`: MFA enrollment confirmed
+- `auth.mfa.challenged`: MFA challenge passed
+- `auth.mfa.disabled`: MFA enrollment removed
+- `auth.mfa.recovery_used`: Recovery code consumed
+- `auth.mfa.recovery_regenerated`: Recovery codes regenerated

@@ -1,20 +1,20 @@
 ---
 title: HTTP API Reference
-description: Complete reference for all Authsome REST endpoints — authentication, users, sessions, MFA, devices, organizations, RBAC, webhooks, and OAuth2.
+description: Complete reference for all Authsome REST endpoints: authentication, users, sessions, MFA, devices, organizations, RBAC, webhooks, and OAuth2.
 ---
 
-All endpoints are registered under the configurable `BasePath` (default `/v1/auth`) and return JSON. Authentication is via `Authorization: Bearer <session_token>` header unless noted otherwise. Tenant resolution depends on your Forge middleware configuration.
+Paths on this page are relative to `/v1`. Standalone, the API is mounted at `/v1`; with the Forge extension it's under `<base_path>/v1`, which is `/authsome/v1` by default. Plugin routes exist only when the plugin is registered (and, standalone, when you mount its routes). Everything returns JSON. Authentication is via `Authorization: Bearer <session_token>` header unless noted otherwise. Tenant resolution depends on your Forge middleware configuration.
 
 ## App context resolution
 
 Every public-auth endpoint (`/signup`, `/signin`, `/forgot-password`, `/verify-email/resend`) needs to know **which app** the request belongs to. Send one of:
 
-- **`X-Publishable-Key: pk_live_…` header** — recommended for frontends. The server resolves the publishable key to its owning app and routes the request there. The official SDKs (`@authsome/sdk` for TypeScript, `authclient` for Go, `authsome` for Dart) accept a `publishableKey` config option and stamp this header on every request automatically.
-- **`app_id` body field** — for server-to-server callers that don't carry a publishable key.
+- `X-Publishable-Key: pk_live_…` header: recommended for frontends. The server resolves the publishable key to its owning app and routes the request there. The official SDKs (`@authsome/client` for TypeScript, `authclient` for Go, `authsome` for Dart) accept a `publishableKey` config option and stamp this header on every request automatically.
+- `app_id` body field: for server-to-server callers that don't carry a publishable key.
 
 If both are sent, the publishable key wins; a body `app_id` that disagrees with the resolved key is rejected with `400 app_id does not match publishable key` to fail closed on misconfigured callers.
 
-If neither is sent, the endpoint returns `400 app context required: send X-Publishable-Key header or app_id in the body`. There is no longer a silent fallback to the platform app — that fallback used to mis-route non-platform tenants' users into the platform pool.
+If neither is sent, the endpoint returns `400 app context required: send X-Publishable-Key header or app_id in the body`. There is no longer a silent fallback to the platform app: that fallback used to mis-route non-platform tenants' users into the platform pool.
 
 ## Authentication
 
@@ -28,10 +28,12 @@ Create a user account and return a session.
 {
   "email": "string (required)",
   "password": "string (required)",
-  "name": "string",
+  "first_name": "string",
+  "last_name": "string",
   "username": "string",
   "app_id": "string (required if no X-Publishable-Key header)",
-  "metadata": {}
+  "metadata": {},
+  "captcha_token": "string (when the app requires captcha)"
 }
 ```
 
@@ -45,7 +47,8 @@ Send `X-Publishable-Key: pk_*` instead of `app_id` to let the server resolve the
     "id": "ausr_01j9...",
     "email": "alice@example.com",
     "username": "alice",
-    "name": "Alice Liddell",
+    "first_name": "Alice",
+    "last_name": "Liddell",
     "email_verified": false,
     "app_id": "aapp_01j9...",
     "metadata": {},
@@ -74,9 +77,9 @@ Authenticate with email/username and password.
 }
 ```
 
-One of `email` or `username` is required. Send `X-Publishable-Key` to let the server resolve the app — see [App context resolution](#app-context-resolution).
+One of `email` or `username` is required. Send `X-Publishable-Key` to let the server resolve the app: see [App context resolution](#app-context-resolution).
 
-**Response** `200 OK` — same structure as signup response.
+**Response** `200 OK`: same structure as signup response.
 
 If MFA is enabled for the user, returns an MFA challenge instead:
 
@@ -218,7 +221,7 @@ Verify email address with a verification token.
 
 Return the authenticated user's profile. Requires `Authorization` header.
 
-**Response** `200 OK` — User object.
+**Response** `200 OK`: User object.
 
 ---
 
@@ -236,7 +239,7 @@ Update the authenticated user's profile fields. Requires `Authorization` header.
 }
 ```
 
-**Response** `200 OK` — Updated User object.
+**Response** `200 OK`: Updated User object.
 
 ---
 
@@ -256,7 +259,7 @@ Permanently delete the authenticated user's account (GDPR right to erasure). Req
 
 Export all data associated with the authenticated user (GDPR data portability). Requires `Authorization` header.
 
-**Response** `200 OK` — JSON object containing user, sessions, devices, organizations, and MFA enrollments.
+**Response** `200 OK`: JSON object containing user, sessions, devices, organizations, and MFA enrollments.
 
 ---
 
@@ -314,7 +317,7 @@ Start MFA enrollment for a method. Requires `Authorization` header.
 }
 ```
 
-**Response** `201 Created` — Enrollment object with TOTP URI/secret (for TOTP) and recovery codes.
+**Response** `201 Created`: Enrollment object with TOTP URI/secret (for TOTP) and recovery codes.
 
 ---
 
@@ -331,7 +334,7 @@ Verify MFA enrollment with a code. Requires `Authorization` header.
 }
 ```
 
-**Response** `200 OK` — Updated enrollment with `verified: true`.
+**Response** `200 OK`: Updated enrollment with `verified: true`.
 
 ---
 
@@ -349,7 +352,7 @@ Complete an MFA challenge during sign-in.
 }
 ```
 
-**Response** `200 OK` — User object with session tokens.
+**Response** `200 OK`: User object with session tokens.
 
 ---
 
@@ -361,25 +364,23 @@ Remove MFA enrollment and recovery codes. Requires `Authorization` header.
 
 ---
 
-### `POST /mfa/recovery-codes/regenerate`
+### `POST /mfa/recovery/regenerate`
 
 Generate new recovery codes (invalidates old ones). Requires `Authorization` header.
 
-**Response** `200 OK` — Array of plaintext recovery codes.
+**Response** `200 OK`: Array of plaintext recovery codes.
 
 ---
 
-### `GET /mfa/enrollments`
+### Other MFA routes
 
-List active MFA enrollments. Requires `Authorization` header.
-
-**Response** `200 OK` — Array of Enrollment objects.
+`POST /mfa/sms/send` and `POST /mfa/sms/verify` handle SMS codes, and `POST /mfa/recovery/verify` signs in with a recovery code. There's no route that lists enrollments; `GET /me/auth-methods` shows whether MFA is set up.
 
 ---
 
 ## Phone Authentication
 
-### `POST /phone/send-code`
+### `POST /phone/start`
 
 Request an SMS OTP for phone sign-in.
 
@@ -414,7 +415,7 @@ Verify OTP and sign in (or sign up if new user).
 }
 ```
 
-**Response** `200 OK` — User object with session tokens.
+**Response** `200 OK`: User object with session tokens.
 
 ---
 
@@ -461,7 +462,7 @@ Remove a tracked device.
 
 Mark a device as trusted.
 
-**Response** `200 OK` — Updated Device object with `trusted: true`.
+**Response** `200 OK`: Updated Device object with `trusted: true`.
 
 ---
 
@@ -483,7 +484,7 @@ Create a new RBAC role.
 }
 ```
 
-**Response** `201 Created` — Role object.
+**Response** `201 Created`: Role object.
 
 ---
 
@@ -528,7 +529,7 @@ Add a permission (action + resource) to a role.
 }
 ```
 
-**Response** `201 Created` — Permission object.
+**Response** `201 Created`: Permission object.
 
 ---
 
@@ -595,7 +596,7 @@ Register a new webhook endpoint.
 }
 ```
 
-**Response** `201 Created` — Webhook object including a generated `secret` for signature verification.
+**Response** `201 Created`: Webhook object including a generated `secret` for signature verification.
 
 ---
 
@@ -639,7 +640,7 @@ Delete a webhook registration.
 
 ## Organizations
 
-### `POST /organizations`
+### `POST /orgs`
 
 Create a new organization.
 
@@ -656,73 +657,73 @@ Create a new organization.
 
 ---
 
-### `GET /organizations`
+### `GET /orgs`
 
 List organizations for an app.
 
 ---
 
-### `GET /organizations/:orgId`
+### `GET /orgs/:orgId`
 
 Get organization details.
 
 ---
 
-### `PATCH /organizations/:orgId`
+### `PATCH /orgs/:orgId`
 
 Update an organization.
 
 ---
 
-### `DELETE /organizations/:orgId`
+### `DELETE /orgs/:orgId`
 
 Delete an organization.
 
 ---
 
-### `POST /organizations/:orgId/members`
+### `POST /orgs/:orgId/members`
 
 Add a member to an organization.
 
 ---
 
-### `GET /organizations/:orgId/members`
+### `GET /orgs/:orgId/members`
 
 List members of an organization.
 
 ---
 
-### `PATCH /organizations/:orgId/members/:memberId`
+### `PATCH /orgs/:orgId/members/:memberId`
 
 Update a member's role.
 
 ---
 
-### `DELETE /organizations/:orgId/members/:memberId`
+### `DELETE /orgs/:orgId/members/:memberId`
 
 Remove a member from an organization.
 
 ---
 
-### `POST /organizations/:orgId/invitations`
+### `POST /orgs/:orgId/invitations`
 
 Create an invitation.
 
 ---
 
-### `GET /organizations/:orgId/invitations`
+### `GET /orgs/:orgId/invitations`
 
 List invitations for an organization.
 
 ---
 
-### `POST /organizations/:orgId/teams`
+### `POST /orgs/:orgId/teams`
 
 Create a team within an organization.
 
 ---
 
-### `GET /organizations/:orgId/teams`
+### `GET /orgs/:orgId/teams`
 
 List teams.
 
@@ -730,7 +731,7 @@ List teams.
 
 ## OAuth2 Provider
 
-### `GET /oauth2/authorize`
+### `GET /oauth/authorize`
 
 Authorization endpoint. Redirects the user through the login/consent flow.
 
@@ -746,7 +747,7 @@ Authorization endpoint. Redirects the user through the login/consent flow.
 
 ---
 
-### `POST /oauth2/token`
+### `POST /oauth/token`
 
 Token endpoint for code exchange, client credentials, and refresh.
 
@@ -770,43 +771,43 @@ grant_type=refresh_token&refresh_token=...&client_id=...
 
 ---
 
-### `POST /oauth2/introspect`
+### `POST /introspect`
 
 Token introspection. Requires client authentication.
 
 ---
 
-### `POST /oauth2/revoke`
+### `POST /oauth/revoke`
 
 Token revocation. Always returns `200 OK`.
 
 ---
 
-### `POST /oauth2/clients`
+### `POST /admin/oauth/clients`
 
 Register a new OAuth2 client.
 
 ---
 
-### `GET /oauth2/clients`
+### `GET /admin/oauth/clients`
 
 List registered clients.
 
 ---
 
-### `GET /oauth2/clients/:clientId`
+### `GET /admin/oauth/clients/:clientId`
 
 Get client details.
 
 ---
 
-### `PATCH /oauth2/clients/:clientId`
+### `PATCH /admin/oauth/clients/:clientId`
 
 Update a client.
 
 ---
 
-### `DELETE /oauth2/clients/:clientId`
+### `DELETE /admin/oauth/clients/:clientId`
 
 Delete a client.
 
@@ -827,6 +828,10 @@ OpenID Connect discovery document.
 ---
 
 ## Forms & Branding
+
+<Callout type="warn">
+These routes don't exist. Form configs and branding are managed from Go (`SaveSignupFormConfig`, `SaveOrgBranding` and their siblings) or the Forge dashboard. See [Dynamic Forms](/docs/dynamic-forms/custom-schemas).
+</Callout>
 
 ### `POST /forms`
 
@@ -889,40 +894,33 @@ Delete a branding configuration.
 
 ## Admin
 
-### `POST /admin/impersonate`
+### `POST /admin/impersonate/:userId`
 
-Start an impersonation session. Requires admin role.
+Start an impersonation session for the user in the path. Requires admin role. No body. `POST /admin/impersonate/stop` ends it.
 
-**Request**
+The admin API has many more routes under `/admin` (users, bulk operations, apps, client configs, settings, OAuth clients, SSO connections); the OpenAPI document at `/.well-known/authsome/openapi` lists them all.
 
-```json
-{
-  "target_user_id": "string (required)",
-  "app_id": "string"
-}
-```
-
-**Response** `200 OK` — Session tokens for the target user with `impersonated_by` field set.
+**Response** `200 OK`: Session tokens for the target user with `impersonated_by` field set.
 
 ---
 
 ## Error format
 
-All error responses use a consistent JSON envelope:
+Errors carry the HTTP status in `code` and a message in `error`. Errors a client has to tell apart add a `type`:
 
 ```json
-{
-  "error": "human-readable message",
-  "code": "ERROR_CODE"
-}
+{"code": 403, "error": "please verify your email address before signing in", "type": "email_not_verified"}
 ```
 
-| HTTP status | `code` | Cause |
-|-------------|--------|-------|
-| `400` | `BAD_REQUEST` | Missing required field, validation error, weak password |
-| `401` | `UNAUTHORIZED` | Invalid credentials, expired session, missing auth header |
-| `403` | `FORBIDDEN` | User is banned, insufficient permissions |
-| `404` | `NOT_FOUND` | User, session, device, webhook, or role not found |
-| `409` | `CONFLICT` | Email already taken, username already taken |
-| `429` | `RATE_LIMITED` | Too many requests (rate limit exceeded) |
-| `500` | `INTERNAL_ERROR` | Store failure, unexpected server error |
+| HTTP status | Cause |
+|-------------|-------|
+| `400` | Missing or invalid field, weak password |
+| `401` | Invalid credentials, expired session, missing auth header |
+| `403` | Banned user, insufficient permissions, `mfa_required` (with `mfa_ticket`), `email_not_verified` |
+| `404` | Not found |
+| `409` | Email or username taken, other conflicts |
+| `423` | `account_locked`, with `retry_after` |
+| `429` | `rate_limited`, too many verification attempts |
+| `500` | Store failure or unexpected error |
+
+[Errors](/docs/concepts/errors) maps each Go error to its status.

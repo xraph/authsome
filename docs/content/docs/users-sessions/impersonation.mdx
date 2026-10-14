@@ -41,14 +41,7 @@ if err != nil {
 
 ### Via HTTP API
 
-`POST /v1/auth/admin/impersonate`
-
-```json
-{
-  "target_user_id": "ausr_01jb...",
-  "app_id": "myapp"
-}
-```
+`POST /v1/admin/impersonate/:userId`, with the target's user ID in the path and no body.
 
 ```
 Authorization: Bearer <admin_session_token>
@@ -76,9 +69,10 @@ The admin can now use the returned `session_token` to make requests as the targe
 
 Impersonation sessions are regular sessions and can be ended in the usual ways:
 
-- **Sign out**: `POST /v1/auth/signout` with the impersonation session token
+- **Stop**: `POST /v1/admin/impersonate/stop`
+- **Sign out**: `POST /v1/signout` with the impersonation session token
 - **Token expiry**: The session expires based on the configured TTL
-- **Session revocation**: Delete the session via `DELETE /v1/auth/sessions/:sessionId`
+- **Session revocation**: Delete the session via `DELETE /v1/sessions/:sessionId`
 
 Impersonation sessions typically have a shorter TTL than regular sessions to limit the window of elevated access.
 
@@ -166,4 +160,5 @@ for _, s := range sessions {
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/admin/impersonate` | Start an impersonation session (admin only) |
+| `POST` | `/v1/admin/impersonate/:userId` | Start an impersonation session (admin only) |
+| `POST` | `/v1/admin/impersonate/stop` | End it |

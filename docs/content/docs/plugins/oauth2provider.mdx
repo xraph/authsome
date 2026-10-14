@@ -14,6 +14,7 @@ import (
 )
 
 eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
     authsome.WithPlugin(oauth2provider.New(oauth2provider.Config{
         Issuer:         "https://auth.example.com",
@@ -46,7 +47,7 @@ The Authorization Code flow with PKCE is the recommended grant type for both pub
 
 ### Step 1: Authorization request
 
-`GET /v1/auth/oauth/authorize`
+`GET /v1/oauth/authorize`
 
 ```
 ?response_type=code
@@ -62,7 +63,7 @@ The user must be authenticated. The endpoint validates the client, redirect URI,
 
 ### Step 2: Token exchange
 
-`POST /v1/auth/oauth/token`
+`POST /v1/oauth/token`
 
 ```json
 {
@@ -112,7 +113,7 @@ A client marked `first_party` on the admin API skips the page, since the user al
 A session the provider mints carries the `client_id` it was issued to, and that binding is enforced everywhere the token can be used:
 
 - The auth middleware never installs such a session on a request by itself. A route admits it with `middleware.RequireScope(scopes...)`, which checks the token holds every named scope and answers `403 insufficient_scope` otherwise; a route nobody tagged sees no session at all. Userinfo (`openid`), introspection and revocation are tagged by default; tag your own resource routes the same way.
-- Refresh goes through the token endpoint's `grant_type=refresh_token` with client authentication. The refresh token must belong to that client, a DPoP-bound token must present a proof before anything rotates, a spent refresh token that is presented again revokes the whole family, and the session refresh route `/v1/auth/refresh` refuses OAuth2 refresh tokens outright.
+- Refresh goes through the token endpoint's `grant_type=refresh_token` with client authentication. The refresh token must belong to that client, a DPoP-bound token must present a proof before anything rotates, a spent refresh token that is presented again revokes the whole family, and the session refresh route `/v1/refresh` refuses OAuth2 refresh tokens outright.
 - Revocation by an authenticated client only touches tokens issued to that client; anything else is answered as revoked without effect.
 - Userinfo returns the claims the token's scopes cover: `profile` for the name, `email` for the address and its verification, `phone` for the number.
 - The signed-in session that authorizes a client, or approves a device, must belong to the client's app.
@@ -122,7 +123,7 @@ A session the provider mints carries the `client_id` it was issued to, and that 
 
 Machine-to-machine authentication for confidential clients:
 
-`POST /v1/auth/oauth/token`
+`POST /v1/oauth/token`
 
 ```json
 {
@@ -147,7 +148,7 @@ Client credentials tokens have no associated user. They are issued with an empty
 
 ## Token revocation
 
-`POST /v1/auth/oauth/revoke`
+`POST /v1/oauth/revoke`
 
 ```json
 {
@@ -160,7 +161,7 @@ Follows RFC 7009. Always returns `200 OK` regardless of whether the token was fo
 
 ## OIDC UserInfo
 
-`GET /v1/auth/oauth/userinfo`
+`GET /v1/oauth/userinfo`
 
 Returns claims about the authenticated user (requires a valid access token):
 
@@ -183,10 +184,10 @@ Returns the OIDC discovery document:
 ```json
 {
   "issuer": "https://auth.example.com",
-  "authorization_endpoint": "https://auth.example.com/v1/auth/oauth/authorize",
-  "token_endpoint": "https://auth.example.com/v1/auth/oauth/token",
-  "userinfo_endpoint": "https://auth.example.com/v1/auth/oauth/userinfo",
-  "revocation_endpoint": "https://auth.example.com/v1/auth/oauth/revoke",
+  "authorization_endpoint": "https://auth.example.com/v1/oauth/authorize",
+  "token_endpoint": "https://auth.example.com/v1/oauth/token",
+  "userinfo_endpoint": "https://auth.example.com/v1/oauth/userinfo",
+  "revocation_endpoint": "https://auth.example.com/v1/oauth/revoke",
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code", "client_credentials"],
   "scopes_supported": ["openid", "profile", "email", "phone"],
@@ -198,7 +199,7 @@ Returns the OIDC discovery document:
 
 ### Create a client
 
-`POST /v1/auth/admin/oauth/clients`
+`POST /v1/admin/oauth/clients`
 
 ```json
 {
@@ -230,24 +231,24 @@ The `client_secret` is only returned at creation time. It is bcrypt-hashed befor
 
 ### List clients
 
-`GET /v1/auth/admin/oauth/clients?app_id=aapp_01j9...`
+`GET /v1/admin/oauth/clients?app_id=aapp_01j9...`
 
 ### Delete a client
 
-`DELETE /v1/auth/admin/oauth/clients/:clientId`
+`DELETE /v1/admin/oauth/clients/:clientId`
 
 ## API routes
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/v1/auth/oauth/authorize` | OAuth2 authorization endpoint |
-| `POST` | `/v1/auth/oauth/token` | Token endpoint (code exchange, client credentials) |
-| `POST` | `/v1/auth/oauth/revoke` | Token revocation |
-| `GET` | `/v1/auth/oauth/userinfo` | OIDC UserInfo |
+| `GET` | `/v1/oauth/authorize` | OAuth2 authorization endpoint |
+| `POST` | `/v1/oauth/token` | Token endpoint (code exchange, client credentials) |
+| `POST` | `/v1/oauth/revoke` | Token revocation |
+| `GET` | `/v1/oauth/userinfo` | OIDC UserInfo |
 | `GET` | `/.well-known/openid-configuration` | OIDC Discovery |
-| `POST` | `/v1/auth/admin/oauth/clients` | Create OAuth2 client |
-| `GET` | `/v1/auth/admin/oauth/clients` | List OAuth2 clients |
-| `DELETE` | `/v1/auth/admin/oauth/clients/:clientId` | Delete OAuth2 client |
+| `POST` | `/v1/admin/oauth/clients` | Create OAuth2 client |
+| `GET` | `/v1/admin/oauth/clients` | List OAuth2 clients |
+| `DELETE` | `/v1/admin/oauth/clients/:clientId` | Delete OAuth2 client |
 
 ## JWT access tokens
 

@@ -3,7 +3,7 @@ title: Errors
 description: Sentinel error values, API error response format, and error handling patterns.
 ---
 
-Authsome defines sentinel error values in dedicated packages. Use `errors.Is` to check for specific error conditions. Never compare error strings directly — error messages are not part of the public API.
+Authsome defines sentinel error values in dedicated packages. Use `errors.Is` to check for specific error conditions. Never compare error strings directly: error messages are not part of the public API.
 
 ## Using errors.Is
 
@@ -18,13 +18,13 @@ import (
 u, sess, err := engine.SignIn(ctx, req)
 switch {
 case errors.Is(err, account.ErrInvalidCredentials):
-    // Wrong email or password — return 401
+    // Wrong email or password: return 401
 case errors.Is(err, account.ErrAccountLocked):
-    // Too many failed attempts — return 423
+    // Too many failed attempts: return 423
 case errors.Is(err, account.ErrUserBanned):
-    // User is banned — return 403
+    // User is banned: return 403
 case err != nil:
-    // Unexpected error — return 500
+    // Unexpected error: return 500
 default:
     // Success
 }
@@ -39,11 +39,10 @@ All service methods wrap sentinel errors using `fmt.Errorf` and `%w`, so `errors
 | Error | Description |
 |-------|-------------|
 | `store.ErrNotFound` | The requested entity does not exist. Returned by all Get/Lookup operations. |
-| `store.ErrDuplicate` | A unique constraint was violated (e.g., duplicate email). |
-| `store.ErrConflict` | A write conflict or optimistic lock violation occurred. |
+| `store.ErrConflict` | A write hit a uniqueness constraint that has no more specific error (duplicate emails come back as `account.ErrEmailTaken`). |
 
 ```go
-u, err := engine.Store().GetUserByEmail(ctx, appID, email)
+u, err := eng.GetUserByEmail(ctx, appID, email)
 if errors.Is(err, store.ErrNotFound) {
     // User does not exist
 }
@@ -66,10 +65,10 @@ if errors.Is(err, store.ErrNotFound) {
 
 | Error | Description |
 |-------|-------------|
-| `account.ErrPasswordBreached` | The password was found in the HaveIBeenPwned breach database. Only returned when `CheckBreached: true`. |
+| `account.ErrWeakPassword` | The password doesn't meet the policy (length, uppercase, digit, special). |
+| `account.ErrPasswordBreached` | The password was found in the HaveIBeenPwned breach database. Only returned when `CheckBreached: true`. It wraps `ErrWeakPassword`. |
 | `account.ErrPasswordReused` | The new password matches one of the user's previous passwords. Only returned when `HistoryCount > 0`. |
-| `account.ErrPasswordExpired` | The user's password has exceeded `MaxAgeDays`. Returned from `SignIn` — the user must change their password. |
-| `account.ErrPasswordTooWeak` | The password does not meet the policy (min length, uppercase, digit, special). |
+| `account.ErrPasswordExpired` | The user's password has exceeded `MaxAgeDays`. Returned from `SignIn`: the user must change their password. |
 
 ### Registration errors
 
@@ -80,41 +79,37 @@ if errors.Is(err, store.ErrNotFound) {
 
 ## API error response format
 
-When a request fails, the HTTP API returns a JSON error body with a consistent shape:
+A failed request returns a JSON body with the status in `code` and a message in `error`. Errors that clients need to tell apart also carry a `type`:
 
 ```json
-{
-  "error": {
-    "code": "invalid_credentials",
-    "message": "Invalid email or password.",
-    "status": 401
-  }
-}
+{"code": 403, "error": "please verify your email address before signing in", "type": "email_not_verified"}
 ```
 
 ### HTTP status code mapping
 
-| Sentinel error | HTTP status | Error code |
-|----------------|-------------|------------|
-| `account.ErrInvalidCredentials` | `401 Unauthorized` | `invalid_credentials` |
-| `account.ErrSessionExpired` | `401 Unauthorized` | `session_expired` |
-| `account.ErrUserBanned` | `403 Forbidden` | `user_banned` |
-| `account.ErrAccountLocked` | `423 Locked` | `account_locked` |
-| `account.ErrEmailTaken` | `409 Conflict` | `email_taken` |
-| `account.ErrUsernameTaken` | `409 Conflict` | `username_taken` |
-| `account.ErrPasswordBreached` | `422 Unprocessable Entity` | `password_breached` |
-| `account.ErrPasswordReused` | `422 Unprocessable Entity` | `password_reused` |
-| `account.ErrPasswordExpired` | `428 Precondition Required` | `password_expired` |
-| `account.ErrPasswordTooWeak` | `422 Unprocessable Entity` | `password_too_weak` |
-| `store.ErrNotFound` | `404 Not Found` | `not_found` |
-| Any unexpected error | `500 Internal Server Error` | `internal_error` |
+| Error | HTTP status | `type` |
+|-------|-------------|--------|
+| `store.ErrNotFound` | `404 Not Found` | |
+| `account.ErrInvalidCredentials` | `401 Unauthorized` | |
+| `account.ErrSessionExpired` | `401 Unauthorized` | |
+| `account.ErrEmailTaken`, `account.ErrUsernameTaken`, `store.ErrConflict` | `409 Conflict` | |
+| `account.ErrMFARequired` | `403 Forbidden` | `mfa_required`, with `mfa_ticket` and `available_methods` |
+| `account.ErrEmailNotVerified` | `403 Forbidden` | `email_not_verified` |
+| `account.ErrUserBanned` | `403 Forbidden` | |
+| `account.ErrAccountLocked` | `423 Locked` | `account_locked`, with `retry_after` |
+| `account.ErrRateLimited` | `429 Too Many Requests` | `rate_limited` |
+| `account.ErrTooManyAttempts` | `429 Too Many Requests` | |
+| `account.ErrWeakPassword` (and `ErrPasswordBreached`) | `400 Bad Request` | |
+| Anything else | `500 Internal Server Error` | |
+
+`account.ErrPasswordReused` and `account.ErrPasswordExpired` have no mapping of their own, so they come back as 500 over HTTP. Check for them with `errors.Is` when you call the engine from Go.
 
 ## Error wrapping patterns
 
 Authsome wraps all internal errors with context before returning them. The wrapping format is consistent: `"authsome: <operation>: <underlying>"`.
 
 ```go
-// Internal wrapping — always use errors.Is, not string comparison.
+// Internal wrapping: always use errors.Is, not string comparison.
 if err := e.store.CreateUser(ctx, u); err != nil {
     return nil, nil, fmt.Errorf("authsome: create user: %w", err)
 }
@@ -137,7 +132,7 @@ if err != nil {
 
 ## Plugin errors
 
-Plugin `OnBeforeSignUp` and `OnBeforeSignIn` hooks can return custom errors to block the operation. Return any error value — it will be wrapped and propagated to the caller:
+Plugin `OnBeforeSignUp` and `OnBeforeSignIn` hooks can return custom errors to block the operation. Return any error value: it will be wrapped and propagated to the caller:
 
 ```go
 func (p *DomainRestrictPlugin) OnBeforeSignUp(_ context.Context, req *account.SignUpRequest) error {

@@ -1,11 +1,11 @@
 ---
 title: Relay Bridge
-description: Reliable webhook delivery — sends auth event payloads to Relay for fan-out with retry semantics.
+description: Reliable webhook delivery: sends auth event payloads to Relay for fan-out with retry semantics.
 ---
 
 The Relay bridge connects Authsome to the Relay webhook delivery extension. When configured, every auth event that triggers a webhook (sign-in, sign-up, org changes, MFA enrollment, API key creation, and more) is sent to Relay, which handles reliable fan-out to all registered subscriber endpoints with configurable retry policies.
 
-Without Relay, Authsome stores webhook configurations in its own database and emits delivery attempts directly. With Relay, delivery is fully offloaded — Relay owns the delivery queue, retry backoff, failure tracking, and subscriber management.
+Without Relay, Authsome stores webhook configurations in its own database and emits delivery attempts directly. With Relay, delivery is fully offloaded: Relay owns the delivery queue, retry backoff, failure tracking, and subscriber management.
 
 ## Interface
 
@@ -53,7 +53,8 @@ if err != nil {
 relayBridge := relayadapter.New(relayEng)
 
 // Register with Authsome.
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(pgStore),
     authsome.WithPlugin(password.New()),
     authsome.WithEventRelay(relayBridge),
@@ -141,7 +142,8 @@ import (
     "github.com/xraph/authsome/bridge"
 )
 
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(memory.New()),
     authsome.WithEventRelay(bridge.NewNoopRelay(slog.Default())),
 )
@@ -150,7 +152,8 @@ eng, err := authsome.New(
 You can also use an inline function adapter to inspect events in tests:
 
 ```go
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(memory.New()),
     authsome.WithEventRelay(bridge.EventRelayFunc(func(ctx context.Context, event *bridge.WebhookEvent) error {
         t.Logf("webhook event: type=%s tenant=%s", event.Type, event.TenantID)
@@ -161,4 +164,4 @@ eng, err := authsome.New(
 
 ## Idempotency
 
-Every webhook event includes an `IdempotencyKey` field set to the TypeID of the entity that changed (session ID for sign-in events, user ID for user creation events, etc.). Relay uses this key to deduplicate delivery attempts — if the same event is sent twice (e.g., due to a retry after a network timeout), subscribers receive it exactly once.
+Every webhook event includes an `IdempotencyKey` field set to the TypeID of the entity that changed (session ID for sign-in events, user ID for user creation events, etc.). Relay uses this key to deduplicate delivery attempts: if the same event is sent twice (e.g., due to a retry after a network timeout), subscribers receive it exactly once.

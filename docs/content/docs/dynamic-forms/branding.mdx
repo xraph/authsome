@@ -3,6 +3,10 @@ title: Branding
 description: Customize auth page appearance with logos, colors, fonts, and CSS overrides per organization.
 ---
 
+<Callout type="warn">
+The HTTP routes this page shows don't exist. Neither the standalone API nor the Forge extension mounts form or branding routes. Manage them from Go with the engine methods (`GetSignupFormConfig`, `SaveSignupFormConfig`, `DeleteSignupFormConfig`, `ListFormConfigs`, `GetOrgBranding`, `SaveOrgBranding`, `DeleteOrgBranding`) or through the Forge dashboard, which edits them over its contract. Clients get the app's branding from `GET /v1/client-config`.
+</Callout>
+
 The branding system allows you to customize the visual appearance of Authsome's authentication pages on a per-organization basis. Each organization can define its own logo, color scheme, fonts, and custom CSS, creating a white-labeled experience for their users.
 
 ## BrandingConfig entity
@@ -25,8 +29,8 @@ type BrandingConfig struct {
 }
 ```
 
-- **`OrgID`** — the organization this branding applies to. Each organization can have one branding config per app.
-- **`AppID`** — the application this branding is scoped to.
+- `OrgID`: the organization this branding applies to. Each organization can have one branding config per app.
+- `AppID`: the application this branding is scoped to.
 - All color fields accept standard CSS color values (hex, rgb, hsl).
 - Branding config IDs have the prefix `abrd_`.
 
@@ -47,7 +51,7 @@ type BrandingConfig struct {
 
 ### Via HTTP API
 
-`POST /v1/auth/branding`
+`POST /v1/branding`
 
 ```json
 {
@@ -177,7 +181,7 @@ globexBranding := &formconfig.BrandingConfig{
 
 ## Updating branding
 
-`PATCH /v1/auth/branding/:brandingId`
+`PATCH /v1/branding/:brandingId`
 
 ```json
 {
@@ -192,13 +196,13 @@ Only fields included in the request are updated. Other fields remain unchanged.
 
 ### By organization
 
-`GET /v1/auth/branding?org_id=aorg_01jb...&app_id=myapp`
+`GET /v1/branding?org_id=aorg_01jb...&app_id=myapp`
 
 Returns the branding config for the specified organization and app.
 
 ### Active branding for auth page
 
-`GET /v1/auth/branding/resolve?org_slug=acme&app_id=myapp`
+`GET /v1/branding/resolve?org_slug=acme&app_id=myapp`
 
 Used by the Authsome UI to resolve branding when rendering auth pages.
 

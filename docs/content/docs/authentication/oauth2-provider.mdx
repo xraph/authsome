@@ -3,7 +3,7 @@ title: OAuth2 Provider
 description: Run Authsome as an OAuth2 authorization server with Authorization Code, PKCE, and Client Credentials flows.
 ---
 
-Authsome can act as a full OAuth2 authorization server, allowing third-party applications to authenticate users and obtain access tokens through standard OAuth2 flows. This is distinct from [Social Login](/docs/authentication/social-login) (where Authsome is an OAuth2 *client*) — here, Authsome issues its own tokens on behalf of your users.
+Authsome can act as a full OAuth2 authorization server, allowing third-party applications to authenticate users and obtain access tokens through standard OAuth2 flows. This is distinct from [Social Login](/docs/authentication/social-login) (where Authsome is an OAuth2 *client*): here, Authsome issues its own tokens on behalf of your users.
 
 ## Setup
 
@@ -13,29 +13,19 @@ import (
     "github.com/xraph/authsome/plugins/oauth2provider"
 )
 
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
     authsome.WithPlugin(password.New()),
-    authsome.WithPlugin(oauth2provider.New()),
-    authsome.WithConfig(authsome.Config{
-        AppID: "myapp",
-        OAuth2: authsome.OAuth2Config{
-            Enabled:                true,
-            Issuer:                 "https://auth.myapp.com",
-            AuthorizationEndpoint:  "/oauth2/authorize",
-            TokenEndpoint:          "/oauth2/token",
-            IntrospectionEndpoint:  "/oauth2/introspect",
-            RevocationEndpoint:     "/oauth2/revoke",
-            JWKSEndpoint:           "/.well-known/jwks.json",
-            AccessTokenTTL:         "1h",
-            RefreshTokenTTL:        "30d",
-            AuthorizationCodeTTL:   "10m",
-            RequirePKCE:            true,
-            AllowedScopes:          []string{"openid", "profile", "email", "offline_access"},
-        },
-    }),
+    authsome.WithPlugin(oauth2provider.New(oauth2provider.Config{
+        Issuer:         "https://auth.myapp.com",
+        AuthCodeTTL:    10 * time.Minute, // the default
+        AccessTokenTTL: time.Hour,        // the default
+    })),
 )
 ```
+
+The plugin's `Config` also covers the device flow (`DeviceCodeTTL`, `DeviceCodeInterval`, `VerificationURI`), dynamic client registration (`DynamicRegistration`, `RegistrationAppID`, `DynamicRegistrationScopes`, `RegistrationRateLimit`), RFC 8707 `ProtectedResources` and a `ConsentGate`. Its endpoints live under `/v1/oauth` (`/authorize`, `/token`, `/revoke`, `/userinfo`, `/consent`, `/register`, `/device/authorize`, `/device/complete`) plus `/.well-known/openid-configuration`.
 
 ## Client registration
 
@@ -43,18 +33,20 @@ OAuth2 clients must be registered before they can request tokens. Clients repres
 
 ### Create a client
 
-`POST /v1/auth/oauth2/clients`
+`POST /v1/admin/oauth/clients`
 
 ```json
 {
   "name": "My Mobile App",
-  "type": "public",
+  "public": true,
   "redirect_uris": ["myapp://callback", "https://myapp.com/callback"],
   "scopes": ["openid", "profile", "email"],
   "grant_types": ["authorization_code"],
-  "app_id": "myapp"
+  "app_id": "aapp_..."
 }
 ```
+
+The body also takes `resources` (RFC 8707), `dpop_mode` and `first_party`, which skips the consent page.
 
 **Response:**
 
@@ -63,7 +55,7 @@ OAuth2 clients must be registered before they can request tokens. Clients repres
   "client_id": "aoc2_01jb...",
   "client_secret": "sec_a3f8c9d4e5f2g7h1...",
   "name": "My Mobile App",
-  "type": "public",
+  "public": true,
   "redirect_uris": ["myapp://callback", "https://myapp.com/callback"],
   "scopes": ["openid", "profile", "email"],
   "grant_types": ["authorization_code"],
@@ -75,25 +67,14 @@ OAuth2 clients must be registered before they can request tokens. Clients repres
 
 ### Client types
 
-| Type | Description | Use case |
-|------|-------------|----------|
-| `confidential` | Can securely store a client secret | Server-side applications, backend services |
-| `public` | Cannot securely store a client secret | Mobile apps, single-page applications, CLI tools |
+| `public` | Description | Use case |
+|----------|-------------|----------|
+| `false` (confidential) | Can securely store a client secret | Server-side applications, backend services |
+| `true` (public) | Can't store a secret, so it uses PKCE | Mobile apps, single-page applications, CLI tools |
 
 ### In Go
 
-```go
-client := &oauth2provider.Client{
-    Name:         "My Mobile App",
-    Type:         "public",
-    RedirectURIs: []string{"myapp://callback"},
-    Scopes:       []string{"openid", "profile", "email"},
-    GrantTypes:   []string{"authorization_code"},
-}
-
-err := engine.CreateOAuth2Client(ctx, appID, client)
-// client.ID and client.Secret are now populated
-```
+The plugin has no client-creation method; register clients through the admin route above, or through `POST /v1/oauth/register` when dynamic registration is on. The model is `oauth2provider.OAuth2Client`.
 
 ## Authorization Code flow with PKCE
 
@@ -117,7 +98,7 @@ codeChallenge := base64.RawURLEncoding.EncodeToString(hash[:])
 **Authorization request**: Redirect the user to the authorization endpoint.
 
 ```
-GET /v1/auth/oauth2/authorize?
+GET /v1/oauth/authorize?
   response_type=code&
   client_id=aoc2_01jb...&
   redirect_uri=https://myapp.com/callback&
@@ -137,7 +118,7 @@ Location: https://myapp.com/callback?code=auth_01jb...&state=random_state_value
 
 **Token exchange**: The client exchanges the authorization code for tokens.
 
-`POST /v1/auth/oauth2/token`
+`POST /v1/oauth/token`
 
 ```
 Content-Type: application/x-www-form-urlencoded
@@ -168,7 +149,7 @@ code_verifier=the_original_code_verifier_string
 
 The Client Credentials grant is used for machine-to-machine authentication where no user context is needed. Only confidential clients can use this grant type.
 
-`POST /v1/auth/oauth2/token`
+`POST /v1/oauth/token`
 
 ```
 Content-Type: application/x-www-form-urlencoded
@@ -190,13 +171,13 @@ scope=api:read api:write
 }
 ```
 
-No refresh token is issued for client credentials grants — the client simply requests a new token when the current one expires.
+No refresh token is issued for client credentials grants: the client simply requests a new token when the current one expires.
 
 ## Token introspection
 
 Resource servers can verify tokens by calling the introspection endpoint. This is useful for opaque tokens or when the resource server does not have access to the signing keys.
 
-`POST /v1/auth/oauth2/introspect`
+`POST /v1/introspect`
 
 ```
 Content-Type: application/x-www-form-urlencoded
@@ -232,7 +213,7 @@ token=eyJhbGciOiJSUzI1NiIs...
 
 Clients can revoke tokens when they are no longer needed (e.g., on user logout):
 
-`POST /v1/auth/oauth2/revoke`
+`POST /v1/oauth/revoke`
 
 ```
 Content-Type: application/x-www-form-urlencoded
@@ -259,23 +240,14 @@ The endpoint always returns `200 OK` regardless of whether the token was found, 
 
 ### Custom scopes
 
-Register custom scopes in the configuration:
-
-```go
-OAuth2: authsome.OAuth2Config{
-    AllowedScopes: []string{
-        "openid", "profile", "email",
-        "api:read", "api:write", "admin",
-    },
-},
-```
+A client may request the scopes listed in its own `scopes`. There's no global allowlist in the configuration; dynamically registered clients are limited to `DynamicRegistrationScopes`.
 
 ### Consent screen
 
 When a third-party client requests authorization, the user is shown a consent screen listing the requested scopes. The consent decision is remembered per user-client pair. To force re-consent:
 
 ```
-GET /v1/auth/oauth2/authorize?...&prompt=consent
+GET /v1/oauth/authorize?...&prompt=consent
 ```
 
 ## Resource indicators (RFC 8707)
@@ -410,10 +382,10 @@ Authsome publishes an OpenID Connect discovery document:
 ```json
 {
   "issuer": "https://auth.myapp.com",
-  "authorization_endpoint": "https://auth.myapp.com/v1/auth/oauth2/authorize",
-  "token_endpoint": "https://auth.myapp.com/v1/auth/oauth2/token",
-  "introspection_endpoint": "https://auth.myapp.com/v1/auth/oauth2/introspect",
-  "revocation_endpoint": "https://auth.myapp.com/v1/auth/oauth2/revoke",
+  "authorization_endpoint": "https://auth.myapp.com/v1/oauth/authorize",
+  "token_endpoint": "https://auth.myapp.com/v1/oauth/token",
+  "introspection_endpoint": "https://auth.myapp.com/v1/introspect",
+  "revocation_endpoint": "https://auth.myapp.com/v1/oauth/revoke",
   "jwks_uri": "https://auth.myapp.com/.well-known/jwks.json",
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code", "client_credentials", "refresh_token"],
@@ -441,14 +413,14 @@ Authsome publishes an OpenID Connect discovery document:
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/oauth2/authorize` | Authorization endpoint (redirects user) |
-| `POST` | `/oauth2/token` | Token endpoint (code exchange, client credentials, refresh) |
-| `POST` | `/oauth2/introspect` | Token introspection |
-| `POST` | `/oauth2/revoke` | Token revocation |
-| `POST` | `/oauth2/clients` | Register a new OAuth2 client |
-| `GET` | `/oauth2/clients` | List registered clients |
-| `GET` | `/oauth2/clients/:clientId` | Get client details |
-| `PATCH` | `/oauth2/clients/:clientId` | Update a client |
-| `DELETE` | `/oauth2/clients/:clientId` | Delete a client |
+| `GET` | `/oauth/authorize` | Authorization endpoint (redirects user) |
+| `POST` | `/oauth/token` | Token endpoint (code exchange, client credentials, refresh) |
+| `POST` | `/introspect` | Token introspection |
+| `POST` | `/oauth/revoke` | Token revocation |
+| `POST` | `/admin/oauth/clients` | Register a new OAuth2 client |
+| `GET` | `/admin/oauth/clients` | List registered clients |
+| `GET` | `/admin/oauth/clients/:clientId` | Get client details |
+| `PATCH` | `/admin/oauth/clients/:clientId` | Update a client |
+| `DELETE` | `/admin/oauth/clients/:clientId` | Delete a client |
 | `GET` | `/.well-known/jwks.json` | JWKS endpoint |
 | `GET` | `/.well-known/openid-configuration` | OIDC discovery document |

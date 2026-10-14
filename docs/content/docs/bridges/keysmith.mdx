@@ -1,6 +1,6 @@
 ---
 title: Keysmith Bridge
-description: Centralized API key management — delegates key operations to Keysmith for rate limiting, scoping, and rotation.
+description: Centralized API key management: delegates key operations to Keysmith for rate limiting, scoping, and rotation.
 ---
 
 The Keysmith bridge connects Authsome to the Keysmith API key management extension. When configured, all API key creation, validation, and revocation operations are delegated to Keysmith, which provides a richer feature set than Authsome's built-in API key store: rate limiting per key, scope enforcement, key rotation with grace periods, usage analytics, and multi-tenant isolation.
@@ -50,18 +50,17 @@ import (
 )
 
 // Build the Keysmith engine.
-keysmithEng, err := keysmith.New(
+keysmithEng, err := keysmith.NewEngine(
     keysmith.WithStore(keysmithStore),
-    keysmith.WithRateLimit(keysmith.RateLimitConfig{
-        RequestsPerMinute: 1000,
-    }),
+    // keysmith.WithRateLimiter(...), WithHasher, WithLogger and others; see Keysmith's docs
 )
 if err != nil {
     log.Fatal(err)
 }
 
 // Register with Authsome using the first-class option.
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(pgStore),
     authsome.WithKeysmith(keysmithEng),
 )
@@ -82,7 +81,8 @@ import (
     "github.com/xraph/authsome/bridge/keysmithadapter"
 )
 
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(pgStore),
     authsome.WithKeyManager(keysmithadapter.New(keysmithEng)),
 )
@@ -102,15 +102,17 @@ eng, err := authsome.New(
 
 ## Scope enforcement
 
-When Keysmith is configured, API key validation includes scope checking. Create keys with explicit scopes:
+When Keysmith is configured, API key validation includes scope checking. With the `apikey` plugin registered, create keys with explicit scopes through `POST /v1/keys`:
 
-```go
-result, err := eng.CreateAPIKey(ctx, &authsome.CreateAPIKeyRequest{
-    Name:   "CI pipeline key",
-    UserID: userID,
-    Scopes: []string{"read:users", "read:sessions"},
-})
+```json
+{
+  "app_id": "aapp_...",
+  "name": "CI pipeline key",
+  "scopes": ["read:users", "read:sessions"]
+}
 ```
+
+`user_id` is optional and defaults to the caller; naming another user needs the `manage` permission on `apikey`. Service-account keys come from `eng.CreateServiceAccountAPIKey`.
 
 Keysmith validates that the key's declared scopes match the required scopes for each operation. Requests from keys without the required scope are rejected with a `403 Forbidden`.
 
@@ -123,10 +125,11 @@ import "github.com/xraph/authsome/bridge"
 
 // Authsome uses NoopKeyManager internally when no KeyManager is set.
 // You can also set it explicitly to be explicit:
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(memory.New()),
     authsome.WithKeyManager(bridge.NewNoopKeyManager()),
 )
 ```
 
-When `NoopKeyManager` is active, calls to create, validate, or revoke API keys return an error. If your application does not use API keys, this is fine — no action needed.
+When `NoopKeyManager` is active, calls to create, validate, or revoke API keys return an error. If your application does not use API keys, this is fine: no action needed.

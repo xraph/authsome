@@ -3,6 +3,10 @@ title: Custom Form Schemas
 description: Define dynamic signup forms with custom fields, validation rules, and per-app configuration using FormConfig.
 ---
 
+<Callout type="warn">
+The HTTP routes this page shows don't exist. Neither the standalone API nor the Forge extension mounts form or branding routes. Manage them from Go with the engine methods (`GetSignupFormConfig`, `SaveSignupFormConfig`, `DeleteSignupFormConfig`, `ListFormConfigs`, `GetOrgBranding`, `SaveOrgBranding`, `DeleteOrgBranding`) or through the Forge dashboard, which edits them over its contract. Clients get the app's branding from `GET /v1/client-config`.
+</Callout>
+
 Authsome supports dynamic form schemas that let you customize the signup experience per application. Instead of hardcoding form fields, you define a `FormConfig` that specifies which fields appear, their types, validation rules, and display order. Custom field values are stored in the user's `Metadata` map.
 
 ## FormConfig entity
@@ -20,9 +24,9 @@ type FormConfig struct {
 }
 ```
 
-- **`FormType`** — currently `"signup"` is supported. Future versions will add `"profile_edit"` and others.
-- **`Active`** — only one FormConfig per app/form-type combination can be active at a time. Creating a new active config deactivates the previous one.
-- **`Version`** — auto-incremented on each update, enabling form versioning.
+- `FormType`: currently `"signup"` is supported. Future versions will add `"profile_edit"` and others.
+- `Active`: only one FormConfig per app/form-type combination can be active at a time. Creating a new active config deactivates the previous one.
+- `Version`: auto-incremented on each update, enabling form versioning.
 
 ## Field types
 
@@ -60,10 +64,10 @@ type FormField struct {
 }
 ```
 
-- **`Key`** — the metadata key where the field value is stored in `User.Metadata`. Must be unique within the form.
-- **`Label`** — display label shown to the user.
-- **`Options`** — only used for `select`, `radio`, and `checkbox` types.
-- **`Order`** — controls the display order of fields (ascending).
+- `Key`: the metadata key where the field value is stored in `User.Metadata`. Must be unique within the form.
+- `Label`: display label shown to the user.
+- `Options`: only used for `select`, `radio`, and `checkbox` types.
+- `Order`: controls the display order of fields (ascending).
 
 ### SelectOption
 
@@ -106,7 +110,7 @@ Validation is enforced at the engine level during signup. If any field fails val
 
 ### Via HTTP API
 
-`POST /v1/auth/forms`
+`POST /v1/forms`
 
 ```json
 {
@@ -234,7 +238,8 @@ When a user signs up with an active FormConfig, the engine:
 {
   "email": "alice@example.com",
   "password": "Secure!Pass99",
-  "name": "Alice Liddell",
+  "first_name": "Alice",
+  "last_name": "Liddell",
   "app_id": "myapp",
   "metadata": {
     "company": "Acme Corp",
@@ -271,9 +276,9 @@ If a custom field fails validation:
 
 Each FormConfig has a `Version` field that auto-increments when the form is updated. This enables:
 
-- **Audit trail** — know which version of the form a user signed up with
-- **Migration** — gradually roll out field changes without affecting existing users
-- **Rollback** — reactivate a previous version if needed
+- Audit trail: know which version of the form a user signed up with
+- Migration: gradually roll out field changes without affecting existing users
+- Rollback: reactivate a previous version if needed
 
 To update a form, create a new FormConfig with `Active: true`. The engine deactivates the previous active config and activates the new one.
 
@@ -314,7 +319,7 @@ appBConfig := &formconfig.FormConfig{
 
 Clients (including the Authsome UI) fetch the active form configuration to render the signup form dynamically:
 
-`GET /v1/auth/forms/active?app_id=myapp&form_type=signup`
+`GET /v1/forms/active?app_id=myapp&form_type=signup`
 
 ```json
 {

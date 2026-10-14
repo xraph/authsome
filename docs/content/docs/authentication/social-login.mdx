@@ -17,7 +17,8 @@ import (
     "github.com/xraph/authsome/plugins/social"
 )
 
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
     authsome.WithPlugin(social.New(social.Config{
         Providers: []social.Provider{
@@ -25,28 +26,28 @@ eng, err := authsome.New(
                 Name:         "google",
                 ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
                 ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-                RedirectURL:  "https://myapp.com/v1/auth/social/google/callback",
+                RedirectURL:  "https://myapp.com/v1/social/google/callback",
                 Scopes:       []string{"openid", "email", "profile"},
             },
             {
                 Name:         "github",
                 ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
                 ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
-                RedirectURL:  "https://myapp.com/v1/auth/social/github/callback",
+                RedirectURL:  "https://myapp.com/v1/social/github/callback",
                 Scopes:       []string{"read:user", "user:email"},
             },
             {
                 Name:         "microsoft",
                 ClientID:     os.Getenv("MICROSOFT_CLIENT_ID"),
                 ClientSecret: os.Getenv("MICROSOFT_CLIENT_SECRET"),
-                RedirectURL:  "https://myapp.com/v1/auth/social/microsoft/callback",
+                RedirectURL:  "https://myapp.com/v1/social/microsoft/callback",
                 Tenant:       "common", // or specific tenant ID for AAD
             },
             {
                 Name:         "apple",
                 ClientID:     os.Getenv("APPLE_CLIENT_ID"),
                 ClientSecret: os.Getenv("APPLE_CLIENT_SECRET"),
-                RedirectURL:  "https://myapp.com/v1/auth/social/apple/callback",
+                RedirectURL:  "https://myapp.com/v1/social/apple/callback",
                 TeamID:       os.Getenv("APPLE_TEAM_ID"),
                 KeyID:        os.Getenv("APPLE_KEY_ID"),
                 PrivateKey:   os.Getenv("APPLE_PRIVATE_KEY"),
@@ -94,16 +95,16 @@ type Provider struct {
 
 
 
-**Initiate the flow**: Your frontend redirects the user to the Authsome authorization URL.
+**Initiate the flow**: Your frontend asks for the provider's authorization URL and sends the user there.
 
-`GET /v1/auth/social/{provider}/authorize?app_id=myapp&state=optional-state`
+`POST /v1/social/{provider}`
 
-The engine generates a PKCE challenge, stores the state in the ceremony store, and returns a redirect to the provider's authorization page.
+The plugin generates the state (and a PKCE challenge where the provider supports it), stores it in the ceremony store and returns `{"auth_url": "..."}`.
 
 
 **Provider redirects back**: After the user consents, the provider redirects to your callback URL with a `code` and `state` parameter.
 
-`GET https://myapp.com/v1/auth/social/{provider}/callback?code=...&state=...`
+`GET https://myapp.com/v1/social/{provider}/callback?code=...&state=...`
 
 The Authsome callback handler:
 1. Validates the `state` parameter against the ceremony store.
@@ -130,60 +131,52 @@ By default, new users are created automatically on their first social sign-in. T
 |----------------|--------|--------|-----------|-------|
 | `email` | `email` | primary email | `mail` | `email` |
 | `name` | `name` | `name` | `displayName` | `name.firstName + lastName` |
-| `image` | `picture` | `avatar_url` | — | — |
-| `email_verified` | `email_verified` | always `true` | — | — |
+| `image` | `picture` | `avatar_url` | none | none |
+| `email_verified` | `email_verified` | always `true` | none | none |
 
 ## Account linking
 
-If a user already has a password account with the same email and then signs in with Google, Authsome automatically links the Google account to the existing user. The user can then sign in with either method.
+The callback resolves the user in three steps:
 
-To prevent automatic account linking (e.g., to require explicit confirmation), you can disable it:
+1. A connection for the same provider account (provider plus provider user ID) wins, whatever the email says now.
+2. Otherwise an existing account is linked when one of the provider's verified emails matches a verified address on it. If more than one account matches, the sign-in is refused with 409 instead of merging them. An unverified address on either side never links.
+3. Otherwise a new user is created from the provider's profile.
 
-```go
-social.New(social.Config{
-    AutoLink: false, // default: true
-    Providers: []social.Provider{...},
-})
-```
+There's no option to turn linking off.
 
-When `AutoLink: false`, signing in with a provider whose email matches an existing account returns an error. Your UI can then prompt the user to sign in with their existing method first, then explicitly link the account.
-
-## The OAuthAccount entity
+## The OAuthConnection entity
 
 **ID prefix:** `aoau_`
 
-Each linked social account is stored as an `OAuthAccount`:
+Each linked social account is stored as an `OAuthConnection` in `plugins/social`:
 
 ```go
-type OAuthAccount struct {
-    ID             id.OAuthAccountID `json:"id"`
-    UserID         id.UserID         `json:"user_id"`
-    AppID          id.AppID          `json:"app_id"`
-    Provider       string            `json:"provider"`       // "google", "github"
-    ProviderUserID string            `json:"provider_user_id"` // provider's user ID
-    Email          string            `json:"email"`
-    AccessToken    string            `json:"-"`              // never serialized
-    RefreshToken   string            `json:"-"`
-    ExpiresAt      *time.Time        `json:"expires_at,omitempty"`
-    CreatedAt      time.Time         `json:"created_at"`
-    UpdatedAt      time.Time         `json:"updated_at"`
+type OAuthConnection struct {
+    ID             id.OAuthConnectionID `json:"id"`
+    AppID          id.AppID             `json:"app_id"`
+    UserID         id.UserID            `json:"user_id"`
+    Provider       string               `json:"provider"`         // "google", "github"
+    ProviderUserID string               `json:"provider_user_id"` // the provider's user ID
+    Email          string               `json:"email"`
+    AccessToken    string               `json:"-"`
+    RefreshToken   string               `json:"-"`
+    ExpiresAt      time.Time            `json:"expires_at,omitempty"`
+    Metadata       map[string]string    `json:"metadata,omitempty"`
+    CreatedAt      time.Time            `json:"created_at"`
+    UpdatedAt      time.Time            `json:"updated_at"`
 }
 ```
 
-A user can have multiple `OAuthAccount` records (one per provider). Retrieve them:
-
-```go
-accounts, err := engine.ListUserOAuthAccounts(ctx, userID)
-```
+A user can have several, one per provider. `GET /v1/me/auth-methods` lists a user's sign-in methods, linked providers included, and `eng.ListAuthMethods(ctx, userID)` does the same from Go.
 
 ## Unlinking a provider
 
 Users can unlink a social account as long as they have another sign-in method (password or another provider):
 
-`DELETE /v1/auth/social/{provider}/unlink`
+`DELETE /v1/me/auth-methods/{provider}`
 
 ```go
-err := engine.UnlinkSocialAccount(ctx, userID, "github")
+err := eng.UnlinkAuthMethod(ctx, userID, "github")
 ```
 
 The engine prevents unlinking when it would leave the user with no way to sign in.
@@ -192,7 +185,7 @@ The engine prevents unlinking when it would leave the user with no way to sign i
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/social/{provider}/authorize` | Redirect to provider authorization page |
-| `GET` | `/social/{provider}/callback` | Handle provider callback and return session |
-| `DELETE` | `/social/{provider}/unlink` | Unlink a social account |
-| `GET` | `/social/accounts` | List all linked social accounts for the current user |
+| `POST` | `/v1/social/{provider}` | Start the flow; returns the provider's authorization URL |
+| `GET` | `/v1/social/{provider}/callback` | Handle the provider callback and return a session |
+| `GET` | `/v1/me/auth-methods` | List the current user's sign-in methods |
+| `DELETE` | `/v1/me/auth-methods/{provider}` | Unlink a provider |

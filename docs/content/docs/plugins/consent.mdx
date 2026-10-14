@@ -14,6 +14,7 @@ import (
 )
 
 eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
     authsome.WithPlugin(consent.New()),
 )
@@ -51,7 +52,7 @@ You define purposes based on your application's needs. The plugin does not enfor
 
 ## Recording consent
 
-`POST /v1/auth/consent/grant`
+`POST /v1/consent/grant`
 
 ```json
 {
@@ -79,14 +80,14 @@ You define purposes based on your application's needs. The plugin does not enfor
 
 Each consent record captures:
 
-- **Purpose** -- What the user is consenting to
-- **Version** -- The policy version this consent applies to (for tracking policy changes)
-- **IP address** -- The client IP at the time of consent (from `X-Forwarded-For`, `X-Real-IP`, or `RemoteAddr`)
-- **Timestamp** -- When consent was granted
+- Purpose: What the user is consenting to
+- Version: The policy version this consent applies to (for tracking policy changes)
+- IP address: The client IP at the time of consent (from `X-Forwarded-For`, `X-Real-IP`, or `RemoteAddr`)
+- Timestamp: When consent was granted
 
 ## Consent withdrawal
 
-`POST /v1/auth/consent/revoke`
+`POST /v1/consent/revoke`
 
 ```json
 {
@@ -105,7 +106,7 @@ Revoking consent marks the record as withdrawn. The original consent record is p
 
 ## Listing consent records
 
-`GET /v1/auth/consent`
+`GET /v1/consent`
 
 Query parameters:
 
@@ -143,9 +144,9 @@ Query parameters:
 
 Every consent operation is recorded through multiple observability channels:
 
-- **Chronicle** -- Audit events with action, resource, actor, and metadata
-- **Relay** -- Webhook events for external systems (`consent.granted`, `consent.revoked`)
-- **Hook bus** -- Internal hook events for other plugins to react to consent changes
+- Chronicle: Audit events with action, resource, actor, and metadata
+- Relay: Webhook events for external systems (`consent.granted`, `consent.revoked`)
+- Hook bus: Internal hook events for other plugins to react to consent changes
 
 ## GDPR data export
 
@@ -168,16 +169,16 @@ When the engine processes a GDPR data export request, consent records are includ
 The consent plugin can be used with a frontend cookie consent banner:
 
 1. The frontend displays a cookie consent banner on first visit
-2. When the user makes their choices, the frontend calls `POST /v1/auth/consent/grant` for each accepted purpose
+2. When the user makes their choices, the frontend calls `POST /v1/consent/grant` for each accepted purpose
 3. The frontend stores a local flag to suppress the banner on subsequent visits
-4. When the user changes preferences, call `POST /v1/auth/consent/revoke` for withdrawn purposes and `POST /v1/auth/consent/grant` for newly accepted ones
+4. When the user changes preferences, call `POST /v1/consent/revoke` for withdrawn purposes and `POST /v1/consent/grant` for newly accepted ones
 
 ## API routes
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/v1/auth/consent/grant` | Record consent for a purpose |
-| `POST` | `/v1/auth/consent/revoke` | Withdraw consent for a purpose |
-| `GET` | `/v1/auth/consent` | List consent records for the authenticated user |
+| `POST` | `/v1/consent/grant` | Record consent for a purpose |
+| `POST` | `/v1/consent/revoke` | Withdraw consent for a purpose |
+| `GET` | `/v1/consent` | List consent records for the authenticated user |
 
 All endpoints require authentication (`Authorization: Bearer` header).

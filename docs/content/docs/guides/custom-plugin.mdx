@@ -3,7 +3,7 @@ title: Custom Plugin
 description: Build a custom Authsome plugin by implementing lifecycle hook interfaces.
 ---
 
-Authsome's plugin system uses Go interfaces -- implement only the hooks you need and register your plugin with the engine. This guide walks through building a complete plugin from scratch.
+Authsome's plugin system uses Go interfaces: implement only the hooks you need and register your plugin with the engine. This guide walks through building a complete plugin from scratch.
 
 ## The base interface
 
@@ -171,9 +171,9 @@ func pgMigrations() *migrate.Group {
 // ── Routes ──
 
 func (p *Plugin) RegisterRoutes(router any) error {
-	// Register POST /v1/auth/api-tokens (create)
-	// Register GET  /v1/auth/api-tokens (list)
-	// Register DELETE /v1/auth/api-tokens/:id (revoke)
+	// Register POST /v1/api-tokens (create)
+	// Register GET  /v1/api-tokens (list)
+	// Register DELETE /v1/api-tokens/:id (revoke)
 	return nil
 }
 
@@ -234,6 +234,7 @@ import (
 )
 
 eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
 	authsome.WithStore(store),
 	authsome.WithPlugin(apitoken.New()),
 )
@@ -254,8 +255,8 @@ authExt := extension.New(
 
 The engine's plugin registry uses type assertions at registration time to discover which hooks each plugin implements. When an event fires, only plugins implementing that specific hook interface are called. Hooks are invoked sequentially in registration order. If any hook returns an error:
 
-- **Before hooks** -- the error aborts the operation
-- **After hooks** -- the error is logged but does not abort the operation
+- Before hooks: the error aborts the operation
+- After hooks: the error is logged but does not abort the operation
 
 ## Testing your plugin
 
@@ -273,6 +274,7 @@ import (
 
 func TestPluginRegisters(t *testing.T) {
 	eng, err := authsome.NewEngine(
+	    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
 		authsome.WithStore(memory.New()),
 		authsome.WithPlugin(apitoken.New()),
 	)

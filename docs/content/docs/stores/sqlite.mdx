@@ -3,7 +3,7 @@ title: SQLite
 description: Lightweight embedded SQLite backend using Grove ORM with sqlitedriver.
 ---
 
-The SQLite store (`store/sqlite`) provides an embedded, file-based backend using Grove ORM with `sqlitedriver`. It implements the full `store.Store` composite interface and requires no external database server — the entire Authsome dataset lives in a single `.db` file on disk.
+The SQLite store (`store/sqlite`) provides an embedded, file-based backend using Grove ORM with `sqlitedriver`. It implements `store.Store` and needs no database server: everything lives in one file on disk.
 
 ## Installation
 
@@ -13,88 +13,61 @@ go get github.com/xraph/grove
 go get github.com/xraph/grove/drivers/sqlitedriver
 ```
 
-SQLite on macOS and Linux is available without CGO using the pure-Go `modernc.org/sqlite` driver that `sqlitedriver` wraps. No system library installation is needed.
+`sqlitedriver` wraps the pure-Go `modernc.org/sqlite`, so you don't need CGO or a system library.
 
 ## Creating a store
 
 ```go
 import (
+    "log"
+
     "github.com/xraph/grove"
     "github.com/xraph/grove/drivers/sqlitedriver"
+
     "github.com/xraph/authsome/store/sqlite"
 )
 
-// Open a Grove DB backed by SQLite.
-db := grove.Open(sqlitedriver.New("authsome.db"))
+lite := sqlitedriver.New()
+if err := lite.Open(ctx, "file:authsome.db"); err != nil {
+    log.Fatal(err)
+}
+db, err := grove.Open(lite)
+if err != nil {
+    log.Fatal(err)
+}
 
-// Create the Authsome store.
 sqStore := sqlite.New(db)
 ```
 
-`sqlitedriver.New` accepts a file path. Pass `":memory:"` to use a transient in-memory SQLite database (distinct from the `store/memory` package — this still uses SQLite semantics and supports full migrations).
-
-```go
-// In-memory SQLite (useful for fast integration tests with real SQL behaviour)
-db := grove.Open(sqlitedriver.New(":memory:"))
-sqStore := sqlite.New(db)
-```
+The DSN is passed to `modernc.org/sqlite`. A `:memory:` DSN gives you a throwaway database that still runs the real migrations, unlike `store/memory`.
 
 ## Wiring into the engine
 
 ```go
-package main
-
-import (
-    "context"
-    "log"
-    "net/http"
-    "time"
-
-    "github.com/xraph/authsome"
-    "github.com/xraph/authsome/plugins/password"
-    "github.com/xraph/authsome/store/sqlite"
-    "github.com/xraph/grove"
-    "github.com/xraph/grove/drivers/sqlitedriver"
+eng, err := authsome.NewEngine(
+    authsome.WithStore(sqStore),
+    authsome.WithDriverName("sqlite"),
+    authsome.WithDB(db),
+    authsome.WithChronicle(chronicleBridge),
+    authsome.WithWarden(wardenEngine),
+    authsome.WithPlugin(password.New()),
 )
-
-func main() {
-    ctx := context.Background()
-
-    db := grove.Open(sqlitedriver.New("authsome.db"))
-    sqStore := sqlite.New(db)
-
-    eng, err := authsome.New(
-        authsome.WithStore(sqStore),
-        authsome.WithPlugin(password.New()),
-        authsome.WithConfig(authsome.Config{
-            AppID:    "myapp",
-            BasePath: "/v1/auth",
-            Session: authsome.SessionConfig{
-                TokenTTL:        1 * time.Hour,
-                RefreshTokenTTL: 7 * 24 * time.Hour,
-            },
-        }),
-    )
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer eng.Stop(ctx)
-
-    if err := eng.Start(ctx); err != nil {
-        log.Fatal(err)
-    }
-
-    mux := http.NewServeMux()
-    eng.RegisterRoutes(mux)
-    log.Fatal(http.ListenAndServe(":8080", mux))
+if err != nil {
+    log.Fatal(err)
 }
+if err := eng.Start(ctx); err != nil {
+    log.Fatal(err)
+}
+defer eng.Stop(ctx)
 ```
+
+`WithDriverName("sqlite")` lets plugins add their SQLite migrations, and `WithDB(db)` lets plugins with their own stores use the database instead of memory. Serve the API the way [Getting Started](/docs/getting-started) does.
 
 ## Migrations
 
-Like all Authsome backends, migrations run automatically on `eng.Start(ctx)`. The SQLite store uses the same Grove ORM migration orchestrator as the PostgreSQL backend. Migration history is tracked in a `grove_migrations` table within the SQLite file.
+Migrations run on `eng.Start(ctx)` unless you pass `WithDisableMigrate()`, through the same Grove orchestrator as PostgreSQL. Applied migrations are recorded in `grove_migrations` inside the file.
 
-Running migrations manually:
+To run the core migrations yourself:
 
 ```go
 if err := sqStore.Migrate(ctx); err != nil {
@@ -104,41 +77,31 @@ if err := sqStore.Migrate(ctx); err != nil {
 
 ## Table naming
 
-SQLite uses the same `authsome_` table prefix as the PostgreSQL backend. All table names, column names, and constraint semantics are identical. The Grove ORM migration system generates SQLite-compatible DDL from the same model definitions.
+SQLite uses the same `authsome_` table names as PostgreSQL. The DDL is SQLite's own, kept in `store/sqlite`'s migration group.
 
 ## Lifecycle methods
 
 | Method | Behaviour |
 |--------|-----------|
-| `Migrate(ctx, extraGroups...)` | Creates all tables using the Grove migration orchestrator. |
-| `Ping(ctx)` | Calls `db.Ping(ctx)` to verify the SQLite file is accessible. |
-| `Close()` | Calls `db.Close()` to flush WAL pages and close the file. |
+| `Migrate(ctx, extraGroups...)` | Runs the core group and any extra groups through the Grove orchestrator |
+| `Ping(ctx)` | Checks the database with `db.Ping` |
+| `Close()` | Closes the `*grove.DB` |
 
-Always call `Close()` before your process exits. SQLite uses a write-ahead log (WAL) and data written since the last checkpoint may not be persisted unless `Close` is called cleanly.
+Call `Close()` before the process exits.
 
 ## Limitations compared to PostgreSQL
 
 | Feature | SQLite | PostgreSQL |
 |---------|--------|------------|
-| Concurrent writers | Single writer at a time (WAL mode allows one writer + multiple readers) | Full concurrent write support |
-| Network access | File only — cannot be shared across processes on different hosts | Full network access |
-| Full-text search | Limited | Full `pg_trgm`, `tsvector` support |
-| JSON operators | Basic JSON support | Full JSONB with GIN indexes |
+| Concurrent writers | One writer at a time | Many |
+| Network access | A local file, so one host | Over the network |
 | Multi-instance deployments | Not supported | Supported |
-| Replication | Not supported | Streaming replication |
-| Max practical dataset | ~1 GB for write-heavy workloads | Petabyte-scale |
+| Replication | None built in | Streaming replication |
 
 ## When to use
 
-- **Local development** — No server process to manage. Run your application with a single file.
-- **Desktop or Electron apps** — Embed Authsome directly in a desktop application with a local SQLite database.
-- **CLI tools** — Authenticate CLI users without requiring an external service.
-- **Single-server deployments** — Low-traffic applications where a single SQLite file is sufficient.
-- **Integration tests** — SQLite `:memory:` provides real SQL behaviour with Grove ORM migrations, faster than spinning up PostgreSQL but more faithful than the pure-memory store.
-- **Edge functions** — Environments where running a PostgreSQL server is impractical.
+Use SQLite for local development, desktop apps and CLI tools, single-server deployments with light traffic, and integration tests where you want real SQL without running PostgreSQL.
 
 ## When not to use
 
-- **Multi-instance deployments** — SQLite cannot be shared across multiple server processes. If you run more than one instance of your application, use PostgreSQL.
-- **High write throughput** — SQLite serialises writes. Under heavy concurrent write load, use PostgreSQL.
-- **Production with high availability requirements** — SQLite has no built-in replication. Use PostgreSQL with streaming replication instead.
+Don't use it when you run more than one instance (the file can't be shared across hosts), when writes are heavy (SQLite serialises them), or when you need replication.
