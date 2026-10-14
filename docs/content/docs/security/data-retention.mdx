@@ -7,7 +7,7 @@ Authsome keeps as little as it still needs. Deleting a user erases what every pl
 
 ## Deleting a user
 
-`DELETE /v1/auth/me` (self-service) and the admin deletion both run the same erasure:
+`DELETE /v1/me` (self-service) and the admin deletion both run the same erasure:
 
 1. Every delegation the user is party to, as subject or actor, is revoked.
 2. The user's devices are removed.

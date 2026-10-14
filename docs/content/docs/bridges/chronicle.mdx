@@ -3,7 +3,7 @@ title: Chronicle Bridge
 description: Audit logging integration that records every auth event to a Chronicle backend.
 ---
 
-The Chronicle bridge connects Authsome to the Chronicle audit logging extension. When configured, every authentication event — sign-in, sign-up, MFA enrollment, password reset, session revocation, and more — is recorded to Chronicle's append-only audit trail with full actor, tenant, outcome, and severity metadata.
+The Chronicle bridge connects Authsome to Chronicle's audit trail. It's required: `NewEngine` returns `ErrChronicleRequired` without `WithChronicle`. Every authentication event (sign-in, sign-up, MFA enrollment, password reset, session revocation and more) is recorded with its actor, tenant, outcome and severity.
 
 ## Interface
 
@@ -20,10 +20,18 @@ type AuditEvent struct {
     ResourceID string            `json:"resource_id,omitempty"`
     ActorID    string            `json:"actor_id,omitempty"`
     Tenant     string            `json:"tenant,omitempty"`
+    OrgID      string            `json:"org_id,omitempty"`
     Outcome    string            `json:"outcome"`
     Severity   string            `json:"severity"`
+    Category   string            `json:"category,omitempty"`
     Metadata   map[string]string `json:"metadata,omitempty"`
     Reason     string            `json:"reason,omitempty"`
+
+    // Request correlation, filled in from the request context.
+    IP        string `json:"ip,omitempty"`
+    UserAgent string `json:"user_agent,omitempty"`
+    RequestID string `json:"request_id,omitempty"`
+    SessionID string `json:"session_id,omitempty"`
 }
 ```
 
@@ -55,10 +63,9 @@ import (
     "github.com/xraph/chronicle"
 )
 
-// Build the Chronicle engine (see Chronicle docs for full setup).
+// Build the Chronicle engine (see Chronicle's docs for stores).
 chronicleEng, err := chronicle.New(
     chronicle.WithStore(chronicleStore),
-    chronicle.WithAppID("myapp"),
 )
 if err != nil {
     log.Fatal(err)
@@ -68,8 +75,9 @@ if err != nil {
 chronicleBridge := chronicleadapter.New(chronicleEng)
 
 // Register with Authsome.
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
     authsome.WithStore(pgStore),
+    authsome.WithWarden(wardenEngine),
     authsome.WithPlugin(password.New()),
     authsome.WithChronicle(chronicleBridge),
 )
@@ -77,51 +85,40 @@ eng, err := authsome.New(
 
 ## Events recorded
 
-The Chronicle bridge receives events for every Authsome operation. The table below lists the most important events:
+The action names come from the `hook` package. Some of the common ones:
 
-| Action | Resource | Severity | Trigger |
-|--------|----------|----------|---------|
-| `auth.signup` | `user` | `info` | New user registered |
-| `auth.signin` | `session` | `info` | Successful sign-in |
-| `auth.signin.failed` | `session` | `warning` | Failed sign-in attempt |
-| `auth.signout` | `session` | `info` | User signed out |
-| `auth.password.reset` | `account` | `info` | Password reset completed |
-| `auth.password.change` | `account` | `info` | Password changed |
-| `auth.mfa.enrolled` | `mfa` | `info` | MFA method enrolled |
-| `auth.mfa.verified` | `mfa` | `info` | MFA challenge passed |
-| `auth.mfa.failed` | `mfa` | `warning` | MFA challenge failed |
-| `auth.passkey.registered` | `passkey` | `info` | Passkey registered |
-| `auth.passkey.authenticated` | `passkey` | `info` | Passkey login |
-| `auth.social.signin` | `session` | `info` | Social OAuth sign-in |
-| `auth.sso.signin` | `session` | `info` | SSO SAML/OIDC sign-in |
-| `session.revoked` | `session` | `info` | Session explicitly revoked |
-| `device.trusted` | `device` | `info` | Device marked as trusted |
-| `user.banned` | `user` | `warning` | User account banned |
-| `account.locked` | `account` | `critical` | Account locked out after repeated failures |
-| `apikey.created` | `apikey` | `info` | API key created |
-| `apikey.revoked` | `apikey` | `warning` | API key revoked |
+| Action | Trigger |
+|--------|---------|
+| `auth.signup`, `auth.signin`, `auth.signout`, `auth.refresh` | Account and session flows |
+| `auth.password_reset`, `auth.password_reset_requested`, `auth.password_change` | Password flows |
+| `auth.email_verify`, `auth.email_verification_requested` | Email verification |
+| `auth.mfa.enroll`, `auth.mfa.challenge`, `auth.mfa.recovery_used` | MFA |
+| `auth.account_locked` | Lockout after repeated failures |
+| `auth.refresh_token_replayed` | A rotated refresh token was used again |
+| `user.create`, `user.update`, `user.delete` | User changes |
+| `session.create`, `session.revoke` | Sessions |
+| `org.create`, `org.member.add`, `org.member.remove`, `org.invitation.accept` | Organizations |
+| `rbac.role.create`, `rbac.role.assign`, `rbac.role.unassign` | Roles |
+| `admin.user.ban`, `admin.user.unlock`, `admin.impersonate` | Admin actions |
+| `device.trust`, `device.register` | Devices |
+
+See the `Action*` constants in `github.com/xraph/authsome/hook` for the full list.
 
 ## Standalone development stub
 
-During development, use the built-in `SlogChronicle` stub that logs audit events to `slog` without requiring a Chronicle instance:
+During development and in tests, `bridge.NewMemoryChronicle()` keeps events in memory instead of needing a Chronicle instance:
 
 ```go
-import (
-    "log/slog"
-    "github.com/xraph/authsome/bridge"
-)
+import "github.com/xraph/authsome/bridge"
 
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
     authsome.WithStore(memory.New()),
-    authsome.WithChronicle(bridge.NewSlogChronicle(slog.Default())),
+    authsome.WithWarden(wardenEngine),
+    authsome.WithChronicle(bridge.NewMemoryChronicle()),
 )
 ```
 
-The stub logs a structured message for each event:
-
-```
-INFO authsome audit action=auth.signin resource=session resource_id=ases_01j... actor_id=ausr_01j... tenant=aorg_01j... outcome=success severity=info
-```
+You can also run a real Chronicle on its in-memory store, as [Getting Started](/docs/getting-started) does.
 
 ## Custom Chronicle implementation
 
@@ -149,10 +146,7 @@ func (c *BigQueryChronicle) Record(ctx context.Context, event *bridge.AuditEvent
 }
 
 // Register:
-eng, err := authsome.New(
-    authsome.WithStore(pgStore),
-    authsome.WithChronicle(&BigQueryChronicle{...}),
-)
+authsome.WithChronicle(&BigQueryChronicle{...}),
 ```
 
 ## Asynchronous recording
@@ -163,7 +157,7 @@ The Chronicle bridge's `Record` method is called synchronously within the auth o
 type AsyncChronicle struct {
     inner   bridge.Chronicle
     queue   chan *bridge.AuditEvent
-    logger  *slog.Logger
+    logger  *slog.Logger // or any logger you use
 }
 
 func NewAsyncChronicle(inner bridge.Chronicle) *AsyncChronicle {
@@ -181,7 +175,7 @@ func (ac *AsyncChronicle) Record(ctx context.Context, event *bridge.AuditEvent) 
     case ac.queue <- event:
         return nil
     default:
-        // Queue full — log and drop rather than blocking the auth path.
+        // Queue full: log and drop rather than block the auth path.
         ac.logger.Warn("chronicle queue full, dropping event", "action", event.Action)
         return nil
     }

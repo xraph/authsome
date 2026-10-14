@@ -43,8 +43,8 @@ Key fields:
 
 Sessions are created automatically on successful authentication. The engine generates two cryptographically random tokens:
 
-1. **Session token** (access token) — short-lived, used for API authorization
-2. **Refresh token** — long-lived, used to obtain new session tokens
+1. **Session token** (access token): short-lived, used for API authorization
+2. Refresh token: long-lived, used to obtain new session tokens
 
 ```go
 import "github.com/xraph/authsome/account"
@@ -78,7 +78,8 @@ When a session is created during sign-in or sign-up, both tokens are returned:
   "user": {
     "id": "ausr_01j9...",
     "email": "alice@example.com",
-    "name": "Alice Liddell"
+    "first_name": "Alice",
+    "last_name": "Liddell"
   },
   "session_token": "a3f8c9d4e5f2g7h1...",
   "refresh_token": "d72b1ef8a4c6e9b3...",
@@ -92,7 +93,7 @@ The client should store both tokens securely. The session token is sent as `Auth
 
 When the session token expires, the client uses the refresh token to obtain new tokens without re-authenticating.
 
-`POST /v1/auth/refresh`
+`POST /v1/refresh`
 
 ```json
 {
@@ -134,7 +135,7 @@ If an attacker attempts to use a previously rotated refresh token, the engine de
 
 ### Revoke current session (sign out)
 
-`POST /v1/auth/signout`
+`POST /v1/signout`
 
 ```
 Authorization: Bearer <session_token>
@@ -146,7 +147,7 @@ Authorization: Bearer <session_token>
 
 ### Revoke a specific session
 
-`DELETE /v1/auth/sessions/:sessionId`
+`DELETE /v1/sessions/:sessionId`
 
 ```
 Authorization: Bearer <session_token>
@@ -184,7 +185,7 @@ sessions, err := engine.ListSessions(ctx, userID)
 
 Users can view all their active sessions:
 
-`GET /v1/auth/sessions`
+`GET /v1/sessions`
 
 ```
 Authorization: Bearer <session_token>

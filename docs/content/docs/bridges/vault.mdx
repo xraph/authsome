@@ -3,7 +3,7 @@ title: Vault Bridge
 description: Secret management and feature flag integration via the Vault extension.
 ---
 
-The Vault bridge connects Authsome to the Vault secrets management extension. When configured, Authsome can retrieve sensitive configuration values (OAuth client secrets, signing keys, SMTP credentials) from Vault's encrypted storage rather than from environment variables or hardcoded configuration. Vault also provides feature flag evaluation, allowing you to gate auth flows behind flags at runtime.
+The Vault bridge gives your code access to Vault's secrets, feature flags and config through `eng.Vault()`. Authsome itself doesn't read anything through it today: no core code or plugin calls the bridge, so it's a convenience for your own startup code and plugins. Use it to fetch OAuth client secrets or SMTP credentials from Vault instead of the environment.
 
 ## Interface
 
@@ -20,28 +20,22 @@ type Vault interface {
 
 ## Setup with the Vault adapter
 
+The adapter wraps Vault's secret, flag and config services. Any of them can be nil; a nil service makes its methods return `bridge.ErrVaultNotAvailable`.
+
 ```go
 import (
     "github.com/xraph/authsome"
     "github.com/xraph/authsome/bridge/vaultadapter"
-    "github.com/xraph/vault"
 )
 
-// Build the Vault engine (see Vault docs for full setup).
-vaultEng, err := vault.New(
-    vault.WithStore(vaultStore),
-    vault.WithEncryptionKey(encryptionKey),
-    vault.WithAppID("myapp"),
+// secretSvc, flagSvc and configSvc come from your Vault setup
+// (*secret.Service, *flag.Service and *config.Service in github.com/xraph/vault).
+vaultBridge := vaultadapter.New(secretSvc, flagSvc, configSvc,
+    vaultadapter.WithAppID("myapp"),
 )
-if err != nil {
-    log.Fatal(err)
-}
 
-// Wrap in the Authsome adapter.
-vaultBridge := vaultadapter.New(vaultEng)
-
-// Register with Authsome.
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(pgStore),
     authsome.WithVault(vaultBridge),
 )
@@ -54,31 +48,34 @@ eng, err := authsome.New(
 Instead of passing OAuth client secrets directly in the plugin constructor, retrieve them from Vault at startup:
 
 ```go
-githubClientID, err := vaultClient.GetSecret(ctx, "oauth.github.client_id")
+githubClientID, err := vaultBridge.GetSecret(ctx, "oauth.github.client_id")
 if err != nil {
     log.Fatal(err)
 }
-githubClientSecret, err := vaultClient.GetSecret(ctx, "oauth.github.client_secret")
+githubClientSecret, err := vaultBridge.GetSecret(ctx, "oauth.github.client_secret")
 if err != nil {
     log.Fatal(err)
 }
 
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(pgStore),
     authsome.WithVault(vaultBridge),
-    authsome.WithPlugin(social.New(
-        social.WithGitHub(
-            string(githubClientID),
-            string(githubClientSecret),
-            "https://myapp.com/v1/auth/social/github/callback",
-        ),
-    )),
+    authsome.WithPlugin(social.New(social.Config{
+        Providers: []social.Provider{
+            social.NewGitHubProvider(social.ProviderConfig{
+                ClientID:     string(githubClientID),
+                ClientSecret: string(githubClientSecret),
+                RedirectURL:  "https://myapp.com/v1/social/github/callback",
+            }),
+        },
+    })),
 )
 ```
 
 ### Feature flags on auth flows
 
-Authsome reads feature flags from Vault when the bridge is configured. You can gate authentication features behind flags for gradual rollout:
+Your own handlers and plugins can check Vault flags through the engine:
 
 ```go
 // In your auth plugin or middleware, check a Vault feature flag:
@@ -89,10 +86,10 @@ if eng.Vault().IsFeatureEnabled(ctx, "passkey_registration_enabled") {
 
 ### Dynamic configuration
 
-Retrieve runtime configuration values (session token TTL, rate limit thresholds, allowed callback URLs) from Vault's config store, enabling changes without redeployment:
+Read config values the same way. Authsome won't pick them up on its own, so apply them yourself:
 
 ```go
-sessionTTLStr, err := vaultClient.GetConfig(ctx, "auth.session_ttl")
+sessionTTLStr, err := vaultBridge.GetConfig(ctx, "auth.session_ttl")
 if err == nil {
     sessionTTL, _ = time.ParseDuration(sessionTTLStr)
 }
@@ -105,12 +102,13 @@ During development, use the built-in `NoopVault` stub:
 ```go
 import "github.com/xraph/authsome/bridge"
 
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(memory.New()),
     authsome.WithVault(bridge.NewNoopVault()),
 )
 ```
 
 <Callout type="warn">
-The `NoopVault` returns `ErrVaultNotAvailable` for all secret and config operations, and returns `false` for all feature flag checks. If your application relies on secrets retrieved from Vault at startup (OAuth credentials, signing keys), it will fail to start with the noop stub. Use real Vault in any environment where secrets must be resolved.
+`NoopVault` returns `ErrVaultNotAvailable` for secret and config calls and `false` for every flag. If your startup code reads secrets through the bridge, it fails with the stub.
 </Callout>

@@ -7,29 +7,34 @@ Every Authsome storage backend implements a single Go interface. This guide show
 
 ## The composite interface
 
-Your store must implement the composite `store.Store` interface, which embeds 12 subsystem stores plus lifecycle methods:
+Your store must implement the composite `store.Store` interface, which embeds every domain store plus three lifecycle methods:
 
 ```go
-import "github.com/xraph/authsome/store"
-
 type Store interface {
-	user.Store
-	session.Store
-	account.Store
-	app.Store
-	organization.Store
-	device.Store
-	webhook.Store
-	notification.Store
-	apikey.Store
-	environment.Store
-	formconfig.Store
-	formconfig.BrandingStore
-	appsessionconfig.Store
-
-	Migrate(ctx context.Context, extraGroups ...*migrate.Group) error
-	Ping(ctx context.Context) error
-	Close() error
+    user.Store
+    session.Store
+    account.Store
+    app.Store
+    organization.Store
+    device.Store
+    webhook.Store
+    notification.Store
+    apikey.Store
+    environment.Store
+    formconfig.Store
+    formconfig.BrandingStore
+    appsessionconfig.Store
+    appclientconfig.Store
+    settings.Store
+    serviceaccount.Store
+    principal.Store
+    KV
+    LegacyTokenHasher
+    Retention
+    Paged
+    Migrate(ctx context.Context, extraGroups ...*migrate.Group) error
+    Ping(ctx context.Context) error
+    Close() error
 }
 ```
 
@@ -39,12 +44,22 @@ type Store interface {
 
 ```go
 type Store interface {
-	CreateUser(ctx context.Context, u *User) error
-	GetUser(ctx context.Context, userID id.UserID) (*User, error)
-	GetUserByEmail(ctx context.Context, email string) (*User, error)
-	UpdateUser(ctx context.Context, u *User) error
-	DeleteUser(ctx context.Context, userID id.UserID) error
-	ListUsers(ctx context.Context, filter *ListFilter) ([]*User, int64, error)
+    CreateUser(ctx context.Context, u *User) error
+    GetUser(ctx context.Context, userID id.UserID) (*User, error)
+    GetUserByEmail(ctx context.Context, appID id.AppID, envID id.EnvironmentID, email string) (*User, error)
+    GetUserByPhone(ctx context.Context, appID id.AppID, envID id.EnvironmentID, phone string) (*User, error)
+    GetUserByUsername(ctx context.Context, appID id.AppID, envID id.EnvironmentID, username string) (*User, error)
+    UpdateUser(ctx context.Context, u *User) error
+    DeleteUser(ctx context.Context, userID id.UserID) error
+    ListUsers(ctx context.Context, q *Query) (*List, error)
+    CreateUserWithPrimaryEmail(ctx context.Context, u *User, primary *UserEmail) error
+    AddUserEmail(ctx context.Context, e *UserEmail) error
+    GetUserByAnyEmail(ctx context.Context, appID id.AppID, envID id.EnvironmentID, email string) (*User, error)
+    GetUserEmailRecord(ctx context.Context, appID id.AppID, envID id.EnvironmentID, email string) (*UserEmail, error)
+    GetUserEmails(ctx context.Context, userID id.UserID) ([]*UserEmail, error)
+    MarkUserEmailVerified(ctx context.Context, userID id.UserID, email string) error
+    SetPrimaryEmail(ctx context.Context, userID id.UserID, email string) error
+    DeleteUserEmail(ctx context.Context, userID id.UserID, email string) error
 }
 ```
 
@@ -52,15 +67,24 @@ type Store interface {
 
 ```go
 type Store interface {
-	CreateSession(ctx context.Context, s *Session) error
-	GetSession(ctx context.Context, sessionID id.SessionID) (*Session, error)
-	GetSessionByToken(ctx context.Context, token string) (*Session, error)
-	GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*Session, error)
-	UpdateSession(ctx context.Context, s *Session) error
-	DeleteSession(ctx context.Context, sessionID id.SessionID) error
-	DeleteUserSessions(ctx context.Context, userID id.UserID) error
-	ListUserSessions(ctx context.Context, userID id.UserID) ([]*Session, error)
-	CountActiveSessions(ctx context.Context, userID id.UserID) (int64, error)
+    CreateSession(ctx context.Context, s *Session) error
+    GetSession(ctx context.Context, sessionID id.SessionID) (*Session, error)
+    GetSessionByToken(ctx context.Context, token string) (*Session, error)
+    GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*Session, error)
+    UpdateSession(ctx context.Context, s *Session) error
+    RotateSession(ctx context.Context, s *Session, expectedTokenHash string) (bool, error)
+    TouchSession(ctx context.Context, sessionID id.SessionID, lastActivityAt, expiresAt time.Time) error
+    DeleteSession(ctx context.Context, sessionID id.SessionID) error
+    DeleteUserSessions(ctx context.Context, userID id.UserID) error
+    DeleteSessionsByGrant(ctx context.Context, grantID id.AgentGrantID) error
+    ListUserSessions(ctx context.Context, userID id.UserID) ([]*Session, error)
+    ListUserSessionsPage(ctx context.Context, userID id.UserID, opts page.Opts) (page.Page[*Session], error)
+    ListSessions(ctx context.Context, limit int) ([]*Session, error)
+    IsRefreshTokenRevoked(ctx context.Context, tokenHash string) (bool, error)
+    MarkRefreshTokenRevoked(ctx context.Context, tokenHash string, familyID id.SessionFamilyID, reason string) error
+    GetRevokedRefreshTokenFamily(ctx context.Context, tokenHash string) (id.SessionFamilyID, error)
+    RevokeRefreshTokenFamily(ctx context.Context, familyID id.SessionFamilyID, reason string) error
+    MarkRefreshTokenReplayed(ctx context.Context, tokenHash string) (firstReplay bool, err error)
 }
 ```
 
@@ -68,10 +92,14 @@ type Store interface {
 
 ```go
 type Store interface {
-	CreateAccount(ctx context.Context, a *Account) error
-	GetAccountByProvider(ctx context.Context, provider, providerID string) (*Account, error)
-	GetAccountsByUserID(ctx context.Context, userID id.UserID) ([]*Account, error)
-	DeleteAccount(ctx context.Context, accountID id.AccountID) error
+    CreateVerification(ctx context.Context, v *Verification) error
+    GetVerification(ctx context.Context, token string) (*Verification, error)
+    ConsumeVerification(ctx context.Context, token string) error
+    GetActiveEmailVerification(ctx context.Context, userID id.UserID) (*Verification, error)
+    UpdateVerification(ctx context.Context, v *Verification) error
+    CreatePasswordReset(ctx context.Context, pr *PasswordReset) error
+    GetPasswordReset(ctx context.Context, token string) (*PasswordReset, error)
+    ConsumePasswordReset(ctx context.Context, token string) error
 }
 ```
 
@@ -79,17 +107,37 @@ type Store interface {
 
 ```go
 type Store interface {
-	CreateOrganization(ctx context.Context, o *Organization) error
-	GetOrganization(ctx context.Context, orgID id.OrgID) (*Organization, error)
-	UpdateOrganization(ctx context.Context, o *Organization) error
-	DeleteOrganization(ctx context.Context, orgID id.OrgID) error
-	ListOrganizations(ctx context.Context, filter *ListFilter) ([]*Organization, int64, error)
-	ListUserOrganizations(ctx context.Context, userID id.UserID) ([]*Organization, error)
-	AddMember(ctx context.Context, m *Member) error
-	GetMember(ctx context.Context, memberID id.MemberID) (*Member, error)
-	UpdateMember(ctx context.Context, m *Member) error
-	RemoveMember(ctx context.Context, memberID id.MemberID) error
-	ListMembers(ctx context.Context, orgID id.OrgID) ([]*Member, error)
+    CreateOrganization(ctx context.Context, o *Organization) error
+    GetOrganization(ctx context.Context, orgID id.OrgID) (*Organization, error)
+    GetOrganizationBySlug(ctx context.Context, appID id.AppID, slug string) (*Organization, error)
+    UpdateOrganization(ctx context.Context, o *Organization) error
+    DeleteOrganization(ctx context.Context, orgID id.OrgID) error
+    ListOrganizations(ctx context.Context, appID id.AppID) ([]*Organization, error)
+    ListUserOrganizations(ctx context.Context, userID id.UserID) ([]*Organization, error)
+    ListOrganizationsPage(ctx context.Context, appID id.AppID, opts page.Opts) (page.Page[*Organization], error)
+    ListUserOrganizationsPage(ctx context.Context, userID id.UserID, opts page.Opts) (page.Page[*Organization], error)
+    CreateMember(ctx context.Context, m *Member) error
+    GetMember(ctx context.Context, memberID id.MemberID) (*Member, error)
+    GetMemberByUserAndOrg(ctx context.Context, userID id.UserID, orgID id.OrgID) (*Member, error)
+    UpdateMember(ctx context.Context, m *Member) error
+    DeleteMember(ctx context.Context, memberID id.MemberID) error
+    ListMembers(ctx context.Context, orgID id.OrgID) ([]*Member, error)
+    ListMembersPage(ctx context.Context, orgID id.OrgID, opts page.Opts) (page.Page[*Member], error)
+    CreateInvitation(ctx context.Context, inv *Invitation) error
+    GetInvitation(ctx context.Context, invID id.InvitationID) (*Invitation, error)
+    GetInvitationByToken(ctx context.Context, token string) (*Invitation, error)
+    UpdateInvitation(ctx context.Context, inv *Invitation) error
+    DeleteInvitation(ctx context.Context, invID id.InvitationID) error
+    ListInvitations(ctx context.Context, orgID id.OrgID) ([]*Invitation, error)
+    ListInvitationsPage(ctx context.Context, orgID id.OrgID, opts page.Opts) (page.Page[*Invitation], error)
+    CreateTeam(ctx context.Context, t *Team) error
+    GetTeam(ctx context.Context, teamID id.TeamID) (*Team, error)
+    UpdateTeam(ctx context.Context, t *Team) error
+    DeleteTeam(ctx context.Context, teamID id.TeamID) error
+    ListTeams(ctx context.Context, orgID id.OrgID) ([]*Team, error)
+    ListTeamsPage(ctx context.Context, orgID id.OrgID, opts page.Opts) (page.Page[*Team], error)
+    WithTx(ctx context.Context, fn func(tx Store) error) error
+    DeleteOrganizationCascade(ctx context.Context, orgID id.OrgID) error
 }
 ```
 
@@ -105,23 +153,19 @@ This causes a compile error if any required method is missing, which is much fas
 
 ## Migration handling
 
-The `Migrate` method accepts optional extra migration groups. These come from plugins that define their own tables. Your store must run both its own core migrations and any extra groups passed in.
+The `Migrate` method receives extra migration groups from plugins that define their own tables (the engine collects them with the driver name you pass to `WithDriverName`). A SQL store should run its own migrations and those groups. A store with no schema can do what `store/memory` does and return nil.
 
 ```go
+// For a store built on Grove, do what store/postgres does: run your core
+// group and the plugins' groups through one orchestrator.
 func (s *MyStore) Migrate(ctx context.Context, extraGroups ...*migrate.Group) error {
-	// Run core migrations first
-	if err := s.runCoreMigrations(ctx); err != nil {
+	executor, err := migrate.NewExecutorFor(s.driver)
+	if err != nil {
 		return err
 	}
-
-	// Run plugin migration groups
-	for _, group := range extraGroups {
-		if err := group.Run(ctx, s.db); err != nil {
-			return fmt.Errorf("plugin migration: %w", err)
-		}
-	}
-
-	return nil
+	groups := append([]*migrate.Group{myCoreMigrations}, extraGroups...)
+	_, err = migrate.NewOrchestrator(executor, groups...).Migrate(ctx)
+	return err
 }
 ```
 
@@ -265,6 +309,7 @@ Pass your custom store when building the engine:
 
 ```go
 eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
 	authsome.WithStore(dynamostore.New(client, "authsome")),
 )
 ```

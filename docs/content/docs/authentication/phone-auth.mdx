@@ -21,18 +21,14 @@ smsSender := smsadapter.NewTwilioSender(
     "+15559876543",                         // From number
 )
 
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
-    authsome.WithPlugin(phone.New()),
-    authsome.WithSMSSender(smsSender),
-    authsome.WithConfig(authsome.Config{
-        AppID: "myapp",
-        Phone: authsome.PhoneConfig{
-            CodeLength: 6,              // number of digits in OTP
-            CodeTTL:    "5m",           // code validity window
-            MaxAttempts: 3,             // max verification attempts per code
-        },
-    }),
+    authsome.WithPlugin(phone.New(phone.Config{
+        CodeTTL: 5 * time.Minute, // the default
+        // AutoCreate defaults to true: an unknown number gets a new account.
+    })),
+    authsome.WithSMSSender(smsSender), // or phone.Config{SMSSender: ...}
 )
 ```
 
@@ -46,7 +42,7 @@ Phone-based sign-in is a two-step process: request a code, then verify it.
 
 **Request code**: The user submits their phone number.
 
-`POST /v1/auth/phone/send-code`
+`POST /v1/phone/start`
 
 ```json
 {
@@ -69,7 +65,7 @@ The engine generates a random 6-digit numeric code and sends it via the configur
 
 **Verify code**: The user submits the code they received.
 
-`POST /v1/auth/phone/verify`
+`POST /v1/phone/verify`
 
 ```json
 {
@@ -124,7 +120,7 @@ valid := mfa.ValidateSMSCode("847293", challenge)
 
 When using phone as an additional identity attribute (not the primary sign-in method), users can verify their phone number through the same OTP flow:
 
-`POST /v1/auth/phone/verify-number`
+`POST /v1/phone/verify`
 
 ```json
 {
@@ -192,7 +188,8 @@ func (s *MyCustomSender) SendSMS(ctx context.Context, msg *bridge.SMSMessage) er
 Then pass it to the engine:
 
 ```go
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithSMSSender(&MyCustomSender{
         apiKey: os.Getenv("SMS_API_KEY"),
     }),
@@ -212,13 +209,13 @@ eng, err := authsome.New(
 
 ## API routes
 
-All phone auth routes are registered under `BasePath` (default `/v1/auth`):
+All phone auth routes are registered under `BasePath` (default `/v1`):
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/phone/send-code` | Request an SMS OTP for sign-in |
+| `POST` | `/phone/start` | Request an SMS OTP for sign-in |
 | `POST` | `/phone/verify` | Verify OTP and sign in (or sign up) |
-| `POST` | `/phone/verify-number` | Verify phone number for an authenticated user |
+| `POST` | `/phone/verify` | Verify phone number for an authenticated user |
 
 ## Security considerations
 

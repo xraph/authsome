@@ -1,6 +1,6 @@
 ---
 title: Authsome UI Overview
-description: Pre-built authentication UI components for React, Next.js, and Vue — headless hooks plus styled Radix + Tailwind components.
+description: Pre-built authentication UI components for React, Next.js, and Vue: headless hooks plus styled Radix + Tailwind components.
 ---
 
 Authsome UI is a family of five JavaScript/TypeScript packages that provide authentication UI for any React, Next.js, or Vue application backed by an Authsome API. The packages are layered: each higher-level package builds on the one below it, and you choose the level of abstraction that fits your project.
@@ -23,11 +23,11 @@ Authsome UI is a family of five JavaScript/TypeScript packages that provide auth
 
 | Package | Version | What it provides |
 |---------|---------|-----------------|
-| `@authsome/ui-core` | — | `AuthManager` class, `AuthClient` HTTP client, TypeScript type definitions (`User`, `Session`, `Organization`, `AuthState`, etc.) |
-| `@authsome/ui-react` | — | `AuthProvider`, `useAuth`, `useUser`, `useOrganizations`, `useSessionToken`, `useClientConfig`, headless `SignInForm`, `SignUpForm`, `MFAChallengeForm`, `AuthGuard` |
-| `@authsome/ui-components` | — | 40+ styled components built with Radix UI primitives and Tailwind CSS |
-| `@authsome/ui-nextjs` | — | `getServerSession()` for RSC, `getClientConfig()` for auto-discovery, `createCookieStorage()`, `createAuthMiddleware()` for Edge, `createProxyHandler()` for API proxy, pre-built Next.js auth pages |
-| `@authsome/ui-vue` | — | `createAuthPlugin()`, `useAuth`, `useUser`, `useOrganizations`, `useSessionToken` composables |
+| `@authsome/ui-core` | none | `AuthManager` class, `AuthClient` HTTP client, TypeScript type definitions (`User`, `Session`, `Organization`, `AuthState`, etc.) |
+| `@authsome/ui-react` | none | `AuthProvider`, `useAuth`, `useUser`, `useOrganizations`, `useSessionToken`, `useClientConfig`, headless `SignInForm`, `SignUpForm`, `MFAChallengeForm`, `AuthGuard` |
+| `@authsome/ui-components` | none | 40+ styled components built with Radix UI primitives and Tailwind CSS |
+| `@authsome/ui-nextjs` | none | `getServerSession()` for RSC, `getClientConfig()` for auto-discovery, `createCookieStorage()`, `createAuthMiddleware()` for Edge, `createProxyHandler()` for API proxy, pre-built Next.js auth pages |
+| `@authsome/ui-vue` | none | `createAuthPlugin()`, `useAuth`, `useUser`, `useOrganizations`, `useSessionToken` composables |
 
 ## Installation
 
@@ -61,17 +61,17 @@ npm install @authsome/ui-vue @authsome/ui-core
 
 | Feature | `ui-core` | `ui-react` | `ui-components` | `ui-nextjs` | `ui-vue` |
 |---------|-----------|------------|-----------------|-------------|----------|
-| TypeScript types | Yes | Re-exports | — | Re-exports | — |
-| HTTP client (`AuthClient`) | Yes | Via context | — | Via context | Via composables |
+| TypeScript types | Yes | Re-exports | none | Re-exports | none |
+| HTTP client (`AuthClient`) | Yes | Via context | none | Via context | Via composables |
 | State management | `AuthManager` | `AuthProvider` | Uses React | Uses React | `createAuthPlugin` |
-| Hooks / composables | — | Yes | — | Re-exports | Yes |
-| Headless form components | — | Yes | — | Re-exports | — |
-| Styled form components | — | — | Yes | — | — |
-| Server session (`RSC`) | — | — | — | Yes | — |
-| Client config (auto-discovery) | — | `useClientConfig` | — | `getClientConfig` | — |
-| Edge middleware | — | — | — | Yes | — |
-| API proxy handler | — | — | — | Yes | — |
-| Cookie token storage | — | — | — | Yes | — |
+| Hooks / composables | none | Yes | none | Re-exports | Yes |
+| Headless form components | none | Yes | none | Re-exports | none |
+| Styled form components | none | none | Yes | none | none |
+| Server session (`RSC`) | none | none | none | Yes | none |
+| Client config (auto-discovery) | none | `useClientConfig` | none | `getClientConfig` | none |
+| Edge middleware | none | none | none | Yes | none |
+| API proxy handler | none | none | none | Yes | none |
+| Cookie token storage | none | none | none | Yes | none |
 
 ## Core concepts
 
@@ -91,7 +91,7 @@ import { AuthManager } from "@authsome/ui-core";
 const manager = new AuthManager({
   baseURL: "https://api.example.com",
   // Defaults to in-memory. createLocalStorage() persists across reloads but
-  // makes the refresh token readable by any script on the page — prefer
+  // makes the refresh token readable by any script on the page: prefer
   // backend-set httpOnly cookies where you can.
   storage: createLocalStorage(),
 });
@@ -105,7 +105,7 @@ const state = manager.getState();
 
 ### AuthClient
 
-`AuthClient` in `@authsome/ui-core` is the typed HTTP client that talks to the Authsome API. It wraps all endpoints under `/v1/auth`:
+`AuthClient` in `@authsome/ui-core` is the typed HTTP client that talks to the Authsome API. It wraps all endpoints under `/v1`:
 
 ```typescript
 import { AuthClient } from "@authsome/ui-core";

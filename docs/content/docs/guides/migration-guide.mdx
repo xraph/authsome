@@ -34,7 +34,7 @@ Firebase users map to Authsome as follows:
 | `displayName` | `user.name` | Direct mapping |
 | `photoUrl` | `user.avatar_url` | Direct mapping |
 | `emailVerified` | `user.email_verified` | Direct mapping |
-| `passwordHash` | -- | Firebase uses scrypt; requires re-hashing or forced reset |
+| `passwordHash` | none | Firebase uses scrypt; requires re-hashing or forced reset |
 | `providerUserInfo` | `account` records | One account per provider |
 | `mfaInfo` | MFA plugin enrollment | Requires MFA plugin setup |
 
@@ -200,6 +200,7 @@ jwtFmt, _ := tokenformat.NewJWT(tokenformat.JWTConfig{
 })
 
 eng, _ := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
 	authsome.WithStore(store),
 	authsome.WithDefaultTokenFormat(jwtFmt),
 )

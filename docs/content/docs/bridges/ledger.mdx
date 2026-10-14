@@ -1,6 +1,6 @@
 ---
 title: Ledger Bridge
-description: Billing and metering integration — tracks auth usage events and checks feature entitlements via Ledger.
+description: Billing and metering integration: tracks auth usage events and checks feature entitlements via Ledger.
 ---
 
 The Ledger bridge connects Authsome to the Ledger billing and metering extension. When configured, Authsome records usage events (monthly active users, API key validations, MFA enrollments) to Ledger's metering system and checks feature entitlements before allowing certain operations.
@@ -26,18 +26,14 @@ import (
 )
 
 // Build the Ledger engine (see Ledger docs for full setup).
-ledgerEng, err := ledger.New(
-    ledger.WithStore(ledgerStore),
-)
-if err != nil {
-    log.Fatal(err)
-}
+ledgerEng := ledger.New(ledgerStore) // returns *ledger.Ledger; options follow the store
 
 // Wrap in the Authsome adapter.
 ledgerBridge := ledgeradapter.New(ledgerEng)
 
 // Register with Authsome.
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(pgStore),
     authsome.WithLedger(ledgerBridge),
 )
@@ -77,12 +73,13 @@ During development, use the built-in `NoopLedger` stub. The noop ledger returns 
 ```go
 import "github.com/xraph/authsome/bridge"
 
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(memory.New()),
     authsome.WithLedger(bridge.NewNoopLedger()),
 )
 ```
 
 <Callout type="info">
-The `NoopLedger` always returns `allowed=true` from `CheckEntitlement`. This is intentional — in development and testing, you want all features available. In production, the real Ledger implementation enforces plan limits.
+The `NoopLedger` always returns `allowed=true` from `CheckEntitlement`. This is intentional: in development and testing, you want all features available. In production, the real Ledger implementation enforces plan limits.
 </Callout>

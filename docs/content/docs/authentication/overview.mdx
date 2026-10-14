@@ -3,7 +3,7 @@ title: Authentication Overview
 description: How Authsome's strategy-based auth system works, and how plugins contribute authentication methods.
 ---
 
-Authsome uses a **strategy-based authentication system**. Each authentication method — password, magic link, social login, passkeys, SSO — is implemented as an independent plugin that registers one or more strategies with the engine's strategy registry.
+Authsome uses a **strategy-based authentication system**. Each authentication method (password, magic link, social login, passkeys, SSO) is implemented as an independent plugin that registers one or more strategies with the engine's strategy registry.
 
 ## Strategy-based authentication
 
@@ -66,7 +66,7 @@ for _, s := range e.strategies.Sorted() {
         if err != nil {
             return nil, nil, err
         }
-        // Strategy accepted and authenticated -- proceed to session creation.
+        // Strategy accepted and authenticated; proceed to session creation.
         break
     }
 }
@@ -80,13 +80,13 @@ When MFA is enrolled, authentication is a two-step process:
 
 
 
-**Step 1 — Primary authentication**: The password (or other) strategy authenticates the user and verifies credentials.
+**Step 1, primary authentication**: The password (or other) strategy checks the credentials.
 
 
-**Step 2 — MFA challenge**: If the user has MFA enrolled, the engine returns an `ErrMFARequired` sentinel error along with an `mfa_challenge_id`. No session is created yet.
+**Step 2, MFA required**: If MFA applies, the engine returns an `*authsome.MFARequiredError` (it unwraps to `account.ErrMFARequired`) carrying an `mfa_ticket` and the available methods. No session is created yet. Over HTTP this is a 403 with `"type": "mfa_required"`.
 
 
-**Step 3 — MFA verification**: The client submits the TOTP code or SMS OTP along with the `mfa_challenge_id`. On success, a session is created.
+**Step 3, MFA verification**: The client posts the ticket and a TOTP or recovery code to `POST /v1/mfa/challenge` (`{"mfa_ticket": "...", "code": "123456"}`). On success, a session is created.
 
 
 
@@ -98,12 +98,10 @@ u, sess, err := engine.SignIn(ctx, &account.SignInRequest{
     AppID:    appID,
 })
 
-if errors.Is(err, mfa.ErrMFARequired) {
-    // Extract the challenge ID from the error.
-    challengeID := mfa.ChallengeIDFromError(err)
-
-    // Step 3 (after user submits TOTP code):
-    sess, err = mfaPlugin.VerifyChallenge(ctx, challengeID, totpCode)
+var mfaErr *authsome.MFARequiredError
+if errors.As(err, &mfaErr) {
+    // Send mfaErr.Ticket and mfaErr.AvailableMethods to the client, which
+    // completes the second factor at POST /v1/mfa/challenge.
 }
 ```
 

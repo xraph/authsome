@@ -3,7 +3,7 @@ title: Enterprise SSO
 description: OIDC and SAML-based enterprise single sign-on with JIT user provisioning.
 ---
 
-The `sso` plugin enables enterprise customers to sign in using their company's identity provider (IdP) through OpenID Connect (OIDC) or SAML 2.0. Each enterprise connection is a separate `SSOConnection` scoped to an organization within your app.
+The `sso` plugin lets enterprise customers sign in through their company's identity provider (IdP) with OpenID Connect (OIDC) or SAML 2.0. Providers come from two places: the static list you pass in `sso.Config.Providers`, and connections created at runtime and stored per app, optionally scoped to one organization.
 
 ## Setup
 
@@ -13,99 +13,54 @@ import (
     "github.com/xraph/authsome/plugins/sso"
 )
 
-eng, err := authsome.New(
+ssoPlugin := sso.New(sso.Config{
+    // Static providers. Optional when you create connections at runtime.
+    Providers: []sso.Provider{
+        sso.NewOIDCProvider(sso.OIDCConfig{
+            Name:         "okta",
+            Issuer:       "https://acme.okta.com",
+            ClientID:     "0oa1abcdef123456",
+            ClientSecret: os.Getenv("OKTA_CLIENT_SECRET"),
+            RedirectURL:  "https://myapp.com/v1/sso/okta/callback",
+            Scopes:       []string{"openid", "email", "profile"},
+        }),
+    },
+    // Public base URL, used for callback and ACS URLs.
+    PublicBaseURL: "https://myapp.com",
+    // Frontend origins a login may return to.
+    AllowedReturnOrigins: []string{"https://app.myapp.com"},
+})
+
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
-    authsome.WithPlugin(sso.New(sso.Config{
-        // Default OIDC callback URL pattern.
-        // {connection_id} is replaced with the SSO connection ID.
-        OIDCCallbackURL: "https://myapp.com/v1/auth/sso/{connection_id}/callback",
-
-        // Default SAML ACS URL pattern.
-        SAMLCallbackURL: "https://myapp.com/v1/auth/sso/{connection_id}/acs",
-
-        // JIT provisioning: create users automatically on first SSO sign-in.
-        JITProvision: true,
-
-        // Attribute mapping from IdP claims to Authsome user fields.
-        AttributeMapping: sso.AttributeMapping{
-            Email:     "email",
-            Name:      "name",
-            FirstName: "given_name",
-            LastName:  "family_name",
-        },
-    })),
+    authsome.WithPlugin(ssoPlugin),
 )
 ```
 
-## OIDC provider configuration
+`sso.Config` also has `SessionTokenTTL` and `SessionRefreshTTL`. [The SSO plugin page](/docs/plugins/sso) covers `NewOIDCProvider` and `NewSAMLProvider` in detail.
 
-Create an SSO connection for an OIDC provider (Okta, Azure AD, Google Workspace, etc.):
+## Creating connections at runtime
 
-```go
-conn := &sso.Connection{
-    ID:             id.NewSSOConnectionID(),
-    AppID:          appID,
-    OrganizationID: orgID,           // scoped to a specific org (optional)
-    Type:           sso.TypeOIDC,
-    Name:           "Acme Corp - Okta",
-    Slug:           "acme-okta",
-    Active:         true,
-    OIDC: &sso.OIDCConfig{
-        Issuer:       "https://acme.okta.com",
-        ClientID:     "0oa1abcdef123456",
-        ClientSecret: "OIDC_CLIENT_SECRET",
-        Scopes:       []string{"openid", "email", "profile", "groups"},
-        // Discovery URL is auto-derived from Issuer: {Issuer}/.well-known/openid-configuration
-    },
-}
-
-if err := engine.CreateSSOConnection(ctx, conn); err != nil {
-    log.Fatal(err)
-}
-```
-
-For providers that don't support OIDC discovery, specify endpoints explicitly:
+A connection is one customer's IdP, matched by email domain:
 
 ```go
-OIDC: &sso.OIDCConfig{
-    Issuer:        "https://login.example.com",
-    ClientID:      "my-client-id",
-    ClientSecret:  "my-secret",
-    AuthURL:       "https://login.example.com/oauth2/authorize",
-    TokenURL:      "https://login.example.com/oauth2/token",
-    UserInfoURL:   "https://login.example.com/oauth2/userinfo",
-    JWKSURL:       "https://login.example.com/.well-known/jwks.json",
-}
+conn, err := ssoPlugin.CreateConnection(ctx, sso.CreateConnectionInput{
+    AppID:        appID,
+    OrgID:        orgID, // zero value means app-wide
+    Provider:     "acme-okta",
+    Protocol:     "oidc", // or "saml"
+    Domain:       "acme.com",
+    Issuer:       "https://acme.okta.com",
+    ClientID:     "0oa1abcdef123456",
+    ClientSecret: oktaSecret,
+    Enforced:     true, // block password sign-in for acme.com (org owners and admins excepted)
+})
 ```
 
-## SAML provider configuration
+For SAML, set `Protocol: "saml"` and `MetadataURL` (or `IDPMetadataXML`, or `IDPSSOURL` with `IDPCertificate`), plus `EntityID`, `ACSURL`, `SignRequests` and `AttributeMappings` as needed.
 
-```go
-conn := &sso.Connection{
-    ID:    id.NewSSOConnectionID(),
-    AppID: appID,
-    Type:  sso.TypeSAML,
-    Name:  "Acme Corp - SAML IdP",
-    Slug:  "acme-saml",
-    SAML: &sso.SAMLConfig{
-        // Metadata URL (preferred — auto-fetches IdP certificate and endpoints)
-        MetadataURL: "https://idp.acme.com/saml/metadata",
-
-        // Or specify manually:
-        IDPSSOSURL:        "https://idp.acme.com/saml/sso",
-        IDPEntityID:       "https://idp.acme.com",
-        IDPCertificate:    "-----BEGIN CERTIFICATE-----\n...",
-
-        // Your SP entity ID (must match what's registered in the IdP)
-        SPEntityID:        "https://myapp.com",
-        AttributeMapping: map[string]string{
-            "email":      "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
-            "first_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
-            "last_name":  "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname",
-        },
-    },
-}
-```
+The stored connections are managed through `ssoPlugin.SSOStore()`, which has `GetConnection`, `GetConnectionByDomain`, `GetConnectionByProvider`, `ListConnections`, `UpdateConnection` and `DeleteConnection`. Set `Active` to false to switch one off without deleting it. Admins can also manage them over HTTP (below).
 
 ## Enterprise SSO flow
 
@@ -113,25 +68,19 @@ conn := &sso.Connection{
 
 **Identify the connection**: The user enters their email and the engine looks up the SSO connection by email domain.
 
-`POST /v1/auth/sso/identify`
+`POST /v1/sso/login`
 
 ```json
-{"email": "alice@acme.com", "app_id": "myapp"}
+{"email": "alice@acme.com", "return_url": "https://app.myapp.com/after-login"}
 ```
 
-Response:
+`connection_id` pins one connection when the same domain belongs to several organizations. The response carries the IdP URL to send the browser to:
 
 ```json
-{
-  "connection_id": "asso_01j9...",
-  "connection_name": "Acme Corp - Okta",
-  "type": "oidc"
-}
+{"login_url": "https://acme.okta.com/oauth2/v1/authorize?...", "state": "..."}
 ```
 
-Alternatively, the connection can be identified by slug (for direct SSO links):
-
-`GET /v1/auth/sso/{slug}/authorize?app_id=myapp`
+If you already know the provider, `POST /v1/sso/{provider}/login` starts the same flow by name.
 
 
 **Redirect to IdP**: The engine generates the authorization URL (OIDC) or a SAML AuthnRequest (SAML) and redirects the user.
@@ -139,86 +88,35 @@ Alternatively, the connection can be identified by slug (for direct SSO links):
 
 **IdP callback**: The user authenticates at the IdP and is redirected back to the Authsome callback URL.
 
-For OIDC: `GET /v1/auth/sso/{connection_id}/callback?code=...&state=...`
-For SAML: `POST /v1/auth/sso/{connection_id}/acs` (with `SAMLResponse` body)
+For OIDC: `GET /v1/sso/{provider}/callback?code=...&state=...`
+For SAML: `POST /v1/sso/{provider}/acs` (with `SAMLResponse` body)
 
 
-**JIT provisioning (first sign-in)**: If `JITProvision: true` and the user doesn't have an Authsome account, one is created automatically using attributes from the IdP assertion.
+**First sign-in**: If no user is linked to the IdP subject yet, the plugin links the existing account with that email (only if its email is verified; an unverified one is refused) or creates one, as long as the email's domain is the connection's `Domain` or in its `AllowedDomains`.
 
 
 **Session created**: A full user + session is returned to the client.
 
 
 
-## JIT provisioning
+## Provisioning on first sign-in
 
-Just-in-time provisioning creates Authsome user accounts automatically on first SSO sign-in. The user's attributes are mapped from the IdP token or assertion to Authsome user fields using the `AttributeMapping` configuration.
-
-```go
-// Users created via JIT provisioning:
-// - Have email_verified: true (IdP has already verified the email)
-// - Have no password (can only sign in via SSO)
-// - Are automatically added to the organization linked to the SSO connection
-```
-
-To disable JIT provisioning and require pre-created accounts:
-
-```go
-sso.New(sso.Config{
-    JITProvision: false,
-})
-```
-
-When `JITProvision: false`, signing in with an unknown email returns `ErrInvalidCredentials`.
-
-## SSO connection management
-
-```go
-// Create
-engine.CreateSSOConnection(ctx, conn)
-
-// Get by ID
-conn, err := engine.GetSSOConnection(ctx, connID)
-
-// Get by slug (for URL-based routing)
-conn, err := engine.GetSSOConnectionBySlug(ctx, appID, "acme-okta")
-
-// Get by email domain (for auto-identification)
-conn, err := engine.GetSSOConnectionByDomain(ctx, appID, "acme.com")
-
-// List all connections for an app
-conns, err := engine.ListSSOConnections(ctx, appID)
-
-// Update (e.g., rotate client secret)
-engine.UpdateSSOConnection(ctx, conn)
-
-// Deactivate (disables sign-in but preserves config)
-engine.DeactivateSSOConnection(ctx, connID)
-```
-
-## Domain-based connection routing
-
-Associate email domains with SSO connections to enable automatic IdP identification:
-
-```go
-conn.DomainMappings = []string{"acme.com", "acmecorp.com"}
-engine.UpdateSSOConnection(ctx, conn)
-```
-
-When a user enters `alice@acme.com` on the sign-in page, the engine automatically identifies the Acme Corp OIDC connection and redirects to Okta — no manual selection required.
+There's no switch for just-in-time provisioning: an SSO sign-in for an unknown address in an allowed domain creates the user. Restrict who can get in through the connection's `Domain` and `AllowedDomains`. With `TrustedFederation` on a connection, a user created through it takes the IdP's subject as the local user ID; it's off by default.
 
 ## API routes
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/sso/identify` | Identify SSO connection by email |
-| `GET` | `/sso/{slug}/authorize` | Initiate SSO flow by connection slug |
-| `GET` | `/sso/{id}/callback` | OIDC callback handler |
-| `POST` | `/sso/{id}/acs` | SAML ACS (Assertion Consumer Service) handler |
-| `GET` | `/sso/{id}/metadata` | SAML SP metadata XML |
-| `POST` | `/admin/sso/connections` | Create SSO connection (admin) |
-| `GET` | `/admin/sso/connections` | List SSO connections (admin) |
-| `PUT` | `/admin/sso/connections/{id}` | Update SSO connection (admin) |
-| `DELETE` | `/admin/sso/connections/{id}` | Delete SSO connection (admin) |
+| `POST` | `/v1/sso/login` | Start a login from an email address |
+| `POST` | `/v1/sso/{provider}/login` | Start a login with a named provider |
+| `GET`, `POST` | `/v1/sso/{provider}/callback` | OIDC callback |
+| `POST` | `/v1/sso/{provider}/acs` | SAML Assertion Consumer Service |
+| `GET` | `/v1/sso/{provider}/metadata` | SAML SP metadata XML |
+| `POST` | `/v1/sso/exchange` | Exchange the post-login code for a session |
+| `POST` | `/v1/admin/sso/connections` | Create a connection (admin) |
+| `GET` | `/v1/admin/sso/connections` | List connections (admin) |
+| `GET` | `/v1/admin/sso/connections/{id}` | Get a connection (admin) |
+| `PUT` | `/v1/admin/sso/connections/{id}` | Update a connection (admin) |
+| `DELETE` | `/v1/admin/sso/connections/{id}` | Delete a connection (admin) |
 
 The admin routes act only on the caller's own app. `app_id` in the create body and the list query is optional and must name that app; any other value is refused. A connection that belongs to another app is answered as not found.

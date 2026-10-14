@@ -13,29 +13,27 @@ Root package. Exports the engine constructor, configuration types, and functiona
 
 | Export | Description |
 |--------|-------------|
-| `New(...Option) (*Engine, error)` | Create an Authsome engine |
-| `Config` | Engine configuration struct |
-| `PasswordConfig` | Password policy configuration |
-| `SessionConfig` | Session behavior configuration |
-| `MFAConfig` | Multi-factor authentication configuration |
-| `PhoneConfig` | Phone authentication configuration |
-| `OAuth2Config` | OAuth2 provider configuration |
-| `JWTConfig` | JWT signing configuration |
-| `RateLimitConfig` | Rate limiting configuration |
+| `NewEngine(...Option) (*Engine, error)` | Create an Authsome engine (needs `WithStore`, `WithChronicle` and `WithWarden`) |
+| `Config`, `DefaultConfig()` | Engine configuration and its defaults |
+| `PasswordConfig`, `SessionConfig`, `RateLimitConfig`, `LockoutConfig` | Sections of `Config` |
+| `RetentionConfig`, `WebhookConfig`, `CSRFConfig`, `TokenEncryptionConfig` | More sections of `Config` |
 | `WithStore(store.Store)` | Set the primary data store |
-| `WithPlugin(Plugin)` | Register an authentication plugin |
+| `WithChronicle(bridge.Chronicle)`, `WithWarden(*warden.Engine)` | The two required bridges |
+| `WithDriverName(string)`, `WithDB(*grove.DB)` | Plugin migrations and plugin storage |
+| `WithPlugin(Plugin)` | Register a plugin |
 | `WithConfig(Config)` | Set engine configuration |
-| `WithMFAStore(mfa.Store)` | Set the MFA enrollment store |
+| `WithBootstrap(...BootstrapOption)` | Create the platform app, environments and roles on start |
+| `WithTokenEncryptor(bridge.Encryptor)` | Encrypt stored tokens with your own encryptor |
 | `WithSMSSender(bridge.SMSSender)` | Set the SMS bridge |
 | `WithMailer(bridge.Mailer)` | Set the email bridge |
 | `WithPasswordHistory(store)` | Set the password history store |
 | `WithRateLimiter(ratelimit.Limiter)` | Set the rate limiter |
-| `WithLockout(lockout.Lockout)` | Set the account lockout handler |
+| `WithLockoutTracker(lockout.Tracker)` | Set the account lockout tracker |
 | `WithLogger(logger)` | Set the logger |
 
-### `github.com/xraph/authsome/engine`
+### `*authsome.Engine` methods
 
-The central engine with all authentication and management operations.
+`Engine` lives in the root package; there's no separate `engine` package. Some of its methods:
 
 | Export | Description |
 |--------|-------------|
@@ -44,7 +42,7 @@ The central engine with all authentication and management operations.
 | `Engine.SignUp(ctx, req)` | Create user account and session |
 | `Engine.SignIn(ctx, req)` | Authenticate user |
 | `Engine.SignOut(ctx, sessionID)` | Revoke a session |
-| `Engine.Refresh(ctx, refreshToken)` | Refresh session tokens |
+| `Engine.Refresh(ctx, refreshToken, ...RefreshOpts)` | Refresh session tokens |
 | `Engine.GetMe(ctx, userID)` | Get user profile |
 | `Engine.UpdateMe(ctx, user)` | Update user profile |
 | `Engine.DeleteAccount(ctx, userID)` | Delete user account (GDPR) |
@@ -53,11 +51,13 @@ The central engine with all authentication and management operations.
 | `Engine.ResetPassword(ctx, token, newPassword)` | Complete password reset |
 | `Engine.ChangePassword(ctx, userID, current, new)` | Change password |
 | `Engine.VerifyEmail(ctx, token)` | Verify email address |
-| `Engine.Impersonate(ctx, adminID, targetID, appID)` | Create impersonation session |
+| `Engine.Impersonate(ctx, adminID, targetID, ...ImpersonateOption)` | Create an impersonation session |
 | `Engine.ListSessions(ctx, userID)` | List user sessions |
 | `Engine.RevokeSession(ctx, sessionID)` | Revoke a specific session |
-| `Engine.RevokeAllSessions(ctx, userID)` | Revoke all user sessions |
-| `Engine.ValidateToken(ctx, token)` | Validate a session token |
+| `Engine.RevokeOtherUserSessions(ctx, userID, keep)` | Revoke a user's other sessions |
+| `Engine.RevokeUserAccess(ctx, userID)` | Revoke all of a user's access |
+| `Engine.ResolveSessionByToken(ctx, token)` | Look up the session behind a token |
+| `Engine.ValidateJWT(token)` | Validate a JWT access token |
 | `Engine.ListUserDevices(ctx, userID)` | List tracked devices |
 | `Engine.GetDevice(ctx, deviceID)` | Get device by ID |
 | `Engine.DeleteDevice(ctx, deviceID)` | Remove a device |

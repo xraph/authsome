@@ -3,7 +3,7 @@ title: Configuration
 description: All configuration options for the Authsome engine, sessions, passwords, rate limiting, and lockout.
 ---
 
-The root `authsome` package defines the `Config` struct, `DefaultConfig()` defaults, and the `Option` functions for constructing an engine. All configuration is passed at construction time via `authsome.New(opts...)`.
+The root `authsome` package defines the `Config` struct, `DefaultConfig()` defaults, and the `Option` functions for constructing an engine. You pass all of it to `authsome.NewEngine(opts...)`. The engine also needs `WithStore`, `WithChronicle`, `WithWarden` and a token encryption key; see [Getting Started](/docs/getting-started).
 
 ## authsome.Config
 
@@ -13,31 +13,39 @@ The root `authsome` package defines the `Config` struct, `DefaultConfig()` defau
 import "github.com/xraph/authsome"
 
 type Config struct {
-    AppID          string          `json:"app_id"`
-    BasePath       string          `json:"base_path"`
-    Session        SessionConfig   `json:"session"`
-    Password       PasswordConfig  `json:"password"`
-    RateLimit      RateLimitConfig `json:"rate_limit"`
-    Lockout        LockoutConfig   `json:"lockout"`
-    DriverName     string          `json:"driver_name"`
-    Debug          bool            `json:"debug"`
-    DisableRoutes  bool            `json:"disable_routes"`
-    DisableMigrate bool            `json:"disable_migrate"`
+    AppID                        string                `json:"app_id"`
+    BasePath                     string                `json:"base_path"`
+    Session                      SessionConfig         `json:"session"`
+    Password                     PasswordConfig        `json:"password"`
+    RateLimit                    RateLimitConfig       `json:"rate_limit"`
+    Lockout                      LockoutConfig         `json:"lockout"`
+    DriverName                   string                `json:"driver_name"`
+    Debug                        bool                  `json:"debug"`
+    DisableRoutes                bool                  `json:"disable_routes"`
+    DisableMigrate               bool                  `json:"disable_migrate"`
+    ProtectedResourceMetadataURL string                `json:"protected_resource_metadata_url"`
+    TokenEncryption              TokenEncryptionConfig `json:"token_encryption"`
+    APIKeyPepper                 string                `json:"api_key_pepper"`
+    Retention                    RetentionConfig       `json:"retention"`
+    Webhooks                     WebhookConfig         `json:"webhooks"`
+    CSRF                         CSRFConfig            `json:"csrf"`
 }
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `AppID` | `string` | `""` | Application identifier used for scoping. Required if not set via `WithAppID`. |
-| `BasePath` | `string` | `"/v1/auth"` | URL prefix for all auto-registered auth routes. |
-| `Session` | `SessionConfig` | See below | Session token and refresh token behavior. |
-| `Password` | `PasswordConfig` | See below | Password policy and hashing algorithm. |
-| `RateLimit` | `RateLimitConfig` | See below | Per-endpoint rate limiting. |
-| `Lockout` | `LockoutConfig` | See below | Account lockout after repeated failures. |
-| `DriverName` | `string` | `""` | Grove driver name (`"pg"`, `"sqlite"`, `"mongo"`, `"memory"`). Set automatically by the extension. |
-| `Debug` | `bool` | `false` | Enables verbose logging of all engine operations. |
-| `DisableRoutes` | `bool` | `false` | When `true`, prevents automatic route registration on `Start`. |
-| `DisableMigrate` | `bool` | `false` | When `true`, prevents automatic schema migration on `Start`. |
+| Field | Default | Description |
+|-------|---------|-------------|
+| `AppID` | `""` | Default application ID |
+| `BasePath` | `"/authsome"` | The mount prefix the Forge extension uses. The standalone API registers its routes under `/v1` whatever this is |
+| `Session`, `Password`, `RateLimit`, `Lockout` | see below | |
+| `DriverName` | `""` | Grove driver name (`"pg"`, `"sqlite"`, `"mongo"`) that plugins use to pick their migrations. The Forge extension sets it; standalone, pass `WithDriverName` |
+| `Debug` | `false` | Verbose logging |
+| `DisableRoutes` | `false` | Read by the Forge extension to skip route registration |
+| `DisableMigrate` | `false` | Skip migrations on `Start` |
+| `TokenEncryption` | empty | `Keys` as `kid:hex` pairs and `Strict`. Empty falls back to `AUTHSOME_TOKEN_ENCRYPTION_KEYS` or `AUTHSOME_TOKEN_ENCRYPTION_KEY` |
+| `APIKeyPepper` | `""` | Pepper for API key hashes |
+| `Retention` | 30 days for sessions, 7 for verifications and resets, 90 for revoked refresh tokens, 1 for device and auth codes, batch 1000 | How long expired rows are kept before the sweeper removes them |
+| `Webhooks` | `VerifyTimeout: 10s` | `AllowInsecureURLs` and `VerifyTimeout` |
+| `CSRF` | on | `Enabled *bool` (nil means on) and `AllowedOrigins` |
 
 ## SessionConfig
 
@@ -49,6 +57,7 @@ type SessionConfig struct {
     RotateRefreshToken *bool         `json:"rotate_refresh_token"`
     BindToIP           bool          `json:"bind_to_ip"`
     BindToDevice       bool          `json:"bind_to_device"`
+    CleanupInterval    time.Duration `json:"cleanup_interval"`
 }
 ```
 
@@ -60,6 +69,7 @@ type SessionConfig struct {
 | `RotateRefreshToken` | `*bool` | `true` | When `true`, every `Refresh` call issues a new refresh token and invalidates the old one. Set to `false` to reuse the same refresh token. |
 | `BindToIP` | `bool` | `false` | When `true`, sessions are rejected if the client IP differs from the IP recorded at creation. Useful for high-security environments but breaks users on mobile networks. |
 | `BindToDevice` | `bool` | `false` | When `true`, sessions are rejected if the User-Agent differs from the one recorded at creation. |
+| `CleanupInterval` | `time.Duration` | `1h` | How often the sweeper purges expired rows. `0` turns it off |
 
 ### ShouldRotateRefreshToken
 
@@ -128,25 +138,33 @@ The Argon2 defaults (`64 MiB`, `3 iterations`, `2 threads`) meet the OWASP recom
 
 ```go
 type RateLimitConfig struct {
-    SignInLimit          int  `json:"signin_limit"`
-    SignUpLimit          int  `json:"signup_limit"`
-    ForgotPasswordLimit  int  `json:"forgot_password_limit"`
-    MFAChallengeLimit    int  `json:"mfa_challenge_limit"`
-    WindowSeconds        int  `json:"window_seconds"`
-    Enabled              bool `json:"enabled"`
+    SignInLimit             int  `json:"signin_limit"`
+    SignUpLimit             int  `json:"signup_limit"`
+    RefreshLimit            int  `json:"refresh_limit"`
+    IntrospectLimit         int  `json:"introspect_limit"`
+    ForgotPasswordLimit     int  `json:"forgot_password_limit"`
+    MFAChallengeLimit       int  `json:"mfa_challenge_limit"`
+    VerifyEmailLimit        int  `json:"verify_email_limit"`
+    ResendVerificationLimit int  `json:"resend_verification_limit"`
+    SSFPushLimit            int  `json:"ssf_push_limit"`
+    ResetPasswordLimit      int  `json:"reset_password_limit"`
+    ChangePasswordLimit     int  `json:"change_password_limit"`
+    OAuthTokenLimit         int  `json:"oauth_token_limit"`
+    OAuthAuthorizeLimit     int  `json:"oauth_authorize_limit"`
+    PasskeyLimit            int  `json:"passkey_limit"`
+    SSOLimit                int  `json:"sso_limit"`
+    SCIMLimit               int  `json:"scim_limit"`
+    WaitlistJoinLimit       int  `json:"waitlist_join_limit"`
+    APIKeyFailureLimit      int  `json:"api_key_failure_limit"`
+    WindowSeconds           int  `json:"window_seconds"`
+    Enabled                 bool `json:"enabled"`
+    FailOpen                bool `json:"fail_open"`
 }
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `Enabled` | `bool` | `false` | Rate limiting is disabled by default. Set to `true` to enable. |
-| `SignInLimit` | `int` | `5` | Max sign-in attempts per IP per window. |
-| `SignUpLimit` | `int` | `3` | Max sign-up attempts per IP per window. |
-| `ForgotPasswordLimit` | `int` | `3` | Max forgot-password requests per IP per window. |
-| `MFAChallengeLimit` | `int` | `5` | Max MFA challenge attempts per session per window. |
-| `WindowSeconds` | `int` | `60` | Sliding window duration in seconds. |
+Rate limiting is on by default (`Enabled: true`). The defaults per window are sign-in 5, sign-up 3, refresh 10, introspect 20, forgot password 3, MFA challenge 5, verify email 10, resend verification 3, SSF push 60, reset password 5, change password 5, OAuth token and authorize 30 each, passkey 10, SSO 20, SCIM 60, waitlist join 5 and failed API-key authentications 20. The window is 60 seconds.
 
-Rate limiting requires a `ratelimit.Limiter` backend to be configured with `WithRateLimiter`. Without a limiter, rate limit config is ignored.
+When you don't pass `WithRateLimiter`, the engine uses `ratelimit.NewKVLimiter` over the store, so instances that share a database share the counters. `FailOpen` lets requests through when the limiter itself fails; off (the default), a limiter outage answers 503.
 
 ## LockoutConfig
 
@@ -161,12 +179,12 @@ type LockoutConfig struct {
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `Enabled` | `bool` | `false` | Account lockout is disabled by default. Set to `true` to enable. |
-| `MaxAttempts` | `int` | `5` | Number of consecutive failed sign-in attempts before the account is locked. |
-| `LockoutDurationSeconds` | `int` | `900` (15 min) | Duration of the lockout in seconds. |
-| `ResetAfterSeconds` | `int` | `3600` (1 hour) | Resets the failure counter after this many seconds of no failures. |
+| `Enabled` | `bool` | `true` | Account lockout |
+| `MaxAttempts` | `int` | `5` | Consecutive failed sign-ins before the account locks |
+| `LockoutDurationSeconds` | `int` | `900` (15 min) | How long the lock lasts |
+| `ResetAfterSeconds` | `int` | `3600` (1 hour) | Clears the failure count after this long without a failure |
 
-Account lockout requires a `lockout.Tracker` backend configured with `WithLockoutTracker`.
+Without `WithLockoutTracker`, the engine uses `lockout.NewKVTracker` over the store with these settings.
 
 ## DefaultConfig
 
@@ -174,7 +192,7 @@ Account lockout requires a `lockout.Tracker` backend configured with `WithLockou
 
 ```go
 cfg := authsome.DefaultConfig()
-// cfg.BasePath              = "/v1/auth"
+// cfg.BasePath              = "/authsome"
 // cfg.Session.TokenTTL      = 1 * time.Hour
 // cfg.Session.RefreshTokenTTL = 30 * 24 * time.Hour
 // cfg.Password.MinLength    = 12
@@ -182,9 +200,11 @@ cfg := authsome.DefaultConfig()
 // cfg.Password.RequireLowercase = true
 // cfg.Password.RequireDigit = true
 // cfg.Password.BcryptCost   = 12
+// cfg.RateLimit.Enabled    = true
 // cfg.RateLimit.SignInLimit  = 5
 // cfg.RateLimit.SignUpLimit  = 3
 // cfg.RateLimit.WindowSeconds = 60
+// cfg.Lockout.Enabled      = true
 // cfg.Lockout.MaxAttempts   = 5
 // cfg.Lockout.LockoutDurationSeconds = 900
 // cfg.Lockout.ResetAfterSeconds = 3600
@@ -192,22 +212,26 @@ cfg := authsome.DefaultConfig()
 
 ## Option functions
 
-All engine options are `func(*Engine)` type values passed to `authsome.New`.
+Options are `func(*Engine)` values passed to `authsome.NewEngine`.
 
 | Option | Description |
 |--------|-------------|
 | `WithConfig(cfg Config)` | Set the full config, overriding defaults. |
-| `WithStore(s store.Store)` | Set the persistence backend. Required. |
-| `WithLogger(l *slog.Logger)` | Set the structured logger. |
+| `WithStore(s store.Store)` | Set the persistence backend. Required |
+| `WithLogger(l log.Logger)` | Set the logger (go-utils `log.Logger`) |
 | `WithDebug(bool)` | Enable verbose debug logging. |
 | `WithAppID(string)` | Set the default application ID. |
 | `WithPlugin(p plugin.Plugin)` | Register a plugin. Call multiple times for multiple plugins. |
 | `WithStrategy(s, priority int)` | Register a custom auth strategy. |
-| `WithChronicle(bridge.Chronicle)` | Set the audit trail bridge. |
+| `WithChronicle(bridge.Chronicle)` | Set the audit trail bridge. Required |
 | `WithMailer(bridge.Mailer)` | Set the transactional email bridge. |
 | `WithSMSSender(bridge.SMSSender)` | Set the SMS sending bridge. |
 | `WithHerald(bridge.Herald)` | Set the unified notification bridge. |
-| `WithWarden(*warden.Engine)` | Set the Warden authorization engine. |
+| `WithWarden(*warden.Engine)` | Set the Warden authorization engine. Required |
+| `WithAuthorizer(bridge.Authorizer)` | Set the authorizer bridge |
+| `WithKeyManager(bridge.KeyManager)` | Set the key manager bridge |
+| `WithTokenEncryptor(bridge.Encryptor)` | Encrypt stored tokens with your own encryptor instead of the configured keys |
+| `WithLedgerEngine(*ledger.Ledger)` | Set the Ledger engine |
 | `WithKeysmith(*keysmith.Engine)` | Set the Keysmith API key engine. |
 | `WithEventRelay(bridge.EventRelay)` | Set the webhook event relay. |
 | `WithVault(bridge.Vault)` | Set the secrets/config bridge. |
@@ -215,15 +239,22 @@ All engine options are `func(*Engine)` type values passed to `authsome.New`.
 | `WithLedger(bridge.Ledger)` | Set the billing bridge. |
 | `WithMetrics(bridge.MetricsCollector)` | Set the metrics bridge. |
 | `WithBasePath(string)` | Override the URL prefix. |
-| `WithDisableRoutes()` | Prevent automatic route registration. |
+| `WithDisableRoutes()` | Set `DisableRoutes` |
+| `WithDriverName(string)` | Set the Grove driver name for plugin migrations |
+| `WithDB(*grove.DB)` | Give the engine the Grove database |
 | `WithDisableMigrate()` | Prevent automatic migration on Start. |
 | `WithRateLimiter(ratelimit.Limiter)` | Set the rate limiter backend. |
 | `WithLockoutTracker(lockout.Tracker)` | Set the account lockout tracker. |
+| `WithLockoutConfig(LockoutConfig)` | Set the lockout configuration |
+| `WithProtectedResourceMetadataURL(string)` | Set the OAuth protected resource metadata URL |
+| `WithPrincipalAuthTTL(time.Duration)` | Set the principal authentication TTL |
+| `WithDPoPReplayCache(dpop.ReplayCache)` | Set the DPoP replay cache |
 | `WithCeremonyStore(ceremony.Store)` | Set the ceremony state store. |
 | `WithPasswordHistory(account.PasswordHistoryStore)` | Set the password history store. |
 | `WithDefaultTokenFormat(tokenformat.Format)` | Set the default access token format. |
 | `WithJWTFormat(appID string, jwt *tokenformat.JWT)` | Set JWT token format for a specific app. |
 | `WithAppSessionConfig(*appsessionconfig.Config)` | Seed a per-app session config override. |
+| `WithBootstrap(opts ...BootstrapOption)` | Create the platform app, environments and roles on start |
 
 ## Per-app session config overrides
 
@@ -232,22 +263,27 @@ You can override session configuration for a specific app using `appsessionconfi
 ```go
 import "github.com/xraph/authsome/appsessionconfig"
 
-eng, err := authsome.New(
-    authsome.WithStore(store),
-    authsome.WithPlugin(password.New()),
+ttl := 8 * 60 * 60               // 8 hours, in seconds
+refresh := 90 * 24 * 60 * 60     // 90 days
+maxSessions := 20
+
+eng, err := authsome.NewEngine(
+    // plus WithStore, WithChronicle and WithWarden (see Getting Started)
     authsome.WithAppSessionConfig(&appsessionconfig.Config{
-        AppID:           "premium-app",
-        TokenTTL:        ptr(8 * time.Hour),    // longer TTL for premium app
-        RefreshTokenTTL: ptr(90 * 24 * time.Hour), // 90 days
-        MaxActiveSessions: ptr(20),
+        AppID:                  premiumAppID, // an id.AppID
+        TokenTTLSeconds:        &ttl,
+        RefreshTokenTTLSeconds: &refresh,
+        MaxActiveSessions:      &maxSessions,
     }),
 )
 ```
+
+A nil field inherits the global value. `Config` also has `RotateRefreshToken`, `BindToIP`, `BindToDevice`, `TokenExchangeTTLSeconds` and `TokenFormat` (`"opaque"` or `"jwt"`).
 
 Per-app session config is seeded into the store during `Start` and takes precedence over the global `SessionConfig`. Per-environment settings take precedence over both.
 
 Resolution order (highest priority wins):
 
-1. Per-environment settings (`EnvironmentSettings.SessionOverrides`)
+1. Per-environment settings (applied with `environment.Settings.ApplySessionOverrides`)
 2. Per-app session config (`appsessionconfig.Config`)
 3. Global engine `SessionConfig`

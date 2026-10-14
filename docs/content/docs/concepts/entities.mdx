@@ -1,6 +1,6 @@
 ---
 title: Entities
-description: Core data types used across Authsome — users, sessions, organizations, devices, and more.
+description: Core data types used across Authsome: users, sessions, organizations, devices, and more.
 ---
 
 Authsome defines a set of entity types across its packages. Understanding these types helps you work effectively with the engine API, store interfaces, and HTTP responses.
@@ -14,25 +14,27 @@ A `User` represents an authenticated identity within an app.
 
 ```go
 type User struct {
-    ID              id.UserID         `json:"id"`
-    AppID           id.AppID          `json:"app_id"`
-    Email           string            `json:"email"`
-    EmailVerified   bool              `json:"email_verified"`
-    Phone           string            `json:"phone,omitempty"`
-    PhoneVerified   bool              `json:"phone_verified"`
-    Username        string            `json:"username,omitempty"`
-    DisplayUsername string            `json:"display_username,omitempty"`
-    Name            string            `json:"name,omitempty"`
-    Image           string            `json:"image,omitempty"`
-    PasswordHash    string            `json:"-"` // never serialized
-    PasswordChangedAt *time.Time      `json:"password_changed_at,omitempty"`
-    Metadata        map[string]string `json:"metadata,omitempty"`
-    Banned          bool              `json:"banned"`
-    BanReason       string            `json:"ban_reason,omitempty"`
-    BanExpires      *time.Time        `json:"ban_expires,omitempty"`
-    DeletedAt       *time.Time        `json:"deleted_at,omitempty"`
-    CreatedAt       time.Time         `json:"created_at"`
-    UpdatedAt       time.Time         `json:"updated_at"`
+    ID                id.UserID        `json:"id"`
+    AppID             id.AppID         `json:"app_id"`
+    EnvID             id.EnvironmentID `json:"env_id"`
+    Email             string           `json:"email"`
+    EmailVerified     bool             `json:"email_verified"`
+    FirstName         string           `json:"first_name"`
+    LastName          string           `json:"last_name"`
+    Image             string           `json:"image,omitempty"`
+    Username          string           `json:"username,omitempty"`
+    DisplayUsername   string           `json:"display_username,omitempty"`
+    Phone             string           `json:"phone,omitempty"`
+    PhoneVerified     bool             `json:"phone_verified"`
+    PasswordHash      string           `json:"-"`
+    PasswordChangedAt *time.Time       `json:"password_changed_at,omitempty"`
+    Banned            bool             `json:"banned"`
+    BanReason         string           `json:"ban_reason,omitempty"`
+    BanExpires        *time.Time       `json:"ban_expires,omitempty"`
+    Metadata          Metadata         `json:"metadata,omitempty"`
+    CreatedAt         time.Time        `json:"created_at"`
+    UpdatedAt         time.Time        `json:"updated_at"`
+    DeletedAt         *time.Time       `json:"deleted_at,omitempty"`
 }
 ```
 
@@ -61,20 +63,36 @@ A `Session` represents an authenticated session for a user.
 
 ```go
 type Session struct {
-    ID                    id.SessionID  `json:"id"`
-    UserID                id.UserID     `json:"user_id"`
-    AppID                 id.AppID      `json:"app_id"`
-    EnvID                 id.EnvironmentID `json:"env_id,omitempty"`
-    Token                 string        `json:"token"`
-    RefreshToken          string        `json:"refresh_token"`
-    ExpiresAt             time.Time     `json:"expires_at"`
-    RefreshTokenExpiresAt time.Time     `json:"refresh_token_expires_at"`
-    IPAddress             string        `json:"ip_address,omitempty"`
-    UserAgent             string        `json:"user_agent,omitempty"`
-    DeviceID              id.DeviceID   `json:"device_id,omitempty"`
-    Actors                principal.Chain `json:"actors,omitempty"`
-    CreatedAt             time.Time     `json:"created_at"`
-    UpdatedAt             time.Time     `json:"updated_at"`
+    ID                    id.SessionID        `json:"id"`
+    AppID                 id.AppID            `json:"app_id"`
+    EnvID                 id.EnvironmentID    `json:"env_id"`
+    UserID                id.UserID           `json:"user_id"`
+    OrgID                 id.OrgID            `json:"org_id,omitempty"`
+    FamilyID              id.SessionFamilyID  `json:"family_id,omitempty"`
+    Token                 string              `json:"-"`
+    RefreshToken          string              `json:"-"`
+    TokenHash             string              `json:"-"`
+    RefreshTokenHash      string              `json:"-"`
+    IPAddress             string              `json:"ip_address,omitempty"`
+    UserAgent             string              `json:"user_agent,omitempty"`
+    DeviceID              id.DeviceID         `json:"device_id,omitempty"`
+    LastActivityAt        time.Time           `json:"last_activity_at,omitempty"`
+    ExpiresAt             time.Time           `json:"expires_at"`
+    RefreshTokenExpiresAt time.Time           `json:"refresh_token_expires_at"`
+    CreatedAt             time.Time           `json:"created_at"`
+    UpdatedAt             time.Time           `json:"updated_at"`
+    Roles                 []string            `json:"roles,omitempty"`
+    Audience              []string            `json:"aud,omitempty"`
+    Scopes                []string            `json:"scopes,omitempty"`
+    PrincipalKind         principal.Kind      `json:"principal_kind,omitempty"`
+    ServiceAccountID      id.ServiceAccountID `json:"service_account_id,omitempty"`
+    AgentID               id.AgentID          `json:"agent_id,omitempty"`
+    GrantID               id.AgentGrantID     `json:"grant_id,omitempty"`
+    Actors                principal.Chain     `json:"actors,omitempty"`
+    ActorGrant            principal.GrantKind `json:"actor_grant,omitempty"`
+    DelegationID          id.DelegationID     `json:"delegation_id,omitempty"`
+    DPoPJKT               string              `json:"dpop_jkt,omitempty"`
+    ClientID              string              `json:"client_id,omitempty"`
 }
 ```
 
@@ -99,15 +117,15 @@ An `App` represents an application registered in Authsome. All entities are scop
 
 ```go
 type App struct {
-    ID          id.AppID          `json:"id"`
-    Name        string            `json:"name"`
-    Slug        string            `json:"slug"`
-    Description string            `json:"description,omitempty"`
-    Logo        string            `json:"logo,omitempty"`
-    Settings    *AppSettings      `json:"settings,omitempty"`
-    Active      bool              `json:"active"`
-    CreatedAt   time.Time         `json:"created_at"`
-    UpdatedAt   time.Time         `json:"updated_at"`
+    ID             id.AppID  `json:"id"`
+    Name           string    `json:"name"`
+    Slug           string    `json:"slug"`
+    Logo           string    `json:"logo,omitempty"`
+    PublishableKey string    `json:"publishable_key,omitempty"`
+    IsPlatform     bool      `json:"is_platform"`
+    Metadata       Metadata  `json:"metadata,omitempty"`
+    CreatedAt      time.Time `json:"created_at"`
+    UpdatedAt      time.Time `json:"updated_at"`
 }
 ```
 
@@ -118,20 +136,20 @@ type App struct {
 **Package:** `github.com/xraph/authsome/organization`
 **ID prefix:** `aorg_`
 
-An `Organization` is a multi-user tenant within an app. Members belong to organizations and can have organization-scoped roles.
+An `Organization` is a group of users within an app, provided by the `organization` plugin. Members have an `owner`, `admin` or `member` role in it.
 
 ```go
 type Organization struct {
-    ID          id.OrganizationID `json:"id"`
-    AppID       id.AppID          `json:"app_id"`
-    Name        string            `json:"name"`
-    Slug        string            `json:"slug"`
-    Logo        string            `json:"logo,omitempty"`
-    Description string            `json:"description,omitempty"`
-    Metadata    map[string]string `json:"metadata,omitempty"`
-    Active      bool              `json:"active"`
-    CreatedAt   time.Time         `json:"created_at"`
-    UpdatedAt   time.Time         `json:"updated_at"`
+    ID        id.OrgID         `json:"id"`
+    AppID     id.AppID         `json:"app_id"`
+    EnvID     id.EnvironmentID `json:"env_id"`
+    Name      string           `json:"name"`
+    Slug      string           `json:"slug"`
+    Logo      string           `json:"logo,omitempty"`
+    Metadata  Metadata         `json:"metadata,omitempty"`
+    CreatedBy id.UserID        `json:"created_by"`
+    CreatedAt time.Time        `json:"created_at"`
+    UpdatedAt time.Time        `json:"updated_at"`
 }
 ```
 
@@ -141,14 +159,12 @@ type Organization struct {
 
 ```go
 type Member struct {
-    ID             id.MemberID       `json:"id"`
-    OrganizationID id.OrganizationID `json:"organization_id"`
-    UserID         id.UserID         `json:"user_id"`
-    AppID          id.AppID          `json:"app_id"`
-    Role           string            `json:"role"` // "owner", "admin", "member"
-    JoinedAt       time.Time         `json:"joined_at"`
-    CreatedAt      time.Time         `json:"created_at"`
-    UpdatedAt      time.Time         `json:"updated_at"`
+    ID        id.MemberID `json:"id"`
+    OrgID     id.OrgID    `json:"org_id"`
+    UserID    id.UserID   `json:"user_id"`
+    Role      MemberRole  `json:"role"`
+    CreatedAt time.Time   `json:"created_at"`
+    UpdatedAt time.Time   `json:"updated_at"`
 }
 ```
 
@@ -158,16 +174,16 @@ type Member struct {
 
 ```go
 type Invitation struct {
-    ID             id.InvitationID   `json:"id"`
-    OrganizationID id.OrganizationID `json:"organization_id"`
-    AppID          id.AppID          `json:"app_id"`
-    Email          string            `json:"email"`
-    Role           string            `json:"role"`
-    Token          string            `json:"-"` // sent via email
-    InvitedBy      id.UserID         `json:"invited_by"`
-    ExpiresAt      time.Time         `json:"expires_at"`
-    AcceptedAt     *time.Time        `json:"accepted_at,omitempty"`
-    CreatedAt      time.Time         `json:"created_at"`
+    ID        id.InvitationID  `json:"id"`
+    OrgID     id.OrgID         `json:"org_id"`
+    Email     string           `json:"email"`
+    Role      MemberRole       `json:"role"`
+    InviterID id.UserID        `json:"inviter_id"`
+    Status    InvitationStatus `json:"status"`
+    Token     string           `json:"-"`
+    TokenHash string           `json:"-"`
+    ExpiresAt time.Time        `json:"expires_at"`
+    CreatedAt time.Time        `json:"created_at"`
 }
 ```
 
@@ -182,18 +198,21 @@ A `Device` represents a browser, mobile app, or other client that has authentica
 
 ```go
 type Device struct {
-    ID          id.DeviceID `json:"id"`
-    UserID      id.UserID   `json:"user_id"`
-    AppID       id.AppID    `json:"app_id"`
-    Fingerprint string      `json:"fingerprint"`
-    Name        string      `json:"name,omitempty"` // "Chrome on macOS"
-    Browser     string      `json:"browser,omitempty"`
-    OS          string      `json:"os,omitempty"`
-    IPAddress   string      `json:"ip_address,omitempty"`
-    Trusted     bool        `json:"trusted"`
-    LastSeenAt  time.Time   `json:"last_seen_at"`
-    CreatedAt   time.Time   `json:"created_at"`
-    UpdatedAt   time.Time   `json:"updated_at"`
+    ID           id.DeviceID      `json:"id"`
+    UserID       id.UserID        `json:"user_id"`
+    AppID        id.AppID         `json:"app_id"`
+    EnvID        id.EnvironmentID `json:"env_id"`
+    Name         string           `json:"name,omitempty"`
+    Type         string           `json:"type,omitempty"`
+    Browser      string           `json:"browser,omitempty"`
+    OS           string           `json:"os,omitempty"`
+    IPAddress    string           `json:"ip_address,omitempty"`
+    Fingerprint  string           `json:"fingerprint,omitempty"`
+    Trusted      bool             `json:"trusted"`
+    TrustedUntil *time.Time       `json:"trusted_until,omitempty"`
+    LastSeenAt   time.Time        `json:"last_seen_at"`
+    CreatedAt    time.Time        `json:"created_at"`
+    UpdatedAt    time.Time        `json:"updated_at"`
 }
 ```
 
@@ -214,15 +233,17 @@ A `Webhook` is a registered endpoint that receives event notifications.
 
 ```go
 type Webhook struct {
-    ID        id.WebhookID      `json:"id"`
-    AppID     id.AppID          `json:"app_id"`
-    EnvID     id.EnvironmentID  `json:"env_id,omitempty"`
-    URL       string            `json:"url"`
-    Events    []string          `json:"events"` // ["user.created", "auth.signin"]
-    Secret    string            `json:"-"`       // HMAC-SHA256 signing secret
-    Active    bool              `json:"active"`
-    CreatedAt time.Time         `json:"created_at"`
-    UpdatedAt time.Time         `json:"updated_at"`
+    ID              id.WebhookID     `json:"id"`
+    AppID           id.AppID         `json:"app_id"`
+    EnvID           id.EnvironmentID `json:"env_id"`
+    URL             string           `json:"url"`
+    Events          []string         `json:"events"`
+    Secret          string           `json:"-"`
+    SecretHash      string           `json:"-"`
+    RelayEndpointID string           `json:"relay_endpoint_id,omitempty"`
+    Active          bool             `json:"active"`
+    CreatedAt       time.Time        `json:"created_at"`
+    UpdatedAt       time.Time        `json:"updated_at"`
 }
 ```
 
@@ -243,10 +264,13 @@ type Environment struct {
     AppID       id.AppID         `json:"app_id"`
     Name        string           `json:"name"`
     Slug        string           `json:"slug"`
-    Type        EnvironmentType  `json:"type"` // "production", "staging", "development"
-    Color       string           `json:"color"` // UI hint: "#22c55e"
+    Type        Type             `json:"type"`
     IsDefault   bool             `json:"is_default"`
-    Settings    *EnvironmentSettings `json:"settings,omitempty"`
+    Color       string           `json:"color,omitempty"`
+    Description string           `json:"description,omitempty"`
+    Settings    *Settings        `json:"settings,omitempty"`
+    ClonedFrom  id.EnvironmentID `json:"cloned_from,omitempty"`
+    Metadata    Metadata         `json:"metadata,omitempty"`
     CreatedAt   time.Time        `json:"created_at"`
     UpdatedAt   time.Time        `json:"updated_at"`
 }
@@ -263,34 +287,34 @@ type Environment struct {
 
 ```go
 type Role struct {
-    ID          string    `json:"id"`  // arol_...
-    AppID       string    `json:"app_id"`
-    EnvID       string    `json:"env_id,omitempty"`
-    ParentID    string    `json:"parent_id,omitempty"` // role hierarchy
-    Name        string    `json:"name"`
-    Slug        string    `json:"slug"` // unique within app
-    Description string    `json:"description,omitempty"`
-    CreatedAt   time.Time `json:"created_at"`
-    UpdatedAt   time.Time `json:"updated_at"`
+    ID            string    `json:"id"`
+    AppID         string    `json:"app_id"`
+    EnvID         string    `json:"env_id"`
+    ParentID      string    `json:"parent_id,omitempty"` // Empty = root role (no parent)
+    Name          string    `json:"name"`
+    Slug          string    `json:"slug"`
+    Description   string    `json:"description,omitempty"`
+    CreatedAt     time.Time `json:"created_at"`
+    UpdatedAt     time.Time `json:"updated_at"`
+    NamespacePath string    `json:"-"`
 }
 
 type Permission struct {
-    ID       string `json:"id"`  // aprm_...
+    ID       string `json:"id"`
     RoleID   string `json:"role_id"`
-    Action   string `json:"action"`   // e.g. "delete"
-    Resource string `json:"resource"` // e.g. "users"
+    Action   string `json:"action"`   // e.g. "read", "write", "delete", "admin"
+    Resource string `json:"resource"` // e.g. "user", "org", "document"
 }
 
 type UserRole struct {
     UserID     string    `json:"user_id"`
     RoleID     string    `json:"role_id"`
-    AppID      string    `json:"app_id"`
+    OrgID      string    `json:"org_id,omitempty"` // empty = global scope
     AssignedAt time.Time `json:"assigned_at"`
-    AssignedBy string    `json:"assigned_by,omitempty"`
 }
 ```
 
-Roles form a hierarchy via `ParentID`. Permissions from parent roles are inherited. The engine evaluates the full hierarchy when checking `HasPermission`.
+Roles and permissions are stored in Warden, which evaluates them for `HasPermission`. `UserRole.OrgID` isn't applied yet; see [Org-Scoped Roles](/docs/organizations/org-scoped-roles).
 
 ---
 
@@ -303,23 +327,26 @@ A `FormConfig` defines custom fields added to the sign-up form (or other flows).
 
 ```go
 type FormConfig struct {
-    ID       id.FormConfigID `json:"id"`
-    AppID    id.AppID        `json:"app_id"`
-    FormType FormType        `json:"form_type"` // "signup", "signin", "profile"
-    Fields   []Field         `json:"fields"`
-    Active   bool            `json:"active"`
-    CreatedAt time.Time      `json:"created_at"`
-    UpdatedAt time.Time      `json:"updated_at"`
+    ID        id.FormConfigID `json:"id"`
+    AppID     id.AppID        `json:"app_id"`
+    FormType  string          `json:"form_type"` // "signup", future: "profile_edit"
+    Fields    []FormField     `json:"fields"`
+    Active    bool            `json:"active"`
+    Version   int             `json:"version"`
+    CreatedAt time.Time       `json:"created_at"`
+    UpdatedAt time.Time       `json:"updated_at"`
 }
 
-type Field struct {
-    Name        string      `json:"name"`        // metadata key
-    Label       string      `json:"label"`       // UI label
-    Type        FieldType   `json:"type"`        // "text", "email", "select", "checkbox"
-    Required    bool        `json:"required"`
-    Placeholder string      `json:"placeholder,omitempty"`
-    Options     []string    `json:"options,omitempty"` // for select fields
-    Validation  *Validation `json:"validation,omitempty"`
+type FormField struct {
+    Key         string         `json:"key"` // stored as key in User.Metadata
+    Label       string         `json:"label"`
+    Type        FieldType      `json:"type"`
+    Placeholder string         `json:"placeholder,omitempty"`
+    Description string         `json:"description,omitempty"`
+    Options     []SelectOption `json:"options,omitempty"` // for select/radio/checkbox
+    Default     string         `json:"default,omitempty"`
+    Validation  Validation     `json:"validation,omitempty"`
+    Order       int            `json:"order"`
 }
 ```
 

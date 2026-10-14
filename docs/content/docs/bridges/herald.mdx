@@ -3,7 +3,7 @@ title: Herald Bridge
 description: Advanced multi-channel notification delivery via Herald, replacing the separate Mailer and SMS bridges.
 ---
 
-The Herald bridge connects Authsome to the Herald notification system. Herald provides unified, multi-channel notification delivery with template management, user preference handling, locale support, and async delivery. When configured, Herald replaces the separate Mailer and SMSSender bridges — all transactional notification delivery is routed through a single integration point.
+The Herald bridge connects Authsome to the Herald notification system. Herald provides unified, multi-channel notification delivery with template management, user preference handling, locale support, and async delivery. When configured, Herald replaces the separate Mailer and SMSSender bridges: all transactional notification delivery is routed through a single integration point.
 
 ## Interface
 
@@ -68,8 +68,7 @@ import (
 // Build the Herald engine (see Herald docs for full setup).
 heraldEng, err := herald.New(
     herald.WithStore(heraldStore),
-    herald.WithMailer(resendMailer),
-    herald.WithSMS(twilioSMS),
+    // channels and providers are configured in Herald; see its docs
 )
 if err != nil {
     log.Fatal(err)
@@ -80,7 +79,8 @@ heraldBridge := heraldadapter.New(heraldEng)
 
 // Register with Authsome.
 // When WithHerald is set, it takes precedence over WithMailer and WithSMSSender.
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(pgStore),
     authsome.WithPlugin(password.New()),
     authsome.WithPlugin(mfa.New()),
@@ -133,7 +133,8 @@ import (
     "github.com/xraph/authsome/bridge"
 )
 
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(memory.New()),
     authsome.WithHerald(bridge.NewNoopHerald(slog.Default())),
 )

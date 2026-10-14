@@ -13,16 +13,17 @@ import (
     "github.com/xraph/authsome/plugins/passkey"
 )
 
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
     authsome.WithPlugin(passkey.New(passkey.Config{
-        // Relying Party ID — must match the effective domain of your origin.
+        // Relying Party ID: must match the effective domain of your origin.
         RPID: "myapp.com",
 
-        // Relying Party display name — shown in the browser passkey UI.
+        // Relying Party display name: shown in the browser passkey UI.
         RPDisplayName: "My Application",
 
-        // Allowed origins — must include your frontend's exact origin
+        // Allowed origins: must include your frontend's exact origin
         // (scheme + host + port). For production, set explicitly.
         RPOrigins: []string{
             "https://myapp.com",
@@ -34,13 +35,13 @@ eng, err := authsome.New(
 
 ### Local development
 
-For `RPID: "localhost"` (or `"127.0.0.1"`) the plugin auto-trusts the request's `Origin` header on every ceremony, **as long as its host matches the configured RPID**. That means any localhost dev port — `http://localhost:3000`, `http://localhost:5173`, etc. — works without listing it in `RPOrigins`. The host check still rejects foreign origins, so this shortcut only loosens the *port* requirement, never the *host*.
+For `RPID: "localhost"` (or `"127.0.0.1"`) the plugin auto-trusts the request's `Origin` header on every ceremony, **as long as its host matches the configured RPID**. That means any localhost dev port, `http://localhost:3000`, `http://localhost:5173`, etc., works without listing it in `RPOrigins`. The host check still rejects foreign origins, so this shortcut only loosens the *port* requirement, never the *host*.
 
 For non-localhost RPIDs, behavior is strict: the browser's origin must match an entry in `RPOrigins` (scheme, host, and port included) exactly.
 
 ### Dynamic origins setting
 
-`passkey.rp_origins` (`[]string`) is a dynamic setting that adds extra allowed origins on top of `Config.RPOrigins`. Use it when origins differ between environments and you'd rather not rebuild the binary — e.g. set it from the dashboard or via your settings store for staging vs. prod.
+`passkey.rp_origins` (`[]string`) is a dynamic setting that adds extra allowed origins on top of `Config.RPOrigins`. Use it when origins differ between environments and you'd rather not rebuild the binary: e.g. set it from the dashboard or via your settings store for staging vs. prod.
 
 <Callout type="info">
 The `passkey` plugin uses the engine's `ceremony.Store` to hold in-progress registration and authentication state between the challenge and response calls. The default in-memory store is used when none is configured by the engine.
@@ -53,7 +54,7 @@ WebAuthn uses public-key cryptography:
 1. During **registration**, the authenticator generates a key pair. The public key is stored on the server. The private key never leaves the device.
 2. During **authentication**, the server sends a challenge. The authenticator signs it with the private key. The server verifies the signature with the stored public key.
 
-Because the private key is device-bound and the challenge is domain-scoped, passkeys are immune to phishing — a fake site cannot obtain a valid authentication signature.
+Because the private key is device-bound and the challenge is domain-scoped, passkeys are immune to phishing: a fake site cannot obtain a valid authentication signature.
 
 ## Registration ceremony
 
@@ -63,7 +64,7 @@ The registration flow runs when an existing user wants to add a passkey to their
 
 **Begin registration**: The server generates a challenge and public key credential creation options.
 
-`POST /v1/auth/passkey/register/begin`
+`POST /v1/passkeys/register/begin`
 
 Request headers must include `Authorization: Bearer {session_token}` (user must be authenticated). The session must also be recent: registration is refused with `403` unless the user signed in within the last five minutes (`Config.StepUpWindow`), because a passkey is itself a sign-in credential. Once a passkey is registered, every other session of the user is signed out.
 
@@ -87,7 +88,7 @@ Response includes the WebAuthn `PublicKeyCredentialCreationOptions` JSON:
 
 **Finish registration**: Submit the credential to the server.
 
-`POST /v1/auth/passkey/register/finish`
+`POST /v1/passkeys/register/finish`
 
 ```json
 {
@@ -115,7 +116,7 @@ The authentication flow allows users to sign in without a password.
 
 **Begin authentication**: The server generates a challenge.
 
-`POST /v1/auth/passkey/authenticate/begin`
+`POST /v1/passkeys/login/begin`
 
 ```json
 {"email": "alice@example.com", "app_id": "myapp"}
@@ -141,7 +142,7 @@ Response includes the WebAuthn `PublicKeyCredentialRequestOptions`:
 
 **Finish authentication**: Submit the assertion.
 
-`POST /v1/auth/passkey/authenticate/finish`
+`POST /v1/passkeys/login/finish`
 
 ```json
 {
@@ -205,10 +206,11 @@ engine.DeletePasskey(ctx, passkeyID)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/passkey/register/begin` | Begin passkey registration ceremony |
-| `POST` | `/passkey/register/finish` | Finish passkey registration |
-| `POST` | `/passkey/authenticate/begin` | Begin passkey authentication ceremony |
-| `POST` | `/passkey/authenticate/finish` | Finish authentication and return session |
-| `GET` | `/passkey` | List all passkeys for the current user |
-| `PATCH` | `/passkey/{id}` | Rename a passkey |
-| `DELETE` | `/passkey/{id}` | Delete a passkey |
+| `POST` | `/v1/passkeys/register/begin` | Begin passkey registration ceremony |
+| `POST` | `/v1/passkeys/register/finish` | Finish passkey registration |
+| `POST` | `/v1/passkeys/login/begin` | Begin passkey authentication ceremony |
+| `POST` | `/v1/passkeys/login/finish` | Finish authentication and return session |
+| `GET` | `/v1/passkeys` | List the current user's passkeys |
+| `DELETE` | `/v1/passkeys/{id}` | Delete a passkey |
+
+There's no route to rename a passkey.

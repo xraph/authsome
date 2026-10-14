@@ -40,8 +40,8 @@ authsome:
 
 | Field | Default | Route |
 |-------|---------|-------|
-| `SignInLimit` | 5 | `/v1/auth/signin` and the identifier budget behind it |
-| `SignUpLimit` | 3 | `/v1/auth/signup` |
+| `SignInLimit` | 5 | `/v1/signin` and the identifier budget behind it |
+| `SignUpLimit` | 3 | `/v1/signup` |
 | `RefreshLimit` | 10 | `/v1/refresh` |
 | `IntrospectLimit` | 20 | `/v1/introspect` |
 | `ForgotPasswordLimit` | 3 | password reset requests |
@@ -71,6 +71,7 @@ The engine wires `ratelimit.NewKVLimiter(store)` over the store's key-value tabl
 import "github.com/xraph/authsome/ratelimit"
 
 engine, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithRateLimiter(ratelimit.NewMemoryLimiter()),
     // ...
 )
