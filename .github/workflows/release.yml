@@ -38,6 +38,8 @@ jobs:
   prepare:
     name: Prepare Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       tag: ${{ steps.set-tag.outputs.tag }}
       version: ${{ steps.set-tag.outputs.version }}
