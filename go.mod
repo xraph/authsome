@@ -15,22 +15,22 @@ require (
 	github.com/russellhaering/goxmldsig v1.6.1
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
-	github.com/xraph/chronicle v1.7.0
-	github.com/xraph/dispatch v1.7.0
-	github.com/xraph/forge v1.12.5
-	github.com/xraph/forge/extensions/auth v1.12.5
-	github.com/xraph/go-utils v1.3.0
-	github.com/xraph/grove v1.7.1
-	github.com/xraph/grove/drivers/mongodriver v1.7.1
-	github.com/xraph/grove/drivers/pgdriver v1.7.1
-	github.com/xraph/grove/drivers/sqlitedriver v1.7.1
-	github.com/xraph/herald v1.7.0
-	github.com/xraph/keysmith v1.7.0
-	github.com/xraph/ledger v1.7.0
-	github.com/xraph/relay v1.7.0
-	github.com/xraph/vault v1.7.0
+	github.com/xraph/chronicle v1.9.0
+	github.com/xraph/dispatch v1.9.1
+	github.com/xraph/forge v1.12.9
+	github.com/xraph/forge/extensions/auth v1.12.9
+	github.com/xraph/go-utils v1.4.1
+	github.com/xraph/grove v1.8.0
+	github.com/xraph/grove/drivers/mongodriver v1.8.0
+	github.com/xraph/grove/drivers/pgdriver v1.8.0
+	github.com/xraph/grove/drivers/sqlitedriver v1.8.0
+	github.com/xraph/herald v1.8.0
+	github.com/xraph/keysmith v1.8.0
+	github.com/xraph/ledger v1.8.0
+	github.com/xraph/relay v1.8.0
+	github.com/xraph/vault v1.8.0
 	github.com/xraph/vessel v1.0.4
-	github.com/xraph/warden v1.7.0
+	github.com/xraph/warden v1.8.0
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 	go.mongodb.org/mongo-driver/v2 v2.9.1
 	golang.org/x/crypto v0.57.0
@@ -55,6 +55,8 @@ require (
 	github.com/go-openapi/swag/yamlutils v0.28.0 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
+	github.com/grafana/pyroscope-go v1.4.3 // indirect
+	github.com/grafana/pyroscope-go/godeltaprof v0.1.11 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
 	github.com/hashicorp/go-metrics v0.6.1 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
@@ -76,11 +78,12 @@ require (
 	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	github.com/zeebo/blake3 v0.2.4 // indirect
-	go.opentelemetry.io/otel/exporters/jaeger v1.17.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.45.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.46.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.46.0 // indirect
 	go.opentelemetry.io/otel/log v1.47.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.46.0 // indirect
+	go.opentelemetry.io/otel/sdk/metric v1.46.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
@@ -185,7 +188,7 @@ require (
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/uptrace/bunrouter v1.0.23 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	github.com/xraph/confy v1.0.3 // indirect
+	github.com/xraph/confy v1.1.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.70.0 // indirect
