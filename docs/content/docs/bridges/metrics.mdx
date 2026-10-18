@@ -1,179 +1,109 @@
 ---
 title: Metrics Bridge
-description: "Observability integration: emits authentication metrics to Prometheus, OpenTelemetry, or any collector backend."
+description: "Hand authsome's hook-bus events and operational counters to a metrics collector of your own."
 ---
 
-The Metrics bridge connects Authsome to your observability stack. When configured, Authsome emits metrics for every authentication event: event counts by action and outcome, sign-in latency, session counts, active user gauges, and more. The bridge is a thin interface: you wire it to Prometheus, OpenTelemetry, Datadog, or any other metrics backend.
+The Metrics bridge gives you authsome's raw signals: every event on the hook bus, and a handful of operational counters. You wire it to whatever you already run.
+
+In a Forge app you probably want something else. The extension passes the app's registry to `WithMetricsSink`, which records authsome's own metric families (sign-in attempts, MFA checks, refreshes, provider latency and more) with bounded labels and needs no code from you. [Observability](/docs/concepts/observability) lists them. Use this bridge when you embed the engine and want the signals in a backend of your own.
 
 ## Interface
 
-The `bridge.MetricsCollector` interface is defined in `github.com/xraph/authsome/bridge`:
+`bridge.MetricsCollector` lives in `github.com/xraph/authsome/bridge`:
 
 ```go
 type MetricsCollector interface {
     RecordEvent(action, resource, outcome, tenant string, duration time.Duration)
     IncrementGauge(name, tenant string, delta int)
+    IncrementCounter(name, tenant string)
 }
 ```
+
+Register yours with `authsome.WithMetrics(collector)`.
 
 ### RecordEvent
 
-Called after every authentication operation:
+The engine calls it once for every hook-bus event, after the audit trail has seen it.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `action` | `string` | Operation name, e.g. `"auth.signin"`, `"auth.signup"`, `"session.refresh"` |
-| `resource` | `string` | Entity type affected, e.g. `"session"`, `"user"`, `"mfa"` |
-| `outcome` | `string` | `"success"` or `"failure"` |
-| `tenant` | `string` | Organisation ID or empty string for no-org context |
-| `duration` | `time.Duration` | Wall-clock time of the operation |
+| Parameter | Description |
+|-----------|-------------|
+| `action` | The event's action, a `hook.Action*` constant such as `auth.signin` or `session.revoke` |
+| `resource` | The entity type, such as `session`, `user` or `mfa` |
+| `outcome` | `success` or `failure` |
+| `tenant` | The app ID the event belongs to |
+| `duration` | Always zero today. The engine doesn't time bus events. |
+
+Earlier releases also sent one `http.request` event per HTTP request, from `middleware.Metrics`. That middleware is gone: forge measures every route itself, by route template, and the old event labelled by raw path, which put session IDs and secrets into labels.
+
+### IncrementCounter
+
+The engine calls it for these operational signals:
+
+| Name | When |
+|------|------|
+| `audit.record.failed` | Chronicle refused an audit record |
+| `auth.lockout` | A sign-in was refused because the account is locked |
+| `refresh.replay_detected` | A rotated refresh token came back for the first time |
+| `control.degraded` | A security control couldn't run and let the request through |
+| `identifier_limit.rejected` | The per-identifier limiter refused a request |
+| `ratelimit.rejected` | A route limiter refused a request |
+| `ratelimit.error` | A limiter couldn't answer |
 
 ### IncrementGauge
 
-Called to adjust live gauges (e.g., active session count):
+Part of the interface, but nothing in authsome calls it.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `name` | `string` | Gauge name, e.g. `"active_sessions"`, `"registered_users"` |
-| `tenant` | `string` | Organisation ID for per-tenant gauges |
-| `delta` | `int` | `+1` to increment, `-1` to decrement |
+## Don't label by tenant
 
-## Setup with a Prometheus adapter
+The `tenant` argument is an app ID. A deployment can hold any number of apps, so a label built from it grows without bound, and a metrics backend pays for every series. Ignore it, as the adapter below does, unless you know your app count stays small.
+
+## The bundled adapter
+
+`bridge/metricsadapter` implements the interface over any go-utils metrics registry, Forge's included:
 
 ```go
-import (
-    "github.com/prometheus/client_golang/prometheus"
-    "github.com/prometheus/client_golang/prometheus/promauto"
-    "github.com/xraph/authsome"
-    "github.com/xraph/authsome/bridge"
-    "time"
-)
-
-// Prometheus-backed MetricsCollector.
-type PrometheusCollector struct {
-    eventCounter *prometheus.CounterVec
-    latencyHist  *prometheus.HistogramVec
-    gauges       *prometheus.GaugeVec
-}
-
-func NewPrometheusCollector(reg prometheus.Registerer) *PrometheusCollector {
-    return &PrometheusCollector{
-        eventCounter: promauto.With(reg).NewCounterVec(prometheus.CounterOpts{
-            Name: "authsome_events_total",
-            Help: "Total auth events by action, resource, outcome, and tenant.",
-        }, []string{"action", "resource", "outcome", "tenant"}),
-
-        latencyHist: promauto.With(reg).NewHistogramVec(prometheus.HistogramOpts{
-            Name:    "authsome_event_duration_seconds",
-            Help:    "Auth event duration distribution.",
-            Buckets: prometheus.DefBuckets,
-        }, []string{"action", "resource", "outcome"}),
-
-        gauges: promauto.With(reg).NewGaugeVec(prometheus.GaugeOpts{
-            Name: "authsome_gauge",
-            Help: "Live auth metrics gauges.",
-        }, []string{"name", "tenant"}),
-    }
-}
-
-func (c *PrometheusCollector) RecordEvent(action, resource, outcome, tenant string, duration time.Duration) {
-    c.eventCounter.WithLabelValues(action, resource, outcome, tenant).Inc()
-    c.latencyHist.WithLabelValues(action, resource, outcome).Observe(duration.Seconds())
-}
-
-func (c *PrometheusCollector) IncrementGauge(name, tenant string, delta int) {
-    c.gauges.WithLabelValues(name, tenant).Add(float64(delta))
-}
-
-// Register with Authsome.
 eng, err := authsome.NewEngine(
-    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
-    authsome.WithStore(pgStore),
-    authsome.WithMetrics(NewPrometheusCollector(prometheus.DefaultRegisterer)),
+    // plus WithStore, WithChronicle and WithWarden, which every engine needs
+    authsome.WithMetrics(metricsadapter.New(registry)),
 )
 ```
 
-## Setup with an OpenTelemetry adapter
+It records `authsome_events_total{action,resource,outcome}`, a counter per `IncrementCounter` name with a `_total` suffix (`auth.lockout` becomes `authsome_auth_lockout_total`), and a gauge per `IncrementGauge` name. It ignores the tenant, gives every series in a family the same label keys, and folds a value that isn't shaped like a constant into `other`.
+
+Don't use it alongside `WithMetricsSink` on the same registry: the sink records `authsome_events_total` too, and the two would count every event twice.
+
+## A Prometheus collector of your own
 
 ```go
-import (
-    "go.opentelemetry.io/otel"
-    "go.opentelemetry.io/otel/metric"
-)
-
-type OTelCollector struct {
-    meter    metric.Meter
-    counter  metric.Int64Counter
-    latency  metric.Float64Histogram
-    gauges   map[string]metric.Int64UpDownCounter
-    mu       sync.Mutex
+type promCollector struct {
+    events   *prometheus.CounterVec
+    counters *prometheus.CounterVec
 }
 
-func NewOTelCollector() (*OTelCollector, error) {
-    meter := otel.GetMeterProvider().Meter("authsome")
-
-    counter, err := meter.Int64Counter("authsome.events.total",
-        metric.WithDescription("Total auth events"))
-    if err != nil {
-        return nil, err
+func newPromCollector(reg prometheus.Registerer) *promCollector {
+    return &promCollector{
+        events: promauto.With(reg).NewCounterVec(prometheus.CounterOpts{
+            Name: "authsome_events_total",
+            Help: "Hook-bus events by action, resource and outcome.",
+        }, []string{"action", "resource", "outcome"}),
+        counters: promauto.With(reg).NewCounterVec(prometheus.CounterOpts{
+            Name: "authsome_signals_total",
+            Help: "authsome's operational signals by name.",
+        }, []string{"name"}),
     }
-
-    latency, err := meter.Float64Histogram("authsome.event.duration",
-        metric.WithUnit("s"),
-        metric.WithDescription("Auth event duration"))
-    if err != nil {
-        return nil, err
-    }
-
-    return &OTelCollector{meter: meter, counter: counter, latency: latency,
-        gauges: make(map[string]metric.Int64UpDownCounter)}, nil
 }
 
-func (c *OTelCollector) RecordEvent(action, resource, outcome, tenant string, duration time.Duration) {
-    attrs := metric.WithAttributes(
-        attribute.String("action", action),
-        attribute.String("resource", resource),
-        attribute.String("outcome", outcome),
-        attribute.String("tenant", tenant),
-    )
-    c.counter.Add(context.Background(), 1, attrs)
-    c.latency.Record(context.Background(), duration.Seconds(), attrs)
+func (c *promCollector) RecordEvent(action, resource, outcome, _ string, _ time.Duration) {
+    c.events.WithLabelValues(action, resource, outcome).Inc()
 }
 
-func (c *OTelCollector) IncrementGauge(name, tenant string, delta int) {
-    // Acquire or create the gauge for this name.
-    // ...
+func (c *promCollector) IncrementCounter(name, _ string) {
+    c.counters.WithLabelValues(name).Inc()
 }
+
+func (c *promCollector) IncrementGauge(string, string, int) {}
 ```
 
-## Metrics emitted by Authsome
+## Without a collector
 
-The following events and gauges are emitted when the Metrics bridge is configured:
-
-### Events (RecordEvent)
-
-| Action | Resource | When |
-|--------|----------|------|
-| `auth.signup` | `user` | User successfully registered |
-| `auth.signin` | `session` | Sign-in completed (success or failure) |
-| `auth.signout` | `session` | User signed out |
-| `auth.refresh` | `session` | Session token refreshed |
-| `auth.mfa.enrolled` | `mfa` | MFA method enrolled |
-| `auth.mfa.verified` | `mfa` | MFA challenge completed |
-| `auth.passkey.authenticated` | `passkey` | Passkey login completed |
-| `auth.social.signin` | `session` | Social OAuth sign-in completed |
-| `auth.password.reset` | `account` | Password reset flow completed |
-| `apikey.validated` | `apikey` | API key validated |
-| `session.revoked` | `session` | Session explicitly revoked |
-
-### Gauges (IncrementGauge)
-
-| Name | When incremented | When decremented |
-|------|-----------------|-----------------|
-| `active_sessions` | Session created | Session expired or revoked |
-| `registered_users` | User created | User deleted |
-| `mfa_enrolled_users` | MFA enrolled | MFA disabled |
-
-## When no metrics bridge is configured
-
-Without a metrics bridge, Authsome performs all operations normally. No metrics overhead is incurred: the bridge check is a single nil pointer check. Configuring metrics is purely additive.
+Nothing changes. The engine checks for a nil collector before each call, so leaving it out costs nothing.

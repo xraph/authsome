@@ -49,7 +49,7 @@ bridge/
 | Keysmith | `WithKeysmith` / `WithKeyManager` | `bridge.KeyManager` | Centralized API key management |
 | Mailer | `WithMailer` | `bridge.Mailer` | Transactional email delivery |
 | SMS | `WithSMSSender` | `bridge.SMSSender` | SMS delivery for OTP and MFA codes |
-| Metrics | `WithMetrics` | `bridge.MetricsCollector` | Observability metrics export |
+| Metrics | `WithMetrics` | `bridge.MetricsCollector` | Hook-bus events and operational counters for your own collector. For authsome's metric families use `WithMetricsSink` |
 
 ## Registering bridges
 

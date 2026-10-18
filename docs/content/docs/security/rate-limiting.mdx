@@ -11,7 +11,7 @@ Route limits key on the client address, resolved through the trusted-proxy rules
 
 Identifier limits key on what is being tried: the email, username or phone number, hashed before it becomes a key so the shared store never holds an address. They apply to sign-in, password reset, verification and the other places an identifier is presented, and a spent budget answers `429` too. Lockout, described on its own page, is the slower control that follows repeated failures from one network.
 
-A limiter that returns an error is a limiter that cannot count. By default the request is refused with `503` and `Retry-After: 5`, because an outage of the shared store must not turn into an unlimited window. `FailOpen` reverses that for deployments that prefer availability, and every fail-open is counted on the `control.degraded` metric.
+A limiter that returns an error is a limiter that cannot count. By default the request is refused with `503` and `Retry-After: 5`, because an outage of the shared store must not turn into an unlimited window. `FailOpen` reverses that for deployments that prefer availability, and every fail-open is counted in `forge_authsome_controls_degraded_total`.
 
 ## Configuration
 
@@ -98,4 +98,4 @@ g.POST("/v1/things", handler, forge.WithMiddleware(engine.RateLimitMiddleware(30
 
 ## Metrics and the trail
 
-`ratelimit.rejected` counts route refusals, `identifier_limit.rejected` counts identifier refusals, `ratelimit.error` counts limiter errors and `control.degraded` counts the requests a fail-open let through. A refused sign-in is also on the audit trail with reason `rate_limited`.
+`forge_authsome_requests_throttled_total` counts refusals by `limiter` (`route` or `identifier`), `forge_authsome_ratelimiter_errors_total` counts limiter errors the same way, and `forge_authsome_controls_degraded_total` counts the requests a fail-open let through, with `control="ratelimit"` or `control="identifier_limit"`. A `MetricsCollector` you registered still receives `ratelimit.rejected`, `identifier_limit.rejected`, `ratelimit.error` and `control.degraded`. A sign-in the identifier limiter refused also counts as `result="rate_limited"` in `forge_authsome_signin_attempts_total`, and is on the audit trail with reason `rate_limited`.

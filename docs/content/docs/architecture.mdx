@@ -206,7 +206,7 @@ Bridges are the interfaces Authsome uses to reach other systems. Chronicle and W
 | `Vault` | `bridge.Vault` | Secrets management and feature flag access |
 | `Dispatch` | `bridge.Dispatcher` | Background job queue for async tasks |
 | `Ledger` | `bridge.Ledger` | Billing/metering integration |
-| `Metrics` | `bridge.MetricsCollector` | Counter and histogram metrics for observability |
+| `Metrics` | `bridge.MetricsCollector` | Hook-bus events and operational counters for a collector of your own. authsome's own metric families go through `WithMetricsSink`; see [Observability](/docs/concepts/observability) |
 
 ### Bridge adapters
 
