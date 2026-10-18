@@ -109,6 +109,51 @@ type Schema struct {
 	Enum        []string           `json:"enum,omitempty"`
 }
 
+// UnmarshalJSON reads a schema and folds forge's nullable reference wrapper
+// back into a plain $ref.
+//
+// Since forge v1.12.9 a pointer element ([]*Connection) or a field tagged
+// nullable is described as oneOf a $ref and a null-only object. The
+// generators know nothing about oneOf, so without this every such list
+// would come out as []any, unknown[] or List<dynamic>. The SDKs already
+// treat a referenced element as possibly absent (a pointer in Go), so the
+// null branch carries nothing they need.
+func (s *Schema) UnmarshalJSON(data []byte) error {
+	type plain Schema
+	var raw struct {
+		plain
+		OneOf []*nullableBranch `json:"oneOf,omitempty"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*s = Schema(raw.plain)
+	if s.Ref == "" && s.Type == "" && len(raw.OneOf) == 2 {
+		a, b := raw.OneOf[0], raw.OneOf[1]
+		switch {
+		case a.isRef() && b.isNullOnly():
+			s.Ref = a.Ref
+		case b.isRef() && a.isNullOnly():
+			s.Ref = b.Ref
+		}
+	}
+	return nil
+}
+
+// nullableBranch is one member of a oneOf, kept only long enough to
+// recognise forge's {$ref} + {enum: [null], nullable: true} pair.
+type nullableBranch struct {
+	Ref      string `json:"$ref,omitempty"`
+	Nullable bool   `json:"nullable,omitempty"`
+	Enum     []any  `json:"enum,omitempty"`
+}
+
+func (b *nullableBranch) isRef() bool { return b != nil && b.Ref != "" }
+
+func (b *nullableBranch) isNullOnly() bool {
+	return b != nil && b.Ref == "" && b.Nullable && len(b.Enum) == 1 && b.Enum[0] == nil
+}
+
 // Components holds a set of reusable objects.
 type Components struct {
 	Schemas         map[string]*Schema         `json:"schemas,omitempty"`
