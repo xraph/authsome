@@ -22,6 +22,7 @@ import (
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/mfa"
@@ -346,7 +347,10 @@ func (p *Plugin) recordFailedAttempt(ctx context.Context, key string, challenge 
 	}
 }
 
-func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyResponse, error) {
+func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (_ *VerifyResponse, err error) {
+	attempt := telemetry.From(p.engine).StartSignIn(telemetry.MethodPhone)
+	defer func() { attempt.Done(err) }()
+
 	if req.Phone == "" {
 		return nil, forge.BadRequest("phone number required")
 	}
@@ -420,6 +424,7 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 		if bindErr != nil {
 			return nil, bindErr
 		}
+		attempt.HandOff()
 		result, issueErr := eng.IssueSession(ctx.Context(), &authsome.IssueSessionRequest{
 			User:       u,
 			AppID:      appID,

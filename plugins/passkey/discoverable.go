@@ -16,6 +16,7 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/user"
@@ -105,7 +106,10 @@ func (p *Plugin) resolveDiscoverableUser(ctx context.Context, userHandle []byte)
 // the ceremony session correlated by cookie, verifies the assertion against the
 // resolved user (looked up by user handle — no prior authentication), rejects
 // cloned authenticators, and issues a real session.
-func (p *Plugin) finishDiscoverableLogin(ctx forge.Context, ceremonyID string) (*LoginFinishResponse, error) {
+func (p *Plugin) finishDiscoverableLogin(ctx forge.Context, ceremonyID string) (_ *LoginFinishResponse, err error) {
+	attempt := telemetry.From(p.engine).StartSignIn(telemetry.MethodPasskey)
+	defer func() { attempt.Done(err) }()
+
 	key := discoverableKey(ceremonyID)
 	sessionJSON, err := p.ceremonies.Get(ctx.Context(), key)
 	if err != nil {
@@ -147,7 +151,7 @@ func (p *Plugin) finishDiscoverableLogin(ctx forge.Context, ceremonyID string) (
 		_ = p.store.UpdateSignCount(ctx.Context(), cred.ID, cred.Authenticator.SignCount) //nolint:errcheck // best-effort update
 	}
 
-	sess, err := p.issueSession(ctx, loggedIn)
+	sess, err := p.issueSession(ctx, loggedIn, attempt)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +171,7 @@ func (p *Plugin) finishDiscoverableLogin(ctx forge.Context, ceremonyID string) (
 
 // issueSession mints a real session for a passwordless login via the engine's
 // centralized IssueSession (so the MFA gate applies), returning it.
-func (p *Plugin) issueSession(ctx forge.Context, u *user.User) (*session.Session, error) {
+func (p *Plugin) issueSession(ctx forge.Context, u *user.User, attempt *telemetry.SignInAttempt) (*session.Session, error) {
 	eng, ok := p.engine.(*authsome.Engine)
 	if !ok || eng == nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: session issuance unavailable"))
@@ -180,6 +184,7 @@ func (p *Plugin) issueSession(ctx forge.Context, u *user.User) (*session.Session
 	if err != nil {
 		return nil, err
 	}
+	attempt.HandOff()
 	result, err := eng.IssueSession(ctx.Context(), &authsome.IssueSessionRequest{
 		User:       u,
 		AppID:      u.AppID,

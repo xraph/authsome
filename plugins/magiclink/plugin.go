@@ -13,6 +13,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/session"
@@ -308,7 +309,10 @@ func (p *Plugin) handleSend(ctx forge.Context, req *SendRequest) (*SendResponse,
 	return &SendResponse{Status: "magic link sent"}, nil
 }
 
-func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyResponse, error) {
+func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (_ *VerifyResponse, err error) {
+	attempt := telemetry.From(p.engine).StartSignIn(telemetry.MethodMagicLink)
+	defer func() { attempt.Done(err) }()
+
 	if req.Token == "" {
 		return nil, forge.BadRequest("token required")
 	}
@@ -377,6 +381,7 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 		if bindErr != nil {
 			return nil, bindErr
 		}
+		attempt.HandOff()
 		result, issueErr := eng.IssueSession(ctx.Context(), &authsome.IssueSessionRequest{
 			User:       u,
 			AppID:      v.AppID,

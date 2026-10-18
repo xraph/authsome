@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/oauth2"
 
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/plugins/sharedsignals/jwksclient"
 )
 
@@ -36,6 +37,10 @@ type OIDCConfig struct {
 	// and userinfo. Nil selects the hardened client, which refuses private
 	// addresses and plain http; tests point it at a local server.
 	HTTPClient *http.Client
+
+	// tel is where the plugin's provider calls are measured. Unset for a
+	// provider built outside the plugin, which then records spans only.
+	tel *telemetry.Metrics
 }
 
 // discoveryTTL is how long a fetched discovery document is reused. The
@@ -90,6 +95,9 @@ func NewOIDCProvider(cfg OIDCConfig) Provider {
 	if client == nil {
 		client = jwksclient.NewHTTPClient(10 * time.Second)
 	}
+	// Discovery, the token exchange and userinfo are client spans with no
+	// host on them: the issuer is the customer's IdP, not a vendor.
+	client = telemetry.InstrumentClient(client, telemetry.Endpoint{Kind: telemetry.ProviderOIDC, HideHost: true}, cfg.tel)
 	return &oidcProvider{name: cfg.Name, issuer: issuer, config: oauthCfg, httpClient: client, customClient: cfg.HTTPClient != nil}
 }
 
@@ -99,9 +107,9 @@ func (p *oidcProvider) Protocol() string { return "oidc" }
 // requestConfig returns a copy of the OAuth2 configuration with discovered
 // endpoints applied. The copy is what keeps concurrent logins from writing
 // endpoints into one another's configuration.
-func (p *oidcProvider) requestConfig() (oauth2.Config, *oidcDiscovery) {
+func (p *oidcProvider) requestConfig(ctx context.Context) (oauth2.Config, *oidcDiscovery) {
 	cfg := *p.config
-	discovered, err := p.discover()
+	discovered, err := p.discover(ctx)
 	if err == nil && discovered != nil {
 		if discovered.AuthorizationEndpoint != "" {
 			cfg.Endpoint.AuthURL = discovered.AuthorizationEndpoint
@@ -117,7 +125,7 @@ func (p *oidcProvider) requestConfig() (oauth2.Config, *oidcDiscovery) {
 // prefers LoginURLWithPKCE; this remains for callers of the Provider
 // interface alone.
 func (p *oidcProvider) LoginURL(state string) (string, error) {
-	cfg, _ := p.requestConfig()
+	cfg, _ := p.requestConfig(context.Background())
 	return cfg.AuthCodeURL(state, oauth2.AccessTypeOffline), nil
 }
 
@@ -130,7 +138,7 @@ func (p *oidcProvider) LoginURLWithPKCE(state, nonce, verifier string) (string, 
 	if nonce == "" || verifier == "" {
 		return "", errors.New("sso/oidc: nonce and verifier are required")
 	}
-	cfg, _ := p.requestConfig()
+	cfg, _ := p.requestConfig(context.Background())
 	return cfg.AuthCodeURL(state,
 		oauth2.AccessTypeOffline,
 		oauth2.SetAuthURLParam("nonce", nonce),
@@ -147,7 +155,7 @@ func (p *oidcProvider) HandleCallback(ctx context.Context, params map[string]str
 		return nil, errors.New("sso/oidc: missing authorization code")
 	}
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, p.httpClient)
-	cfg, discovered := p.requestConfig()
+	cfg, discovered := p.requestConfig(ctx)
 
 	var exchangeOpts []oauth2.AuthCodeOption
 	if v := params["code_verifier"]; v != "" {
@@ -254,7 +262,13 @@ type oidcDiscovery struct {
 // hardened client and cached for discoveryTTL. The issuer URL is validated
 // first unless a custom client was supplied, which is how tests reach a
 // local server.
-func (p *oidcProvider) discover() (*oidcDiscovery, error) {
+//
+// The fetch runs on context.WithoutCancel(ctx) with its own ten-second
+// timeout: the caller's values travel with it (its span, so the fetch is
+// traced under the callback that needed it) but its cancellation and
+// deadline do not, which is exactly how it behaved on context.Background().
+// The login-URL paths have no context to give and pass Background.
+func (p *oidcProvider) discover(ctx context.Context) (*oidcDiscovery, error) {
 	if c, ok := discoveryCache.Load(p.issuer); ok {
 		if cached, ok := c.(cachedDiscovery); ok && time.Now().Before(cached.expires) {
 			return cached.doc, nil
@@ -266,7 +280,7 @@ func (p *oidcProvider) discover() (*oidcDiscovery, error) {
 			return nil, fmt.Errorf("sso/oidc: discovery: %w", err)
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
