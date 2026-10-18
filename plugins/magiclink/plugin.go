@@ -379,6 +379,9 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (_ *VerifyR
 		// magic-link route would be refused rather than bound.
 		dpopJKT, bindErr := eng.DPoPBindingForRequest(ctx, v.AppID)
 		if bindErr != nil {
+			if errors.Is(bindErr, authsome.ErrDPoPBindingRequired) {
+				attempt.Refuse(telemetry.SignInDenied)
+			}
 			return nil, bindErr
 		}
 		attempt.HandOff()

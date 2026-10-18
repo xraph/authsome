@@ -5,6 +5,7 @@ package phone
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -422,6 +423,9 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (_ *VerifyR
 		// phone route working rather than what makes it stricter.
 		dpopJKT, bindErr := eng.DPoPBindingForRequest(ctx, appID)
 		if bindErr != nil {
+			if errors.Is(bindErr, authsome.ErrDPoPBindingRequired) {
+				attempt.Refuse(telemetry.SignInDenied)
+			}
 			return nil, bindErr
 		}
 		attempt.HandOff()

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -182,6 +183,9 @@ func (p *Plugin) issueSession(ctx forge.Context, u *user.User, attempt *telemetr
 	// working on a mandating app rather than what tightens it.
 	dpopJKT, err := eng.DPoPBindingForRequest(ctx, u.AppID)
 	if err != nil {
+		if errors.Is(err, authsome.ErrDPoPBindingRequired) {
+			attempt.Refuse(telemetry.SignInDenied)
+		}
 		return nil, err
 	}
 	attempt.HandOff()

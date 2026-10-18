@@ -15,6 +15,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/user"
@@ -267,6 +268,12 @@ func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse
 
 	dpopJKT, err := a.engine.DPoPBindingForRequest(ctx, appID)
 	if err != nil {
+		// Refused before SignIn runs, so it is counted here: a DPoP mandate
+		// the request can't satisfy is a denied sign-in, as it is on every
+		// other method.
+		if errors.Is(err, authsome.ErrDPoPBindingRequired) {
+			a.engine.Telemetry().SignIn(telemetry.MethodPassword, telemetry.SignInDenied)
+		}
 		return nil, err
 	}
 

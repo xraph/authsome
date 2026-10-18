@@ -895,6 +895,7 @@ func (p *Plugin) callback(ctx forge.Context, req *CallbackRequest, attempt *tele
 	// burned for nothing.
 	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
 		if bindErr := eng.DPoPBindingUnavailable(ctx.Context(), appID); bindErr != nil {
+			attempt.Refuse(telemetry.SignInDenied)
 			return nil, bindErr
 		}
 	}

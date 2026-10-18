@@ -1238,6 +1238,7 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 	// regardless, but only after the single-use artifact had been spent.
 	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
 		if bindErr := eng.DPoPBindingUnavailable(ctx.Context(), appID); bindErr != nil {
+			attempt.Refuse(telemetry.SignInDenied)
 			return nil, bindErr
 		}
 	}
