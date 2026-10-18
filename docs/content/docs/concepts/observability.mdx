@@ -84,7 +84,7 @@ API key results are `ok`, `invalid` (malformed, unknown prefix, or wrong secret,
 
 On the provider histogram, `email` and `sms` are measured around the configured mailer or SMS bridge, so their result is `ok`, `timeout`, `canceled` or `error` and never a status class. Every other kind is measured at the HTTP client, up to the response headers.
 
-`breach_check` exists in the enum but doesn't fire today: the HIBP checker fails open without reporting an error, so a breach check that couldn't run looks like a clean one. The client span and `kind="breach"` on the provider histogram still show the failure.
+`breach_check` counts a HIBP lookup that couldn't run (a failed request, a non-200 answer) during sign-up, a password reset or a password change. The check fails open, so the password goes through as not breached; this counter is how you see that it was skipped rather than passed.
 
 `forge_authsome_events_total` counts every hook-bus event. The values are the bus's own constants (`auth.signin`, `session`, `success`); anything that isn't shaped like one folds into `other`.
 

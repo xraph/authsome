@@ -38,6 +38,17 @@ func (e *Engine) isBreached(ctx context.Context, password string) (bool, error) 
 // Messaging
 // ──────────────────────────────────────────────────
 
+// passwordBreached is isBreached for a path that fails open: a lookup that
+// could not run reports false and is counted as a degraded breach_check
+// control, so you can see the check was skipped rather than passed.
+func (e *Engine) passwordBreached(ctx context.Context, tenant, password string) bool {
+	breached, err := e.isBreached(ctx, password)
+	if err != nil {
+		e.controlDegraded(telemetry.ControlBreachCheck, tenant)
+	}
+	return breached
+}
+
 // tracedMailer measures and traces every email the engine's plugins send,
 // whichever Mailer is configured.
 type tracedMailer struct {

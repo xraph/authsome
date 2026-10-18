@@ -80,17 +80,10 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 		return nil, nil, err
 	}
 
-	// Breach check (fail-open on network errors)
-	if policy.CheckBreached {
-		breached, breachErr := e.isBreached(ctx, req.Password)
-		if breachErr != nil {
-			// Fail open, and say so: a breach check that could not run is a
-			// control that did not run.
-			e.controlDegraded(telemetry.ControlBreachCheck, req.AppID.String())
-		}
-		if breached {
-			return nil, nil, account.ErrPasswordBreached
-		}
+	// Breach check. It fails open, and says so: a lookup that could not run
+	// is counted as a control that did not run.
+	if policy.CheckBreached && e.passwordBreached(ctx, req.AppID.String(), req.Password) {
+		return nil, nil, account.ErrPasswordBreached
 	}
 
 	// Plugin: before signup
@@ -1596,7 +1589,7 @@ func (e *Engine) ResetPassword(ctx context.Context, token, newPassword string) e
 
 	// Breach check
 	if policy.CheckBreached {
-		if breached, _ := e.isBreached(ctx, newPassword); breached { //nolint:errcheck // best-effort check
+		if e.passwordBreached(ctx, pr.AppID.String(), newPassword) {
 			return account.ErrPasswordBreached
 		}
 	}
@@ -1677,7 +1670,7 @@ func (e *Engine) ChangePassword(ctx context.Context, userID id.UserID, currentPa
 
 	// Breach check
 	if policy.CheckBreached {
-		if breached, _ := e.isBreached(ctx, newPassword); breached { //nolint:errcheck // best-effort check
+		if e.passwordBreached(ctx, u.AppID.String(), newPassword) {
 			return account.ErrPasswordBreached
 		}
 	}
