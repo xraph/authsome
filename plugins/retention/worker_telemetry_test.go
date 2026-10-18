@@ -3,6 +3,7 @@ package retention
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -13,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/internal/telemetry/telemetrytest"
@@ -147,4 +150,57 @@ func TestHubSpotHostIsHiddenWhenTheBaseURLIsOverridden(t *testing.T) {
 	custom, err := NewHubSpotProvider(ProviderConfig{Name: "hs", Token: "x", BaseURL: "https://crm-proxy.acme.example/"})
 	require.NoError(t, err)
 	assert.NotContains(t, call(custom), "server.address", "an overridden base URL's host is not")
+}
+
+// fieldLogger keeps every Warn with its fields.
+type fieldLogger struct {
+	log.Logger
+	mu    sync.Mutex
+	warns []string
+}
+
+func (l *fieldLogger) Warn(msg string, fields ...log.Field) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	line := msg
+	for _, f := range fields {
+		line += " " + f.Key() + "=" + fmt.Sprint(f.Value())
+	}
+	l.warns = append(l.warns, line)
+}
+
+// A dead-lettered job is logged by ID, error type and status class. The
+// CRM's own error text, which can quote the contact's email back, stays in
+// the job row only.
+func TestDeadLetterLogLeavesTheCRMResponseInTheJobRow(t *testing.T) {
+	ctx := context.Background()
+	s := NewMemoryStore()
+	crmBody := `{"message":"Contact alice@example.com already exists","status":"error"}`
+	p := &fakeProvider{
+		caps: CapContacts | CapActivities,
+		upsertErr: []error{&ProviderError{
+			Err:    fmt.Errorf("422 Unprocessable Entity: %s", crmBody),
+			Status: http.StatusUnprocessableEntity,
+		}},
+	}
+	j := enqueued(t, s, KindContactUpsert, "dl1")
+
+	logger := &fieldLogger{Logger: log.NewNoopLogger()}
+	w := newTestWorker(t, s, p)
+	w.deps.Logger = logger
+	w.runOnce(ctx)
+
+	stored, err := s.GetJob(ctx, j.ID)
+	require.NoError(t, err)
+	require.Equal(t, StateDead, stored.State)
+	assert.Contains(t, stored.LastError, "alice@example.com", "the full text is kept where an operator investigates the job")
+
+	require.Len(t, logger.warns, 1)
+	line := logger.warns[0]
+	assert.Contains(t, line, "retention: job dead-lettered")
+	assert.Contains(t, line, "job_id="+j.ID.String())
+	assert.Contains(t, line, "status_class=4xx")
+	assert.Contains(t, line, "error_type=")
+	assert.NotContains(t, line, "alice@example.com")
+	assert.NotContains(t, line, "already exists")
 }

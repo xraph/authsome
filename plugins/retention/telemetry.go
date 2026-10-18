@@ -2,8 +2,11 @@ package retention
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"strconv"
 
+	log "github.com/xraph/go-utils/log"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/xraph/authsome/internal/telemetry"
@@ -48,6 +51,23 @@ func (w *worker) providerLabel(j *Job) string {
 func (w *worker) outcome(ctx context.Context, j *Job, outcome string) {
 	trace.SpanFromContext(ctx).SetAttributes(telemetry.AttrRetentionOutcome.String(outcome))
 	w.deps.Tel.RetentionJob(w.providerLabel(j), outcome)
+}
+
+// failureFields describes a failed delivery for the log without the error's
+// text. A CRM's error quotes up to 512 bytes of its response body, which can
+// echo the contact's email back, so that text goes only into the job row
+// (MarkDead, MarkRetry), where whoever investigates the job can read it.
+func failureFields(j *Job, cause error) []log.Field {
+	fields := []log.Field{
+		log.String("job_id", j.ID.String()),
+		log.String("provider", j.Provider),
+		log.String("error_type", telemetry.TypeOf(cause)),
+	}
+	var pe *ProviderError
+	if errors.As(cause, &pe) && pe.Status > 0 {
+		fields = append(fields, log.String("status_class", strconv.Itoa(pe.Status/100)+"xx"))
+	}
+	return fields
 }
 
 // instrumentProviders wraps each built-in provider's HTTP client so every

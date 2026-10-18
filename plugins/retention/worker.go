@@ -489,10 +489,7 @@ func (w *worker) fail(ctx context.Context, j *Job, cause error, isTerminal bool)
 		if err := w.deps.Store.MarkDead(ctx, j.ID, cause.Error()); err != nil {
 			w.deps.Logger.Warn("retention: mark dead failed", log.String("error", err.Error()))
 		}
-		w.deps.Logger.Warn("retention: job dead-lettered",
-			log.String("job_id", j.ID.String()),
-			log.String("provider", j.Provider),
-			log.String("error", cause.Error()))
+		w.deps.Logger.Warn("retention: job dead-lettered", failureFields(j, cause)...)
 		return
 	}
 	w.outcome(ctx, j, telemetry.JobRetry)
