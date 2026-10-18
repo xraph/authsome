@@ -52,13 +52,14 @@ func (w *worker) outcome(ctx context.Context, j *Job, outcome string) {
 
 // instrumentProviders wraps each built-in provider's HTTP client so every
 // CRM call is a client span under its job and an observation in the
-// provider latency histogram. HubSpot's host is a vendor's and is
-// recorded; a generic provider's URL is the customer's, so its host is not.
+// provider latency histogram. HubSpot's own API host is a vendor's and is
+// recorded. A HubSpot base URL someone overrode can point anywhere, and a
+// generic provider's URL is the customer's, so neither host is.
 func instrumentProviders(providers map[string]Provider, tel *telemetry.Metrics) {
 	for _, p := range providers {
 		switch prov := p.(type) {
 		case *HubSpotProvider:
-			prov.client = instrumentCRMClient(prov.client, false, tel)
+			prov.client = instrumentCRMClient(prov.client, prov.baseURL != hubspotDefaultBaseURL, tel)
 		case *GenericProvider:
 			prov.client = instrumentCRMClient(prov.client, true, tel)
 		}

@@ -3,6 +3,8 @@ package retention
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -115,4 +117,34 @@ func TestProviderLabelNamesTheTypeNotTheInstance(t *testing.T) {
 	assert.Equal(t, telemetry.CRMGeneric, w.providerLabel(&Job{Provider: "acme-crm"}))
 	assert.Equal(t, telemetry.CRMOther, w.providerLabel(&Job{Provider: "fake"}))
 	assert.Equal(t, telemetry.CRMOther, w.providerLabel(&Job{Provider: "gone"}))
+}
+
+// HubSpot's own API host is a vendor's and goes on the client span. An
+// overridden base URL can point anywhere, so its host doesn't.
+func TestHubSpotHostIsHiddenWhenTheBaseURLIsOverridden(t *testing.T) {
+	rec := telemetrytest.Spans(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	defer srv.Close()
+
+	call := func(p *HubSpotProvider) map[string]string {
+		t.Helper()
+		instrumentProviders(map[string]Provider{"h": p}, nil)
+		ctx, parent := telemetry.Start(context.Background(), "job")
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL, http.NoBody)
+		require.NoError(t, err)
+		resp, err := p.client.Do(req)
+		require.NoError(t, err)
+		require.NoError(t, resp.Body.Close())
+		parent.End()
+		got := telemetrytest.Named(telemetrytest.Authsome(rec), "GET")
+		return telemetrytest.Attrs(got[len(got)-1])
+	}
+
+	vendor, err := NewHubSpotProvider(ProviderConfig{Name: "hs", Token: "x"})
+	require.NoError(t, err)
+	assert.Contains(t, call(vendor), "server.address", "the default HubSpot host is recorded")
+
+	custom, err := NewHubSpotProvider(ProviderConfig{Name: "hs", Token: "x", BaseURL: "https://crm-proxy.acme.example/"})
+	require.NoError(t, err)
+	assert.NotContains(t, call(custom), "server.address", "an overridden base URL's host is not")
 }
