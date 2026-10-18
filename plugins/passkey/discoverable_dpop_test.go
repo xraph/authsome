@@ -62,7 +62,7 @@ func TestPasskeyIssueSession_UnderRequiredMode_BindsSession(t *testing.T) {
 	router := forge.NewRouter()
 	require.NoError(t, router.POST("/test/passkey-issue",
 		func(ctx forge.Context, _ *issueSessionProbeRequest) (*issueSessionProbeResponse, error) {
-			sess, issueErr := p.issueSession(ctx, u)
+			sess, issueErr := p.issueSession(ctx, u, nil)
 			if issueErr != nil {
 				return nil, issueErr
 			}

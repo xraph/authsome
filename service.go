@@ -29,6 +29,7 @@ import (
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/page"
 	"github.com/xraph/authsome/principal"
@@ -79,17 +80,10 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 		return nil, nil, err
 	}
 
-	// Breach check (fail-open on network errors)
-	if policy.CheckBreached {
-		breached, breachErr := account.NewBreachChecker().IsBreached(req.Password)
-		if breachErr != nil {
-			// Fail open, and say so: a breach check that could not run is a
-			// control that did not run.
-			e.count("control.degraded", req.AppID.String())
-		}
-		if breached {
-			return nil, nil, account.ErrPasswordBreached
-		}
+	// Breach check. It fails open, and says so: a lookup that could not run
+	// is counted as a control that did not run.
+	if policy.CheckBreached && e.passwordBreached(ctx, req.AppID.String(), req.Password) {
+		return nil, nil, account.ErrPasswordBreached
 	}
 
 	// Plugin: before signup
@@ -141,7 +135,7 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 	}
 
 	// Hash password using configured algorithm
-	hash, err := account.HashPasswordWithPolicy(req.Password, policy)
+	hash, err := e.hashPassword(ctx, req.Password, policy)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -220,10 +214,26 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 }
 
 // SignIn authenticates a user and returns the user + session.
-func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.User, *session.Session, error) {
+func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (_ *user.User, _ *session.Session, signInErr error) {
 	if err := e.requireStarted(); err != nil {
 		return nil, nil, err
 	}
+
+	// The attempt is counted once. IssueSession counts it from the moment
+	// it is reached; a refusal before that is counted here on the way out.
+	// lookupFailed separates a store that could not answer from an
+	// identifier nobody holds, which is only ever "invalid".
+	issuing, lookupFailed := false, false
+	defer func() {
+		if issuing {
+			return
+		}
+		result := signInResult(signInErr)
+		if lookupFailed {
+			result = telemetry.SignInError
+		}
+		e.tel.SignIn(telemetry.MethodPassword, result)
+	}()
 
 	// Build lockout key from identifier + appID
 	lockoutKey := e.lockoutKey(req)
@@ -261,7 +271,7 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 
 	// Plugin: before signin
 	if err := e.plugins.EmitBeforeSignIn(ctx, req); err != nil {
-		return nil, nil, fmt.Errorf("authsome: before signin: %w", err)
+		return nil, nil, &hookRefusedError{fmt.Errorf("authsome: before signin: %w", err)}
 	}
 
 	// Normalize email for case-insensitive lookup (emails are stored lowercase).
@@ -293,8 +303,10 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 
 	if err != nil {
 		// An unknown identifier pays the same hash a known one would, so
-		// the response time does not say which identifiers exist.
-		e.ConsumeDummyHash(req.Password)
+		// the response time does not say which identifiers exist. It gets
+		// the same verify password span too, so a trace doesn't either.
+		lookupFailed = !errors.Is(err, store.ErrNotFound)
+		e.consumeDummyVerify(ctx, req.Password)
 		e.recordFailedSignin(ctx, req, lockoutKey)
 		return nil, nil, account.ErrInvalidCredentials
 	}
@@ -302,7 +314,7 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	// Verify the password before the ban: a wrong password on a banned
 	// account gets the generic answer, so probing a ban costs the right
 	// password.
-	if checkErr := account.CheckPassword(u.PasswordHash, req.Password); checkErr != nil {
+	if checkErr := e.verifyPassword(ctx, u.PasswordHash, req.Password); checkErr != nil {
 		e.recordFailedSignin(ctx, req, lockoutKey)
 		return nil, nil, account.ErrInvalidCredentials
 	}
@@ -380,7 +392,7 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	// Transparent rehash if the password algorithm has changed (e.g. bcrypt→argon2id).
 	policy := e.passwordPolicy()
 	if account.NeedsRehash(u.PasswordHash, policy) {
-		if newHash, hashErr := account.HashPasswordWithPolicy(req.Password, policy); hashErr == nil {
+		if newHash, hashErr := e.hashPassword(ctx, req.Password, policy); hashErr == nil {
 			u.PasswordHash = newHash
 			u.UpdatedAt = time.Now()
 			if updateErr := e.store.UpdateUser(ctx, u); updateErr != nil {
@@ -394,6 +406,7 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	// hooks/audit. SignIn keeps the signin-specific telemetry below
 	// (after-signin plugin hook, signin audit) since those describe
 	// the auth event rather than the session itself.
+	issuing = true
 	result, err := e.IssueSession(ctx, &IssueSessionRequest{
 		User:       u,
 		AppID:      req.AppID,
@@ -501,7 +514,7 @@ type RefreshOpts struct {
 // a presented hash that is already in the revoked set is either a leaked
 // token being replayed or a double spend, so the whole family is revoked
 // and the caller refused.
-func (e *Engine) refuseReplayedRefresh(ctx context.Context, presentedHash string, opts ...RefreshOpts) error {
+func (e *Engine) refuseReplayedRefresh(ctx context.Context, presentedHash string, opts ...RefreshOpts) (replayErr error) {
 	// Replay check: if the presented token's hash is already in the
 	// revoked set, this is either a leaked token being replayed or a
 	// double-spend. Either way: cascade-revoke the family and refuse.
@@ -523,6 +536,9 @@ func (e *Engine) refuseReplayedRefresh(ctx context.Context, presentedHash string
 			return account.ErrInvalidCredentials
 		}
 		e.count("refresh.replay_detected", "")
+		// The caller still gets the bare sentinel (finishRefresh unwraps
+		// this); only the refresh counter learns it was a replay.
+		defer func() { replayErr = &refreshRefusalError{telemetry.RefreshReplayDetected, replayErr} }()
 
 		var ipAddr, userAgent string
 		if len(opts) > 0 {
@@ -558,6 +574,12 @@ func (e *Engine) refuseReplayedRefresh(ctx context.Context, presentedHash string
 }
 
 func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...RefreshOpts) (*session.Session, error) {
+	ctx, finish := e.startRefresh(ctx, telemetry.RefreshViaRefreshToken)
+	sess, err := e.refresh(ctx, refreshToken, opts...)
+	return sess, finish(err)
+}
+
+func (e *Engine) refresh(ctx context.Context, refreshToken string, opts ...RefreshOpts) (*session.Session, error) {
 	if err := e.refuseReplayedRefresh(ctx, store.HashToken(refreshToken), opts...); err != nil {
 		return nil, err
 	}
@@ -581,6 +603,12 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 // for replay, matched to that client, and rotated with the same refusals as
 // any refresh, including the DPoP proof check for a bound session.
 func (e *Engine) RefreshForClient(ctx context.Context, refreshToken, clientID string, opts ...RefreshOpts) (*session.Session, error) {
+	ctx, finish := e.startRefresh(ctx, telemetry.RefreshViaClient)
+	sess, err := e.refreshForClient(ctx, refreshToken, clientID, opts...)
+	return sess, finish(err)
+}
+
+func (e *Engine) refreshForClient(ctx context.Context, refreshToken, clientID string, opts ...RefreshOpts) (*session.Session, error) {
 	if clientID == "" {
 		return nil, account.ErrInvalidCredentials
 	}
@@ -607,6 +635,12 @@ func (e *Engine) RefreshForClient(ctx context.Context, refreshToken, clientID st
 // here too: bans, agent sessions, expiry, the absolute lifetime, binding and
 // DPoP. A session issued without a refresh token cannot be rotated this way.
 func (e *Engine) RefreshBySessionToken(ctx context.Context, sessionToken string, opts ...RefreshOpts) (*session.Session, error) {
+	ctx, finish := e.startRefresh(ctx, telemetry.RefreshViaSessionToken)
+	sess, err := e.refreshBySessionToken(ctx, sessionToken, opts...)
+	return sess, finish(err)
+}
+
+func (e *Engine) refreshBySessionToken(ctx context.Context, sessionToken string, opts ...RefreshOpts) (*session.Session, error) {
 	sess, err := e.store.GetSessionByToken(ctx, sessionToken)
 	if err != nil {
 		return nil, account.ErrInvalidCredentials
@@ -628,6 +662,12 @@ func (e *Engine) RefreshBySessionToken(ctx context.Context, sessionToken string,
 // retires the ones nobody ever received. Everything Refresh enforces after
 // the lookup applies here too.
 func (e *Engine) RefreshBySessionID(ctx context.Context, sessionID id.SessionID, opts ...RefreshOpts) (*session.Session, error) {
+	ctx, finish := e.startRefresh(ctx, telemetry.RefreshViaSessionID)
+	sess, err := e.refreshBySessionID(ctx, sessionID, opts...)
+	return sess, finish(err)
+}
+
+func (e *Engine) refreshBySessionID(ctx context.Context, sessionID id.SessionID, opts ...RefreshOpts) (*session.Session, error) {
 	sess, err := e.store.GetSession(ctx, sessionID)
 	if err != nil {
 		return nil, account.ErrInvalidCredentials
@@ -735,7 +775,7 @@ func (e *Engine) rotateSession(ctx context.Context, sess *session.Session, opts 
 			o = opts[0]
 		}
 		if dpopErr := e.verifyRefreshDPoP(ctx, sess, o); dpopErr != nil {
-			return nil, account.ErrInvalidCredentials
+			return nil, &refreshRefusalError{telemetry.RefreshDPoPRejected, account.ErrInvalidCredentials}
 		}
 	}
 
@@ -1271,11 +1311,11 @@ func (e *Engine) checkPasswordHistory(ctx context.Context, userID id.UserID, new
 	entries, err := e.passwordHistory.GetPasswordHistory(ctx, userID, e.config.Password.HistoryCount)
 	if err != nil {
 		e.logger.Warn("authsome: password history lookup failed", log.String("error", err.Error()))
-		e.count("control.degraded", "")
+		e.controlDegraded(telemetry.ControlPasswordHistory, "")
 		return nil // fail open — don't block the user
 	}
 	for _, entry := range entries {
-		if account.CheckPassword(entry.Hash, newPassword) == nil {
+		if e.verifyPassword(ctx, entry.Hash, newPassword) == nil {
 			return account.ErrPasswordReused
 		}
 	}
@@ -1549,7 +1589,7 @@ func (e *Engine) ResetPassword(ctx context.Context, token, newPassword string) e
 
 	// Breach check
 	if policy.CheckBreached {
-		if breached, _ := account.NewBreachChecker().IsBreached(newPassword); breached { //nolint:errcheck // best-effort check
+		if e.passwordBreached(ctx, pr.AppID.String(), newPassword) {
 			return account.ErrPasswordBreached
 		}
 	}
@@ -1564,7 +1604,7 @@ func (e *Engine) ResetPassword(ctx context.Context, token, newPassword string) e
 		return historyErr
 	}
 
-	hash, err := account.HashPasswordWithPolicy(newPassword, policy)
+	hash, err := e.hashPassword(ctx, newPassword, policy)
 	if err != nil {
 		return err
 	}
@@ -1619,7 +1659,7 @@ func (e *Engine) ChangePassword(ctx context.Context, userID id.UserID, currentPa
 		return fmt.Errorf("authsome: get user: %w", err)
 	}
 
-	if verifyErr := account.CheckPassword(u.PasswordHash, currentPassword); verifyErr != nil {
+	if verifyErr := e.verifyPassword(ctx, u.PasswordHash, currentPassword); verifyErr != nil {
 		return account.ErrInvalidCredentials
 	}
 
@@ -1630,7 +1670,7 @@ func (e *Engine) ChangePassword(ctx context.Context, userID id.UserID, currentPa
 
 	// Breach check
 	if policy.CheckBreached {
-		if breached, _ := account.NewBreachChecker().IsBreached(newPassword); breached { //nolint:errcheck // best-effort check
+		if e.passwordBreached(ctx, u.AppID.String(), newPassword) {
 			return account.ErrPasswordBreached
 		}
 	}
@@ -1640,7 +1680,7 @@ func (e *Engine) ChangePassword(ctx context.Context, userID id.UserID, currentPa
 		return historyErr
 	}
 
-	hash, err := account.HashPasswordWithPolicy(newPassword, policy)
+	hash, err := e.hashPassword(ctx, newPassword, policy)
 	if err != nil {
 		return err
 	}
@@ -2787,7 +2827,7 @@ func (e *Engine) AdminCreateUser(ctx context.Context, adminID id.UserID, appID i
 	}
 
 	// Hash password
-	hash, err := account.HashPasswordWithPolicy(password, policy)
+	hash, err := e.hashPassword(ctx, password, policy)
 	if err != nil {
 		return nil, fmt.Errorf("authsome: admin create user: hash password: %w", err)
 	}

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -15,6 +16,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/user"
@@ -44,10 +46,11 @@ func (a *API) captchaOpt(action string) []forge.RouteOption {
 	}
 	return []forge.RouteOption{
 		forge.WithMiddleware(middleware.CaptchaMiddleware(middleware.CaptchaOptions{
-			Settings:  mgr,
-			Action:    action,
-			Chronicle: bridge.NewBusChronicle(a.engine.Hooks()),
-			Logger:    a.engine.Logger(),
+			Settings:    mgr,
+			Action:      action,
+			Chronicle:   bridge.NewBusChronicle(a.engine.Hooks()),
+			Logger:      a.engine.Logger(),
+			VerifierFor: a.captchaVerifierFor,
 		})),
 	}
 }
@@ -169,7 +172,7 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 			// emails and use the response time to enumerate registered
 			// addresses (duplicate ~1ms vs fresh ~100ms+). Result is
 			// discarded.
-			a.consumeDummyHashBudget(req.Password)
+			a.consumeDummyHashBudget(ctx.Context(), req.Password)
 			return nil, ctx.JSON(http.StatusCreated, a.syntheticSignupResponse(req.Email, appID))
 		}
 		return nil, mapErrorCtx(ctx, err)
@@ -184,10 +187,14 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 // the duplicate-email path so the response time matches a real signup. Any
 // error from the hash function is intentionally ignored — this is purely a
 // time-budget consumer.
-func (a *API) consumeDummyHashBudget(password string) {
+//
+// It runs under the same hash password span, and lands in the same hash
+// histogram, as a fresh sign-up's real hash, so an operator reading traces
+// or metrics can't tell the duplicate from the fresh sign-up either.
+func (a *API) consumeDummyHashBudget(ctx context.Context, password string) {
 	// The engine owns the hash and its policy; sign-in's unknown-identifier
 	// path spends the same budget through the same method.
-	policy := a.engine.ConsumeDummyHash(password)
+	policy := a.engine.ConsumeDummyHashContext(ctx, password)
 
 	// Test-only observation point (nil in production). Reports the policy
 	// actually used so a test can assert the duplicate path hashes with the
@@ -266,6 +273,12 @@ func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse
 
 	dpopJKT, err := a.engine.DPoPBindingForRequest(ctx, appID)
 	if err != nil {
+		// Refused before SignIn runs, so it is counted here: a DPoP mandate
+		// the request can't satisfy is a denied sign-in, as it is on every
+		// other method.
+		if errors.Is(err, authsome.ErrDPoPBindingRequired) {
+			a.engine.Telemetry().SignIn(telemetry.MethodPassword, telemetry.SignInDenied)
+		}
 		return nil, err
 	}
 

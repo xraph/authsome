@@ -1,4 +1,11 @@
 {
   "title": "Core Concepts",
-  "pages": ["identity", "entities", "configuration", "errors", "multi-tenancy"]
+  "pages": [
+    "identity",
+    "entities",
+    "configuration",
+    "errors",
+    "multi-tenancy",
+    "observability"
+  ]
 }

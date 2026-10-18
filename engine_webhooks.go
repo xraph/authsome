@@ -19,6 +19,7 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/safeurl"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/webhook"
 )
@@ -114,7 +115,11 @@ func (e *Engine) verifyWebhookURL(ctx context.Context, w *webhook.Webhook, secre
 	req.Header.Set("X-Relay-Event-Type", "webhook.test")
 	req.Header.Set(webhook.RelayTimestampHeader, strconv.FormatInt(ts.Unix(), 10))
 	req.Header.Set(webhook.RelaySignatureHeader, webhook.SignRelay(secret, ts, body))
-	resp, err := safeurl.Client(e.webhookVerifyTimeout(), opts).Do(req)
+	// The receiver is the customer's, so the client span keeps its host
+	// off; the URL itself never goes on a span at all.
+	client := telemetry.InstrumentClient(safeurl.Client(e.webhookVerifyTimeout(), opts),
+		telemetry.Endpoint{Kind: telemetry.ProviderWebhook, HideHost: true}, e.tel)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w: test delivery failed: %w", ErrWebhookURLRejected, err)
 	}

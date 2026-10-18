@@ -25,6 +25,7 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/browserbind"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/plugin"
@@ -334,6 +335,7 @@ func (p *Plugin) connectionToProvider(conn *Connection) (Provider, error) {
 			// must be set (empty redirect_uri is rejected by real IdPs) and must
 			// exactly match what's registered with the IdP — see oidcRedirectURLFor.
 			RedirectURL: p.oidcRedirectURLFor(conn),
+			tel:         telemetry.From(p.engine),
 		}), nil
 	case "saml":
 		return NewSAMLProvider(SAMLConfig{
@@ -348,6 +350,7 @@ func (p *Plugin) connectionToProvider(conn *Connection) (Provider, error) {
 			SPPrivateKeyPEM:   conn.SPPrivateKey,
 			SignRequests:      conn.SignRequests,
 			AttributeMap:      conn.AttributeMappings,
+			tel:               telemetry.From(p.engine),
 		})
 	default:
 		return nil, fmt.Errorf("sso: unsupported protocol %q", conn.Protocol)
@@ -1219,7 +1222,10 @@ func (p *Plugin) isOrgOwnerOrAdmin(ctx context.Context, orgID id.OrgID, userID i
 	return false
 }
 
-func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Provider, conn *Connection, params map[string]string) (*CallbackResponse, error) {
+func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Provider, conn *Connection, params map[string]string) (_ *CallbackResponse, err error) {
+	attempt := telemetry.From(p.engine).StartSignIn(telemetry.MethodSSO)
+	defer func() { attempt.Done(err) }()
+
 	// Every SSO entry point funnels through here: the JSON callback, the OIDC
 	// browser landing and the SAML ACS. All three are the identity
 	// provider delivering the user agent. The client holding the DPoP key is
@@ -1232,12 +1238,17 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 	// regardless, but only after the single-use artifact had been spent.
 	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
 		if bindErr := eng.DPoPBindingUnavailable(ctx.Context(), appID); bindErr != nil {
+			attempt.Refuse(telemetry.SignInDenied)
 			return nil, bindErr
 		}
 	}
 
 	ssoUser, err := provider.HandleCallback(ctx.Context(), params)
 	if err != nil {
+		// The IdP's answer did not yield a user: a bad assertion, a code
+		// the token endpoint refused, or a userinfo call that failed. The
+		// response is a 500, but for the counter it is a refused sign-in.
+		attempt.Refuse(telemetry.SignInInvalid)
 		return nil, middleware.InternalError(ctx, fmt.Errorf("sso: callback failed: %w", err))
 	}
 	if ssoUser == nil {
@@ -1279,6 +1290,7 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 	// MFARequired gate fires for SAML/OIDC callbacks too.
 	var sess *session.Session
 	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
+		attempt.HandOff()
 		result, issueErr := eng.IssueSession(goCtx, &authsome.IssueSessionRequest{
 			User:       u,
 			AppID:      appID,

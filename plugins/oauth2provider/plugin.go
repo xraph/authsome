@@ -27,6 +27,7 @@ import (
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/ratelimit"
@@ -1084,7 +1085,7 @@ func (p *Plugin) authenticateClient(ctx context.Context, clientID, clientSecret 
 		if clientSecret == "" {
 			return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "client_secret required for confidential clients")
 		}
-		if cmpErr := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(clientSecret)); cmpErr != nil {
+		if cmpErr := compareClientSecret(ctx, client.ClientSecret, clientSecret); cmpErr != nil {
 			return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "invalid client_secret")
 		}
 	}
@@ -1123,7 +1124,9 @@ func callerOwnsSession(caller, target *session.Session) bool {
 // returned error into a written response before any enclosing middleware's
 // next() call sees it, the same reason handleUserInfo below sets its own
 // header instead of relying on that middleware.
-func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
+func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (_ *TokenResponse, err error) {
+	defer func() { telemetry.From(p.engine).OAuth2Token(grantLabel(req.GrantType), tokenResult(err)) }()
+
 	// Token responses carry credentials and must never be cached by a
 	// browser or an intermediary (RFC 6749 section 5.1).
 	ctx.SetHeader("Cache-Control", "no-store")
@@ -1249,7 +1252,7 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 		if req.ClientSecret == "" {
 			return nil, forge.Unauthorized("client_secret required for confidential clients")
 		}
-		if cmpErr := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(req.ClientSecret)); cmpErr != nil {
+		if cmpErr := compareClientSecret(ctx.Context(), client.ClientSecret, req.ClientSecret); cmpErr != nil {
 			return nil, forge.Unauthorized("invalid client_secret")
 		}
 	}
@@ -1329,7 +1332,7 @@ func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenReque
 		return nil, forge.BadRequest("client is not registered for the client_credentials grant")
 	}
 
-	if cmpErr := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(req.ClientSecret)); cmpErr != nil {
+	if cmpErr := compareClientSecret(ctx.Context(), client.ClientSecret, req.ClientSecret); cmpErr != nil {
 		return nil, forge.Unauthorized("invalid client_secret")
 	}
 

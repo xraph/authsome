@@ -40,6 +40,7 @@ import (
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/lockout"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
@@ -115,6 +116,10 @@ type Engine struct {
 	dispatcher   bridge.Dispatcher
 	ledger       bridge.Ledger
 	metrics      bridge.MetricsCollector
+
+	// tel holds authsome's own metric families, recorded into the sink
+	// WithMetricsSink was given. Nil records nothing.
+	tel *telemetry.Metrics
 
 	// tokenEncryptor encrypts at-rest secrets such as third-party OAuth
 	// access/refresh tokens. Defaults to bridge.NoopEncryptor when no
@@ -434,6 +439,7 @@ func (e *Engine) buildAuthMiddleware() {
 	bindCfg := e.DPoPBindingConfig()
 	bindCfg.CookieNameResolver = e.resolveSessionCookieName
 	bindCfg.JWTSessionChecker = e.JWTSessionChecker
+	bindCfg.JWTSessionContextChecker = e.JWTSessionContextChecker
 	bindCfg.ExpectedAudienceResolver = e.resolveExpectedAudience
 	bindCfg.PrincipalResolver = e.ResolvePrincipalByRef
 
@@ -606,7 +612,7 @@ func (e *Engine) resolveExpectedAudience(ctx context.Context, appID string) []st
 	opts := settings.ResolveOpts{AppID: appID}
 	identifier, err := settings.Get(ctx, mgr, SettingResourceIdentifier, opts)
 	if err != nil {
-		e.count("control.degraded", appID)
+		e.controlDegraded(telemetry.ControlSettings, appID)
 		return nil
 	}
 	if identifier == "" {
@@ -622,7 +628,16 @@ func (e *Engine) resolveExpectedAudience(ctx context.Context, appID string) []st
 // active; when it is off, nil, nil is returned to skip the store lookup and
 // the binding checks. The setting defaults to on.
 func (e *Engine) JWTSessionChecker(appIDStr, sessionIDStr string) (*session.Session, error) {
-	ctx := context.Background()
+	return e.JWTSessionContextChecker(context.Background(), appIDStr, sessionIDStr)
+}
+
+// JWTSessionContextChecker is JWTSessionChecker for a caller that has the
+// request's context. The lookup runs on context.WithoutCancel(ctx): it
+// keeps the request's values, so its queries show up in the request's
+// trace, and drops its cancellation and deadline, so it behaves exactly as
+// it did on context.Background().
+func (e *Engine) JWTSessionContextChecker(ctx context.Context, appIDStr, sessionIDStr string) (*session.Session, error) {
+	ctx = context.WithoutCancel(ctx)
 
 	// Check if the feature is enabled via dynamic settings.
 	mgr := e.Settings()
@@ -692,7 +707,10 @@ func (e *Engine) Start(ctx context.Context) error {
 	// waits on the sweep, and a large table must not hold up boot. The
 	// start context's values travel with the sweep but its cancellation
 	// does not, since Start returning is not a reason to stop converting.
-	sweepCtx := context.WithoutCancel(ctx)
+	// Its span does not travel either: forge runs Start inside a boot span,
+	// and every query the sweep makes would otherwise hang off a trace that
+	// ended at startup.
+	sweepCtx := telemetry.Detach(context.WithoutCancel(ctx))
 	e.spawn(func() { e.hashLegacyTokens(sweepCtx) })
 	// Webhook rows from before webhooks became Relay endpoints are given
 	// one in the background, for the same reasons.
@@ -787,6 +805,7 @@ func (e *Engine) Start(ctx context.Context) error {
 			if e.metrics != nil {
 				e.metrics.IncrementCounter("audit.record.failed", event.Tenant)
 			}
+			e.tel.AuditRecordFailed()
 			return err
 		}
 		return nil
@@ -799,11 +818,20 @@ func (e *Engine) Start(ctx context.Context) error {
 			return nil
 		})
 	}
+	// Count every bus event in the sink too, by action, resource and
+	// outcome only: never by tenant, which is an app ID and unbounded.
+	if e.tel != nil {
+		e.hooks.On("telemetry", func(_ context.Context, event *hook.Event) error {
+			e.tel.Event(event.Action, event.Resource, event.Outcome)
+			return nil
+		})
+	}
 
 	// Expired rows are swept on a timer for as long as the engine runs;
 	// see engine_retention.go. As with the token sweep above, the start
-	// context's cancellation is not a reason to stop.
-	e.startRetentionSweeper(context.WithoutCancel(ctx))
+	// context's cancellation is not a reason to stop, and its boot span is
+	// dropped so each sweep can be its own trace.
+	e.startRetentionSweeper(telemetry.Detach(context.WithoutCancel(ctx)))
 
 	e.started.Store(true)
 	return nil
@@ -1048,11 +1076,26 @@ func (e *Engine) KeyManager() bridge.KeyManager { return e.keyManager }
 // Relay returns the event relay bridge (may be nil).
 func (e *Engine) Relay() bridge.EventRelay { return e.relay }
 
-// Mailer returns the email bridge (may be nil).
-func (e *Engine) Mailer() bridge.Mailer { return e.mailer }
+// Mailer returns the email bridge (may be nil). Each send through it is a
+// send email span and an observation in the provider latency histogram,
+// whichever Mailer was configured; the no-op mailer is handed back as is.
+func (e *Engine) Mailer() bridge.Mailer {
+	switch e.mailer.(type) {
+	case nil, *bridge.NoopMailer:
+		return e.mailer
+	}
+	return tracedMailer{next: e.mailer, tel: e.tel}
+}
 
-// SMSSender returns the SMS bridge (may be nil).
-func (e *Engine) SMSSender() bridge.SMSSender { return e.sms }
+// SMSSender returns the SMS bridge (may be nil), traced and measured the
+// same way as Mailer.
+func (e *Engine) SMSSender() bridge.SMSSender {
+	switch e.sms.(type) {
+	case nil, *bridge.NoopSMSSender:
+		return e.sms
+	}
+	return tracedSMSSender{next: e.sms, tel: e.tel}
+}
 
 // Herald returns the Herald notification bridge (may be nil).
 func (e *Engine) Herald() bridge.Herald { return e.heraldBridge }

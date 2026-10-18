@@ -5,6 +5,7 @@ import (
 	"time"
 
 	log "github.com/xraph/go-utils/log"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/xraph/grove/migrate"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/sharedsignals/jwksclient"
 	"github.com/xraph/authsome/settings"
@@ -264,7 +266,13 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		p.store = NewMemoryStore()
 	}
 
-	p.jwks = jwksclient.New(jwksclient.Options{})
+	// Key-set fetches are client spans with no host on them (the JWKS URI
+	// is the transmitter's, not a vendor's) and observations under
+	// kind=jwks in the provider latency histogram.
+	p.jwks = jwksclient.New(jwksclient.Options{
+		HTTPClient: telemetry.InstrumentClient(jwksclient.NewHTTPClient(5*time.Second),
+			telemetry.Endpoint{Kind: telemetry.ProviderJWKS, HideHost: true}, telemetry.From(engine)),
+	})
 
 	if p.config.KeyRefreshInterval > 0 {
 		p.refresher = newRefresher(p.config.KeyRefreshInterval, p.refreshKeys)
@@ -282,14 +290,33 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 // visible in the receiver's own error path, but an endpoint that has quietly
 // stopped answering the ticker produces no traffic at all -- and the first
 // symptom, twelve hours later, is a stream that starts refusing SETs.
+//
+// A round with a key set due for a fetch runs in a refresh stream keys root
+// span; a round with nothing due starts none, so an idle ticker mints no
+// traces.
 func (p *Plugin) refreshKeys(ctx context.Context) {
-	for _, failure := range p.jwks.RefreshAll(ctx) {
+	due := p.jwks.Due()
+	if due == 0 {
+		return
+	}
+	ctx, span := telemetry.StartRoot(ctx, spanRefreshStreamKeys,
+		trace.WithAttributes(telemetry.AttrJWKSSets.Int(due)))
+	defer span.End()
+	failures := p.jwks.RefreshAll(ctx)
+	span.SetAttributes(telemetry.AttrJWKSFailed.Int(len(failures)))
+	if len(failures) > 0 {
+		telemetry.Fail(span, "refresh_failed", nil)
+	}
+	for _, failure := range failures {
 		p.logger.Warn("sharedsignals: background JWKS refresh failed",
 			logString("jwks_uri", failure.URI),
 			logString("error", failure.Err.Error()),
 		)
 	}
 }
+
+// spanRefreshStreamKeys is the root span of one background JWKS round.
+const spanRefreshStreamKeys = "refresh stream keys"
 
 // OnShutdown stops the background JWKS refresh and waits for any round
 // already in flight, so the process does not exit with an outbound fetch

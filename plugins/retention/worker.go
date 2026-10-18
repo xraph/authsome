@@ -10,8 +10,10 @@ import (
 	"time"
 
 	log "github.com/xraph/go-utils/log"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 )
 
 // workerDeps is everything the delivery loop needs. It takes function values
@@ -26,6 +28,8 @@ type workerDeps struct {
 	// plain map.
 	Providers *providerRegistry
 	Logger    log.Logger
+	// Tel counts job outcomes and CRM call latency. Nil records nothing.
+	Tel *telemetry.Metrics
 
 	Interval    time.Duration
 	Lease       time.Duration
@@ -152,6 +156,10 @@ func (w *worker) start() {
 
 // startWith begins the loop on a caller-supplied tick channel, so tests drive
 // it deterministically instead of sleeping.
+//
+// The loop's context carries no span. A tick that finds nothing to do (the
+// usual case) makes its claim query outside any trace; a tick that claims
+// jobs, or that purges, starts a root span of its own.
 func (w *worker) startWith(tick <-chan time.Time) {
 	ctx, cancel := context.WithCancel(context.Background())
 	w.cancel = cancel
@@ -195,6 +203,12 @@ func (w *worker) runOnce(ctx context.Context) {
 		w.deps.Logger.Warn("retention: claim failed", log.String("error", err.Error()))
 		return
 	}
+	if len(jobs) == 0 {
+		return
+	}
+	ctx, span := telemetry.StartRoot(ctx, spanDeliverJobs,
+		trace.WithAttributes(telemetry.AttrRetentionJobs.Int(len(jobs))))
+	defer span.End()
 	for _, j := range jobs {
 		w.deliver(ctx, j)
 	}
@@ -235,12 +249,16 @@ func (w *worker) maybePurge(ctx context.Context, now time.Time) {
 		return
 	}
 
+	ctx, span := telemetry.StartRoot(ctx, spanPurgeOutbox)
+	defer span.End()
 	removed, err := w.deps.Store.PurgeTerminal(ctx, doneBefore, auditBefore)
 	if err != nil {
+		telemetry.FailErr(span, err)
 		w.deps.Logger.Warn("retention: outbox purge failed",
 			log.String("error", err.Error()))
 		return
 	}
+	span.SetAttributes(telemetry.AttrRetentionRemoved.Int(removed))
 	if removed > 0 {
 		w.deps.Logger.Info("retention: purged expired outbox rows",
 			log.Int("removed", removed))
@@ -256,11 +274,18 @@ func (w *worker) maybePurge(ctx context.Context, now time.Time) {
 // transient, and running the same bug again on the same row panics again.
 // The rest of the batch carries on.
 func (w *worker) deliver(ctx context.Context, j *Job) {
+	ctx, span := telemetry.Start(ctx, spanDeliverJob, trace.WithAttributes(
+		telemetry.AttrRetentionJobKind.String(jobKindLabel(j.Kind)),
+		telemetry.AttrRetentionProvider.String(w.providerLabel(j)),
+	))
+	defer span.End()
 	defer func() {
 		r := recover()
 		if r == nil {
 			return
 		}
+		telemetry.Fail(span, "panic", nil)
+		w.outcome(ctx, j, telemetry.JobDead)
 		w.deps.Logger.Error("retention: delivery panicked, job dead-lettered",
 			log.String("job_id", j.ID.String()),
 			log.String("provider", j.Provider),
@@ -376,6 +401,7 @@ func (w *worker) deliverOne(ctx context.Context, j *Job) {
 	if err := w.deps.Store.MarkDone(ctx, j.ID, time.Now()); err != nil {
 		w.deps.Logger.Warn("retention: mark done failed", log.String("error", err.Error()))
 	}
+	w.outcome(ctx, j, telemetry.JobDone)
 }
 
 // ensureRef returns the contact's ref, creating the contact when we have not
@@ -455,16 +481,18 @@ func isRetryable(err error) bool {
 // fail either defers the job or parks it. isTerminal short-circuits the retry
 // budget for errors that will never succeed.
 func (w *worker) fail(ctx context.Context, j *Job, cause error, isTerminal bool) {
+	// The CRM's answer goes on the span as a type, never as text: provider
+	// errors quote response bodies, and those carry contact details.
+	telemetry.FailErr(trace.SpanFromContext(ctx), cause)
 	if isTerminal || j.Attempts+1 >= w.deps.MaxAttempts {
+		w.outcome(ctx, j, telemetry.JobDead)
 		if err := w.deps.Store.MarkDead(ctx, j.ID, cause.Error()); err != nil {
 			w.deps.Logger.Warn("retention: mark dead failed", log.String("error", err.Error()))
 		}
-		w.deps.Logger.Warn("retention: job dead-lettered",
-			log.String("job_id", j.ID.String()),
-			log.String("provider", j.Provider),
-			log.String("error", cause.Error()))
+		w.deps.Logger.Warn("retention: job dead-lettered", failureFields(j, cause)...)
 		return
 	}
+	w.outcome(ctx, j, telemetry.JobRetry)
 	_, after := Retryable(cause)
 	if after <= 0 {
 		after = w.backoff(j.Attempts)
@@ -478,12 +506,14 @@ func (w *worker) fail(ctx context.Context, j *Job, cause error, isTerminal bool)
 // where nothing failed and nothing was decided: we are simply not delivering
 // right now. It comes back up roughly one tick later.
 func (w *worker) deferJob(ctx context.Context, j *Job, reason string) {
+	w.outcome(ctx, j, telemetry.JobDeferred)
 	if err := w.deps.Store.MarkDeferred(ctx, j.ID, time.Now().Add(w.deps.Interval), reason); err != nil {
 		w.deps.Logger.Warn("retention: mark deferred failed", log.String("error", err.Error()))
 	}
 }
 
 func (w *worker) suppress(ctx context.Context, j *Job, reason string) {
+	w.outcome(ctx, j, telemetry.JobSuppressed)
 	if err := w.deps.Store.MarkSuppressed(ctx, j.ID, reason); err != nil {
 		w.deps.Logger.Warn("retention: mark suppressed failed", log.String("error", err.Error()))
 	}

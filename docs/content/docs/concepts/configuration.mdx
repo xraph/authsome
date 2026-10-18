@@ -238,6 +238,7 @@ Options are `func(*Engine)` values passed to `authsome.NewEngine`.
 | `WithDispatcher(bridge.Dispatcher)` | Set the background job bridge. |
 | `WithLedger(bridge.Ledger)` | Set the billing bridge. |
 | `WithMetrics(bridge.MetricsCollector)` | Set the metrics bridge. |
+| `WithMetricsSink(metrics.Metrics)` | Record authsome's metric families into a go-utils registry. The Forge extension passes the app's. |
 | `WithBasePath(string)` | Override the URL prefix. |
 | `WithDisableRoutes()` | Set `DisableRoutes` |
 | `WithDriverName(string)` | Set the Grove driver name for plugin migrations |

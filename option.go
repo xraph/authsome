@@ -4,6 +4,7 @@ import (
 	"time"
 
 	log "github.com/xraph/go-utils/log"
+	gometrics "github.com/xraph/go-utils/metrics"
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/appsessionconfig"
@@ -13,6 +14,7 @@ import (
 	"github.com/xraph/authsome/bridge/wardenadapter"
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/dpop"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/lockout"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/ratelimit"
@@ -264,10 +266,32 @@ func WithLockoutConfig(cfg LockoutConfig) Option {
 	}
 }
 
-// WithMetrics sets the metrics collector for observability.
+// WithMetrics sets a bridge.MetricsCollector. The engine hands it every
+// hook-bus event through RecordEvent and its operational signals
+// (audit.record.failed, auth.lockout, control.degraded, and so on) through
+// IncrementCounter. The tenant argument it receives is the app ID, which is
+// unbounded: don't turn it into a metric label.
+//
+// In a Forge app you don't need this. The extension passes the app's
+// registry to WithMetricsSink, which records authsome's own metric
+// families; see that option.
 func WithMetrics(m bridge.MetricsCollector) Option {
 	return func(e *Engine) {
 		e.metrics = m
+	}
+}
+
+// WithMetricsSink records authsome's metric families (sign-in attempts,
+// MFA checks, refreshes, password hashing time, API key and OAuth2 token
+// requests, third-party call latency, retention and the degraded-control
+// counters) into m. A Forge app's registry, fapp.Metrics(), is one; the
+// extension passes it in for you. Nil turns the families off.
+//
+// Every family carries bounded labels only. None is labelled by app,
+// tenant, user, provider name or route.
+func WithMetricsSink(m gometrics.Metrics) Option {
+	return func(e *Engine) {
+		e.tel = telemetry.NewMetrics(m)
 	}
 }
 

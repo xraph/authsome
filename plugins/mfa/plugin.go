@@ -19,6 +19,7 @@ import (
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/settings"
@@ -80,6 +81,8 @@ type Plugin struct {
 	// revoker ends the user's other sessions after a factor changes. Nil in
 	// minimal test wiring, in which case nothing is revoked.
 	revoker sessionRevoker
+	// tel counts every code check. Nil when the engine records no metrics.
+	tel *telemetry.Metrics
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -119,6 +122,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	}
 	p.engine = engine
 	p.revoker = engine
+	p.tel = telemetry.From(engine)
 
 	// Build a persistent, at-rest-encrypted enrollment store when one hasn't
 	// been injected (tests inject via SetStore). TOTP/SMS secrets are wrapped
@@ -495,11 +499,14 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyMFARequest) (*Verify
 
 	ok2, step := ValidateTOTPStep(req.Code, enrollment.Secret)
 	if !ok2 {
+		p.tel.MFAVerification(telemetry.MFAFlowVerify, telemetry.MFAMethodTOTP, telemetry.MFAInvalid)
 		return nil, forge.Unauthorized("invalid TOTP code")
 	}
 	if p.totpStepUsed(ctx.Context(), enrollment.ID, step) {
+		p.tel.MFAVerification(telemetry.MFAFlowVerify, telemetry.MFAMethodTOTP, telemetry.MFAReplayed)
 		return nil, forge.Unauthorized("TOTP code already used")
 	}
+	p.tel.MFAVerification(telemetry.MFAFlowVerify, telemetry.MFAMethodTOTP, telemetry.MFAOK)
 
 	// Mark as verified if this is the first successful verification
 	if !enrollment.Verified {
@@ -574,6 +581,7 @@ func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*Cha
 
 	payload, err := eng.LoadMFATicket(ctx.Context(), req.Ticket)
 	if err != nil {
+		p.tel.MFAVerification(telemetry.MFAFlowSignIn, telemetry.MFAMethodTOTP, telemetry.MFAExpired)
 		return nil, forge.Unauthorized("invalid or expired ticket")
 	}
 	userID := payload.UserID
@@ -591,16 +599,21 @@ func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*Cha
 	// unavailable, which is this endpoint — before the fix they could only be
 	// redeemed from an already-authenticated session, i.e. never when actually
 	// needed.
+	//
+	// A code that matches neither counts as method=totp, which is what the
+	// endpoint reports back.
 	method := "totp"
 	ok2, step := ValidateTOTPStep(req.Code, enrollment.Secret)
 	switch {
 	case ok2:
 		if p.totpStepUsed(ctx.Context(), enrollment.ID, step) {
+			p.tel.MFAVerification(telemetry.MFAFlowSignIn, telemetry.MFAMethodTOTP, telemetry.MFAReplayed)
 			return nil, forge.Unauthorized("TOTP code already used")
 		}
 	default:
 		used, recErr := p.consumeRecoveryCode(ctx.Context(), userID, req.Code)
 		if recErr != nil {
+			p.tel.MFAVerification(telemetry.MFAFlowSignIn, telemetry.MFAMethodRecovery, telemetry.MFAError)
 			return nil, recErr
 		}
 		if !used {
@@ -615,12 +628,15 @@ func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*Cha
 				)
 			}
 			if exhausted {
+				p.tel.MFAVerification(telemetry.MFAFlowSignIn, telemetry.MFAMethodTOTP, telemetry.MFAExhausted)
 				return nil, forge.Unauthorized("too many invalid codes; sign in again")
 			}
+			p.tel.MFAVerification(telemetry.MFAFlowSignIn, telemetry.MFAMethodTOTP, telemetry.MFAInvalid)
 			return nil, forge.Unauthorized("invalid TOTP code")
 		}
 		method = "recovery"
 	}
+	p.tel.MFAVerification(telemetry.MFAFlowSignIn, method, telemetry.MFAOK)
 
 	// Code is good. Consume the ticket (single-use) before minting the
 	// real session so a race that re-uses the ticket can't double-spend.
@@ -854,6 +870,7 @@ func (p *Plugin) handleRecoveryVerify(ctx forge.Context, req *RecoveryVerifyRequ
 	// Fetch all unused recovery codes
 	codes, err := p.store.GetRecoveryCodes(ctx.Context(), userID)
 	if err != nil {
+		p.tel.MFAVerification(telemetry.MFAFlowVerify, telemetry.MFAMethodRecovery, telemetry.MFAError)
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to get recovery codes: %w", err))
 	}
 
@@ -871,13 +888,16 @@ func (p *Plugin) handleRecoveryVerify(ctx forge.Context, req *RecoveryVerifyRequ
 	}
 
 	if matched == nil {
+		p.tel.MFAVerification(telemetry.MFAFlowVerify, telemetry.MFAMethodRecovery, telemetry.MFAInvalid)
 		return nil, forge.Unauthorized("invalid recovery code")
 	}
 
 	// Consume the matched code (one-time use)
 	if err := p.store.ConsumeRecoveryCode(ctx.Context(), matched.ID); err != nil {
+		p.tel.MFAVerification(telemetry.MFAFlowVerify, telemetry.MFAMethodRecovery, telemetry.MFAError)
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to consume recovery code: %w", err))
 	}
+	p.tel.MFAVerification(telemetry.MFAFlowVerify, telemetry.MFAMethodRecovery, telemetry.MFAOK)
 
 	p.audit(ctx.Context(), hook.ActionMFARecoveryUsed, "mfa", matched.ID.String(), userID.String(), "", bridge.OutcomeSuccess)
 	p.emitHook(ctx.Context(), hook.ActionMFARecoveryUsed, "mfa", matched.ID.String(), userID.String(), "")
@@ -1051,17 +1071,21 @@ func (p *Plugin) handleSMSVerify(ctx forge.Context, req *SMSVerifyRequest) (*SMS
 
 	challengeData, err := p.ceremonies.Get(ctx.Context(), "mfa:sms:"+userID.String())
 	if err != nil {
+		p.tel.MFAVerification(telemetry.MFAFlowVerify, telemetry.MFAMethodSMS, telemetry.MFAExpired)
 		return nil, forge.BadRequest("no pending SMS challenge; send a code first")
 	}
 
 	var challenge SMSChallenge
 	if unmarshalErr := json.Unmarshal(challengeData, &challenge); unmarshalErr != nil {
+		p.tel.MFAVerification(telemetry.MFAFlowVerify, telemetry.MFAMethodSMS, telemetry.MFAError)
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to parse challenge: %w", unmarshalErr))
 	}
 
 	if !ValidateSMSCode(req.Code, &challenge) {
+		p.tel.MFAVerification(telemetry.MFAFlowVerify, telemetry.MFAMethodSMS, telemetry.MFAInvalid)
 		return nil, forge.Unauthorized("invalid or expired SMS code")
 	}
+	p.tel.MFAVerification(telemetry.MFAFlowVerify, telemetry.MFAMethodSMS, telemetry.MFAOK)
 
 	// Remove the used challenge
 	_ = p.ceremonies.Delete(ctx.Context(), "mfa:sms:"+userID.String()) //nolint:errcheck // best-effort cleanup

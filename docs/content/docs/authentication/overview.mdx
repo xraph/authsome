@@ -113,12 +113,12 @@ Every authentication operation emits structured events on the hook bus. You can 
 import "github.com/xraph/authsome/hook"
 
 engine.Hooks().Subscribe(hook.ActionSignUp, func(ctx context.Context, evt *hook.Event) {
-    metrics.Increment("auth.signups", map[string]string{"app": evt.Tenant})
+    metrics.Increment("auth.signups", nil)
 })
 
 engine.Hooks().Subscribe(hook.ActionSignIn, func(ctx context.Context, evt *hook.Event) {
     if evt.Err != nil {
-        metrics.Increment("auth.signin_failures", map[string]string{"app": evt.Tenant})
+        metrics.Increment("auth.signin_failures", nil)
     }
 })
 

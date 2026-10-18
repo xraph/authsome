@@ -320,39 +320,40 @@ func classifyHTTPError(resp *http.Response, body []byte, err error) *ProviderErr
 	}
 
 	detail := fmt.Errorf("%s: %s", resp.Status, truncate(body, 512))
+	status := resp.StatusCode
 
-	switch resp.StatusCode {
+	switch status {
 	case http.StatusTooManyRequests:
-		return &ProviderError{Err: detail, Retryable: true, RetryAfter: retryAfter(resp)}
+		return &ProviderError{Err: detail, Retryable: true, RetryAfter: retryAfter(resp), Status: status}
 
 	case http.StatusUnauthorized, http.StatusForbidden:
 		// Whole-integration failure: a bad or revoked token fails every job,
 		// and a dead row is never re-enqueued. Retry flat and slow so a broken
 		// credential does not burn its budget inside the first minute.
-		return &ProviderError{Err: detail, Retryable: true, RetryAfter: 2 * time.Minute}
+		return &ProviderError{Err: detail, Retryable: true, RetryAfter: 2 * time.Minute, Status: status}
 
 	case http.StatusNotFound:
 		// Deleted upstream. Drop the ref so the retry recreates the contact
 		// instead of updating a record that is gone.
-		return &ProviderError{Err: detail, Retryable: true, DropRef: true}
+		return &ProviderError{Err: detail, Retryable: true, DropRef: true, Status: status}
 
 	case http.StatusRequestTimeout, http.StatusConflict:
-		return &ProviderError{Err: detail, Retryable: true}
+		return &ProviderError{Err: detail, Retryable: true, Status: status}
 
 	case http.StatusNotImplemented:
 		// The endpoint does not implement this. Configuration, not weather.
-		return &ProviderError{Err: detail}
+		return &ProviderError{Err: detail, Status: status}
 	}
 
-	if resp.StatusCode >= 500 {
-		return &ProviderError{Err: detail, Retryable: true}
+	if status >= 500 {
+		return &ProviderError{Err: detail, Retryable: true, Status: status}
 	}
 
 	// Every other 4xx is this job's own payload: 400, 422, 413. It will not
 	// become valid on the ninth attempt. Anything unrecognised is terminal
 	// too, matching the package rule that an unclassified failure does not
 	// retry forever.
-	return &ProviderError{Err: detail}
+	return &ProviderError{Err: detail, Status: status}
 }
 
 // retryAfter parses the response's RFC 7231 Retry-After header, in both its

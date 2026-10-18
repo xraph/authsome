@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/xraph/forge"
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/xraph/authsome"
 	"github.com/xraph/authsome/hook"
@@ -160,7 +159,7 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 	if client.Public {
 		return nil, forge.BadRequest("token exchange not allowed for public clients")
 	}
-	if cmpErr := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(req.ClientSecret)); cmpErr != nil {
+	if cmpErr := compareClientSecret(ctx.Context(), client.ClientSecret, req.ClientSecret); cmpErr != nil {
 		return nil, forge.Unauthorized("invalid client_secret")
 	}
 	if !p.clientSupportsGrant(client, tokenExchangeGrantType) {
