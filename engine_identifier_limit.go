@@ -7,6 +7,7 @@ import (
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 )
 
 // AllowIdentifier counts an attempt against an identifier (an email, a
@@ -30,17 +31,15 @@ func (e *Engine) AllowIdentifier(ctx context.Context, scope string, appID id.App
 			log.String("scope", scope),
 			log.String("error", err.Error()),
 		)
-		if e.metrics != nil {
-			e.metrics.IncrementCounter("ratelimit.error", appID.String())
-		}
+		e.limiterError(telemetry.LimiterIdentifier, appID.String())
 		if e.config.RateLimit.FailOpen {
-			e.count("control.degraded", appID.String())
+			e.controlDegraded(telemetry.ControlIdentifierLimit, appID.String())
 			return nil
 		}
 		return account.ErrRateLimited
 	}
 	if !allowed {
-		e.count("identifier_limit.rejected", appID.String())
+		e.throttled(telemetry.LimiterIdentifier, appID.String())
 		return account.ErrRateLimited
 	}
 	return nil

@@ -5,6 +5,7 @@ import (
 
 	"github.com/xraph/forge"
 
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/ratelimit"
 )
@@ -58,11 +59,11 @@ func (e *Engine) RateLimitMiddlewareConfig(limit int) middleware.RateLimitConfig
 		Window:   cfg.Window(),
 		FailOpen: cfg.FailOpen,
 		OnError: func(err error) {
-			e.count("ratelimit.error", "")
+			e.limiterError(telemetry.LimiterRoute, "")
 			e.logger.Warn("authsome: rate limiter error", log.String("error", err.Error()))
 		},
-		OnReject:   func() { e.count("ratelimit.rejected", "") },
-		OnFailOpen: func() { e.count("control.degraded", "") },
+		OnReject:   func() { e.throttled(telemetry.LimiterRoute, "") },
+		OnFailOpen: func() { e.controlDegraded(telemetry.ControlRateLimit, "") },
 	}
 }
 

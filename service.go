@@ -29,6 +29,7 @@ import (
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/page"
 	"github.com/xraph/authsome/principal"
@@ -85,7 +86,7 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 		if breachErr != nil {
 			// Fail open, and say so: a breach check that could not run is a
 			// control that did not run.
-			e.count("control.degraded", req.AppID.String())
+			e.controlDegraded(telemetry.ControlBreachCheck, req.AppID.String())
 		}
 		if breached {
 			return nil, nil, account.ErrPasswordBreached
@@ -1271,7 +1272,7 @@ func (e *Engine) checkPasswordHistory(ctx context.Context, userID id.UserID, new
 	entries, err := e.passwordHistory.GetPasswordHistory(ctx, userID, e.config.Password.HistoryCount)
 	if err != nil {
 		e.logger.Warn("authsome: password history lookup failed", log.String("error", err.Error()))
-		e.count("control.degraded", "")
+		e.controlDegraded(telemetry.ControlPasswordHistory, "")
 		return nil // fail open — don't block the user
 	}
 	for _, entry := range entries {

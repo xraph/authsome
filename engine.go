@@ -40,6 +40,7 @@ import (
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/lockout"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
@@ -115,6 +116,10 @@ type Engine struct {
 	dispatcher   bridge.Dispatcher
 	ledger       bridge.Ledger
 	metrics      bridge.MetricsCollector
+
+	// tel holds authsome's own metric families, recorded into the sink
+	// WithMetricsSink was given. Nil records nothing.
+	tel *telemetry.Metrics
 
 	// tokenEncryptor encrypts at-rest secrets such as third-party OAuth
 	// access/refresh tokens. Defaults to bridge.NoopEncryptor when no
@@ -606,7 +611,7 @@ func (e *Engine) resolveExpectedAudience(ctx context.Context, appID string) []st
 	opts := settings.ResolveOpts{AppID: appID}
 	identifier, err := settings.Get(ctx, mgr, SettingResourceIdentifier, opts)
 	if err != nil {
-		e.count("control.degraded", appID)
+		e.controlDegraded(telemetry.ControlSettings, appID)
 		return nil
 	}
 	if identifier == "" {
@@ -787,6 +792,7 @@ func (e *Engine) Start(ctx context.Context) error {
 			if e.metrics != nil {
 				e.metrics.IncrementCounter("audit.record.failed", event.Tenant)
 			}
+			e.tel.AuditRecordFailed()
 			return err
 		}
 		return nil
@@ -796,6 +802,14 @@ func (e *Engine) Start(ctx context.Context) error {
 	if e.metrics != nil {
 		e.hooks.On("metrics", func(_ context.Context, event *hook.Event) error {
 			e.metrics.RecordEvent(event.Action, event.Resource, event.Outcome, event.Tenant, 0)
+			return nil
+		})
+	}
+	// Count every bus event in the sink too, by action, resource and
+	// outcome only: never by tenant, which is an app ID and unbounded.
+	if e.tel != nil {
+		e.hooks.On("telemetry", func(_ context.Context, event *hook.Event) error {
+			e.tel.Event(event.Action, event.Resource, event.Outcome)
 			return nil
 		})
 	}
