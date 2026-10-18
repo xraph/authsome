@@ -439,6 +439,7 @@ func (e *Engine) buildAuthMiddleware() {
 	bindCfg := e.DPoPBindingConfig()
 	bindCfg.CookieNameResolver = e.resolveSessionCookieName
 	bindCfg.JWTSessionChecker = e.JWTSessionChecker
+	bindCfg.JWTSessionContextChecker = e.JWTSessionContextChecker
 	bindCfg.ExpectedAudienceResolver = e.resolveExpectedAudience
 	bindCfg.PrincipalResolver = e.ResolvePrincipalByRef
 
@@ -627,7 +628,16 @@ func (e *Engine) resolveExpectedAudience(ctx context.Context, appID string) []st
 // active; when it is off, nil, nil is returned to skip the store lookup and
 // the binding checks. The setting defaults to on.
 func (e *Engine) JWTSessionChecker(appIDStr, sessionIDStr string) (*session.Session, error) {
-	ctx := context.Background()
+	return e.JWTSessionContextChecker(context.Background(), appIDStr, sessionIDStr)
+}
+
+// JWTSessionContextChecker is JWTSessionChecker for a caller that has the
+// request's context. The lookup runs on context.WithoutCancel(ctx): it
+// keeps the request's values, so its queries show up in the request's
+// trace, and drops its cancellation and deadline, so it behaves exactly as
+// it did on context.Background().
+func (e *Engine) JWTSessionContextChecker(ctx context.Context, appIDStr, sessionIDStr string) (*session.Session, error) {
+	ctx = context.WithoutCancel(ctx)
 
 	// Check if the feature is enabled via dynamic settings.
 	mgr := e.Settings()
@@ -697,7 +707,10 @@ func (e *Engine) Start(ctx context.Context) error {
 	// waits on the sweep, and a large table must not hold up boot. The
 	// start context's values travel with the sweep but its cancellation
 	// does not, since Start returning is not a reason to stop converting.
-	sweepCtx := context.WithoutCancel(ctx)
+	// Its span does not travel either: forge runs Start inside a boot span,
+	// and every query the sweep makes would otherwise hang off a trace that
+	// ended at startup.
+	sweepCtx := telemetry.Detach(context.WithoutCancel(ctx))
 	e.spawn(func() { e.hashLegacyTokens(sweepCtx) })
 	// Webhook rows from before webhooks became Relay endpoints are given
 	// one in the background, for the same reasons.
@@ -816,8 +829,9 @@ func (e *Engine) Start(ctx context.Context) error {
 
 	// Expired rows are swept on a timer for as long as the engine runs;
 	// see engine_retention.go. As with the token sweep above, the start
-	// context's cancellation is not a reason to stop.
-	e.startRetentionSweeper(context.WithoutCancel(ctx))
+	// context's cancellation is not a reason to stop, and its boot span is
+	// dropped so each sweep can be its own trace.
+	e.startRetentionSweeper(telemetry.Detach(context.WithoutCancel(ctx)))
 
 	e.started.Store(true)
 	return nil

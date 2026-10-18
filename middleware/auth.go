@@ -134,6 +134,11 @@ type JWTValidator interface {
 // rather than the global one.
 type SessionExistsChecker func(appID, sessionID string) (*session.Session, error)
 
+// SessionExistsContextChecker is SessionExistsChecker with the request's
+// context, so the store lookup carries the request's values (its trace
+// span among them).
+type SessionExistsContextChecker func(ctx context.Context, appID, sessionID string) (*session.Session, error)
+
 // CookieNameResolver returns the session cookie name for the current context.
 // When nil, the default "authsome_session_token" is used.
 type CookieNameResolver func(ctx context.Context) string
@@ -201,6 +206,10 @@ type SessionBindingConfig struct {
 
 	// DPoPAudit records a DPoP failure. Nil disables recording.
 	DPoPAudit func(ctx context.Context, action string, md map[string]string)
+
+	// JWTSessionContextChecker is JWTSessionChecker taking the request's
+	// context. When both are set this one is used.
+	JWTSessionContextChecker SessionExistsContextChecker
 }
 
 // AuthMiddleware extracts the session token from the Authorization header,
@@ -554,8 +563,14 @@ func tryJWTAuth(
 	// When a session checker is configured, cross-check the JWT's session ID
 	// against the store. This enables revocation and IP/device binding for JWTs.
 	// The checker returns (nil, nil) when the feature is disabled via settings.
-	if bindCfg.JWTSessionChecker != nil && claims.SessionID != "" {
-		sess, sessErr := bindCfg.JWTSessionChecker(claims.AppID, claims.SessionID)
+	if (bindCfg.JWTSessionContextChecker != nil || bindCfg.JWTSessionChecker != nil) && claims.SessionID != "" {
+		var sess *session.Session
+		var sessErr error
+		if bindCfg.JWTSessionContextChecker != nil {
+			sess, sessErr = bindCfg.JWTSessionContextChecker(ctx.Context(), claims.AppID, claims.SessionID)
+		} else {
+			sess, sessErr = bindCfg.JWTSessionChecker(claims.AppID, claims.SessionID)
+		}
 		if sessErr != nil {
 			logger.Debug("auth middleware: JWT session not found in store (revoked?)",
 				log.String("session_id", claims.SessionID),
