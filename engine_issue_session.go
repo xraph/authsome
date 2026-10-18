@@ -11,12 +11,14 @@ import (
 	"time"
 
 	log "github.com/xraph/go-utils/log"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/user"
 )
@@ -164,7 +166,43 @@ type MFATicketPayload struct {
 // Returns (*IssueSessionResult, nil) on success.
 // Returns (nil, *MFARequiredError) when the gate fires.
 // Returns (nil, err) for any other failure.
+//
+// Because every sign-in reaches it, this is also where a sign-in attempt is
+// counted, under the normalized auth method. A call that completes an MFA
+// challenge is not a new attempt (the MFA plugin counts the code check), so
+// it gets the span but not the count.
 func (e *Engine) IssueSession(ctx context.Context, req *IssueSessionRequest) (*IssueSessionResult, error) {
+	var method string
+	var mfaVerified bool
+	if req != nil {
+		method, mfaVerified = telemetry.AuthMethod(req.AuthMethod), req.MFAJustVerified
+	}
+	ctx, span := telemetry.Start(ctx, spanIssueSession, trace.WithAttributes(
+		telemetry.AttrAuthMethod.String(method),
+		telemetry.AttrMFAVerified.Bool(mfaVerified),
+	))
+	defer span.End()
+
+	res, err := e.issueSession(ctx, req)
+
+	result := signInResult(err)
+	span.SetAttributes(
+		telemetry.AttrResult.String(result),
+		telemetry.AttrMFARequired.Bool(result == telemetry.SignInMFARequired),
+	)
+	if result == telemetry.SignInError {
+		telemetry.FailErr(span, err)
+	}
+	if res != nil && res.Session != nil {
+		span.SetAttributes(telemetry.AttrSessionFormat.String(sessionFormat(res.Session.Token)))
+	}
+	if !mfaVerified {
+		e.tel.SignIn(method, result)
+	}
+	return res, err
+}
+
+func (e *Engine) issueSession(ctx context.Context, req *IssueSessionRequest) (*IssueSessionResult, error) {
 	if req == nil || req.User == nil {
 		return nil, fmt.Errorf("authsome: IssueSession: nil request or user")
 	}
@@ -237,7 +275,7 @@ func (e *Engine) IssueSession(ctx context.Context, req *IssueSessionRequest) (*I
 	}
 	e.bindSessionToDevice(ctx, sess, req.AppID, req.EnvID, req.IPAddress, req.UserAgent)
 	if hookErr := e.plugins.EmitBeforeSessionCreate(ctx, sess); hookErr != nil {
-		return nil, fmt.Errorf("authsome: before session create: %w", hookErr)
+		return nil, &hookRefusedError{fmt.Errorf("authsome: before session create: %w", hookErr)}
 	}
 	e.enforceSessionCap(ctx, req.User.ID, sessCfg.MaxActiveSessions)
 	if storeErr := e.store.CreateSession(ctx, sess); storeErr != nil {
