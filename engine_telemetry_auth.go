@@ -183,3 +183,19 @@ func (e *Engine) consumeDummyVerify(ctx context.Context, password string) {
 	policy := e.ConsumeDummyHash(password)
 	e.tel.PasswordHash(telemetry.PasswordVerify, passwordAlgorithm(policy), time.Since(start))
 }
+
+// ConsumeDummyHashContext is ConsumeDummyHash for sign-up's duplicate-address
+// path. It hashes under the same hash password span, with the same
+// algorithm attribute, and records into the same histogram as a real
+// sign-up's hash, so the duplicate looks like a fresh sign-up in a trace and
+// on a metric as well as in the response time.
+func (e *Engine) ConsumeDummyHashContext(ctx context.Context, password string) account.PasswordPolicy {
+	algorithm := passwordAlgorithm(e.passwordPolicy())
+	_, span := telemetry.Start(ctx, spanHashPassword,
+		trace.WithAttributes(telemetry.AttrPasswordAlgorithm.String(algorithm)))
+	defer span.End()
+	start := time.Now()
+	policy := e.ConsumeDummyHash(password)
+	e.tel.PasswordHash(telemetry.PasswordHash, algorithm, time.Since(start))
+	return policy
+}

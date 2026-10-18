@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -171,7 +172,7 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 			// emails and use the response time to enumerate registered
 			// addresses (duplicate ~1ms vs fresh ~100ms+). Result is
 			// discarded.
-			a.consumeDummyHashBudget(req.Password)
+			a.consumeDummyHashBudget(ctx.Context(), req.Password)
 			return nil, ctx.JSON(http.StatusCreated, a.syntheticSignupResponse(req.Email, appID))
 		}
 		return nil, mapErrorCtx(ctx, err)
@@ -186,10 +187,14 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 // the duplicate-email path so the response time matches a real signup. Any
 // error from the hash function is intentionally ignored — this is purely a
 // time-budget consumer.
-func (a *API) consumeDummyHashBudget(password string) {
+//
+// It runs under the same hash password span, and lands in the same hash
+// histogram, as a fresh sign-up's real hash, so an operator reading traces
+// or metrics can't tell the duplicate from the fresh sign-up either.
+func (a *API) consumeDummyHashBudget(ctx context.Context, password string) {
 	// The engine owns the hash and its policy; sign-in's unknown-identifier
 	// path spends the same budget through the same method.
-	policy := a.engine.ConsumeDummyHash(password)
+	policy := a.engine.ConsumeDummyHashContext(ctx, password)
 
 	// Test-only observation point (nil in production). Reports the policy
 	// actually used so a test can assert the duplicate path hashes with the
