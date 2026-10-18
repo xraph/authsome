@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/internal/telemetry"
 )
 
 // ResendMailer delivers email via the Resend HTTP API.
@@ -40,9 +41,10 @@ func NewResendMailer(apiKey, fromAddr string, opts ...ResendOption) *ResendMaile
 	m := &ResendMailer{
 		apiKey:   apiKey,
 		fromAddr: fromAddr,
-		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
-		},
+		// Each call is a client span with the host and status on it and
+		// nothing from the message.
+		httpClient: telemetry.InstrumentClient(&http.Client{Timeout: 10 * time.Second},
+			telemetry.Endpoint{Kind: telemetry.ProviderEmail}, nil),
 		baseURL: "https://api.resend.com",
 	}
 	for _, opt := range opts {

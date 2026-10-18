@@ -1076,11 +1076,26 @@ func (e *Engine) KeyManager() bridge.KeyManager { return e.keyManager }
 // Relay returns the event relay bridge (may be nil).
 func (e *Engine) Relay() bridge.EventRelay { return e.relay }
 
-// Mailer returns the email bridge (may be nil).
-func (e *Engine) Mailer() bridge.Mailer { return e.mailer }
+// Mailer returns the email bridge (may be nil). Each send through it is a
+// send email span and an observation in the provider latency histogram,
+// whichever Mailer was configured; the no-op mailer is handed back as is.
+func (e *Engine) Mailer() bridge.Mailer {
+	switch e.mailer.(type) {
+	case nil, *bridge.NoopMailer:
+		return e.mailer
+	}
+	return tracedMailer{next: e.mailer, tel: e.tel}
+}
 
-// SMSSender returns the SMS bridge (may be nil).
-func (e *Engine) SMSSender() bridge.SMSSender { return e.sms }
+// SMSSender returns the SMS bridge (may be nil), traced and measured the
+// same way as Mailer.
+func (e *Engine) SMSSender() bridge.SMSSender {
+	switch e.sms.(type) {
+	case nil, *bridge.NoopSMSSender:
+		return e.sms
+	}
+	return tracedSMSSender{next: e.sms, tel: e.tel}
+}
 
 // Herald returns the Herald notification bridge (may be nil).
 func (e *Engine) Herald() bridge.Herald { return e.heraldBridge }

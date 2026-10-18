@@ -22,12 +22,22 @@ type BreachChecker struct {
 	baseURL string
 }
 
+// BreachCheckTimeout bounds one HIBP range lookup.
+const BreachCheckTimeout = 5 * time.Second
+
 // NewBreachChecker creates a new breach checker with sensible defaults.
 func NewBreachChecker() *BreachChecker {
+	return NewBreachCheckerWithClient(nil)
+}
+
+// NewBreachCheckerWithClient is NewBreachChecker sending its lookups
+// through client. A nil client is a plain one with BreachCheckTimeout.
+func NewBreachCheckerWithClient(client *http.Client) *BreachChecker {
+	if client == nil {
+		client = &http.Client{Timeout: BreachCheckTimeout}
+	}
 	return &BreachChecker{
-		client: &http.Client{
-			Timeout: 5 * time.Second,
-		},
+		client:  client,
 		baseURL: "https://api.pwnedpasswords.com/range/",
 	}
 }
@@ -36,6 +46,12 @@ func NewBreachChecker() *BreachChecker {
 // Returns true if the password hash appears in the HIBP database.
 // On network errors, returns false (fail-open to avoid blocking auth).
 func (bc *BreachChecker) IsBreached(password string) (bool, error) {
+	return bc.IsBreachedContext(context.Background(), password)
+}
+
+// IsBreachedContext is IsBreached with the lookup made under ctx, so it
+// carries ctx's values (its trace span among them) and stops when ctx does.
+func (bc *BreachChecker) IsBreachedContext(ctx context.Context, password string) (bool, error) {
 	// SHA-1 hash the password
 	// #nosec G401 -- SHA-1 is mandated by the HIBP k-Anonymity range API; this is a breach lookup, not password storage.
 	h := sha1.New()
@@ -45,7 +61,7 @@ func (bc *BreachChecker) IsBreached(password string) (bool, error) {
 	prefix := hash[:5]
 	suffix := hash[5:]
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, bc.baseURL+prefix, http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, bc.baseURL+prefix, http.NoBody)
 	if err != nil {
 		return false, nil //nolint:nilerr // fail-open: don't block auth on request build errors
 	}

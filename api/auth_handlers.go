@@ -44,10 +44,11 @@ func (a *API) captchaOpt(action string) []forge.RouteOption {
 	}
 	return []forge.RouteOption{
 		forge.WithMiddleware(middleware.CaptchaMiddleware(middleware.CaptchaOptions{
-			Settings:  mgr,
-			Action:    action,
-			Chronicle: bridge.NewBusChronicle(a.engine.Hooks()),
-			Logger:    a.engine.Logger(),
+			Settings:    mgr,
+			Action:      action,
+			Chronicle:   bridge.NewBusChronicle(a.engine.Hooks()),
+			Logger:      a.engine.Logger(),
+			VerifierFor: a.captchaVerifierFor,
 		})),
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/internal/telemetry"
 )
 
 // TwilioSender implements bridge.SMSSender via the Twilio REST API.
@@ -32,8 +33,10 @@ func NewTwilioSender(accountSID, authToken, fromNumber string) *TwilioSender {
 		authToken:  authToken,
 		fromNumber: fromNumber,
 		// A deadline on every outbound call: a stalled SMS provider must
-		// not hold a sign-in open indefinitely.
-		client: &http.Client{Timeout: 10 * time.Second},
+		// not hold a sign-in open indefinitely. Each call is a client span
+		// with no path on it: Twilio's path carries the account SID.
+		client: telemetry.InstrumentClient(&http.Client{Timeout: 10 * time.Second},
+			telemetry.Endpoint{Kind: telemetry.ProviderSMS}, nil),
 	}
 }
 

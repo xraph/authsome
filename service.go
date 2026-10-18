@@ -82,7 +82,7 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 
 	// Breach check (fail-open on network errors)
 	if policy.CheckBreached {
-		breached, breachErr := account.NewBreachChecker().IsBreached(req.Password)
+		breached, breachErr := e.isBreached(ctx, req.Password)
 		if breachErr != nil {
 			// Fail open, and say so: a breach check that could not run is a
 			// control that did not run.
@@ -1596,7 +1596,7 @@ func (e *Engine) ResetPassword(ctx context.Context, token, newPassword string) e
 
 	// Breach check
 	if policy.CheckBreached {
-		if breached, _ := account.NewBreachChecker().IsBreached(newPassword); breached { //nolint:errcheck // best-effort check
+		if breached, _ := e.isBreached(ctx, newPassword); breached { //nolint:errcheck // best-effort check
 			return account.ErrPasswordBreached
 		}
 	}
@@ -1677,7 +1677,7 @@ func (e *Engine) ChangePassword(ctx context.Context, userID id.UserID, currentPa
 
 	// Breach check
 	if policy.CheckBreached {
-		if breached, _ := account.NewBreachChecker().IsBreached(newPassword); breached { //nolint:errcheck // best-effort check
+		if breached, _ := e.isBreached(ctx, newPassword); breached { //nolint:errcheck // best-effort check
 			return account.ErrPasswordBreached
 		}
 	}
