@@ -398,7 +398,18 @@
         "properties": {
           "connections": {
             "items": {
-              "$ref": "#/components/schemas/Connection"
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/Connection"
+                },
+                {
+                  "enum": [
+                    null
+                  ],
+                  "nullable": true,
+                  "type": "object"
+                }
+              ]
             },
             "type": "array"
           }
@@ -537,7 +548,18 @@
           },
           "service_accounts": {
             "items": {
-              "$ref": "#/components/schemas/AdminServiceAccountResponse"
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/AdminServiceAccountResponse"
+                },
+                {
+                  "enum": [
+                    null
+                  ],
+                  "nullable": true,
+                  "type": "object"
+                }
+              ]
             },
             "type": "array"
           },
@@ -1755,7 +1777,18 @@
           "consents": {
             "description": "List of consent records",
             "items": {
-              "$ref": "#/components/schemas/Consent"
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/Consent"
+                },
+                {
+                  "enum": [
+                    null
+                  ],
+                  "nullable": true,
+                  "type": "object"
+                }
+              ]
             },
             "type": "array"
           },
@@ -2435,7 +2468,18 @@
           "definitions": {
             "description": "Setting definitions in this group",
             "items": {
-              "$ref": "#/components/schemas/Definition"
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/Definition"
+                },
+                {
+                  "enum": [
+                    null
+                  ],
+                  "nullable": true,
+                  "type": "object"
+                }
+              ]
             },
             "type": "array"
           },
@@ -3402,7 +3446,18 @@
         "properties": {
           "methods": {
             "items": {
-              "$ref": "#/components/schemas/AuthMethod"
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/AuthMethod"
+                },
+                {
+                  "enum": [
+                    null
+                  ],
+                  "nullable": true,
+                  "type": "object"
+                }
+              ]
             },
             "type": "array"
           }
@@ -3416,7 +3471,18 @@
         "properties": {
           "clients": {
             "items": {
-              "$ref": "#/components/schemas/OAuth2Client"
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/OAuth2Client"
+                },
+                {
+                  "enum": [
+                    null
+                  ],
+                  "nullable": true,
+                  "type": "object"
+                }
+              ]
             },
             "type": "array"
           }
@@ -4165,7 +4231,18 @@
         "properties": {
           "credentials": {
             "items": {
-              "$ref": "#/components/schemas/CredentialInfo"
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/CredentialInfo"
+                },
+                {
+                  "enum": [
+                    null
+                  ],
+                  "nullable": true,
+                  "type": "object"
+                }
+              ]
             },
             "type": "array"
           }
@@ -4638,7 +4715,18 @@
           "settings": {
             "description": "Resolved settings with scope cascade details",
             "items": {
-              "$ref": "#/components/schemas/ResolvedSetting"
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ResolvedSetting"
+                },
+                {
+                  "enum": [
+                    null
+                  ],
+                  "nullable": true,
+                  "type": "object"
+                }
+              ]
             },
             "type": "array"
           }
@@ -30685,7 +30773,7 @@
     },
     "/v1/orgs/invitations/accept": {
       "post": {
-        "description": "Accepts a pending organization invitation using the invitation token.",
+        "description": "Accepts a pending organization invitation using the invitation token. The signed-in user must own the email the invitation was sent to.",
         "operationId": "acceptInvitation",
         "requestBody": {
           "content": {
