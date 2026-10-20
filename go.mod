@@ -17,13 +17,13 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	github.com/xraph/chronicle v1.9.0
 	github.com/xraph/dispatch v1.9.1
-	github.com/xraph/forge v1.12.9
+	github.com/xraph/forge v1.12.10
 	github.com/xraph/forge/extensions/auth v1.12.9
 	github.com/xraph/go-utils v1.4.1
-	github.com/xraph/grove v1.8.0
-	github.com/xraph/grove/drivers/mongodriver v1.8.0
-	github.com/xraph/grove/drivers/pgdriver v1.8.0
-	github.com/xraph/grove/drivers/sqlitedriver v1.8.0
+	github.com/xraph/grove v1.9.0
+	github.com/xraph/grove/drivers/mongodriver v1.9.0
+	github.com/xraph/grove/drivers/pgdriver v1.9.0
+	github.com/xraph/grove/drivers/sqlitedriver v1.9.0
 	github.com/xraph/herald v1.8.0
 	github.com/xraph/keysmith v1.8.0
 	github.com/xraph/ledger v1.8.0
