@@ -1791,6 +1791,7 @@ func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.
 				Scopes:    scopes,
 				Audience:  resources,
 				DPoPJKT:   jkt,
+				ClientID:  sess.ClientID,
 				IssuedAt:  sess.CreatedAt,
 				ExpiresAt: sess.ExpiresAt,
 			})

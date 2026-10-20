@@ -830,9 +830,13 @@ func (e *Engine) rotateSession(ctx context.Context, sess *session.Session, opts 
 			SessionID: sess.ID.String(),
 			// Without this the first refresh turns a token bound to one
 			// resource server into an unrestricted one, silently.
-			Audience:  sess.Audience,
-			Scopes:    sess.Scopes,
-			DPoPJKT:   sess.DPoPJKT,
+			Audience: sess.Audience,
+			Scopes:   sess.Scopes,
+			DPoPJKT:  sess.DPoPJKT,
+			// A refreshed OAuth2 token is still the client's. Dropping
+			// this would hand the client a token the middleware treats
+			// as the user's own login.
+			ClientID:  sess.ClientID,
 			IssuedAt:  sess.UpdatedAt,
 			ExpiresAt: sess.ExpiresAt,
 		})
