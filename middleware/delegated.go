@@ -74,6 +74,22 @@ func DenyDelegatedSession() forge.Middleware {
 	}
 }
 
+// DenyDelegatedWrites is DenyDelegatedSession for POST, PUT, PATCH and DELETE
+// only. It knows nothing about AgentSafe, so use it on a group with no
+// agent-safe routes, ahead of a permission check, where the deny-by-default
+// interceptor would otherwise refuse too late: after the check had already
+// told a delegated caller whether its user may write there.
+func DenyDelegatedWrites() forge.Middleware {
+	return func(next forge.Handler) forge.Handler {
+		return func(ctx forge.Context) error {
+			if !readOnlyMethod(ctx.Request().Method) && RefuseDelegated(ctx.Context()) != nil {
+				return forge.Forbidden(DelegatedWriteMessage)
+			}
+			return next(ctx)
+		}
+	}
+}
+
 // AgentSafeMetadataKey is the route metadata key AgentSafe sets.
 const AgentSafeMetadataKey = "authsome.agent_safe"
 
@@ -148,9 +164,11 @@ func DelegatedWriteInterceptor() interceptors.Interceptor {
 // middleware under this guard two rules to keep. It must not change state,
 // since it runs before the refusal. And a permission check that answers
 // differently from the refusal tells a delegated caller what its user may do,
-// so put DenyDelegatedSession ahead of it on the route (authsome's own routes
-// all do). Moving the refusal ahead of route middleware would need the
-// matched route before middleware runs, which forge doesn't expose.
+// so put DenyDelegatedSession ahead of it, or DenyDelegatedWrites where reads
+// should stay open. Every authsome write route does, group or route level,
+// and the deny-by-default table test in api checks it with agents acting for
+// an unprivileged user. Moving the refusal ahead of route middleware would
+// need the matched route before middleware runs, which forge doesn't expose.
 func GuardDelegatedWrites(router forge.Router) forge.Router {
 	return router.Group("", interceptors.WithGroupInterceptor(DelegatedWriteInterceptor()))
 }

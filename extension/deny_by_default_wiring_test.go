@@ -92,8 +92,8 @@ func TestExtension_EveryWriteRouteCarriesTheDelegatedWriteGuard(t *testing.T) {
 	writes := 0
 	seenSafe := map[string]bool{}
 	for _, r := range app.Router().Routes() {
-		if !strings.HasPrefix(r.Path, "/authsome") && !strings.HasPrefix(r.Path, "/.well-known") {
-			continue // forge's own routes
+		if strings.HasPrefix(r.Path, "/_") {
+			continue // forge's own routes (/_/health, /_/metrics, ...)
 		}
 		key := r.Method + " " + r.Path
 
@@ -105,11 +105,10 @@ func TestExtension_EveryWriteRouteCarriesTheDelegatedWriteGuard(t *testing.T) {
 			t.Errorf("%s carries the agent-safe metadata key", key)
 		}
 
-		switch r.Method {
-		case http.MethodGet, http.MethodHead, http.MethodOptions:
-			continue
-		}
-		writes++
+		// Every route authsome mounts carries the interceptor, reads
+		// included: the interceptor itself lets reads through, and checking
+		// them is what catches a root router (which only serves GETs today)
+		// mounted without the guard.
 		guarded := false
 		for _, i := range r.Interceptors {
 			if i.Name() == middleware.DelegatedWriteInterceptorName {
@@ -118,6 +117,12 @@ func TestExtension_EveryWriteRouteCarriesTheDelegatedWriteGuard(t *testing.T) {
 		}
 		assert.True(t, guarded, "%s has no delegated-write interceptor", key)
 		assert.False(t, r.SkipInterceptors[middleware.DelegatedWriteInterceptorName], "%s skips the delegated-write interceptor", key)
+
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+		default:
+			writes++
+		}
 	}
 
 	assert.Greater(t, writes, 100, "the check has to see the real routes")

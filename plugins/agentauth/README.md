@@ -144,8 +144,10 @@ the delegation's scopes the same way you name grant scopes. With no covering sco
 
 The rule is an interceptor, and interceptors run after a route's own middleware. So route
 middleware on an authsome router must not change state, and a permission check there should sit
-behind `middleware.DenyDelegatedSession()`, or an agent can tell from the answer what its user may
-do. Authsome's own routes follow both rules. The rule lives in
+behind `middleware.DenyDelegatedSession()` (or `DenyDelegatedWrites()` where reads stay open), or an
+agent can tell from the answer what its user may do. Every authsome write route follows both
+rules, and a test checks it with agents acting for a user who holds no admin rights. The rule
+lives in
 `middleware.GuardDelegatedWrites`, an interceptor on a router group. The API registers its routes
 through one, and the Forge extension hands one to every plugin's `RegisterRoutes`. If you mount
 authsome's plugins on a router yourself, pass them `middleware.GuardDelegatedWrites(router)`.

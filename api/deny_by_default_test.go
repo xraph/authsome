@@ -32,6 +32,8 @@ import (
 	"github.com/xraph/authsome/plugins/sso"
 	"github.com/xraph/authsome/plugins/subscription"
 	"github.com/xraph/authsome/plugins/waitlist"
+	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/serviceaccount"
 )
 
 // agentSafeWrites is every write route a delegated session may call. Keep it
@@ -58,6 +60,34 @@ type denyByDefaultFixture struct {
 	appID      id.AppID
 	agents     *agentauth.Plugin
 	grant      *agentauth.AgentGrant
+	plainGrant *agentauth.AgentGrant
+	plain      id.UserID
+	actor      principal.Ref
+}
+
+// callers are the delegated sessions the table runs as: an agent for the
+// platform owner, and an agent and an exchanged session for a user with no
+// admin rights. The unprivileged ones matter most. A permission check that
+// answers before the delegated refusal shows up there as "insufficient
+// permissions", which would tell the agent what its user may do.
+func (f *denyByDefaultFixture) callers() map[string]func(t *testing.T) string {
+	return map[string]func(t *testing.T) string{
+		"agent for owner": f.freshAgentToken,
+		"agent for plain user": func(t *testing.T) string {
+			t.Helper()
+			sess, err := f.agents.IssueAgentSession(context.Background(), f.plainGrant, agentauth.IssueMeta{})
+			require.NoError(t, err)
+			return sess.Token
+		},
+		"exchange for plain user": func(t *testing.T) string {
+			t.Helper()
+			sess, err := f.eng.ExchangeToken(context.Background(), &authsome.ExchangeRequest{
+				AppID: f.appID, Actor: f.actor, RequestedSubject: principal.UserRef(f.plain),
+			})
+			require.NoError(t, err)
+			return sess.Token
+		},
+	}
 }
 
 // freshAgentToken issues another agent session under the same grant, so a
@@ -118,10 +148,32 @@ func newDenyByDefaultFixture(t *testing.T) *denyByDefaultFixture {
 	agentSess, err := agents.IssueAgentSession(ctx, grant, agentauth.IssueMeta{})
 	require.NoError(t, err)
 
+	// A second user with no admin rights, an agent grant for them, and a
+	// delegation to an agent-kind service account for token exchange.
+	_, plainToken, _ := signUp(t, eng, "deny-default-plain@test.com", "SecureP@ss123")
+	plain := userIDFor(t, eng, plainToken)
+	plainGrant := &agentauth.AgentGrant{
+		ID: id.NewAgentGrantID(), AppID: appID, AgentID: id.NewAgentID(), UserID: plain, OrgID: id.NewOrgID(),
+		Scopes: []string{"invoices:read"}, ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	require.NoError(t, agents.Store().CreateAgentGrant(ctx, plainGrant))
+	svcStore, ok := eng.PrincipalStore().(interface {
+		CreateServiceAccount(ctx context.Context, svc *serviceaccount.ServiceAccount) error
+	})
+	require.True(t, ok)
+	svc := &serviceaccount.ServiceAccount{
+		ID: id.NewServiceAccountID(), Name: "deny-default-actor", AppID: appID, Kind: principal.KindAgent,
+		Active: true, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	require.NoError(t, svcStore.CreateServiceAccount(ctx, svc))
+	actor := principal.Ref{Kind: principal.KindAgent, ID: svc.ID.String()}
+	_, err = eng.GrantDelegation(ctx, appID, actor, principal.UserRef(plain), nil, principal.UserRef(plain), nil)
+	require.NoError(t, err)
+
 	return &denyByDefaultFixture{
 		eng: eng, handler: root.Handler(), routes: root.Routes(), orgs: orgs,
 		owner: owner, ownerToken: ownerToken, agentToken: agentSess.Token, appID: appID,
-		agents: agents, grant: grant,
+		agents: agents, grant: grant, plainGrant: plainGrant, plain: plain, actor: actor,
 	}
 }
 
@@ -164,17 +216,20 @@ func TestDenyByDefault_EveryWriteRouteRefusesAgentSession(t *testing.T) {
 		writes++
 		path := pathParam.ReplaceAllString(r.Path, "x")
 		key := r.Method + " " + r.Path
-		t.Run(key, func(t *testing.T) {
-			rec := f.call(t, f.freshAgentToken(t), r.Method, path, `{}`)
-			if agentSafeWrites[key] {
-				assert.NotContains(t, rec.Body.String(), "delegated session", "an agent-safe route lets the agent through; body=%s", rec.Body.String())
-				return
-			}
-			assert.Equal(t, http.StatusForbidden, rec.Code, "body=%s", rec.Body.String())
-			// Always the delegated-session refusal, never a permission
-			// check's answer, which would tell the agent what its user may do.
-			assert.Contains(t, rec.Body.String(), "delegated session", "body=%s", rec.Body.String())
-		})
+		for who, token := range f.callers() {
+			t.Run(who+" "+key, func(t *testing.T) {
+				rec := f.call(t, token(t), r.Method, path, `{}`)
+				if agentSafeWrites[key] {
+					assert.NotContains(t, rec.Body.String(), "delegated session", "an agent-safe route lets the caller through; body=%s", rec.Body.String())
+					return
+				}
+				assert.Equal(t, http.StatusForbidden, rec.Code, "body=%s", rec.Body.String())
+				// Always the delegated-session refusal, never a permission
+				// check's answer, which would tell the caller what its user
+				// may do.
+				assert.Contains(t, rec.Body.String(), "delegated session", "body=%s", rec.Body.String())
+			})
+		}
 	}
 	assert.Greater(t, writes, 50, "the table has to cover the real router, not an empty one")
 	for key := range agentSafeWrites {
