@@ -193,7 +193,7 @@ func (p *bearerAuthProvider) Authenticate(_ context.Context, r *http.Request) (*
 // newOrderingTestPlugin builds an agentauth plugin wired to the plugin's own
 // real RegisterRoutes, with a real (non-nil) auth.Registry backing
 // plugin.SessionGuard/AdminGuard, so the group middleware chain those
-// functions build — and middleware.DenyDelegatedSession's real position in it — is
+// functions build (and middleware.DenyDelegatedSession's real position in it) is
 // exercised exactly as production constructs it.
 func newOrderingTestPlugin(t *testing.T, tokenToSession map[string]*authprovider.SessionData) (*agentauth.MemoryStore, forge.Router) {
 	t.Helper()
@@ -301,7 +301,7 @@ func TestMeRoutes_RealAuthChain_AgentPrincipalSessionIsRefused(t *testing.T) {
 }
 
 // A human-principal session, resolved through the exact same real chain,
-// must still reach the handler — this rules out middleware.DenyDelegatedSession (or a
+// must still reach the handler. That rules out middleware.DenyDelegatedSession (or a
 // mistake in the harness above) simply denying everything regardless of
 // PrincipalKind, which would make the two tests above pass for the wrong
 // reason.

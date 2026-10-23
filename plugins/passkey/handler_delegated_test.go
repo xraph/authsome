@@ -40,5 +40,7 @@ func TestRegisterHandlers_RefuseAgentSessionWithoutRouteGuard(t *testing.T) {
 		rec := httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, req.WithContext(ctx))
 		assert.Equal(t, http.StatusForbidden, rec.Code, "%s body=%s", path, rec.Body.String())
+		_, err := p.ceremonies.Get(context.Background(), "passkey:reg:"+u.ID.String())
+		assert.Error(t, err, "no registration ceremony is stored")
 	}
 }

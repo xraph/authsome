@@ -10,6 +10,7 @@ import (
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/tokenformat"
 )
 
 // ──────────────────────────────────────────────────
@@ -72,7 +73,7 @@ func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*Intr
 			Scope:     strings.Join(claims.Scopes, " "),
 		}
 		resp.Confirmation = confirmationFor(claims.DPoPJKT)
-		resp.PrincipalKind, resp.Delegated = jwtPrincipal(claims.PrincipalKind, claims.UserID)
+		resp.PrincipalKind, resp.Delegated = jwtPrincipal(claims)
 
 		// Optionally resolve user details
 		if claims.UserID != "" {
@@ -155,15 +156,13 @@ func (a *API) introspectionFor(ctx forge.Context, full *IntrospectResponse) *Int
 }
 
 // jwtPrincipal reads the caller's kind off a JWT's pk claim, where empty means
-// user, and reports whether the token acts for userID without being that
-// user. A JWT has no actor chain (a delegated session is always opaque), so
-// only a non-user kind that still names a user is delegated.
-func jwtPrincipal(pk, userID string) (kind string, delegated bool) {
-	k := principal.Kind(pk)
-	if k == "" {
-		k = principal.KindUser
+// user, and whether the token acts for its sub without being that user (see
+// tokenformat.TokenClaims.IsDelegated).
+func jwtPrincipal(claims *tokenformat.TokenClaims) (kind string, delegated bool) {
+	if claims.PrincipalKind == "" {
+		return string(principal.KindUser), claims.IsDelegated()
 	}
-	return string(k), k == principal.KindAgent || (!k.IsHuman() && userID != "")
+	return claims.PrincipalKind, claims.IsDelegated()
 }
 
 // callerManagesApp reports whether the authenticated caller holds manage on

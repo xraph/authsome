@@ -17,13 +17,28 @@ var ErrDelegatedSession = errors.New("authsome: an agent or delegated session ca
 // DelegatedSessionMessage is the 403 body DenyDelegatedSession answers with.
 const DelegatedSessionMessage = "this endpoint needs the user's own session; an agent or delegated session cannot use it"
 
-// RefuseDelegated returns ErrDelegatedSession when the session resolved onto
-// ctx is delegated (see session.Session.IsDelegated), and nil otherwise,
-// including when there is no session at all. A method that mints a
-// credential calls it so a caller that skipped the HTTP route, and with it
-// DenyDelegatedSession, is still refused.
+// delegatedCallerKey marks a request whose caller was found to be delegated
+// without a session row to say so: a client-mode service learns it from
+// introspection, and the JWT path from the token's claims.
+type delegatedCallerKey struct{}
+
+// withDelegatedCaller marks ctx as carrying a delegated caller.
+func withDelegatedCaller(ctx context.Context) context.Context {
+	return context.WithValue(ctx, delegatedCallerKey{}, true)
+}
+
+// RefuseDelegated returns ErrDelegatedSession when the caller on ctx is
+// delegated, and nil otherwise, including when there is no caller at all. It
+// reads the session the auth middleware resolved (see
+// session.Session.IsDelegated), and the marker the client-mode and JWT paths
+// leave when they have no session row: introspection's delegated field, or a
+// JWT's act claim. A method that mints a credential calls it so a caller that
+// skipped the HTTP route, and with it DenyDelegatedSession, is still refused.
 func RefuseDelegated(ctx context.Context) error {
 	if sess, ok := SessionFrom(ctx); ok && sess != nil && sess.IsDelegated() {
+		return ErrDelegatedSession
+	}
+	if marked, ok := ctx.Value(delegatedCallerKey{}).(bool); ok && marked {
 		return ErrDelegatedSession
 	}
 	return nil

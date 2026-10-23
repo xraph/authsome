@@ -77,11 +77,15 @@ func PermissionRouteOptions(engine Engine, action, resource string) []forge.Rout
 // PermissionChecker. An engine without RBAC still gets session enforcement,
 // which is the property that matters most: the group is never anonymous.
 //
-// The chain ends with middleware.DenyDelegatedSession, always, engine or not.
-// The permission check runs against the session's user, and for an agent
-// session that is the delegating admin, so without it an agent would carry
-// its user's admin roles into tenant configuration its grant never named.
+// middleware.DenyDelegatedSession sits between the two, always, engine or not:
+// after the session guard, which is what resolves the session, and before the
+// permission check. That check runs against the session's user, and for an
+// agent session that is the delegating admin, so without the deny an agent
+// would carry its user's admin roles into tenant configuration its grant
+// never named. Running it first also answers a delegated caller the same way
+// whatever its user may do, so the refusal says nothing about the user's
+// permissions.
 func AdminGuard(engine Engine, action, resource string) []forge.Middleware {
-	guards := append(SessionGuard(engine), PermissionGuard(engine, action, resource)...)
-	return append(guards, middleware.DenyDelegatedSession())
+	guards := append(SessionGuard(engine), middleware.DenyDelegatedSession())
+	return append(guards, PermissionGuard(engine, action, resource)...)
 }

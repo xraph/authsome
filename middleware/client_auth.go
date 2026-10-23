@@ -238,6 +238,15 @@ func setContextFromIntrospect(ctx context.Context, resp *authclient.IntrospectRe
 		}
 	}
 
+	// The identity server says whether the token acts for user_id without
+	// being that user's own sign-in. There is no session row here for the
+	// guard to read, so the answer goes on the context. An identity server
+	// that predates the field never sends it, and its tokens read as the
+	// user's own.
+	if resp.Delegated {
+		ctx = withDelegatedCaller(ctx)
+	}
+
 	// Set user if available
 	if resp.User != nil {
 		if parsed, err := id.ParseUserID(resp.User.ID); err == nil {

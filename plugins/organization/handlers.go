@@ -246,9 +246,12 @@ func (p *Plugin) registerAdminOrgRoutes(router forge.Router) error {
 		forge.WithGroupAuth("session"),
 		forge.WithGroupMiddleware(
 			authprovider.RegistryMiddleware(p.engine.AuthRegistry(), "session"),
-			middleware.RequirePermission(p.permChecker, "manage", "organization"),
 			// An agent's authority is its grant, not its user's admin role.
+			// After the session middleware, which resolves the caller, and
+			// before the permission check, so the refusal doesn't depend on
+			// what the delegating user may do.
 			middleware.DenyDelegatedSession(),
+			middleware.RequirePermission(p.permChecker, "manage", "organization"),
 		),
 	)
 

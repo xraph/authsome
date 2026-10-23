@@ -145,7 +145,7 @@ func TestSessionJSONRoundTrip(t *testing.T) {
 // credential in that user's name, so each kind of session is pinned here.
 func TestIsDelegated(t *testing.T) {
 	user := id.NewUserID()
-	impersonated := &session.Session{UserID: user}
+	impersonated := &session.Session{UserID: user, DelegationID: id.NewDelegationID()}
 	impersonated.SetImpersonatedBy(id.NewUserID())
 
 	cases := []struct {
@@ -156,7 +156,12 @@ func TestIsDelegated(t *testing.T) {
 		{"user's own session", &session.Session{UserID: user}, false},
 		{"explicit user kind", &session.Session{UserID: user, PrincipalKind: principal.KindUser}, false},
 		{"agent", &session.Session{UserID: user, PrincipalKind: session.PrincipalKindAgent}, true},
-		{"agent with no user", &session.Session{PrincipalKind: session.PrincipalKindAgent}, true},
+		{"agent-kind service account acting as itself", &session.Session{
+			PrincipalKind: session.PrincipalKindAgent, ServiceAccountID: id.NewServiceAccountID(),
+		}, false},
+		{"agent marker without the agent kind", &session.Session{UserID: user, AgentID: id.NewAgentID()}, true},
+		{"grant marker without the agent kind", &session.Session{UserID: user, GrantID: id.NewAgentGrantID()}, true},
+		{"delegation marker with no chain", &session.Session{UserID: user, DelegationID: id.NewDelegationID()}, true},
 		{"token exchange", &session.Session{
 			UserID: user, Actors: principal.Chain{{Kind: principal.KindWorkload, ID: "svc_1"}},
 			ActorGrant: principal.GrantDelegation,

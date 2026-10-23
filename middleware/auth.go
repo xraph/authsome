@@ -657,6 +657,11 @@ func tryJWTAuth(
 
 	goCtx = WithAppID(goCtx, appID)
 	goCtx = WithAuthMethod(goCtx, "jwt")
+	// An act claim says someone other than sub is calling. The JWT path puts
+	// no session on the context, so the claims have to tell the guard.
+	if claims.IsDelegated() {
+		goCtx = withDelegatedCaller(goCtx)
+	}
 
 	// An empty PrincipalKind means user, which is what every token minted
 	// before that claim existed carries.

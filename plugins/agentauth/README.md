@@ -117,9 +117,15 @@ they hand out would outlive the grant or the work is admin work:
 | `/v1/me/agents` | Control over its own delegation |
 
 The dashboard won't take a delegated token either, in engine mode or in client mode.
-Introspection reports `principal_kind` and `delegated` for every active token, and client mode
-reads them. An admin's impersonation session isn't refused, and neither is a service account
-acting as itself.
+Introspection reports `principal_kind` and `delegated` for every active token. In client mode
+`ClientAuthMiddleware` carries `delegated` onto the request, and a JWT's `act` claim does the same
+on the JWT path, so the guard and the handler checks refuse there too.
+
+What makes a session delegated is its shape, not its kind: an agent or grant marker, a
+delegation that isn't an impersonation, an actor chain, or a non-user principal that names a
+user. An admin's impersonation session isn't refused. Neither is a principal acting as itself,
+whatever its kind, so a service account registered as an agent, with no user behind it, keeps
+working.
 
 `middleware.DenyDelegatedSession()` is the guard behind these, and `plugin.AdminGuard` ends with
 it. Mount it on a route of your own that mints a credential, after the middleware that resolves

@@ -168,17 +168,28 @@ func (s *Session) IsHumanPrincipal() bool {
 // in the user's name (an API key, an OAuth2 token, a passkey) would outlive or
 // escape that grant.
 //
-// An impersonation is not delegated in this sense, since impersonating
-// somebody is the request to act as them (see AuthzActors). A service account
-// or workload session acting as itself names no user, so it isn't either.
+// The test is the session's shape, not its kind. Any delegation marker counts
+// (AgentID, GrantID, or a DelegationID that isn't an impersonation's), as does
+// an actor chain, and so does a non-user principal that names a user. That
+// matches agentauth's Authorize, which treats markers on a session that
+// doesn't claim the agent kind as inconsistent rather than as a user.
+//
+// A principal acting as itself is not delegated, whatever its kind: a service
+// account registered as an agent, with no user, no chain and no markers, is
+// calling for nobody but itself. An impersonation isn't delegated either,
+// since impersonating somebody is the request to act as them (see
+// AuthzActors).
 func (s *Session) IsDelegated() bool {
-	if s.PrincipalKind == PrincipalKindAgent {
+	if !s.AgentID.IsNil() || !s.GrantID.IsNil() {
 		return true
 	}
-	if !s.IsHumanPrincipal() {
-		return !s.UserID.IsNil()
+	if !s.DelegationID.IsNil() && s.ActorGrant != principal.GrantImpersonation {
+		return true
 	}
-	return len(s.AuthzActors()) > 0
+	if len(s.AuthzActors()) > 0 {
+		return true
+	}
+	return !s.IsHumanPrincipal() && !s.UserID.IsNil()
 }
 
 // AbsoluteDeadline is the instant after which the session must not be

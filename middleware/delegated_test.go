@@ -25,6 +25,7 @@ func TestDenyDelegatedSession(t *testing.T) {
 		"user's own":      {&session.Session{ID: id.NewSessionID(), UserID: user}, http.StatusOK},
 		"agent":           {&session.Session{ID: id.NewSessionID(), UserID: user, PrincipalKind: session.PrincipalKindAgent}, http.StatusForbidden},
 		"service account": {&session.Session{ID: id.NewSessionID(), PrincipalKind: session.PrincipalKindServiceAccount, ServiceAccountID: id.NewServiceAccountID()}, http.StatusOK},
+		"agent-kind service account acting as itself": {&session.Session{ID: id.NewSessionID(), PrincipalKind: session.PrincipalKindAgent, ServiceAccountID: id.NewServiceAccountID()}, http.StatusOK},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

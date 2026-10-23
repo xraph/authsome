@@ -57,6 +57,8 @@ func TestRegisterBegin_RefusesDelegatedSessions(t *testing.T) {
 
 			assert.Equal(t, http.StatusForbidden, rec.Code, "body=%s", rec.Body.String())
 			assert.NotContains(t, rec.Body.String(), "challenge")
+			_, err := p.ceremonies.Get(context.Background(), "passkey:reg:"+u.ID.String())
+			assert.Error(t, err, "no registration ceremony is stored")
 		})
 	}
 }
