@@ -7546,25 +7546,33 @@ class SwitchOrgRequest {
 }
 
 class SwitchOrgResponse {
+  final String? expiresAt;
   final String? orgId;
   final String sessionId;
+  final String? sessionToken;
 
   const SwitchOrgResponse({
+    this.expiresAt,
     this.orgId,
     required this.sessionId,
+    this.sessionToken,
   });
 
   factory SwitchOrgResponse.fromJson(Map<String, dynamic> json) {
     return SwitchOrgResponse(
+      expiresAt: json['expires_at'] as String?,
       orgId: json['org_id'] as String?,
       sessionId: json['session_id'] as String,
+      sessionToken: json['session_token'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      if (expiresAt != null) 'expires_at': expiresAt,
       if (orgId != null) 'org_id': orgId,
       'session_id': sessionId,
+      if (sessionToken != null) 'session_token': sessionToken,
     };
   }
 

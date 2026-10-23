@@ -183,6 +183,14 @@ func (a *API) handleSwitchOrg(ctx forge.Context, req *SwitchOrgRequest) (*Switch
 	if !updated.OrgID.IsNil() {
 		resp.OrgID = updated.OrgID.String()
 	}
+	// A JWT app got a new access token for the new org. The cookie gets it
+	// too: the row now knows only the new token, so a browser left holding
+	// the old one could no longer refresh through its cookie.
+	if updated.Token != "" {
+		resp.SessionToken = updated.Token
+		resp.ExpiresAt = updated.ExpiresAt.Format("2006-01-02T15:04:05Z07:00")
+		a.setSessionCookie(ctx, updated.Token, a.sessionTokenMaxAge())
+	}
 	return resp, nil
 }
 

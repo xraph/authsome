@@ -178,7 +178,7 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 	var sess *session.Session
 	if u.EmailVerified || !e.EmailVerificationRequired(ctx, req.AppID) {
 		// Create session (using per-app + per-env config; JWT if configured)
-		sess, err = e.newSession(req.AppID, u.ID, e.sessionConfigForApp(ctx, req.AppID, req.EnvID), req.DPoPJKT)
+		sess, err = e.newSession(req.AppID, u.ID, req.EnvID, e.sessionConfigForApp(ctx, req.AppID, req.EnvID), req.DPoPJKT)
 		if err != nil {
 			return nil, nil, fmt.Errorf("authsome: create session token: %w", err)
 		}
@@ -796,22 +796,7 @@ func (e *Engine) rotateSession(ctx context.Context, sess *session.Session, opts 
 	// minted, so a client holding it never had a JWT to lose.
 	tokFmt := e.TokenFormatForApp(sess.AppID.String())
 	if tokFmt.Name() == "jwt" && len(sess.Actors) == 0 {
-		jwtToken, genErr := tokFmt.GenerateAccessToken(tokenformat.TokenClaims{
-			UserID:    sess.UserID.String(),
-			AppID:     sess.AppID.String(),
-			SessionID: sess.ID.String(),
-			// Without this the first refresh turns a token bound to one
-			// resource server into an unrestricted one, silently.
-			Audience: sess.Audience,
-			Scopes:   sess.Scopes,
-			DPoPJKT:  sess.DPoPJKT,
-			// A refreshed OAuth2 token is still the client's. Dropping
-			// this would hand the client a token the middleware treats
-			// as the user's own login.
-			ClientID:  sess.ClientID,
-			IssuedAt:  sess.UpdatedAt,
-			ExpiresAt: sess.ExpiresAt,
-		})
+		jwtToken, genErr := tokFmt.GenerateAccessToken(accessTokenClaims(sess, sess.UpdatedAt))
 		if genErr != nil {
 			return nil, fmt.Errorf("authsome: refresh session: regenerate jwt: %w", genErr)
 		}
@@ -1130,24 +1115,23 @@ func (e *Engine) sessionConfigForApp(ctx context.Context, appID id.AppID, envIDs
 // field on sess afterward would leave the DB row bound while the token
 // itself carries no proof-of-possession requirement, silently defeating the
 // binding for every JWT-format app.
-func (e *Engine) newSession(appID id.AppID, userID id.UserID, cfg account.SessionConfig, dpopJKT string) (*session.Session, error) {
+//
+// envID is stamped here for the same reason: the token carries env_id, so the
+// environment has to be on the session before the token is signed, not after.
+func (e *Engine) newSession(
+	appID id.AppID, userID id.UserID, envID id.EnvironmentID, cfg account.SessionConfig, dpopJKT string,
+) (*session.Session, error) {
 	sess, err := account.NewSession(appID, userID, cfg)
 	if err != nil {
 		return nil, err
 	}
+	sess.EnvID = envID
 	sess.DPoPJKT = dpopJKT
 
 	// Check if app uses JWT for access tokens.
 	tokFmt := e.TokenFormatForApp(appID.String())
 	if tokFmt.Name() == "jwt" {
-		jwtToken, genErr := tokFmt.GenerateAccessToken(tokenformat.TokenClaims{
-			UserID:    userID.String(),
-			AppID:     appID.String(),
-			SessionID: sess.ID.String(),
-			DPoPJKT:   dpopJKT,
-			IssuedAt:  sess.CreatedAt,
-			ExpiresAt: sess.ExpiresAt,
-		})
+		jwtToken, genErr := tokFmt.GenerateAccessToken(accessTokenClaims(sess, sess.CreatedAt))
 		if genErr != nil {
 			return nil, genErr
 		}
@@ -1171,6 +1155,33 @@ func (e *Engine) newSession(appID id.AppID, userID id.UserID, cfg account.Sessio
 	}
 
 	return sess, nil
+}
+
+// accessTokenClaims builds the JWT claims for sess's access token, signed at
+// issuedAt and expiring with the session's access token. Every engine site
+// that signs a token for a session goes through here, so a claim the session
+// carries can't be set at one site and forgotten at another. That is how
+// org_id and env_id went missing: TokenClaims declared them and no site set
+// them.
+//
+// Each field matters to a consumer that validates the JWT without loading
+// the row. Audience keeps a token bound to its resource server. ClientID
+// keeps an OAuth2 token parked as the client's rather than the user's own
+// login. OrgID and EnvID are what a resource server scopes the request to.
+func accessTokenClaims(sess *session.Session, issuedAt time.Time) tokenformat.TokenClaims {
+	return tokenformat.TokenClaims{
+		UserID:    sess.UserID.String(),
+		AppID:     sess.AppID.String(),
+		EnvID:     sess.EnvID.String(),
+		OrgID:     sess.OrgID.String(),
+		SessionID: sess.ID.String(),
+		Audience:  sess.Audience,
+		Scopes:    sess.Scopes,
+		DPoPJKT:   sess.DPoPJKT,
+		ClientID:  sess.ClientID,
+		IssuedAt:  issuedAt,
+		ExpiresAt: sess.ExpiresAt,
+	}
 }
 
 // newOpaqueSession mints a session whose access token is always the opaque

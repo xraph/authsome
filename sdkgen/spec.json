@@ -5478,10 +5478,18 @@
       },
       "SwitchOrgResponse": {
         "properties": {
+          "expires_at": {
+            "description": "Expiration time of session_token",
+            "type": "string"
+          },
           "org_id": {
             "type": "string"
           },
           "session_id": {
+            "type": "string"
+          },
+          "session_token": {
+            "description": "New access token carrying the new org_id; set only for JWT apps",
             "type": "string"
           }
         },

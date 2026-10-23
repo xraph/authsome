@@ -70,3 +70,5 @@ The Go methods don't apply the HTTP ranking rules above; they're for code you tr
 ## The active organization
 
 A session can carry an active organization. `POST /v1/me/switch-org` changes it for the current session (the user has to be a member), and `middleware.OrgIDFrom(ctx)` reads it in your handlers.
+
+On an app that issues JWT access tokens, the active org also goes into the token's `org_id` claim, so the switch returns a new token in `session_token`. Use it from then on; the old one still names the old org until it expires. See [Token formats](/docs/users-sessions/token-formats#organization-and-environment).

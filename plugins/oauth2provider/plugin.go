@@ -1784,9 +1784,16 @@ func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.
 	if p.engine != nil {
 		tokFmt := p.engine.TokenFormatForApp(appID.String())
 		if tokFmt.Name() == "jwt" {
+			// An authorization code and a device code record no org, so a
+			// provider session starts with none and OrgID stays empty here
+			// (org_id is omitted). EnvID is the default environment bound
+			// above. Both are read off the session so this site and the
+			// engine's refresh agree on what the token says.
 			jwtToken, err := tokFmt.GenerateAccessToken(tokenformat.TokenClaims{
 				UserID:    userID.String(),
 				AppID:     appID.String(),
+				EnvID:     sess.EnvID.String(),
+				OrgID:     sess.OrgID.String(),
 				SessionID: sess.ID.String(),
 				Scopes:    scopes,
 				Audience:  resources,

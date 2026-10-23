@@ -1529,8 +1529,10 @@ export interface SwitchOrgRequest {
 }
 
 export interface SwitchOrgResponse {
+  expires_at?: string;
   org_id?: string;
   session_id: string;
+  session_token?: string;
 }
 
 export interface Team {

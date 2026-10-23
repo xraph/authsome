@@ -947,8 +947,16 @@ func (e *Engine) Hooks() *hook.Bus { return e.hooks }
 // organization plugin. When the user is not a member the org-plugin
 // returns ErrOrgNotMember (or equivalent) and we propagate.
 //
-// Returns the updated session so callers (HTTP handlers) can re-issue
-// the cookie / token with the new OrgID claim if appropriate.
+// On an app that issues JWT access tokens, the session also gets a new access
+// token carrying the new org_id, returned in the session's Token field. A JWT
+// is validated without loading the row, so the caller's old token would go on
+// naming the old org until it expired. The new token keeps the session's
+// expiry, and it replaces the old one on the row, so a cookie refresh keyed on
+// the access token finds the session through the new token. The old JWT stays
+// valid until it expires, as it does after a refresh. An opaque session keeps
+// its token and Token comes back empty: the middleware reads the org off the
+// row on every request. So does a session carrying an actor chain, which is
+// always opaque (see newOpaqueSession).
 //
 // When newOrgID is empty the active org is cleared (legitimate use:
 // "leave the current org and stay logged out of any org").
@@ -984,8 +992,8 @@ func (e *Engine) SwitchActiveOrg(ctx context.Context, sessionID id.SessionID, ne
 	}
 
 	sess.OrgID = newOrgID
-	if err := e.store.UpdateSession(ctx, sess); err != nil {
-		return nil, fmt.Errorf("authsome: update session: %w", err)
+	if err := e.persistOrgSwitch(ctx, sess); err != nil {
+		return nil, err
 	}
 
 	e.hooks.Emit(ctx, &hook.Event{
@@ -999,6 +1007,39 @@ func (e *Engine) SwitchActiveOrg(ctx context.Context, sessionID id.SessionID, ne
 	})
 
 	return sess, nil
+}
+
+// persistOrgSwitch writes a session whose OrgID just changed. On a JWT app it
+// first signs a new access token for the new org and rotates it onto the row.
+//
+// The rotation is a compare-and-swap on the access token the row held when
+// SwitchActiveOrg read it, the same one Refresh uses. A refresh that lands in
+// between has already handed the client a token minted from the old org, and
+// overwriting the row would orphan it, so the switch is refused with
+// store.ErrConflict and the caller can retry it.
+func (e *Engine) persistOrgSwitch(ctx context.Context, sess *session.Session) error {
+	tokFmt := e.TokenFormatForApp(sess.AppID.String())
+	if tokFmt.Name() != "jwt" || len(sess.Actors) > 0 {
+		if err := e.store.UpdateSession(ctx, sess); err != nil {
+			return fmt.Errorf("authsome: update session: %w", err)
+		}
+		return nil
+	}
+
+	jwtToken, err := tokFmt.GenerateAccessToken(accessTokenClaims(sess, time.Now()))
+	if err != nil {
+		return fmt.Errorf("authsome: switch org: generate jwt: %w", err)
+	}
+	oldTokenHash := sess.TokenHash
+	sess.Token = jwtToken
+	rotated, err := e.store.RotateSession(ctx, sess, oldTokenHash)
+	if err != nil {
+		return fmt.Errorf("authsome: update session: %w", err)
+	}
+	if !rotated {
+		return fmt.Errorf("authsome: switch org: session changed concurrently: %w", store.ErrConflict)
+	}
+	return nil
 }
 
 // orgMembershipChecker is the narrow contract SwitchActiveOrg needs

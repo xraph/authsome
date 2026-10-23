@@ -1737,8 +1737,10 @@ type SwitchOrgRequest struct {
 
 // SwitchOrgResponse represents the SwitchOrgResponse schema.
 type SwitchOrgResponse struct {
-	OrgID     string `json:"org_id,omitempty"`
-	SessionID string `json:"session_id"`
+	ExpiresAt    string `json:"expires_at,omitempty"`
+	OrgID        string `json:"org_id,omitempty"`
+	SessionID    string `json:"session_id"`
+	SessionToken string `json:"session_token,omitempty"`
 }
 
 // Team represents the Team schema.

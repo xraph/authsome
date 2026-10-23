@@ -114,9 +114,16 @@ type SwitchOrgRequest struct {
 }
 
 // SwitchOrgResponse is the body returned by POST /me/switch-org.
+//
+// SessionToken and ExpiresAt are set only on an app that issues JWT access
+// tokens. A JWT names its org in the org_id claim, so the switch mints a new
+// one and the caller should use it from here on. An opaque token is left as it
+// is, because the org is read off the session row, and both fields are omitted.
 type SwitchOrgResponse struct {
-	SessionID string `json:"session_id"`
-	OrgID     string `json:"org_id,omitempty"`
+	SessionID    string `json:"session_id"`
+	OrgID        string `json:"org_id,omitempty"`
+	SessionToken string `json:"session_token,omitempty" description:"New access token carrying the new org_id; set only for JWT apps"`
+	ExpiresAt    string `json:"expires_at,omitempty" description:"Expiration time of session_token"`
 }
 
 // ---------------------------------------------------------------------------
