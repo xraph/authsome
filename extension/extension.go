@@ -851,6 +851,9 @@ func (e *Extension) RegisterDashboardAuth(dashExt *dashboard.Extension) {
 			return
 		}
 		dashExt.SetAuthChecker(&authChecker{engine: e.engine})
+		// The dashboard's sign-in writes auth_token, and its pages call the
+		// API with that cookie alone.
+		e.engine.AcceptAuthTokenCookie()
 	}
 
 	dashExt.SetTenantResolver(dashauth.ScopeTenantResolver{})
@@ -1267,6 +1270,7 @@ func (e *Extension) buildEngineConfig() authsome.Config {
 	if e.config.Session.CleanupInterval != 0 {
 		cfg.Session.CleanupInterval = e.config.Session.CleanupInterval
 	}
+	cfg.Session.AuthTokenCookie = e.config.Session.AuthTokenCookie
 
 	if e.config.CSRF.Enabled != nil {
 		cfg.CSRF.Enabled = e.config.CSRF.Enabled

@@ -206,6 +206,16 @@ type SessionConfig struct {
 	// CleanupInterval is the interval at which expired sessions are
 	// automatically purged. 0 = disabled.
 	CleanupInterval time.Duration `json:"cleanup_interval"`
+
+	// AuthTokenCookie makes the auth middleware accept a session token from
+	// a cookie named auth_token, ahead of the configured session cookie
+	// (session.cookie_name). The forge dashboard's sign-in writes that
+	// cookie, and registering authsome with the dashboard turns this on by
+	// itself, so set it only when something else of yours writes auth_token.
+	// Default: false. Cookies are scoped to a host rather than a port, so
+	// on a shared host such as localhost another app's auth_token would
+	// otherwise sign requests in to this one.
+	AuthTokenCookie bool `json:"auth_token_cookie"`
 }
 
 // ShouldRotateRefreshToken returns whether refresh token rotation is enabled.
