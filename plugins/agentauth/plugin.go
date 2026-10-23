@@ -11,6 +11,7 @@ import (
 
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/oauth2provider"
 
@@ -180,10 +181,17 @@ func (p *Plugin) registerConsentGate(engine plugin.Engine) {
 // to see and revoke which agents are acting for them, and an admin surface
 // for registering and blocking agents org-wide.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
+	// Neither surface is open to an agent or delegated session, so an agent
+	// cannot manage its own delegation. SessionGuard and AdminGuard check
+	// permissions against sess.UserID, which for an agent session is the
+	// delegating user: without the deny, an agent acting for an org admin
+	// could open its own org's policy, unblock itself or revoke a competing
+	// grant. The deny goes after the guard, which is what resolves the
+	// session (see middleware.DenyDelegatedSession).
 	me := router.Group(p.basePath+"/me/agents",
 		forge.WithGroupTags("agentauth"),
 		forge.WithGroupAuth("session"),
-		forge.WithGroupMiddleware(append(plugin.SessionGuard(p.engine), denyAgentPrincipal())...),
+		forge.WithGroupMiddleware(append(plugin.SessionGuard(p.engine), middleware.DenyDelegatedSession())...),
 	)
 	if err := me.GET("", p.handleListMyGrants,
 		forge.WithSummary("List agents acting on my behalf"),
@@ -203,7 +211,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	admin := router.Group(p.basePath+"/admin/agents",
 		forge.WithGroupTags("agentauth-admin"),
 		forge.WithGroupAuth("session"),
-		forge.WithGroupMiddleware(append(plugin.AdminGuard(p.engine, "read", "agent"), denyAgentPrincipal())...),
+		forge.WithGroupMiddleware(append(plugin.AdminGuard(p.engine, "read", "agent"), middleware.DenyDelegatedSession())...),
 	)
 	if err := admin.GET("", p.handleListAgents,
 		forge.WithSummary("List registered agents"),

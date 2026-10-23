@@ -268,7 +268,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	authorizeRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int { return c.OAuthAuthorizeLimit })
 	tokenRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int { return c.OAuthTokenLimit })
 
+	// Approving a client hands it a token for the signed-in user. An agent
+	// session reads as its delegating user here, and the token it would get
+	// back carries no pk claim and no grant, so the middleware later takes it
+	// for the user's own login. The same deny sits on the consent and device
+	// approval routes below.
 	if err := g.GET("/authorize", p.handleAuthorize, append([]forge.RouteOption{
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("OAuth2 Authorization"),
 		forge.WithDescription("Authorization endpoint for the OAuth2 authorization code flow."),
 		forge.WithOperationID("oauth2Authorize"),
@@ -423,7 +429,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	authG := router.Group("/v1/oauth",
 		forge.WithGroupTags("OAuth2"),
 		forge.WithGroupAuth("session"),
-		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
+		forge.WithGroupMiddleware(append(plugin.SessionGuard(p.engine), middleware.DenyDelegatedSession())...),
 	)
 
 	if err := authG.GET("/consent", p.handleConsentPage,
@@ -486,11 +492,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	// Admin endpoints for client management. Gated behind a session plus
 	// manage/oauth2_client — a caller who can mint clients can register an
-	// arbitrary redirect_uri and harvest codes for any user.
+	// arbitrary redirect_uri and harvest codes for any user. A client secret
+	// is a credential no agent grant bounds, so an agent or delegated session
+	// is refused here even when its user holds the permission.
 	admin := router.Group("/v1/admin/oauth",
 		forge.WithGroupTags("OAuth2 Admin"),
 		forge.WithGroupAuth("session"),
-		forge.WithGroupMiddleware(plugin.AdminGuard(p.engine, "manage", "oauth2_client")...),
+		forge.WithGroupMiddleware(append(plugin.AdminGuard(p.engine, "manage", "oauth2_client"), middleware.DenyDelegatedSession())...),
 	)
 
 	if err := admin.POST("/clients", p.handleCreateClient,
@@ -2109,6 +2117,12 @@ func (p *Plugin) handleDeviceComplete(ctx forge.Context, req *DeviceCompleteRequ
 		return nil, forge.NewHTTPError(http.StatusForbidden, "this device request belongs to a different app than the signed-in session")
 	}
 	if req.Action == "approve" {
+		// The route already refuses a delegated session. Checked again here
+		// because approving binds the user to the device code, and the token
+		// it later redeems is the user's.
+		if middleware.RefuseDelegated(ctx.Context()) != nil {
+			return nil, forge.Forbidden(middleware.DelegatedSessionMessage)
+		}
 		// Same veto point as the authorization-code flow: a gate refusal
 		// must block the approval, not be undone after the fact.
 		orgID, _ := middleware.OrgIDFrom(ctx.Context())

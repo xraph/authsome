@@ -47,10 +47,10 @@ import (
 // double's Middleware method calls the real, unmodified
 // authprovider.BridgeToContext itself — mimicking exactly what a
 // session-establishing step must do, positioned (via plugin.SessionGuard,
-// which RegisterRoutes wraps with denyAgentPrincipal appended after it, not
-// before) ahead of denyAgentPrincipal in the SAME real group-middleware
+// which RegisterRoutes wraps with middleware.DenyDelegatedSession appended after it, not
+// before) ahead of middleware.DenyDelegatedSession in the SAME real group-middleware
 // slice RegisterRoutes builds. Every other piece here — plugin.SessionGuard,
-// plugin.AdminGuard, RegisterRoutes' own append(...) calls, denyAgentPrincipal
+// plugin.AdminGuard, RegisterRoutes' own append(...) calls, middleware.DenyDelegatedSession
 // itself, authprovider.BridgeToContext — is the real, unmodified production
 // code; only the auth-provider resolution step is a double.
 type bridgingRegistry struct {
@@ -98,7 +98,7 @@ func (r *bridgingRegistry) List() []string {
 // Middleware is the piece under test's real dependency: this is what
 // plugin.SessionGuard(engine)/AdminGuard(engine, ...) wrap via
 // authprovider.RegistryMiddleware and mount as the session-establishing
-// step of the group's middleware chain, ahead of denyAgentPrincipal.
+// step of the group's middleware chain, ahead of middleware.DenyDelegatedSession.
 func (r *bridgingRegistry) Middleware(providerNames ...string) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
@@ -193,7 +193,7 @@ func (p *bearerAuthProvider) Authenticate(_ context.Context, r *http.Request) (*
 // newOrderingTestPlugin builds an agentauth plugin wired to the plugin's own
 // real RegisterRoutes, with a real (non-nil) auth.Registry backing
 // plugin.SessionGuard/AdminGuard, so the group middleware chain those
-// functions build — and denyAgentPrincipal's real position in it — is
+// functions build — and middleware.DenyDelegatedSession's real position in it — is
 // exercised exactly as production constructs it.
 func newOrderingTestPlugin(t *testing.T, tokenToSession map[string]*authprovider.SessionData) (*agentauth.MemoryStore, forge.Router) {
 	t.Helper()
@@ -244,15 +244,15 @@ func bearerRequest(t *testing.T, mux forge.Router, method, path, token string, b
 // construction: an agent-principal session, resolved DURING the request by a
 // middleware occupying SessionGuard's real position in the chain, must be
 // refused on both of agentauth's own route groups — not merely refused when
-// a test hands denyAgentPrincipal an already-resolved session for free.
+// a test hands middleware.DenyDelegatedSession an already-resolved session for free.
 //
-// This is the test the review demanded: it fails if denyAgentPrincipal is
+// This is the test the review demanded: it fails if middleware.DenyDelegatedSession is
 // mounted before SessionGuard/AdminGuard in the group's middleware slice
 // (forge wraps middleware outermost-first — see the comment on
-// denyAgentPrincipal in middleware.go — so index 0 runs first and would see
+// middleware.DenyDelegatedSession in middleware/delegated.go, so index 0 runs first and would see
 // no session yet) and passes only with it mounted after. Confirmed by hand:
 // moving plugin.go's two append(...) calls back to
-// append([]forge.Middleware{denyAgentPrincipal()}, ...) turns both
+// append([]forge.Middleware{middleware.DenyDelegatedSession()}, ...) turns both
 // assertions below into 200/handler-reached, reproducing the reviewer's own
 // scratch-router proof; restoring the fix turns them back into
 // 403/handler-not-reached.
@@ -301,7 +301,7 @@ func TestMeRoutes_RealAuthChain_AgentPrincipalSessionIsRefused(t *testing.T) {
 }
 
 // A human-principal session, resolved through the exact same real chain,
-// must still reach the handler — this rules out denyAgentPrincipal (or a
+// must still reach the handler — this rules out middleware.DenyDelegatedSession (or a
 // mistake in the harness above) simply denying everything regardless of
 // PrincipalKind, which would make the two tests above pass for the wrong
 // reason.

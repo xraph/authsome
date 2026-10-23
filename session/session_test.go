@@ -140,3 +140,36 @@ func TestSessionJSONRoundTrip(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &back))
 	assert.Equal(t, admin.String(), back.ImpersonatedBy().String())
 }
+
+// IsDelegated is what keeps a session acting for a user from minting a
+// credential in that user's name, so each kind of session is pinned here.
+func TestIsDelegated(t *testing.T) {
+	user := id.NewUserID()
+	impersonated := &session.Session{UserID: user}
+	impersonated.SetImpersonatedBy(id.NewUserID())
+
+	cases := []struct {
+		name string
+		sess *session.Session
+		want bool
+	}{
+		{"user's own session", &session.Session{UserID: user}, false},
+		{"explicit user kind", &session.Session{UserID: user, PrincipalKind: principal.KindUser}, false},
+		{"agent", &session.Session{UserID: user, PrincipalKind: session.PrincipalKindAgent}, true},
+		{"agent with no user", &session.Session{PrincipalKind: session.PrincipalKindAgent}, true},
+		{"token exchange", &session.Session{
+			UserID: user, Actors: principal.Chain{{Kind: principal.KindWorkload, ID: "svc_1"}},
+			ActorGrant: principal.GrantDelegation,
+		}, true},
+		{"impersonation", impersonated, false},
+		{"service account acting as itself", &session.Session{
+			PrincipalKind: session.PrincipalKindServiceAccount, ServiceAccountID: id.NewServiceAccountID(),
+		}, false},
+		{"workload carrying a user", &session.Session{UserID: user, PrincipalKind: principal.KindWorkload}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, tc.sess.IsDelegated())
+		})
+	}
+}

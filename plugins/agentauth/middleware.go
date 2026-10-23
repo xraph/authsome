@@ -140,52 +140,6 @@ func (p *Plugin) Authorize(ctx context.Context, sess *session.Session, action, r
 	return nil
 }
 
-// denyAgentPrincipal refuses any request whose resolved session is
-// agent-principal, before the wrapped handler ever runs.
-//
-// agentauth's own admin and /me routes (RegisterRoutes) are guarded by
-// plugin.SessionGuard and plugin.AdminGuard, both of which resolve to
-// middleware.RequirePermission — checking a Warden permission against
-// sess.UserID with no awareness of PrincipalKind at all. An agent session
-// carries its delegating human's UserID by design (see session.go), so an
-// agent belonging to an org admin would otherwise reach these routes with
-// that admin's full permission and no granted scope required for any of
-// it: PUT /admin/agents/policy could set the agent's own governing org to
-// open with unrestricted scopes, PATCH /admin/agents/:id/status could
-// unblock a blocked agent, and DELETE /me/agents/:id could revoke a
-// competing grant. This plugin ships the intersection guard (Guard, below)
-// for every route a host app protects; it must not leave its own policy
-// surface outside that same discipline.
-//
-// This middleware MUST be mounted AFTER plugin.SessionGuard/AdminGuard in
-// the group's middleware slice, not before. forge applies group middleware
-// by wrapping from the last index inward (see
-// forge@v1.9.10/internal/router/router_impl.go's applyMiddleware /
-// applyMiddlewareAndInterceptors: `for i := len(middleware)-1; i >= 0; i--`),
-// which makes index 0 the OUTERMOST handler — the first one to run on a
-// request. SessionGuard is what resolves the session and puts it in context
-// (authprovider.RegistryMiddleware -> BridgeToContext -> WithSession); this
-// middleware only has anything to check once that has already happened.
-// Mounted first/outermost, middleware.SessionFrom always reports ok=false
-// here (no session yet), so this fails OPEN — the one case Guard's own
-// missing-session branch below handles the opposite way, by design: Guard
-// fails CLOSED (401) on a missing session, because Guard's contract is "deny
-// unless proven otherwise". This middleware's contract is "the session
-// already resolved by SessionGuard/AdminGuard is not an agent's" — it has no
-// business opining on a session it never got a chance to see, which is why
-// it must run after those guards, not instead of a missing-session check.
-func denyAgentPrincipal() forge.Middleware {
-	return func(next forge.Handler) forge.Handler {
-		return func(ctx forge.Context) error {
-			if sess, ok := middleware.SessionFrom(ctx.Context()); ok && sess != nil &&
-				sess.PrincipalKind == session.PrincipalKindAgent {
-				return forge.Forbidden("agent sessions may not access this endpoint")
-			}
-			return next(ctx)
-		}
-	}
-}
-
 // Guard returns middleware enforcing the agent intersection for a route that
 // requires action on resource. It resolves the session with
 // middleware.SessionFrom — the whole *session.Session, not just a user id,

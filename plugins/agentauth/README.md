@@ -81,7 +81,7 @@ router.GET("/v1/calendar", handler,
 ## Endpoints
 
 User surface under `/v1/me/agents`, admin surface under `/v1/admin/agents`. Both refuse
-agent-principal sessions, so an agent cannot manage its own delegation.
+agent and other delegated sessions, so an agent cannot manage its own delegation.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -92,6 +92,40 @@ agent-principal sessions, so an agent cannot manage its own delegation.
 | `PATCH` | `/v1/admin/agents/:id/status` | Approve or block an agent |
 | `GET` | `/v1/admin/agents/policy` | Read the org's delegation policy |
 | `PUT` | `/v1/admin/agents/policy` | Set the org's delegation policy |
+
+## What an agent session can't do
+
+An agent session carries its delegating user's ID, so any route that only reads the user ID sees
+the agent as that user. That's why step 4 matters for your own routes. Authsome's own routes
+that mint something in the user's name refuse an agent session outright with a 403, whatever the
+user is allowed to do, because what they mint would outlive the grant:
+
+| Route | What it would have handed the agent |
+|---|---|
+| `POST /v1/keys` | A durable API key owned by the user |
+| `GET /v1/oauth/authorize`, `GET` and `POST /v1/oauth/consent`, `POST /v1/oauth/device/complete` | An ordinary user token for a client the agent controls, with no `pk` claim |
+| `/v1/admin/oauth/*` | A client secret |
+| `POST /v1/admin/impersonate/:userId` | A session as any user in the app |
+| `POST /v1/admin/service-accounts/:id/api-keys` | A service-account key |
+| `POST /v1/admin/users/create` | A new account with a password the agent picked |
+| `POST /v1/change-password` | A password it knows |
+| `POST /v1/mfa/enroll`, `DELETE /v1/mfa/enrollment`, `POST /v1/mfa/recovery/regenerate` | A second factor or recovery codes, or MFA turned off |
+| `POST /v1/passkeys/register/begin` and `/finish` | A passkey that signs in as the user |
+| `POST /v1/me/switch-org` | A token for another org the user belongs to |
+| `/v1/me/agents`, `/v1/admin/agents` | Control over its own delegation |
+
+The dashboard won't accept an agent token either. The same refusal covers a session minted by
+token exchange, whose actor chain names the principal that's really calling. An admin's
+impersonation session isn't refused, and neither is a service account acting as itself.
+
+`middleware.DenyDelegatedSession()` is the guard most of these use (org switch checks the session in the engine). Mount it on a route of your own
+that mints a credential, after the middleware that resolves the session. `Engine.Impersonate` and
+`Engine.ChangePassword` return `authsome.ErrDelegatedSession` when the context carries such a
+session, for callers that don't come in over HTTP.
+
+Everything else under `/v1` still treats the agent as its user, including the rest of
+`/v1/admin`. If your users delegate to agents, keep that in mind when you hand someone an admin
+role.
 
 ## Lifecycle hooks
 

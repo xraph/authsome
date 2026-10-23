@@ -50,6 +50,9 @@ func (a *API) registerPasswordRoutes(router forge.Router) error {
 
 	changeOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
 	changeOpts = append(changeOpts,
+		// An agent that changes the password knows the new one and can sign
+		// in as the user with no grant behind it.
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Change password"),
 		forge.WithDescription("Changes the authenticated user's password. Requires current password."),
 		forge.WithOperationID("changePassword"),

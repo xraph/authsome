@@ -55,6 +55,14 @@ func (c *authChecker) CheckAuth(ctx context.Context, r *http.Request) (*dashauth
 		return nil, nil
 	}
 
+	// An agent session carries its delegating user's UserID, so resolving
+	// that user below would open the dashboard to the agent as the user, and
+	// the dashboard mints API keys. A session acting for a user it is not gets
+	// no dashboard identity at all.
+	if sess.IsDelegated() {
+		return nil, nil
+	}
+
 	u, err := c.engine.ResolveUser(ctx, sess.UserID.String())
 	if err != nil {
 		return nil, nil

@@ -183,7 +183,14 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return append(opts, rl...)
 	}
 
+	// Enrolling a factor, turning MFA off and regenerating recovery codes
+	// change the credentials on the account. An agent session reads as its
+	// delegating user here and is freshly minted, so it would pass the
+	// recent-sign-in step-up too. Only the user's own session may.
+	ownSession := forge.WithMiddleware(middleware.DenyDelegatedSession())
+
 	if err := g.POST("/enroll", p.handleEnroll,
+		ownSession,
 		forge.WithSummary("Enroll in MFA"),
 		forge.WithOperationID("enrollMFA"),
 		forge.WithResponseSchema(http.StatusOK, "Enrollment started", EnrollResponse{}),
@@ -211,6 +218,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	if err := g.DELETE("/enrollment", p.handleDisable,
+		ownSession,
 		forge.WithSummary("Disable MFA"),
 		forge.WithOperationID("disableMFA"),
 		forge.WithResponseSchema(http.StatusOK, "MFA disabled", DisableResponse{}),
@@ -230,6 +238,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	if err := g.POST("/recovery/regenerate", p.handleRecoveryRegenerate,
+		ownSession,
 		forge.WithSummary("Regenerate MFA recovery codes"),
 		forge.WithOperationID("regenerateMFARecoveryCodes"),
 		forge.WithResponseSchema(http.StatusOK, "New recovery codes generated", RecoveryRegenerateResponse{}),

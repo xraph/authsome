@@ -1662,7 +1662,13 @@ func (e *Engine) ResetPassword(ctx context.Context, token, newPassword string) e
 }
 
 // ChangePassword changes a user's password (requires current password).
+//
+// It returns ErrDelegatedSession when ctx carries an agent or delegated
+// session: whoever sets the password can sign in as the user from then on.
 func (e *Engine) ChangePassword(ctx context.Context, userID id.UserID, currentPassword, newPassword string) error {
+	if err := middleware.RefuseDelegated(ctx); err != nil {
+		return err
+	}
 	u, err := e.store.GetUser(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("authsome: get user: %w", err)
@@ -3244,7 +3250,15 @@ func (e *Engine) ExportUserData(ctx context.Context, userID id.UserID) (*UserExp
 // Impersonate creates a new session for the target user, marked as impersonated
 // by the admin. The resulting session behaves as if the target user is signed in,
 // but carries the impersonator's identity for audit purposes.
+//
+// It returns ErrDelegatedSession when ctx carries an agent or delegated
+// session. adminID is whatever user the caller resolved, and for an agent
+// session that is the delegating admin, so the permission the caller checked
+// says nothing about who is really asking.
 func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID, opts ...ImpersonateOption) (*user.User, *session.Session, error) {
+	if err := middleware.RefuseDelegated(ctx); err != nil {
+		return nil, nil, err
+	}
 	var o impersonateOpts
 	for _, apply := range opts {
 		apply(&o)

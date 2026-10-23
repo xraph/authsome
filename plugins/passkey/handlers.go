@@ -44,7 +44,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// four share the passkey budget.
 	ceremonyRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int { return c.PasskeyLimit })
 
+	// A passkey signs in as the user. A session acting for the user without
+	// being them (an agent, a token-exchange session) must not add one.
 	if err := g.POST("/register/begin", p.handleRegisterBegin, append([]forge.RouteOption{
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Begin passkey registration"),
 		forge.WithOperationID("passkeyRegisterBegin"),
 		forge.WithResponseSchema(http.StatusOK, "Registration options", RegisterBeginResponse{}),
@@ -54,6 +57,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	if err := g.POST("/register/finish", p.handleRegisterFinish, append([]forge.RouteOption{
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Complete passkey registration"),
 		forge.WithOperationID("passkeyRegisterFinish"),
 		forge.WithRequestBodySchema(Attestation{}),

@@ -240,7 +240,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
 	)
 
+	// A key is a durable credential in its owner's name. An agent session
+	// reads as its delegating user here, and a key it minted would belong to
+	// that user, bound to no grant and outliving it.
 	if err := g.POST("", p.handleCreate,
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Create API key"),
 		forge.WithOperationID("createAPIKey"),
 		forge.WithCreatedResponse(CreateKeyResponse{}),

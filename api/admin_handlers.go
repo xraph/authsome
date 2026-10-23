@@ -109,7 +109,10 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 		return err
 	}
 
+	// The caller picks the new user's password, so an agent acting for an
+	// admin would leave with a login of its own that outlives its grant.
 	if err := g.POST("/users/create", a.handleAdminCreateUser,
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Create user (admin)"),
 		forge.WithDescription("Creates a new user without going through the signup flow. The user is created with email verified."),
 		forge.WithOperationID("adminCreateUser"),
@@ -142,8 +145,11 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 		return err
 	}
 
-	// Impersonation
+	// Impersonation. An agent session acting for an admin passes the group's
+	// manage:user check, which runs against its delegating user, and would get
+	// back a session as anybody in the app. Only the admin's own session may.
 	if err := g.POST("/impersonate/:userId", a.handleAdminImpersonate,
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Impersonate user (admin)"),
 		forge.WithDescription("Creates a short-lived session as the target user. The session carries an audit trail of the impersonating admin."),
 		forge.WithOperationID("adminImpersonate"),
@@ -258,7 +264,10 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 		return err
 	}
 
+	// A service-account key is a credential no agent grant bounds, so an
+	// agent acting for an admin cannot mint one.
 	return g.POST("/service-accounts/:serviceAccountId/api-keys", a.handleAdminCreateServiceAccountAPIKey,
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Create service account API key (admin)"),
 		forge.WithDescription("Mints an API key for a service account. The plaintext secret is returned only once."),
 		forge.WithOperationID("adminCreateServiceAccountAPIKey"),

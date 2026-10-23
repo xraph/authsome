@@ -158,6 +158,29 @@ func (s *Session) IsHumanPrincipal() bool {
 	return s.PrincipalKind == "" || s.PrincipalKind == principal.KindUser
 }
 
+// IsDelegated reports whether this session acts for a user without being that
+// user's own sign-in.
+//
+// Two kinds of session do. An agent session carries its delegating user's
+// UserID, so code that only reads the user ID treats it as that user. A user
+// session minted by token exchange carries an actor chain naming the principal
+// that is really calling. Both are bounded by a grant, and anything they mint
+// in the user's name (an API key, an OAuth2 token, a passkey) would outlive or
+// escape that grant.
+//
+// An impersonation is not delegated in this sense, since impersonating
+// somebody is the request to act as them (see AuthzActors). A service account
+// or workload session acting as itself names no user, so it isn't either.
+func (s *Session) IsDelegated() bool {
+	if s.PrincipalKind == PrincipalKindAgent {
+		return true
+	}
+	if !s.IsHumanPrincipal() {
+		return !s.UserID.IsNil()
+	}
+	return len(s.AuthzActors()) > 0
+}
+
 // AbsoluteDeadline is the instant after which the session must not be
 // honoured however active it has been: CreatedAt plus lifetime. A zero
 // lifetime or an unset CreatedAt yields the zero time, meaning no deadline.

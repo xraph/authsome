@@ -942,6 +942,13 @@ func (e *Engine) Plugin(name string) plugin.Plugin { return e.plugins.Plugin(nam
 // Hooks returns the global event bus.
 func (e *Engine) Hooks() *hook.Bus { return e.hooks }
 
+// ErrDelegatedSession is returned by an engine method that mints a credential
+// or a session in a user's name when the context carries an agent or delegated
+// session (see session.Session.IsDelegated). It is middleware.ErrDelegatedSession,
+// re-exported so callers of the engine can match it without importing the
+// middleware package.
+var ErrDelegatedSession = middleware.ErrDelegatedSession
+
 // ErrOrgSwitchNotUser is returned when a session whose principal is not a
 // user (an agent, a workload, a service account) asks to switch its active
 // organization. An agent's org is its grant's org, and the user it acts for
