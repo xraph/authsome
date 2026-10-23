@@ -293,7 +293,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
+	// Agent-safe: handleRevoke only revokes a token the caller itself holds
+	// (callerOwnsSession), which is how an OAuth2 client, an agent included,
+	// logs out.
 	if err := g.POST("/revoke", p.handleRevoke, append([]forge.RouteOption{
+		middleware.AgentSafe(),
 		forge.WithMiddleware(middleware.RequireScope()),
 		forge.WithSummary("Revoke token"),
 		forge.WithDescription("Revokes an access or refresh token."),

@@ -191,8 +191,10 @@ func NewTestServer(t *testing.T, opts ...ServerOption) *TestServer {
 		t.Fatalf("testutil: register API routes: %v", routeErr)
 	}
 	// Register plugin routes (org, apikey, passkey, etc.)
+	// Behind the same deny-by-default write guard the Forge extension uses.
+	pluginRouter := authmw.GuardDelegatedWrites(router)
 	for _, rp := range engine.Plugins().RouteProviders() {
-		if pluginErr := rp.RegisterRoutes(router); pluginErr != nil {
+		if pluginErr := rp.RegisterRoutes(pluginRouter); pluginErr != nil {
 			t.Fatalf("testutil: register plugin routes (%T): %v", rp, pluginErr)
 		}
 	}

@@ -68,6 +68,13 @@ func PermissionRouteOptions(engine Engine, action, resource string) []forge.Rout
 	return opts
 }
 
+// AgentSafe marks a write route as one an agent or delegated session may call.
+// Every authsome route is deny by default for those sessions on POST, PUT,
+// PATCH and DELETE (see middleware.GuardDelegatedWrites). Mark a route only
+// when the caller can touch nothing but its own credential, or when the route
+// enforces the agent's grant itself (agentauth.Plugin.GuardRoute does both).
+func AgentSafe() forge.RouteOption { return middleware.AgentSafe() }
+
 // AdminGuard returns SessionGuard plus an RBAC permission check, mirroring the
 // core API's /v1/admin chain (middleware.RequireAuth + RequirePermission). Use
 // it for plugin admin groups that manage tenant-wide configuration —

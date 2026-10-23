@@ -500,8 +500,9 @@ func (e *Extension) init(fapp forge.App) error {
 			// No duplicate-path risk: basePath is never empty (it defaults
 			// to /authsome above), so the prefixed mirror and the root
 			// registration always land on different literal paths.
+			rootGuarded := middleware.GuardDelegatedWrites(router)
 			for _, rp := range eng.Plugins().RootRouteProviders() {
-				if err := rp.RegisterRootRoutes(router); err != nil {
+				if err := rp.RegisterRootRoutes(rootGuarded); err != nil {
 					return fmt.Errorf("authsome: register plugin root routes (%T): %w", rp, err)
 				}
 			}
@@ -510,9 +511,13 @@ func (e *Extension) init(fapp forge.App) error {
 				return fmt.Errorf("authsome: register forge routes: %w", err)
 			}
 
-			// Register plugin routes on the grouped router.
+			// Register plugin routes on the grouped router, behind the
+			// deny-by-default write guard: a plugin route refuses an agent or
+			// delegated session on a write unless it is marked AgentSafe.
+			// Made after the API registered, so it keeps the API's Use calls.
+			pluginRouter := middleware.GuardDelegatedWrites(groupedRouter)
 			for _, rp := range eng.Plugins().RouteProviders() {
-				if err := rp.RegisterRoutes(groupedRouter); err != nil {
+				if err := rp.RegisterRoutes(pluginRouter); err != nil {
 					return fmt.Errorf("authsome: register plugin routes (%T): %w", rp, err)
 				}
 			}
@@ -525,7 +530,7 @@ func (e *Extension) init(fapp forge.App) error {
 			// surface stays isolated from any colocated dashboard's own
 			// dispatcher (which RegisterContractContributor targets
 			// separately).
-			if err := e.registerContractServer(groupedRouter); err != nil {
+			if err := e.registerContractServer(pluginRouter); err != nil {
 				return err
 			}
 

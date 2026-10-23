@@ -3,8 +3,10 @@ package middleware
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	"github.com/xraph/forge"
+	"github.com/xraph/forge/interceptors"
 )
 
 // ErrDelegatedSession is returned when a session that acts for a user without
@@ -70,4 +72,77 @@ func DenyDelegatedSession() forge.Middleware {
 			return next(ctx)
 		}
 	}
+}
+
+// AgentSafeMetadataKey is the route metadata key AgentSafe sets.
+const AgentSafeMetadataKey = "authsome.agent_safe"
+
+// DelegatedWriteInterceptorName names the interceptor GuardDelegatedWrites
+// installs.
+const DelegatedWriteInterceptorName = "authsome.deny_delegated_writes"
+
+// DelegatedWriteMessage is the 403 body the write guard answers with.
+const DelegatedWriteMessage = "an agent or delegated session cannot use this endpoint; " +
+	"an agent acts through its grant, and this route is not marked agent-safe"
+
+// AgentSafe marks a write route as one a delegated session may call. It is
+// for routes where the caller can only touch its own credential (ending its
+// own session, revoking its own token) and for routes that enforce the
+// agent's grant themselves, such as one behind agentauth's Guard. Anything
+// that acts on what the user owns stays unmarked.
+func AgentSafe() forge.RouteOption {
+	return forge.WithMetadata(AgentSafeMetadataKey, true)
+}
+
+// IsAgentSafe reports whether route carries the AgentSafe marker.
+func IsAgentSafe(route forge.RouteInfo) bool {
+	marked, ok := route.Metadata[AgentSafeMetadataKey].(bool)
+	return ok && marked
+}
+
+// readOnlyMethod reports whether method is one HTTP defines as safe.
+func readOnlyMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	default:
+		return false
+	}
+}
+
+// DelegatedWriteInterceptor refuses a delegated caller (see RefuseDelegated)
+// on any request that isn't GET, HEAD or OPTIONS, unless the route is marked
+// AgentSafe. It is the deny-by-default rule for every authsome route: an
+// agent's authority comes from its grant, so it reads what its user can read
+// and writes only where a route says so.
+//
+// It is an interceptor rather than a middleware because interceptors see the
+// matched route's metadata, which is where AgentSafe lives, and run after
+// every middleware, so the session guard of the route's group has already
+// resolved the caller.
+func DelegatedWriteInterceptor() interceptors.Interceptor {
+	return interceptors.NewInterceptor(DelegatedWriteInterceptorName,
+		func(ctx forge.Context, route forge.RouteInfo) interceptors.InterceptorResult {
+			if readOnlyMethod(ctx.Request().Method) || IsAgentSafe(route) {
+				return interceptors.Allow()
+			}
+			if RefuseDelegated(ctx.Context()) != nil {
+				return interceptors.Block(forge.Forbidden(DelegatedWriteMessage))
+			}
+			return interceptors.Allow()
+		})
+}
+
+// GuardDelegatedWrites returns a group of router, with no prefix, that runs
+// DelegatedWriteInterceptor on every route registered through it or through
+// any group made from it. The API registers its own routes this way, and the
+// Forge extension hands it to every plugin's RegisterRoutes, so a route a
+// plugin adds is refused to delegated sessions until someone marks it
+// AgentSafe. If you mount authsome's plugins on a router yourself, pass them
+// this.
+//
+// Create it after any Use calls on router that the routes should get: a group
+// copies its parent's middleware when it is made.
+func GuardDelegatedWrites(router forge.Router) forge.Router {
+	return router.Group("", interceptors.WithGroupInterceptor(DelegatedWriteInterceptor()))
 }

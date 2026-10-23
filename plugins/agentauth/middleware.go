@@ -140,6 +140,16 @@ func (p *Plugin) Authorize(ctx context.Context, sess *session.Session, action, r
 	return nil
 }
 
+// GuardRoute returns the route options for a route an agent may call under its
+// grant: Guard(action, resource), plus the AgentSafe marker that lets a
+// delegated session past authsome's deny-by-default write rule. Use it on
+// write routes registered through authsome's routers; Guard alone keeps the
+// route closed to agents there. Pair it with your RBAC check as step 4 of the
+// host integration contract says.
+func (p *Plugin) GuardRoute(action, resource string) []forge.RouteOption {
+	return []forge.RouteOption{forge.WithMiddleware(p.Guard(action, resource)), middleware.AgentSafe()}
+}
+
 // Guard returns middleware enforcing the agent intersection for a route that
 // requires action on resource. It resolves the session with
 // middleware.SessionFrom — the whole *session.Session, not just a user id,

@@ -93,33 +93,57 @@ delegated sessions, agents included, so an agent cannot manage its own delegatio
 | `GET` | `/v1/admin/agents/policy` | Read the org's delegation policy |
 | `PUT` | `/v1/admin/agents/policy` | Set the org's delegation policy |
 
-## What a delegated session can't do
+## Deny by default for delegated sessions
 
 A delegated session acts for a user without being that user's own sign-in. An agent session is
 one: it carries its delegating user's ID, so any route that only reads the user ID sees the agent
 as that user. A session minted by token exchange is the other, with an actor chain naming the
-principal that's really calling. That's why step 4 matters for your own routes.
+principal that's really calling.
 
-Authsome's own routes refuse both kinds with a 403, whatever the user is allowed to do, when what
-they hand out would outlive the grant or the work is admin work:
+An agent's authority comes from its grant and nowhere else. So on every authsome route, core and
+plugin alike, a delegated session gets a 403 on `POST`, `PUT`, `PATCH` and `DELETE` unless the
+route is marked agent-safe. `GET`, `HEAD` and `OPTIONS` stay open, so an agent can still read
+`GET /v1/me` and anything else its user can read. A route someone adds tomorrow is refused until
+someone marks it, which is the point.
 
-| Route | What it would have handed the agent |
+Two authsome routes are agent-safe, because the caller can only touch its own credential there:
+
+| Route | Why it's safe |
 |---|---|
-| `POST /v1/keys` | A durable API key owned by the user |
-| `GET /v1/oauth/authorize`, `GET` and `POST /v1/oauth/consent`, `POST /v1/oauth/device/complete` | An ordinary user token for a client the agent controls, with no `pk` claim |
-| `POST /v1/change-password` | A password it knows |
-| `POST /v1/mfa/enroll`, `DELETE /v1/mfa/enrollment`, `POST /v1/mfa/recovery/regenerate` | A second factor or recovery codes, or MFA turned off |
-| `POST /v1/passkeys/register/begin` and `/finish` | A passkey that signs in as the user |
-| `POST /v1/me/switch-org` | A token for another org the user belongs to (agents only; this one checks the principal kind) |
-| Every route under `/v1/admin` (users, impersonation, service accounts, platform owners, apps, bulk, settings, OAuth2 clients, SSO, social providers, agents) | The user's admin roles: impersonation, service-account keys, new accounts with a password the agent picked, client secrets, bans and deletes |
-| Writes under `/v1/roles` (create, update, delete, permissions, assign, unassign) | Role changes in the app |
-| The organization, waitlist and shared-signals admin routes | Tenant administration |
-| `/v1/me/agents` | Control over its own delegation |
+| `POST /v1/signout` | Ends the caller's own session |
+| `POST /v1/oauth/revoke` | Revokes a token the caller itself holds |
 
-The dashboard won't take a delegated token either, in engine mode or in client mode.
-Introspection reports `principal_kind` and `delegated` for every active token. In client mode
-`ClientAuthMiddleware` carries `delegated` onto the request, and a JWT's `act` claim does the same
-on the JWT path, so the guard and the handler checks refuse there too.
+Everything else an agent does goes through your routes and `Guard`. Token exchange, refresh and
+the OAuth2 token endpoint aren't on the list: an agent session never reaches them with a session
+on the request (a workload exchanging tokens acts as itself, and `Engine.Refresh` refuses agent
+sessions anyway).
+
+To mark a write route agent-safe, add `plugin.AgentSafe()` (or `middleware.AgentSafe()`) to its
+options. For a route that enforces the grant, use `GuardRoute`, which mounts `Guard` and the
+marker together:
+
+```go
+router.POST("/v1/invoices/:id/approve", handler,
+    append(agents.GuardRoute("approve", "invoice"),
+        forge.WithMiddleware(middleware.RequirePermission(engine, "approve", "invoice")))...,
+)
+```
+
+`Guard` on its own leaves a write route closed to agents. The rule lives in
+`middleware.GuardDelegatedWrites`, an interceptor on a router group. The API registers its routes
+through one, and the Forge extension hands one to every plugin's `RegisterRoutes`. If you mount
+authsome's plugins on a router yourself, pass them `middleware.GuardDelegatedWrites(router)`.
+
+Some reads are refused too, because what they hand out would outlive the grant or the work is
+admin work: `GET /v1/oauth/authorize` and the consent page, and every route under `/v1/admin`
+along with the organization, waitlist and shared-signals admin routes. The dashboard won't take a
+delegated token either, in engine mode or in client mode.
+
+In client mode, `ClientAuthMiddleware` carries introspection's `delegated` field onto the request,
+and on the JWT path an `act` claim does the same, so the rule holds there as well. Introspection
+reports `principal_kind` and `delegated` for every active token. A client-mode service needs an
+identity server that sends the field; an older one sends nothing, and its tokens read as the
+user's own.
 
 What makes a session delegated is its shape, not its kind: an agent or grant marker, a
 delegation that isn't an impersonation, an actor chain, or a non-user principal that names a
@@ -127,16 +151,10 @@ user. An admin's impersonation session isn't refused. Neither is a principal act
 whatever its kind, so a service account registered as an agent, with no user behind it, keeps
 working.
 
-`middleware.DenyDelegatedSession()` is the guard behind these, and `plugin.AdminGuard` ends with
-it. Mount it on a route of your own that mints a credential, after the middleware that resolves
-the session. The handlers that write credentials straight to the store (API key create, the MFA
-and passkey routes, the dashboard's API key create) call `middleware.RefuseDelegated` themselves,
-so a mount that forgets the guard still fails closed. `Engine.Impersonate`,
-`Engine.ChangePassword` and `Engine.AdminCreateUser` return `authsome.ErrDelegatedSession` when the
-context carries a delegated session.
-
-Every other route still treats an agent as its user. Reads under `/v1/roles`, environments,
-webhooks and org membership are the ones to keep in mind.
+The older, narrower guards stay in place underneath: `middleware.DenyDelegatedSession()` on the
+credential and admin routes, `middleware.RefuseDelegated` inside the handlers that write
+credentials straight to the store, and `authsome.ErrDelegatedSession` from `Engine.Impersonate`,
+`Engine.ChangePassword` and `Engine.AdminCreateUser`.
 
 ## Lifecycle hooks
 

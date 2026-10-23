@@ -65,16 +65,17 @@
 // route not explicitly wrapped in Guard is reachable with it regardless of
 // what any grant says.
 //
-// Authsome's own routes refuse a delegated session (an agent session, or
-// one minted by token exchange) with a 403 whether or not you have wired
-// the above: API key creation, OAuth2 authorize, consent and device
-// approval, password change, MFA enrollment, disable and recovery-code
-// regeneration, passkey registration, every /v1/admin route, role writes,
-// and the organization, waitlist and shared-signals admin routes. Org switch
-// refuses any non-user session. The dashboard refuses a delegated token in
-// both modes, reading principal_kind and delegated off introspection in
-// client mode. Most of these mount middleware.DenyDelegatedSession, which
-// plugin.AdminGuard ends with; README.md lists them with what each would
-// have handed out. Every other authsome route still treats an agent as its
-// delegating user.
+// Authsome is deny by default for a delegated session (an agent session, or
+// one minted by token exchange), whether or not you have wired the above.
+// On every authsome route, core and plugin, such a session gets a 403 on
+// POST, PUT, PATCH and DELETE unless the route is marked agent-safe; GET,
+// HEAD and OPTIONS stay open. Only POST /v1/signout and POST /v1/oauth/revoke
+// are marked, since the caller can touch nothing there but its own
+// credential. Mark a route of your own with plugin.AgentSafe, or use
+// Plugin.GuardRoute, which mounts Guard and the marker together. The rule is
+// middleware.GuardDelegatedWrites, which the API and the Forge extension put
+// around every route they register; pass it to a plugin's RegisterRoutes if
+// you mount plugins yourself. Some reads are refused as well: OAuth2
+// authorize and consent, every /v1/admin route, and the organization,
+// waitlist and shared-signals admin routes. README.md has the details.
 package agentauth

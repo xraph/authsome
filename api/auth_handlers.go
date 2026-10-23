@@ -93,7 +93,10 @@ func (a *API) registerAuthRoutes(router forge.Router) error {
 		return err
 	}
 
+	// Agent-safe: it ends the caller's own session and touches nothing the
+	// user owns, so an agent can log itself out.
 	if err := g.POST("/signout", a.handleSignOut,
+		middleware.AgentSafe(),
 		forge.WithSummary("Sign out"),
 		forge.WithDescription("Terminates the current session."),
 		forge.WithOperationID("signOut"),
