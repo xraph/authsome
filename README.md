@@ -304,6 +304,6 @@ make test-integration        # PostgreSQL and a MongoDB replica set, needs Docke
 
 ## License
 
-See the [Authsome repository](https://github.com/xraph/authsome) for license terms.
+MIT. See [LICENSE](LICENSE).
 
 Authsome is part of the [Forge](https://github.com/xraph/forge) forgery stack, built by [Rex Raphael](https://github.com/juicycleff) and [contributors](https://github.com/xraph/authsome/graphs/contributors).
