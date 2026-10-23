@@ -942,6 +942,12 @@ func (e *Engine) Plugin(name string) plugin.Plugin { return e.plugins.Plugin(nam
 // Hooks returns the global event bus.
 func (e *Engine) Hooks() *hook.Bus { return e.hooks }
 
+// ErrOrgSwitchNotUser is returned when a session whose principal is not a
+// user (an agent, a workload, a service account) asks to switch its active
+// organization. An agent's org is its grant's org, and the user it acts for
+// is not the caller.
+var ErrOrgSwitchNotUser = errors.New("authsome: only a user session can switch organization")
+
 // SwitchActiveOrg sets the active organization on an existing session.
 // The session's user must be a member of newOrgID — verified via the
 // organization plugin. When the user is not a member the org-plugin
@@ -966,27 +972,27 @@ func (e *Engine) SwitchActiveOrg(ctx context.Context, sessionID id.SessionID, ne
 		return nil, fmt.Errorf("authsome: get session: %w", err)
 	}
 
+	// Only a user's own session picks its org. An agent session carries the
+	// delegating user's UserID, so the membership check below would pass for
+	// it, and its org is its grant's org: switching would move it out from
+	// under the grant. On a JWT app it would also come back with a token that
+	// has no pk claim, which the middleware reads as the user's own login.
+	if !sess.IsHumanPrincipal() {
+		return nil, ErrOrgSwitchNotUser
+	}
+
 	if !newOrgID.IsNil() {
-		// Membership check via the organization plugin. Plugin name is
-		// stable so the lookup is cheap; we tolerate the plugin not
-		// being registered (auth-only deployments without orgs) by
-		// returning a clear error rather than crashing on nil.
-		orgP, ok := e.plugins.Plugin("organization").(orgMembershipChecker)
-		if !ok || orgP == nil {
+		// We tolerate the plugin not being registered (auth-only
+		// deployments without orgs) by returning a clear error rather
+		// than crashing on nil.
+		member, memberErr := e.isOrgMember(ctx, sess.UserID, newOrgID)
+		if errors.Is(memberErr, errOrgPluginMissing) {
 			return nil, fmt.Errorf("authsome: organization plugin not registered; cannot switch org")
 		}
-		orgs, err := orgP.ListUserOrganizations(ctx, sess.UserID)
-		if err != nil {
-			return nil, fmt.Errorf("authsome: list user orgs for membership check: %w", err)
+		if memberErr != nil {
+			return nil, fmt.Errorf("authsome: list user orgs for membership check: %w", memberErr)
 		}
-		matched := false
-		for _, o := range orgs {
-			if o.ID == newOrgID {
-				matched = true
-				break
-			}
-		}
-		if !matched {
+		if !member {
 			return nil, fmt.Errorf("authsome: user is not a member of org %s", newOrgID)
 		}
 	}
@@ -1040,6 +1046,29 @@ func (e *Engine) persistOrgSwitch(ctx context.Context, sess *session.Session) er
 		return fmt.Errorf("authsome: switch org: session changed concurrently: %w", store.ErrConflict)
 	}
 	return nil
+}
+
+// errOrgPluginMissing reports that no organization plugin is registered, so
+// no membership can be checked.
+var errOrgPluginMissing = errors.New("authsome: organization plugin not registered")
+
+// isOrgMember asks the organization plugin whether userID belongs to orgID.
+// The plugin is looked up by its stable name, so the lookup is cheap.
+func (e *Engine) isOrgMember(ctx context.Context, userID id.UserID, orgID id.OrgID) (bool, error) {
+	orgP, ok := e.plugins.Plugin("organization").(orgMembershipChecker)
+	if !ok || orgP == nil {
+		return false, errOrgPluginMissing
+	}
+	orgs, err := orgP.ListUserOrganizations(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	for _, o := range orgs {
+		if o != nil && o.ID == orgID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // orgMembershipChecker is the narrow contract SwitchActiveOrg needs

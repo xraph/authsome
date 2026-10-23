@@ -146,7 +146,11 @@ You'll always see `env_id` on a session bound to an environment, which is every 
 }
 ```
 
-Use that token from then on. It expires when the old one would have, so switching never extends a session. The old token isn't revoked: it keeps verifying, with the old `org_id`, until it expires, the same as a token you've refreshed past. Clearing the org (an empty `org_id` in the request) works the same way and returns a token with no `org_id`. Removing a member, or deleting the org, clears the active org on that member's sessions without minting anything, so their current tokens keep the old claim until the next refresh.
+Use that token from then on. It expires when the old one would have, so switching never extends a session. The old token isn't revoked, but with the session check on (the `session.jwt_require_active_session` setting, on by default) Authsome's own middleware loads the session row for every JWT and refuses one whose `org_id` doesn't match the row's active org. So after a switch the old token stops working against Authsome straight away. A resource server that verifies offline never sees the row, and it will go on accepting the old token, with the old `org_id`, until it expires. Keep access token lifetimes short if that matters to you.
+
+Calling `Engine.SwitchActiveOrg` with an empty org ID clears the active org the same way and hands back a token with no `org_id`. Removing a member, or deleting the org, clears the active org on that member's sessions without minting anything. Their current tokens are refused by the session check from then on, and the next refresh checks the membership again before it signs `org_id`, so a refresh never puts back an org the user has left.
+
+Only a user's own session can switch. An agent, workload or service account session gets a 403, because an agent's org is the org on its grant. If a refresh rotates the session between the switch reading it and writing it, the switch returns 409 and you can retry it.
 
 On an opaque app there's no claim to go stale, since the middleware reads the org off the session row on every request. The response leaves out `session_token` and `expires_at`, and you keep using the token you have.
 

@@ -161,6 +161,9 @@ func mapErrorCtx(ctx forge.Context, err error) error {
 	if errors.Is(err, account.ErrWeakPassword) {
 		return forge.BadRequest(err.Error())
 	}
+	if errors.Is(err, authsome.ErrOrgSwitchNotUser) {
+		return forge.Forbidden("only a user session can switch organization")
+	}
 	if errors.Is(err, authsome.ErrPlatformAppProtected) {
 		return forge.Forbidden("the platform app cannot be deleted")
 	}

@@ -162,6 +162,12 @@ func (a *API) handleSwitchOrg(ctx forge.Context, req *SwitchOrgRequest) (*Switch
 	if !ok {
 		return nil, forge.Unauthorized("authentication required")
 	}
+	// The engine refuses a non-user session too. Refusing here as well
+	// keeps an agent from reaching the store at all when the middleware has
+	// already resolved its session.
+	if sess, hasSess := middleware.SessionFrom(ctx.Context()); hasSess && sess != nil && !sess.IsHumanPrincipal() {
+		return nil, forge.Forbidden("only a user session can switch organization")
+	}
 
 	var newOrgID id.OrgID
 	if req.OrgID != "" {

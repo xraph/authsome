@@ -751,6 +751,28 @@ func (e *Engine) rotateSession(ctx context.Context, sess *session.Session, opts 
 		}
 	}
 
+	// A refresh copies the session's active org into the new token, so the
+	// membership behind it is checked again first. Removing a member clears
+	// the org on their sessions, but only best-effort, and a refresh that read
+	// the row before the clear writes the whole row back on rotation, org
+	// included. Without this check every later refresh in the chain would
+	// re-sign org_id for an org the user has left. The drop is persisted by
+	// the rotation below. With no organization plugin registered nothing can
+	// vouch for the org, so it is dropped too.
+	if !sess.OrgID.IsNil() {
+		member, memberErr := e.isOrgMember(ctx, sess.UserID, sess.OrgID)
+		if memberErr != nil && !errors.Is(memberErr, errOrgPluginMissing) {
+			return nil, fmt.Errorf("authsome: refresh session: check org membership: %w", memberErr)
+		}
+		if !member {
+			e.logger.Info("authsome: refresh dropped an org the user no longer belongs to",
+				log.String("session_id", sess.ID.String()),
+				log.String("org_id", sess.OrgID.String()),
+			)
+			sess.OrgID = id.OrgID{}
+		}
+	}
+
 	// Lazily backfill FamilyID for legacy sessions that pre-date Phase 3E.2.
 	// Without a family, replay-cascade can't link siblings — but a single
 	// session is still safer than refusing every legacy refresh.

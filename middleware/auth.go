@@ -580,6 +580,17 @@ func tryJWTAuth(
 
 		// sess == nil && sessErr == nil means "feature disabled, skip checks".
 		if sess != nil {
+			// The token's org_id has to be the row's active org. The
+			// request is scoped by the claim below, so a token signed
+			// before the org was switched or cleared would otherwise go on
+			// acting in an org the session no longer has.
+			if sess.OrgID.String() != claims.OrgID {
+				logger.Warn("auth middleware: JWT org does not match its session",
+					log.String("session_id", sess.ID.String()),
+				)
+				return jwtAuthRefused, nil
+			}
+
 			// Validate IP binding for JWT.
 			if bindCfg.BindToIP && sess.IPAddress != "" {
 				clientIP := clientIPFromRequest(ctx.Request())

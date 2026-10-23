@@ -9,18 +9,22 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xraph/forge"
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/store/memory"
@@ -228,4 +232,121 @@ func TestOAuth2IssuedJWTStampsEnv(t *testing.T) {
 			assert.False(t, hasOrg)
 		})
 	}
+}
+
+// An agent session carries its delegating user's UserID, and an agent's org is
+// its grant's org. Letting it switch would let it move off that org, and on a
+// JWT app mint a token with no pk claim, which the middleware reads as the
+// user's own login.
+func TestSwitchOrg_RefusesAgentSession(t *testing.T) {
+	for _, format := range []string{"jwt", "opaque"} {
+		t.Run(format, func(t *testing.T) {
+			var (
+				eng  *authsome.Engine
+				s    *memory.Store
+				orgs *fakeOrgPlugin
+			)
+			if format == "jwt" {
+				eng, s, orgs = newJWTOrgEngine(t)
+			} else {
+				orgs = &fakeOrgPlugin{orgs: map[string][]id.OrgID{}}
+				eng, s = newTestEngine(t, authsome.WithPlugin(orgs))
+			}
+			ctx := context.Background()
+
+			grantOrg, otherOrg := id.NewOrgID(), id.NewOrgID()
+			uid := id.NewUserID()
+			orgs.orgs[uid.String()] = []id.OrgID{grantOrg, otherOrg}
+			agent := &session.Session{
+				ID:            id.NewSessionID(),
+				AppID:         testAppID(t),
+				UserID:        uid,
+				OrgID:         grantOrg,
+				PrincipalKind: session.PrincipalKindAgent,
+				Token:         "agent-token-" + format,
+				RefreshToken:  "agent-refresh-" + format,
+			}
+			require.NoError(t, s.CreateSession(ctx, agent))
+			before, err := s.GetSession(ctx, agent.ID)
+			require.NoError(t, err)
+
+			for _, target := range []id.OrgID{otherOrg, {}} {
+				out, switchErr := eng.SwitchActiveOrg(ctx, agent.ID, target)
+				require.ErrorIs(t, switchErr, authsome.ErrOrgSwitchNotUser)
+				assert.Nil(t, out, "no session, and so no token, comes back")
+			}
+
+			after, err := s.GetSession(ctx, agent.ID)
+			require.NoError(t, err)
+			assert.Equal(t, grantOrg.String(), after.OrgID.String(), "the agent stays on its grant's org")
+			assert.Equal(t, before.TokenHash, after.TokenHash, "no token was rotated onto the row")
+		})
+	}
+}
+
+// clearActiveOrg is best-effort and can lose a race with a refresh that wrote
+// the old row back, so refresh has to check the membership itself before it
+// signs org_id again.
+func TestJWT_RefreshDropsOrgTheUserLeft(t *testing.T) {
+	eng, s, orgs := newJWTOrgEngine(t)
+	ctx := context.Background()
+	_, in := signUpJWT(t, eng, "claims-left@example.com")
+
+	orgID := id.NewOrgID()
+	orgs.orgs[in.UserID.String()] = []id.OrgID{orgID}
+	_, err := eng.SwitchActiveOrg(ctx, in.ID, orgID)
+	require.NoError(t, err)
+
+	// The membership goes; the row still names the org, as it would if the
+	// plugin's clear had been overwritten.
+	orgs.orgs[in.UserID.String()] = nil
+
+	refreshed, err := eng.Refresh(ctx, in.RefreshToken)
+	require.NoError(t, err)
+	claims := rawJWTClaims(t, refreshed.Token)
+	_, hasOrg := claims["org_id"]
+	assert.False(t, hasOrg, "a refresh must not re-sign an org the user is no longer in")
+	assert.Equal(t, in.EnvID.String(), claims["env_id"])
+
+	stored, err := s.GetSession(ctx, in.ID)
+	require.NoError(t, err)
+	assert.True(t, stored.OrgID.IsNil(), "the drop has to reach the row too")
+}
+
+// With the session check on (the default), the middleware loads the row for a
+// JWT. A token whose org_id disagrees with the row is stale: the org was
+// switched or cleared after it was signed.
+func TestJWT_MiddlewareRefusesTokenWhoseOrgDisagreesWithRow(t *testing.T) {
+	eng, _, orgs := newJWTOrgEngine(t)
+	ctx := context.Background()
+	_, in := signUpJWT(t, eng, "claims-stale@example.com")
+
+	orgID := id.NewOrgID()
+	orgs.orgs[in.UserID.String()] = []id.OrgID{orgID}
+	switched, err := eng.SwitchActiveOrg(ctx, in.ID, orgID)
+	require.NoError(t, err)
+
+	var gotOrg string
+	router := forge.NewRouter()
+	router.Use(eng.AuthMiddleware())
+	require.NoError(t, router.GET("/whoami", func(c forge.Context) error {
+		if _, ok := middleware.UserFrom(c.Context()); !ok {
+			return c.NoContent(http.StatusUnauthorized)
+		}
+		if o, ok := middleware.OrgIDFrom(c.Context()); ok {
+			gotOrg = o.String()
+		}
+		return c.NoContent(http.StatusOK)
+	}))
+	call := func(token string) int {
+		req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/whoami", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	assert.Equal(t, http.StatusUnauthorized, call(in.Token), "the pre-switch token names no org while the row does")
+	assert.Equal(t, http.StatusOK, call(switched.Token))
+	assert.Equal(t, orgID.String(), gotOrg, "the middleware scopes the request to the token's org")
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store/memory"
 	"github.com/xraph/authsome/tokenformat"
 
@@ -43,10 +44,10 @@ func (m *memberOrgs) ListUserOrganizations(_ context.Context, userID id.UserID) 
 	return out, nil
 }
 
-// POST /v1/me/switch-org on a JWT app hands back an access token for the new
-// org and puts it in the session cookie, so neither a bearer client nor a
-// browser keeps acting in the org it just left.
-func TestHandleSwitchOrg_JWTAppReturnsTokenForNewOrg(t *testing.T) {
+// newSwitchOrgAPI builds an API over a JWT-format engine with memberOrgs
+// standing in for the organization plugin.
+func newSwitchOrgAPI(t *testing.T) (http.Handler, *authsome.Engine, *memberOrgs) {
+	t.Helper()
 	s := memory.New()
 	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
@@ -68,8 +69,14 @@ func TestHandleSwitchOrg_JWTAppReturnsTokenForNewOrg(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, eng.Start(context.Background()))
 	secutil.RelaxAuthDefaults(t, eng)
-	handler := withTestKey(api.New(eng).Handler())
+	return withTestKey(api.New(eng).Handler()), eng, orgs
+}
 
+// POST /v1/me/switch-org on a JWT app hands back an access token for the new
+// org and puts it in the session cookie, so neither a bearer client nor a
+// browser keeps acting in the org it just left.
+func TestHandleSwitchOrg_JWTAppReturnsTokenForNewOrg(t *testing.T) {
+	handler, eng, orgs := newSwitchOrgAPI(t)
 	ctx := context.Background()
 	appID, err := id.ParseAppID(testAppIDStr)
 	require.NoError(t, err)
@@ -109,4 +116,47 @@ func TestHandleSwitchOrg_JWTAppReturnsTokenForNewOrg(t *testing.T) {
 		}
 	}
 	assert.Equal(t, resp.SessionToken, cookieToken, "the session cookie has to carry the new token")
+}
+
+// An agent session may not switch org over HTTP, whether the auth middleware
+// put the whole session on the request or only its id.
+func TestHandleSwitchOrg_RefusesAgentSession(t *testing.T) {
+	handler, eng, orgs := newSwitchOrgAPI(t)
+	ctx := context.Background()
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+
+	// The delegating user belongs to both orgs, so only the principal check
+	// stands between the agent and the switch.
+	grantOrg, otherOrg := id.NewOrgID(), id.NewOrgID()
+	agent := &session.Session{
+		ID:            id.NewSessionID(),
+		AppID:         appID,
+		UserID:        id.NewUserID(),
+		OrgID:         grantOrg,
+		PrincipalKind: session.PrincipalKindAgent,
+		Token:         "agent-http-token",
+	}
+	orgs.orgs[agent.UserID.String()] = []id.OrgID{grantOrg, otherOrg}
+	require.NoError(t, eng.Store().CreateSession(ctx, agent))
+
+	for name, withSession := range map[string]bool{"session on context": true, "session id only": false} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/me/switch-org", jsonBody(t, map[string]string{"org_id": otherOrg.String()}))
+			req.Header.Set("Content-Type", "application/json")
+			reqCtx := middleware.WithUserID(req.Context(), agent.UserID)
+			reqCtx = middleware.WithSessionID(reqCtx, agent.ID)
+			if withSession {
+				reqCtx = middleware.WithSession(reqCtx, agent)
+			}
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req.WithContext(reqCtx))
+			assert.Equal(t, http.StatusForbidden, rec.Code, "body=%s", rec.Body.String())
+			assert.NotContains(t, rec.Body.String(), "session_token")
+		})
+	}
+
+	stored, err := eng.Store().GetSession(ctx, agent.ID)
+	require.NoError(t, err)
+	assert.Equal(t, grantOrg.String(), stored.OrgID.String())
 }
