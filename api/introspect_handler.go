@@ -25,6 +25,9 @@ func (a *API) registerIntrospectRoutes(router forge.Router) error {
 
 	introspectOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
 	introspectOpts = append(introspectOpts,
+		// Agent-safe: introspection only reads a token's state, and it is a
+		// POST only so the token travels in the body rather than the URL.
+		middleware.AgentSafe(),
 		forge.WithMiddleware(middleware.RequireScope()),
 		forge.WithSummary("Introspect token"),
 		forge.WithDescription("Validates a token. Follows RFC 7662 semantics: invalid tokens return {active: false} with 200 status. Requires a secret API key or a session; callers without manage on app see only active, expires_at, user_id, scope, aud and cnf."),

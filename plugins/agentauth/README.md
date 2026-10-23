@@ -106,12 +106,19 @@ route is marked agent-safe. `GET`, `HEAD` and `OPTIONS` stay open, so an agent c
 `GET /v1/me` and anything else its user can read. A route someone adds tomorrow is refused until
 someone marks it, which is the point.
 
-Two authsome routes are agent-safe, because the caller can only touch its own credential there:
+Three authsome routes are agent-safe. On two of them the caller can only touch its own
+credential, and the third only reads:
 
 | Route | Why it's safe |
 |---|---|
 | `POST /v1/signout` | Ends the caller's own session |
 | `POST /v1/oauth/revoke` | Revokes a token the caller itself holds |
+| `POST /v1/introspect` | Reads a token's state; it's a POST only so the token travels in the body |
+
+The public writes (sign-up, sign-in, password reset, email verification, magic link, phone OTP,
+passkey login, social and SSO sign-in, the OAuth2 token, device and registration endpoints, the
+waitlist join) answer 403 too when the request carries a delegated bearer token. Nothing an agent
+needs goes through them with its own token attached.
 
 Everything else an agent does goes through your routes and `Guard`. Token exchange, refresh and
 the OAuth2 token endpoint aren't on the list: an agent session never reaches them with a session
@@ -129,7 +136,16 @@ router.POST("/v1/invoices/:id/approve", handler,
 )
 ```
 
-`Guard` on its own leaves a write route closed to agents. The rule lives in
+`Guard` on its own leaves a write route closed to agents. A session minted by token exchange
+that reaches a `Guard`ed route has no agent grant, so `Guard` checks its own scopes instead: one
+of them has to be a scope you registered with `WithScope` that covers the route, and the user it
+acts for has to be allowed as well. Exchange narrows those scopes to the delegation's, so name
+the delegation's scopes the same way you name grant scopes. With no covering scope it gets 403.
+
+The rule is an interceptor, and interceptors run after a route's own middleware. So route
+middleware on an authsome router must not change state, and a permission check there should sit
+behind `middleware.DenyDelegatedSession()`, or an agent can tell from the answer what its user may
+do. Authsome's own routes follow both rules. The rule lives in
 `middleware.GuardDelegatedWrites`, an interceptor on a router group. The API registers its routes
 through one, and the Forge extension hands one to every plugin's `RegisterRoutes`. If you mount
 authsome's plugins on a router yourself, pass them `middleware.GuardDelegatedWrites(router)`.
@@ -140,10 +156,12 @@ along with the organization, waitlist and shared-signals admin routes. The dashb
 delegated token either, in engine mode or in client mode.
 
 In client mode, `ClientAuthMiddleware` carries introspection's `delegated` field onto the request,
-and on the JWT path an `act` claim does the same, so the rule holds there as well. Introspection
-reports `principal_kind` and `delegated` for every active token. A client-mode service needs an
-identity server that sends the field; an older one sends nothing, and its tokens read as the
-user's own.
+and on the JWT path an `act` claim does the same. A client-mode service is covered only on the
+routes it wraps in `middleware.GuardDelegatedWrites` (or guards with `DenyDelegatedSession`);
+nothing applies the rule to your own routes for you. Introspection reports `principal_kind` and
+`delegated` for every active token. You need an identity server that sends them. An older one
+sends neither, every token reads as the user's own, and `ClientAuthMiddleware` logs a warning the
+first time it sees such a response.
 
 What makes a session delegated is its shape, not its kind: an agent or grant marker, a
 delegation that isn't an impersonation, an actor chain, or a non-user principal that names a

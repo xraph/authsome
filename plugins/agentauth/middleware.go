@@ -46,8 +46,11 @@ func (p *Plugin) SetPermissionChecker(pc plugin.PermissionChecker) { p.permCheck
 func (p *Plugin) SetLogger(l log.Logger) { p.logger = l }
 
 // Authorize enforces the intersection: an agent may do something only if its
-// grant confers it AND the delegating user can do it. A non-agent session
-// passes straight through, since this plugin has no opinion on human traffic.
+// grant confers it AND the delegating user can do it. Another delegated
+// session, such as one minted by token exchange, gets the same treatment with
+// its own scopes in place of a grant (see authorizeDelegated). A user's own
+// session passes straight through, since this plugin has no opinion on human
+// traffic.
 //
 // The scope gate runs first. It is cheaper, a map lookup ahead of a Warden
 // call, and it is the safe order: reporting a user-gate failure first would
@@ -69,6 +72,13 @@ func (p *Plugin) Authorize(ctx context.Context, sess *session.Session, action, r
 		// here must deny, not pass through.
 		if !sess.AgentID.IsNil() || !sess.GrantID.IsNil() {
 			return ErrGrantInactive
+		}
+		// Any other delegated session (one minted by token exchange, or a
+		// non-user principal acting for a user) has no agent grant to read,
+		// but it is no more the user than an agent is. It gets the same
+		// intersection, with its own scopes standing in for the grant's.
+		if sess.IsDelegated() {
+			return p.authorizeDelegated(ctx, sess, action, resource)
 		}
 		return nil
 	}
@@ -131,6 +141,29 @@ func (p *Plugin) Authorize(ctx context.Context, sess *session.Session, action, r
 	}
 
 	allowed, err := p.permChecker.HasPermission(ctx, grant.UserID, action, resource)
+	if err != nil {
+		return fmt.Errorf("agentauth: permission check: %w", err)
+	}
+	if !allowed {
+		return fmt.Errorf("%w: %s on %s", ErrUserNotPermitted, action, resource)
+	}
+	return nil
+}
+
+// authorizeDelegated decides for a delegated session that isn't an agent's.
+// Token exchange narrows the session's scopes to what the delegation granted,
+// so those scopes are the grant here: one of them has to be a scope this
+// plugin knows (WithScope) that covers action on resource, and the user the
+// session acts for has to be allowed to do it. A session with no scopes, or
+// only scopes this plugin has never heard of, is refused.
+func (p *Plugin) authorizeDelegated(ctx context.Context, sess *session.Session, action, resource string) error {
+	if action == "" || resource == "" || !p.scopes.Covers(sess.Scopes, action, resource) {
+		return ErrInsufficientScope
+	}
+	if p.permChecker == nil {
+		return ErrNoPermissionChecker
+	}
+	allowed, err := p.permChecker.HasPermission(ctx, sess.UserID, action, resource)
 	if err != nil {
 		return fmt.Errorf("agentauth: permission check: %w", err)
 	}

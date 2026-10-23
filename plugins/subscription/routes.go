@@ -27,11 +27,16 @@ import (
 // Returns a pass-through when the engine exposes no RBAC (bare test wiring),
 // leaving the group's session check as the effective bar rather than failing
 // every mutation closed.
+//
+// A delegated session is refused before the permission check, so an agent
+// gets the same answer whatever its user may do and can't probe its user's
+// billing rights. The deny-by-default interceptor would refuse it too, but
+// interceptors run after route middleware.
 func (p *Plugin) writeGuard() forge.RouteOption {
 	if guards := plugin.PermissionGuard(p.engine, "manage", "billing"); len(guards) > 0 {
-		return forge.WithMiddleware(guards[0])
+		return forge.WithMiddleware(middleware.DenyDelegatedSession(), guards[0])
 	}
-	return forge.WithMiddleware(func(next forge.Handler) forge.Handler { return next })
+	return forge.WithMiddleware(middleware.DenyDelegatedSession())
 }
 
 // RegisterRoutes registers billing API routes on a forge.Router.

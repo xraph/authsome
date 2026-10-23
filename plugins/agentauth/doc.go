@@ -69,9 +69,11 @@
 // one minted by token exchange), whether or not you have wired the above.
 // On every authsome route, core and plugin, such a session gets a 403 on
 // POST, PUT, PATCH and DELETE unless the route is marked agent-safe; GET,
-// HEAD and OPTIONS stay open. Only POST /v1/signout and POST /v1/oauth/revoke
-// are marked, since the caller can touch nothing there but its own
-// credential. Mark a route of your own with plugin.AgentSafe, or use
+// HEAD and OPTIONS stay open. Only POST /v1/signout, POST /v1/oauth/revoke
+// and POST /v1/introspect are marked: on the first two the caller can touch
+// nothing but its own credential, and the third only reads. A session minted
+// by token exchange that reaches a Guard'ed route needs one of its own scopes
+// to be a registered scope covering the route, and its user's permission. Mark a route of your own with plugin.AgentSafe, or use
 // Plugin.GuardRoute, which mounts Guard and the marker together. The rule is
 // middleware.GuardDelegatedWrites, which the API and the Forge extension put
 // around every route they register; pass it to a plugin's RegisterRoutes if

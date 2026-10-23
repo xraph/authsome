@@ -143,6 +143,14 @@ func DelegatedWriteInterceptor() interceptors.Interceptor {
 //
 // Create it after any Use calls on router that the routes should get: a group
 // copies its parent's middleware when it is made.
+//
+// Interceptors run after middleware, group and route alike, which gives route
+// middleware under this guard two rules to keep. It must not change state,
+// since it runs before the refusal. And a permission check that answers
+// differently from the refusal tells a delegated caller what its user may do,
+// so put DenyDelegatedSession ahead of it on the route (authsome's own routes
+// all do). Moving the refusal ahead of route middleware would need the
+// matched route before middleware runs, which forge doesn't expose.
 func GuardDelegatedWrites(router forge.Router) forge.Router {
 	return router.Group("", interceptors.WithGroupInterceptor(DelegatedWriteInterceptor()))
 }

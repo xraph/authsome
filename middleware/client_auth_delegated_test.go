@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	log "github.com/xraph/go-utils/log"
@@ -116,6 +117,48 @@ func TestJWTAuth_ActClaimIsRefusedByTheGuard(t *testing.T) {
 				want = http.StatusForbidden
 			}
 			assert.Equal(t, want, rec.Code, "body=%s", rec.Body.String())
+		})
+	}
+}
+
+// An identity server that predates principal_kind sends neither field, and
+// the client then can't tell a delegated token from the user's own. That
+// fails open, so the middleware says so in the log, once, rather than on
+// every request.
+func TestClientAuth_WarnsOnceWhenIntrospectionHasNoPrincipalKind(t *testing.T) {
+	for name, kind := range map[string]string{"older identity server": "", "current identity server": "user"} {
+		t.Run(name, func(t *testing.T) {
+			tl, ok := log.NewTestLogger().(*log.TestLogger)
+			require.True(t, ok)
+			identity := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(authclient.IntrospectResponse{
+					Active: true, UserID: id.NewUserID().String(), AppID: id.NewAppID().String(),
+					SessionID: id.NewSessionID().String(), PrincipalKind: kind,
+				})
+			}))
+			t.Cleanup(identity.Close)
+
+			router := forge.NewRouter()
+			router.Use(middleware.ClientAuthMiddleware(authclient.NewClient(identity.URL), tl))
+			require.NoError(t, router.GET("/x", func(ctx forge.Context) error { return ctx.NoContent(http.StatusOK) }))
+			for _, token := range []string{"t1", "t2", "t3"} {
+				req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
+				req.Header.Set("Authorization", "Bearer "+token)
+				router.ServeHTTP(httptest.NewRecorder(), req)
+			}
+
+			warned := 0
+			for _, l := range tl.GetLogsByLevel("WARN") {
+				if strings.Contains(l.Message, "principal_kind") {
+					warned++
+				}
+			}
+			if kind == "" {
+				assert.Equal(t, 1, warned, "warned once, not per request")
+			} else {
+				assert.Zero(t, warned)
+			}
 		})
 	}
 }

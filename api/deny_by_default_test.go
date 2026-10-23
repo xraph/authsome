@@ -40,6 +40,7 @@ import (
 var agentSafeWrites = map[string]bool{
 	"POST /v1/signout":      true, // ends the caller's own session, nothing else
 	"POST /v1/oauth/revoke": true, // revokes a token the caller itself holds (callerOwnsSession)
+	"POST /v1/introspect":   true, // reads a token's state; POST only to carry the token in the body
 }
 
 // denyByDefaultFixture builds the engine with every plugin that serves
@@ -170,13 +171,9 @@ func TestDenyByDefault_EveryWriteRouteRefusesAgentSession(t *testing.T) {
 				return
 			}
 			assert.Equal(t, http.StatusForbidden, rec.Code, "body=%s", rec.Body.String())
-			// The guard is an interceptor, so it runs after route middleware.
-			// A route whose own permission middleware already refused the
-			// delegating user (the billing writes, for this owner) answers
-			// with that refusal first. Either way nothing runs.
-			body := rec.Body.String()
-			assert.True(t, strings.Contains(body, "delegated session") || strings.Contains(body, "insufficient permissions"),
-				"refused by the delegated-session deny or an earlier permission check; body=%s", body)
+			// Always the delegated-session refusal, never a permission
+			// check's answer, which would tell the agent what its user may do.
+			assert.Contains(t, rec.Body.String(), "delegated session", "body=%s", rec.Body.String())
 		})
 	}
 	assert.Greater(t, writes, 50, "the table has to cover the real router, not an empty one")

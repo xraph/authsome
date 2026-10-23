@@ -86,6 +86,11 @@ func ClientAuthMiddleware(client *authclient.Client, logger log.Logger, bind ...
 		bindCfg = bind[0]
 	}
 
+	// An identity server too old to send principal_kind sends no delegated
+	// flag either, so every token reads as the user's own and the
+	// delegated-session guard can't fire. That fails open; say so once.
+	var warnNoPrincipalKind sync.Once
+
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
 			installDPoPRequestScope(ctx)
@@ -153,6 +158,14 @@ func ClientAuthMiddleware(client *authclient.Client, logger log.Logger, bind ...
 			if !resp.Active {
 				ctx.WithContext(goCtx)
 				return next(ctx)
+			}
+
+			if resp.PrincipalKind == "" {
+				warnNoPrincipalKind.Do(func() {
+					logger.Warn("client auth: the identity server sent no principal_kind, so agent and delegated tokens " +
+						"can't be told apart from the user's own and the delegated-session guard won't refuse them; " +
+						"upgrade the identity server")
+				})
 			}
 
 			// RFC 9449 section 7.3: introspection reports the binding in
