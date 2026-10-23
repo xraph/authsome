@@ -3239,6 +3239,10 @@
             "$ref": "#/components/schemas/IntrospectConfirmation",
             "description": "Proof-of-possession confirmation for a DPoP-bound token"
           },
+          "delegated": {
+            "description": "True when the token acts for user_id without being that user's own sign-in (an agent, or a token-exchange session)",
+            "type": "boolean"
+          },
           "env_id": {
             "description": "Environment ID",
             "type": "string"
@@ -3249,6 +3253,10 @@
           },
           "org_id": {
             "description": "Organization ID",
+            "type": "string"
+          },
+          "principal_kind": {
+            "description": "Kind of caller holding the token: user, agent, workload or service_account",
             "type": "string"
           },
           "scope": {

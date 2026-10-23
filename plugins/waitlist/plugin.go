@@ -211,6 +211,9 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.permChecker != nil {
 		adminMiddlewares = append(adminMiddlewares, middleware.RequirePermission(p.permChecker, "manage", "waitlist"))
 	}
+	// An agent's authority is its grant, not its user's admin role. Last, so
+	// it runs after the session middleware has resolved the caller.
+	adminMiddlewares = append(adminMiddlewares, middleware.DenyDelegatedSession())
 
 	admin := router.Group(p.basePath+"/admin/waitlist",
 		forge.WithGroupTags("Waitlist Admin"),

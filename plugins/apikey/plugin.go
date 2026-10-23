@@ -397,6 +397,11 @@ type RevokeKeyRequest struct {
 // ──────────────────────────────────────────────────
 
 func (p *Plugin) handleCreate(ctx forge.Context, req *CreateKeyRequest) (*CreateKeyResponse, error) {
+	// The route refuses a delegated session too. Checked here as well so a
+	// mount without that guard still fails closed.
+	if middleware.RefuseDelegated(ctx.Context()) != nil {
+		return nil, forge.Forbidden(middleware.DelegatedSessionMessage)
+	}
 	if req.Name == "" {
 		return nil, forge.BadRequest("name is required")
 	}

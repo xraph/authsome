@@ -19,6 +19,7 @@ import (
 
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 
 	"github.com/xraph/forge/extensions/dashboard/contract"
 
@@ -109,6 +110,12 @@ func apikeysListHandler(deps Deps) func(ctx context.Context, _ struct{}, p contr
 
 func apikeysCreateHandler(deps Deps) func(ctx context.Context, in CreateAPIKeyInput, p contract.Principal) (CreateAPIKeyResponse, error) {
 	return func(ctx context.Context, in CreateAPIKeyInput, p contract.Principal) (CreateAPIKeyResponse, error) {
+		// The dashboard's auth check refuses an agent or delegated token
+		// already. This keeps a dashboard wired to another checker from
+		// minting a key for one.
+		if middleware.RefuseDelegated(ctx) != nil {
+			return CreateAPIKeyResponse{}, &contract.Error{Code: contract.CodePermissionDenied, Message: middleware.DelegatedSessionMessage}
+		}
 		if deps.Engine == nil {
 			return CreateAPIKeyResponse{}, unavailable()
 		}

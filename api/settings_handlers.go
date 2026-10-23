@@ -27,6 +27,9 @@ func (a *API) registerSettingsRoutes(router forge.Router) error {
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),
 			middleware.RequirePermission(a.engine, "manage", "settings"),
+			// An agent's authority is its grant, and the permission check above
+			// runs against its delegating user. No admin route takes it.
+			middleware.DenyDelegatedSession(),
 		),
 	)
 

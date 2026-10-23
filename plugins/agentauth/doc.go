@@ -65,14 +65,16 @@
 // route not explicitly wrapped in Guard is reachable with it regardless of
 // what any grant says.
 //
-// Authsome's own routes that mint something in the user's name refuse an
-// agent session with a 403 whether or not you have wired them: API key creation,
-// OAuth2 authorize, consent and device approval, the OAuth2 client admin
-// routes, impersonation, service-account keys, admin user creation, password
-// change, MFA enrollment, disable and recovery-code regeneration, passkey
-// registration, org switch, and this package's own routes. The dashboard
-// refuses an agent token too. Most of them mount
-// middleware.DenyDelegatedSession; README.md lists them with what each would
-// have handed out. Every other
-// authsome route still treats the agent as its delegating user.
+// Authsome's own routes refuse a delegated session (an agent session, or
+// one minted by token exchange) with a 403 whether or not you have wired
+// the above: API key creation, OAuth2 authorize, consent and device
+// approval, password change, MFA enrollment, disable and recovery-code
+// regeneration, passkey registration, every /v1/admin route, role writes,
+// and the organization, waitlist and shared-signals admin routes. Org switch
+// refuses any non-user session. The dashboard refuses a delegated token in
+// both modes, reading principal_kind and delegated off introspection in
+// client mode. Most of these mount middleware.DenyDelegatedSession, which
+// plugin.AdminGuard ends with; README.md lists them with what each would
+// have handed out. Every other authsome route still treats an agent as its
+// delegating user.
 package agentauth

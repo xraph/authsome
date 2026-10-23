@@ -494,11 +494,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// manage/oauth2_client — a caller who can mint clients can register an
 	// arbitrary redirect_uri and harvest codes for any user. A client secret
 	// is a credential no agent grant bounds, so an agent or delegated session
-	// is refused here even when its user holds the permission.
+	// is refused here even when its user holds the permission (AdminGuard ends
+	// with middleware.DenyDelegatedSession).
 	admin := router.Group("/v1/admin/oauth",
 		forge.WithGroupTags("OAuth2 Admin"),
 		forge.WithGroupAuth("session"),
-		forge.WithGroupMiddleware(append(plugin.AdminGuard(p.engine, "manage", "oauth2_client"), middleware.DenyDelegatedSession())...),
+		forge.WithGroupMiddleware(plugin.AdminGuard(p.engine, "manage", "oauth2_client")...),
 	)
 
 	if err := admin.POST("/clients", p.handleCreateClient,

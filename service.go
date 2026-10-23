@@ -2809,7 +2809,13 @@ type AdminUserUpdates struct {
 
 // AdminCreateUser creates a new user without going through the signup flow.
 // The user is created with the given password (hashed) and email marked as verified.
+// It returns ErrDelegatedSession when ctx carries an agent or delegated session.
 func (e *Engine) AdminCreateUser(ctx context.Context, adminID id.UserID, appID id.AppID, envID id.EnvironmentID, email, password, firstName, lastName, username string) (*user.User, error) {
+	// The caller picks the password, so an agent or delegated session would
+	// walk away with a login no grant bounds.
+	if err := middleware.RefuseDelegated(ctx); err != nil {
+		return nil, err
+	}
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {
 		return nil, fmt.Errorf("authsome: admin create user: email is required")

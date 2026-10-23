@@ -883,9 +883,11 @@ export interface IntrospectResponse {
   app_id?: string;
   aud?: string[];
   cnf?: IntrospectConfirmation;
+  delegated?: boolean;
   env_id?: string;
   expires_at?: string;
   org_id?: string;
+  principal_kind?: string;
   scope?: string;
   session_id?: string;
   user?: IntrospectUser;

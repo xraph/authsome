@@ -112,6 +112,13 @@ func (c *clientAuthChecker) CheckAuth(ctx context.Context, r *http.Request) (*da
 		return nil, nil
 	}
 
+	// user_id on an agent token names its delegating user, so the user
+	// details alone would open the dashboard to the agent. A server that
+	// predates these fields sends neither, which reads as the user's own.
+	if resp.Delegated || (resp.PrincipalKind != "" && resp.PrincipalKind != "user") {
+		return nil, nil
+	}
+
 	jkt := ""
 	if resp.Cnf != nil {
 		jkt = resp.Cnf.Jkt

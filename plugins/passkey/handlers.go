@@ -277,6 +277,11 @@ func (p *Plugin) revokeOtherSessions(ctx context.Context, userID id.UserID) {
 // ──────────────────────────────────────────────────
 
 func (p *Plugin) handleRegisterBegin(ctx forge.Context, req *RegisterBeginRequest) (*RegisterBeginResponse, error) {
+	// The route refuses a delegated session too. Checked here as well so a
+	// mount without that guard still fails closed.
+	if middleware.RefuseDelegated(ctx.Context()) != nil {
+		return nil, forge.Forbidden(middleware.DelegatedSessionMessage)
+	}
 	if p.wa == nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: WebAuthn not initialized"))
 	}
@@ -308,6 +313,11 @@ func (p *Plugin) handleRegisterBegin(ctx forge.Context, req *RegisterBeginReques
 }
 
 func (p *Plugin) handleRegisterFinish(ctx forge.Context, _ *RegisterFinishRequest) (*RegisterFinishResponse, error) {
+	// The route refuses a delegated session too. Checked here as well so a
+	// mount without that guard still fails closed.
+	if middleware.RefuseDelegated(ctx.Context()) != nil {
+		return nil, forge.Forbidden(middleware.DelegatedSessionMessage)
+	}
 	if p.wa == nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: WebAuthn not initialized"))
 	}

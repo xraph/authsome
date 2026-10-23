@@ -201,6 +201,8 @@ token=eyJhbGciOiJSUzI1NiIs...
 }
 ```
 
+Every active response also carries `principal_kind` (`user`, `agent`, `workload` or `service_account`), and `delegated: true` when the token acts for `user_id` without being that user's own sign-in. An agent token, or a session minted by token exchange, is delegated. Its `user_id` still names the user it acts for, so check `delegated` before you treat the caller as that user. Both fields reach you even when your caller can't manage the app.
+
 **Response (expired or revoked token):**
 
 ```json

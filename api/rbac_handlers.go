@@ -25,8 +25,13 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 		),
 	)
 
+	// Every write below changes who can do what in the app. An agent's
+	// authority is its grant, not its delegating user's roles, so the writes
+	// refuse an agent or delegated session. Reads stay open to it.
+
 	// Role CRUD
 	if err := g.POST("/roles", a.handleCreateRole,
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Create role"),
 		forge.WithDescription("Creates a new RBAC role."),
 		forge.WithOperationID("authsomeCreateRole"),
@@ -62,6 +67,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 	}
 
 	if err := g.PATCH("/roles/:roleId", a.handleUpdateRole,
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Update role"),
 		forge.WithDescription("Updates a role's name or description."),
 		forge.WithOperationID("authsomeUpdateRole"),
@@ -74,6 +80,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 	}
 
 	if err := g.DELETE("/roles/:roleId", a.handleDeleteRole,
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Delete role"),
 		forge.WithDescription("Deletes a role and its permissions and assignments."),
 		forge.WithOperationID("authsomeDeleteRole"),
@@ -87,6 +94,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 
 	// Permission management
 	if err := g.POST("/roles/:roleId/permissions", a.handleAddPermission,
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Add permission to role"),
 		forge.WithDescription("Adds a permission (action + resource) to a role."),
 		forge.WithOperationID("authsomeAddPermission"),
@@ -111,6 +119,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 	}
 
 	if err := g.DELETE("/roles/:roleId/permissions/:permissionId", a.handleRemovePermission,
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Remove permission from role"),
 		forge.WithDescription("Removes a permission from a role."),
 		forge.WithOperationID("authsomeRemovePermission"),
@@ -124,6 +133,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 
 	// Role assignment
 	if err := g.POST("/roles/:roleId/assign", a.handleAssignRole,
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Assign role to user"),
 		forge.WithDescription("Assigns a role to a user, optionally scoped to an organization."),
 		forge.WithOperationID("authsomeAssignRole"),
@@ -136,6 +146,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 	}
 
 	if err := g.POST("/roles/:roleId/unassign", a.handleUnassignRole,
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Unassign role from user"),
 		forge.WithDescription("Removes a role assignment from a user."),
 		forge.WithOperationID("authsomeUnassignRole"),

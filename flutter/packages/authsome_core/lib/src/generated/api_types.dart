@@ -4330,9 +4330,11 @@ class IntrospectResponse {
   final String? appId;
   final List<String>? aud;
   final IntrospectConfirmation? cnf;
+  final bool? delegated;
   final String? envId;
   final String? expiresAt;
   final String? orgId;
+  final String? principalKind;
   final String? scope;
   final String? sessionId;
   final IntrospectUser? user;
@@ -4343,9 +4345,11 @@ class IntrospectResponse {
     this.appId,
     this.aud,
     this.cnf,
+    this.delegated,
     this.envId,
     this.expiresAt,
     this.orgId,
+    this.principalKind,
     this.scope,
     this.sessionId,
     this.user,
@@ -4358,9 +4362,11 @@ class IntrospectResponse {
       appId: json['app_id'] as String?,
       aud: json['aud'] == null ? null : (json['aud'] as List).map((e) => e as String).toList(),
       cnf: json['cnf'] == null ? null : IntrospectConfirmation.fromJson(Map<String, dynamic>.from(json['cnf'] as Map)),
+      delegated: json['delegated'] as bool?,
       envId: json['env_id'] as String?,
       expiresAt: json['expires_at'] as String?,
       orgId: json['org_id'] as String?,
+      principalKind: json['principal_kind'] as String?,
       scope: json['scope'] as String?,
       sessionId: json['session_id'] as String?,
       user: json['user'] == null ? null : IntrospectUser.fromJson(Map<String, dynamic>.from(json['user'] as Map)),
@@ -4374,9 +4380,11 @@ class IntrospectResponse {
       if (appId != null) 'app_id': appId,
       if (aud != null) 'aud': aud,
       if (cnf != null) 'cnf': cnf?.toJson(),
+      if (delegated != null) 'delegated': delegated,
       if (envId != null) 'env_id': envId,
       if (expiresAt != null) 'expires_at': expiresAt,
       if (orgId != null) 'org_id': orgId,
+      if (principalKind != null) 'principal_kind': principalKind,
       if (scope != null) 'scope': scope,
       if (sessionId != null) 'session_id': sessionId,
       if (user != null) 'user': user?.toJson(),

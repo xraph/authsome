@@ -28,6 +28,9 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),
 			middleware.RequirePermission(a.engine, "manage", "user"),
+			// An agent's authority is its grant, and the permission check above
+			// runs against its delegating user. No admin route takes it.
+			middleware.DenyDelegatedSession(),
 		),
 		// Declared so the requirement the middleware above enforces reaches
 		// the OpenAPI document and the generated clients. Declaring does not

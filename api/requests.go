@@ -726,6 +726,12 @@ type IntrospectResponse struct {
 	// omitting this leaves it accepting a stolen token as an ordinary
 	// bearer token. Absent means unbound.
 	Confirmation *IntrospectConfirmation `json:"cnf,omitempty" description:"Proof-of-possession confirmation for a DPoP-bound token"`
+
+	// PrincipalKind and Delegated tell a resource server who really holds
+	// the token. An agent token carries its delegating user's ID in user_id,
+	// so without these the agent reads as that user.
+	PrincipalKind string `json:"principal_kind,omitempty" description:"Kind of caller holding the token: user, agent, workload or service_account"`
+	Delegated     bool   `json:"delegated,omitempty" description:"True when the token acts for user_id without being that user's own sign-in (an agent, or a token-exchange session)"`
 }
 
 // IntrospectConfirmation is the RFC 7800 cnf claim. Only the jkt member is

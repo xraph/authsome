@@ -40,3 +40,23 @@ func TestEngine_RefusesAgentSessionOnContext(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, eng.ChangePassword(context.Background(), ownerID, "SecureP@ss123", "Own3rChanged!Pass"))
 }
+
+// AdminCreateUser writes the account itself, so it refuses a delegated
+// session on the context too.
+func TestEngine_AdminCreateUserRefusesAgentSession(t *testing.T) {
+	_, eng := newBootstrappedAPI(t)
+	_, ownerToken, _ := signUp(t, eng, "agent-eng-create-owner@test.com", "SecureP@ss123")
+	ownerID := userIDFor(t, eng, ownerToken)
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+
+	ctx := middleware.WithSession(context.Background(), &session.Session{
+		ID: id.NewSessionID(), AppID: appID, UserID: ownerID,
+		PrincipalKind: session.PrincipalKindAgent, AgentID: id.NewAgentID(), GrantID: id.NewAgentGrantID(),
+	})
+	_, err = eng.AdminCreateUser(ctx, ownerID, appID, id.EnvironmentID{}, "eng-agent-made@test.com", "AgentKn0ws!Pass", "Made", "", "")
+	require.ErrorIs(t, err, authsome.ErrDelegatedSession)
+
+	_, err = eng.AdminCreateUser(context.Background(), ownerID, appID, id.EnvironmentID{}, "eng-owner-made@test.com", "Own3rMade!Pass", "Made", "", "")
+	require.NoError(t, err)
+}

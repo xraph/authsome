@@ -998,17 +998,19 @@ type IntrospectRequest struct {
 
 // IntrospectResponse represents the IntrospectResponse schema.
 type IntrospectResponse struct {
-	Active    bool                    `json:"active"`
-	AppID     string                  `json:"app_id,omitempty"`
-	Aud       []string                `json:"aud,omitempty"`
-	Cnf       *IntrospectConfirmation `json:"cnf,omitempty"`
-	EnvID     string                  `json:"env_id,omitempty"`
-	ExpiresAt string                  `json:"expires_at,omitempty"`
-	OrgID     string                  `json:"org_id,omitempty"`
-	Scope     string                  `json:"scope,omitempty"`
-	SessionID string                  `json:"session_id,omitempty"`
-	User      *IntrospectUser         `json:"user,omitempty"`
-	UserID    string                  `json:"user_id,omitempty"`
+	Active        bool                    `json:"active"`
+	AppID         string                  `json:"app_id,omitempty"`
+	Aud           []string                `json:"aud,omitempty"`
+	Cnf           *IntrospectConfirmation `json:"cnf,omitempty"`
+	Delegated     bool                    `json:"delegated,omitempty"`
+	EnvID         string                  `json:"env_id,omitempty"`
+	ExpiresAt     string                  `json:"expires_at,omitempty"`
+	OrgID         string                  `json:"org_id,omitempty"`
+	PrincipalKind string                  `json:"principal_kind,omitempty"`
+	Scope         string                  `json:"scope,omitempty"`
+	SessionID     string                  `json:"session_id,omitempty"`
+	User          *IntrospectUser         `json:"user,omitempty"`
+	UserID        string                  `json:"user_id,omitempty"`
 }
 
 // IntrospectUser represents the IntrospectUser schema.

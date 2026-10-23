@@ -186,8 +186,8 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// permissions against sess.UserID, which for an agent session is the
 	// delegating user: without the deny, an agent acting for an org admin
 	// could open its own org's policy, unblock itself or revoke a competing
-	// grant. The deny goes after the guard, which is what resolves the
-	// session (see middleware.DenyDelegatedSession).
+	// grant. On /me the deny goes after the guard, which is what resolves the
+	// session (see middleware.DenyDelegatedSession); AdminGuard ends with it.
 	me := router.Group(p.basePath+"/me/agents",
 		forge.WithGroupTags("agentauth"),
 		forge.WithGroupAuth("session"),
@@ -211,7 +211,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	admin := router.Group(p.basePath+"/admin/agents",
 		forge.WithGroupTags("agentauth-admin"),
 		forge.WithGroupAuth("session"),
-		forge.WithGroupMiddleware(append(plugin.AdminGuard(p.engine, "read", "agent"), middleware.DenyDelegatedSession())...),
+		forge.WithGroupMiddleware(plugin.AdminGuard(p.engine, "read", "agent")...),
 	)
 	if err := admin.GET("", p.handleListAgents,
 		forge.WithSummary("List registered agents"),
