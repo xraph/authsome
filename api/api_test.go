@@ -1845,3 +1845,30 @@ func TestMFAChallenge_SucceedsBelowAttemptCap(t *testing.T) {
 	rec := postChallenge(t, router, ticket, code)
 	assert.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 }
+
+// With verification required, sign-up answers 201 with the user and empty
+// tokens and sets no cookie, so the account can't use the app from another
+// tab before it enters its code. A duplicate email gets the same shape.
+func TestHandleSignUp_VerificationRequiredSetsNoSession(t *testing.T) {
+	t.Parallel()
+	_, eng := newTestAPI(t)
+	router := newAPIWithRouter(t, eng)
+	require.NoError(t, eng.Settings().Set(context.Background(), "auth.require_email_verification",
+		json.RawMessage(`true`), settings.ScopeGlobal, "", "", "", "verification-required-test"))
+
+	for _, attempt := range []string{"fresh", "duplicate"} {
+		body := []byte(`{"email":"pending@example.com","password":"SecureP@ss123"}`)
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusCreated, rec.Code, "%s sign-up; body=%s", attempt, rec.Body.String())
+		assert.Empty(t, rec.Result().Cookies(), "%s sign-up must set no cookie", attempt)
+		var resp map[string]any
+		require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+		assert.NotNil(t, resp["user"], attempt)
+		assert.Empty(t, resp["session_token"], "%s sign-up must carry no session", attempt)
+		assert.Empty(t, resp["refresh_token"], attempt)
+	}
+}

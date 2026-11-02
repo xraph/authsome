@@ -34,8 +34,10 @@ func TestClient_SignUp(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.NotEmpty(t, resp.SessionToken)
-	assert.NotEmpty(t, resp.RefreshToken)
+	// Email verification is on by default, so the account exists but gets
+	// no session until it enters the code it was sent.
+	assert.Empty(t, resp.SessionToken)
+	assert.Empty(t, resp.RefreshToken)
 	assert.NotNil(t, resp.User)
 	assert.Equal(t, "signup@example.com", resp.User.Email)
 }
@@ -595,15 +597,16 @@ func TestClient_Auth_WithSessionCookies(t *testing.T) {
 		authclient.WithPublishableKey(testutil.DefaultPublishableKey),
 	)
 
-	signUpResp, err := client.SignUp(ctx, &authclient.SignUpRequest{
-		Email:     "cookie@example.com",
-		Password:  "SecureP@ss123",
-		FirstName: "Cookie",
-		LastName:  "User",
+	// Sign-up gives an unverified account no session, so start from a
+	// verified one and sign in through the client.
+	ts.CreateUser(t, "cookie@example.com", "SecureP@ss123")
+	signInResp, err := client.SignIn(ctx, &authclient.SignInRequest{
+		Email:    "cookie@example.com",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 
-	client.SetToken(signUpResp.SessionToken)
+	client.SetToken(signInResp.SessionToken)
 
 	user, err := client.GetMe(ctx)
 	require.NoError(t, err)
@@ -619,10 +622,10 @@ func TestClient_Auth_CookiePersistence(t *testing.T) {
 		authclient.WithPublishableKey(testutil.DefaultPublishableKey),
 	)
 
-	resp, err := client.SignUp(ctx, &authclient.SignUpRequest{
-		Email:     "persist@example.com",
-		Password:  "SecureP@ss123",
-		FirstName: "Persist",
+	ts.CreateUser(t, "persist@example.com", "SecureP@ss123")
+	resp, err := client.SignIn(ctx, &authclient.SignInRequest{
+		Email:    "persist@example.com",
+		Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 

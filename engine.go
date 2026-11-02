@@ -1530,17 +1530,11 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 	}
 
 	// Email verification: enabled when password plugin is registered,
-	// required based on environment settings (default: required in production).
+	// required by the same rule the server enforces.
 	if passwordEnabled {
-		emailVerifRequired := true
-		if env, _ := e.GetDefaultEnvironment(ctx, appID); env != nil && env.Settings != nil { //nolint:errcheck // best-effort env lookup
-			if env.Settings.SkipEmailVerification != nil && *env.Settings.SkipEmailVerification {
-				emailVerifRequired = false
-			}
-		}
 		resp.EmailVerification = &ClientConfigEmailVerification{
 			Enabled:  true,
-			Required: emailVerifRequired,
+			Required: e.EmailVerificationRequired(ctx, appID),
 		}
 	}
 

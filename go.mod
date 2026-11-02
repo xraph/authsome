@@ -2,7 +2,7 @@ module github.com/xraph/authsome
 
 go 1.26.0
 
-toolchain go1.26.9
+toolchain go1.26.10
 
 // replace github.com/xraph/forge => ../../forge
 
@@ -15,16 +15,16 @@ require (
 	github.com/russellhaering/goxmldsig v1.6.1
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
-	github.com/xraph/chronicle v1.9.0
+	github.com/xraph/chronicle v1.9.1
 	github.com/xraph/dispatch v1.9.1
-	github.com/xraph/forge v1.12.10
+	github.com/xraph/forge v1.13.2
 	github.com/xraph/forge/extensions/auth v1.12.9
-	github.com/xraph/go-utils v1.4.1
-	github.com/xraph/grove v1.9.0
-	github.com/xraph/grove/drivers/mongodriver v1.9.0
-	github.com/xraph/grove/drivers/pgdriver v1.9.0
-	github.com/xraph/grove/drivers/sqlitedriver v1.9.0
-	github.com/xraph/herald v1.8.0
+	github.com/xraph/go-utils v1.5.0
+	github.com/xraph/grove v1.10.1
+	github.com/xraph/grove/drivers/mongodriver v1.10.1
+	github.com/xraph/grove/drivers/pgdriver v1.10.1
+	github.com/xraph/grove/drivers/sqlitedriver v1.10.1
+	github.com/xraph/herald v1.10.0
 	github.com/xraph/keysmith v1.8.0
 	github.com/xraph/ledger v1.8.0
 	github.com/xraph/relay v1.8.0
@@ -79,10 +79,12 @@ require (
 	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	github.com/zeebo/blake3 v0.2.4 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.21.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.45.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.46.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.46.0 // indirect
 	go.opentelemetry.io/otel/log v1.47.0 // indirect
+	go.opentelemetry.io/otel/sdk/log v0.21.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.46.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect

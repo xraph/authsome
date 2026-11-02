@@ -223,15 +223,12 @@ func TestSetupHandlerAppliesPlatformEnvironmentAndOwner(t *testing.T) {
 	require.Equal(t, "kept", updatedEnv.Metadata["seeded"])
 	require.Equal(t, "plugins", updatedEnv.Metadata["purpose"])
 
-	cookies := writer.(*httptest.ResponseRecorder).Result().Cookies()
-	require.Condition(t, func() bool {
-		for _, cookie := range cookies {
-			if cookie.Name == dashboardCookieName && cookie.Value != "" {
-				return true
-			}
-		}
-		return false
-	}, "setup must write the dashboard session cookie")
+	// The owner hasn't verified yet, so setup signs nobody in: a session
+	// now would let an unproven address use the console.
+	for _, cookie := range writer.(*httptest.ResponseRecorder).Result().Cookies() {
+		require.False(t, cookie.Name == dashboardCookieName && cookie.Value != "",
+			"setup must not write a session cookie before the owner verifies")
+	}
 
 	userID, err := id.ParseUserID(got.Subject)
 	require.NoError(t, err)

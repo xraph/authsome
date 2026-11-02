@@ -172,26 +172,32 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 	// happens in promoteVerifiedOwner once the email is proven.
 	e.EnsureDefaultRole(ctx, req.AppID, u.ID)
 
-	// Create session (using per-app + per-env config; JWT if configured)
-	sess, err := e.newSession(req.AppID, u.ID, e.sessionConfigForApp(ctx, req.AppID, req.EnvID), req.DPoPJKT)
-	if err != nil {
-		return nil, nil, fmt.Errorf("authsome: create session token: %w", err)
+	// An account whose email has to be verified first gets no session: the
+	// verification code is its way in. A session here would let it into
+	// the app from any other tab while the UI still asked for the code.
+	var sess *session.Session
+	if u.EmailVerified || !e.EmailVerificationRequired(ctx, req.AppID) {
+		// Create session (using per-app + per-env config; JWT if configured)
+		sess, err = e.newSession(req.AppID, u.ID, e.sessionConfigForApp(ctx, req.AppID, req.EnvID), req.DPoPJKT)
+		if err != nil {
+			return nil, nil, fmt.Errorf("authsome: create session token: %w", err)
+		}
+
+		// Bind session to device (registers or finds device via fingerprint upsert)
+		e.bindSessionToDevice(ctx, sess, req.AppID, req.EnvID, req.IPAddress, req.UserAgent)
+
+		// Plugin: before session create
+		if hookErr := e.plugins.EmitBeforeSessionCreate(ctx, sess); hookErr != nil {
+			return nil, nil, fmt.Errorf("authsome: before session create: %w", hookErr)
+		}
+
+		if storeErr := e.store.CreateSession(ctx, sess); storeErr != nil {
+			return nil, nil, fmt.Errorf("authsome: create session: %w", storeErr)
+		}
+		e.plugins.EmitAfterSessionCreate(ctx, sess)
 	}
 
-	// Bind session to device (registers or finds device via fingerprint upsert)
-	e.bindSessionToDevice(ctx, sess, req.AppID, req.EnvID, req.IPAddress, req.UserAgent)
-
-	// Plugin: before session create
-	if hookErr := e.plugins.EmitBeforeSessionCreate(ctx, sess); hookErr != nil {
-		return nil, nil, fmt.Errorf("authsome: before session create: %w", hookErr)
-	}
-
-	if storeErr := e.store.CreateSession(ctx, sess); storeErr != nil {
-		return nil, nil, fmt.Errorf("authsome: create session: %w", storeErr)
-	}
-
-	// Plugin: after session create + after signup
-	e.plugins.EmitAfterSessionCreate(ctx, sess)
+	// Plugin: after signup. sess is nil while the email awaits verification.
 	e.plugins.EmitAfterSignUp(ctx, u, sess)
 
 	// Global hook bus (which is also the audit trail)
@@ -330,45 +336,11 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (_ *use
 		_ = e.lockout.Reset(ctx, lockoutKey) //nolint:errcheck // best-effort reset
 	}
 
-	// Enforce email verification. Users whose email is not verified are
-	// blocked from signing in unless enforcement is explicitly disabled.
-	//
-	// Resolution order (first match wins):
-	// 1. Dynamic setting (auth.require_email_verification — dashboard-configurable)
-	// 2. Per-app client config override (RequireEmailVerification)
-	// 3. Environment setting (SkipEmailVerification — inverted, with type defaults merged)
-	// 4. Default: skip verification (no config = no enforcement)
-	if !u.EmailVerified {
-		requireVerif := false // default: no enforcement when unconfigured
-
-		// 1. Check dynamic setting (highest priority — dashboard-configurable).
-		if mgr := e.Settings(); mgr != nil {
-			resolveOpts := settings.ResolveOpts{}
-			if req.AppID.Prefix() != "" {
-				resolveOpts.AppID = req.AppID.String()
-			}
-			if dynVal, dynErr := settings.Get(ctx, mgr, SettingRequireEmailVerification, resolveOpts); dynErr == nil && dynVal {
-				requireVerif = true
-			}
-		}
-
-		// 2. Per-app client config override (existing).
-		if !requireVerif {
-			if appCfg, cfgErr := e.store.GetAppClientConfig(ctx, req.AppID); cfgErr == nil && appCfg.RequireEmailVerification != nil {
-				requireVerif = *appCfg.RequireEmailVerification
-			} else if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil { //nolint:errcheck // best-effort env lookup
-				// 3. Environment setting (merge type defaults).
-				typeDefaults := environment.DefaultSettingsForType(env.Type)
-				effective := environment.MergeSettings(typeDefaults, env.Settings)
-				if effective != nil && !effective.SkipEmailVerificationEnabled() {
-					requireVerif = true
-				}
-			}
-		}
-
-		if requireVerif {
-			return u, nil, account.ErrEmailNotVerified
-		}
+	// Users whose email is not verified are blocked from signing in unless
+	// enforcement is off. IssueSession refuses them too; checking here first
+	// returns the user, so the caller can send them to verify.
+	if !u.EmailVerified && e.EmailVerificationRequired(ctx, req.AppID) {
+		return u, nil, account.ErrEmailNotVerified
 	}
 
 	// MFARequired enforcement is now handled inside Engine.IssueSession

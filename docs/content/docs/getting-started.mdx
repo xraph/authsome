@@ -160,9 +160,9 @@ Response:
 
 ```json
 {
-  "session_token": "0d6283f1...",
-  "refresh_token": "ebad821f...",
-  "expires_at": "2026-10-14T18:29:39Z",
+  "session_token": "",
+  "refresh_token": "",
+  "expires_at": "",
   "user": {
     "id": "ausr_01m4...",
     "app_id": "aapp_01m4...",
@@ -173,7 +173,29 @@ Response:
 }
 ```
 
+The tokens are empty because `auth.require_email_verification` is on by default: the account exists, but it gets no session and no cookie until it proves the address. Sign-up sends a 6-digit code for that. Authsome doesn't deliver it by itself; the `notification` plugin sends it through a Herald bridge.
+
 Browser and mobile clients usually send an `X-Publishable-Key` header instead of the app ID.
+
+### Verify the email
+
+Post the code with the address:
+
+```bash
+curl -s -X POST http://localhost:8080/v1/verify-email \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","code":"123456"}'
+```
+
+A right code marks the email verified and signs you in, so the response has the same shape as above with real tokens in it. With no mail set up yet, take the code from `engine.SendEmailVerification(ctx, user)`, or switch the setting off for local work:
+
+```go
+// after engine.Start; needs encoding/json and github.com/xraph/authsome/settings
+_ = engine.Settings().Set(ctx, "auth.require_email_verification",
+    json.RawMessage(`false`), settings.ScopeGlobal, "", "", "", "local-dev")
+```
+
+With it off, sign-up hands back a session straight away.
 
 ### Call /me
 
@@ -184,21 +206,13 @@ curl -s http://localhost:8080/v1/me \
 
 ### Sign in
 
-`/v1/signin` refuses an account whose email isn't verified, because the `auth.require_email_verification` setting is on by default:
+`/v1/signin` refuses an account whose email isn't verified while the setting is on:
 
 ```json
 {"code":403,"error":"please verify your email address before signing in","type":"email_not_verified"}
 ```
 
-Sign-up issues a 6-digit code for this, but Authsome doesn't send it by itself; the `notification` plugin delivers it through a Herald bridge. For local work, either switch the setting off:
-
-```go
-// after engine.Start; needs encoding/json and github.com/xraph/authsome/settings
-_ = engine.Settings().Set(ctx, "auth.require_email_verification",
-    json.RawMessage(`false`), settings.ScopeGlobal, "", "", "", "local-dev")
-```
-
-or take the code from `engine.SendEmailVerification(ctx, user)` and post `{"email": "...", "code": "..."}` to `/v1/verify-email`. After that, sign-in returns the same shape as sign-up.
+So does every other way in (passkeys, magic links, social sign-in), since they all mint their session in the same place. An account with no email at all, such as a phone sign-up, isn't affected.
 
 ### Refresh tokens
 
