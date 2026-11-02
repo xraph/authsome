@@ -270,12 +270,14 @@ func (p *Plugin) OnAfterOrgCreate(ctx context.Context, o *organization.Organizat
 
 // OnAfterSignUp auto-creates a subscription for new users
 // when tenant mode is "user" and auto-subscribe is enabled.
-func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, s *session.Session) error {
-	if p.ledger == nil || u == nil || s == nil {
+func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, _ *session.Session) error {
+	// s is nil when the account signed up but must verify its email
+	// before it gets a session; the user carries the app either way.
+	if p.ledger == nil || u == nil {
 		return nil
 	}
 
-	appID := s.AppID.String()
+	appID := u.AppID.String()
 
 	// Resolve tenant mode setting.
 	tenantMode, _ := settings.Get(ctx, p.settings, SettingTenantMode, settings.ResolveOpts{AppID: appID}) //nolint:errcheck // best-effort settings

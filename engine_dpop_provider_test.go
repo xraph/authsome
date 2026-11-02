@@ -25,6 +25,7 @@ func TestEngine_SessionAuthProviderEnforcesDPoP(t *testing.T) {
 	t.Parallel()
 
 	eng := secutil.NewTestEngine(t)
+	secutil.RelaxAuthDefaults(t, eng) // sign-up has to hand back a session to bind
 	ctx := context.Background()
 	require.NoError(t, eng.InitPlugins(ctx))
 

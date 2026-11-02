@@ -157,13 +157,9 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 		//
 		// NOTE: ideally we'd queue a "someone tried to register with your
 		// email" notification to the legitimate owner here, but the engine
-		// does not yet expose a notifier hook for this. Phase 2A Task 4
-		// (default-on email verification) will give every fresh signup a
-		// structurally identical "verification pending" path, at which
-		// point this synthetic shape becomes indistinguishable from a real
-		// pending verification. Until then the lack of a session token
-		// is still ambiguous to an attacker — could be a fresh signup
-		// awaiting verification — so it is strictly better than 409.
+		// does not yet expose a notifier hook for this. Where verification
+		// is required, a fresh signup gets the same "verification pending"
+		// response with no session, so the two can't be told apart.
 		if errors.Is(err, account.ErrEmailTaken) {
 			// Run a dummy password hash on the duplicate path so the
 			// HTTP-response timing is indistinguishable from a fresh
@@ -173,13 +169,29 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 			// addresses (duplicate ~1ms vs fresh ~100ms+). Result is
 			// discarded.
 			a.consumeDummyHashBudget(ctx.Context(), req.Password)
-			return nil, ctx.JSON(http.StatusCreated, a.syntheticSignupResponse(req.Email, appID))
+			return nil, ctx.JSON(http.StatusCreated, a.syntheticSignupResponse(ctx.Context(), req.Email, appID))
 		}
 		return nil, mapErrorCtx(ctx, err)
 	}
 
+	// The email has to be verified first: no session, no cookie. The code
+	// sent at sign-up signs the user in once they enter it.
+	if sess == nil {
+		return nil, ctx.JSON(http.StatusCreated, pendingVerificationResponse(u))
+	}
 	a.setSessionCookie(ctx, sess.Token, a.sessionTokenMaxAge())
 	return nil, ctx.JSON(http.StatusCreated, authResponse(u, sess))
+}
+
+// pendingVerificationResponse is a sign-up's answer while its email awaits
+// verification: the user, with empty tokens.
+func pendingVerificationResponse(u *user.User) map[string]any {
+	return map[string]any{
+		"user":          u,
+		"session_token": "",
+		"refresh_token": "",
+		"expires_at":    "",
+	}
 }
 
 // consumeDummyHashBudget runs the engine's configured password hashing
@@ -205,18 +217,26 @@ func (a *API) consumeDummyHashBudget(ctx context.Context, password string) {
 }
 
 // syntheticSignupResponse returns a response shaped exactly like a real
-// fresh-signup response — populated user, non-empty session_token /
-// refresh_token, and a forward-dated expires_at — so an attacker cannot use
-// the response shape itself to distinguish duplicate-email signups from
-// fresh ones. The synthetic tokens are generated via crypto/rand and will
-// not validate against the session store; any attacker probe that tries to
-// USE one in a follow-up request gets the same "invalid session" response
-// they would get from a fully forged token.
-//
-// This is a Phase 2A Task 4 stopgap. Once RequireEmailVerification defaults
-// to true, fresh signups will also return empty tokens until verification
-// completes, at which point this synthesis can be collapsed.
-func (a *API) syntheticSignupResponse(email string, appID id.AppID) map[string]any {
+// fresh-signup response, so an attacker cannot use the response shape to
+// tell a duplicate-email signup from a fresh one. Where the app requires
+// email verification a fresh signup gets no session, so neither does this.
+// Otherwise it carries a populated user, non-empty session_token and
+// refresh_token, and a forward-dated expires_at. Those synthetic tokens
+// come from crypto/rand and never validate against the session store; any
+// probe that tries to USE one gets the same "invalid session" response as
+// a forged token.
+func (a *API) syntheticSignupResponse(ctx context.Context, email string, appID id.AppID) map[string]any {
+	syntheticUser := &user.User{
+		ID:        id.NewUserID(),
+		AppID:     appID,
+		Email:     strings.ToLower(strings.TrimSpace(email)),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if a.engine.EmailVerificationRequired(ctx, appID) {
+		return pendingVerificationResponse(syntheticUser)
+	}
+
 	token, err := syntheticOpaqueToken()
 	if err != nil {
 		token = ""
@@ -231,14 +251,6 @@ func (a *API) syntheticSignupResponse(email string, appID id.AppID) map[string]a
 		ttl = time.Hour
 	}
 	expiresAt := time.Now().Add(ttl)
-
-	syntheticUser := &user.User{
-		ID:        id.NewUserID(),
-		AppID:     appID,
-		Email:     strings.ToLower(strings.TrimSpace(email)),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
 
 	return map[string]any{
 		"user":          syntheticUser,

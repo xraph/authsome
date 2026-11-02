@@ -214,6 +214,13 @@ func (e *Engine) issueSession(ctx context.Context, req *IssueSessionRequest) (*I
 	if req.AppID.IsNil() {
 		req.AppID = req.User.AppID
 	}
+	// The same holds for an email nobody has verified, where the app
+	// requires it. An account with no email (phone, anonymous) has none to
+	// verify. The verify-email paths mark the user verified before they
+	// sign anyone in.
+	if req.User.Email != "" && !req.User.EmailVerified && e.EmailVerificationRequired(ctx, req.AppID) {
+		return nil, account.ErrEmailNotVerified
+	}
 
 	// Resolve the default environment when the caller didn't supply one.
 	// authsome_sessions.env_id is NOT NULL, so a session minted without an

@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
@@ -41,6 +42,13 @@ func (ts *TestServer) CreateUser(t *testing.T, email, pass string) (resp *authcl
 	if !u.EmailVerified {
 		u.EmailVerified = true
 		require.NoError(t, ts.Engine.Store().UpdateUser(ctx, u))
+	}
+	// Sign-up gives an unverified account no session; now that it's
+	// verified, sign it in the way the verify-email path does.
+	if sess == nil {
+		res, issueErr := ts.Engine.IssueSession(ctx, &authsome.IssueSessionRequest{User: u, AppID: appID, AuthMethod: "password"})
+		require.NoError(t, issueErr)
+		sess = res.Session
 	}
 
 	resp = &authclient.AuthResponse{
