@@ -3,7 +3,9 @@ package contract
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -60,6 +62,8 @@ type fakeService struct {
 	rotated    KeyInfo
 	keys       []KeyInfo
 	keysErr    error
+	issuer     IssuerDetails
+	issuerErr  error
 	getClient  Client
 	getErr     error
 	createCall int
@@ -87,7 +91,7 @@ func (f *fakeService) RotateSigningKey(context.Context, id.AppID) (KeyInfo, erro
 	return f.rotated, f.rotateErr
 }
 func (f *fakeService) IssuerInfo(context.Context, id.AppID) (IssuerDetails, error) {
-	return IssuerDetails{}, nil
+	return f.issuer, f.issuerErr
 }
 
 func TestClientsList_UnavailableWhenPluginNil(t *testing.T) {
@@ -131,6 +135,18 @@ func TestClientsCreate_MapsValidationAndCarriesSecret(t *testing.T) {
 	}
 }
 
+func TestClientsCreate_PublicClientOmitsSecret(t *testing.T) {
+	h := clientsCreateHandler(Deps{Plugin: &fakeService{created: Created{ID: "oa2c_1", ClientID: "pub"}}})
+	out, err := h(context.Background(), CreateClientInput{Name: "x", Public: true}, contract.Principal{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(out)
+	if strings.Contains(string(b), "clientSecret") {
+		t.Fatalf("public client response carries clientSecret: %s", b)
+	}
+}
+
 func TestClientsDetail_NotFound(t *testing.T) {
 	h := clientsDetailHandler(Deps{Plugin: &fakeService{getErr: ErrClientNotFound}})
 	_, err := h(context.Background(), ClientIDInput{ID: "x"}, contract.Principal{})
@@ -151,13 +167,6 @@ func TestClientsDetail_Projects(t *testing.T) {
 	}
 }
 
-func TestClientsUpdate_RefusesDPoPMode(t *testing.T) {
-	m := "required"
-	h := clientsUpdateHandler(Deps{Plugin: &fakeService{}})
-	_, err := h(context.Background(), UpdateClientInput{ID: "x", DPoPMode: &m}, contract.Principal{})
-	expectCode(t, err, contract.CodeBadRequest)
-}
-
 func TestKeysRotate_OperatorKeyIsBadRequest(t *testing.T) {
 	h := keysRotateHandler(Deps{Plugin: &fakeService{rotateErr: ErrOperatorKey}})
 	_, err := h(context.Background(), struct{}{}, contract.Principal{})
@@ -172,6 +181,19 @@ func TestKeysRotate_ReturnsPostRotationList(t *testing.T) {
 	}}
 	out, err := keysRotateHandler(Deps{Plugin: f})(context.Background(), struct{}{}, contract.Principal{})
 	if err != nil || len(out.Keys) != 2 || out.Issuer != "https://iss" || out.Keys[1].RetiresAt == "" || out.Keys[0].RetiresAt != "" {
+		t.Fatalf("out = %+v, err = %v", out, err)
+	}
+}
+
+func TestKeysRotate_DegradedListKeepsIssuer(t *testing.T) {
+	f := &fakeService{rotated: KeyInfo{KID: "new"}, keysErr: errors.New("boom"), issuer: IssuerDetails{Issuer: "https://iss2"}}
+	out, err := keysRotateHandler(Deps{Plugin: f})(context.Background(), struct{}{}, contract.Principal{})
+	if err != nil || len(out.Keys) != 1 || out.Keys[0].KID != "new" || out.Issuer != "https://iss2" {
+		t.Fatalf("out = %+v, err = %v", out, err)
+	}
+	f.issuerErr = errors.New("boom")
+	out, err = keysRotateHandler(Deps{Plugin: f})(context.Background(), struct{}{}, contract.Principal{})
+	if err != nil || out.Issuer != "" || len(out.Keys) != 1 {
 		t.Fatalf("out = %+v, err = %v", out, err)
 	}
 }

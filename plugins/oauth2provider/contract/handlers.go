@@ -62,9 +62,7 @@ type CreateClientInput struct {
 	Resources    []string `json:"resources"`
 }
 
-// UpdateClientInput changes the fields it carries. DPoPMode is accepted so the
-// wire shape is stable, but the service does not edit it yet, so a non-nil
-// value is refused rather than ignored.
+// UpdateClientInput changes the fields it carries. A nil field is left alone.
 type UpdateClientInput struct {
 	ID           string    `json:"id"`
 	Name         *string   `json:"name,omitempty"`
@@ -72,7 +70,6 @@ type UpdateClientInput struct {
 	Scopes       *[]string `json:"scopes,omitempty"`
 	GrantTypes   *[]string `json:"grantTypes,omitempty"`
 	Resources    *[]string `json:"resources,omitempty"`
-	DPoPMode     *string   `json:"dpopMode,omitempty"`
 }
 
 // CreatedClient carries the plaintext secret of a confidential client, once.
@@ -181,9 +178,6 @@ func clientsUpdateHandler(deps Deps) func(context.Context, UpdateClientInput, co
 		if deps.Plugin == nil {
 			return ClientDetail{}, unavailable()
 		}
-		if in.DPoPMode != nil {
-			return ClientDetail{}, badReq("dpopMode cannot be changed here")
-		}
 		c, err := deps.Plugin.UpdateClientFor(ctx, authcontract.AppIDFromPrincipal(p, deps.Engine), in.ID, UpdateParams{
 			Name: in.Name, RedirectURIs: in.RedirectURIs, Scopes: in.Scopes,
 			GrantTypes: in.GrantTypes, Resources: in.Resources,
@@ -262,8 +256,8 @@ func keysListHandler(deps Deps) func(context.Context, struct{}, contract.Princip
 // keysRotateHandler rotates the signing key and answers with the key list as
 // it stands afterwards, so the dashboard refreshes in one round trip. If the
 // rotation succeeded but the list could not be read, it answers with the new
-// key alone rather than an error, because the rotation cannot be retried
-// harmlessly.
+// key alone (with the issuer when that can be read) rather than an error,
+// because the rotation cannot be retried harmlessly.
 func keysRotateHandler(deps Deps) func(context.Context, struct{}, contract.Principal) (KeyListResponse, error) {
 	return func(ctx context.Context, _ struct{}, p contract.Principal) (KeyListResponse, error) {
 		if refuseDelegated(ctx) {
@@ -279,7 +273,12 @@ func keysRotateHandler(deps Deps) func(context.Context, struct{}, contract.Princ
 		}
 		issuer, keys, err := deps.Plugin.SigningKeys(ctx, appID)
 		if err != nil {
-			return projectKeys("", []KeyInfo{rotated}), nil
+			// Best effort: the issuer is a nicety, the rotation already happened.
+			var iss string
+			if info, infoErr := deps.Plugin.IssuerInfo(ctx, appID); infoErr == nil {
+				iss = info.Issuer
+			}
+			return projectKeys(iss, []KeyInfo{rotated}), nil
 		}
 		return projectKeys(issuer, keys), nil
 	}
