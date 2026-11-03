@@ -1297,9 +1297,21 @@ func (c *Client) DeleteCoupon(ctx context.Context, couponId string) error {
 }
 
 // CheckEntitlement — Check feature entitlement
-func (c *Client) CheckEntitlement(ctx context.Context, featureKey string) (*EntitlementResponse, error) {
+func (c *Client) CheckEntitlement(ctx context.Context, featureKey string, params *CheckEntitlementParams) (*EntitlementResponse, error) {
 	path := "/v1/billing/entitlements/{featureKey}"
 	path = strings.Replace(path, "{featureKey}", featureKey, 1)
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if params.TenantID != "" {
+			q.Set("tenant_id", params.TenantID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	var result EntitlementResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -3394,6 +3406,12 @@ type AdminListUsersParams struct {
 // ListCouponsParams holds optional query parameters for ListCoupons.
 type ListCouponsParams struct {
 	AppID string `json:"app_id,omitempty"`
+}
+
+// CheckEntitlementParams holds optional query parameters for CheckEntitlement.
+type CheckEntitlementParams struct {
+	AppID    string `json:"app_id,omitempty"`
+	TenantID string `json:"tenant_id,omitempty"`
 }
 
 // ListInvoicesParams holds optional query parameters for ListInvoices.
