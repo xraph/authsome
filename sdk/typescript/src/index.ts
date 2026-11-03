@@ -126,6 +126,8 @@ export type {
   Invitation,
   InvitationListResponse,
   InvoiceResponse,
+  JWK,
+  JWKSResponse,
   KeyListItem,
   ListAuthMethodsResponse,
   ListClientsResponse,

@@ -730,6 +730,7 @@ export interface DisableResponse {
 
 export interface DiscoveryResponse {
   authorization_endpoint: string;
+  claims_supported: string[];
   code_challenge_methods_supported: string[];
   device_authorization_endpoint: string;
   dpop_signing_alg_values_supported?: string[];
@@ -739,6 +740,7 @@ export interface DiscoveryResponse {
   jwks_uri: string;
   registration_endpoint?: string;
   resource_indicators_supported: boolean;
+  response_modes_supported: string[];
   response_types_supported: string[];
   revocation_endpoint: string;
   scopes_supported: string[];
@@ -927,6 +929,22 @@ export interface InvoiceResponse {
   subscription_id: string;
   tenant_id: string;
   total: string;
+}
+
+export interface JWK {
+  alg?: string;
+  crv?: string;
+  e?: string;
+  kid?: string;
+  kty: string;
+  n?: string;
+  use?: string;
+  x?: string;
+  y?: string;
+}
+
+export interface JWKSResponse {
+  keys: JWK[];
 }
 
 export interface KeyListItem {
@@ -1119,6 +1137,7 @@ export interface OAuth2Client {
 export interface Oauth2providerTokenResponse {
   access_token: string;
   expires_in: number;
+  id_token?: string;
   issued_token_type?: string;
   refresh_token?: string;
   scope?: string;
@@ -1725,9 +1744,15 @@ export interface User {
 export interface UserInfo {
   email?: string;
   email_verified?: boolean;
+  family_name?: string;
+  given_name?: string;
   name?: string;
   phone_number?: string;
+  phone_number_verified?: boolean;
+  picture?: string;
+  preferred_username?: string;
   sub: string;
+  updated_at?: number;
 }
 
 export interface UserResource {
