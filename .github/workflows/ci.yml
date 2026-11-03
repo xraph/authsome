@@ -29,6 +29,8 @@ jobs:
       # workflow sets check-latest, so this still resolves to the newest patch.
       go-versions: '["1.26"]'
       os: '["ubuntu-latest"]'
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   # ─── Store Conformance (Postgres + Mongo) ───────────────────────────
   # Runs the cross-backend store conformance suite against real Postgres
