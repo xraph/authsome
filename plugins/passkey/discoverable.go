@@ -152,7 +152,7 @@ func (p *Plugin) finishDiscoverableLogin(ctx forge.Context, ceremonyID string) (
 		_ = p.store.UpdateSignCount(ctx.Context(), cred.ID, cred.Authenticator.SignCount) //nolint:errcheck // best-effort update
 	}
 
-	sess, err := p.issueSession(ctx, loggedIn, attempt)
+	sess, err := p.issueSession(ctx, loggedIn, cred.Flags.UserVerified, attempt)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +178,10 @@ func (p *Plugin) finishDiscoverableLogin(ctx forge.Context, ceremonyID string) (
 
 // issueSession mints a real session for a passwordless login via the engine's
 // centralized IssueSession (so the MFA gate applies), returning it.
-func (p *Plugin) issueSession(ctx forge.Context, u *user.User, attempt *telemetry.SignInAttempt) (*session.Session, error) {
+//
+// userVerified is the assertion's UV flag: the authenticator checked a
+// biometric or PIN, which spares a user with two-step on the code.
+func (p *Plugin) issueSession(ctx forge.Context, u *user.User, userVerified bool, attempt *telemetry.SignInAttempt) (*session.Session, error) {
 	eng, ok := p.engine.(*authsome.Engine)
 	if !ok || eng == nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: session issuance unavailable"))
@@ -196,12 +199,13 @@ func (p *Plugin) issueSession(ctx forge.Context, u *user.User, attempt *telemetr
 	}
 	attempt.HandOff()
 	result, err := eng.IssueSession(ctx.Context(), &authsome.IssueSessionRequest{
-		User:       u,
-		AppID:      u.AppID,
-		AuthMethod: "passkey",
-		DPoPJKT:    dpopJKT,
-		IPAddress:  ctx.Request().RemoteAddr,
-		UserAgent:  ctx.Request().UserAgent(),
+		User:              u,
+		AppID:             u.AppID,
+		AuthMethod:        "passkey",
+		DPoPJKT:           dpopJKT,
+		IPAddress:         ctx.Request().RemoteAddr,
+		UserAgent:         ctx.Request().UserAgent(),
+		UserVerifiedByKey: userVerified,
 	})
 	if err != nil {
 		return nil, err

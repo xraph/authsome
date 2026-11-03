@@ -65,6 +65,13 @@ type IssueSessionRequest struct {
 	// DPoPJKT binds the issued session to a client-held key (RFC 9449).
 	// Empty issues an ordinary unbound session.
 	DPoPJKT string
+
+	// UserVerifiedByKey reports that the sign-in was a passkey assertion
+	// whose authenticator verified the user (a biometric or PIN on top of
+	// holding the key). That is two factors already, so the user's own
+	// second factor isn't asked for after it. Set it only from a verified
+	// WebAuthn assertion's UV flag.
+	UserVerifiedByKey bool
 }
 
 // IssueSessionResult is the gate's success output. On the
@@ -265,11 +272,11 @@ func (e *Engine) issueSession(ctx context.Context, req *IssueSessionRequest) (*I
 	// UI can route to the enrollment surface.
 	//
 	// A user who turned a second factor on for themselves is asked for it
-	// too, app rule or not. A passkey sign-in is the exception: it already
-	// proves possession plus a local biometric or PIN, so only the app-wide
-	// rule follows it with a code.
+	// too, app rule or not. A passkey that verified its user is the
+	// exception: it already proves possession plus a biometric or PIN, so
+	// only the app-wide rule follows it with a code.
 	gate := !req.MFAJustVerified && e.mfaRequiredFor(ctx, req.AppID)
-	if !gate && !req.MFAJustVerified && req.AuthMethod != authMethodPasskey {
+	if !gate && !req.MFAJustVerified && !req.UserVerifiedByKey {
 		enrolled, err := e.userHasMFA(ctx, req.User.ID)
 		if err != nil {
 			// Fail closed: a sign-in that can't tell whether the user
@@ -334,9 +341,6 @@ func (e *Engine) mfaRequiredFor(ctx context.Context, appID id.AppID) bool {
 	}
 	return *cfg.MFARequired
 }
-
-// authMethodPasskey is the AuthMethod the passkey plugin signs in with.
-const authMethodPasskey = "passkey"
 
 // mfaEnrollmentChecker is the part of the mfa plugin the gate asks
 // whether a user has a verified second factor.

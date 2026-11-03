@@ -110,6 +110,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 // RegisterBeginRequest is the request body for beginning passkey registration.
 type RegisterBeginRequest struct {
 	DisplayName string `json:"display_name,omitempty"`
+	// Code is a current TOTP or recovery code. It's needed only when the
+	// user has two-step verification on, since a passkey that verifies its
+	// user signs in without the code.
+	Code string `json:"code,omitempty" description:"Current TOTP or recovery code, required when two-step verification is on"`
 }
 
 // RegisterBeginResponse contains the WebAuthn registration options.
@@ -250,6 +254,28 @@ func (p *Plugin) requireFreshSession(ctx forge.Context) error {
 	return nil
 }
 
+// stepUpVerifier is the part of the mfa plugin that checks a code from a
+// user with two-step verification on.
+type stepUpVerifier interface {
+	VerifyStepUp(ctx context.Context, userID id.UserID, code string) error
+}
+
+// requireSecondFactor asks a user with two-step verification on for a
+// current code before a passkey is added. A passkey that verifies its user
+// signs in without the code, so adding one on a session alone would let
+// whoever holds the session turn two-step off for themselves.
+func (p *Plugin) requireSecondFactor(ctx forge.Context, userID id.UserID, code string) error {
+	if p.engine == nil {
+		return nil
+	}
+	for _, pl := range p.engine.Plugins().Plugins() {
+		if v, ok := pl.(stepUpVerifier); ok {
+			return v.VerifyStepUp(ctx.Context(), userID, code)
+		}
+	}
+	return nil
+}
+
 // sessionRevoker is the slice of the engine a credential change needs.
 type sessionRevoker interface {
 	RevokeOtherUserSessions(ctx context.Context, userID id.UserID, keep id.SessionID) error
@@ -292,6 +318,9 @@ func (p *Plugin) handleRegisterBegin(ctx forge.Context, req *RegisterBeginReques
 	}
 	if freshErr := p.requireFreshSession(ctx); freshErr != nil {
 		return nil, freshErr
+	}
+	if stepErr := p.requireSecondFactor(ctx, u.ID, req.Code); stepErr != nil {
+		return nil, stepErr
 	}
 
 	wau := p.toWebAuthnUser(ctx.Context(), u)

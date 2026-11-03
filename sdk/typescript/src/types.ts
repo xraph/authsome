@@ -1226,6 +1226,7 @@ export interface RefreshRequest {
 }
 
 export interface RegisterBeginRequest {
+  code?: string;
   display_name?: string;
 }
 

@@ -29,6 +29,9 @@ type Authenticator struct {
 	Origin string
 	// RPID is the relying party ID the credential is scoped to.
 	RPID string
+	// NoUserVerification signs assertions with user presence only, the
+	// way a security key with no PIN does.
+	NoUserVerification bool
 
 	key        *ecdsa.PrivateKey
 	credID     []byte
@@ -163,7 +166,11 @@ func (a *Authenticator) Get(options json.RawMessage) ([]byte, error) {
 		return nil, errors.New("passkeytest: request options carry no challenge")
 	}
 	a.signCount++
-	authData := a.authData(flagUserPresent | flagUserVerified)
+	flags := byte(flagUserPresent | flagUserVerified)
+	if a.NoUserVerification {
+		flags = flagUserPresent
+	}
+	authData := a.authData(flags)
 	clientData, err := a.clientData("webauthn.get", opts.PublicKey.Challenge)
 	if err != nil {
 		return nil, err

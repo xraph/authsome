@@ -89,31 +89,72 @@ func TestIssueSession_UnverifiedEnrollment_IssuesSession(t *testing.T) {
 	require.NotNil(t, res.Session)
 }
 
-// A passkey is possession plus a local biometric or PIN, already two
-// factors, so it isn't followed by a code. An app that requires MFA of
-// everyone still asks (TestIssueSession_GateFiresForEveryAuthMethod
-// covers the app rule; this covers its passkey case).
-func TestIssueSession_EnrolledUser_PasskeySkipsPerUserGate(t *testing.T) {
+// A passkey that verified its user (a biometric or PIN on top of holding
+// the key) is already two factors, so it isn't followed by a code. An app
+// that requires MFA of everyone still asks.
+func TestIssueSession_EnrolledUser_VerifiedPasskeySkipsPerUserGate(t *testing.T) {
 	t.Parallel()
 	eng, u, appID := issueSessionFixture(t)
 	enrollTOTP(t, eng, u, true)
 
 	res, err := eng.IssueSession(context.Background(), &authsome.IssueSessionRequest{
-		User:       u,
-		AppID:      appID,
-		AuthMethod: "passkey",
+		User:              u,
+		AppID:             appID,
+		AuthMethod:        "passkey",
+		UserVerifiedByKey: true,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, res.Session)
 
 	requireMFAOnApp(t, eng, appID)
 	_, err = eng.IssueSession(context.Background(), &authsome.IssueSessionRequest{
+		User:              u,
+		AppID:             appID,
+		AuthMethod:        "passkey",
+		UserVerifiedByKey: true,
+	})
+	var mfaErr *authsome.MFARequiredError
+	require.True(t, errors.As(err, &mfaErr), "the app-wide rule still applies to passkeys, got %v", err)
+}
+
+// A passkey that only proved someone touched it, such as a security key
+// with no PIN, is one factor, so the code is still asked for. The auth
+// method's name alone exempts nothing.
+func TestIssueSession_EnrolledUser_UnverifiedPasskeyIsGated(t *testing.T) {
+	t.Parallel()
+	eng, u, appID := issueSessionFixture(t)
+	enrollTOTP(t, eng, u, true)
+
+	_, err := eng.IssueSession(context.Background(), &authsome.IssueSessionRequest{
 		User:       u,
 		AppID:      appID,
 		AuthMethod: "passkey",
 	})
 	var mfaErr *authsome.MFARequiredError
-	require.True(t, errors.As(err, &mfaErr), "the app-wide rule still applies to passkeys, got %v", err)
+	require.True(t, errors.As(err, &mfaErr), "got %v", err)
+}
+
+// Only factors the sign-in challenge can check gate sign-in. It checks TOTP
+// and recovery codes, so an SMS-only enrolment would ask for a code nobody
+// could give.
+func TestIssueSession_SMSOnlyEnrollment_IssuesSession(t *testing.T) {
+	t.Parallel()
+	eng, u, appID := issueSessionFixture(t)
+	plg, ok := eng.Plugins().Plugin("mfa").(*mfa.Plugin)
+	require.True(t, ok)
+	store := mfa.NewMemoryStore()
+	plg.SetStore(store)
+	require.NoError(t, store.CreateEnrollment(context.Background(), &mfa.Enrollment{
+		ID: id.NewMFAID(), UserID: u.ID, Method: "sms", Secret: "+15555550100", Verified: true,
+	}))
+
+	res, err := eng.IssueSession(context.Background(), &authsome.IssueSessionRequest{
+		User:       u,
+		AppID:      appID,
+		AuthMethod: "password",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res.Session)
 }
 
 // failingStore fails every enrolment lookup, as a database outage would.
