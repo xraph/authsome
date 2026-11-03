@@ -15,10 +15,15 @@ import (
 	"github.com/xraph/ledger/plan"
 	"github.com/xraph/ledger/store/memory"
 	"github.com/xraph/ledger/subscription"
+	"github.com/xraph/warden"
+	wardenmem "github.com/xraph/warden/store/memory"
 
+	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/settings"
+	authmemory "github.com/xraph/authsome/store/memory"
 	"github.com/xraph/authsome/user"
 )
 
@@ -124,4 +129,39 @@ func TestOnAfterSignUp_DefaultStillSubscribes(t *testing.T) {
 
 	require.NoError(t, p.OnAfterSignUp(context.Background(), u, nil))
 	assert.Len(t, subscriptionsOf(t, st, u.ID.String()), 1)
+}
+
+// TestOnInit_FindsLedgerFromEngine builds the engine with WithLedgerEngine and
+// never calls RebindLedgerOnPlugins. The plugin has to find the ledger and its
+// store on its own, because *authsome.Engine returns them with concrete types.
+func TestOnInit_FindsLedgerFromEngine(t *testing.T) {
+	ctx := context.Background()
+	st := memory.New()
+	l := ledger.New(st)
+	pl := &plan.Plan{
+		Name: "Free", Slug: "free", Currency: "usd", Status: plan.StatusActive,
+		AppID: "aapp_01jf0000000000000000000000",
+	}
+	require.NoError(t, l.CreatePlan(ctx, pl))
+
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+
+	p := New(Config{})
+	eng, err := authsome.NewEngine(
+		authsome.WithStore(authmemory.New()),
+		authsome.WithWarden(w),
+		authsome.WithChronicle(bridge.NewMemoryChronicle()),
+		authsome.WithDisableMigrate(),
+		authsome.WithAppID("aapp_01jf0000000000000000000000"),
+		authsome.WithLedgerEngine(l),
+		authsome.WithPlugin(p),
+	)
+	require.NoError(t, err)
+	require.NoError(t, eng.InitPlugins(ctx))
+
+	sub, err := p.Service().Subscribe(ctx, "tenant-1", pl.ID, "aapp_01jf0000000000000000000000")
+	require.NoError(t, err)
+	assert.Equal(t, "tenant-1", sub.TenantID)
+	assert.NotNil(t, p.ledgerStore)
 }

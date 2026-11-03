@@ -200,15 +200,25 @@ func (p *Plugin) Name() string { return "subscription" }
 
 // OnInit captures bridge and engine references.
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
-	// Discover ledger engine (optional capability).
-	if lep, ok := engine.(plugin.LedgerEngineProvider); ok {
+	// Discover ledger engine (optional capability). *authsome.Engine returns
+	// concrete types, so try those first; the any-typed providers stay for
+	// engines that hide the ledger behind plugin.LedgerEngineProvider.
+	if lep, ok := engine.(interface{ LedgerEngine() *ledger.Ledger }); ok {
+		if l := lep.LedgerEngine(); l != nil {
+			p.ledger = l
+		}
+	} else if lep, ok := engine.(plugin.LedgerEngineProvider); ok {
 		if l, ok := lep.LedgerEngine().(*ledger.Ledger); ok {
 			p.ledger = l
 		}
 	}
 
 	// Discover ledger store (optional capability).
-	if lsp, ok := engine.(plugin.LedgerStoreProvider); ok {
+	if lsp, ok := engine.(interface{ LedgerStore() ledgerstore.Store }); ok {
+		if ls := lsp.LedgerStore(); ls != nil {
+			p.ledgerStore = ls
+		}
+	} else if lsp, ok := engine.(plugin.LedgerStoreProvider); ok {
 		if ls, ok := lsp.LedgerStore().(ledgerstore.Store); ok {
 			p.ledgerStore = ls
 		}
