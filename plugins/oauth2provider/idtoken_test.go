@@ -64,7 +64,9 @@ func newOIDCFixture(t *testing.T, cfg oauth2provider.Config, withEncryptor bool,
 	appID, err := id.ParseAppID("aapp_01jf0000000000000000000000")
 	require.NoError(t, err)
 
-	cfg.Issuer = oidcIssuer
+	if cfg.Issuer == "" {
+		cfg.Issuer = oidcIssuer
+	}
 	p := oauth2provider.New(cfg)
 	st := oauth2provider.NewMemoryStore()
 	p.SetOAuth2Store(st)
