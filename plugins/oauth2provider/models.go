@@ -101,6 +101,13 @@ type AuthorizationCode struct {
 	ExpiresAt           time.Time `json:"expires_at"`
 	Consumed            bool      `json:"consumed"`
 	CreatedAt           time.Time `json:"created_at"`
+	// Nonce is the client's OpenID Connect nonce from the authorization
+	// request, empty when it sent none. It is echoed into the id_token.
+	Nonce string `json:"-"`
+	// AuthTime is when the user authenticated: the creation time of the
+	// session that approved the request. Zero on codes minted before this
+	// field existed.
+	AuthTime time.Time `json:"-"`
 }
 
 // TokenResponse is the OAuth2 token endpoint response.
@@ -117,6 +124,9 @@ type TokenResponse struct {
 	// IssuedTokenType is required by RFC 8693 section 2.2.1 and omitted by
 	// every other grant, which is why it carries omitempty.
 	IssuedTokenType string `json:"issued_token_type,omitempty"`
+	// IDToken is the OpenID Connect id_token, present only when the grant
+	// is for a user and the granted scopes include openid.
+	IDToken string `json:"id_token,omitempty"`
 }
 
 // DeviceCode represents an OAuth2 device authorization code (RFC 8628).
@@ -136,6 +146,9 @@ type DeviceCode struct {
 	UserID          id.UserID `json:"user_id,omitempty"`        // set when user authorizes
 	LastPolledAt    time.Time `json:"last_polled_at,omitempty"` // last time the CLI polled for this code
 	CreatedAt       time.Time `json:"created_at"`
+	// AuthTime is when the approving user authenticated, set at approval from
+	// that user's session. Zero until approved.
+	AuthTime time.Time `json:"-"`
 }
 
 // Device code status constants.
@@ -148,11 +161,8 @@ const (
 
 // UserInfo is the OIDC userinfo response.
 type UserInfo struct {
-	Sub           string `json:"sub"`
-	Email         string `json:"email,omitempty"`
-	EmailVerified bool   `json:"email_verified,omitempty"`
-	Name          string `json:"name,omitempty"`
-	Phone         string `json:"phone_number,omitempty"`
+	Sub string `json:"sub"`
+	StandardClaims
 }
 
 // Grant records that a user approved a client for a set of scopes in an app.

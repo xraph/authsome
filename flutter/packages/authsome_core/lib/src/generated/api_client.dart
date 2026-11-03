@@ -101,6 +101,30 @@ class AuthClient {
     return DiscoveryResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// App OpenID Connect Discovery
+  /// GET /apps/{slug}/.well-known/openid-configuration
+  Future<DiscoveryResponse> oauth2AppDiscoveryPrefixed({required String slug, required String token}) async {
+    final path = '/apps/$slug/.well-known/openid-configuration';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return DiscoveryResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// App JSON Web Key Set
+  /// GET /apps/{slug}/v1/oauth/jwks
+  Future<JWKSResponse> oauth2AppJWKS({required String slug, required String token}) async {
+    final path = '/apps/$slug/v1/oauth/jwks';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return JWKSResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// List SCIM Groups
   /// GET /scim/v2/Groups
   Future<ScimListResponse> scimListGroups({required String token}) async {
@@ -1931,7 +1955,7 @@ class AuthClient {
 
   /// OAuth2 Authorization
   /// GET /v1/oauth/authorize
-  Future<void> oauth2Authorize({required String responseType, required String clientId, String? redirectUri, String? scope, String? state, String? codeChallenge, String? codeChallengeMethod, List<String>? resource, String? prompt}) async {
+  Future<void> oauth2Authorize({required String responseType, required String clientId, String? redirectUri, String? scope, String? state, String? codeChallenge, String? codeChallengeMethod, List<String>? resource, String? prompt, String? nonce}) async {
     final path = '/v1/oauth/authorize';
     // A list of pairs rather than a map, because a query string may carry the
     // same key more than once. RFC 8707 sends `resource` that way, and a map
@@ -1948,6 +1972,7 @@ class AuthClient {
       queryPairs.add(MapEntry('resource', element.toString()));
     }
     if (prompt != null) queryPairs.add(MapEntry('prompt', prompt.toString()));
+    if (nonce != null) queryPairs.add(MapEntry('nonce', nonce.toString()));
     final queryString = queryPairs.isNotEmpty
         ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
@@ -2004,6 +2029,18 @@ class AuthClient {
       token: token,
     );
     return DeviceCompleteResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// JSON Web Key Set
+  /// GET /v1/oauth/jwks
+  Future<JWKSResponse> oauth2JWKS({required String token}) async {
+    final path = '/v1/oauth/jwks';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return JWKSResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Register OAuth2 client
@@ -2087,6 +2124,18 @@ class AuthClient {
     final path = '/v1/oauth/userinfo';
     final res = await _request(
 'GET',
+      path,
+      token: token,
+    );
+    return UserInfo.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// OIDC UserInfo (POST)
+  /// POST /v1/oauth/userinfo
+  Future<UserInfo> oauth2UserInfoPost({required String token}) async {
+    final path = '/v1/oauth/userinfo';
+    final res = await _request(
+'POST',
       path,
       token: token,
     );

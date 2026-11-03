@@ -26,6 +26,8 @@ import (
 type backend struct {
 	name  string
 	setup func(t *testing.T) oauth2test.Factory
+	// skip names the conformance cases this backend cannot run yet.
+	skip []string
 }
 
 // extraBackends holds the backends that need external infrastructure. The
@@ -38,13 +40,13 @@ var extraBackends []backend
 // `-tags integration`.
 func TestConformance(t *testing.T) {
 	backends := append([]backend{
-		{"Memory", func(*testing.T) oauth2test.Factory { return memoryFixture }},
-		{"SQLite", func(*testing.T) oauth2test.Factory { return sqliteFixture }},
+		{"Memory", func(*testing.T) oauth2test.Factory { return memoryFixture }, nil},
+		{"SQLite", func(*testing.T) oauth2test.Factory { return sqliteFixture }, nil},
 	}, extraBackends...)
 
 	for _, b := range backends {
 		t.Run(b.name, func(t *testing.T) {
-			oauth2test.RunConformance(t, b.setup(t))
+			oauth2test.RunConformance(t, b.setup(t), b.skip...)
 		})
 	}
 }

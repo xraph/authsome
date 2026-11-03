@@ -1,6 +1,8 @@
 package oauth2provider
 
 import (
+	"context"
+
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/dpop"
@@ -44,6 +46,9 @@ type AuthServerMetadata struct {
 	// is not app scoped, and a server that can validate ES256 proofs can do so
 	// whoever is asking. Per-client mode is discovered at registration.
 	DPoPSigningAlgValuesSupported []string `json:"dpop_signing_alg_values_supported,omitempty"`
+
+	ClaimsSupported        []string `json:"claims_supported"`
+	ResponseModesSupported []string `json:"response_modes_supported"`
 }
 
 // ProtectedResourceMetadata is the RFC 9728 protected resource metadata
@@ -65,17 +70,22 @@ type ProtectedResourceRequest struct {
 // buildAuthServerMetadata is the single source of truth for the RFC 8414
 // document. handleDiscovery maps its fields onto the OIDC discovery shape so
 // the two documents cannot drift apart.
-func (p *Plugin) buildAuthServerMetadata() *AuthServerMetadata {
-	issuer := p.issuerURL()
+//
+// issuer is the identifier the document names and where jwks_uri points;
+// scope picks the signing keys whose algorithms are advertised. Endpoint URLs
+// always come from p.issuerURL(), since the endpoints are served by this
+// deployment whichever issuer is asking. It reads keys without creating any.
+func (p *Plugin) buildAuthServerMetadata(ctx context.Context, issuer, scope string) *AuthServerMetadata {
+	base := p.issuerURL()
 
 	m := &AuthServerMetadata{
 		Issuer:                      issuer,
-		AuthorizationEndpoint:       issuer + "/v1/oauth/authorize",
-		TokenEndpoint:               issuer + "/v1/oauth/token",
-		UserinfoEndpoint:            issuer + "/v1/oauth/userinfo",
-		RevocationEndpoint:          issuer + "/v1/oauth/revoke",
-		DeviceAuthorizationEndpoint: issuer + "/v1/oauth/device/authorize",
-		JWKSURI:                     issuer + "/.well-known/jwks.json",
+		AuthorizationEndpoint:       base + "/v1/oauth/authorize",
+		TokenEndpoint:               base + "/v1/oauth/token",
+		UserinfoEndpoint:            base + "/v1/oauth/userinfo",
+		RevocationEndpoint:          base + "/v1/oauth/revoke",
+		DeviceAuthorizationEndpoint: base + "/v1/oauth/device/authorize",
+		JWKSURI:                     issuer + "/v1/oauth/jwks",
 		ResponseTypesSupported:      []string{"code"},
 		GrantTypesSupported: []string{
 			"authorization_code",
@@ -85,7 +95,7 @@ func (p *Plugin) buildAuthServerMetadata() *AuthServerMetadata {
 			tokenExchangeGrantType,
 		},
 		SubjectTypesSupported:            []string{"public"},
-		IDTokenSigningAlgValuesSupported: []string{"RS256", "ES256"},
+		IDTokenSigningAlgValuesSupported: p.idTokenAlgs(ctx, scope),
 		// The configured DynamicRegistrationScopes allowlist, not a
 		// separate hardcoded list: advertising a scope here that
 		// registration would then silently drop (or vice versa) is
@@ -97,19 +107,21 @@ func (p *Plugin) buildAuthServerMetadata() *AuthServerMetadata {
 		CodeChallengeMethodsSupported: []string{"S256"},
 		ResourceIndicatorsSupported:   true,
 		DPoPSigningAlgValuesSupported: dpop.SupportedAlgs(),
+		ClaimsSupported:               supportedClaims(),
+		ResponseModesSupported:        []string{"query"},
 	}
 
 	// Only advertise registration when it will actually answer. Pointing a
 	// client at an endpoint that 404s produces a worse failure than not
 	// mentioning it at all.
 	if p.config.DynamicRegistration {
-		m.RegistrationEndpoint = issuer + "/v1/oauth/register"
+		m.RegistrationEndpoint = base + "/v1/oauth/register"
 	}
 	return m
 }
 
-func (p *Plugin) handleAuthServerMetadata(_ forge.Context, _ *DiscoveryRequest) (*AuthServerMetadata, error) {
-	return p.buildAuthServerMetadata(), nil
+func (p *Plugin) handleAuthServerMetadata(ctx forge.Context, _ *DiscoveryRequest) (*AuthServerMetadata, error) {
+	return p.buildAuthServerMetadata(ctx.Context(), p.issuerURL(), ""), nil
 }
 
 // handleProtectedResourceMetadata always describes AuthSome itself,

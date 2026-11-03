@@ -31,6 +31,13 @@ eng, err := authsome.NewEngine(
 | `Issuer` | `string` | `"https://localhost"` | OAuth2 issuer URL used in OIDC discovery |
 | `AuthCodeTTL` | `time.Duration` | `10m` | Lifetime of authorization codes |
 | `AccessTokenTTL` | `time.Duration` | `1h` | Lifetime of issued access tokens |
+| `IDTokenTTL` | `time.Duration` | `1h` | Lifetime of id_tokens |
+| `IDTokenSigningKey` | `[]byte` | none | PEM private key (RSA of 2048 bits or more, or EC P-256) that signs id_tokens. Wins over a managed key |
+| `IDTokenSigningKeyFile` | `string` | none | Path to the same PEM key |
+| `IDTokenSigningKeyID` | `string` | key thumbprint | The `kid` of the operator key |
+| `IDTokenPreviousKeys` | `[][]byte` | none | PEM keys published in the JWKS but never used to sign |
+| `IDTokenKeyRotation` | `time.Duration` | `90d` | Age at which a managed signing key is replaced |
+| `IDTokenKeyRetireGrace` | `time.Duration` | `7d` | How long a replaced managed key stays in the JWKS |
 
 ## Implemented interfaces
 
@@ -86,13 +93,16 @@ The plugin validates the code, checks PKCE, authenticates the client (for confid
   "token_type": "Bearer",
   "expires_in": 3600,
   "refresh_token": "d72b1ef8...",
-  "scope": "openid profile email"
+  "scope": "openid profile email",
+  "id_token": "eyJhbGciOiJSUzI1NiIs..."
 }
 ```
 
+The `id_token` appears only when the granted scopes include `openid`.
+
 ### PKCE verification
 
-The plugin supports both `S256` and `plain` challenge methods. `S256` is the recommended method:
+The plugin accepts the `S256` challenge method only; `plain` is refused:
 
 - The client generates a random `code_verifier`
 - Computes `code_challenge = BASE64URL(SHA256(code_verifier))`
@@ -161,19 +171,38 @@ Follows RFC 7009. Always returns `200 OK` regardless of whether the token was fo
 
 ## OIDC UserInfo
 
-`GET /v1/oauth/userinfo`
+`GET /v1/oauth/userinfo` or `POST /v1/oauth/userinfo`
 
-Returns claims about the authenticated user (requires a valid access token):
+Returns the claims the token's scopes cover (requires a valid access token). The id_token carries the same set.
 
 ```json
 {
   "sub": "ausr_01j9...",
+  "name": "Alice Liddell",
+  "given_name": "Alice",
+  "family_name": "Liddell",
+  "preferred_username": "alice",
+  "updated_at": 1762160000,
   "email": "alice@example.com",
   "email_verified": true,
-  "name": "Alice Liddell",
-  "phone": "+14155551234"
+  "phone_number": "+14155551234",
+  "phone_number_verified": false
 }
 ```
+
+| Scope | Claims |
+|-------|--------|
+| `profile` | `name`, `given_name`, `family_name`, `picture`, `preferred_username`, `updated_at` |
+| `email` | `email`, `email_verified` |
+| `phone` | `phone_number`, `phone_number_verified` |
+
+Empty strings are omitted. The verification booleans are always present when their scope was granted.
+
+## Sign in with your app (OpenID Connect)
+
+Set `Issuer` to your public URL and ask for `openid`. The token endpoint then returns an `id_token` that go-oidc, Auth.js and other OIDC libraries verify against `GET /v1/oauth/jwks`. Authsome generates and rotates an RSA-2048 key (90 days, with the old one published for 7 more) unless you set `IDTokenSigningKey` or `IDTokenSigningKeyFile`. The `oauth2.app_issuer` setting gives one app its own issuer at `{Issuer}/apps/{slug}`; flipping it, or renaming the slug, changes the issuer for all of that app's clients.
+
+Key handling, the per-app issuer warning, and copy-paste Auth.js and go-oidc setups are in [Sign in with your app](/docs/authentication/oauth2-provider#sign-in-with-your-app-openid-connect).
 
 ## OpenID Connect Discovery
 
@@ -188,10 +217,13 @@ Returns the OIDC discovery document:
   "token_endpoint": "https://auth.example.com/v1/oauth/token",
   "userinfo_endpoint": "https://auth.example.com/v1/oauth/userinfo",
   "revocation_endpoint": "https://auth.example.com/v1/oauth/revoke",
+  "jwks_uri": "https://auth.example.com/v1/oauth/jwks",
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code", "client_credentials"],
   "scopes_supported": ["openid", "profile", "email", "phone"],
-  "code_challenge_methods_supported": ["S256", "plain"]
+  "claims_supported": ["sub", "iss", "aud", "exp", "iat", "auth_time", "nonce", "azp", "at_hash", "name", "given_name", "family_name", "picture", "preferred_username", "updated_at", "email", "email_verified", "phone_number", "phone_number_verified"],
+  "response_modes_supported": ["query"],
+  "code_challenge_methods_supported": ["S256"]
 }
 ```
 
@@ -244,7 +276,11 @@ The `client_secret` is only returned at creation time. It is bcrypt-hashed befor
 | `GET` | `/v1/oauth/authorize` | OAuth2 authorization endpoint |
 | `POST` | `/v1/oauth/token` | Token endpoint (code exchange, client credentials) |
 | `POST` | `/v1/oauth/revoke` | Token revocation |
-| `GET` | `/v1/oauth/userinfo` | OIDC UserInfo |
+| `GET`, `POST` | `/v1/oauth/userinfo` | OIDC UserInfo |
+| `GET` | `/v1/oauth/jwks` | id_token signing keys |
+| `GET` | `/apps/:slug/.well-known/openid-configuration` | Per-app discovery |
+| `GET` | `/apps/:slug/.well-known/oauth-authorization-server` | Per-app RFC 8414 metadata |
+| `GET` | `/apps/:slug/v1/oauth/jwks` | Per-app signing keys |
 | `GET` | `/.well-known/openid-configuration` | OIDC Discovery |
 | `POST` | `/v1/admin/oauth/clients` | Create OAuth2 client |
 | `GET` | `/v1/admin/oauth/clients` | List OAuth2 clients |

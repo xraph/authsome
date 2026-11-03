@@ -18,7 +18,11 @@ package authsome_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -62,9 +66,12 @@ func issueOAuth2AccessToken(t *testing.T, eng *authsome.Engine, appID id.AppID, 
 	})
 	require.NoError(t, err)
 
-	p := oauth2provider.New(oauth2provider.Config{Issuer: "https://auth.example.com"})
+	// The client is registered for openid, so the grant mints an id_token
+	// and needs a signing key. OnInit builds the key manager from it.
+	p := oauth2provider.New(oauth2provider.Config{Issuer: "https://auth.example.com", IDTokenSigningKey: e2eSigningKeyPEM(t)})
 	oauthStore := oauth2provider.NewMemoryStore()
 	p.SetOAuth2Store(oauthStore)
+	require.NoError(t, p.OnInit(context.Background(), eng))
 	p.SetStore(eng.Store())
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(e2eClientSecret), bcrypt.MinCost)
@@ -132,6 +139,16 @@ func issueOAuth2AccessToken(t *testing.T, eng *authsome.Engine, appID id.AppID, 
 		"the issued token carries no audience, so the rest of this test would be vacuous")
 
 	return resp.AccessToken
+}
+
+// e2eSigningKeyPEM is an RSA-2048 id_token signing key in PKCS#8 PEM.
+func e2eSigningKeyPEM(t *testing.T) []byte {
+	t.Helper()
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	der, err := x509.MarshalPKCS8PrivateKey(k)
+	require.NoError(t, err)
+	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
 }
 
 // TestOAuth2IssuedTokenMeetsAuthMiddleware is the composition check.

@@ -4,6 +4,29 @@ contributor:
   envelope:
     supports: [v1]
     preferred: v1
-  capabilities: [auth.read]
+  capabilities: [auth.read, auth.write]
 
-intents: []
+intents:
+  - { name: oauth2.clients.list,         kind: query,   version: 1, capability: read }
+  - { name: oauth2.clients.detail,       kind: query,   version: 1, capability: read }
+  - { name: oauth2.clients.create,       kind: command, version: 1, capability: write, invalidates: [oauth2.clients.list] }
+  - { name: oauth2.clients.update,       kind: command, version: 1, capability: write, invalidates: [oauth2.clients.list, oauth2.clients.detail] }
+  - { name: oauth2.clients.delete,       kind: command, version: 1, capability: write, invalidates: [oauth2.clients.list, oauth2.clients.detail] }
+  - { name: oauth2.clients.rotateSecret, kind: command, version: 1, capability: write, invalidates: [oauth2.clients.detail] }
+  - { name: oauth2.issuer.info,          kind: query,   version: 1, capability: read }
+  - { name: oauth2.keys.list,            kind: query,   version: 1, capability: read }
+  - { name: oauth2.keys.rotate,          kind: command, version: 1, capability: write, invalidates: [oauth2.keys.list, oauth2.issuer.info] }
+
+queries:
+  oauth2ClientList:
+    intent: oauth2.clients.list
+    cache: { staleTime: 30s }
+  oauth2ClientDetail:
+    intent: oauth2.clients.detail
+    cache: { staleTime: 30s }
+  oauth2IssuerInfo:
+    intent: oauth2.issuer.info
+    cache: { staleTime: 30s }
+  oauth2KeyList:
+    intent: oauth2.keys.list
+    cache: { staleTime: 30s }

@@ -11,13 +11,9 @@ package oauth2provider
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/xraph/forge"
-	"golang.org/x/crypto/bcrypt"
 
-	"github.com/xraph/authsome/id"
-	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 )
 
@@ -118,71 +114,35 @@ type RotateClientSecretResponse struct {
 // audit, rate-limit or gate behind a stronger permission later without
 // dragging ordinary metadata edits along with it.
 func (p *Plugin) handleRotateClientSecret(ctx forge.Context, _ *RotateClientSecretRequest) (*RotateClientSecretResponse, error) {
-	rawID := ctx.Param("clientId")
-	if rawID == "" {
-		return nil, forge.BadRequest("client ID required")
+	appID, ok := plugin.CallerAppID(ctx)
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
 	}
-	clientID, err := id.ParseOAuth2ClientID(rawID)
+	client, secret, err := p.rotateClientSecret(ctx.Context(), appID, ctx.Param("clientId"))
 	if err != nil {
-		return nil, forge.BadRequest("invalid client ID")
+		return nil, clientHTTPError(ctx, err)
 	}
-
-	client, err := p.oauth2Store.GetClientByID(ctx.Context(), clientID)
-	if err != nil {
-		if errors.Is(err, ErrClientNotFound) {
-			return nil, forge.NotFound("oauth2 client not found")
-		}
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: load client: %w", err))
-	}
-	// Scope before doing anything else. Rotating another app's secret would
-	// lock that app's client out, so this is a denial-of-service reachable by
-	// guessing a primary key, not just an information leak.
-	if scopeErr := plugin.AssertAppScope(ctx, client.AppID); scopeErr != nil {
-		return nil, scopeErr
-	}
-
-	// A public client authenticates with PKCE, not a secret. Minting one here
-	// would contradict both Public and TokenEndpointAuthMethod "none", and
-	// nothing would ever read it.
-	if client.Public {
-		return nil, forge.BadRequest("a public client has no client_secret to rotate")
-	}
-
-	rawSecret, err := generateSecureToken(32)
-	if err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate client_secret: %w", err))
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(rawSecret), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: hash client_secret: %w", err))
-	}
-	client.ClientSecret = string(hash)
-
-	if err := p.oauth2Store.UpdateClient(ctx.Context(), client); err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: rotate client secret: %w", err))
-	}
-
 	return &RotateClientSecretResponse{
 		ID:           client.ID.String(),
 		ClientID:     client.ClientID,
-		ClientSecret: rawSecret,
+		ClientSecret: secret,
 	}, nil
 }
 
-// rejectImmutableClientFields refuses a request that tries to change one of
-// the fields this endpoint deliberately does not own.
-func rejectImmutableClientFields(req *UpdateClientRequest) error {
+// immutableClientFieldError names why req tries to change one of the fields
+// the update path deliberately does not own, or returns "" when it does not.
+func immutableClientFieldError(req *UpdateClientRequest) string {
 	switch {
 	case req.BodyClientID != nil:
-		return forge.BadRequest("client_id is immutable; it cannot be changed on an existing client")
+		return "client_id is immutable; it cannot be changed on an existing client"
 	case req.BodyAppID != nil:
-		return forge.BadRequest("app_id is immutable; a client cannot be moved between apps")
+		return "app_id is immutable; a client cannot be moved between apps"
 	case req.BodyPublic != nil:
-		return forge.BadRequest("public is immutable here; changing the client type issues or destroys a secret, so use the client secret route")
+		return "public is immutable here; changing the client type issues or destroys a secret, so use the client secret route"
 	case req.BodyTokenEndpointAuthMethod != nil:
-		return forge.BadRequest("token_endpoint_auth_method is immutable here; it is derived from the client type, which this route does not change")
+		return "token_endpoint_auth_method is immutable here; it is derived from the client type, which this route does not change"
 	}
-	return nil
+	return ""
 }
 
 // registrationErrorDescription unwraps the RFC 7591 error shape used by the
@@ -198,92 +158,18 @@ func registrationErrorDescription(err error) string {
 }
 
 func (p *Plugin) handleUpdateClient(ctx forge.Context, req *UpdateClientRequest) (*UpdateClientResponse, error) {
+	appID, ok := plugin.CallerAppID(ctx)
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
 	// Read the identifier from the path rather than the bound struct. See
 	// UpdateClientRequest's doc comment: this is the second of two
 	// independent protections against a body key redirecting the write at
 	// some other client.
-	rawID := ctx.Param("clientId")
-	if rawID == "" {
-		return nil, forge.BadRequest("client ID required")
-	}
-	clientID, err := id.ParseOAuth2ClientID(rawID)
+	client, err := p.UpdateClientFor(ctx.Context(), appID, ctx.Param("clientId"), *req)
 	if err != nil {
-		return nil, forge.BadRequest("invalid client ID")
+		return nil, clientHTTPError(ctx, err)
 	}
-
-	// Refuse a malformed request before touching the store. Nothing about
-	// this check depends on the stored client, so there is no reason to spend
-	// a read discovering that the body was never acceptable.
-	if fieldsErr := rejectImmutableClientFields(req); fieldsErr != nil {
-		return nil, fieldsErr
-	}
-
-	client, err := p.oauth2Store.GetClientByID(ctx.Context(), clientID)
-	if err != nil {
-		if errors.Is(err, ErrClientNotFound) {
-			return nil, forge.NotFound("oauth2 client not found")
-		}
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: load client: %w", err))
-	}
-	// Same tenancy rule handleDeleteClient applies. A mismatch answers 404 so
-	// the route cannot be used to probe for another app's clients.
-	if err := plugin.AssertAppScope(ctx, client.AppID); err != nil {
-		return nil, err
-	}
-
-	// Each field applies only when the caller sent it. Dereferencing an
-	// explicitly-sent empty slice is what makes "clear this" expressible.
-	if req.Name != nil {
-		client.Name = *req.Name
-	}
-	if req.FirstParty != nil {
-		client.FirstParty = *req.FirstParty
-	}
-	if req.RedirectURIs != nil {
-		uris := *req.RedirectURIs
-		// A confidential client with no redirect URI can never complete an
-		// authorization code flow. handleCreateClient refuses to create one,
-		// so the update path must not be a back door into that state.
-		if len(uris) == 0 && !client.Public {
-			return nil, forge.BadRequest("redirect_uris must not be empty for a confidential client")
-		}
-		for _, u := range uris {
-			if uriErr := validateRedirectURI(u); uriErr != nil {
-				return nil, forge.BadRequest(registrationErrorDescription(uriErr))
-			}
-		}
-		client.RedirectURIs = uris
-	}
-	if req.Scopes != nil {
-		// Deliberately not clampScopes. Silently dropping unknown scopes is
-		// right for a client registering optimistically over RFC 7591; it is
-		// wrong for an operator who typed a scope and expects to be told if
-		// it did not take.
-		client.Scopes = *req.Scopes
-	}
-	if req.GrantTypes != nil {
-		for _, g := range *req.GrantTypes {
-			if _, ok := adminGrantTypes[g]; !ok {
-				return nil, forge.BadRequest(fmt.Sprintf("grant_type %q is not supported", g))
-			}
-		}
-		client.GrantTypes = *req.GrantTypes
-	}
-	if req.Resources != nil {
-		for _, r := range *req.Resources {
-			if msg := resourceURISyntaxError(r); msg != "" {
-				return nil, forge.BadRequest(msg)
-			}
-		}
-		client.Resources = *req.Resources
-	}
-
-	// UpdateClient is a full-record replace on every backend, so the write
-	// has to carry the whole client, not just the edited fields.
-	if err := p.oauth2Store.UpdateClient(ctx.Context(), client); err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: update client: %w", err))
-	}
-
 	return &UpdateClientResponse{
 		ID:           client.ID.String(),
 		ClientID:     client.ClientID,

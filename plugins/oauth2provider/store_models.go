@@ -2,6 +2,7 @@ package oauth2provider
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/xraph/grove"
@@ -65,6 +66,10 @@ type authCodeModel struct {
 	ExpiresAt           time.Time       `grove:"expires_at,notnull"`
 	Consumed            bool            `grove:"consumed,notnull"`
 	CreatedAt           time.Time       `grove:"created_at,notnull,default:now()"`
+	// Nullable: rows written before the add_oauth2_nonce_auth_time migration
+	// hold NULL. NULL maps to "" and to the zero time.
+	Nonce    *string    `grove:"nonce"`
+	AuthTime *time.Time `grove:"auth_time"`
 }
 
 // ──────────────────────────────────────────────────
@@ -90,6 +95,8 @@ type deviceCodeModel struct {
 	UserID          string          `grove:"user_id"`
 	LastPolledAt    time.Time       `grove:"last_polled_at"`
 	CreatedAt       time.Time       `grove:"created_at,notnull,default:now()"`
+	// Nullable like authCodeModel.AuthTime.
+	AuthTime *time.Time `grove:"auth_time"`
 }
 
 // ──────────────────────────────────────────────────
@@ -256,6 +263,8 @@ func toAuthCode(m *authCodeModel) (*AuthorizationCode, error) {
 		ExpiresAt:           m.ExpiresAt,
 		Consumed:            m.Consumed,
 		CreatedAt:           m.CreatedAt,
+		Nonce:               derefString(m.Nonce),
+		AuthTime:            derefTime(m.AuthTime),
 	}, nil
 }
 
@@ -283,6 +292,8 @@ func fromAuthCode(c *AuthorizationCode) *authCodeModel {
 		ExpiresAt:           utc(c.ExpiresAt),
 		Consumed:            c.Consumed,
 		CreatedAt:           utc(c.CreatedAt),
+		Nonce:               nullableString(c.Nonce),
+		AuthTime:            nullableTime(c.AuthTime),
 	}
 }
 
@@ -332,6 +343,7 @@ func toDeviceCode(m *deviceCodeModel) (*DeviceCode, error) {
 		UserID:          userID,
 		LastPolledAt:    m.LastPolledAt,
 		CreatedAt:       m.CreatedAt,
+		AuthTime:        derefTime(m.AuthTime),
 	}, nil
 }
 
@@ -360,7 +372,40 @@ func fromDeviceCode(dc *DeviceCode) *deviceCodeModel {
 		UserID:          dc.UserID.String(),
 		LastPolledAt:    utc(dc.LastPolledAt),
 		CreatedAt:       utc(dc.CreatedAt),
+		AuthTime:        nullableTime(dc.AuthTime),
 	}
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func derefTime(t *time.Time) time.Time {
+	if t == nil {
+		return time.Time{}
+	}
+	return *t
+}
+
+// nullableString stores the empty string as NULL, so a code without a nonce
+// is indistinguishable from one written before the column existed.
+func nullableString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// nullableTime stores the zero time as NULL.
+func nullableTime(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	u := utc(t)
+	return &u
 }
 
 // principalIDString renders a client's principal link for storage. The column
@@ -451,4 +496,73 @@ func toGrant(m *grantModel) (*Grant, error) {
 		scopes = []string{}
 	}
 	return &Grant{ID: grantID, AppID: appID, UserID: userID, ClientID: m.ClientID, Scopes: scopes, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}, nil
+}
+
+// ──────────────────────────────────────────────────
+// Signing key model (shared across SQL stores)
+// ──────────────────────────────────────────────────
+
+type signingKeyModel struct {
+	grove.BaseModel `grove:"table:authsome_oauth2_signing_keys,alias:sk"`
+
+	ID         string          `grove:"id,pk"`
+	Scope      string          `grove:"scope,notnull"`
+	Alg        string          `grove:"alg,notnull"`
+	PrivateKey string          `grove:"private_key,notnull"`
+	PublicJWK  json.RawMessage `grove:"public_jwk,type:jsonb"`
+	Generation int64           `grove:"generation,notnull"`
+	CreatedAt  time.Time       `grove:"created_at,notnull,default:now()"`
+	RetiresAt  *time.Time      `grove:"retires_at"`
+}
+
+func fromSigningKey(k *SigningKey) *signingKeyModel {
+	m := &signingKeyModel{
+		ID:         k.ID.String(),
+		Scope:      k.Scope,
+		Alg:        k.Alg,
+		PrivateKey: k.PrivateKey,
+		PublicJWK:  append(json.RawMessage(nil), k.PublicJWK...),
+		Generation: k.Generation,
+		CreatedAt:  utc(k.CreatedAt),
+	}
+	if k.RetiresAt != nil {
+		t := utc(*k.RetiresAt)
+		m.RetiresAt = &t
+	}
+	return m
+}
+
+func toSigningKey(m *signingKeyModel) (*SigningKey, error) {
+	keyID, err := id.ParseOAuth2SigningKeyID(m.ID)
+	if err != nil {
+		return nil, err
+	}
+	k := &SigningKey{
+		ID:         keyID,
+		Scope:      m.Scope,
+		Alg:        m.Alg,
+		PrivateKey: m.PrivateKey,
+		PublicJWK:  append([]byte(nil), m.PublicJWK...),
+		Generation: m.Generation,
+		CreatedAt:  m.CreatedAt,
+	}
+	if m.RetiresAt != nil {
+		t := *m.RetiresAt
+		k.RetiresAt = &t
+	}
+	return k, nil
+}
+
+// isSigningKeyConflict reports whether err is a (scope, generation) unique
+// violation. pgx surfaces SQLSTATE 23505 and SQLite says "UNIQUE constraint
+// failed"; matching on text survives any wrapping grove adds, the same way
+// the core store's pgError does.
+func isSigningKeyConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "SQLSTATE 23505") ||
+		strings.Contains(msg, "duplicate key value") ||
+		strings.Contains(msg, "UNIQUE constraint failed")
 }

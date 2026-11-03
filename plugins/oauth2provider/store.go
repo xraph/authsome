@@ -57,4 +57,13 @@ type Store interface {
 	GetGrant(ctx context.Context, appID id.AppID, userID id.UserID, clientID string) (*Grant, error)
 	ListGrantsByUser(ctx context.Context, appID id.AppID, userID id.UserID) ([]*Grant, error)
 	DeleteGrant(ctx context.Context, appID id.AppID, userID id.UserID, clientID string) error
+
+	// Signing keys for id_tokens. Generation is unique within a scope:
+	// CreateSigningKey returns ErrSigningKeyConflict when (Scope, Generation)
+	// already exists, which is how concurrent rotations pick one winner.
+	// ListSigningKeys returns a scope's keys, newest generation first.
+	// RetireSigningKey sets RetiresAt on the key; an unknown id is a no-op.
+	CreateSigningKey(ctx context.Context, k *SigningKey) error
+	ListSigningKeys(ctx context.Context, scope string) ([]*SigningKey, error)
+	RetireSigningKey(ctx context.Context, keyID id.OAuth2SigningKeyID, at time.Time) error
 }

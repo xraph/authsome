@@ -77,6 +77,8 @@ type authCodeDoc struct {
 	ExpiresAt           time.Time `bson:"expires_at"`
 	Consumed            bool      `bson:"consumed"`
 	CreatedAt           time.Time `bson:"created_at"`
+	Nonce               string    `bson:"nonce,omitempty"`
+	AuthTime            time.Time `bson:"auth_time,omitempty"`
 }
 
 // ──────────────────────────────────────────────────
@@ -223,6 +225,8 @@ func authCodeDocToModel(d *authCodeDoc) (*AuthorizationCode, error) {
 		ExpiresAt:           d.ExpiresAt,
 		Consumed:            d.Consumed,
 		CreatedAt:           d.CreatedAt,
+		Nonce:               d.Nonce,
+		AuthTime:            d.AuthTime,
 	}, nil
 }
 
@@ -250,6 +254,8 @@ func authCodeToDoc(c *AuthorizationCode) *authCodeDoc {
 		ExpiresAt:           c.ExpiresAt,
 		Consumed:            c.Consumed,
 		CreatedAt:           c.CreatedAt,
+		Nonce:               c.Nonce,
+		AuthTime:            c.AuthTime,
 	}
 }
 
@@ -268,6 +274,7 @@ type deviceCodeDoc struct {
 	UserID          string    `bson:"user_id"`
 	LastPolledAt    time.Time `bson:"last_polled_at,omitempty"`
 	CreatedAt       time.Time `bson:"created_at"`
+	AuthTime        time.Time `bson:"auth_time,omitempty"`
 }
 
 // ──────────────────────────────────────────────────
@@ -316,6 +323,7 @@ func deviceCodeDocToModel(d *deviceCodeDoc) (*DeviceCode, error) {
 		UserID:          userID,
 		LastPolledAt:    d.LastPolledAt,
 		CreatedAt:       d.CreatedAt,
+		AuthTime:        d.AuthTime,
 	}, nil
 }
 
@@ -344,6 +352,7 @@ func deviceCodeToDoc(dc *DeviceCode) *deviceCodeDoc {
 		UserID:          dc.UserID.String(),
 		LastPolledAt:    dc.LastPolledAt,
 		CreatedAt:       dc.CreatedAt,
+		AuthTime:        dc.AuthTime,
 	}
 }
 
@@ -356,6 +365,7 @@ const (
 	oauth2AuthCodesColl   = "authsome_oauth2_auth_codes"
 	oauth2DeviceCodesColl = "authsome_oauth2_device_codes"
 	oauth2GrantsColl      = "authsome_oauth2_grants"
+	oauth2SigningKeysColl = "authsome_oauth2_signing_keys"
 )
 
 // ──────────────────────────────────────────────────
@@ -542,6 +552,7 @@ func (s *MongoStore) UpdateDeviceCode(ctx context.Context, dc *DeviceCode) error
 			"status":         dc.Status,
 			"user_id":        dc.UserID.String(),
 			"last_polled_at": dc.LastPolledAt,
+			"auth_time":      dc.AuthTime,
 		}},
 	)
 	return oauth2MongoError(err)
@@ -693,4 +704,88 @@ func (s *MongoStore) DeleteGrant(ctx context.Context, appID id.AppID, userID id.
 		return ErrGrantNotFound
 	}
 	return nil
+}
+
+// ──────────────────────────────────────────────────
+// Signing keys
+// ──────────────────────────────────────────────────
+
+type signingKeyDoc struct {
+	ID         string     `bson:"_id"`
+	Scope      string     `bson:"scope"`
+	Alg        string     `bson:"alg"`
+	PrivateKey string     `bson:"private_key"`
+	PublicJWK  []byte     `bson:"public_jwk"`
+	Generation int64      `bson:"generation"`
+	CreatedAt  time.Time  `bson:"created_at"`
+	RetiresAt  *time.Time `bson:"retires_at,omitempty"`
+}
+
+func (s *MongoStore) CreateSigningKey(ctx context.Context, k *SigningKey) error {
+	if k.CreatedAt.IsZero() {
+		k.CreatedAt = time.Now()
+	}
+	doc := &signingKeyDoc{
+		ID:         k.ID.String(),
+		Scope:      k.Scope,
+		Alg:        k.Alg,
+		PrivateKey: k.PrivateKey,
+		PublicJWK:  append([]byte(nil), k.PublicJWK...),
+		Generation: k.Generation,
+		CreatedAt:  k.CreatedAt,
+		RetiresAt:  k.RetiresAt,
+	}
+	if _, err := s.mdb.Collection(oauth2SigningKeysColl).InsertOne(ctx, doc); err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return ErrSigningKeyConflict
+		}
+		return err
+	}
+	return nil
+}
+
+func (s *MongoStore) ListSigningKeys(ctx context.Context, scope string) ([]*SigningKey, error) {
+	cursor, err := s.mdb.Collection(oauth2SigningKeysColl).Find(ctx,
+		bson.M{"scope": scope},
+		options.Find().SetSort(bson.D{{Key: "generation", Value: -1}}))
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	out := make([]*SigningKey, 0)
+	for cursor.Next(ctx) {
+		var d signingKeyDoc
+		if err := cursor.Decode(&d); err != nil {
+			return nil, err
+		}
+		keyID, err := id.ParseOAuth2SigningKeyID(d.ID)
+		if err != nil {
+			return nil, err
+		}
+		k := &SigningKey{
+			ID:         keyID,
+			Scope:      d.Scope,
+			Alg:        d.Alg,
+			PrivateKey: d.PrivateKey,
+			PublicJWK:  d.PublicJWK,
+			Generation: d.Generation,
+			CreatedAt:  d.CreatedAt,
+		}
+		if d.RetiresAt != nil {
+			t := *d.RetiresAt
+			k.RetiresAt = &t
+		}
+		out = append(out, k)
+	}
+	return out, cursor.Err()
+}
+
+// RetireSigningKey sets retires_at, overwriting an earlier value. An unknown
+// id matches nothing and is not an error.
+func (s *MongoStore) RetireSigningKey(ctx context.Context, keyID id.OAuth2SigningKeyID, at time.Time) error {
+	_, err := s.mdb.Collection(oauth2SigningKeysColl).UpdateOne(ctx,
+		bson.M{"_id": keyID.String()},
+		bson.M{"$set": bson.M{"retires_at": at}})
+	return err
 }

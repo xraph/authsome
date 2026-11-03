@@ -25,8 +25,8 @@ import (
 // matching how store/postgres and store/mongo gate their own conformance runs.
 func init() {
 	extraBackends = append(extraBackends,
-		backend{"Postgres", postgresSetup},
-		backend{"Mongo", mongoSetup},
+		backend{"Postgres", postgresSetup, nil},
+		backend{"Mongo", mongoSetup, nil},
 	)
 }
 
@@ -65,9 +65,9 @@ func postgresSetup(t *testing.T) oauth2test.Factory {
 	}
 }
 
-// mongoSetup reuses the CI mongo. There is no mongo migration group for this
-// plugin: the collections are schemaless and the core Migrate call is what
-// creates the indexes the fixtures rely on.
+// mongoSetup reuses the CI mongo. The core Migrate call creates the indexes
+// the fixtures rely on; the plugin's own MongoMigrations adds the signing key
+// uniqueness index.
 func mongoSetup(t *testing.T) oauth2test.Factory {
 	t.Helper()
 	uri := os.Getenv("AUTHSOME_MONGO_URI")
@@ -84,6 +84,7 @@ func mongoSetup(t *testing.T) oauth2test.Factory {
 
 	core := mongostore.New(db)
 	require.NoError(t, core.Migrate(ctx), "run migrations")
+	require.NoError(t, core.Migrate(ctx, oauth2provider.MongoMigrations), "run oauth2 migrations")
 
 	plugin := oauth2provider.NewMongoStore(db)
 	return func(t *testing.T) oauth2test.Fixture {

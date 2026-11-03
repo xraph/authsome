@@ -13,7 +13,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
@@ -24,6 +26,7 @@ import (
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apitypes"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/id"
@@ -36,8 +39,6 @@ import (
 	"github.com/xraph/authsome/tokenformat"
 
 	"github.com/xraph/grove/migrate"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Compile-time interface checks.
@@ -46,6 +47,7 @@ var (
 	_ plugin.RouteProvider     = (*Plugin)(nil)
 	_ plugin.RootRouteProvider = (*Plugin)(nil)
 	_ plugin.OnInit            = (*Plugin)(nil)
+	_ plugin.SettingsProvider  = (*Plugin)(nil)
 	_ plugin.MigrationProvider = (*Plugin)(nil)
 )
 
@@ -120,6 +122,33 @@ type Config struct {
 	// ConsentGate, if set, is consulted before every authorization code is
 	// issued. See SetConsentGate for post-construction wiring.
 	ConsentGate ConsentGate
+
+	// IDTokenSigningKey is a PEM private key (RSA of at least 2048 bits, or
+	// EC P-256) that signs id_tokens for the deployment issuer. When it or
+	// IDTokenSigningKeyFile is set, no key is generated for that issuer.
+	IDTokenSigningKey     []byte
+	IDTokenSigningKeyFile string
+	// IDTokenSigningKeyID is the kid. Defaults to the key's RFC 7638
+	// thumbprint.
+	IDTokenSigningKeyID string
+	// IDTokenPreviousKeys are PEM keys, public or private, that are published
+	// in JWKS but never sign. Keep a rotated-out key here until every token it
+	// signed has expired.
+	//
+	// A previous key's kid is always its RFC 7638 thumbprint. If the old key
+	// signed under IDTokenSigningKeyID, its tokens carry that kid, so either
+	// keep it as the signing key until they expire or accept that they stop
+	// verifying when the kid changes.
+	IDTokenPreviousKeys [][]byte
+
+	// IDTokenTTL is the lifetime of id_tokens (default: 1 hour).
+	IDTokenTTL time.Duration
+	// IDTokenKeyRotation is how old a managed signing key gets before the
+	// next one replaces it (default: 90 days).
+	IDTokenKeyRotation time.Duration
+	// IDTokenKeyRetireGrace is how long a replaced managed key stays in
+	// JWKS so tokens it signed still verify (default: 7 days).
+	IDTokenKeyRetireGrace time.Duration
 }
 
 // Plugin is the OAuth2 provider plugin.
@@ -139,6 +168,14 @@ type Plugin struct {
 	// registrationLimiter.
 	regLimiter  ratelimit.Limiter
 	consentGate ConsentGate
+
+	// keys resolves the id_token signing key for each issuer. Built at the
+	// end of OnInit, once the store and encryptor are known.
+	keys *keyManager
+
+	// unregisteredSettingOnce warns once that the plugin's settings were
+	// never declared to a real engine (see appIssuerEnabled).
+	unregisteredSettingOnce sync.Once
 }
 
 // New creates a new OAuth2 provider plugin.
@@ -165,6 +202,15 @@ func New(cfg ...Config) *Plugin {
 	if c.RegistrationRateLimit.Limit == 0 {
 		c.RegistrationRateLimit = RateLimit{Limit: 10, Window: time.Hour}
 	}
+	if c.IDTokenTTL == 0 {
+		c.IDTokenTTL = time.Hour
+	}
+	if c.IDTokenKeyRotation == 0 {
+		c.IDTokenKeyRotation = 90 * 24 * time.Hour
+	}
+	if c.IDTokenKeyRetireGrace == 0 {
+		c.IDTokenKeyRetireGrace = 7 * 24 * time.Hour
+	}
 
 	p := &Plugin{config: c, logger: log.NewNoopLogger(), consentGate: c.ConsentGate}
 	return p
@@ -174,7 +220,7 @@ func New(cfg ...Config) *Plugin {
 func (p *Plugin) Name() string { return "oauth2provider" }
 
 // OnInit captures dependencies from the engine.
-func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+func (p *Plugin) OnInit(ctx context.Context, engine plugin.Engine) error {
 	p.engine = engine
 	p.store = engine.Store()
 	p.logger = engine.Logger()
@@ -215,6 +261,31 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 			"so the cap is per-replica behind a load balancer")
 	}
 
+	if p.config.Issuer == "" {
+		p.logger.Warn("oauth2: Issuer is unset, so discovery and id_tokens use https://localhost and no OIDC client will verify them")
+	}
+
+	return p.initSigningKeys(ctx, engine.TokenEncryptor())
+}
+
+// initSigningKeys builds the id_token key manager over the OAuth2 store. A
+// bad operator key is a configuration error, so it stops the boot here
+// rather than failing the first login with a server_error.
+func (p *Plugin) initSigningKeys(ctx context.Context, enc bridge.Encryptor) error {
+	keys, err := newKeyManager(p.config, p.oauth2Store, enc, p.logger)
+	if err != nil {
+		return err
+	}
+	keys.onRotate = func(scope, result string) {
+		telemetry.From(p.engine).OAuth2KeyRotation(issuerLabel(scope), result)
+	}
+	p.keys = keys
+	// Managed keys the deployment issuer used before an operator key was
+	// configured start their retirement grace now. Failing here is not
+	// worth stopping the boot over: the keys just leave the JWKS early.
+	if err := keys.retireForOperator(ctx); err != nil {
+		p.logger.Warn("oauth2: retire managed id_token keys under an operator key", log.Error(err))
+	}
 	return nil
 }
 
@@ -242,6 +313,8 @@ func (p *Plugin) MigrationGroups(driverName string) []*migrate.Group {
 		return []*migrate.Group{PostgresMigrations}
 	case "sqlite", "sqlite3":
 		return []*migrate.Group{SqliteMigrations}
+	case "mongo", "mongodb":
+		return []*migrate.Group{MongoMigrations}
 	default:
 		return nil
 	}
@@ -293,6 +366,14 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
+	// Public: relying parties fetch this unauthenticated to verify tokens.
+	if err := p.registerJWKSRoute(g); err != nil {
+		return err
+	}
+	if err := p.registerAppJWKSRoute(router); err != nil {
+		return err
+	}
+
 	// Agent-safe: handleRevoke only revokes a token the caller itself holds
 	// (callerOwnsSession), which is how an OAuth2 client, an agent included,
 	// logs out.
@@ -312,6 +393,18 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("OIDC UserInfo"),
 		forge.WithDescription("Returns claims about the authenticated user."),
 		forge.WithOperationID("oauth2UserInfo"),
+		forge.WithResponseSchema(http.StatusOK, "UserInfo", UserInfo{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	// OIDC Core 5.3.1 requires userinfo to answer POST as well as GET.
+	if err := g.POST("/userinfo", p.handleUserInfo,
+		forge.WithMiddleware(middleware.RequireScope("openid")),
+		forge.WithSummary("OIDC UserInfo (POST)"),
+		forge.WithDescription("Returns claims about the authenticated user. Same as the GET form."),
+		forge.WithOperationID("oauth2UserInfoPost"),
 		forge.WithResponseSchema(http.StatusOK, "UserInfo", UserInfo{}),
 		forge.WithErrorResponses(),
 	); err != nil {
@@ -493,6 +586,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	); err != nil {
 		return err
 	}
+	if err := router.GET("/apps/:slug/.well-known/openid-configuration", p.handleAppDiscovery,
+		forge.WithSummary("App OpenID Connect Discovery"),
+		forge.WithOperationID("oauth2AppDiscoveryPrefixed"),
+		forge.WithTags("OAuth2"),
+	); err != nil {
+		return err
+	}
 
 	// Admin endpoints for client management. Gated behind a session plus
 	// manage/oauth2_client — a caller who can mint clients can register an
@@ -582,6 +682,10 @@ func (p *Plugin) registerWellKnown(router forge.Router) error {
 		return err
 	}
 
+	if err := p.registerAppWellKnown(router); err != nil {
+		return err
+	}
+
 	if err := router.GET("/.well-known/oauth-protected-resource", p.handleProtectedResourceMetadata,
 		forge.WithSummary("OAuth2 Protected Resource Metadata"),
 		forge.WithDescription("RFC 9728 protected resource metadata."),
@@ -628,6 +732,10 @@ type AuthorizeRequest struct {
 	// in field order, so a field added above Resource moves it, and a caller
 	// passing resources by position would hand them to this one instead.
 	Prompt string `query:"prompt,omitempty"`
+	// Nonce is the OpenID Connect replay guard (Core 3.1.2.1), echoed into the
+	// id_token. At most maxNonceBytes. It stays last for the same reason
+	// Prompt did: generated clients pass query parameters positionally.
+	Nonce string `query:"nonce,omitempty"`
 }
 
 // TokenRequest is the OAuth2 token request.
@@ -698,6 +806,9 @@ type DiscoveryResponse struct {
 	// DPoPSigningAlgValuesSupported lists the JWS algorithms accepted in DPoP
 	// proofs (RFC 9449 section 5.1).
 	DPoPSigningAlgValuesSupported []string `json:"dpop_signing_alg_values_supported,omitempty"`
+
+	ClaimsSupported        []string `json:"claims_supported"`
+	ResponseModesSupported []string `json:"response_modes_supported"`
 }
 
 // CreateClientRequest is the admin request to create an OAuth2 client.
@@ -811,6 +922,10 @@ func (e *OAuth2HTTPError) ResponseBody() any {
 }
 
 // newOAuth2Error creates an OAuth2HTTPError for device flow error responses.
+// maxNonceBytes bounds the nonce an authorization request may carry. It is
+// stored on the code and echoed into the id_token, so it must not be free.
+const maxNonceBytes = 512
+
 func newOAuth2Error(status int, errorCode, description string) *OAuth2HTTPError {
 	return &OAuth2HTTPError{
 		httpStatus:  status,
@@ -835,6 +950,11 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 	client, err := p.oauth2Store.GetClient(ctx.Context(), req.ClientID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid client_id")
+	}
+
+	// Refused before a code or a consent record exists.
+	if len(req.Nonce) > maxNonceBytes {
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_request", "nonce must be at most 512 bytes")
 	}
 
 	// Resolve the redirect URI. Omitting it is only legal when exactly one is
@@ -903,6 +1023,14 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		return nil, gateErr
 	}
 
+	// auth_time is when the user logged in, not when they approved this
+	// client, so it is read here, with the user present, and carried through
+	// consent. A request with no session record falls back to now.
+	authTime := time.Now()
+	if sess, ok := middleware.SessionFrom(ctx.Context()); ok && sess != nil && !sess.CreatedAt.IsZero() {
+		authTime = sess.CreatedAt
+	}
+
 	// A third-party client needs the user's recorded approval for every
 	// scope it asks for; otherwise the user decides on the consent page and
 	// the code is issued from there.
@@ -911,6 +1039,7 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 			ClientID: req.ClientID, UserID: userID.String(), AppID: client.AppID.String(), OrgID: orgID.String(),
 			RedirectURI: redirectURI, Scopes: scopes, Resources: resources, State: req.State,
 			CodeChallenge: req.CodeChallenge, CodeChallengeMethod: req.CodeChallengeMethod,
+			Nonce: req.Nonce, AuthTime: authTime,
 		})
 	}
 
@@ -919,6 +1048,7 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		ClientID: req.ClientID, UserID: userID.String(), AppID: client.AppID.String(),
 		RedirectURI: redirectURI, Scopes: scopes, Resources: resources, State: req.State,
 		CodeChallenge: req.CodeChallenge, CodeChallengeMethod: req.CodeChallengeMethod,
+		Nonce: req.Nonce, AuthTime: authTime,
 	})
 	if err != nil {
 		return nil, err
@@ -1190,6 +1320,14 @@ func (p *Plugin) handleRefreshTokenGrant(ctx forge.Context, req *TokenRequest) (
 	if !ok || eng == nil {
 		return nil, middleware.InternalError(ctx, errors.New("oauth2: refresh grant needs the authsome engine"))
 	}
+	// Rotation spends the refresh token, so a refresh that must carry an
+	// id_token resolves everything that can fail first: the user, the issuer
+	// and the signing key. A failure here leaves the token unspent and the
+	// client can retry.
+	plan, err := p.planRefreshIDToken(ctx.Context(), client, req.RefreshToken)
+	if err != nil {
+		return nil, p.idTokenServerError(err)
+	}
 	r := ctx.Request()
 	sess, err := eng.RefreshForClient(ctx.Context(), req.RefreshToken, client.ClientID, authsome.RefreshOpts{
 		IPAddress:  middleware.ClientIP(r),
@@ -1201,6 +1339,33 @@ func (p *Plugin) handleRefreshTokenGrant(ctx forge.Context, req *TokenRequest) (
 	if err != nil {
 		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "invalid refresh token")
 	}
+	// A refreshed id_token restates who the user is (OpenID Connect Core
+	// 12.2). It carries no nonce and no auth_time: neither belongs to this
+	// request. With a plan in hand only the in-memory signing is left to
+	// fail. Without one (the session gained openid or changed hands between
+	// the lookup and the rotation, which the store should never allow) the
+	// full mint runs. Either way the session is already rotated, so if
+	// signing fails it is revoked rather than handed out without the
+	// id_token the client expects.
+	var idToken string
+	switch {
+	case !slices.Contains(sess.Scopes, "openid"):
+	case plan != nil && plan.user.ID == sess.UserID:
+		idToken, err = p.signIDTokenWith(plan.key, idTokenInput{
+			Client: client, User: plan.user, Scopes: sess.Scopes, AccessToken: sess.Token,
+			Grant: telemetry.GrantRefreshToken,
+		})
+	default:
+		idToken, err = p.idTokenFor(ctx.Context(), client, sess.UserID, sess.Scopes, sess.Token,
+			&oidcRequest{Grant: telemetry.GrantRefreshToken})
+	}
+	if err != nil {
+		if revokeErr := eng.RevokeSession(ctx.Context(), sess.ID); revokeErr != nil {
+			p.logger.Error("oauth2: revoke refreshed session after id_token failure",
+				log.String("session_id", sess.ID.String()), log.Error(revokeErr))
+		}
+		return nil, p.idTokenServerError(err)
+	}
 	tokenType := "Bearer"
 	if sess.DPoPJKT != "" {
 		tokenType = "DPoP"
@@ -1211,6 +1376,7 @@ func (p *Plugin) handleRefreshTokenGrant(ctx forge.Context, req *TokenRequest) (
 		ExpiresIn:    int(time.Until(sess.ExpiresAt).Seconds()),
 		RefreshToken: sess.RefreshToken,
 		Scope:        strings.Join(sess.Scopes, " "),
+		IDToken:      idToken,
 	}, nil
 }
 
@@ -1326,7 +1492,8 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 	}
 
 	// Generate tokens.
-	return p.issueTokens(ctx, client, authCode.UserID, authCode.AppID, authCode.Scopes, resources, jkt)
+	return p.issueTokens(ctx, client, authCode.UserID, authCode.AppID, authCode.Scopes, resources, jkt,
+		&oidcRequest{Nonce: authCode.Nonce, AuthTime: authCode.AuthTime, Grant: telemetry.GrantAuthorizationCode})
 }
 
 func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
@@ -1473,17 +1640,7 @@ func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInf
 	granted := func(scope string) bool {
 		return sess == nil || sess.ClientID == "" || middleware.HasScopes(sess, scope)
 	}
-	info := &UserInfo{Sub: u.ID.String()}
-	if granted("profile") {
-		info.Name = u.Name()
-	}
-	if granted("email") {
-		info.Email = u.Email
-		info.EmailVerified = u.EmailVerified
-	}
-	if granted("phone") {
-		info.Phone = u.Phone
-	}
+	info := &UserInfo{Sub: u.ID.String(), StandardClaims: standardClaims(u, granted)}
 	return info, nil
 }
 
@@ -1492,8 +1649,12 @@ func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInf
 // AuthServerMetadata and DiscoveryResponse are field-identical but distinct
 // struct types, so a field added to one is not automatically added to the
 // other; TestMetadata_OIDCAndAuthServerAgree is what actually catches that.
-func (p *Plugin) handleDiscovery(_ forge.Context, _ *DiscoveryRequest) (*DiscoveryResponse, error) {
-	m := p.buildAuthServerMetadata()
+func (p *Plugin) handleDiscovery(ctx forge.Context, _ *DiscoveryRequest) (*DiscoveryResponse, error) {
+	return discoveryFrom(p.buildAuthServerMetadata(ctx.Context(), p.issuerURL(), "")), nil
+}
+
+// discoveryFrom copies an RFC 8414 document onto the OIDC discovery shape.
+func discoveryFrom(m *AuthServerMetadata) *DiscoveryResponse {
 	return &DiscoveryResponse{
 		Issuer:                            m.Issuer,
 		AuthorizationEndpoint:             m.AuthorizationEndpoint,
@@ -1512,7 +1673,9 @@ func (p *Plugin) handleDiscovery(_ forge.Context, _ *DiscoveryRequest) (*Discove
 		CodeChallengeMethodsSupported:     m.CodeChallengeMethodsSupported,
 		ResourceIndicatorsSupported:       m.ResourceIndicatorsSupported,
 		DPoPSigningAlgValuesSupported:     m.DPoPSigningAlgValuesSupported,
-	}, nil
+		ClaimsSupported:                   m.ClaimsSupported,
+		ResponseModesSupported:            m.ResponseModesSupported,
+	}
 }
 
 // ──────────────────────────────────────────────────
@@ -1526,17 +1689,6 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 	if req.AppID == "" {
 		return nil, forge.BadRequest("app_id required")
 	}
-	if len(req.RedirectURIs) == 0 && !req.Public {
-		return nil, forge.BadRequest("redirect_uris required for confidential clients")
-	}
-	// Same rule the update path and dynamic registration apply. Leaving create
-	// more permissive would mean a client could be registered with a URI that
-	// can never be edited afterwards, since any later edit would be refused.
-	for _, u := range req.RedirectURIs {
-		if uriErr := validateRedirectURI(u); uriErr != nil {
-			return nil, forge.BadRequest(registrationErrorDescription(uriErr))
-		}
-	}
 
 	// manage:oauth2_client says the caller may administer clients. It does not
 	// say whose. A client carries redirect URIs and a secret, so minting one
@@ -1547,90 +1699,10 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 		return nil, err
 	}
 
-	// Generate client credentials.
-	clientIDStr, err := generateSecureToken(16)
+	resp, err := p.CreateClientFor(ctx.Context(), appID, *req)
 	if err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate client_id: %w", err))
+		return nil, clientHTTPError(ctx, err)
 	}
-
-	var rawSecret string
-	var hashedSecret string
-	if !req.Public {
-		rawSecret, err = generateSecureToken(32)
-		if err != nil {
-			return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate client_secret: %w", err))
-		}
-		hash, err := bcrypt.GenerateFromPassword([]byte(rawSecret), bcrypt.DefaultCost)
-		if err != nil {
-			return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: hash client_secret: %w", err))
-		}
-		hashedSecret = string(hash)
-	}
-
-	grantTypes := req.GrantTypes
-	if len(grantTypes) == 0 {
-		grantTypes = []string{"authorization_code"}
-	}
-	scopes := req.Scopes
-	if len(scopes) == 0 {
-		scopes = []string{"openid", "profile", "email"}
-	}
-
-	// Validate the allowlist at registration so a malformed entry is caught
-	// here rather than turning every later authorize request into an opaque
-	// invalid_target. This shares the exact rule resolveResources applies at
-	// request time, so the two can never disagree about what counts as valid.
-	for _, raw := range req.Resources {
-		if msg := resourceURISyntaxError(raw); msg != "" {
-			return nil, forge.BadRequest(msg)
-		}
-	}
-
-	// Normalise through ParseMode so an unrecognised value is stored as a
-	// known one rather than sitting in the column waiting to be misread.
-	// Empty stays empty, which means inherit.
-	dpopMode := ""
-	if req.DPoPMode != "" {
-		dpopMode = string(dpop.ParseMode(req.DPoPMode))
-	}
-
-	client := &OAuth2Client{
-		ID:                      id.NewOAuth2ClientID(),
-		AppID:                   appID,
-		Name:                    req.Name,
-		ClientID:                clientIDStr,
-		ClientSecret:            hashedSecret,
-		RedirectURIs:            req.RedirectURIs,
-		Scopes:                  scopes,
-		Resources:               req.Resources,
-		GrantTypes:              grantTypes,
-		Public:                  req.Public,
-		FirstParty:              req.FirstParty,
-		TokenEndpointAuthMethod: authMethodForPublic(req.Public),
-		DPoPMode:                dpopMode,
-		CreatedAt:               time.Now(),
-		UpdatedAt:               time.Now(),
-	}
-
-	if err := p.oauth2Store.CreateClient(ctx.Context(), client); err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: create client: %w", err))
-	}
-
-	resp := &CreateClientResponse{
-		ID:           client.ID.String(),
-		ClientID:     client.ClientID,
-		Name:         client.Name,
-		RedirectURIs: client.RedirectURIs,
-		Scopes:       client.Scopes,
-		Resources:    client.Resources,
-		GrantTypes:   client.GrantTypes,
-		Public:       client.Public,
-	}
-	// Only return the raw secret once.
-	if rawSecret != "" {
-		resp.ClientSecret = rawSecret
-	}
-
 	return resp, nil
 }
 
@@ -1644,46 +1716,23 @@ func (p *Plugin) handleListClients(ctx forge.Context, req *ListClientsRequest) (
 		return nil, err
 	}
 
-	clients, err := p.oauth2Store.ListClients(ctx.Context(), appID)
+	clients, err := p.ListClientsFor(ctx.Context(), appID)
 	if err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: list clients: %w", err))
+		return nil, clientHTTPError(ctx, err)
 	}
-	if clients == nil {
-		clients = []*OAuth2Client{}
-	}
-
 	return &ListClientsResponse{Clients: clients}, nil
 }
 
 func (p *Plugin) handleDeleteClient(ctx forge.Context, req *DeleteClientRequest) (*DeleteClientResponse, error) {
-	if req.ClientID == "" {
-		return nil, forge.BadRequest("client ID required")
+	appID, ok := plugin.CallerAppID(ctx)
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
 	}
-
-	clientID, err := id.ParseOAuth2ClientID(req.ClientID)
-	if err != nil {
-		return nil, forge.BadRequest("invalid client ID")
+	// A client of another app answers 404, not 403, so the route cannot be
+	// used to probe for the existence of another app's clients.
+	if err := p.DeleteClientFor(ctx.Context(), appID, req.ClientID); err != nil {
+		return nil, clientHTTPError(ctx, err)
 	}
-
-	// Load before deleting. The tenancy check needs the row's AppID and
-	// DeleteClient takes only an id, so there is no way to make this one call.
-	// A mismatch answers 404, not 403, so the route cannot be used to probe
-	// for the existence of another app's clients.
-	client, err := p.oauth2Store.GetClientByID(ctx.Context(), clientID)
-	if err != nil {
-		if errors.Is(err, ErrClientNotFound) {
-			return nil, forge.NotFound("oauth2 client not found")
-		}
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: load client: %w", err))
-	}
-	if err := plugin.AssertAppScope(ctx, client.AppID); err != nil {
-		return nil, err
-	}
-
-	if err := p.oauth2Store.DeleteClient(ctx.Context(), clientID); err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: delete client: %w", err))
-	}
-
 	return &DeleteClientResponse{Status: "deleted"}, nil
 }
 
@@ -1755,7 +1804,11 @@ func (p *Plugin) bindDPoP(ctx forge.Context, client *OAuth2Client, appID id.AppI
 // retried: the retry the RFC requires would arrive against a code the
 // store already rejects as used. See handleAuthorizationCodeGrant and
 // handleDeviceCodeGrant for where jkt is actually resolved.
-func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.UserID, appID id.AppID, scopes, resources []string, jkt string) (*TokenResponse, error) {
+//
+// oidc is non-nil for the grants that can carry an OpenID Connect login.
+// When the granted scopes include openid the id_token is minted before the
+// session is stored, so a signing failure leaves no access token behind.
+func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.UserID, appID id.AppID, scopes, resources []string, jkt string, oidc *oidcRequest) (*TokenResponse, error) {
 	// Resolve session config for the app.
 	sessCfg := account.SessionConfig{
 		TokenTTL:        p.config.AccessTokenTTL,
@@ -1822,6 +1875,11 @@ func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.
 		}
 	}
 
+	idToken, idErr := p.idTokenFor(ctx.Context(), client, userID, scopes, sess.Token, oidc)
+	if idErr != nil {
+		return nil, p.idTokenServerError(idErr)
+	}
+
 	if err := p.store.CreateSession(ctx.Context(), sess); err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: save session: %w", err))
 	}
@@ -1837,6 +1895,7 @@ func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.
 		ExpiresIn:    int(time.Until(sess.ExpiresAt).Seconds()),
 		RefreshToken: sess.RefreshToken,
 		Scope:        strings.Join(scopes, " "),
+		IDToken:      idToken,
 	}, nil
 }
 
@@ -2073,7 +2132,10 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 			return nil, resErr
 		}
 
-		return p.issueTokens(ctx, client, dc.UserID, dc.AppID, dc.Scopes, resources, jkt)
+		// A device code carries no nonce: the device authorization request
+		// has nowhere to send one.
+		return p.issueTokens(ctx, client, dc.UserID, dc.AppID, dc.Scopes, resources, jkt,
+			&oidcRequest{AuthTime: dc.AuthTime, Grant: deviceCodeGrantType})
 
 	default:
 		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "unexpected device code status")
@@ -2136,6 +2198,10 @@ func (p *Plugin) handleDeviceComplete(ctx forge.Context, req *DeviceCompleteRequ
 		}
 		dc.Status = DeviceCodeStatusAuthorized
 		dc.UserID = userID
+		dc.AuthTime = time.Now()
+		if sess, ok := middleware.SessionFrom(ctx.Context()); ok && sess != nil && !sess.CreatedAt.IsZero() {
+			dc.AuthTime = sess.CreatedAt
+		}
 	} else {
 		dc.Status = DeviceCodeStatusDenied
 	}

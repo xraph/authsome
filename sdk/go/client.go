@@ -302,6 +302,28 @@ func (c *Client) OidcDiscoveryPrefixed(ctx context.Context) (*DiscoveryResponse,
 	return &result, nil
 }
 
+// Oauth2AppDiscoveryPrefixed — App OpenID Connect Discovery
+func (c *Client) Oauth2AppDiscoveryPrefixed(ctx context.Context, slug string) (*DiscoveryResponse, error) {
+	path := "/apps/{slug}/.well-known/openid-configuration"
+	path = strings.Replace(path, "{slug}", slug, 1)
+	var result DiscoveryResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Oauth2AppJWKS — App JSON Web Key Set
+func (c *Client) Oauth2AppJWKS(ctx context.Context, slug string) (*JWKSResponse, error) {
+	path := "/apps/{slug}/v1/oauth/jwks"
+	path = strings.Replace(path, "{slug}", slug, 1)
+	var result JWKSResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // ScimListGroups — List SCIM Groups
 func (c *Client) ScimListGroups(ctx context.Context) (*ScimListResponse, error) {
 	path := "/scim/v2/Groups"
@@ -2148,6 +2170,9 @@ func (c *Client) Oauth2Authorize(ctx context.Context, params *Oauth2AuthorizePar
 		if params.Prompt != "" {
 			q.Set("prompt", params.Prompt)
 		}
+		if params.Nonce != "" {
+			q.Set("nonce", params.Nonce)
+		}
 		if encoded := q.Encode(); encoded != "" {
 			path += "?" + encoded
 		}
@@ -2199,6 +2224,16 @@ func (c *Client) Oauth2DeviceComplete(ctx context.Context, req *Oauth2DeviceComp
 	path := "/v1/oauth/device/complete"
 	var result DeviceCompleteResponse
 	if err := c.doForm(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Oauth2JWKS — JSON Web Key Set
+func (c *Client) Oauth2JWKS(ctx context.Context) (*JWKSResponse, error) {
+	path := "/v1/oauth/jwks"
+	var result JWKSResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -2336,6 +2371,16 @@ func (c *Client) Oauth2UserInfo(ctx context.Context) (*UserInfo, error) {
 	path := "/v1/oauth/userinfo"
 	var result UserInfo
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Oauth2UserInfoPost — OIDC UserInfo (POST)
+func (c *Client) Oauth2UserInfoPost(ctx context.Context) (*UserInfo, error) {
+	path := "/v1/oauth/userinfo"
+	var result UserInfo
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -3478,6 +3523,7 @@ type Oauth2AuthorizeParams struct {
 	CodeChallengeMethod string   `json:"code_challenge_method,omitempty"`
 	Resource            []string `json:"resource,omitempty"`
 	Prompt              string   `json:"prompt,omitempty"`
+	Nonce               string   `json:"nonce,omitempty"`
 }
 
 // ListOrganizationsParams holds optional query parameters for ListOrganizations.

@@ -32,7 +32,7 @@ func newEngineFixture(t *testing.T) (*authsome.Engine, forge.Router, id.AppID) {
 	secutil.RelaxAuthDefaults(t, eng)
 	appID, err := id.ParseAppID("aapp_01jf0000000000000000000000")
 	require.NoError(t, err)
-	p := oauth2provider.New(oauth2provider.Config{Issuer: "https://auth.example.com"})
+	p := oauth2provider.New(oauth2provider.Config{Issuer: "https://auth.example.com", IDTokenSigningKey: testSigningKeyPEM(t)})
 	st := oauth2provider.NewMemoryStore()
 	p.SetOAuth2Store(st)
 	require.NoError(t, p.OnInit(context.Background(), eng))
@@ -166,6 +166,23 @@ func TestUserInfo_ClaimsFollowTheTokenScopes(t *testing.T) {
 	assert.Equal(t, "Claire", body["name"])
 }
 
+func TestUserInfo_AnswersPOST(t *testing.T) {
+	eng, mux, appID := newEngineFixture(t)
+	u, _, err := eng.SignUp(context.Background(), &account.SignUpRequest{AppID: appID, Email: "post@example.com", Password: "SecureP@ss123"})
+	require.NoError(t, err)
+
+	sess := &session.Session{ID: id.NewSessionID(), AppID: appID, UserID: u.ID, ClientID: publicID, Scopes: []string{"openid", "email"}}
+	ctx := middleware.WithPendingOAuthSession(context.Background(), &middleware.PendingOAuthSession{Session: sess})
+	req := httptest.NewRequestWithContext(ctx, "POST", "/v1/oauth/userinfo", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, "post@example.com", body["email"])
+	assert.Contains(t, body, "email_verified")
+}
+
 func TestDeviceAuthorize_ScopesAreBoundedByTheRegistration(t *testing.T) {
 	_, _, mux := newFixture(t)
 	form := url.Values{"client_id": {publicID}, "scope": {"openid admin:everything"}}
@@ -186,4 +203,7 @@ func TestDiscovery_AdvertisesOnlyWhatExists(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &doc))
 	assert.Contains(t, doc.GrantTypesSupported, "refresh_token")
 	assert.Equal(t, []string{"S256"}, doc.CodeChallengeMethodsSupported)
+	assert.Equal(t, []string{"query"}, doc.ResponseModesSupported)
+	assert.Contains(t, doc.ClaimsSupported, "sub")
+	assert.Equal(t, "https://auth.example.com/v1/oauth/jwks", doc.JWKSURI)
 }

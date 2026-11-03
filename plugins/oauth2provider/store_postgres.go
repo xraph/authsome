@@ -218,6 +218,7 @@ func (s *PostgresStore) UpdateDeviceCode(ctx context.Context, dc *DeviceCode) er
 		Set("status = ?", dc.Status).
 		Set("user_id = ?", dc.UserID.String()).
 		Set("last_polled_at = ?", dc.LastPolledAt).
+		Set("auth_time = ?", nullableTime(dc.AuthTime)).
 		Where("id = ?", dc.ID.String()).
 		Exec(ctx)
 	return oauth2PgError(err)
@@ -332,4 +333,51 @@ func (s *PostgresStore) DeleteGrant(ctx context.Context, appID id.AppID, userID 
 		return ErrGrantNotFound
 	}
 	return nil
+}
+
+// ──────────────────────────────────────────────────
+// Signing keys
+// ──────────────────────────────────────────────────
+
+func (s *PostgresStore) CreateSigningKey(ctx context.Context, k *SigningKey) error {
+	if k.CreatedAt.IsZero() {
+		k.CreatedAt = utc(time.Now())
+	}
+	if _, err := s.pg.NewInsert(fromSigningKey(k)).Exec(ctx); err != nil {
+		if isSigningKeyConflict(err) {
+			return ErrSigningKeyConflict
+		}
+		return err
+	}
+	return nil
+}
+
+func (s *PostgresStore) ListSigningKeys(ctx context.Context, scope string) ([]*SigningKey, error) {
+	var models []signingKeyModel
+	err := s.pg.NewSelect(&models).
+		Where("scope = ?", scope).
+		OrderExpr("generation DESC").
+		Scan(ctx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	out := make([]*SigningKey, 0, len(models))
+	for i := range models {
+		k, convErr := toSigningKey(&models[i])
+		if convErr != nil {
+			return nil, convErr
+		}
+		out = append(out, k)
+	}
+	return out, nil
+}
+
+// RetireSigningKey sets RetiresAt, overwriting an earlier value. An unknown
+// id updates no rows and is not an error.
+func (s *PostgresStore) RetireSigningKey(ctx context.Context, keyID id.OAuth2SigningKeyID, at time.Time) error {
+	_, err := s.pg.NewUpdate((*signingKeyModel)(nil)).
+		Set("retires_at = ?", utc(at)).
+		Where("id = ?", keyID.String()).
+		Exec(ctx)
+	return err
 }

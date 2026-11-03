@@ -7,6 +7,7 @@ toolchain go1.26.10
 // replace github.com/xraph/forge => ../../forge
 
 require (
+	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/crewjam/saml v0.5.1
 	github.com/go-webauthn/webauthn v0.17.4
 	github.com/moby/moby/api v1.55.0
@@ -26,10 +27,10 @@ require (
 	github.com/xraph/grove/drivers/sqlitedriver v1.10.1
 	github.com/xraph/herald v1.10.0
 	github.com/xraph/keysmith v1.8.0
-	github.com/xraph/ledger v1.8.0
+	github.com/xraph/ledger v1.9.1
 	github.com/xraph/relay v1.8.0
 	github.com/xraph/vault v1.8.0
-	github.com/xraph/vessel v1.0.4
+	github.com/xraph/vessel v1.0.5
 	github.com/xraph/warden v1.8.0
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 	go.mongodb.org/mongo-driver/v2 v2.9.1
@@ -43,6 +44,7 @@ require (
 	github.com/beevik/etree v1.7.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.8 // indirect
 	github.com/go-openapi/swag/cmdutils v0.28.0 // indirect
 	github.com/go-openapi/swag/conv v0.28.0 // indirect
 	github.com/go-openapi/swag/fileutils v0.28.0 // indirect

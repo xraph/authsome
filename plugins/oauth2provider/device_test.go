@@ -81,7 +81,7 @@ func approveDeviceCode(t *testing.T, st oauth2provider.Store, deviceCode string)
 	dc, err := st.GetDeviceCodeByDeviceCode(context.Background(), deviceCode)
 	require.NoError(t, err)
 	dc.Status = oauth2provider.DeviceCodeStatusAuthorized
-	dc.UserID = id.NewUserID()
+	dc.UserID = fixtureUserID
 	require.NoError(t, st.UpdateDeviceCode(context.Background(), dc))
 }
 

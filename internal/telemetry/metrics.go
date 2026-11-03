@@ -15,8 +15,11 @@ const (
 	MetricMFAVerifications     = "authsome_mfa_verifications_total"
 	MetricSessionsRefreshed    = "authsome_sessions_refreshed_total"
 	MetricPasswordHashDuration = "authsome_password_hash_duration_seconds"
-	MetricAPIKeyAuths          = "authsome_apikey_authentications_total"  // #nosec G101 -- a metric name, not a credential
-	MetricOAuth2Tokens         = "authsome_oauth2_tokens_requested_total" // #nosec G101 -- a metric name, not a credential
+	MetricAPIKeyAuths          = "authsome_apikey_authentications_total"       // #nosec G101 -- a metric name, not a credential
+	MetricOAuth2Tokens         = "authsome_oauth2_tokens_requested_total"      // #nosec G101 -- a metric name, not a credential
+	MetricOAuth2IDTokens       = "authsome_oauth2_id_tokens_issued_total"      // #nosec G101 -- a metric name, not a credential
+	MetricOAuth2KeyRotations   = "authsome_oauth2_signing_key_rotations_total" // #nosec G101 -- a metric name, not a credential
+	MetricOAuth2IDTokenFailed  = "authsome_oauth2_id_token_failures_total"     // #nosec G101 -- a metric name, not a credential
 	MetricProviderDuration     = "authsome_provider_request_duration_seconds"
 	MetricRetentionRows        = "authsome_retention_rows_deleted_total"
 	MetricRetentionSweeps      = "authsome_retention_sweeps_attempted_total"
@@ -47,6 +50,9 @@ type Metrics struct {
 	passwordHash     *forge.Vec[forge.Histogram]
 	apiKeys          *forge.Vec[forge.Counter]
 	oauth2Tokens     *forge.Vec[forge.Counter]
+	oauth2IDTokens   *forge.Vec[forge.Counter]
+	oauth2Rotations  *forge.Vec[forge.Counter]
+	oauth2IDFailures *forge.Vec[forge.Counter]
 	provider         *forge.Vec[forge.Histogram]
 	retentionRows    *forge.Vec[forge.Counter]
 	retentionSweeps  *forge.Vec[forge.Counter]
@@ -72,8 +78,11 @@ func NewMetrics(m gometrics.Metrics) *Metrics {
 			Help:    "Time authsome spent hashing or verifying a password, by operation and algorithm.",
 			Unit:    "s",
 		}, "operation", "algorithm"),
-		apiKeys:      forge.CounterVec(m, MetricAPIKeyAuths, "result"),
-		oauth2Tokens: forge.CounterVec(m, MetricOAuth2Tokens, "grant_type", "result"),
+		apiKeys:          forge.CounterVec(m, MetricAPIKeyAuths, "result"),
+		oauth2Tokens:     forge.CounterVec(m, MetricOAuth2Tokens, "grant_type", "result"),
+		oauth2IDTokens:   forge.CounterVec(m, MetricOAuth2IDTokens, "grant_type", "issuer"),
+		oauth2Rotations:  forge.CounterVec(m, MetricOAuth2KeyRotations, "issuer", "result"),
+		oauth2IDFailures: forge.CounterVec(m, MetricOAuth2IDTokenFailed, "reason"),
 		provider: forge.HistogramVec(m, MetricProviderDuration, forge.HistogramOpts{
 			Buckets: providerBuckets,
 			Help:    "Time a third-party call took to answer, by provider kind and result.",
@@ -136,6 +145,31 @@ func (t *Metrics) OAuth2Token(grantType, result string) {
 		return
 	}
 	t.oauth2Tokens.With(grantType, result).Inc()
+}
+
+// OAuth2IDToken counts one id_token signed and handed out. issuer is
+// IssuerDeployment or IssuerApp.
+func (t *Metrics) OAuth2IDToken(grantType, issuer string) {
+	if t == nil {
+		return
+	}
+	t.oauth2IDTokens.With(grantType, issuer).Inc()
+}
+
+// OAuth2KeyRotation counts one attempt to rotate an id_token signing key.
+func (t *Metrics) OAuth2KeyRotation(issuer, result string) {
+	if t == nil {
+		return
+	}
+	t.oauth2Rotations.With(issuer, result).Inc()
+}
+
+// OAuth2IDTokenFailure counts one id_token that could not be issued.
+func (t *Metrics) OAuth2IDTokenFailure(reason string) {
+	if t == nil {
+		return
+	}
+	t.oauth2IDFailures.With(reason).Inc()
 }
 
 // ProviderRequest records how long one third-party call took.

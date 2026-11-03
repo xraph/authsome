@@ -3581,6 +3581,7 @@ class DisableResponse {
 
 class DiscoveryResponse {
   final String authorizationEndpoint;
+  final List<String> claimsSupported;
   final List<String> codeChallengeMethodsSupported;
   final String deviceAuthorizationEndpoint;
   final List<String>? dpopSigningAlgValuesSupported;
@@ -3590,6 +3591,7 @@ class DiscoveryResponse {
   final String jwksUri;
   final String? registrationEndpoint;
   final bool resourceIndicatorsSupported;
+  final List<String> responseModesSupported;
   final List<String> responseTypesSupported;
   final String revocationEndpoint;
   final List<String> scopesSupported;
@@ -3600,6 +3602,7 @@ class DiscoveryResponse {
 
   const DiscoveryResponse({
     required this.authorizationEndpoint,
+    required this.claimsSupported,
     required this.codeChallengeMethodsSupported,
     required this.deviceAuthorizationEndpoint,
     this.dpopSigningAlgValuesSupported,
@@ -3609,6 +3612,7 @@ class DiscoveryResponse {
     required this.jwksUri,
     this.registrationEndpoint,
     required this.resourceIndicatorsSupported,
+    required this.responseModesSupported,
     required this.responseTypesSupported,
     required this.revocationEndpoint,
     required this.scopesSupported,
@@ -3621,6 +3625,7 @@ class DiscoveryResponse {
   factory DiscoveryResponse.fromJson(Map<String, dynamic> json) {
     return DiscoveryResponse(
       authorizationEndpoint: json['authorization_endpoint'] as String,
+      claimsSupported: (json['claims_supported'] as List).map((e) => e as String).toList(),
       codeChallengeMethodsSupported: (json['code_challenge_methods_supported'] as List).map((e) => e as String).toList(),
       deviceAuthorizationEndpoint: json['device_authorization_endpoint'] as String,
       dpopSigningAlgValuesSupported: json['dpop_signing_alg_values_supported'] == null ? null : (json['dpop_signing_alg_values_supported'] as List).map((e) => e as String).toList(),
@@ -3630,6 +3635,7 @@ class DiscoveryResponse {
       jwksUri: json['jwks_uri'] as String,
       registrationEndpoint: json['registration_endpoint'] as String?,
       resourceIndicatorsSupported: json['resource_indicators_supported'] as bool,
+      responseModesSupported: (json['response_modes_supported'] as List).map((e) => e as String).toList(),
       responseTypesSupported: (json['response_types_supported'] as List).map((e) => e as String).toList(),
       revocationEndpoint: json['revocation_endpoint'] as String,
       scopesSupported: (json['scopes_supported'] as List).map((e) => e as String).toList(),
@@ -3643,6 +3649,7 @@ class DiscoveryResponse {
   Map<String, dynamic> toJson() {
     return {
       'authorization_endpoint': authorizationEndpoint,
+      'claims_supported': claimsSupported,
       'code_challenge_methods_supported': codeChallengeMethodsSupported,
       'device_authorization_endpoint': deviceAuthorizationEndpoint,
       if (dpopSigningAlgValuesSupported != null) 'dpop_signing_alg_values_supported': dpopSigningAlgValuesSupported,
@@ -3652,6 +3659,7 @@ class DiscoveryResponse {
       'jwks_uri': jwksUri,
       if (registrationEndpoint != null) 'registration_endpoint': registrationEndpoint,
       'resource_indicators_supported': resourceIndicatorsSupported,
+      'response_modes_supported': responseModesSupported,
       'response_types_supported': responseTypesSupported,
       'revocation_endpoint': revocationEndpoint,
       'scopes_supported': scopesSupported,
@@ -4562,6 +4570,84 @@ class InvoiceResponse {
 
   @override
   String toString() => 'InvoiceResponse(${toJson()})';
+}
+
+class JWK {
+  final String? alg;
+  final String? crv;
+  final String? e;
+  final String? kid;
+  final String kty;
+  final String? n;
+  final String? use;
+  final String? x;
+  final String? y;
+
+  const JWK({
+    this.alg,
+    this.crv,
+    this.e,
+    this.kid,
+    required this.kty,
+    this.n,
+    this.use,
+    this.x,
+    this.y,
+  });
+
+  factory JWK.fromJson(Map<String, dynamic> json) {
+    return JWK(
+      alg: json['alg'] as String?,
+      crv: json['crv'] as String?,
+      e: json['e'] as String?,
+      kid: json['kid'] as String?,
+      kty: json['kty'] as String,
+      n: json['n'] as String?,
+      use: json['use'] as String?,
+      x: json['x'] as String?,
+      y: json['y'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (alg != null) 'alg': alg,
+      if (crv != null) 'crv': crv,
+      if (e != null) 'e': e,
+      if (kid != null) 'kid': kid,
+      'kty': kty,
+      if (n != null) 'n': n,
+      if (use != null) 'use': use,
+      if (x != null) 'x': x,
+      if (y != null) 'y': y,
+    };
+  }
+
+  @override
+  String toString() => 'JWK(${toJson()})';
+}
+
+class JWKSResponse {
+  final List<JWK> keys;
+
+  const JWKSResponse({
+    required this.keys,
+  });
+
+  factory JWKSResponse.fromJson(Map<String, dynamic> json) {
+    return JWKSResponse(
+      keys: (json['keys'] as List).map((e) => JWK.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'keys': keys.map((e) => e.toJson()).toList(),
+    };
+  }
+
+  @override
+  String toString() => 'JWKSResponse(${toJson()})';
 }
 
 class KeyListItem {
@@ -5497,6 +5583,7 @@ class OAuth2Client {
 class Oauth2providerTokenResponse {
   final String accessToken;
   final int expiresIn;
+  final String? idToken;
   final String? issuedTokenType;
   final String? refreshToken;
   final String? scope;
@@ -5505,6 +5592,7 @@ class Oauth2providerTokenResponse {
   const Oauth2providerTokenResponse({
     required this.accessToken,
     required this.expiresIn,
+    this.idToken,
     this.issuedTokenType,
     this.refreshToken,
     this.scope,
@@ -5515,6 +5603,7 @@ class Oauth2providerTokenResponse {
     return Oauth2providerTokenResponse(
       accessToken: json['access_token'] as String,
       expiresIn: (json['expires_in'] as num).toInt(),
+      idToken: json['id_token'] as String?,
       issuedTokenType: json['issued_token_type'] as String?,
       refreshToken: json['refresh_token'] as String?,
       scope: json['scope'] as String?,
@@ -5526,6 +5615,7 @@ class Oauth2providerTokenResponse {
     return {
       'access_token': accessToken,
       'expires_in': expiresIn,
+      if (idToken != null) 'id_token': idToken,
       if (issuedTokenType != null) 'issued_token_type': issuedTokenType,
       if (refreshToken != null) 'refresh_token': refreshToken,
       if (scope != null) 'scope': scope,
@@ -8482,25 +8572,43 @@ class User {
 class UserInfo {
   final String? email;
   final bool? emailVerified;
+  final String? familyName;
+  final String? givenName;
   final String? name;
   final String? phoneNumber;
+  final bool? phoneNumberVerified;
+  final String? picture;
+  final String? preferredUsername;
   final String sub;
+  final int? updatedAt;
 
   const UserInfo({
     this.email,
     this.emailVerified,
+    this.familyName,
+    this.givenName,
     this.name,
     this.phoneNumber,
+    this.phoneNumberVerified,
+    this.picture,
+    this.preferredUsername,
     required this.sub,
+    this.updatedAt,
   });
 
   factory UserInfo.fromJson(Map<String, dynamic> json) {
     return UserInfo(
       email: json['email'] as String?,
       emailVerified: json['email_verified'] as bool?,
+      familyName: json['family_name'] as String?,
+      givenName: json['given_name'] as String?,
       name: json['name'] as String?,
       phoneNumber: json['phone_number'] as String?,
+      phoneNumberVerified: json['phone_number_verified'] as bool?,
+      picture: json['picture'] as String?,
+      preferredUsername: json['preferred_username'] as String?,
       sub: json['sub'] as String,
+      updatedAt: json['updated_at'] == null ? null : (json['updated_at'] as num).toInt(),
     );
   }
 
@@ -8508,9 +8616,15 @@ class UserInfo {
     return {
       if (email != null) 'email': email,
       if (emailVerified != null) 'email_verified': emailVerified,
+      if (familyName != null) 'family_name': familyName,
+      if (givenName != null) 'given_name': givenName,
       if (name != null) 'name': name,
       if (phoneNumber != null) 'phone_number': phoneNumber,
+      if (phoneNumberVerified != null) 'phone_number_verified': phoneNumberVerified,
+      if (picture != null) 'picture': picture,
+      if (preferredUsername != null) 'preferred_username': preferredUsername,
       'sub': sub,
+      if (updatedAt != null) 'updated_at': updatedAt,
     };
   }
 

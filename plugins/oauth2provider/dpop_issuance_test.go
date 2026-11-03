@@ -70,7 +70,7 @@ type dpopFixtureOpts struct {
 func newDPoPFixtureOpts(t *testing.T, opts dpopFixtureOpts) (*authsome.Engine, forge.Router, id.AppID) {
 	t.Helper()
 
-	p := oauth2provider.New(oauth2provider.Config{Issuer: "https://auth.example.com"})
+	p := oauth2provider.New(oauth2provider.Config{Issuer: "https://auth.example.com", IDTokenSigningKey: testSigningKeyPEM(t)})
 	st := oauth2provider.NewMemoryStore()
 	p.SetOAuth2Store(st)
 
@@ -99,6 +99,7 @@ func newDPoPFixtureOpts(t *testing.T, opts dpopFixtureOpts) (*authsome.Engine, f
 	}
 
 	eng := secutil.NewTestEngine(t, engOpts...)
+	seedFixtureUser(t, eng.Store(), appID)
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(dpopIssuanceSecret), bcrypt.MinCost)
 	require.NoError(t, err)

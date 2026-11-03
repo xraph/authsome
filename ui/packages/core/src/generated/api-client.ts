@@ -122,6 +122,8 @@ import type {
   Invitation,
   InvitationListResponse,
   InvoiceResponse,
+  JWK,
+  JWKSResponse,
   KeyListItem,
   ListAuthMethodsResponse,
   ListClientsResponse,
@@ -401,6 +403,34 @@ export class AuthClient {
   async oidcDiscoveryPrefixed(token: string): Promise<DiscoveryResponse> {
     const path = "/.well-known/openid-configuration";
     return this.request<DiscoveryResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * App OpenID Connect Discovery
+   * GET /apps/{slug}/.well-known/openid-configuration
+   */
+  async oauth2AppDiscoveryPrefixed(slug: string, token: string): Promise<DiscoveryResponse> {
+    const path = `/apps/${slug}/.well-known/openid-configuration`;
+    return this.request<DiscoveryResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * App JSON Web Key Set
+   * GET /apps/{slug}/v1/oauth/jwks
+   */
+  async oauth2AppJWKS(slug: string, token: string): Promise<JWKSResponse> {
+    const path = `/apps/${slug}/v1/oauth/jwks`;
+    return this.request<JWKSResponse>(
       'GET',
       path,
       undefined,
@@ -2338,7 +2368,7 @@ export class AuthClient {
    * OAuth2 Authorization
    * GET /v1/oauth/authorize
    */
-  async oauth2Authorize(response_type: string, client_id: string, redirect_uri?: string, scope?: string, state?: string, code_challenge?: string, code_challenge_method?: string, resource?: string[], prompt?: string): Promise<void> {
+  async oauth2Authorize(response_type: string, client_id: string, redirect_uri?: string, scope?: string, state?: string, code_challenge?: string, code_challenge_method?: string, resource?: string[], prompt?: string, nonce?: string): Promise<void> {
     const params = new URLSearchParams();
     if (response_type !== undefined) params.set('response_type', String(response_type));
     if (client_id !== undefined) params.set('client_id', String(client_id));
@@ -2352,6 +2382,7 @@ export class AuthClient {
     // would join it on commas and reach the server as one value.
     if (resource !== undefined) for (const element of resource) params.append('resource', String(element));
     if (prompt !== undefined) params.set('prompt', String(prompt));
+    if (nonce !== undefined) params.set('nonce', String(nonce));
     const qs = params.toString();
     const path = "/v1/oauth/authorize" + (qs ? `?${qs}` : '');
     return this.request<void>(
@@ -2416,6 +2447,20 @@ export class AuthClient {
       body,
       token,
       true,
+    );
+  }
+
+  /**
+   * JSON Web Key Set
+   * GET /v1/oauth/jwks
+   */
+  async oauth2JWKS(token: string): Promise<JWKSResponse> {
+    const path = "/v1/oauth/jwks";
+    return this.request<JWKSResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
     );
   }
 
@@ -2513,6 +2558,20 @@ export class AuthClient {
     const path = "/v1/oauth/userinfo";
     return this.request<UserInfo>(
       'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * OIDC UserInfo (POST)
+   * POST /v1/oauth/userinfo
+   */
+  async oauth2UserInfoPost(token: string): Promise<UserInfo> {
+    const path = "/v1/oauth/userinfo";
+    return this.request<UserInfo>(
+      'POST',
       path,
       undefined,
       token,

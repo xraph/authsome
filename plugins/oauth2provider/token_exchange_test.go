@@ -17,6 +17,7 @@ import (
 
 	"github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
@@ -84,6 +85,10 @@ func (e *exchangeEngine) RateLimiter() ratelimit.Limiter { return nil }
 
 // CeremonyStore backs the consent flow the plugin wires at init.
 func (e *exchangeEngine) CeremonyStore() ceremony.Store { return ceremony.NewMemory() }
+
+// OnInit builds the id_token key manager from this. The no-op encryptor means
+// no managed key, which this grant never needs.
+func (e *exchangeEngine) TokenEncryptor() bridge.Encryptor { return bridge.NoopEncryptor{} }
 
 // Nil registry means SessionGuard and AdminGuard attach no middleware, which
 // is how the other fixtures in this package register routes without standing

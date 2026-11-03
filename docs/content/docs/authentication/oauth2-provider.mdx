@@ -25,7 +25,7 @@ eng, err := authsome.NewEngine(
 )
 ```
 
-The plugin's `Config` also covers the device flow (`DeviceCodeTTL`, `DeviceCodeInterval`, `VerificationURI`), dynamic client registration (`DynamicRegistration`, `RegistrationAppID`, `DynamicRegistrationScopes`, `RegistrationRateLimit`), RFC 8707 `ProtectedResources` and a `ConsentGate`. Its endpoints live under `/v1/oauth` (`/authorize`, `/token`, `/revoke`, `/userinfo`, `/consent`, `/register`, `/device/authorize`, `/device/complete`) plus `/.well-known/openid-configuration`.
+The plugin's `Config` also covers the device flow (`DeviceCodeTTL`, `DeviceCodeInterval`, `VerificationURI`), dynamic client registration (`DynamicRegistration`, `RegistrationAppID`, `DynamicRegistrationScopes`, `RegistrationRateLimit`), RFC 8707 `ProtectedResources` and a `ConsentGate`. Its endpoints live under `/v1/oauth` (`/authorize`, `/token`, `/revoke`, `/userinfo`, `/consent`, `/register`, `/jwks`, `/device/authorize`, `/device/complete`) plus `/.well-known/openid-configuration`.
 
 ## Client registration
 
@@ -228,13 +228,154 @@ client_secret=sec_a3f8c9d4e5f2g7h1...
 
 The endpoint always returns `200 OK` regardless of whether the token was found, to prevent token enumeration.
 
+## Sign in with your app (OpenID Connect)
+
+Once a client asks for the `openid` scope, the token endpoint returns an `id_token` next to the access token, and any OIDC library can sign users in against your deployment with an issuer URL, a client ID and a client secret. Nothing else needs configuring on the relying-party side.
+
+### Set the issuer first
+
+`Issuer` has to be the public URL your deployment is reachable at. Libraries fetch `{issuer}/.well-known/openid-configuration` and refuse any id_token whose `iss` differs from it.
+
+```go
+oauth2provider.New(oauth2provider.Config{
+    Issuer:     "https://auth.myapp.com",
+    IDTokenTTL: time.Hour, // the default
+})
+```
+
+Leave it empty and the plugin falls back to `https://localhost`, logs a warning at startup, and no OIDC client will verify what you issue.
+
+### Signing keys
+
+You have two options. With no extra config, authsome manages the key for you. It generates an RSA-2048 key (signing with RS256), seals it with the engine's token encryptor, and stores it. The engine therefore needs an encryption key; with neither that nor an operator key, `openid` requests fail with a 500 and no access token goes out.
+
+Managed keys rotate on a schedule. A key older than `IDTokenKeyRotation` (90 days by default) is replaced, and the old one stays in the JWKS for `IDTokenKeyRetireGrace` (7 days by default) so tokens it already signed still verify. An id_token lives for `IDTokenTTL` (1 hour by default), so the grace period is far longer than anyone needs.
+
+You can rotate an app's own key from the dashboard, but at most once an hour, and only when the app has its own issuer (see below). The deployment issuer's key is shared by every app, so the dashboard won't rotate it. It rotates on its schedule.
+
+If you'd rather hold the key yourself, hand the plugin a PEM private key. It wins over any managed key.
+
+```go
+oauth2provider.New(oauth2provider.Config{
+    Issuer:                "https://auth.myapp.com",
+    IDTokenSigningKeyFile: "/etc/authsome/id-token-key.pem", // or IDTokenSigningKey: pemBytes
+    IDTokenSigningKeyID:   "2026-11",                        // optional, defaults to the RFC 7638 thumbprint
+    IDTokenPreviousKeys:   [][]byte{oldPublicKeyPEM},         // published, never used to sign
+})
+```
+
+An operator key is either RSA of at least 2048 bits or EC P-256 (ES256). One that doesn't parse, or an RSA key that's too small, stops the boot. You rotate it yourself: move the old key into `IDTokenPreviousKeys` and keep it there until every token it signed has expired. A previous key's `kid` is always its thumbprint, so if the old key signed under a custom `IDTokenSigningKeyID`, its tokens stop verifying once the `kid` changes.
+
+If your deployment signs only with an ES256 operator key, discovery advertises only ES256. OIDC Discovery expects RS256 support, and a relying party that only accepts RS256 will reject your tokens. Keep an RSA key unless you know every client accepts ES256.
+
+The JWKS lives at `{issuer}/v1/oauth/jwks` and is advertised as `jwks_uri`. It's served with `Cache-Control: public, max-age=300`, and HMAC keys never appear in it. If the signing keys can't be read from the store, the JWKS still answers with the access token keys, marked `Cache-Control: no-store` so no cache holds on to the partial set.
+
+### One issuer per app
+
+By default every client sees the deployment issuer. To give one app its own, turn on the `oauth2.app_issuer` setting (namespace `oauth2provider`, app scope, off by default). That app's clients then get the issuer `{Issuer}/apps/{slug}` and a key of their own, and these routes start answering for it:
+
+| Method | Path |
+|--------|------|
+| `GET` | `/apps/:slug/.well-known/openid-configuration` |
+| `GET` | `/apps/:slug/.well-known/oauth-authorization-server` |
+| `GET` | `/apps/:slug/v1/oauth/jwks` |
+
+An unknown slug and an app that hasn't opted in get the same 404.
+
+<Callout type="warn">
+  Turning `oauth2.app_issuer` on or off, or renaming the app's slug while it's on, changes the issuer for every OAuth2 client of that app. Each of them rejects tokens until you point it at the new issuer, so do it before they're live or announce it first.
+</Callout>
+
+### Claims
+
+The id_token always carries `iss`, `sub`, `aud`, `azp`, `iat`, `exp` and `at_hash`, plus `nonce` and `auth_time` on the code flow, `auth_time` alone on the device flow, and neither on a refresh. The scopes the client was granted add the rest, and `GET` or `POST /v1/oauth/userinfo` returns the same set.
+
+| Scope | Claims |
+|-------|--------|
+| `profile` | `name`, `given_name`, `family_name`, `picture`, `preferred_username`, `updated_at` |
+| `email` | `email`, `email_verified` |
+| `phone` | `phone_number`, `phone_number_verified` |
+
+Empty strings are left out. The two booleans never are: a user without a verified address gets `email_verified: false`, not a missing claim.
+
+Only the code, refresh and device grants mint an id_token. Client credentials and token exchange never do, and a client that doesn't ask for `openid` gets exactly the response it got before.
+
+### Auth.js
+
+Authsome's discovery document is enough for a generic OIDC provider:
+
+```ts
+import NextAuth from "next-auth";
+
+export const { handlers, auth } = NextAuth({
+  providers: [
+    {
+      id: "authsome",
+      name: "Authsome",
+      type: "oidc",
+      issuer: "https://auth.myapp.com",
+      clientId: process.env.AUTHSOME_CLIENT_ID,
+      clientSecret: process.env.AUTHSOME_CLIENT_SECRET,
+    },
+  ],
+});
+```
+
+Register the callback URL Auth.js shows you (`/api/auth/callback/authsome` for this id) as a redirect URI on the client, and include `openid profile email` in its scopes.
+
+### go-oidc
+
+```go
+provider, err := oidc.NewProvider(ctx, "https://auth.myapp.com")
+if err != nil {
+    return err
+}
+
+conf := oauth2.Config{
+    ClientID:     clientID,
+    ClientSecret: clientSecret,
+    RedirectURL:  "https://app.example.com/callback",
+    Endpoint:     provider.Endpoint(),
+    Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+}
+verifier := provider.Verifier(&oidc.Config{ClientID: clientID})
+
+// In the callback handler:
+tok, err := conf.Exchange(ctx, code)
+if err != nil {
+    return err
+}
+raw, _ := tok.Extra("id_token").(string)
+idToken, err := verifier.Verify(ctx, raw)
+if err != nil {
+    return err
+}
+var claims struct {
+    Email         string `json:"email"`
+    EmailVerified bool   `json:"email_verified"`
+    Nonce         string `json:"nonce"`
+}
+if err := idToken.Claims(&claims); err != nil {
+    return err
+}
+// Compare claims.Nonce with the nonce you sent on the authorize request.
+```
+
+go-oidc accepts only RS256 unless you say otherwise. If your deployment signs with an EC P-256 operator key, set `SupportedSigningAlgs: []string{oidc.ES256}` in `oidc.Config` (or list both `oidc.RS256` and `oidc.ES256` if you might switch).
+
+The `nonce` you send on `/v1/oauth/authorize` can be up to 512 bytes. It's optional on the code flow.
+
+### What this doesn't do yet
+
+A signed-out user who reaches `/v1/oauth/authorize` gets a 401 and no login page, so a browser app has to sign the user in to authsome first. `prompt=none`, `max_age`, `id_token_hint`, RP-initiated logout and CORS on the OIDC endpoints are also not there yet, and neither is a way to add custom claims.
+
 ## Scopes and consent
 
 ### Built-in scopes
 
 | Scope | Description |
 |-------|-------------|
-| `openid` | Required for OIDC. Returns an ID token with the `sub` claim |
+| `openid` | Required for OIDC. Returns an id_token (see [Sign in with your app](#sign-in-with-your-app-openid-connect)) |
 | `profile` | Access to user's name, username, and profile image |
 | `email` | Access to user's email address and email verification status |
 | `phone` | Access to user's phone number and phone verification status |
@@ -388,7 +529,7 @@ Authsome publishes an OpenID Connect discovery document:
   "token_endpoint": "https://auth.myapp.com/v1/oauth/token",
   "introspection_endpoint": "https://auth.myapp.com/v1/introspect",
   "revocation_endpoint": "https://auth.myapp.com/v1/oauth/revoke",
-  "jwks_uri": "https://auth.myapp.com/.well-known/jwks.json",
+  "jwks_uri": "https://auth.myapp.com/v1/oauth/jwks",
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code", "client_credentials", "refresh_token"],
   "subject_types_supported": ["public"],

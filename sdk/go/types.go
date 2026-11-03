@@ -828,6 +828,7 @@ type DisableResponse struct {
 // DiscoveryResponse represents the DiscoveryResponse schema.
 type DiscoveryResponse struct {
 	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
+	ClaimsSupported                   []string `json:"claims_supported"`
 	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
 	DeviceAuthorizationEndpoint       string   `json:"device_authorization_endpoint"`
 	DpopSigningAlgValuesSupported     []string `json:"dpop_signing_alg_values_supported,omitempty"`
@@ -837,6 +838,7 @@ type DiscoveryResponse struct {
 	JwksURI                           string   `json:"jwks_uri"`
 	RegistrationEndpoint              string   `json:"registration_endpoint,omitempty"`
 	ResourceIndicatorsSupported       bool     `json:"resource_indicators_supported"`
+	ResponseModesSupported            []string `json:"response_modes_supported"`
 	ResponseTypesSupported            []string `json:"response_types_supported"`
 	RevocationEndpoint                string   `json:"revocation_endpoint"`
 	ScopesSupported                   []string `json:"scopes_supported"`
@@ -1050,6 +1052,24 @@ type InvoiceResponse struct {
 	SubscriptionID string `json:"subscription_id"`
 	TenantID       string `json:"tenant_id"`
 	Total          string `json:"total"`
+}
+
+// JWK represents the JWK schema.
+type JWK struct {
+	Alg string `json:"alg,omitempty"`
+	Crv string `json:"crv,omitempty"`
+	E   string `json:"e,omitempty"`
+	Kid string `json:"kid,omitempty"`
+	Kty string `json:"kty"`
+	N   string `json:"n,omitempty"`
+	Use string `json:"use,omitempty"`
+	X   string `json:"x,omitempty"`
+	Y   string `json:"y,omitempty"`
+}
+
+// JWKSResponse represents the JWKSResponse schema.
+type JWKSResponse struct {
+	Keys []*JWK `json:"keys"`
 }
 
 // KeyListItem represents the KeyListItem schema.
@@ -1269,6 +1289,7 @@ type OAuth2Client struct {
 type Oauth2providerTokenResponse struct {
 	AccessToken     string `json:"access_token"`
 	ExpiresIn       int64  `json:"expires_in"`
+	IDToken         string `json:"id_token,omitempty"`
 	IssuedTokenType string `json:"issued_token_type,omitempty"`
 	RefreshToken    string `json:"refresh_token,omitempty"`
 	Scope           string `json:"scope,omitempty"`
@@ -1954,11 +1975,17 @@ type User struct {
 
 // UserInfo represents the UserInfo schema.
 type UserInfo struct {
-	Email         string `json:"email,omitempty"`
-	EmailVerified bool   `json:"email_verified,omitempty"`
-	Name          string `json:"name,omitempty"`
-	PhoneNumber   string `json:"phone_number,omitempty"`
-	Sub           string `json:"sub"`
+	Email               string `json:"email,omitempty"`
+	EmailVerified       bool   `json:"email_verified,omitempty"`
+	FamilyName          string `json:"family_name,omitempty"`
+	GivenName           string `json:"given_name,omitempty"`
+	Name                string `json:"name,omitempty"`
+	PhoneNumber         string `json:"phone_number,omitempty"`
+	PhoneNumberVerified bool   `json:"phone_number_verified,omitempty"`
+	Picture             string `json:"picture,omitempty"`
+	PreferredUsername   string `json:"preferred_username,omitempty"`
+	Sub                 string `json:"sub"`
+	UpdatedAt           int64  `json:"updated_at,omitempty"`
 }
 
 // UserResource represents the UserResource schema.

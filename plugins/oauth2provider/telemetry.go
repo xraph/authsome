@@ -71,3 +71,12 @@ func compareClientSecret(ctx context.Context, hash, secret string) error {
 	defer span.End()
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(secret))
 }
+
+// issuerLabel folds a key scope into the bounded issuer label: "" is the
+// deployment issuer, anything else an app's own.
+func issuerLabel(scope string) string {
+	if scope == "" {
+		return telemetry.IssuerDeployment
+	}
+	return telemetry.IssuerApp
+}

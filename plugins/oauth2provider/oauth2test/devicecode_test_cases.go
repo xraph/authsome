@@ -156,3 +156,25 @@ func testDeviceCodeStoredAsHash(t *testing.T, f Fixture) {
 	assert.Equal(t, oauth2provider.DeviceCodeStatusAuthorized, again.Status)
 	assert.Equal(t, f.UserID, again.UserID)
 }
+
+// testDeviceCodeAuthTimeRoundTrip proves the approving session's auth_time is
+// written by UpdateDeviceCode and read back, and that a code nobody approved
+// reads back as the zero time.
+func testDeviceCodeAuthTimeRoundTrip(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	dc := seedDeviceCode(t, f)
+
+	got, err := f.Store.GetDeviceCodeByDeviceCode(ctx, dc.DeviceCode)
+	require.NoError(t, err)
+	assert.True(t, got.AuthTime.IsZero(), "a pending code has no auth_time, got %v", got.AuthTime)
+
+	authTime := now().Add(-2 * time.Hour).Truncate(time.Second)
+	got.Status = oauth2provider.DeviceCodeStatusAuthorized
+	got.UserID = f.UserID
+	got.AuthTime = authTime
+	require.NoError(t, f.Store.UpdateDeviceCode(ctx, got))
+
+	again, err := f.Store.GetDeviceCodeByDeviceCode(ctx, dc.DeviceCode)
+	require.NoError(t, err)
+	assert.WithinDuration(t, authTime, again.AuthTime, time.Second)
+}

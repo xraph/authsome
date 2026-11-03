@@ -164,3 +164,31 @@ func testAuthCodeStoredAsHash(t *testing.T, f Fixture) {
 	require.NoError(t, err)
 	assert.True(t, consumed)
 }
+
+// testAuthCodeNonceAndAuthTimeRoundTrip proves the two id_token inputs a code
+// carries survive storage, and that a code without them (every code minted
+// before they existed) reads back as the empty nonce and the zero time rather
+// than failing to scan.
+func testAuthCodeNonceAndAuthTimeRoundTrip(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	c := newClient(f.AppID)
+	require.NoError(t, f.Store.CreateClient(ctx, c))
+
+	authTime := now().Add(-time.Hour).Truncate(time.Second)
+	with := newAuthCode(f, c.ClientID)
+	with.Nonce = "n-0S6_WzA2Mj"
+	with.AuthTime = authTime
+	require.NoError(t, f.Store.CreateAuthCode(ctx, with))
+
+	got, err := f.Store.GetAuthCode(ctx, with.Code)
+	require.NoError(t, err)
+	assert.Equal(t, "n-0S6_WzA2Mj", got.Nonce)
+	assert.WithinDuration(t, authTime, got.AuthTime, time.Second)
+
+	without := newAuthCode(f, c.ClientID)
+	require.NoError(t, f.Store.CreateAuthCode(ctx, without))
+	got, err = f.Store.GetAuthCode(ctx, without.Code)
+	require.NoError(t, err)
+	assert.Empty(t, got.Nonce)
+	assert.True(t, got.AuthTime.IsZero(), "an unset auth_time must read back as the zero time, got %v", got.AuthTime)
+}
