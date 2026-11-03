@@ -41,6 +41,9 @@ func (p *Plugin) writeGuard() forge.RouteOption {
 
 // RegisterRoutes registers billing API routes on a forge.Router.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
+	if p.config.DisableRoutes {
+		return nil
+	}
 	prefix := p.config.PathPrefix
 
 	// Plan routes

@@ -247,7 +247,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 // OnAfterOrgCreate auto-creates a subscription for new organizations
 // when tenant mode is "organization" and auto-subscribe is enabled.
 func (p *Plugin) OnAfterOrgCreate(ctx context.Context, o *organization.Organization) error {
-	if p.ledger == nil {
+	if p.ledger == nil || p.config.DisableAutoSubscribe {
 		return nil
 	}
 
@@ -273,7 +273,7 @@ func (p *Plugin) OnAfterOrgCreate(ctx context.Context, o *organization.Organizat
 func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, _ *session.Session) error {
 	// s is nil when the account signed up but must verify its email
 	// before it gets a session; the user carries the app either way.
-	if p.ledger == nil || u == nil {
+	if p.ledger == nil || u == nil || p.config.DisableAutoSubscribe {
 		return nil
 	}
 
