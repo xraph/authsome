@@ -29,6 +29,7 @@ import (
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/internal/telemetry/telemetrytest"
 	"github.com/xraph/authsome/plugins/oauth2provider"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/user"
 )
 
@@ -341,21 +342,29 @@ func TestCodeGrant_ECKeyHeaderAndAtHash(t *testing.T) {
 	assert.Len(t, sig, 64)
 }
 
-// The refresh grant rotates before it can mint. When minting then fails the
-// rotated session is revoked, so the client is not left holding an access
-// token that came without the id_token it asked for.
-func TestRefreshGrant_IDTokenFailureRevokesRotatedSession(t *testing.T) {
-	// No encryptor and no operator key: nothing can sign. The provider
-	// session is seeded directly, since the code grant itself would refuse.
-	f := newOIDCFixture(t, oauth2provider.Config{}, false)
-	ctx := context.Background()
-	sess, err := account.NewSession(f.appID, f.user.ID, account.SessionConfig{
+// seedProviderSession stores a session the provider issued to clientID with
+// the given scopes, as the code grant would have.
+func seedProviderSession(t *testing.T, f *oidcFixture, appID id.AppID, clientID string, scopes ...string) *session.Session {
+	t.Helper()
+	sess, err := account.NewSession(appID, f.user.ID, account.SessionConfig{
 		TokenTTL: time.Hour, RefreshTokenTTL: 24 * time.Hour,
 	})
 	require.NoError(t, err)
-	sess.ClientID = publicID
-	sess.Scopes = []string{"openid"}
-	require.NoError(t, f.eng.Store().CreateSession(ctx, sess))
+	sess.ClientID = clientID
+	sess.Scopes = scopes
+	require.NoError(t, f.eng.Store().CreateSession(context.Background(), sess))
+	return sess
+}
+
+// The refresh grant spends the refresh token when it rotates, so it checks
+// that an id_token can be signed first. With no key nothing can sign: the
+// grant fails as server_error and the session is left as it was.
+func TestRefreshGrant_NoKeyRefusesWithoutRotating(t *testing.T) {
+	// No encryptor and no operator key. The provider session is seeded
+	// directly, since the code grant itself would refuse.
+	f := newOIDCFixture(t, oauth2provider.Config{}, false)
+	ctx := context.Background()
+	sess := seedProviderSession(t, f, f.appID, publicID, "openid")
 
 	rec := postToken(t, f.mux, map[string]string{
 		"grant_type": "refresh_token", "refresh_token": sess.RefreshToken, "client_id": publicID,
@@ -363,9 +372,46 @@ func TestRefreshGrant_IDTokenFailureRevokesRotatedSession(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, rec.Code, "body: %s", rec.Body.String())
 	assert.NotContains(t, rec.Body.String(), "access_token")
 
-	sessions, err := f.eng.Store().ListUserSessions(ctx, f.user.ID)
-	require.NoError(t, err)
-	for _, s := range sessions {
-		assert.NotEqual(t, publicID, s.ClientID, "the rotated session must be revoked: %+v", s)
+	got, err := f.eng.Store().GetSessionByRefreshToken(ctx, sess.RefreshToken)
+	require.NoError(t, err, "the refresh token was not spent")
+	assert.Equal(t, sess.ID, got.ID)
+}
+
+// A settings or store failure while resolving the issuer must not cost the
+// user their session: the refresh answers 500 without rotating, and the
+// same refresh token works once the failure clears.
+func TestRefreshGrant_IssuerFailureKeepsRefreshToken(t *testing.T) {
+	f := newOIDCFixture(t, oauth2provider.Config{}, true)
+	ctx := context.Background()
+
+	// An app that opted into its own issuer but whose row can't be loaded:
+	// issuerFor refuses to guess and fails.
+	ghost := id.NewAppID()
+	const ghostClient = "ghost-app-client"
+	require.NoError(t, f.st.CreateClient(ctx, &oauth2provider.OAuth2Client{
+		ID: id.NewOAuth2ClientID(), AppID: ghost, ClientID: ghostClient, Name: "Ghost", FirstParty: true,
+		RedirectURIs: []string{registeredURI}, Scopes: []string{"openid"},
+		GrantTypes: []string{"authorization_code"}, Public: true, TokenEndpointAuthMethod: "none",
+	}))
+	setAppIssuer(t, f, ghost, true)
+	sess := seedProviderSession(t, f, f.appID, ghostClient, "openid")
+	refresh := map[string]string{
+		"grant_type": "refresh_token", "refresh_token": sess.RefreshToken, "client_id": ghostClient,
 	}
+
+	rec := postToken(t, f.mux, refresh)
+	require.Equal(t, http.StatusInternalServerError, rec.Code, "body: %s", rec.Body.String())
+	assert.NotContains(t, rec.Body.String(), "access_token")
+	got, err := f.eng.Store().GetSessionByRefreshToken(ctx, sess.RefreshToken)
+	require.NoError(t, err, "the refresh token was not spent")
+	assert.Equal(t, sess.ID, got.ID)
+
+	// The failure clears and the client retries with the token it holds.
+	setAppIssuer(t, f, ghost, false)
+	body := decodeTokenBody(t, postToken(t, f.mux, refresh))
+	raw, ok := body["id_token"].(string)
+	require.True(t, ok, "the retried refresh carries an id_token: %v", body)
+	_, claims := verifyIDToken(t, f.mux, raw)
+	assert.Equal(t, f.user.ID.String(), claims["sub"])
+	assert.Equal(t, sha256AtHash(body["access_token"].(string)), claims["at_hash"])
 }

@@ -83,34 +83,64 @@ func (p *Plugin) idTokenFor(ctx context.Context, client *OAuth2Client, userID id
 // mintIDToken signs an id_token for in with the active key of the client's
 // issuer.
 func (p *Plugin) mintIDToken(ctx context.Context, in idTokenInput) (string, error) {
-	m := telemetry.From(p.engine)
-	fail := func(reason string, err error) (string, error) {
-		m.OAuth2IDTokenFailure(reason)
+	k, err := p.idTokenKeyFor(ctx, in.Client)
+	if err != nil {
 		return "", err
 	}
+	return p.signIDTokenWith(k, in)
+}
+
+// idTokenKey is the issuer and active key an id_token for one client is
+// signed under, resolved ahead of signing.
+type idTokenKey struct {
+	issuer, scope string
+	s             *signer
+}
+
+// idTokenKeyFor resolves the issuer and active signing key for client. It is
+// every step of minting that reads the settings or the store, so a grant that
+// cannot undo its own side effects (the refresh grant) can run it before
+// committing to anything.
+func (p *Plugin) idTokenKeyFor(ctx context.Context, client *OAuth2Client) (*idTokenKey, error) {
+	m := telemetry.From(p.engine)
 	if p.keys == nil {
-		return fail(telemetry.IDTokenNoKey, errNoSigningKey)
+		m.OAuth2IDTokenFailure(telemetry.IDTokenNoKey)
+		return nil, errNoSigningKey
 	}
-	issuer, scope, err := p.issuerFor(ctx, in.Client.AppID)
+	issuer, scope, err := p.issuerFor(ctx, client.AppID)
 	if err != nil {
-		return fail(telemetry.IDTokenIssuer, err)
+		m.OAuth2IDTokenFailure(telemetry.IDTokenIssuer)
+		return nil, err
 	}
 	s, err := p.keys.Active(ctx, scope)
 	if err != nil {
 		if errors.Is(err, errNoSigningKey) {
-			return fail(telemetry.IDTokenNoKey, err)
+			m.OAuth2IDTokenFailure(telemetry.IDTokenNoKey)
+		} else {
+			m.OAuth2IDTokenFailure(telemetry.IDTokenSignError)
 		}
-		return fail(telemetry.IDTokenSignError, err)
+		return nil, err
 	}
-	hash, err := atHash(in.AccessToken, s.alg)
+	return &idTokenKey{issuer: issuer, scope: scope, s: s}, nil
+}
+
+// signIDTokenWith builds and signs the id_token for in under k. It touches
+// neither the store nor the settings.
+func (p *Plugin) signIDTokenWith(k *idTokenKey, in idTokenInput) (string, error) {
+	m := telemetry.From(p.engine)
+	fail := func(err error) (string, error) {
+		m.OAuth2IDTokenFailure(telemetry.IDTokenSignError)
+		return "", err
+	}
+	hash, err := atHash(in.AccessToken, k.s.alg)
 	if err != nil {
-		return fail(telemetry.IDTokenSignError, err)
+		return fail(err)
 	}
 
 	now := time.Now()
 	claims := idTokenClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    issuer,
+			Issuer:    k.issuer,
 			Subject:   in.User.ID.String(),
 			Audience:  jwt.ClaimStrings{in.Client.ClientID},
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -126,12 +156,45 @@ func (p *Plugin) mintIDToken(ctx context.Context, in idTokenInput) (string, erro
 	if !in.AuthTime.IsZero() {
 		claims.AuthTime = jwt.NewNumericDate(in.AuthTime)
 	}
-	tok, err := signIDToken(s, claims)
+	tok, err := signIDToken(k.s, claims)
 	if err != nil {
-		return fail(telemetry.IDTokenSignError, err)
+		return fail(err)
 	}
-	m.OAuth2IDToken(grantLabel(in.Grant), issuerLabel(scope))
+	m.OAuth2IDToken(grantLabel(in.Grant), issuerLabel(k.scope))
 	return tok, nil
+}
+
+// refreshIDTokenPlan is what the refresh grant resolves before it rotates:
+// the user the id_token names and the key that signs it.
+type refreshIDTokenPlan struct {
+	user *user.User
+	key  *idTokenKey
+}
+
+// planRefreshIDToken does every fallible lookup a refreshed id_token needs
+// before the refresh token is spent: the session's user, the client's
+// issuer and its active key. It returns nil, nil when the session the token
+// names did not get openid, belongs to another client, or cannot be found
+// (the rotation then refuses it on its own). An error means the id_token
+// cannot be issued and nothing should be rotated.
+func (p *Plugin) planRefreshIDToken(ctx context.Context, client *OAuth2Client, refreshToken string) (*refreshIDTokenPlan, error) {
+	if p.store == nil {
+		return nil, nil
+	}
+	sess, err := p.store.GetSessionByRefreshToken(ctx, refreshToken)
+	if err != nil || sess == nil || sess.ClientID != client.ClientID || !slices.Contains(sess.Scopes, "openid") {
+		return nil, nil //nolint:nilerr // the rotation answers for a token it can't find
+	}
+	u, err := p.store.GetUser(ctx, sess.UserID)
+	if err != nil {
+		telemetry.From(p.engine).OAuth2IDTokenFailure(telemetry.IDTokenUserLookup)
+		return nil, fmt.Errorf("oauth2: load id_token subject: %w", err)
+	}
+	k, err := p.idTokenKeyFor(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+	return &refreshIDTokenPlan{user: u, key: k}, nil
 }
 
 // signIDToken signs claims with s. The key's concrete type has to match the

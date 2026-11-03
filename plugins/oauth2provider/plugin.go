@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -1314,6 +1315,14 @@ func (p *Plugin) handleRefreshTokenGrant(ctx forge.Context, req *TokenRequest) (
 	if !ok || eng == nil {
 		return nil, middleware.InternalError(ctx, errors.New("oauth2: refresh grant needs the authsome engine"))
 	}
+	// Rotation spends the refresh token, so a refresh that must carry an
+	// id_token resolves everything that can fail first: the user, the issuer
+	// and the signing key. A failure here leaves the token unspent and the
+	// client can retry.
+	plan, err := p.planRefreshIDToken(ctx.Context(), client, req.RefreshToken)
+	if err != nil {
+		return nil, p.idTokenServerError(err)
+	}
 	r := ctx.Request()
 	sess, err := eng.RefreshForClient(ctx.Context(), req.RefreshToken, client.ClientID, authsome.RefreshOpts{
 		IPAddress:  middleware.ClientIP(r),
@@ -1327,9 +1336,24 @@ func (p *Plugin) handleRefreshTokenGrant(ctx forge.Context, req *TokenRequest) (
 	}
 	// A refreshed id_token restates who the user is (OpenID Connect Core
 	// 12.2). It carries no nonce and no auth_time: neither belongs to this
-	// request. The session is already rotated, so if signing fails it is
-	// revoked rather than handed out without the id_token the client expects.
-	idToken, err := p.idTokenFor(ctx.Context(), client, sess.UserID, sess.Scopes, sess.Token, &oidcRequest{Grant: telemetry.GrantRefreshToken})
+	// request. With a plan in hand only the in-memory signing is left to
+	// fail. Without one (the session gained openid or changed hands between
+	// the lookup and the rotation, which the store should never allow) the
+	// full mint runs. Either way the session is already rotated, so if
+	// signing fails it is revoked rather than handed out without the
+	// id_token the client expects.
+	var idToken string
+	switch {
+	case !slices.Contains(sess.Scopes, "openid"):
+	case plan != nil && plan.user.ID == sess.UserID:
+		idToken, err = p.signIDTokenWith(plan.key, idTokenInput{
+			Client: client, User: plan.user, Scopes: sess.Scopes, AccessToken: sess.Token,
+			Grant: telemetry.GrantRefreshToken,
+		})
+	default:
+		idToken, err = p.idTokenFor(ctx.Context(), client, sess.UserID, sess.Scopes, sess.Token,
+			&oidcRequest{Grant: telemetry.GrantRefreshToken})
+	}
 	if err != nil {
 		if revokeErr := eng.RevokeSession(ctx.Context(), sess.ID); revokeErr != nil {
 			p.logger.Error("oauth2: revoke refreshed session after id_token failure",
