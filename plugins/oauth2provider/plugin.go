@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
@@ -171,6 +172,10 @@ type Plugin struct {
 	// keys resolves the id_token signing key for each issuer. Built at the
 	// end of OnInit, once the store and encryptor are known.
 	keys *keyManager
+
+	// unregisteredSettingOnce warns once that the plugin's settings were
+	// never declared to a real engine (see appIssuerEnabled).
+	unregisteredSettingOnce sync.Once
 }
 
 // New creates a new OAuth2 provider plugin.

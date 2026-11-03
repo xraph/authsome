@@ -7,6 +7,9 @@ import (
 	"net/http"
 
 	"github.com/xraph/forge"
+	log "github.com/xraph/go-utils/log"
+
+	"github.com/xraph/authsome"
 
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
@@ -55,8 +58,19 @@ func (p *Plugin) appIssuerEnabled(ctx context.Context, appID id.AppID) (bool, er
 	on, err := settings.Get(ctx, mgr, SettingAppIssuer, settings.ResolveOpts{AppID: appID.String()})
 	if err != nil {
 		// The plugin was not registered with the engine, so nothing can have
-		// turned the setting on.
+		// turned the setting on. On a real engine that is a wiring mistake
+		// worth one warning: per-app issuers silently don't apply.
 		if errors.Is(err, settings.ErrUnknownKey) {
+			if _, isEngine := p.engine.(*authsome.Engine); isEngine {
+				p.unregisteredSettingOnce.Do(func() {
+					if p.logger != nil {
+						p.logger.Warn("oauth2: the "+SettingAppIssuer.Def.Key+" setting is not declared, "+
+							"so per-app issuers are ignored and every app uses the deployment issuer; "+
+							"register the oauth2provider plugin with the engine to declare it",
+							log.String("app_id", appID.String()))
+					}
+				})
+			}
 			return false, nil
 		}
 		return false, fmt.Errorf("oauth2: read %s: %w", SettingAppIssuer.Def.Key, err)

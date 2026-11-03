@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/id"
@@ -33,10 +34,20 @@ func TestIssuerFor_UnregisteredSettingMeansOff(t *testing.T) {
 	p.SetOAuth2Store(NewMemoryStore())
 	require.NoError(t, p.OnInit(ctx, eng))
 
+	tl := log.NewTestLogger()
+	p.logger = tl
+
 	issuer, scope, err := p.issuerFor(ctx, id.NewAppID())
 	require.NoError(t, err)
 	assert.Equal(t, "https://auth.example.com", issuer)
 	assert.Empty(t, scope)
+
+	// A second lookup still answers "off" but does not warn again.
+	_, _, err = p.issuerFor(ctx, id.NewAppID())
+	require.NoError(t, err)
+	warns := tl.(*log.TestLogger).GetLogsByLevel("WARN")
+	require.Len(t, warns, 1, "the missing setting is reported once")
+	assert.Contains(t, warns[0].Message, "every app uses the deployment issuer")
 }
 
 func TestIssuerFor_OptedInAppWithoutRowIsAnError(t *testing.T) {
