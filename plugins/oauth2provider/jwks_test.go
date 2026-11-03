@@ -10,9 +10,11 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync/atomic"
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -184,4 +186,60 @@ func TestDiscovery_ClaimsAndResponseModes(t *testing.T) {
 	assert.Contains(t, claims, "nonce")
 	assert.Equal(t, []any{"query"}, got["response_modes_supported"])
 	assert.NotContains(t, got, "introspection_endpoint")
+}
+
+// failingKeyStore fails every signing key read and write while broken is
+// set, the way a database outage would.
+type failingKeyStore struct {
+	oauth2provider.Store
+	broken atomic.Bool
+}
+
+var errKeyStoreDown = errors.New("signing key store is down")
+
+func (s *failingKeyStore) ListSigningKeys(ctx context.Context, scope string) ([]*oauth2provider.SigningKey, error) {
+	if s.broken.Load() {
+		return nil, errKeyStoreDown
+	}
+	return s.Store.ListSigningKeys(ctx, scope)
+}
+
+func (s *failingKeyStore) CreateSigningKey(ctx context.Context, k *oauth2provider.SigningKey) error {
+	if s.broken.Load() {
+		return errKeyStoreDown
+	}
+	return s.Store.CreateSigningKey(ctx, k)
+}
+
+// When the id_token keys can't be read the JWKS still serves the access
+// token keys, uncached, and picks the id_token keys up again as soon as the
+// store recovers.
+func TestJWKS_StoreFailureServesAccessTokenKeys(t *testing.T) {
+	enc, err := bridge.NewAESGCMEncryptor(bytes.Repeat([]byte{7}, 32))
+	require.NoError(t, err)
+	eng := secutil.NewTestEngine(t, authsome.WithTokenEncryptor(enc),
+		authsome.WithJWTFormat("app-a", rsaJWTFormat(t, "at-key")))
+	st := &failingKeyStore{Store: oauth2provider.NewMemoryStore()}
+	p := oauth2provider.New(oauth2provider.Config{Issuer: "https://auth.example.com"})
+	p.SetOAuth2Store(st)
+	require.NoError(t, p.OnInit(context.Background(), eng))
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	st.broken.Store(true)
+	rec := getPath(t, mux, "/v1/oauth/jwks")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"), "a partial key set must not be cached")
+	var doc jwksDoc
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &doc))
+	assert.Equal(t, []string{"at-key"}, kids(doc))
+
+	st.broken.Store(false)
+	rec = getPath(t, mux, "/v1/oauth/jwks")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, "public, max-age=300", rec.Header().Get("Cache-Control"))
+	doc = jwksDoc{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &doc))
+	assert.Len(t, doc.Keys, 2, "the id_token key is back, so the degraded result was not memoized")
+	assert.Contains(t, kids(doc), "at-key")
 }

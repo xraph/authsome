@@ -698,3 +698,51 @@ func TestKeyManager_RotateRefusesNewKey(t *testing.T) {
 	_, err = m.Rotate(ctx, "fresh", time.Hour)
 	require.NoError(t, err)
 }
+
+// createCountingStore counts key inserts and fails every one of them.
+type createCountingStore struct {
+	Store
+	mu      sync.Mutex
+	creates int
+}
+
+func (s *createCountingStore) CreateSigningKey(context.Context, *SigningKey) error {
+	s.mu.Lock()
+	s.creates++
+	s.mu.Unlock()
+	return errors.New("store is read-only")
+}
+
+func (s *createCountingStore) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.creates
+}
+
+// A scope with no key whose first key can't be stored backs off: calls
+// inside the window return the failure without generating another key, and
+// the next attempt comes once the window passes.
+func TestKeyManager_FirstKeyFailureBacksOff(t *testing.T) {
+	ctx := context.Background()
+	st := &createCountingStore{Store: NewMemoryStore()}
+	m := newTestKeyManager(t, Config{}, st, testEncryptor(t))
+	clock := time.Now()
+	m.now = func() time.Time { return clock }
+
+	for i := range 5 {
+		_, err := m.Active(ctx, "app")
+		require.ErrorIs(t, err, errNoSigningKey, "call %d", i)
+		clock = clock.Add(time.Second)
+	}
+	assert.Equal(t, 1, st.count(), "one generation and insert attempt inside the window")
+
+	clock = clock.Add(firstKeyRetryBackoff)
+	_, err := m.Active(ctx, "app")
+	require.ErrorIs(t, err, errNoSigningKey)
+	assert.Equal(t, 2, st.count(), "the window passed, so it tried again")
+
+	// Another scope is not held off by this one's failure.
+	_, err = m.Active(ctx, "other")
+	require.ErrorIs(t, err, errNoSigningKey)
+	assert.Equal(t, 3, st.count())
+}

@@ -18,8 +18,8 @@ func TestJWKS_KidMatchesActive(t *testing.T) {
 	active, err := m.Active(ctx, "")
 	require.NoError(t, err)
 
-	got, err := p.jwksFor(ctx, "")
-	require.NoError(t, err)
+	got, degraded := p.jwksFor(ctx, "")
+	require.False(t, degraded)
 	require.Len(t, got.Keys, 1)
 	assert.Equal(t, active.kid, got.Keys[0].KID)
 }

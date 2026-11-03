@@ -135,11 +135,8 @@ func (p *Plugin) handleAppJWKS(ctx forge.Context, req *AppSlugRequest) (*JWKSRes
 	if !ok {
 		return nil, errUnknownIssuer()
 	}
-	doc, err := p.jwksFor(ctx.Context(), scope)
-	if err != nil {
-		return nil, middleware.InternalError(ctx, err)
-	}
-	ctx.SetHeader("Cache-Control", jwksCacheControl)
+	doc, degraded := p.jwksFor(ctx.Context(), scope)
+	writeJWKSCacheControl(ctx, degraded)
 	return doc, nil
 }
 

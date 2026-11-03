@@ -10,7 +10,6 @@ import (
 	"github.com/xraph/authsome"
 	"github.com/xraph/authsome/apitypes"
 	"github.com/xraph/authsome/internal/jwkutil"
-	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/tokenformat"
 )
 
@@ -28,7 +27,12 @@ type JWKSResponse struct {
 // verifies with. The deployment issuer ("") gets every JWT format's key; an
 // app scope gets only its own app's, and nothing from the deployment scope.
 // HMAC keys are never included. Entries are deduplicated by kid.
-func (p *Plugin) jwksFor(ctx context.Context, scope string) (*JWKSResponse, error) {
+//
+// A key manager failure is logged, not returned: the access token keys come
+// from memory and still verify every access token, so a store outage should
+// not take them down too. degraded reports that the id_token keys are
+// missing, so the caller can keep the partial set out of shared caches.
+func (p *Plugin) jwksFor(ctx context.Context, scope string) (doc *JWKSResponse, degraded bool) {
 	out := &JWKSResponse{Keys: []jwkutil.JWK{}}
 	seen := map[string]bool{}
 	add := func(j jwkutil.JWK) {
@@ -44,7 +48,9 @@ func (p *Plugin) jwksFor(ctx context.Context, scope string) (*JWKSResponse, erro
 	if p.keys != nil {
 		keys, err := p.keys.Published(ctx, scope)
 		if err != nil {
-			return nil, err
+			p.logger.Error("oauth2: list id_token keys for JWKS; serving access token keys only",
+				log.String("scope", scope), log.Error(err))
+			degraded = true
 		}
 		for i := range keys {
 			add(keys[i])
@@ -53,7 +59,18 @@ func (p *Plugin) jwksFor(ctx context.Context, scope string) (*JWKSResponse, erro
 	for _, j := range p.accessTokenJWKs(scope) {
 		add(j)
 	}
-	return out, nil
+	return out, degraded
+}
+
+// writeJWKSCacheControl lets a complete key set be cached for five minutes
+// and keeps a degraded one out of every cache, so the id_token keys come
+// back as soon as the store does.
+func writeJWKSCacheControl(ctx forge.Context, degraded bool) {
+	if degraded {
+		ctx.SetHeader("Cache-Control", "no-store")
+		return
+	}
+	ctx.SetHeader("Cache-Control", jwksCacheControl)
 }
 
 // accessTokenJWKs returns the public halves of the engine's asymmetric JWT
@@ -121,11 +138,8 @@ func (p *Plugin) idTokenAlgs(ctx context.Context, scope string) []string {
 }
 
 func (p *Plugin) handleJWKS(ctx forge.Context, _ *apitypes.Empty) (*JWKSResponse, error) {
-	doc, err := p.jwksFor(ctx.Context(), "")
-	if err != nil {
-		return nil, middleware.InternalError(ctx, err)
-	}
-	ctx.SetHeader("Cache-Control", jwksCacheControl)
+	doc, degraded := p.jwksFor(ctx.Context(), "")
+	writeJWKSCacheControl(ctx, degraded)
 	return doc, nil
 }
 

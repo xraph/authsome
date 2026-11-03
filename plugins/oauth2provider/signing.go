@@ -49,6 +49,14 @@ const (
 	// the store is read again.
 	activeKeyCacheTTL = 5 * time.Minute
 
+	// firstKeyRetryBackoff is how long a scope with no key waits after its
+	// first key failed to store before trying again. Until then Active
+	// returns that failure without generating a key, so a store that can't
+	// be written costs one RSA generation per window rather than one per
+	// openid request. It is short because the scope can sign nothing at all
+	// while it lasts.
+	firstKeyRetryBackoff = 30 * time.Second
+
 	// listMemoTTL is how long Published and Describe results are reused.
 	// Both back unauthenticated endpoints, so without it every hit costs a
 	// store read. It is short because another replica's rotation is only
@@ -146,6 +154,10 @@ type scopeKeys struct {
 	// database outage costs one key generation per cache period, not one
 	// per token.
 	retryAfter time.Time
+	// createErr and createRetryAfter hold off another attempt at a scope's
+	// first key after one failed to store (see firstKeyRetryBackoff).
+	createErr        error
+	createRetryAfter time.Time
 }
 
 // newKeyManager parses and validates the operator keys in cfg. A key that
@@ -294,6 +306,9 @@ func (m *keyManager) Active(ctx context.Context, scope string) (*signer, error) 
 		(!m.due(st.row, now) || now.Before(st.retryAfter)) {
 		return st.active, nil
 	}
+	if st.active == nil && now.Before(st.createRetryAfter) {
+		return nil, st.createErr
+	}
 
 	keys, err := m.store.ListSigningKeys(ctx, scope)
 	if err != nil {
@@ -334,7 +349,9 @@ func (m *keyManager) Active(ctx context.Context, scope string) (*signer, error) 
 				log.String("scope", scope), log.Error(createErr))
 			st.retryAfter = now.Add(activeKeyCacheTTL)
 		default:
-			return nil, fmt.Errorf("%w: %w", errNoSigningKey, createErr)
+			st.createErr = fmt.Errorf("%w: %w", errNoSigningKey, createErr)
+			st.createRetryAfter = now.Add(firstKeyRetryBackoff)
+			return nil, st.createErr
 		}
 	}
 	if row == nil {
@@ -346,6 +363,7 @@ func (m *keyManager) Active(ctx context.Context, scope string) (*signer, error) 
 		return nil, err
 	}
 	st.active, st.row, st.loadedAt = s, row, now
+	st.createErr, st.createRetryAfter = nil, time.Time{}
 	return s, nil
 }
 
@@ -378,6 +396,10 @@ func (m *keyManager) Rotate(ctx context.Context, scope string, minAge time.Durat
 	defer m.invalidate(scope)
 
 	row, err := m.create(ctx, scope, keys, now)
+	if err == nil {
+		// A key exists now, so a held-off first-key failure is moot.
+		st.createErr, st.createRetryAfter = nil, time.Time{}
+	}
 	if errors.Is(err, ErrSigningKeyConflict) {
 		// A scheduled rotation landed at the same moment. Its key is just
 		// as fresh, so hand that one back.
