@@ -642,3 +642,28 @@ type conflictStore struct{ Store }
 func (conflictStore) CreateSigningKey(context.Context, *SigningKey) error {
 	return ErrSigningKeyConflict
 }
+
+func TestKeyManager_RetireForOperatorKeepsCause(t *testing.T) {
+	ctx := context.Background()
+	st := NewMemoryStore()
+	managed := newTestKeyManager(t, Config{}, st, testEncryptor(t))
+	_, err := managed.Active(ctx, "")
+	require.NoError(t, err)
+
+	m := newTestKeyManager(t, Config{IDTokenSigningKey: rsaPEM(t, 2048)}, st, testEncryptor(t))
+	cause := errors.New("database is down")
+	m.store = &retireFailStore{Store: st, err: cause}
+	err = m.retireForOperator(ctx)
+	require.ErrorIs(t, err, cause)
+	assert.Contains(t, err.Error(), "database is down")
+}
+
+// retireFailStore fails every RetireSigningKey.
+type retireFailStore struct {
+	Store
+	err error
+}
+
+func (s *retireFailStore) RetireSigningKey(context.Context, id.OAuth2SigningKeyID, time.Time) error {
+	return s.err
+}

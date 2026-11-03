@@ -550,7 +550,7 @@ func (m *keyManager) retireForOperator(ctx context.Context) error {
 			continue
 		}
 		if retireErr := m.store.RetireSigningKey(ctx, k.ID, retireAt); retireErr != nil {
-			return fmt.Errorf("oauth2: retire signing key %s: %w", k.ID, err)
+			return fmt.Errorf("oauth2: retire signing key %s: %w", k.ID, retireErr)
 		}
 	}
 	return nil
