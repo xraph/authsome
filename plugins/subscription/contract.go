@@ -30,7 +30,7 @@ func (p *Plugin) RegisterContract(
 	if svc == nil {
 		return fmt.Errorf("subscription: Service not initialised")
 	}
-	return subcontract.Register(d, reg, wreg, subcontract.Deps{Engine: eng, Service: svc, Usage: func(ctx context.Context, tenantID, appID string) ([]subcontract.UsageSummary, error) {
+	return subcontract.Register(d, reg, wreg, subcontract.Deps{Engine: eng, Service: svc, CanManageBilling: p.holdsBillingManage, Usage: func(ctx context.Context, tenantID, appID string) ([]subcontract.UsageSummary, error) {
 		rows, err := svc.GetUsageSummary(ctx, tenantID, appID)
 		if err != nil {
 			return nil, err
