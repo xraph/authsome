@@ -240,7 +240,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
 	)
 
+	// A key is a durable credential in its owner's name. An agent session
+	// reads as its delegating user here, and a key it minted would belong to
+	// that user, bound to no grant and outliving it.
 	if err := g.POST("", p.handleCreate,
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Create API key"),
 		forge.WithOperationID("createAPIKey"),
 		forge.WithCreatedResponse(CreateKeyResponse{}),
@@ -393,6 +397,11 @@ type RevokeKeyRequest struct {
 // ──────────────────────────────────────────────────
 
 func (p *Plugin) handleCreate(ctx forge.Context, req *CreateKeyRequest) (*CreateKeyResponse, error) {
+	// The route refuses a delegated session too. Checked here as well so a
+	// mount without that guard still fails closed.
+	if middleware.RefuseDelegated(ctx.Context()) != nil {
+		return nil, forge.Forbidden(middleware.DelegatedSessionMessage)
+	}
 	if req.Name == "" {
 		return nil, forge.BadRequest("name is required")
 	}

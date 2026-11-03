@@ -10,7 +10,6 @@ import (
 
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugins/agentauth"
-	"github.com/xraph/authsome/principal"
 	"github.com/xraph/authsome/session"
 )
 
@@ -210,16 +209,32 @@ func TestAuthorize_AgentMarkersWithoutAgentKindDenies(t *testing.T) {
 }
 
 // A human session is not this plugin's business and must pass straight
-// through, for every non-agent PrincipalKind, not just the empty string.
+// through, for every non-agent PrincipalKind, not just the empty string. A
+// service account acting as itself (no user behind it) passes too; one that
+// names a user is delegated and gets the scope check instead.
 func TestAuthorize_NonAgentSessionPassesThrough(t *testing.T) {
-	for _, kind := range []principal.Kind{"", session.PrincipalKindUser, session.PrincipalKindServiceAccount} {
-		t.Run(string(kind), func(t *testing.T) {
+	cases := map[string]*session.Session{
+		"empty kind":   {ID: id.NewSessionID(), UserID: id.NewUserID()},
+		"user":         {ID: id.NewSessionID(), UserID: id.NewUserID(), PrincipalKind: session.PrincipalKindUser},
+		"service acct": {ID: id.NewSessionID(), ServiceAccountID: id.NewServiceAccountID(), PrincipalKind: session.PrincipalKindServiceAccount},
+	}
+	for name, sess := range cases {
+		t.Run(name, func(t *testing.T) {
 			p := agentauth.New()
-			sess := &session.Session{ID: id.NewSessionID(), UserID: id.NewUserID(), PrincipalKind: kind}
-
 			assert.NoError(t, p.Authorize(context.Background(), sess, "read", "invoice"))
 		})
 	}
+}
+
+// A service account that names a user acts for that user, so with no scope
+// covering the route it is refused like an exchanged session.
+func TestAuthorize_ServiceAccountActingForAUserNeedsScope(t *testing.T) {
+	p := agentauth.New()
+	sess := &session.Session{
+		ID: id.NewSessionID(), UserID: id.NewUserID(), ServiceAccountID: id.NewServiceAccountID(),
+		PrincipalKind: session.PrincipalKindServiceAccount,
+	}
+	require.ErrorIs(t, p.Authorize(context.Background(), sess, "read", "invoice"), agentauth.ErrInsufficientScope)
 }
 
 // An empty action or resource is never a real authorization question. Without

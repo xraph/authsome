@@ -5,6 +5,8 @@ package tokenformat
 import (
 	"errors"
 	"time"
+
+	"github.com/xraph/authsome/id"
 )
 
 // Sentinel errors.
@@ -72,6 +74,23 @@ type TokenClaims struct {
 	// row, but a JWT is validated without loading one, so the token has to
 	// say it.
 	ClientID string `json:"client_id,omitempty"`
+}
+
+// IsDelegated reports whether the token acts for its sub without being that
+// user's own sign-in. It does when it carries an RFC 8693 act claim, or when
+// it belongs to a principal other than a user and still names a user as sub.
+// A machine token whose sub is the caller itself acts for nobody. An
+// impersonated token carries no act claim (RFC 8693 section 1.1), so it reads
+// as the user's own, the same as an impersonation session.
+func (c *TokenClaims) IsDelegated() bool {
+	if c.Act != nil {
+		return true
+	}
+	if c.PrincipalKind == "" || c.PrincipalKind == "user" {
+		return false
+	}
+	_, err := id.ParseUserID(c.UserID)
+	return err == nil
 }
 
 // Format generates and validates access tokens. Refresh tokens are always

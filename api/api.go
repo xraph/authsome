@@ -112,13 +112,23 @@ func (a *API) RegisterRoutes(router forge.Router) error {
 		rootRouter = router
 	}
 
+	// Deny by default: every route registered below refuses an agent or
+	// delegated session on a write unless it is marked middleware.AgentSafe.
+	// The groups are made here, after the Use calls above, so they keep that
+	// middleware.
+	guarded := middleware.GuardDelegatedWrites(router)
+	guardedRoot := guarded
+	if rootRouter != router {
+		guardedRoot = middleware.GuardDelegatedWrites(rootRouter)
+	}
+
 	// Routes registered on the root router (not nested under extension group).
 	rootRegisterers := []func(forge.Router) error{
 		a.registerWellKnownRoutes,
 		a.registerJWKSRoutes,
 	}
 	for _, fn := range rootRegisterers {
-		if err := fn(rootRouter); err != nil {
+		if err := fn(guardedRoot); err != nil {
 			return err
 		}
 	}
@@ -135,7 +145,7 @@ func (a *API) RegisterRoutes(router forge.Router) error {
 	// otherwise the second registration panics with "route already
 	// handles GET".
 	if rootRouter != router {
-		if err := a.registerWellKnownRoutes(router); err != nil {
+		if err := a.registerWellKnownRoutes(guarded); err != nil {
 			return err
 		}
 	}
@@ -162,7 +172,7 @@ func (a *API) RegisterRoutes(router forge.Router) error {
 		a.registerPrincipalRoutes,
 	}
 	for _, fn := range registerers {
-		if err := fn(router); err != nil {
+		if err := fn(guarded); err != nil {
 			return err
 		}
 	}

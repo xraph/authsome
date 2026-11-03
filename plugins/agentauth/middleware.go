@@ -46,8 +46,11 @@ func (p *Plugin) SetPermissionChecker(pc plugin.PermissionChecker) { p.permCheck
 func (p *Plugin) SetLogger(l log.Logger) { p.logger = l }
 
 // Authorize enforces the intersection: an agent may do something only if its
-// grant confers it AND the delegating user can do it. A non-agent session
-// passes straight through, since this plugin has no opinion on human traffic.
+// grant confers it AND the delegating user can do it. Another delegated
+// session, such as one minted by token exchange, gets the same treatment with
+// its own scopes in place of a grant (see authorizeDelegated). A user's own
+// session passes straight through, since this plugin has no opinion on human
+// traffic.
 //
 // The scope gate runs first. It is cheaper, a map lookup ahead of a Warden
 // call, and it is the safe order: reporting a user-gate failure first would
@@ -69,6 +72,13 @@ func (p *Plugin) Authorize(ctx context.Context, sess *session.Session, action, r
 		// here must deny, not pass through.
 		if !sess.AgentID.IsNil() || !sess.GrantID.IsNil() {
 			return ErrGrantInactive
+		}
+		// Any other delegated session (one minted by token exchange, or a
+		// non-user principal acting for a user) has no agent grant to read,
+		// but it is no more the user than an agent is. It gets the same
+		// intersection, with its own scopes standing in for the grant's.
+		if sess.IsDelegated() {
+			return p.authorizeDelegated(ctx, sess, action, resource)
 		}
 		return nil
 	}
@@ -140,50 +150,37 @@ func (p *Plugin) Authorize(ctx context.Context, sess *session.Session, action, r
 	return nil
 }
 
-// denyAgentPrincipal refuses any request whose resolved session is
-// agent-principal, before the wrapped handler ever runs.
-//
-// agentauth's own admin and /me routes (RegisterRoutes) are guarded by
-// plugin.SessionGuard and plugin.AdminGuard, both of which resolve to
-// middleware.RequirePermission — checking a Warden permission against
-// sess.UserID with no awareness of PrincipalKind at all. An agent session
-// carries its delegating human's UserID by design (see session.go), so an
-// agent belonging to an org admin would otherwise reach these routes with
-// that admin's full permission and no granted scope required for any of
-// it: PUT /admin/agents/policy could set the agent's own governing org to
-// open with unrestricted scopes, PATCH /admin/agents/:id/status could
-// unblock a blocked agent, and DELETE /me/agents/:id could revoke a
-// competing grant. This plugin ships the intersection guard (Guard, below)
-// for every route a host app protects; it must not leave its own policy
-// surface outside that same discipline.
-//
-// This middleware MUST be mounted AFTER plugin.SessionGuard/AdminGuard in
-// the group's middleware slice, not before. forge applies group middleware
-// by wrapping from the last index inward (see
-// forge@v1.9.10/internal/router/router_impl.go's applyMiddleware /
-// applyMiddlewareAndInterceptors: `for i := len(middleware)-1; i >= 0; i--`),
-// which makes index 0 the OUTERMOST handler — the first one to run on a
-// request. SessionGuard is what resolves the session and puts it in context
-// (authprovider.RegistryMiddleware -> BridgeToContext -> WithSession); this
-// middleware only has anything to check once that has already happened.
-// Mounted first/outermost, middleware.SessionFrom always reports ok=false
-// here (no session yet), so this fails OPEN — the one case Guard's own
-// missing-session branch below handles the opposite way, by design: Guard
-// fails CLOSED (401) on a missing session, because Guard's contract is "deny
-// unless proven otherwise". This middleware's contract is "the session
-// already resolved by SessionGuard/AdminGuard is not an agent's" — it has no
-// business opining on a session it never got a chance to see, which is why
-// it must run after those guards, not instead of a missing-session check.
-func denyAgentPrincipal() forge.Middleware {
-	return func(next forge.Handler) forge.Handler {
-		return func(ctx forge.Context) error {
-			if sess, ok := middleware.SessionFrom(ctx.Context()); ok && sess != nil &&
-				sess.PrincipalKind == session.PrincipalKindAgent {
-				return forge.Forbidden("agent sessions may not access this endpoint")
-			}
-			return next(ctx)
-		}
+// authorizeDelegated decides for a delegated session that isn't an agent's.
+// Token exchange narrows the session's scopes to what the delegation granted,
+// so those scopes are the grant here: one of them has to be a scope this
+// plugin knows (WithScope) that covers action on resource, and the user the
+// session acts for has to be allowed to do it. A session with no scopes, or
+// only scopes this plugin has never heard of, is refused.
+func (p *Plugin) authorizeDelegated(ctx context.Context, sess *session.Session, action, resource string) error {
+	if action == "" || resource == "" || !p.scopes.Covers(sess.Scopes, action, resource) {
+		return ErrInsufficientScope
 	}
+	if p.permChecker == nil {
+		return ErrNoPermissionChecker
+	}
+	allowed, err := p.permChecker.HasPermission(ctx, sess.UserID, action, resource)
+	if err != nil {
+		return fmt.Errorf("agentauth: permission check: %w", err)
+	}
+	if !allowed {
+		return fmt.Errorf("%w: %s on %s", ErrUserNotPermitted, action, resource)
+	}
+	return nil
+}
+
+// GuardRoute returns the route options for a route an agent may call under its
+// grant: Guard(action, resource), plus the AgentSafe marker that lets a
+// delegated session past authsome's deny-by-default write rule. Use it on
+// write routes registered through authsome's routers; Guard alone keeps the
+// route closed to agents there. Pair it with your RBAC check as step 4 of the
+// host integration contract says.
+func (p *Plugin) GuardRoute(action, resource string) []forge.RouteOption {
+	return []forge.RouteOption{forge.WithMiddleware(p.Guard(action, resource)), middleware.AgentSafe()}
 }
 
 // Guard returns middleware enforcing the agent intersection for a route that

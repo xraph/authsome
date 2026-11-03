@@ -207,7 +207,14 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Admin routes (auth + permission required)
 	// ──────────────────────────────────────────────────
 
-	adminMiddlewares := []forge.Middleware{authprovider.RegistryMiddleware(p.engine.AuthRegistry(), "session")}
+	// An agent's authority is its grant, not its user's admin role. The deny
+	// runs after the session middleware, which resolves the caller, and before
+	// the permission check, so the refusal doesn't depend on what the
+	// delegating user may do.
+	adminMiddlewares := []forge.Middleware{
+		authprovider.RegistryMiddleware(p.engine.AuthRegistry(), "session"),
+		middleware.DenyDelegatedSession(),
+	}
 	if p.permChecker != nil {
 		adminMiddlewares = append(adminMiddlewares, middleware.RequirePermission(p.permChecker, "manage", "waitlist"))
 	}

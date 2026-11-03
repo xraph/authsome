@@ -21,6 +21,11 @@ func (a *API) registerEnvironmentRoutes(router forge.Router) error {
 		forge.WithGroupTags("environments"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),
+			// Writes here are refused to a delegated session by the
+			// deny-by-default guard anyway. Refusing them before the
+			// permission check keeps the answer the same whatever the
+			// delegating user may do. Reads stay open.
+			middleware.DenyDelegatedWrites(),
 			middleware.RequirePermission(a.engine, "manage", "environment"),
 		),
 		// Declared so the requirement the middleware above enforces reaches

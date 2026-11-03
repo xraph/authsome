@@ -962,13 +962,34 @@ func (e *Engine) Plugin(name string) plugin.Plugin { return e.plugins.Plugin(nam
 // Hooks returns the global event bus.
 func (e *Engine) Hooks() *hook.Bus { return e.hooks }
 
+// ErrDelegatedSession is returned by an engine method that mints a credential
+// or a session in a user's name when the context carries an agent or delegated
+// session (see session.Session.IsDelegated). It is middleware.ErrDelegatedSession,
+// re-exported so callers of the engine can match it without importing the
+// middleware package.
+var ErrDelegatedSession = middleware.ErrDelegatedSession
+
+// ErrOrgSwitchNotUser is returned when a session whose principal is not a
+// user (an agent, a workload, a service account) asks to switch its active
+// organization. An agent's org is its grant's org, and the user it acts for
+// is not the caller.
+var ErrOrgSwitchNotUser = errors.New("authsome: only a user session can switch organization")
+
 // SwitchActiveOrg sets the active organization on an existing session.
 // The session's user must be a member of newOrgID — verified via the
 // organization plugin. When the user is not a member the org-plugin
 // returns ErrOrgNotMember (or equivalent) and we propagate.
 //
-// Returns the updated session so callers (HTTP handlers) can re-issue
-// the cookie / token with the new OrgID claim if appropriate.
+// On an app that issues JWT access tokens, the session also gets a new access
+// token carrying the new org_id, returned in the session's Token field. A JWT
+// is validated without loading the row, so the caller's old token would go on
+// naming the old org until it expired. The new token keeps the session's
+// expiry, and it replaces the old one on the row, so a cookie refresh keyed on
+// the access token finds the session through the new token. The old JWT stays
+// valid until it expires, as it does after a refresh. An opaque session keeps
+// its token and Token comes back empty: the middleware reads the org off the
+// row on every request. So does a session carrying an actor chain, which is
+// always opaque (see newOpaqueSession).
 //
 // When newOrgID is empty the active org is cleared (legitimate use:
 // "leave the current org and stay logged out of any org").
@@ -978,34 +999,34 @@ func (e *Engine) SwitchActiveOrg(ctx context.Context, sessionID id.SessionID, ne
 		return nil, fmt.Errorf("authsome: get session: %w", err)
 	}
 
+	// Only a user's own session picks its org. An agent session carries the
+	// delegating user's UserID, so the membership check below would pass for
+	// it, and its org is its grant's org: switching would move it out from
+	// under the grant. On a JWT app it would also come back with a token that
+	// has no pk claim, which the middleware reads as the user's own login.
+	if !sess.IsHumanPrincipal() {
+		return nil, ErrOrgSwitchNotUser
+	}
+
 	if !newOrgID.IsNil() {
-		// Membership check via the organization plugin. Plugin name is
-		// stable so the lookup is cheap; we tolerate the plugin not
-		// being registered (auth-only deployments without orgs) by
-		// returning a clear error rather than crashing on nil.
-		orgP, ok := e.plugins.Plugin("organization").(orgMembershipChecker)
-		if !ok || orgP == nil {
+		// We tolerate the plugin not being registered (auth-only
+		// deployments without orgs) by returning a clear error rather
+		// than crashing on nil.
+		member, memberErr := e.isOrgMember(ctx, sess.UserID, newOrgID)
+		if errors.Is(memberErr, errOrgPluginMissing) {
 			return nil, fmt.Errorf("authsome: organization plugin not registered; cannot switch org")
 		}
-		orgs, err := orgP.ListUserOrganizations(ctx, sess.UserID)
-		if err != nil {
-			return nil, fmt.Errorf("authsome: list user orgs for membership check: %w", err)
+		if memberErr != nil {
+			return nil, fmt.Errorf("authsome: list user orgs for membership check: %w", memberErr)
 		}
-		matched := false
-		for _, o := range orgs {
-			if o.ID == newOrgID {
-				matched = true
-				break
-			}
-		}
-		if !matched {
+		if !member {
 			return nil, fmt.Errorf("authsome: user is not a member of org %s", newOrgID)
 		}
 	}
 
 	sess.OrgID = newOrgID
-	if err := e.store.UpdateSession(ctx, sess); err != nil {
-		return nil, fmt.Errorf("authsome: update session: %w", err)
+	if err := e.persistOrgSwitch(ctx, sess); err != nil {
+		return nil, err
 	}
 
 	e.hooks.Emit(ctx, &hook.Event{
@@ -1019,6 +1040,62 @@ func (e *Engine) SwitchActiveOrg(ctx context.Context, sessionID id.SessionID, ne
 	})
 
 	return sess, nil
+}
+
+// persistOrgSwitch writes a session whose OrgID just changed. On a JWT app it
+// first signs a new access token for the new org and rotates it onto the row.
+//
+// The rotation is a compare-and-swap on the access token the row held when
+// SwitchActiveOrg read it, the same one Refresh uses. A refresh that lands in
+// between has already handed the client a token minted from the old org, and
+// overwriting the row would orphan it, so the switch is refused with
+// store.ErrConflict and the caller can retry it.
+func (e *Engine) persistOrgSwitch(ctx context.Context, sess *session.Session) error {
+	tokFmt := e.TokenFormatForApp(sess.AppID.String())
+	if tokFmt.Name() != "jwt" || len(sess.Actors) > 0 {
+		if err := e.store.UpdateSession(ctx, sess); err != nil {
+			return fmt.Errorf("authsome: update session: %w", err)
+		}
+		return nil
+	}
+
+	jwtToken, err := tokFmt.GenerateAccessToken(accessTokenClaims(sess, time.Now()))
+	if err != nil {
+		return fmt.Errorf("authsome: switch org: generate jwt: %w", err)
+	}
+	oldTokenHash := sess.TokenHash
+	sess.Token = jwtToken
+	rotated, err := e.store.RotateSession(ctx, sess, oldTokenHash)
+	if err != nil {
+		return fmt.Errorf("authsome: update session: %w", err)
+	}
+	if !rotated {
+		return fmt.Errorf("authsome: switch org: session changed concurrently: %w", store.ErrConflict)
+	}
+	return nil
+}
+
+// errOrgPluginMissing reports that no organization plugin is registered, so
+// no membership can be checked.
+var errOrgPluginMissing = errors.New("authsome: organization plugin not registered")
+
+// isOrgMember asks the organization plugin whether userID belongs to orgID.
+// The plugin is looked up by its stable name, so the lookup is cheap.
+func (e *Engine) isOrgMember(ctx context.Context, userID id.UserID, orgID id.OrgID) (bool, error) {
+	orgP, ok := e.plugins.Plugin("organization").(orgMembershipChecker)
+	if !ok || orgP == nil {
+		return false, errOrgPluginMissing
+	}
+	orgs, err := orgP.ListUserOrganizations(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	for _, o := range orgs {
+		if o != nil && o.ID == orgID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // orgMembershipChecker is the narrow contract SwitchActiveOrg needs

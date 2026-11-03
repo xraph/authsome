@@ -21,6 +21,11 @@ func (a *API) registerBulkRoutes(router forge.Router) error {
 		forge.WithGroupTags("admin", "bulk"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),
+			// An agent's authority is its grant, and the permission check
+			// below runs against its delegating user. No admin route takes
+			// it. The deny goes first, so the refusal is the same whatever
+			// that user may do and says nothing about their permissions.
+			middleware.DenyDelegatedSession(),
 			middleware.RequirePermission(a.engine, "manage", "user"),
 		),
 		// Declared so the requirement the middleware above enforces reaches

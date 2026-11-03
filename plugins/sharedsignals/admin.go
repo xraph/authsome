@@ -312,10 +312,13 @@ func (p *Plugin) UpdateStream(ctx context.Context, streamID id.SSFStreamID,
 // get stay at session-only, same as the read/write split in
 // plugins/subscription/routes.go.
 func (p *Plugin) registerAdminRoutes(router forge.Router) error {
+	// An agent's authority is its grant, not its user's admin role, so the
+	// admin surface refuses an agent or delegated session. The deny goes after
+	// SessionGuard, which is what resolves the session.
 	g := router.Group("/v1/ssf/admin",
 		forge.WithGroupTags("Shared Signals"),
 		forge.WithGroupAuth("session"),
-		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
+		forge.WithGroupMiddleware(append(plugin.SessionGuard(p.engine), middleware.DenyDelegatedSession())...),
 	)
 
 	writeGuard := plugin.PermissionRouteOptions(p.engine, "manage", permStreamResource)

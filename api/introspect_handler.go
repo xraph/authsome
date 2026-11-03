@@ -9,6 +9,8 @@ import (
 
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/tokenformat"
 )
 
 // ──────────────────────────────────────────────────
@@ -23,6 +25,9 @@ func (a *API) registerIntrospectRoutes(router forge.Router) error {
 
 	introspectOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
 	introspectOpts = append(introspectOpts,
+		// Agent-safe: introspection only reads a token's state, and it is a
+		// POST only so the token travels in the body rather than the URL.
+		middleware.AgentSafe(),
 		forge.WithMiddleware(middleware.RequireScope()),
 		forge.WithSummary("Introspect token"),
 		forge.WithDescription("Validates a token. Follows RFC 7662 semantics: invalid tokens return {active: false} with 200 status. Requires a secret API key or a session; callers without manage on app see only active, expires_at, user_id, scope, aud and cnf."),
@@ -71,6 +76,7 @@ func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*Intr
 			Scope:     strings.Join(claims.Scopes, " "),
 		}
 		resp.Confirmation = confirmationFor(claims.DPoPJKT)
+		resp.PrincipalKind, resp.Delegated = jwtPrincipal(claims)
 
 		// Optionally resolve user details
 		if claims.UserID != "" {
@@ -104,6 +110,8 @@ func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*Intr
 		Scope:     strings.Join(sess.Scopes, " "),
 	}
 	resp.Confirmation = confirmationFor(sess.DPoPJKT)
+	resp.PrincipalKind = string(sess.Subject().Kind)
+	resp.Delegated = sess.IsDelegated()
 
 	if sess.OrgID.String() != "" {
 		resp.OrgID = sess.OrgID.String()
@@ -143,7 +151,21 @@ func (a *API) introspectionFor(ctx forge.Context, full *IntrospectResponse) *Int
 		Scope:        full.Scope,
 		Audience:     full.Audience,
 		Confirmation: full.Confirmation,
+		// A resource server needs these to enforce the token, the same as
+		// cnf: an agent token otherwise passes for its user's.
+		PrincipalKind: full.PrincipalKind,
+		Delegated:     full.Delegated,
 	}
+}
+
+// jwtPrincipal reads the caller's kind off a JWT's pk claim, where empty means
+// user, and whether the token acts for its sub without being that user (see
+// tokenformat.TokenClaims.IsDelegated).
+func jwtPrincipal(claims *tokenformat.TokenClaims) (kind string, delegated bool) {
+	if claims.PrincipalKind == "" {
+		return string(principal.KindUser), claims.IsDelegated()
+	}
+	return claims.PrincipalKind, claims.IsDelegated()
 }
 
 // callerManagesApp reports whether the authenticated caller holds manage on
@@ -210,11 +232,12 @@ func (a *API) introspectAPIKey(ctx forge.Context, token string, inactive *Intros
 	_ = store.UpdateAPIKey(ctx.Context(), key) //nolint:errcheck // best-effort
 
 	resp := &IntrospectResponse{
-		Active:    true,
-		AppID:     key.AppID.String(),
-		UserID:    key.UserID.String(),
-		EnvID:     key.EnvID.String(),
-		ExpiresAt: "",
+		Active:        true,
+		AppID:         key.AppID.String(),
+		UserID:        key.UserID.String(),
+		EnvID:         key.EnvID.String(),
+		ExpiresAt:     "",
+		PrincipalKind: a.apiKeyPrincipalKind(ctx, key),
 	}
 	if key.ExpiresAt != nil {
 		resp.ExpiresAt = key.ExpiresAt.Format(time.RFC3339)
@@ -233,6 +256,21 @@ func (a *API) introspectAPIKey(ctx forge.Context, token string, inactive *Intros
 	}
 
 	return a.introspectionFor(ctx, resp), nil
+}
+
+// apiKeyPrincipalKind names the kind of caller an API key authenticates. A
+// user's key is the user's own credential. A service-account key reports the
+// account's registered kind, which may be agent or workload, falling back to
+// service_account when the account does not resolve.
+func (a *API) apiKeyPrincipalKind(ctx forge.Context, key *apikey.APIKey) string {
+	if key.ServiceAccountID.IsNil() {
+		return string(principal.KindUser)
+	}
+	p, err := a.engine.ResolvePrincipal(ctx.Context(), principal.Ref{Kind: principal.KindService, ID: key.ServiceAccountID.String()})
+	if err != nil || p == nil || p.Kind == "" {
+		return string(principal.KindService)
+	}
+	return string(p.Kind)
 }
 
 // extractAPIKeyPrefix returns the lookup prefix for a raw API key. Mirrors

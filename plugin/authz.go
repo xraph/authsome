@@ -68,6 +68,13 @@ func PermissionRouteOptions(engine Engine, action, resource string) []forge.Rout
 	return opts
 }
 
+// AgentSafe marks a write route as one an agent or delegated session may call.
+// Every authsome route is deny by default for those sessions on POST, PUT,
+// PATCH and DELETE (see middleware.GuardDelegatedWrites). Mark a route only
+// when the caller can touch nothing but its own credential, or when the route
+// enforces the agent's grant itself (agentauth.Plugin.GuardRoute does both).
+func AgentSafe() forge.RouteOption { return middleware.AgentSafe() }
+
 // AdminGuard returns SessionGuard plus an RBAC permission check, mirroring the
 // core API's /v1/admin chain (middleware.RequireAuth + RequirePermission). Use
 // it for plugin admin groups that manage tenant-wide configuration —
@@ -76,6 +83,16 @@ func PermissionRouteOptions(engine Engine, action, resource string) []forge.Rout
 // The permission check is appended only when the engine implements
 // PermissionChecker. An engine without RBAC still gets session enforcement,
 // which is the property that matters most: the group is never anonymous.
+//
+// middleware.DenyDelegatedSession sits between the two, always, engine or not:
+// after the session guard, which is what resolves the session, and before the
+// permission check. That check runs against the session's user, and for an
+// agent session that is the delegating admin, so without the deny an agent
+// would carry its user's admin roles into tenant configuration its grant
+// never named. Running it first also answers a delegated caller the same way
+// whatever its user may do, so the refusal says nothing about the user's
+// permissions.
 func AdminGuard(engine Engine, action, resource string) []forge.Middleware {
-	return append(SessionGuard(engine), PermissionGuard(engine, action, resource)...)
+	guards := append(SessionGuard(engine), middleware.DenyDelegatedSession())
+	return append(guards, PermissionGuard(engine, action, resource)...)
 }

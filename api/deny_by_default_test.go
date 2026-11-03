@@ -1,0 +1,321 @@
+package api_test
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"regexp"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/xraph/forge"
+
+	"github.com/xraph/authsome"
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/plugins/agentauth"
+	"github.com/xraph/authsome/plugins/apikey"
+	"github.com/xraph/authsome/plugins/consent"
+	"github.com/xraph/authsome/plugins/magiclink"
+	"github.com/xraph/authsome/plugins/mfa"
+	"github.com/xraph/authsome/plugins/oauth2provider"
+	"github.com/xraph/authsome/plugins/organization"
+	"github.com/xraph/authsome/plugins/passkey"
+	"github.com/xraph/authsome/plugins/password"
+	"github.com/xraph/authsome/plugins/phone"
+	"github.com/xraph/authsome/plugins/scim"
+	"github.com/xraph/authsome/plugins/sharedsignals"
+	"github.com/xraph/authsome/plugins/social"
+	"github.com/xraph/authsome/plugins/sso"
+	"github.com/xraph/authsome/plugins/subscription"
+	"github.com/xraph/authsome/plugins/waitlist"
+	"github.com/xraph/authsome/principal"
+	"github.com/xraph/authsome/serviceaccount"
+)
+
+// agentSafeWrites is every write route a delegated session may call. Keep it
+// short: each entry is a route where the delegated caller can only act on its
+// own credential, never on what its user owns.
+var agentSafeWrites = map[string]bool{
+	"POST /v1/signout":      true, // ends the caller's own session, nothing else
+	"POST /v1/oauth/revoke": true, // revokes a token the caller itself holds (callerOwnsSession)
+	"POST /v1/introspect":   true, // reads a token's state; POST only to carry the token in the body
+}
+
+// denyByDefaultFixture builds the engine with every plugin that serves
+// routes, wires it the way the Forge extension does (auth middleware global,
+// core and plugin routes behind the delegated-write guard), and mints a real
+// agent token for the platform owner.
+type denyByDefaultFixture struct {
+	eng        *authsome.Engine
+	handler    http.Handler
+	routes     []forge.RouteInfo
+	orgs       *organization.Plugin
+	owner      id.UserID
+	ownerToken string
+	agentToken string
+	appID      id.AppID
+	agents     *agentauth.Plugin
+	grant      *agentauth.AgentGrant
+	plainGrant *agentauth.AgentGrant
+	plain      id.UserID
+	actor      principal.Ref
+}
+
+// callers are the delegated sessions the table runs as: an agent for the
+// platform owner, and an agent and an exchanged session for a user with no
+// admin rights. The unprivileged ones matter most. A permission check that
+// answers before the delegated refusal shows up there as "insufficient
+// permissions", which would tell the agent what its user may do.
+func (f *denyByDefaultFixture) callers() map[string]func(t *testing.T) string {
+	return map[string]func(t *testing.T) string{
+		"agent for owner": f.freshAgentToken,
+		"agent for plain user": func(t *testing.T) string {
+			t.Helper()
+			sess, err := f.agents.IssueAgentSession(context.Background(), f.plainGrant, agentauth.IssueMeta{})
+			require.NoError(t, err)
+			return sess.Token
+		},
+		"exchange for plain user": func(t *testing.T) string {
+			t.Helper()
+			sess, err := f.eng.ExchangeToken(context.Background(), &authsome.ExchangeRequest{
+				AppID: f.appID, Actor: f.actor, RequestedSubject: principal.UserRef(f.plain),
+			})
+			require.NoError(t, err)
+			return sess.Token
+		},
+	}
+}
+
+// freshAgentToken issues another agent session under the same grant, so a
+// route that ends one (signout is agent-safe) doesn't spoil the next case.
+func (f *denyByDefaultFixture) freshAgentToken(t *testing.T) string {
+	t.Helper()
+	sess, err := f.agents.IssueAgentSession(context.Background(), f.grant, agentauth.IssueMeta{})
+	require.NoError(t, err)
+	return sess.Token
+}
+
+func newDenyByDefaultFixture(t *testing.T) *denyByDefaultFixture {
+	t.Helper()
+	agents := agentauth.New(agentauth.WithStore(agentauth.NewMemoryStore()))
+	wl := waitlist.New()
+	wl.SetWaitlistStore(waitlist.NewMemoryStore())
+	ssf := sharedsignals.New()
+	ssf.SetStore(sharedsignals.NewMemoryStore())
+	orgs := organization.New()
+	a, eng := newBootstrappedAPI(t,
+		authsome.WithPlugin(password.New()),
+		authsome.WithPlugin(social.New(social.Config{})),
+		authsome.WithPlugin(mfa.New(mfa.Config{})),
+		authsome.WithPlugin(apikey.New()),
+		authsome.WithPlugin(magiclink.New(magiclink.Config{})),
+		authsome.WithPlugin(sso.New(sso.Config{})),
+		authsome.WithPlugin(passkey.New(passkey.Config{RPID: "localhost"})),
+		authsome.WithPlugin(orgs),
+		authsome.WithPlugin(scim.New()),
+		authsome.WithPlugin(subscription.New()),
+		authsome.WithPlugin(phone.New()),
+		authsome.WithPlugin(consent.New()),
+		authsome.WithPlugin(oauth2provider.New()),
+		authsome.WithPlugin(agents),
+		authsome.WithPlugin(wl),
+		authsome.WithPlugin(ssf),
+	)
+	ctx := context.Background()
+
+	root := forge.NewRouter()
+	root.UseGlobal(eng.AuthMiddleware())
+	require.NoError(t, a.RegisterRoutes(root))
+	pluginRouter := middleware.GuardDelegatedWrites(root)
+	for _, rp := range eng.Plugins().RouteProviders() {
+		require.NoError(t, rp.RegisterRoutes(pluginRouter))
+	}
+
+	_, ownerToken, _ := signUp(t, eng, "deny-default-owner@test.com", "SecureP@ss123")
+	owner := userIDFor(t, eng, ownerToken)
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+
+	grant := &agentauth.AgentGrant{
+		ID: id.NewAgentGrantID(), AppID: appID, AgentID: id.NewAgentID(), UserID: owner, OrgID: id.NewOrgID(),
+		Scopes: []string{"invoices:read"}, ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	require.NoError(t, agents.Store().CreateAgentGrant(ctx, grant))
+	agentSess, err := agents.IssueAgentSession(ctx, grant, agentauth.IssueMeta{})
+	require.NoError(t, err)
+
+	// A second user with no admin rights, an agent grant for them, and a
+	// delegation to an agent-kind service account for token exchange.
+	_, plainToken, _ := signUp(t, eng, "deny-default-plain@test.com", "SecureP@ss123")
+	plain := userIDFor(t, eng, plainToken)
+	plainGrant := &agentauth.AgentGrant{
+		ID: id.NewAgentGrantID(), AppID: appID, AgentID: id.NewAgentID(), UserID: plain, OrgID: id.NewOrgID(),
+		Scopes: []string{"invoices:read"}, ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	require.NoError(t, agents.Store().CreateAgentGrant(ctx, plainGrant))
+	svcStore, ok := eng.PrincipalStore().(interface {
+		CreateServiceAccount(ctx context.Context, svc *serviceaccount.ServiceAccount) error
+	})
+	require.True(t, ok)
+	svc := &serviceaccount.ServiceAccount{
+		ID: id.NewServiceAccountID(), Name: "deny-default-actor", AppID: appID, Kind: principal.KindAgent,
+		Active: true, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	require.NoError(t, svcStore.CreateServiceAccount(ctx, svc))
+	actor := principal.Ref{Kind: principal.KindAgent, ID: svc.ID.String()}
+	_, err = eng.GrantDelegation(ctx, appID, actor, principal.UserRef(plain), nil, principal.UserRef(plain), nil)
+	require.NoError(t, err)
+
+	return &denyByDefaultFixture{
+		eng: eng, handler: root.Handler(), routes: root.Routes(), orgs: orgs,
+		owner: owner, ownerToken: ownerToken, agentToken: agentSess.Token, appID: appID,
+		agents: agents, grant: grant, plainGrant: plainGrant, plain: plain, actor: actor,
+	}
+}
+
+func (f *denyByDefaultFixture) call(t *testing.T, token, method, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	var req *http.Request
+	if body == "" {
+		req = httptest.NewRequestWithContext(context.Background(), method, path, nil)
+	} else {
+		req = httptest.NewRequestWithContext(context.Background(), method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set(middleware.PublishableKeyHeader, testPublishableKey)
+	req.Header.Set("Origin", "http://localhost:3000")
+	rec := httptest.NewRecorder()
+	f.handler.ServeHTTP(rec, req)
+	return rec
+}
+
+var pathParam = regexp.MustCompile(`:[A-Za-z_]+|\{[^}]+\}`)
+
+// Every write route authsome registers refuses an agent session unless it is
+// on the agent-safe list. Enumerating the router is the point: a route added
+// tomorrow without the marker shows up here as refused, which is what deny by
+// default means.
+func TestDenyByDefault_EveryWriteRouteRefusesAgentSession(t *testing.T) {
+	f := newDenyByDefaultFixture(t)
+
+	writes := 0
+	for _, r := range f.routes {
+		switch r.Method {
+		case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		default:
+			continue
+		}
+		if strings.Contains(r.Path, "*") {
+			continue
+		}
+		writes++
+		path := pathParam.ReplaceAllString(r.Path, "x")
+		key := r.Method + " " + r.Path
+		for who, token := range f.callers() {
+			t.Run(who+" "+key, func(t *testing.T) {
+				rec := f.call(t, token(t), r.Method, path, `{}`)
+				if agentSafeWrites[key] {
+					assert.NotContains(t, rec.Body.String(), "delegated session", "an agent-safe route lets the caller through; body=%s", rec.Body.String())
+					return
+				}
+				assert.Equal(t, http.StatusForbidden, rec.Code, "body=%s", rec.Body.String())
+				// Always the delegated-session refusal, never a permission
+				// check's answer, which would tell the caller what its user
+				// may do.
+				assert.Contains(t, rec.Body.String(), "delegated session", "body=%s", rec.Body.String())
+			})
+		}
+	}
+	assert.Greater(t, writes, 50, "the table has to cover the real router, not an empty one")
+	for key := range agentSafeWrites {
+		found := false
+		for _, r := range f.routes {
+			if r.Method+" "+r.Path == key {
+				found = true
+			}
+		}
+		assert.True(t, found, "agent-safe route %s is registered", key)
+	}
+}
+
+// The cases the review proved one by one: each refused for the agent with
+// nothing written, and each still open to the owner's own session.
+func TestDenyByDefault_ProvenCasesWriteNothing(t *testing.T) {
+	f := newDenyByDefaultFixture(t)
+	ctx := context.Background()
+
+	t.Run("DELETE /v1/me", func(t *testing.T) {
+		rec := f.call(t, f.agentToken, http.MethodDelete, "/v1/me", "")
+		assert.Equal(t, http.StatusForbidden, rec.Code, "body=%s", rec.Body.String())
+		_, err := f.eng.AdminGetUser(ctx, f.owner)
+		require.NoError(t, err, "the account still exists")
+	})
+
+	t.Run("POST /v1/environments", func(t *testing.T) {
+		before, err := f.eng.ListEnvironments(ctx, f.appID)
+		require.NoError(t, err)
+		body := `{"name":"Agent","slug":"agent-env","type":"development"}`
+
+		rec := f.call(t, f.agentToken, http.MethodPost, "/v1/environments", body)
+		assert.Equal(t, http.StatusForbidden, rec.Code, "body=%s", rec.Body.String())
+		after, err := f.eng.ListEnvironments(ctx, f.appID)
+		require.NoError(t, err)
+		assert.Len(t, after, len(before), "no environment is created")
+
+		rec = f.call(t, f.ownerToken, http.MethodPost, "/v1/environments", body)
+		assert.Less(t, rec.Code, 300, "the owner still creates one; body=%s", rec.Body.String())
+	})
+
+	t.Run("POST /v1/orgs", func(t *testing.T) {
+		before, err := f.orgs.ListUserOrganizations(ctx, f.owner)
+		require.NoError(t, err)
+		body := `{"name":"Agent Org","slug":"agent-org"}`
+
+		rec := f.call(t, f.agentToken, http.MethodPost, "/v1/orgs", body)
+		assert.Equal(t, http.StatusForbidden, rec.Code, "body=%s", rec.Body.String())
+		after, err := f.orgs.ListUserOrganizations(ctx, f.owner)
+		require.NoError(t, err)
+		assert.Len(t, after, len(before), "no org is created")
+
+		rec = f.call(t, f.ownerToken, http.MethodPost, "/v1/orgs", body)
+		assert.Less(t, rec.Code, 300, "the owner still creates one; body=%s", rec.Body.String())
+	})
+
+	t.Run("POST /v1/webhooks", func(t *testing.T) {
+		before, err := f.eng.ListWebhooks(ctx, f.appID)
+		require.NoError(t, err)
+		body := `{"url":"https://hooks.example.com/agent","events":["user.created"]}`
+
+		rec := f.call(t, f.agentToken, http.MethodPost, "/v1/webhooks", body)
+		assert.Equal(t, http.StatusForbidden, rec.Code, "body=%s", rec.Body.String())
+		after, err := f.eng.ListWebhooks(ctx, f.appID)
+		require.NoError(t, err)
+		assert.Len(t, after, len(before), "no webhook is created")
+	})
+
+	t.Run("POST /v1/billing/plans", func(t *testing.T) {
+		body := `{"name":"Agent Plan","slug":"agent-plan","currency":"usd"}`
+		rec := f.call(t, f.agentToken, http.MethodPost, "/v1/billing/plans", body)
+		assert.Equal(t, http.StatusForbidden, rec.Code, "body=%s", rec.Body.String())
+
+		list := f.call(t, f.ownerToken, http.MethodGet, "/v1/billing/plans?app_id="+f.appID.String(), "")
+		assert.NotContains(t, list.Body.String(), "agent-plan", "no plan is created")
+	})
+
+	t.Run("reads stay open", func(t *testing.T) {
+		rec := f.call(t, f.agentToken, http.MethodGet, "/v1/me", "")
+		assert.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+	})
+
+	t.Run("signout is agent-safe", func(t *testing.T) {
+		rec := f.call(t, f.agentToken, http.MethodPost, "/v1/signout", "")
+		assert.Less(t, rec.Code, 300, "the agent can end its own session; body=%s", rec.Body.String())
+		me := f.call(t, f.agentToken, http.MethodGet, "/v1/me", "")
+		assert.NotEqual(t, http.StatusOK, me.Code, "and the token stops working")
+	})
+}

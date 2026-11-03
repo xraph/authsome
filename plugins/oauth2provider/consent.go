@@ -124,6 +124,11 @@ func (p *Plugin) loadConsent(ctx forge.Context, cid string) (*pendingConsent, er
 // issueAuthorizationCode mints and stores the code for an approved request
 // and returns the redirect the browser should follow.
 func (p *Plugin) issueAuthorizationCode(ctx context.Context, pc pendingConsent) (string, error) {
+	// The routes refuse a delegated session already. This covers any other
+	// path to a code: what it redeems for is the user's own token.
+	if middleware.RefuseDelegated(ctx) != nil {
+		return "", forge.Forbidden(middleware.DelegatedSessionMessage)
+	}
 	userID, err := id.ParseUserID(pc.UserID)
 	if err != nil {
 		return "", middleware.InternalErrorCtx(ctx, fmt.Errorf("oauth2: consent user: %w", err))
@@ -286,6 +291,9 @@ func (p *Plugin) handleConsentDecision(ctx forge.Context) error {
 	var target string
 	switch in.Decision {
 	case "approve":
+		if middleware.RefuseDelegated(ctx.Context()) != nil {
+			return forge.Forbidden(middleware.DelegatedSessionMessage)
+		}
 		userID, perr := id.ParseUserID(pc.UserID)
 		if perr != nil {
 			return middleware.InternalError(ctx, fmt.Errorf("oauth2: consent user: %w", perr))

@@ -44,7 +44,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// four share the passkey budget.
 	ceremonyRL := authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int { return c.PasskeyLimit })
 
+	// A passkey signs in as the user. A session acting for the user without
+	// being them (an agent, a token-exchange session) must not add one.
 	if err := g.POST("/register/begin", p.handleRegisterBegin, append([]forge.RouteOption{
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Begin passkey registration"),
 		forge.WithOperationID("passkeyRegisterBegin"),
 		forge.WithResponseSchema(http.StatusOK, "Registration options", RegisterBeginResponse{}),
@@ -54,6 +57,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	if err := g.POST("/register/finish", p.handleRegisterFinish, append([]forge.RouteOption{
+		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("Complete passkey registration"),
 		forge.WithOperationID("passkeyRegisterFinish"),
 		forge.WithRequestBodySchema(Attestation{}),
@@ -273,6 +277,11 @@ func (p *Plugin) revokeOtherSessions(ctx context.Context, userID id.UserID) {
 // ──────────────────────────────────────────────────
 
 func (p *Plugin) handleRegisterBegin(ctx forge.Context, req *RegisterBeginRequest) (*RegisterBeginResponse, error) {
+	// The route refuses a delegated session too. Checked here as well so a
+	// mount without that guard still fails closed.
+	if middleware.RefuseDelegated(ctx.Context()) != nil {
+		return nil, forge.Forbidden(middleware.DelegatedSessionMessage)
+	}
 	if p.wa == nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: WebAuthn not initialized"))
 	}
@@ -304,6 +313,11 @@ func (p *Plugin) handleRegisterBegin(ctx forge.Context, req *RegisterBeginReques
 }
 
 func (p *Plugin) handleRegisterFinish(ctx forge.Context, _ *RegisterFinishRequest) (*RegisterFinishResponse, error) {
+	// The route refuses a delegated session too. Checked here as well so a
+	// mount without that guard still fails closed.
+	if middleware.RefuseDelegated(ctx.Context()) != nil {
+		return nil, forge.Forbidden(middleware.DelegatedSessionMessage)
+	}
 	if p.wa == nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("passkey: WebAuthn not initialized"))
 	}

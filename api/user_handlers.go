@@ -162,6 +162,12 @@ func (a *API) handleSwitchOrg(ctx forge.Context, req *SwitchOrgRequest) (*Switch
 	if !ok {
 		return nil, forge.Unauthorized("authentication required")
 	}
+	// The engine refuses a non-user session too. Refusing here as well
+	// keeps an agent from reaching the store at all when the middleware has
+	// already resolved its session.
+	if sess, hasSess := middleware.SessionFrom(ctx.Context()); hasSess && sess != nil && !sess.IsHumanPrincipal() {
+		return nil, forge.Forbidden("only a user session can switch organization")
+	}
 
 	var newOrgID id.OrgID
 	if req.OrgID != "" {
@@ -182,6 +188,14 @@ func (a *API) handleSwitchOrg(ctx forge.Context, req *SwitchOrgRequest) (*Switch
 	}
 	if !updated.OrgID.IsNil() {
 		resp.OrgID = updated.OrgID.String()
+	}
+	// A JWT app got a new access token for the new org. The cookie gets it
+	// too: the row now knows only the new token, so a browser left holding
+	// the old one could no longer refresh through its cookie.
+	if updated.Token != "" {
+		resp.SessionToken = updated.Token
+		resp.ExpiresAt = updated.ExpiresAt.Format("2006-01-02T15:04:05Z07:00")
+		a.setSessionCookie(ctx, updated.Token, a.sessionTokenMaxAge())
 	}
 	return resp, nil
 }

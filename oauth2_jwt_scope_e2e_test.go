@@ -29,6 +29,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugins/oauth2provider"
 	"github.com/xraph/authsome/tokenformat"
@@ -42,11 +43,18 @@ func issueOAuth2JWT(t *testing.T, eng *authsome.Engine, appID id.AppID) (*oauth2
 	t.Helper()
 	ctx := context.Background()
 
-	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
+	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID:     appID,
 		Email:     "oauth2-jwt@example.com",
 		Password:  "SecureP@ss123",
 		FirstName: "JWT Scope",
+	})
+	require.NoError(t, err)
+	// An environment that requires a verified email gives no session at
+	// sign-up, so verify and sign in to get the one the flow needs.
+	secutil.VerifyEmail(t, eng, u.ID)
+	_, sess, err := eng.SignIn(ctx, &account.SignInRequest{
+		AppID: appID, Email: "oauth2-jwt@example.com", Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 

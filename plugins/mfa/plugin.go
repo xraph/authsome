@@ -183,7 +183,14 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return append(opts, rl...)
 	}
 
+	// Enrolling a factor, turning MFA off and regenerating recovery codes
+	// change the credentials on the account. An agent session reads as its
+	// delegating user here and is freshly minted, so it would pass the
+	// recent-sign-in step-up too. Only the user's own session may.
+	ownSession := forge.WithMiddleware(middleware.DenyDelegatedSession())
+
 	if err := g.POST("/enroll", p.handleEnroll,
+		ownSession,
 		forge.WithSummary("Enroll in MFA"),
 		forge.WithOperationID("enrollMFA"),
 		forge.WithResponseSchema(http.StatusOK, "Enrollment started", EnrollResponse{}),
@@ -211,6 +218,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	if err := g.DELETE("/enrollment", p.handleDisable,
+		ownSession,
 		forge.WithSummary("Disable MFA"),
 		forge.WithOperationID("disableMFA"),
 		forge.WithResponseSchema(http.StatusOK, "MFA disabled", DisableResponse{}),
@@ -230,6 +238,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	if err := g.POST("/recovery/regenerate", p.handleRecoveryRegenerate,
+		ownSession,
 		forge.WithSummary("Regenerate MFA recovery codes"),
 		forge.WithOperationID("regenerateMFARecoveryCodes"),
 		forge.WithResponseSchema(http.StatusOK, "New recovery codes generated", RecoveryRegenerateResponse{}),
@@ -381,6 +390,11 @@ type SMSVerifyResponse struct {
 
 // handleEnroll starts MFA enrollment for the authenticated user.
 func (p *Plugin) handleEnroll(ctx forge.Context, req *EnrollRequest) (*EnrollResponse, error) {
+	// The route refuses a delegated session too. Checked here as well so a
+	// mount without that guard still fails closed.
+	if middleware.RefuseDelegated(ctx.Context()) != nil {
+		return nil, forge.Forbidden(middleware.DelegatedSessionMessage)
+	}
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok || userID.Prefix() == "" {
 		return nil, forge.Unauthorized("authentication required")
@@ -811,6 +825,11 @@ func safePrefix(s string) string {
 
 // handleDisable removes MFA enrollment for the authenticated user.
 func (p *Plugin) handleDisable(ctx forge.Context, req *DisableRequest) (*DisableResponse, error) {
+	// The route refuses a delegated session too. Checked here as well so a
+	// mount without that guard still fails closed.
+	if middleware.RefuseDelegated(ctx.Context()) != nil {
+		return nil, forge.Forbidden(middleware.DelegatedSessionMessage)
+	}
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok || userID.Prefix() == "" {
 		return nil, forge.Unauthorized("authentication required")
@@ -910,6 +929,11 @@ func (p *Plugin) handleRecoveryVerify(ctx forge.Context, req *RecoveryVerifyRequ
 
 // handleRecoveryRegenerate generates a fresh set of recovery codes, replacing any existing ones.
 func (p *Plugin) handleRecoveryRegenerate(ctx forge.Context, _ *RecoveryRegenerateRequest) (*RecoveryRegenerateResponse, error) {
+	// The route refuses a delegated session too. Checked here as well so a
+	// mount without that guard still fails closed.
+	if middleware.RefuseDelegated(ctx.Context()) != nil {
+		return nil, forge.Forbidden(middleware.DelegatedSessionMessage)
+	}
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok || userID.Prefix() == "" {
 		return nil, forge.Unauthorized("authentication required")

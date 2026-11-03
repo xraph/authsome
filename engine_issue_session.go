@@ -276,7 +276,7 @@ func (e *Engine) issueSession(ctx context.Context, req *IssueSessionRequest) (*I
 
 	sessCfg := e.sessionConfigForApp(ctx, req.AppID, req.EnvID)
 	applySessionTTLOverride(&sessCfg, req.SessionTTL, req.RefreshTTL)
-	sess, err := e.newSession(req.AppID, req.User.ID, sessCfg, req.DPoPJKT)
+	sess, err := e.newSession(req.AppID, req.User.ID, req.EnvID, sessCfg, req.DPoPJKT)
 	if err != nil {
 		return nil, fmt.Errorf("authsome: build session: %w", err)
 	}

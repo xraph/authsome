@@ -81,7 +81,7 @@ router.GET("/v1/calendar", handler,
 ## Endpoints
 
 User surface under `/v1/me/agents`, admin surface under `/v1/admin/agents`. Both refuse
-agent-principal sessions, so an agent cannot manage its own delegation.
+delegated sessions, agents included, so an agent cannot manage its own delegation.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -92,6 +92,89 @@ agent-principal sessions, so an agent cannot manage its own delegation.
 | `PATCH` | `/v1/admin/agents/:id/status` | Approve or block an agent |
 | `GET` | `/v1/admin/agents/policy` | Read the org's delegation policy |
 | `PUT` | `/v1/admin/agents/policy` | Set the org's delegation policy |
+
+## Deny by default for delegated sessions
+
+A delegated session acts for a user without being that user's own sign-in. An agent session is
+one: it carries its delegating user's ID, so any route that only reads the user ID sees the agent
+as that user. A session minted by token exchange is the other, with an actor chain naming the
+principal that's really calling.
+
+An agent's authority comes from its grant and nowhere else. So on every authsome route, core and
+plugin alike, a delegated session gets a 403 on `POST`, `PUT`, `PATCH` and `DELETE` unless the
+route is marked agent-safe. `GET`, `HEAD` and `OPTIONS` stay open, so an agent can still read
+`GET /v1/me` and anything else its user can read. A route someone adds tomorrow is refused until
+someone marks it, which is the point.
+
+Three authsome routes are agent-safe. On two of them the caller can only touch its own
+credential, and the third only reads:
+
+| Route | Why it's safe |
+|---|---|
+| `POST /v1/signout` | Ends the caller's own session |
+| `POST /v1/oauth/revoke` | Revokes a token the caller itself holds |
+| `POST /v1/introspect` | Reads a token's state; it's a POST only so the token travels in the body |
+
+The public writes (sign-up, sign-in, password reset, email verification, magic link, phone OTP,
+passkey login, social and SSO sign-in, the OAuth2 token, device and registration endpoints, the
+waitlist join) answer 403 too when the request carries a delegated bearer token. Nothing an agent
+needs goes through them with its own token attached.
+
+Everything else an agent does goes through your routes and `Guard`. Token exchange, refresh and
+the OAuth2 token endpoint aren't on the list: an agent session never reaches them with a session
+on the request (a workload exchanging tokens acts as itself, and `Engine.Refresh` refuses agent
+sessions anyway).
+
+To mark a write route agent-safe, add `plugin.AgentSafe()` (or `middleware.AgentSafe()`) to its
+options. For a route that enforces the grant, use `GuardRoute`, which mounts `Guard` and the
+marker together:
+
+```go
+router.POST("/v1/invoices/:id/approve", handler,
+    append(agents.GuardRoute("approve", "invoice"),
+        forge.WithMiddleware(middleware.RequirePermission(engine, "approve", "invoice")))...,
+)
+```
+
+`Guard` on its own leaves a write route closed to agents. A session minted by token exchange
+that reaches a `Guard`ed route has no agent grant, so `Guard` checks its own scopes instead: one
+of them has to be a scope you registered with `WithScope` that covers the route, and the user it
+acts for has to be allowed as well. Exchange narrows those scopes to the delegation's, so name
+the delegation's scopes the same way you name grant scopes. With no covering scope it gets 403.
+
+The rule is an interceptor, and interceptors run after a route's own middleware. So route
+middleware on an authsome router must not change state, and a permission check there should sit
+behind `middleware.DenyDelegatedSession()` (or `DenyDelegatedWrites()` where reads stay open), or an
+agent can tell from the answer what its user may do. Every authsome write route follows both
+rules, and a test checks it with agents acting for a user who holds no admin rights. The rule
+lives in
+`middleware.GuardDelegatedWrites`, an interceptor on a router group. The API registers its routes
+through one, and the Forge extension hands one to every plugin's `RegisterRoutes`. If you mount
+authsome's plugins on a router yourself, pass them `middleware.GuardDelegatedWrites(router)`.
+
+Some reads are refused too, because what they hand out would outlive the grant or the work is
+admin work: `GET /v1/oauth/authorize` and the consent page, and every route under `/v1/admin`
+along with the organization, waitlist and shared-signals admin routes. The dashboard won't take a
+delegated token either, in engine mode or in client mode.
+
+In client mode, `ClientAuthMiddleware` carries introspection's `delegated` field onto the request,
+and on the JWT path an `act` claim does the same. A client-mode service is covered only on the
+routes it wraps in `middleware.GuardDelegatedWrites` (or guards with `DenyDelegatedSession`);
+nothing applies the rule to your own routes for you. Introspection reports `principal_kind` and
+`delegated` for every active token. You need an identity server that sends them. An older one
+sends neither, every token reads as the user's own, and `ClientAuthMiddleware` logs a warning the
+first time it sees such a response.
+
+What makes a session delegated is its shape, not its kind: an agent or grant marker, a
+delegation that isn't an impersonation, an actor chain, or a non-user principal that names a
+user. An admin's impersonation session isn't refused. Neither is a principal acting as itself,
+whatever its kind, so a service account registered as an agent, with no user behind it, keeps
+working.
+
+The older, narrower guards stay in place underneath: `middleware.DenyDelegatedSession()` on the
+credential and admin routes, `middleware.RefuseDelegated` inside the handlers that write
+credentials straight to the store, and `authsome.ErrDelegatedSession` from `Engine.Impersonate`,
+`Engine.ChangePassword` and `Engine.AdminCreateUser`.
 
 ## Lifecycle hooks
 

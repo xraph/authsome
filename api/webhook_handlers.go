@@ -20,6 +20,11 @@ func (a *API) registerWebhookRoutes(router forge.Router) error {
 		forge.WithGroupTags("webhooks"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),
+			// Writes here are refused to a delegated session by the
+			// deny-by-default guard anyway. Refusing them before the
+			// permission check keeps the answer the same whatever the
+			// delegating user may do. Reads stay open.
+			middleware.DenyDelegatedWrites(),
 			middleware.RequirePermission(a.engine, "manage", "app"),
 		),
 	)

@@ -580,6 +580,17 @@ func tryJWTAuth(
 
 		// sess == nil && sessErr == nil means "feature disabled, skip checks".
 		if sess != nil {
+			// The token's org_id has to be the row's active org. The
+			// request is scoped by the claim below, so a token signed
+			// before the org was switched or cleared would otherwise go on
+			// acting in an org the session no longer has.
+			if sess.OrgID.String() != claims.OrgID {
+				logger.Warn("auth middleware: JWT org does not match its session",
+					log.String("session_id", sess.ID.String()),
+				)
+				return jwtAuthRefused, nil
+			}
+
 			// Validate IP binding for JWT.
 			if bindCfg.BindToIP && sess.IPAddress != "" {
 				clientIP := clientIPFromRequest(ctx.Request())
@@ -646,6 +657,11 @@ func tryJWTAuth(
 
 	goCtx = WithAppID(goCtx, appID)
 	goCtx = WithAuthMethod(goCtx, "jwt")
+	// An act claim says someone other than sub is calling. The JWT path puts
+	// no session on the context, so the claims have to tell the guard.
+	if claims.IsDelegated() {
+		goCtx = withDelegatedCaller(goCtx)
+	}
 
 	// An empty PrincipalKind means user, which is what every token minted
 	// before that claim existed carries.

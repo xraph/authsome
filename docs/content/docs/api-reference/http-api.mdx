@@ -775,6 +775,8 @@ grant_type=refresh_token&refresh_token=...&client_id=...
 
 Token introspection. Requires client authentication.
 
+An active response says who holds the token in `principal_kind` (`user`, `agent`, `workload` or `service_account`), and sets `delegated: true` when the token acts for `user_id` without being that user's own sign-in, as an agent or token-exchange session does.
+
 ---
 
 ### `POST /oauth/revoke`

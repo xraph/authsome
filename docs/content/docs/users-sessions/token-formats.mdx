@@ -129,6 +129,31 @@ When using JWT format, session tokens contain the following claims:
 
 The access token doesn't carry email, name or roles. Read those from `GET /v1/me` or the OIDC userinfo endpoint.
 
+### Organization and environment
+
+`env_id` and `org_id` are copied from the session when the token is signed: at sign-up and sign-in, on refresh, and when the OAuth2 provider issues a token. A resource server that verifies the JWT offline can read the tenant straight off the token without calling Authsome.
+
+You'll always see `env_id` on a session bound to an environment, which is every session on an app that has a default one. `org_id` is omitted, not sent empty, until the session has an active organization. A fresh sign-in has none, so its first token has no `org_id`. Tokens from the OAuth2 provider never carry one either, because an authorization code or device code records no organization.
+
+`POST /v1/me/switch-org` sets the active organization. On a JWT app the response carries a new access token for the new org, in `session_token` with its `expires_at`, and the session cookie is updated to match:
+
+```json
+{
+  "session_id": "ases_01j9...",
+  "org_id": "aorg_01j9...",
+  "session_token": "eyJhbGciOi...",
+  "expires_at": "2026-10-22T15:04:05Z"
+}
+```
+
+Use that token from then on. It expires when the old one would have, so switching never extends a session. The old token isn't revoked, but with the session check on (the `session.jwt_require_active_session` setting, on by default) Authsome's own middleware loads the session row for every JWT and refuses one whose `org_id` doesn't match the row's active org. So after a switch the old token stops working against Authsome straight away. A resource server that verifies offline never sees the row, and it will go on accepting the old token, with the old `org_id`, until it expires. Keep access token lifetimes short if that matters to you.
+
+Calling `Engine.SwitchActiveOrg` with an empty org ID clears the active org the same way and hands back a token with no `org_id`. Removing a member, or deleting the org, clears the active org on that member's sessions without minting anything. Their current tokens are refused by the session check from then on, and the next refresh checks the membership again before it signs `org_id`, so a refresh never puts back an org the user has left.
+
+Only a user's own session can switch. An agent, workload or service account session gets a 403, because an agent's org is the org on its grant. If a refresh rotates the session between the switch reading it and writing it, the switch returns 409 and you can retry it.
+
+On an opaque app there's no claim to go stale, since the middleware reads the org off the session row on every request. The response leaves out `session_token` and `expires_at`, and you keep using the token you have.
+
 ## OIDC-compatible claims
 
 When the `openid` scope is requested (via the OAuth2 provider), ID tokens include standard OIDC claims:
