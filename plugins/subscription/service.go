@@ -301,6 +301,14 @@ func (s *Service) GetCoupon(ctx context.Context, code, appID string) (*coupon.Co
 	return s.ledgerStore.GetCoupon(ctx, code, appID)
 }
 
+// GetCouponByID retrieves a coupon by ID.
+func (s *Service) GetCouponByID(ctx context.Context, couponID ledgerid.CouponID) (*coupon.Coupon, error) {
+	if s.ledgerStore == nil {
+		return nil, fmt.Errorf("subscription: ledger store not available")
+	}
+	return s.ledgerStore.GetCouponByID(ctx, couponID)
+}
+
 // CreateCoupon creates a new coupon.
 func (s *Service) CreateCoupon(ctx context.Context, c *coupon.Coupon) error {
 	if s.ledgerStore == nil {

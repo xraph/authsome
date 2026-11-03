@@ -24,6 +24,9 @@ import (
 // Every refusal is a 404, so a caller outside the tenant can't tell a tenant
 // that exists from one that doesn't. An empty tenantID belongs to no one, so
 // only a billing manager gets past it.
+//
+// Unlike writeGuard, this lets a delegated session through when its actor
+// chain holds manage/billing. writeGuard explains why the two differ.
 func (p *Plugin) requireTenant(ctx forge.Context, tenantID string) error {
 	ok, err := p.tenantAllowed(ctx, tenantID)
 	if err != nil {
@@ -54,6 +57,39 @@ func (p *Plugin) tenantAllowed(ctx forge.Context, tenantID string) (bool, error)
 	}
 
 	return p.holdsBillingManage(ctx.Context(), userID), nil
+}
+
+// requestApp resolves the app a billing request works in. A request scoped
+// to an app (an API key or an app-bound session) stays inside it: naming
+// another app gets the same 404 a missing record gets, so holding
+// manage/billing in one app doesn't reach another app's billing. An empty
+// appID means the scoped app, or the plugin's default app when the request
+// carries no scope.
+func (p *Plugin) requestApp(ctx forge.Context, appID string) (string, error) {
+	scope, ok := middleware.AppIDFrom(ctx.Context())
+	if !ok || scope.IsNil() {
+		if appID == "" {
+			return p.defaultAppID, nil
+		}
+		return appID, nil
+	}
+	if appID == "" {
+		return scope.String(), nil
+	}
+	if appID != scope.String() {
+		return "", forge.NotFound("not found")
+	}
+	return appID, nil
+}
+
+// inRequestApp reports whether a record loaded by ID belongs to the
+// request's app scope. An unscoped request reaches any app, as before.
+func inRequestApp(ctx forge.Context, recordAppID string) bool {
+	scope, ok := middleware.AppIDFrom(ctx.Context())
+	if !ok || scope.IsNil() {
+		return true
+	}
+	return recordAppID == scope.String()
 }
 
 // ownsTenant reports whether userID is the tenant (user mode) or a member of

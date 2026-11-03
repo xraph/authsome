@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,6 +87,8 @@ type billingFixture struct {
 	engine    *accessEngine
 	appID     string
 	tenantID  string
+	planID    string
+	subID     string
 	invoiceID string
 }
 
@@ -138,7 +141,7 @@ func newBillingFixture(t *testing.T, mode, tenantID string) *billingFixture {
 
 	return &billingFixture{
 		plugin: p, handler: router.Handler(), authStore: authStore, engine: eng,
-		appID: appID, tenantID: tenantID, invoiceID: inv.ID.String(),
+		appID: appID, tenantID: tenantID, planID: pl.ID.String(), subID: sub.ID.String(), invoiceID: inv.ID.String(),
 	}
 }
 
@@ -176,6 +179,136 @@ func (f *billingFixture) get(t *testing.T, path string, userID id.UserID) *httpt
 	rec := httptest.NewRecorder()
 	f.handler.ServeHTTP(rec, r)
 	return rec
+}
+
+// send makes a request as userID scoped to appScope, the way an API key or
+// an app-bound session scopes one. An empty appScope leaves it unscoped.
+func (f *billingFixture) send(t *testing.T, method, path string, userID id.UserID, appScope, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := httptest.NewRequestWithContext(context.Background(), method, path, strings.NewReader(body))
+	if body != "" {
+		r.Header.Set("Content-Type", "application/json")
+	}
+	ctx := middleware.WithUserID(r.Context(), userID)
+	if appScope != "" {
+		appID, err := id.ParseAppID(appScope)
+		require.NoError(t, err)
+		ctx = middleware.WithAppID(ctx, appID)
+	}
+	rec := httptest.NewRecorder()
+	f.handler.ServeHTTP(rec, r.WithContext(ctx))
+	return rec
+}
+
+// addCoupon seeds a coupon in the fixture's app and returns its ID.
+func (f *billingFixture) addCoupon(t *testing.T) string {
+	t.Helper()
+	c := &coupon.Coupon{
+		ID: ledgerid.NewCouponID(), Code: "LAUNCH", Name: "Launch", Type: coupon.CouponTypePercentage, Percentage: 10, Currency: "usd", AppID: f.appID,
+	}
+	require.NoError(t, f.plugin.service.CreateCoupon(context.Background(), c))
+	return c.ID.String()
+}
+
+// writes lists every by-ID billing write aimed at the fixture's records.
+func (f *billingFixture) writes(couponID string) [][3]string {
+	return [][3]string{
+		{http.MethodPost, "/v1/billing/subscriptions/" + f.subID + "/change-plan", `{"new_plan_id":"` + f.planID + `"}`},
+		{http.MethodPost, "/v1/billing/subscriptions/" + f.subID + "/pause", ""},
+		{http.MethodPost, "/v1/billing/subscriptions/" + f.subID + "/resume", ""},
+		{http.MethodPost, "/v1/billing/subscriptions/" + f.subID + "/cancel", `{"immediately":true}`},
+		{http.MethodPost, "/v1/billing/invoices/" + f.invoiceID + "/pay", `{"payment_ref":"x"}`},
+		{http.MethodPost, "/v1/billing/invoices/" + f.invoiceID + "/void", `{"reason":"x"}`},
+		{http.MethodDelete, "/v1/billing/coupons/" + couponID, ""},
+		{http.MethodPost, "/v1/billing/plans/" + f.planID + "/archive", ""},
+		{http.MethodPost, "/v1/billing/plans/" + f.planID + "/activate", ""},
+	}
+}
+
+func TestCrossApp_ManagerInOtherAppReadsNotFound(t *testing.T) {
+	org := id.NewOrgID()
+	f := newBillingFixture(t, "organization", org.String())
+	f.addOrg(t, org, id.NewUserID())
+	operator := id.NewUserID()
+	f.engine.managers[operator.String()] = true
+	f.addCoupon(t)
+	otherApp := id.NewAppID().String()
+
+	paths := append(f.readPaths(org.String()), "/v1/billing/coupons?app_id="+f.appID)
+	for _, path := range paths {
+		rec := f.send(t, http.MethodGet, path, operator, otherApp, "")
+		assert.Equal(t, http.StatusNotFound, rec.Code, "GET %s: %s", path, rec.Body.String())
+	}
+}
+
+func TestCrossApp_ManagerInOtherAppWritesNotFound(t *testing.T) {
+	org := id.NewOrgID()
+	f := newBillingFixture(t, "organization", org.String())
+	operator := id.NewUserID()
+	f.engine.managers[operator.String()] = true
+	couponID := f.addCoupon(t)
+	otherApp := id.NewAppID().String()
+
+	for _, w := range f.writes(couponID) {
+		rec := f.send(t, w[0], w[1], operator, otherApp, w[2])
+		assert.Equal(t, http.StatusNotFound, rec.Code, "%s %s: %s", w[0], w[1], rec.Body.String())
+	}
+
+	ctx := context.Background()
+	subID, err := ledgerid.ParseSubscriptionID(f.subID)
+	require.NoError(t, err)
+	sub, err := f.plugin.service.GetSubscription(ctx, subID)
+	require.NoError(t, err)
+	assert.Equal(t, subscription.StatusActive, sub.Status)
+	invID, err := ledgerid.ParseInvoiceID(f.invoiceID)
+	require.NoError(t, err)
+	inv, err := f.plugin.service.GetInvoice(ctx, invID)
+	require.NoError(t, err)
+	assert.Equal(t, invoice.StatusPending, inv.Status)
+	coupons, err := f.plugin.service.ListCoupons(ctx, f.appID)
+	require.NoError(t, err)
+	assert.Len(t, coupons, 1)
+}
+
+func TestCrossApp_SameAppManagerStillWorks(t *testing.T) {
+	org := id.NewOrgID()
+	f := newBillingFixture(t, "organization", org.String())
+	f.addOrg(t, org, id.NewUserID())
+	operator := id.NewUserID()
+	f.engine.managers[operator.String()] = true
+	couponID := f.addCoupon(t)
+
+	paths := append(f.readPaths(org.String()), "/v1/billing/coupons?app_id="+f.appID)
+	for _, path := range paths {
+		rec := f.send(t, http.MethodGet, path, operator, f.appID, "")
+		assert.Equal(t, http.StatusOK, rec.Code, "GET %s: %s", path, rec.Body.String())
+	}
+
+	rec := f.send(t, http.MethodPost, "/v1/billing/subscriptions/"+f.subID+"/cancel", operator, f.appID, `{"immediately":true}`)
+	assert.Equal(t, http.StatusNoContent, rec.Code, rec.Body.String())
+	rec = f.send(t, http.MethodDelete, "/v1/billing/coupons/"+couponID, operator, f.appID, "")
+	assert.Equal(t, http.StatusNoContent, rec.Code, rec.Body.String())
+}
+
+func TestCrossApp_ScopedRequestDefaultsToItsApp(t *testing.T) {
+	org := id.NewOrgID()
+	f := newBillingFixture(t, "organization", org.String())
+	operator := id.NewUserID()
+	f.engine.managers[operator.String()] = true
+	path := "/v1/billing/entitlements/sso?tenant_id=" + org.String()
+
+	// No app_id: a request scoped to another app checks that app, not the
+	// plugin's default one, so the fixture's plan grants it nothing.
+	var got EntitlementResponse
+	rec := f.send(t, http.MethodGet, path, operator, id.NewAppID().String(), "")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.False(t, got.Allowed)
+
+	rec = f.send(t, http.MethodGet, path, operator, f.appID, "")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	assert.True(t, got.Allowed)
 }
 
 func TestRead_OtherOrgIsNotFound(t *testing.T) {

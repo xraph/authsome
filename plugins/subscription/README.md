@@ -90,7 +90,14 @@ Subscription, invoice, entitlement and usage reads are scoped to a tenant: pass 
 Anyone else gets a 404, whether the tenant exists or not, unless they hold
 `billing:manage`, which reads every tenant. Plans stay app-wide. You need
 `billing:manage` for `GET /coupons` and for the dashboard billing views as well, because
-both list data from the whole app.
+both list data from the whole app. One caveat: on an engine with no RBAC, the coupon list
+and the write routes only ask for a session, since there is no permission to check. The
+tenant reads go the other way and treat a missing RBAC as not holding `billing:manage`.
+
+`billing:manage` doesn't cross apps. When your request is scoped to an app (an API key
+or an app-bound session), every billing route stays inside it. An `app_id` naming another
+app gets a 404, and so does a subscription, invoice, coupon or plan from another app
+addressed by ID. Leave `app_id` off and the route uses your request's app.
 
 To run your own billing API, set `DisableRoutes` and call `plugin.Service()` from your
 handlers. Pass your ledger to `authsome.WithLedgerEngine` and the plugin picks it up
