@@ -33,11 +33,13 @@ func tokenFixture(t *testing.T) (oauth2provider.Store, authstore.Store, forge.Ro
 	p.SetOAuth2Store(st)
 	acct := memory.New()
 	p.SetStore(acct)
+	giveSigningKey(t, p)
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(confidentialSecret), bcrypt.MinCost)
 	require.NoError(t, err)
 
 	appID := id.NewAppID()
+	seedFixtureUser(t, acct, appID)
 	require.NoError(t, st.CreateClient(context.Background(), &oauth2provider.OAuth2Client{
 		ID:           id.NewOAuth2ClientID(),
 		AppID:        appID,
@@ -267,7 +269,7 @@ func TestTokenResource(t *testing.T) {
 			"the device code must carry the resource resolved at /device/authorize")
 
 		dc.Status = oauth2provider.DeviceCodeStatusAuthorized
-		dc.UserID = id.NewUserID()
+		dc.UserID = fixtureUserID
 		require.NoError(t, st.UpdateDeviceCode(context.Background(), dc))
 
 		rec := postToken(t, mux, map[string]string{
@@ -301,7 +303,7 @@ func TestTokenResource(t *testing.T) {
 			"the device code must carry both resources resolved at /device/authorize")
 
 		dc.Status = oauth2provider.DeviceCodeStatusAuthorized
-		dc.UserID = id.NewUserID()
+		dc.UserID = fixtureUserID
 		require.NoError(t, st.UpdateDeviceCode(context.Background(), dc))
 
 		rec := postTokenJSON(t, mux, map[string]any{
@@ -335,7 +337,7 @@ func TestTokenResource(t *testing.T) {
 		dc, err := st.GetDeviceCodeByDeviceCode(context.Background(), authResp.DeviceCode)
 		require.NoError(t, err)
 		dc.Status = oauth2provider.DeviceCodeStatusAuthorized
-		dc.UserID = id.NewUserID()
+		dc.UserID = fixtureUserID
 		require.NoError(t, st.UpdateDeviceCode(context.Background(), dc))
 
 		rec := postTokenJSON(t, mux, map[string]any{

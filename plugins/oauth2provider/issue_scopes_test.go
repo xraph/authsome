@@ -27,9 +27,12 @@ func decodeTokenResponseMap(t *testing.T, rec *httptest.ResponseRecorder) map[st
 // token loses them and token exchange has no subject-side ceiling to narrow
 // against.
 func TestAuthCodeGrantStampsScopesOnSession(t *testing.T) {
-	p, _, mux := newFixture(t)
+	p, st, mux := newFixture(t)
 	core := memory.New()
 	p.SetStore(core)
+	client, err := st.GetClient(context.Background(), confidentialID)
+	require.NoError(t, err)
+	seedFixtureUser(t, core, client.AppID)
 
 	q := baseAuthorizeQuery(confidentialID)
 	q.Set("scope", "openid profile")

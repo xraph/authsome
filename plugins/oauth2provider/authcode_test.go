@@ -40,12 +40,15 @@ func newFixture(t *testing.T) (*oauth2provider.Plugin, oauth2provider.Store, for
 	p := oauth2provider.New(oauth2provider.Config{Issuer: "https://auth.example.com"})
 	st := oauth2provider.NewMemoryStore()
 	p.SetOAuth2Store(st)
-	p.SetStore(memory.New())
+	core := memory.New()
+	p.SetStore(core)
+	giveSigningKey(t, p)
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(confidentialSecret), bcrypt.MinCost)
 	require.NoError(t, err)
 
 	appID := id.NewAppID()
+	seedFixtureUser(t, core, appID)
 	require.NoError(t, st.CreateClient(context.Background(), &oauth2provider.OAuth2Client{
 		ID:           id.NewOAuth2ClientID(),
 		AppID:        appID,
@@ -75,10 +78,11 @@ func newFixture(t *testing.T) (*oauth2provider.Plugin, oauth2provider.Store, for
 	return p, st, mux
 }
 
-// authorize drives GET /v1/oauth/authorize as a signed-in user.
+// authorize drives GET /v1/oauth/authorize as the fixture user, whom the
+// fixtures seed so an openid grant can load the id_token's subject.
 func authorize(t *testing.T, mux forge.Router, q url.Values) *httptest.ResponseRecorder {
 	t.Helper()
-	ctx := middleware.WithUserID(context.Background(), id.NewUserID())
+	ctx := middleware.WithUserID(context.Background(), fixtureUserID)
 	req := httptest.NewRequestWithContext(ctx, "GET", "/v1/oauth/authorize?"+q.Encode(), nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -392,11 +396,14 @@ func TestConsumeAuthCode_IsCompareAndSet(t *testing.T) {
 // redirect the client parses.
 func TestAuthorize_RedirectPreservesQueryAndEscapesState(t *testing.T) {
 	_, st, mux := newFixture(t)
+	// The client shares the fixture's app, which the signed-in user belongs to.
+	sibling, err := st.GetClient(context.Background(), confidentialID)
+	require.NoError(t, err)
 
 	const withQuery = "https://app.example.com/cb?tenant=acme"
 	require.NoError(t, st.CreateClient(context.Background(), &oauth2provider.OAuth2Client{
 		ID:           id.NewOAuth2ClientID(),
-		AppID:        id.NewAppID(),
+		AppID:        sibling.AppID,
 		ClientID:     "queried",
 		FirstParty:   true,
 		Name:         "Has query",

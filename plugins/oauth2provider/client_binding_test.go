@@ -32,7 +32,7 @@ func newEngineFixture(t *testing.T) (*authsome.Engine, forge.Router, id.AppID) {
 	secutil.RelaxAuthDefaults(t, eng)
 	appID, err := id.ParseAppID("aapp_01jf0000000000000000000000")
 	require.NoError(t, err)
-	p := oauth2provider.New(oauth2provider.Config{Issuer: "https://auth.example.com"})
+	p := oauth2provider.New(oauth2provider.Config{Issuer: "https://auth.example.com", IDTokenSigningKey: testSigningKeyPEM(t)})
 	st := oauth2provider.NewMemoryStore()
 	p.SetOAuth2Store(st)
 	require.NoError(t, p.OnInit(context.Background(), eng))

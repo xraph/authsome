@@ -170,9 +170,8 @@ func TestAuthCode_LegacyRowWithoutNonceRedeems(t *testing.T) {
 	_, st, mux := newFixture(t)
 	client, err := st.GetClient(context.Background(), confidentialID)
 	require.NoError(t, err)
-	user := id.NewUserID()
 	require.NoError(t, st.CreateAuthCode(context.Background(), &oauth2provider.AuthorizationCode{
-		ID: id.NewAuthCodeID(), Code: "legacy-code-1", ClientID: confidentialID, UserID: user, AppID: client.AppID,
+		ID: id.NewAuthCodeID(), Code: "legacy-code-1", ClientID: confidentialID, UserID: fixtureUserID, AppID: client.AppID,
 		RedirectURI: registeredURI, Scopes: []string{"openid"},
 		ExpiresAt: time.Now().Add(time.Minute), CreatedAt: time.Now(),
 	}))

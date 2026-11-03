@@ -33,11 +33,13 @@ func newRevokeFixture(t *testing.T) (store.Store, forge.Router) {
 	core := memory.New()
 	p.SetOAuth2Store(st)
 	p.SetStore(core)
+	giveSigningKey(t, p)
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(confidentialSecret), bcrypt.MinCost)
 	require.NoError(t, err)
 
 	appID := id.NewAppID()
+	seedFixtureUser(t, core, appID)
 	require.NoError(t, st.CreateClient(context.Background(), &oauth2provider.OAuth2Client{
 		ID:           id.NewOAuth2ClientID(),
 		AppID:        appID,
