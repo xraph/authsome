@@ -113,6 +113,14 @@ func newKeyManager(cfg Config, st Store, enc bridge.Encryptor, logger log.Logger
 	if logger == nil {
 		logger = log.NewNoopLogger()
 	}
+	switch {
+	case cfg.IDTokenTTL < 0:
+		return nil, errors.New("oauth2: IDTokenTTL must not be negative")
+	case cfg.IDTokenKeyRotation < 0:
+		return nil, errors.New("oauth2: IDTokenKeyRotation must not be negative")
+	case cfg.IDTokenKeyRetireGrace < 0:
+		return nil, errors.New("oauth2: IDTokenKeyRetireGrace must not be negative")
+	}
 	m := &keyManager{
 		store:    st,
 		enc:      enc,
@@ -241,11 +249,22 @@ func (m *keyManager) Active(ctx context.Context, scope string) (*signer, error) 
 			row = created
 		case errors.Is(createErr, ErrSigningKeyConflict):
 			// Another replica inserted this generation first. Its key wins.
-			keys, err = m.store.ListSigningKeys(ctx, scope)
-			if err != nil {
-				return nil, fmt.Errorf("oauth2: list signing keys: %w", err)
+			// If the store can't say which key that is right now, keep
+			// signing with the one we have and look again next time.
+			fresh, listErr := m.store.ListSigningKeys(ctx, scope)
+			if listErr != nil {
+				m.logger.Warn("oauth2: reload id_token signing keys after a rotation race; keeping the current key",
+					log.String("scope", scope), log.Error(listErr))
+				if row == nil {
+					if st.active != nil {
+						return st.active, nil
+					}
+					return nil, fmt.Errorf("oauth2: list signing keys: %w", listErr)
+				}
+				st.retryAfter = now.Add(activeKeyCacheTTL)
+			} else {
+				row = activeRow(fresh)
 			}
-			row = activeRow(keys)
 		case row != nil:
 			m.logger.Error("oauth2: rotate id_token signing key; signing with the current key",
 				log.String("scope", scope), log.Error(createErr))
@@ -307,29 +326,35 @@ func (m *keyManager) Rotate(ctx context.Context, scope string) (*SigningKey, err
 
 // Published returns the public keys a relying party needs to verify
 // id_tokens for scope: the active key, every managed key still inside its
-// retirement grace, and the operator's previous keys. Retired keys and
-// symmetric keys are never included.
+// retirement grace, and, for the deployment issuer, the operator's previous
+// keys. Retired keys and symmetric keys are never included.
+//
+// It publishes whatever it can. A key that can't be loaded or generated is
+// logged, not returned as an error, so a broken active key never takes the
+// keys that still verify out of the JWKS with it.
 func (m *keyManager) Published(ctx context.Context, scope string) ([]jwkutil.JWK, error) {
-	if m.usesOperatorKey(scope) {
-		out := make([]jwkutil.JWK, 0, 1+len(m.operatorPrev))
+	operator := m.usesOperatorKey(scope)
+	out := make([]jwkutil.JWK, 0, 2+len(m.operatorPrev))
+	if operator {
 		out = append(out, m.operatorJWK)
-		return append(out, m.operatorPrev...), nil
-	}
-
-	// Make sure the scope has a key, and that an aged one has rotated,
-	// before saying which keys exist.
-	if _, err := m.Active(ctx, scope); err != nil && !errors.Is(err, errNoSigningKey) {
-		return nil, err
+	} else if _, err := m.Active(ctx, scope); err != nil && !errors.Is(err, errNoSigningKey) {
+		// Make sure the scope has a key, and that an aged one has rotated,
+		// before saying which keys exist.
+		m.logger.Error("oauth2: load id_token signing key for JWKS",
+			log.String("scope", scope), log.Error(err))
 	}
 
 	keys, err := m.store.ListSigningKeys(ctx, scope)
 	if err != nil {
-		return nil, fmt.Errorf("oauth2: list signing keys: %w", err)
+		if len(out) == 0 && (scope != "" || len(m.operatorPrev) == 0) {
+			return nil, fmt.Errorf("oauth2: list signing keys: %w", err)
+		}
+		m.logger.Warn("oauth2: list signing keys for JWKS",
+			log.String("scope", scope), log.Error(err))
 	}
 	now := m.now()
-	out := make([]jwkutil.JWK, 0, len(keys))
 	for _, k := range keys {
-		if k.RetiresAt != nil && !k.RetiresAt.After(now) {
+		if !m.publishable(k, operator, now) {
 			continue
 		}
 		j, err := jwkFromStored(k)
@@ -340,56 +365,100 @@ func (m *keyManager) Published(ctx context.Context, scope string) ([]jwkutil.JWK
 		}
 		out = append(out, *j)
 	}
+	if scope == "" {
+		out = append(out, m.operatorPrev...)
+	}
 	return out, nil
+}
+
+// publishable reports whether a stored key belongs in the JWKS. Under an
+// operator key, managed keys only stay while they retire; otherwise every
+// key that has not yet retired does.
+func (m *keyManager) publishable(k *SigningKey, operator bool, now time.Time) bool {
+	if k.RetiresAt == nil {
+		return !operator
+	}
+	return k.RetiresAt.After(now)
 }
 
 // Describe lists the keys for scope as the dashboard shows them, active key
 // first. It reads only and never generates a key.
 func (m *keyManager) Describe(ctx context.Context, scope string) ([]KeyInfo, error) {
-	if m.usesOperatorKey(scope) {
-		out := make([]KeyInfo, 0, 1+len(m.operatorPrev))
+	operator := m.usesOperatorKey(scope)
+	out := make([]KeyInfo, 0, 2+len(m.operatorPrev))
+	if operator {
 		out = append(out, KeyInfo{
 			KID: m.operator.kid, Alg: m.operator.alg,
 			Source: keySourceOperator, Status: keyStatusActive,
 		})
-		for _, j := range m.operatorPrev {
-			out = append(out, KeyInfo{
-				KID: j.KID, Alg: j.ALG,
-				Source: keySourceOperator, Status: keyStatusPrevious,
-			})
-		}
-		return out, nil
 	}
 
 	keys, err := m.store.ListSigningKeys(ctx, scope)
 	if err != nil {
 		return nil, fmt.Errorf("oauth2: list signing keys: %w", err)
 	}
-	active := activeRow(keys)
+	var active *SigningKey
+	if !operator {
+		active = activeRow(keys)
+	}
 	now := m.now()
-	out := make([]KeyInfo, 0, len(keys))
 	for _, k := range keys {
+		if !m.publishable(k, operator, now) {
+			continue
+		}
 		var status string
 		switch {
 		case k == active:
 			status = keyStatusActive
 		case k.RetiresAt == nil:
 			status = keyStatusPrevious
-		case k.RetiresAt.After(now):
-			status = keyStatusRetiring
 		default:
-			continue
+			status = keyStatusRetiring
 		}
 		j, err := jwkFromStored(k)
 		if err != nil {
-			return nil, err
+			m.logger.Warn("oauth2: skip unreadable signing key",
+				log.String("key_id", k.ID.String()), log.Error(err))
+			continue
 		}
 		out = append(out, KeyInfo{
 			KID: j.KID, Alg: k.Alg, Source: keySourceManaged, Status: status,
 			CreatedAt: k.CreatedAt, RetiresAt: k.RetiresAt,
 		})
 	}
+	if scope == "" {
+		for _, j := range m.operatorPrev {
+			out = append(out, KeyInfo{
+				KID: j.KID, Alg: j.ALG,
+				Source: keySourceOperator, Status: keyStatusPrevious,
+			})
+		}
+	}
 	return out, nil
+}
+
+// retireForOperator starts the retirement grace of every managed key the
+// deployment issuer still has once an operator key takes over. The managed
+// keys stay published until then, so tokens they signed keep verifying. A
+// key already retiring keeps its date, so a restart doesn't push it out.
+func (m *keyManager) retireForOperator(ctx context.Context) error {
+	if m.operator == nil {
+		return nil
+	}
+	keys, err := m.store.ListSigningKeys(ctx, "")
+	if err != nil {
+		return fmt.Errorf("oauth2: list signing keys: %w", err)
+	}
+	retireAt := m.now().Add(m.grace).UTC()
+	for _, k := range keys {
+		if k.RetiresAt != nil {
+			continue
+		}
+		if err := m.store.RetireSigningKey(ctx, k.ID, retireAt); err != nil {
+			return fmt.Errorf("oauth2: retire signing key %s: %w", k.ID, err)
+		}
+	}
+	return nil
 }
 
 // due reports whether k is old enough to rotate.
@@ -410,6 +479,32 @@ func (m *keyManager) create(ctx context.Context, scope string, keys []*SigningKe
 		gen = keys[0].Generation + 1
 	}
 
+	row, err := m.mint(scope, gen, now)
+	if err != nil {
+		return nil, err
+	}
+	if err := m.store.CreateSigningKey(ctx, row); err != nil {
+		return nil, err
+	}
+
+	retireAt := now.Add(m.grace).UTC()
+	for _, k := range keys {
+		if k.RetiresAt != nil {
+			continue
+		}
+		if err := m.store.RetireSigningKey(ctx, k.ID, retireAt); err != nil {
+			// The new key already signs. The old one just stays published
+			// until a later rotation retires it.
+			m.logger.Warn("oauth2: retire previous id_token signing key",
+				log.String("key_id", k.ID.String()), log.Error(err))
+		}
+	}
+	return row, nil
+}
+
+// mint generates a sealed RSA-2048 key for scope at generation gen. It
+// stores nothing.
+func (m *keyManager) mint(scope string, gen int64, now time.Time) (*SigningKey, error) {
 	priv, err := rsa.GenerateKey(rand.Reader, managedKeyBits)
 	if err != nil {
 		return nil, fmt.Errorf("oauth2: generate signing key: %w", err)
@@ -439,22 +534,6 @@ func (m *keyManager) create(ctx context.Context, scope string, keys []*SigningKe
 		PublicJWK:  pubJSON,
 		Generation: gen,
 		CreatedAt:  now.UTC(),
-	}
-	if err := m.store.CreateSigningKey(ctx, row); err != nil {
-		return nil, err
-	}
-
-	retireAt := now.Add(m.grace).UTC()
-	for _, k := range keys {
-		if k.RetiresAt != nil {
-			continue
-		}
-		if err := m.store.RetireSigningKey(ctx, k.ID, retireAt); err != nil {
-			// The new key already signs. The old one just stays published
-			// until a later rotation retires it.
-			m.logger.Warn("oauth2: retire previous id_token signing key",
-				log.String("key_id", k.ID.String()), log.Error(err))
-		}
 	}
 	return row, nil
 }

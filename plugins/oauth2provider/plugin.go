@@ -132,6 +132,11 @@ type Config struct {
 	// IDTokenPreviousKeys are PEM keys, public or private, that are published
 	// in JWKS but never sign. Keep a rotated-out key here until every token it
 	// signed has expired.
+	//
+	// A previous key's kid is always its RFC 7638 thumbprint. If the old key
+	// signed under IDTokenSigningKeyID, its tokens carry that kid, so either
+	// keep it as the signing key until they expire or accept that they stop
+	// verifying when the kid changes.
 	IDTokenPreviousKeys [][]byte
 
 	// IDTokenTTL is the lifetime of id_tokens (default: 1 hour).
@@ -209,7 +214,7 @@ func New(cfg ...Config) *Plugin {
 func (p *Plugin) Name() string { return "oauth2provider" }
 
 // OnInit captures dependencies from the engine.
-func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+func (p *Plugin) OnInit(ctx context.Context, engine plugin.Engine) error {
 	p.engine = engine
 	p.store = engine.Store()
 	p.logger = engine.Logger()
@@ -257,6 +262,12 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		return err
 	}
 	p.keys = keys
+	// Managed keys the deployment issuer used before an operator key was
+	// configured start their retirement grace now. Failing here is not
+	// worth stopping the boot over: the keys just leave the JWKS early.
+	if err := keys.retireForOperator(ctx); err != nil {
+		p.logger.Warn("oauth2: retire managed id_token keys under an operator key", log.Error(err))
+	}
 
 	return nil
 }

@@ -24,6 +24,7 @@ import (
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/jwkutil"
 	"github.com/xraph/authsome/internal/secutil"
 )
@@ -269,12 +270,15 @@ func TestOnInit_RejectsBadOperatorKey(t *testing.T) {
 	require.NoError(t, os.WriteFile(keyFile, []byte("not a key"), 0o600))
 
 	cases := map[string]Config{
-		"garbage PEM":  {IDTokenSigningKey: []byte("-----BEGIN PRIVATE KEY-----\nbm9wZQ==\n-----END PRIVATE KEY-----\n")},
-		"not PEM":      {IDTokenSigningKey: []byte("hello")},
-		"RSA 1024":     {IDTokenSigningKey: rsaPEM(t, 1024)},
-		"garbage file": {IDTokenSigningKeyFile: keyFile},
-		"missing file": {IDTokenSigningKeyFile: filepath.Join(t.TempDir(), "absent.pem")},
-		"bad previous": {IDTokenPreviousKeys: [][]byte{[]byte("hello")}},
+		"garbage PEM":       {IDTokenSigningKey: []byte("-----BEGIN PRIVATE KEY-----\nbm9wZQ==\n-----END PRIVATE KEY-----\n")},
+		"not PEM":           {IDTokenSigningKey: []byte("hello")},
+		"RSA 1024":          {IDTokenSigningKey: rsaPEM(t, 1024)},
+		"garbage file":      {IDTokenSigningKeyFile: keyFile},
+		"missing file":      {IDTokenSigningKeyFile: filepath.Join(t.TempDir(), "absent.pem")},
+		"bad previous":      {IDTokenPreviousKeys: [][]byte{[]byte("hello")}},
+		"negative TTL":      {IDTokenTTL: -time.Second},
+		"negative rotation": {IDTokenKeyRotation: -time.Second},
+		"negative grace":    {IDTokenKeyRetireGrace: -time.Second},
 	}
 	for name, cfg := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -333,4 +337,185 @@ func TestKeyManager_ECOperatorKeyIsES256(t *testing.T) {
 	require.Len(t, info, 2)
 	assert.Equal(t, "previous", info[1].Status)
 	assert.Equal(t, "operator", info[1].Source)
+}
+
+func publicPEM(t *testing.T) ([]byte, crypto.PublicKey) {
+	t.Helper()
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	der, err := x509.MarshalPKIXPublicKey(&k.PublicKey)
+	require.NoError(t, err)
+	return pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der}), &k.PublicKey
+}
+
+// An operator moving from an operator key to managed keys lists the old key
+// as a previous key, and it must stay published next to the managed one.
+func TestKeyManager_PreviousKeysPublishedOnManagedPath(t *testing.T) {
+	ctx := context.Background()
+	prevPEM, prevPub := publicPEM(t)
+	m := newTestKeyManager(t, Config{IDTokenPreviousKeys: [][]byte{prevPEM}}, NewMemoryStore(), testEncryptor(t))
+
+	s, err := m.Active(ctx, "")
+	require.NoError(t, err)
+	prevKID := thumbprintOf(t, prevPub)
+	assert.Equal(t, []string{s.kid, prevKID}, publishedKIDs(t, m, ""))
+
+	info, err := m.Describe(ctx, "")
+	require.NoError(t, err)
+	require.Len(t, info, 2)
+	assert.Equal(t, KeyInfo{KID: prevKID, Alg: "RS256", Source: "operator", Status: "previous"}, info[1])
+
+	// Previous keys belong to the deployment issuer only.
+	app, err := m.Active(ctx, "app")
+	require.NoError(t, err)
+	assert.Equal(t, []string{app.kid}, publishedKIDs(t, m, "app"))
+}
+
+// Switching from managed keys to an operator key retires the managed key on
+// boot, and it stays published through its grace.
+func TestKeyManager_OperatorSwitchRetiresManagedKey(t *testing.T) {
+	ctx := context.Background()
+	st := NewMemoryStore()
+	managed, err := newTestKeyManager(t, Config{}, st, testEncryptor(t)).Active(ctx, "")
+	require.NoError(t, err)
+
+	eng := secutil.NewTestEngine(t)
+	boot := func() *Plugin {
+		p := New(Config{IDTokenSigningKey: rsaPEM(t, 2048)})
+		p.SetOAuth2Store(st)
+		require.NoError(t, p.OnInit(ctx, eng))
+		return p
+	}
+	p := boot()
+
+	op, err := p.keys.Active(ctx, "")
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{op.kid, managed.kid}, publishedKIDs(t, p.keys, ""))
+
+	keys, err := st.ListSigningKeys(ctx, "")
+	require.NoError(t, err)
+	require.Len(t, keys, 1)
+	require.NotNil(t, keys[0].RetiresAt)
+	retiresAt := *keys[0].RetiresAt
+	assert.WithinDuration(t, time.Now().Add(7*24*time.Hour), retiresAt, time.Minute)
+
+	info, err := p.keys.Describe(ctx, "")
+	require.NoError(t, err)
+	require.Len(t, info, 2)
+	assert.Equal(t, "operator", info[0].Source)
+	assert.Equal(t, KeyInfo{
+		KID: managed.kid, Alg: "RS256", Source: "managed", Status: "retiring",
+		CreatedAt: keys[0].CreatedAt, RetiresAt: keys[0].RetiresAt,
+	}, info[1])
+
+	// A restart leaves the retirement date where it was.
+	boot()
+	keys, err = st.ListSigningKeys(ctx, "")
+	require.NoError(t, err)
+	assert.True(t, keys[0].RetiresAt.Equal(retiresAt))
+
+	// Once the grace is over the managed key leaves the JWKS.
+	require.NoError(t, st.RetireSigningKey(ctx, keys[0].ID, time.Now().Add(-time.Minute)))
+	assert.Equal(t, []string{op.kid}, publishedKIDs(t, p.keys, ""))
+}
+
+// racingStore loses every CreateSigningKey to a competitor: it inserts the
+// competing row at the caller's (scope, generation) first, then reports the
+// conflict the unique index would.
+type racingStore struct {
+	Store
+	competitor *SigningKey
+	attempted  []id.OAuth2SigningKeyID
+	// failList makes every ListSigningKeys after the conflict fail.
+	failList bool
+	lost     bool
+}
+
+func (s *racingStore) CreateSigningKey(ctx context.Context, k *SigningKey) error {
+	s.attempted = append(s.attempted, k.ID)
+	s.competitor.Generation = k.Generation
+	if err := s.Store.CreateSigningKey(ctx, s.competitor); err != nil {
+		return err
+	}
+	s.lost = true
+	return ErrSigningKeyConflict
+}
+
+func (s *racingStore) ListSigningKeys(ctx context.Context, scope string) ([]*SigningKey, error) {
+	if s.failList && s.lost {
+		return nil, errors.New("database is down")
+	}
+	return s.Store.ListSigningKeys(ctx, scope)
+}
+
+func TestKeyManager_ConflictTakesCompetingKey(t *testing.T) {
+	ctx := context.Background()
+	enc := testEncryptor(t)
+	rival := newTestKeyManager(t, Config{}, NewMemoryStore(), enc)
+	competitor, err := rival.mint("", 0, time.Now())
+	require.NoError(t, err)
+	want, err := jwkFromStored(competitor)
+	require.NoError(t, err)
+
+	st := &racingStore{Store: NewMemoryStore(), competitor: competitor}
+	m := newTestKeyManager(t, Config{}, st, enc)
+	s, err := m.Active(ctx, "")
+	require.NoError(t, err)
+	assert.Equal(t, want.KID, s.kid)
+
+	keys, err := st.ListSigningKeys(ctx, "")
+	require.NoError(t, err)
+	require.Len(t, keys, 1)
+	assert.Equal(t, competitor.ID, keys[0].ID)
+	require.Len(t, st.attempted, 1)
+	assert.NotEqual(t, competitor.ID, st.attempted[0], "the losing key was never stored")
+}
+
+// When the store can't be read after losing a rotation race, the current
+// key keeps signing.
+func TestKeyManager_ConflictRelistFailureKeepsSigning(t *testing.T) {
+	ctx := context.Background()
+	enc := testEncryptor(t)
+	inner := NewMemoryStore()
+	old := newTestKeyManager(t, Config{}, inner, enc)
+	old.now = func() time.Time { return time.Now().Add(-100 * 24 * time.Hour) }
+	aged, err := old.Active(ctx, "")
+	require.NoError(t, err)
+
+	competitor, err := old.mint("", 0, time.Now())
+	require.NoError(t, err)
+	st := &racingStore{Store: inner, competitor: competitor, failList: true}
+	m := newTestKeyManager(t, Config{}, st, enc)
+	s, err := m.Active(ctx, "")
+	require.NoError(t, err)
+	assert.Equal(t, aged.kid, s.kid)
+}
+
+// A key that can't be unsealed must not take the JWKS down with it.
+func TestKeyManager_PublishedSurvivesActiveFailure(t *testing.T) {
+	ctx := context.Background()
+	st := NewMemoryStore()
+	s, err := newTestKeyManager(t, Config{}, st, testEncryptor(t)).Active(ctx, "app")
+	require.NoError(t, err)
+
+	otherKey, err := bridge.NewAESGCMEncryptor(bytes.Repeat([]byte{9}, 32))
+	require.NoError(t, err)
+	m := newTestKeyManager(t, Config{}, st, otherKey)
+	_, err = m.Active(ctx, "app")
+	require.Error(t, err)
+	assert.Equal(t, []string{s.kid}, publishedKIDs(t, m, "app"))
+}
+
+// Under an operator key, a managed key that never started retiring (the boot
+// retire failed, say) is not published: only retiring keys are.
+func TestKeyManager_OperatorPathSkipsUnretiredManagedKey(t *testing.T) {
+	ctx := context.Background()
+	st := NewMemoryStore()
+	_, err := newTestKeyManager(t, Config{}, st, testEncryptor(t)).Active(ctx, "")
+	require.NoError(t, err)
+
+	m := newTestKeyManager(t, Config{IDTokenSigningKey: rsaPEM(t, 2048)}, st, testEncryptor(t))
+	op, err := m.Active(ctx, "")
+	require.NoError(t, err)
+	assert.Equal(t, []string{op.kid}, publishedKIDs(t, m, ""))
 }
