@@ -7,6 +7,9 @@
 package oauth2test
 
 import (
+	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -71,6 +74,10 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"DeviceCodeStoredAsHash", testDeviceCodeStoredAsHash},
 		{"GrantLifecycle", testGrantLifecycle},
 		{"ClientFirstPartyRoundTrip", testClientFirstPartyRoundTrip},
+		{"SigningKeys/CreateAndList", testSigningKeysCreateAndList},
+		{"SigningKeys/DuplicateGenerationConflicts", testSigningKeysDuplicateGenerationConflicts},
+		{"SigningKeys/ScopesAreIsolated", testSigningKeysScopesAreIsolated},
+		{"SigningKeys/Retire", testSigningKeysRetire},
 	}
 	for _, tc := range cases {
 		if skipSet[tc.name] {
@@ -105,5 +112,126 @@ func newClient(appID id.AppID) *oauth2provider.OAuth2Client {
 		Resources:    []string{"https://api.example.test"},
 		CreatedAt:    now(),
 		UpdatedAt:    now(),
+	}
+}
+
+// ──────────────────────────────────────────────────
+// Signing keys
+// ──────────────────────────────────────────────────
+
+func newSigningKey(scope string, generation int64) *oauth2provider.SigningKey {
+	return &oauth2provider.SigningKey{
+		ID:         id.NewOAuth2SigningKeyID(),
+		Scope:      scope,
+		Alg:        "RS256",
+		PrivateKey: "sealed-private-key",
+		PublicJWK:  []byte(`{"kty":"RSA","kid":"k","alg":"RS256","use":"sig"}`),
+		Generation: generation,
+		CreatedAt:  now(),
+	}
+}
+
+func testSigningKeysCreateAndList(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	scope := unique("scope")
+	older, newer := newSigningKey(scope, 1), newSigningKey(scope, 2)
+	// Insert out of order so the result can only be ordered by the store.
+	for _, k := range []*oauth2provider.SigningKey{newer, older} {
+		if err := f.Store.CreateSigningKey(ctx, k); err != nil {
+			t.Fatalf("CreateSigningKey gen %d: %v", k.Generation, err)
+		}
+	}
+
+	got, err := f.Store.ListSigningKeys(ctx, scope)
+	if err != nil {
+		t.Fatalf("ListSigningKeys: %v", err)
+	}
+	if len(got) != 2 || got[0].Generation != 2 || got[1].Generation != 1 {
+		t.Fatalf("want generations [2 1], got %+v", got)
+	}
+	k := got[0]
+	if k.ID != newer.ID || k.Scope != scope || k.Alg != "RS256" ||
+		k.PrivateKey != newer.PrivateKey || !bytes.Equal(k.PublicJWK, newer.PublicJWK) {
+		t.Fatalf("round trip mismatch: got %+v want %+v", k, newer)
+	}
+	if !k.CreatedAt.Equal(newer.CreatedAt) {
+		t.Fatalf("CreatedAt: got %v want %v", k.CreatedAt, newer.CreatedAt)
+	}
+	if k.RetiresAt != nil {
+		t.Fatalf("a new key must not be retired, got %v", k.RetiresAt)
+	}
+}
+
+func testSigningKeysDuplicateGenerationConflicts(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	scope := unique("scope")
+	if err := f.Store.CreateSigningKey(ctx, newSigningKey(scope, 1)); err != nil {
+		t.Fatalf("CreateSigningKey: %v", err)
+	}
+	err := f.Store.CreateSigningKey(ctx, newSigningKey(scope, 1))
+	if !errors.Is(err, oauth2provider.ErrSigningKeyConflict) {
+		t.Fatalf("duplicate generation: want ErrSigningKeyConflict, got %v", err)
+	}
+	got, err := f.Store.ListSigningKeys(ctx, scope)
+	if err != nil {
+		t.Fatalf("ListSigningKeys: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("the loser must not be stored, got %d keys", len(got))
+	}
+}
+
+func testSigningKeysScopesAreIsolated(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	a, b := unique("scope"), unique("scope")
+	// The same generation in two scopes is fine: uniqueness is per scope.
+	for _, scope := range []string{a, b, ""} {
+		if err := f.Store.CreateSigningKey(ctx, newSigningKey(scope, 1)); err != nil {
+			t.Fatalf("CreateSigningKey scope %q: %v", scope, err)
+		}
+	}
+	for _, scope := range []string{a, b} {
+		got, err := f.Store.ListSigningKeys(ctx, scope)
+		if err != nil {
+			t.Fatalf("ListSigningKeys: %v", err)
+		}
+		if len(got) != 1 || got[0].Scope != scope {
+			t.Fatalf("scope %q: want its own single key, got %+v", scope, got)
+		}
+	}
+	got, err := f.Store.ListSigningKeys(ctx, unique("empty"))
+	if err != nil {
+		t.Fatalf("ListSigningKeys: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("unknown scope must list nothing, got %d", len(got))
+	}
+}
+
+func testSigningKeysRetire(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	scope := unique("scope")
+	retired, active := newSigningKey(scope, 1), newSigningKey(scope, 2)
+	for _, k := range []*oauth2provider.SigningKey{retired, active} {
+		if err := f.Store.CreateSigningKey(ctx, k); err != nil {
+			t.Fatalf("CreateSigningKey: %v", err)
+		}
+	}
+	at := now().Add(time.Hour)
+	if err := f.Store.RetireSigningKey(ctx, retired.ID, at); err != nil {
+		t.Fatalf("RetireSigningKey: %v", err)
+	}
+	got, err := f.Store.ListSigningKeys(ctx, scope)
+	if err != nil {
+		t.Fatalf("ListSigningKeys: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("retiring must not delete, got %d keys", len(got))
+	}
+	if got[0].RetiresAt != nil {
+		t.Fatalf("the other key must stay active, got %v", got[0].RetiresAt)
+	}
+	if got[1].RetiresAt == nil || !got[1].RetiresAt.Equal(at) {
+		t.Fatalf("RetiresAt: got %v want %v", got[1].RetiresAt, at)
 	}
 }

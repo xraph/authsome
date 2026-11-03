@@ -24,53 +24,54 @@ type Prefix string
 
 // Prefix constants for all AuthSome entity types.
 const (
-	PrefixUser            Prefix = "ausr"
-	PrefixSession         Prefix = "ases"
-	PrefixApp             Prefix = "aapp"
-	PrefixOrg             Prefix = "aorg"
-	PrefixMember          Prefix = "amem"
-	PrefixTeam            Prefix = "atm"
-	PrefixInvitation      Prefix = "ainv"
-	PrefixDevice          Prefix = "adev"
-	PrefixWebhook         Prefix = "awhk"
-	PrefixNotification    Prefix = "antf"
-	PrefixVerification    Prefix = "avrf"
-	PrefixPasswordReset   Prefix = "apwr"
-	PrefixAPIKey          Prefix = "akey"
-	PrefixOAuthConnection Prefix = "aoau"
-	PrefixPasskey         Prefix = "apsk"
-	PrefixMFA             Prefix = "amfa"
-	PrefixEnvironment     Prefix = "aenv"
-	PrefixRole            Prefix = "arol"
-	PrefixPermission      Prefix = "aprm"
-	PrefixRecoveryCode    Prefix = "arec"
-	PrefixSSOConnection   Prefix = "asso"
-	PrefixConsent         Prefix = "acns"
-	PrefixFormConfig      Prefix = "afcf"
-	PrefixBrandingConfig  Prefix = "abrd"
-	PrefixAppSessionCfg   Prefix = "ascf"
-	PrefixOAuth2Client    Prefix = "aoac"
-	PrefixOAuth2Grant     Prefix = "aoag"
-	PrefixAuthCode        Prefix = "aaco"
-	PrefixSetting         Prefix = "aset"
-	PrefixAppClientConfig Prefix = "aacf"
-	PrefixDeviceCode      Prefix = "advc"
-	PrefixSCIMConfig      Prefix = "ascm"
-	PrefixSCIMToken       Prefix = "asct"
-	PrefixSCIMLog         Prefix = "ascl"
-	PrefixWaitlist        Prefix = "awlt"
-	PrefixSessionFamily   Prefix = "asfm"
-	PrefixServiceAccount  Prefix = "svc"
-	PrefixUserEmail       Prefix = "auem"
-	PrefixDelegation      Prefix = "adel"
-	PrefixSSFStream       Prefix = "assf"
-	PrefixSSFLink         Prefix = "assl"
-	PrefixSSFEvent        Prefix = "asse"
-	PrefixSSFSignal       Prefix = "assg"
-	PrefixAgent           Prefix = "aagt"
-	PrefixAgentGrant      Prefix = "aagr"
-	PrefixRetentionJob    Prefix = "artj"
-	PrefixRetentionRef    Prefix = "artr"
+	PrefixUser             Prefix = "ausr"
+	PrefixSession          Prefix = "ases"
+	PrefixApp              Prefix = "aapp"
+	PrefixOrg              Prefix = "aorg"
+	PrefixMember           Prefix = "amem"
+	PrefixTeam             Prefix = "atm"
+	PrefixInvitation       Prefix = "ainv"
+	PrefixDevice           Prefix = "adev"
+	PrefixWebhook          Prefix = "awhk"
+	PrefixNotification     Prefix = "antf"
+	PrefixVerification     Prefix = "avrf"
+	PrefixPasswordReset    Prefix = "apwr"
+	PrefixAPIKey           Prefix = "akey"
+	PrefixOAuthConnection  Prefix = "aoau"
+	PrefixPasskey          Prefix = "apsk"
+	PrefixMFA              Prefix = "amfa"
+	PrefixEnvironment      Prefix = "aenv"
+	PrefixRole             Prefix = "arol"
+	PrefixPermission       Prefix = "aprm"
+	PrefixRecoveryCode     Prefix = "arec"
+	PrefixSSOConnection    Prefix = "asso"
+	PrefixConsent          Prefix = "acns"
+	PrefixFormConfig       Prefix = "afcf"
+	PrefixBrandingConfig   Prefix = "abrd"
+	PrefixAppSessionCfg    Prefix = "ascf"
+	PrefixOAuth2Client     Prefix = "aoac"
+	PrefixOAuth2Grant      Prefix = "aoag"
+	PrefixOAuth2SigningKey Prefix = "aosk"
+	PrefixAuthCode         Prefix = "aaco"
+	PrefixSetting          Prefix = "aset"
+	PrefixAppClientConfig  Prefix = "aacf"
+	PrefixDeviceCode       Prefix = "advc"
+	PrefixSCIMConfig       Prefix = "ascm"
+	PrefixSCIMToken        Prefix = "asct"
+	PrefixSCIMLog          Prefix = "ascl"
+	PrefixWaitlist         Prefix = "awlt"
+	PrefixSessionFamily    Prefix = "asfm"
+	PrefixServiceAccount   Prefix = "svc"
+	PrefixUserEmail        Prefix = "auem"
+	PrefixDelegation       Prefix = "adel"
+	PrefixSSFStream        Prefix = "assf"
+	PrefixSSFLink          Prefix = "assl"
+	PrefixSSFEvent         Prefix = "asse"
+	PrefixSSFSignal        Prefix = "assg"
+	PrefixAgent            Prefix = "aagt"
+	PrefixAgentGrant       Prefix = "aagr"
+	PrefixRetentionJob     Prefix = "artj"
+	PrefixRetentionRef     Prefix = "artr"
 )
 
 // ID is the primary identifier type for all AuthSome entities.
@@ -179,6 +180,9 @@ type OAuth2ClientID = ID
 
 // OAuth2GrantID is a type-safe identifier for OAuth2 consent grants (prefix: "aoag").
 type OAuth2GrantID = ID
+
+// OAuth2SigningKeyID is a type-safe identifier for id_token signing keys (prefix: "aosk").
+type OAuth2SigningKeyID = ID
 
 // AuthCodeID is a type-safe identifier for authorization codes (prefix: "aaco").
 type AuthCodeID = ID
@@ -397,6 +401,9 @@ func NewOAuth2ClientID() ID { return New(PrefixOAuth2Client) }
 // NewOAuth2GrantID generates a new unique OAuth2 consent grant ID.
 func NewOAuth2GrantID() ID { return New(PrefixOAuth2Grant) }
 
+// NewOAuth2SigningKeyID generates a new unique id_token signing key ID.
+func NewOAuth2SigningKeyID() ID { return New(PrefixOAuth2SigningKey) }
+
 // NewAuthCodeID generates a new unique authorization code ID.
 func NewAuthCodeID() ID { return New(PrefixAuthCode) }
 
@@ -546,6 +553,9 @@ func ParseOAuth2ClientID(s string) (ID, error) { return ParseWithPrefix(s, Prefi
 
 // ParseOAuth2GrantID parses a string and validates the "aoag" prefix.
 func ParseOAuth2GrantID(s string) (ID, error) { return ParseWithPrefix(s, PrefixOAuth2Grant) }
+
+// ParseOAuth2SigningKeyID parses a string and validates the "aosk" prefix.
+func ParseOAuth2SigningKeyID(s string) (ID, error) { return ParseWithPrefix(s, PrefixOAuth2SigningKey) }
 
 // ParseAuthCodeID parses a string and validates the "aaco" prefix.
 func ParseAuthCodeID(s string) (ID, error) { return ParseWithPrefix(s, PrefixAuthCode) }

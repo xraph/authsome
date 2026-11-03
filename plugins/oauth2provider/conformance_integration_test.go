@@ -25,8 +25,8 @@ import (
 // matching how store/postgres and store/mongo gate their own conformance runs.
 func init() {
 	extraBackends = append(extraBackends,
-		backend{"Postgres", postgresSetup},
-		backend{"Mongo", mongoSetup},
+		backend{"Postgres", postgresSetup, pendingSigningKeyCases},
+		backend{"Mongo", mongoSetup, pendingSigningKeyCases},
 	)
 }
 

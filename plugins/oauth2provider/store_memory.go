@@ -2,6 +2,7 @@ package oauth2provider
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ type MemoryStore struct {
 	codes       map[string]*AuthorizationCode // keyed by store.HashToken(Code)
 	deviceCodes map[string]*DeviceCode        // keyed by ID; codes are held hashed
 	grants      map[string]*Grant             // keyed by grantKey
+	signingKeys map[string][]*SigningKey      // keyed by scope
 }
 
 func grantKey(appID id.AppID, userID id.UserID, clientID string) string {
@@ -29,6 +31,7 @@ func NewMemoryStore() *MemoryStore {
 		codes:       make(map[string]*AuthorizationCode),
 		deviceCodes: make(map[string]*DeviceCode),
 		grants:      make(map[string]*Grant),
+		signingKeys: make(map[string][]*SigningKey),
 	}
 }
 
@@ -277,6 +280,57 @@ func (s *MemoryStore) DeleteGrant(_ context.Context, appID id.AppID, userID id.U
 		return ErrGrantNotFound
 	}
 	delete(s.grants, key)
+	return nil
+}
+
+// ──────────────────────────────────────────────────
+// Signing keys
+// ──────────────────────────────────────────────────
+
+func copySigningKey(k *SigningKey) *SigningKey {
+	cp := *k
+	cp.PublicJWK = append([]byte(nil), k.PublicJWK...)
+	if k.RetiresAt != nil {
+		t := *k.RetiresAt
+		cp.RetiresAt = &t
+	}
+	return &cp
+}
+
+func (s *MemoryStore) CreateSigningKey(_ context.Context, k *SigningKey) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, existing := range s.signingKeys[k.Scope] {
+		if existing.Generation == k.Generation {
+			return ErrSigningKeyConflict
+		}
+	}
+	s.signingKeys[k.Scope] = append(s.signingKeys[k.Scope], copySigningKey(k))
+	return nil
+}
+
+func (s *MemoryStore) ListSigningKeys(_ context.Context, scope string) ([]*SigningKey, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*SigningKey, 0, len(s.signingKeys[scope]))
+	for _, k := range s.signingKeys[scope] {
+		out = append(out, copySigningKey(k))
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Generation > out[j].Generation })
+	return out, nil
+}
+
+func (s *MemoryStore) RetireSigningKey(_ context.Context, keyID id.OAuth2SigningKeyID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, keys := range s.signingKeys {
+		for _, k := range keys {
+			if k.ID == keyID {
+				k.RetiresAt = &at
+				return nil
+			}
+		}
+	}
 	return nil
 }
 

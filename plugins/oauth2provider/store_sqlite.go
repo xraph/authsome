@@ -336,3 +336,18 @@ func (s *SqliteStore) DeleteGrant(ctx context.Context, appID id.AppID, userID id
 	}
 	return nil
 }
+
+// Signing keys are not persisted by this backend yet.
+var errSigningKeysUnsupportedSqlite = errors.New("oauth2: signing keys not implemented for sqlite")
+
+func (s *SqliteStore) CreateSigningKey(_ context.Context, _ *SigningKey) error {
+	return errSigningKeysUnsupportedSqlite
+}
+
+func (s *SqliteStore) ListSigningKeys(_ context.Context, _ string) ([]*SigningKey, error) {
+	return nil, errSigningKeysUnsupportedSqlite
+}
+
+func (s *SqliteStore) RetireSigningKey(_ context.Context, _ id.OAuth2SigningKeyID, _ time.Time) error {
+	return errSigningKeysUnsupportedSqlite
+}

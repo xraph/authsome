@@ -694,3 +694,18 @@ func (s *MongoStore) DeleteGrant(ctx context.Context, appID id.AppID, userID id.
 	}
 	return nil
 }
+
+// Signing keys are not persisted by this backend yet.
+var errSigningKeysUnsupportedMongo = errors.New("oauth2: signing keys not implemented for mongo")
+
+func (s *MongoStore) CreateSigningKey(_ context.Context, _ *SigningKey) error {
+	return errSigningKeysUnsupportedMongo
+}
+
+func (s *MongoStore) ListSigningKeys(_ context.Context, _ string) ([]*SigningKey, error) {
+	return nil, errSigningKeysUnsupportedMongo
+}
+
+func (s *MongoStore) RetireSigningKey(_ context.Context, _ id.OAuth2SigningKeyID, _ time.Time) error {
+	return errSigningKeysUnsupportedMongo
+}

@@ -333,3 +333,18 @@ func (s *PostgresStore) DeleteGrant(ctx context.Context, appID id.AppID, userID 
 	}
 	return nil
 }
+
+// Signing keys are not persisted by this backend yet.
+var errSigningKeysUnsupportedPostgres = errors.New("oauth2: signing keys not implemented for postgres")
+
+func (s *PostgresStore) CreateSigningKey(_ context.Context, _ *SigningKey) error {
+	return errSigningKeysUnsupportedPostgres
+}
+
+func (s *PostgresStore) ListSigningKeys(_ context.Context, _ string) ([]*SigningKey, error) {
+	return nil, errSigningKeysUnsupportedPostgres
+}
+
+func (s *PostgresStore) RetireSigningKey(_ context.Context, _ id.OAuth2SigningKeyID, _ time.Time) error {
+	return errSigningKeysUnsupportedPostgres
+}
