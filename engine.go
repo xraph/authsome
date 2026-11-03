@@ -167,6 +167,10 @@ type Engine struct {
 	// read it from request goroutines.
 	authMiddleware atomic.Pointer[forge.Middleware]
 
+	// Set by AcceptAuthTokenCookie. The dashboard registers after the
+	// middleware is built, so the bridge reads this on each request.
+	authTokenCookie atomic.Bool
+
 	// Forge auth provider registry — plugins register their providers here.
 	authRegistry auth.Registry
 
@@ -467,8 +471,11 @@ func (e *Engine) buildAuthMiddleware() {
 	}
 
 	// Wrap with cookie-to-header bridge: when no Authorization header is
-	// present, read the auth_token cookie (set during browser login) or
-	// the dynamic session cookie and inject it as a Bearer token.
+	// present, read the session cookie and inject it as a Bearer token. The
+	// dashboard's auth_token cookie is read first, but only once something
+	// has opted in to it (Session.AuthTokenCookie or AcceptAuthTokenCookie).
+	// The name is generic and cookies don't separate ports, so reading it
+	// unasked let another app's auth_token on localhost sign in here.
 	//
 	// The bridge also records the value it wrote. Everything downstream still
 	// reads one credential shape, but RFC 9449 section 7.1 is a rule about the
@@ -481,10 +488,13 @@ func (e *Engine) buildAuthMiddleware() {
 			r := ctx.Request()
 			if r.Header.Get("Authorization") == "" {
 				bridged := ""
-				if cookie, err := r.Cookie("auth_token"); err == nil && cookie.Value != "" {
-					bridged = cookie.Value
-				} else {
-					// Fall back to the dynamic session cookie name from settings.
+				if e.acceptsAuthTokenCookie() {
+					if cookie, err := r.Cookie("auth_token"); err == nil && cookie.Value != "" {
+						bridged = cookie.Value
+					}
+				}
+				if bridged == "" {
+					// The dynamic session cookie name from settings.
 					cookieName := e.resolveSessionCookieName(ctx.Context())
 					if cookie, err := r.Cookie(cookieName); err == nil && cookie.Value != "" {
 						bridged = cookie.Value
@@ -499,6 +509,16 @@ func (e *Engine) buildAuthMiddleware() {
 		}
 	}
 	e.authMiddleware.Store(&built)
+}
+
+// AcceptAuthTokenCookie makes the auth middleware read a session token from
+// the auth_token cookie, the one the forge dashboard's sign-in writes, as
+// Session.AuthTokenCookie does from config. The extension calls it when it
+// registers with the dashboard. It is safe to call while serving requests.
+func (e *Engine) AcceptAuthTokenCookie() { e.authTokenCookie.Store(true) }
+
+func (e *Engine) acceptsAuthTokenCookie() bool {
+	return e.config.Session.AuthTokenCookie || e.authTokenCookie.Load()
 }
 
 // AuthMiddleware returns the engine's fully-configured non-blocking

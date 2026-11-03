@@ -122,6 +122,16 @@ export interface AuthConfig {
    */
   storage?: TokenStorage;
 
+  /**
+   * Where the session lives. "token", the default, keeps its tokens in
+   * storage and sends them as a bearer token. "cookie" leaves it in the
+   * httpOnly cookie the backend sets on sign-in: every request carries the
+   * cookie, a reload asks the backend who's signed in, and no token reaches
+   * JavaScript. The backend renews the cookie, so nothing is refreshed here,
+   * and storage keeps only the cached client config.
+   */
+  session?: "token" | "cookie";
+
   /** Callback invoked when the auth state changes. */
   onStateChange?: (state: AuthState) => void;
 
