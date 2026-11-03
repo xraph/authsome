@@ -120,9 +120,9 @@ func TestOIDC_DiscoveryIsCachedPerIssuer(t *testing.T) {
 
 func TestOIDC_HardenedClientRefusesLocalAndPlainIssuers(t *testing.T) {
 	p := NewOIDCProvider(OIDCConfig{Name: "prod", Issuer: "http://127.0.0.1:9/" + t.Name(), ClientID: "c"})
-	_, err := p.(*oidcProvider).discover()
+	_, err := p.(*oidcProvider).discover(context.Background())
 	require.Error(t, err, "plain http discovery is refused before any dial")
 	p = NewOIDCProvider(OIDCConfig{Name: "prod", Issuer: "https://127.0.0.1:9/" + t.Name(), ClientID: "c"})
-	_, err = p.(*oidcProvider).discover()
+	_, err = p.(*oidcProvider).discover(context.Background())
 	require.Error(t, err, "a loopback issuer is refused")
 }

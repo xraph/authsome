@@ -1,9 +1,9 @@
 ---
 title: Dispatch Bridge
-description: Background job processing — offloads async tasks like email sending and session cleanup to Dispatch.
+description: The Dispatcher bridge to Dispatch, and what uses it today.
 ---
 
-The Dispatch bridge connects Authsome to the Dispatch background job extension. When configured, Authsome can offload long-running or retry-sensitive operations — bulk email delivery, session cleanup sweeps, expired token purges — to Dispatch's durable job queue rather than executing them in-process synchronously.
+The Dispatch bridge connects Authsome to [Dispatch](https://github.com/xraph/dispatch)'s job queue. Today only the `notification` plugin looks at it: when a dispatcher is configured, the plugin sends its notifications asynchronously. The core engine doesn't enqueue anything, so session cleanup and retention run in-process whether or not Dispatch is configured.
 
 ## Interface
 
@@ -23,12 +23,15 @@ import (
     "github.com/xraph/authsome"
     "github.com/xraph/authsome/bridge/dispatchadapter"
     "github.com/xraph/dispatch"
+    "github.com/xraph/dispatch/engine"
 )
 
-// Build the Dispatch engine (see Dispatch docs for full setup).
-dispatchEng, err := dispatch.New(
-    dispatch.WithStore(dispatchStore),
-)
+// Build the Dispatch engine (see Dispatch's docs for stores and workers).
+d, err := dispatch.New(dispatch.WithStore(dispatchStore))
+if err != nil {
+    log.Fatal(err)
+}
+dispatchEng, err := engine.Build(d)
 if err != nil {
     log.Fatal(err)
 }
@@ -37,51 +40,20 @@ if err != nil {
 dispatchBridge := dispatchadapter.New(dispatchEng)
 
 // Register with Authsome.
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(pgStore),
     authsome.WithDispatcher(dispatchBridge),
 )
 ```
 
-## Job types enqueued by Authsome
+## What Authsome sends through it
 
-When a Dispatch bridge is configured, Authsome enqueues the following job types:
+| Caller | Behaviour with a dispatcher |
+|--------|-----------------------------|
+| `notification` plugin | Sends notifications asynchronously (the same as `Async: true` in its config) |
 
-| Job type | Trigger | Payload |
-|----------|---------|---------|
-| `authsome.session.cleanup` | Periodic (engine scheduler) | `{"app_id": "..."}` |
-| `authsome.verification.expire` | After verification TTL | `{"token": "..."}` |
-| `authsome.password_reset.expire` | After reset TTL | `{"token": "..."}` |
-| `authsome.webhook.deliver` | Auth event emitted | Webhook event JSON |
-
-### Session cleanup
-
-Without Dispatch, Authsome performs session cleanup synchronously during sign-out or on a timer. With Dispatch, the cleanup job is enqueued and executed by Dispatch workers at controlled concurrency, preventing cleanup sweeps from competing with live auth operations:
-
-```go
-// Authsome internally calls:
-dispatcher.Enqueue(ctx, "authsome.session.cleanup", payload)
-```
-
-### Webhook delivery (without Relay)
-
-If you do not use the Relay bridge but still want retry semantics on webhook delivery, Dispatch can handle the retry queue:
-
-```go
-// Authsome enqueues webhook delivery attempts through Dispatch:
-dispatcher.Enqueue(ctx, "authsome.webhook.deliver", eventPayload)
-```
-
-Dispatch handles retries with exponential backoff. Failed deliveries are moved to a dead-letter queue after the configured maximum retry count.
-
-## Scheduled jobs
-
-`Schedule` allows jobs to run at a specific future time. Authsome uses this for expiry-based operations:
-
-```go
-// Schedule verification token expiry 24 hours from now:
-dispatcher.Schedule(ctx, "authsome.verification.expire", payload, time.Now().Add(24*time.Hour))
-```
+Nothing else calls `Enqueue` or `Schedule`. Your own plugins can reach the bridge through the plugin engine's `Dispatcher()` and enqueue jobs there; the adapter forwards the job name and payload to Dispatch.
 
 ## Standalone development stub
 
@@ -90,12 +62,13 @@ During development, use the built-in `NoopDispatcher` stub:
 ```go
 import "github.com/xraph/authsome/bridge"
 
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(memory.New()),
     authsome.WithDispatcher(bridge.NewNoopDispatcher()),
 )
 ```
 
 <Callout type="info">
-The `NoopDispatcher` returns `ErrDispatchNotAvailable` for all operations. When Dispatch is not configured, Authsome performs cleanup operations synchronously in-process. For local development and low-traffic applications, this is perfectly acceptable.
+`NoopDispatcher` returns `ErrDispatchNotAvailable` from every call.
 </Callout>

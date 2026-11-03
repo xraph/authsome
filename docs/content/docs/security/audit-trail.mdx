@@ -102,4 +102,4 @@ Chronicle owns the query surface. Use its admin API or the `audit.Query` type; `
 
 ## Metrics
 
-The engine's `MetricsCollector` receives `audit.record.failed` (a counter, labelled by tenant) whenever Chronicle refuses a record. Alert on it: a non-zero rate means the trail has gaps.
+Whenever Chronicle refuses a record, the engine adds one to `forge_authsome_audit_records_failed_total` (a counter with no labels, recorded through `WithMetricsSink`, which the Forge extension sets up for you) and hands `audit.record.failed` to any `MetricsCollector` you registered. Alert on it: a non-zero rate means the trail has gaps. [Observability](/docs/concepts/observability) lists the rest of authsome's metrics.

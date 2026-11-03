@@ -14,22 +14,18 @@ Authorization: Bearer a3f8c9d4e5f2g7h1j2k3m4n5p6q7r8s9
 ```
 
 **Advantages:**
-- Immediate revocation — deleting the session record instantly invalidates the token
+- Immediate revocation: deleting the session record instantly invalidates the token
 - No token size overhead
 - No cryptographic key management required
 - Tokens cannot be decoded by clients (no information leakage)
 
 **Trade-offs:**
 - Every request requires a session store lookup
-- Not self-contained — cannot be verified without contacting the auth server
+- Not self-contained: cannot be verified without contacting the auth server
 
 ### Configuration
 
-```go
-Session: authsome.SessionConfig{
-    TokenFormat: "opaque", // default
-}
-```
+Opaque is the default; you don't configure anything to get it.
 
 ## JWT tokens
 
@@ -40,7 +36,7 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImtleS0yMDI0LT
 ```
 
 **Advantages:**
-- Stateless verification — no session store lookup needed
+- Stateless verification: no session store lookup needed
 - Self-contained user claims reduce API calls
 - Compatible with OIDC-compliant resource servers
 - Can be verified by any service with access to the public key
@@ -53,17 +49,33 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImtleS0yMDI0LT
 ### Configuration
 
 ```go
-Session: authsome.SessionConfig{
-    TokenFormat: "jwt",
-    JWT: authsome.JWTConfig{
-        SigningAlgorithm: "RS256",       // RS256, RS384, RS512, ES256, ES384, ES512
-        Issuer:           "https://auth.myapp.com",
-        Audience:         []string{"https://api.myapp.com"},
-        KeyID:            "key-2024-01",
-        PrivateKeyPath:   "/path/to/private.pem",
-    },
+import (
+    "github.com/golang-jwt/jwt/v5"
+
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/tokenformat"
+)
+
+jwtFmt, err := tokenformat.NewJWT(tokenformat.JWTConfig{
+    SigningMethod: jwt.SigningMethodRS256, // or ES256, HS256 and the rest
+    SigningKey:    rsaPrivateKey,          // *rsa.PrivateKey, *ecdsa.PrivateKey or []byte for HMAC
+    VerifyKey:     &rsaPrivateKey.PublicKey,
+    KeyID:         "key-2024-01",
+    Issuer:        "https://auth.myapp.com",
+    Audience:      "https://api.myapp.com",
+})
+if err != nil {
+    log.Fatal(err)
 }
+
+eng, err := authsome.NewEngine(
+    // plus WithStore, WithChronicle and WithWarden (see Getting Started)
+    authsome.WithJWTFormat(appID.String(), jwtFmt),  // JWTs for one app
+    // authsome.WithDefaultTokenFormat(jwtFmt),      // or for every app
+)
 ```
+
+`tokenformat.NewJWT` takes the key itself, not a file path; load the PEM yourself. An app can also switch formats at runtime through its session config (`TokenFormat: "jwt"` on `appsessionconfig.Config`).
 
 ## JWT claims structure
 
@@ -78,18 +90,18 @@ When using JWT format, session tokens contain the following claims:
   "aud": ["https://api.myapp.com"],
   "exp": 1730455200,
   "iat": 1730451600,
-  "jti": "ases_01j9..."
+  "nbf": 1730451600
 }
 ```
 
 | Claim | Description |
 |-------|-------------|
-| `iss` | Issuer — your Authsome instance URL |
-| `sub` | Subject — the user ID |
-| `aud` | Audience — intended token recipients |
+| `iss` | Issuer: your Authsome instance URL |
+| `sub` | Subject: the user ID |
+| `aud` | Audience: intended token recipients |
 | `exp` | Expiration time (Unix timestamp) |
 | `iat` | Issued at time (Unix timestamp) |
-| `jti` | JWT ID — the session ID (unique per token) |
+| `nbf` | Not before (Unix timestamp) |
 
 ### Authsome custom claims
 
@@ -97,13 +109,9 @@ When using JWT format, session tokens contain the following claims:
 {
   "app_id": "aapp_01j9...",
   "env_id": "aenv_01j9...",
-  "email": "alice@example.com",
-  "email_verified": true,
-  "name": "Alice Liddell",
-  "username": "alice",
   "org_id": "aorg_01j9...",
-  "roles": ["admin", "member"],
-  "session_id": "ases_01j9..."
+  "sid": "ases_01j9...",
+  "scopes": ["openid", "profile"]
 }
 ```
 
@@ -111,13 +119,15 @@ When using JWT format, session tokens contain the following claims:
 |-------|-------------|
 | `app_id` | Application the session belongs to |
 | `env_id` | Environment the session belongs to |
-| `email` | User's email address |
-| `email_verified` | Whether the email has been verified |
-| `name` | User's display name |
-| `username` | User's username |
-| `org_id` | Organization scope (if session is org-scoped) |
-| `roles` | User's RBAC roles |
-| `session_id` | The Authsome session ID |
+| `org_id` | Active organization, when the session has one |
+| `sid` | The Authsome session ID |
+| `scopes` | Granted scopes, when the token has them |
+| `act` | The actor chain on a delegated token |
+| `pk`, `pid` | Principal kind and ID for non-user callers |
+| `client_id` | The OAuth2 client, for tokens the OAuth2 provider issued |
+| `cnf` | `{"jkt": ...}` for DPoP-bound tokens |
+
+The access token doesn't carry email, name or roles. Read those from `GET /v1/me` or the OIDC userinfo endpoint.
 
 ## OIDC-compatible claims
 

@@ -14,6 +14,7 @@ import (
 )
 
 eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
     authsome.WithSMSSender(smsBridge),
     authsome.WithPlugin(phone.New(phone.Config{
@@ -39,7 +40,7 @@ func boolPtr(v bool) *bool { return &v }
 |-----------|---------|
 | `Plugin` | Base plugin identity (`"phone"`) |
 | `OnInit` | Captures store, SMS sender, ceremony store, logger, and session config resolver |
-| `RouteProvider` | Registers `/v1/auth/phone/start` and `/verify` endpoints |
+| `RouteProvider` | Registers `/v1/phone/start` and `/verify` endpoints |
 | `AuthMethodContributor` | Reports `"phone"` as a linked auth method if the user has a verified phone |
 
 ## Authentication flow
@@ -48,7 +49,7 @@ func boolPtr(v bool) *bool { return &v }
 
 **Send OTP**: The user submits their phone number in E.164 format.
 
-`POST /v1/auth/phone/start`
+`POST /v1/phone/start`
 
 ```json
 {
@@ -71,7 +72,7 @@ The plugin validates the phone number format (E.164: `+` followed by 7-15 digits
 
 **Verify OTP**: The user enters the received code.
 
-`POST /v1/auth/phone/verify`
+`POST /v1/phone/verify`
 
 ```json
 {
@@ -172,5 +173,5 @@ The phone plugin implements `AuthMethodContributor`, reporting phone as a linked
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/v1/auth/phone/start` | Send OTP to phone number |
-| `POST` | `/v1/auth/phone/verify` | Verify OTP and authenticate |
+| `POST` | `/v1/phone/start` | Send OTP to phone number |
+| `POST` | `/v1/phone/verify` | Verify OTP and authenticate |

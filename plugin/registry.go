@@ -351,7 +351,9 @@ func (r *Registry) EmitOnShutdown(ctx context.Context) {
 // EmitBeforeSignUp notifies all plugins that implement BeforeSignUp.
 func (r *Registry) EmitBeforeSignUp(ctx context.Context, req *account.SignUpRequest) error {
 	for _, e := range r.beforeSignUp {
-		if err := e.hook.OnBeforeSignUp(ctx, req); err != nil {
+		if err := runHook(ctx, hookBeforeSignUp, e.name, true, func(ctx context.Context) error {
+			return e.hook.OnBeforeSignUp(ctx, req)
+		}); err != nil {
 			return err // Before hooks can abort the operation
 		}
 	}
@@ -361,7 +363,9 @@ func (r *Registry) EmitBeforeSignUp(ctx context.Context, req *account.SignUpRequ
 // EmitAfterSignUp notifies all plugins that implement AfterSignUp.
 func (r *Registry) EmitAfterSignUp(ctx context.Context, u *user.User, s *session.Session) {
 	for _, e := range r.afterSignUp {
-		if err := e.hook.OnAfterSignUp(ctx, u, s); err != nil {
+		if err := runHook(ctx, hookAfterSignUp, e.name, false, func(ctx context.Context) error {
+			return e.hook.OnAfterSignUp(ctx, u, s)
+		}); err != nil {
 			r.logHookError("OnAfterSignUp", e.name, err)
 		}
 	}
@@ -370,7 +374,9 @@ func (r *Registry) EmitAfterSignUp(ctx context.Context, u *user.User, s *session
 // EmitBeforeSignIn notifies all plugins that implement BeforeSignIn.
 func (r *Registry) EmitBeforeSignIn(ctx context.Context, req *account.SignInRequest) error {
 	for _, e := range r.beforeSignIn {
-		if err := e.hook.OnBeforeSignIn(ctx, req); err != nil {
+		if err := runHook(ctx, hookBeforeSignIn, e.name, true, func(ctx context.Context) error {
+			return e.hook.OnBeforeSignIn(ctx, req)
+		}); err != nil {
 			return err // Before hooks can abort the operation
 		}
 	}
@@ -380,7 +386,9 @@ func (r *Registry) EmitBeforeSignIn(ctx context.Context, req *account.SignInRequ
 // EmitAfterSignIn notifies all plugins that implement AfterSignIn.
 func (r *Registry) EmitAfterSignIn(ctx context.Context, u *user.User, s *session.Session) {
 	for _, e := range r.afterSignIn {
-		if err := e.hook.OnAfterSignIn(ctx, u, s); err != nil {
+		if err := runHook(ctx, hookAfterSignIn, e.name, false, func(ctx context.Context) error {
+			return e.hook.OnAfterSignIn(ctx, u, s)
+		}); err != nil {
 			r.logHookError("OnAfterSignIn", e.name, err)
 		}
 	}
@@ -409,7 +417,9 @@ func (r *Registry) EmitAfterSignOut(ctx context.Context, sessionID id.SessionID)
 // BeforePrincipalAuth, stopping at the first error.
 func (r *Registry) EmitBeforePrincipalAuth(ctx context.Context, a *principal.AuthAttempt) error {
 	for _, e := range r.beforePrincipalAuth {
-		if err := e.hook.OnBeforePrincipalAuth(ctx, a); err != nil {
+		if err := runHook(ctx, hookBeforePrincipalAuth, e.name, true, func(ctx context.Context) error {
+			return e.hook.OnBeforePrincipalAuth(ctx, a)
+		}); err != nil {
 			return err // Before hooks can abort the operation
 		}
 	}
@@ -420,7 +430,9 @@ func (r *Registry) EmitBeforePrincipalAuth(ctx context.Context, a *principal.Aut
 // AfterPrincipalAuth. Errors are logged, never propagated.
 func (r *Registry) EmitAfterPrincipalAuth(ctx context.Context, a *principal.AuthAttempt, s *session.Session) {
 	for _, e := range r.afterPrincipalAuth {
-		if err := e.hook.OnAfterPrincipalAuth(ctx, a, s); err != nil {
+		if err := runHook(ctx, hookAfterPrincipalAuth, e.name, false, func(ctx context.Context) error {
+			return e.hook.OnAfterPrincipalAuth(ctx, a, s)
+		}); err != nil {
 			r.logHookError("OnAfterPrincipalAuth", e.name, err)
 		}
 	}
@@ -494,7 +506,9 @@ func (r *Registry) EmitAfterUserDelete(ctx context.Context, userID id.UserID) {
 // EmitBeforeSessionCreate notifies all plugins that implement BeforeSessionCreate.
 func (r *Registry) EmitBeforeSessionCreate(ctx context.Context, s *session.Session) error {
 	for _, e := range r.beforeSessionCreate {
-		if err := e.hook.OnBeforeSessionCreate(ctx, s); err != nil {
+		if err := runHook(ctx, hookBeforeSessionCreate, e.name, true, func(ctx context.Context) error {
+			return e.hook.OnBeforeSessionCreate(ctx, s)
+		}); err != nil {
 			return err
 		}
 	}
@@ -504,7 +518,9 @@ func (r *Registry) EmitBeforeSessionCreate(ctx context.Context, s *session.Sessi
 // EmitAfterSessionCreate notifies all plugins that implement AfterSessionCreate.
 func (r *Registry) EmitAfterSessionCreate(ctx context.Context, s *session.Session) {
 	for _, e := range r.afterSessionCreate {
-		if err := e.hook.OnAfterSessionCreate(ctx, s); err != nil {
+		if err := runHook(ctx, hookAfterSessionCreate, e.name, false, func(ctx context.Context) error {
+			return e.hook.OnAfterSessionCreate(ctx, s)
+		}); err != nil {
 			r.logHookError("OnAfterSessionCreate", e.name, err)
 		}
 	}

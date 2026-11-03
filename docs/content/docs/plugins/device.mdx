@@ -3,23 +3,20 @@ title: Device Plugin
 description: Device fingerprinting, trust management, session-device binding, and suspicious device detection.
 ---
 
-The `device` plugin tracks user devices across sessions. It records device fingerprints, manages trusted devices, binds sessions to specific devices, and enables suspicious device detection for security-sensitive applications.
+Authsome tracks user devices across sessions. It records device fingerprints, manages trusted devices, binds sessions to specific devices, and enables suspicious device detection for security-sensitive applications.
 
 ## Setup
 
 ```go
-import (
-    "github.com/xraph/authsome"
-    "github.com/xraph/authsome/device"
-)
+import "github.com/xraph/authsome"
 
 eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
-    authsome.WithDeviceStore(deviceStore),
 )
 ```
 
-The device tracking functionality is built into the core engine and uses the `device.Store` interface for persistence. It does not require a separate plugin registration -- configure a device store to enable it.
+There's no `device` plugin to register and no separate device store to configure. Device tracking is part of the core engine: `store.Store` includes `device.Store`, so every backend persists devices, and the engine's `RegisterDevice`, `GetDevice`, `ListUserDevices`, `TrustDevice` and `DeleteDevice` methods and the `/v1/devices` routes work out of the box. The separate `deviceverify` plugin adds a verification step for new devices.
 
 ## Device model
 
@@ -27,20 +24,21 @@ Each tracked device stores the following information:
 
 ```go
 type Device struct {
-    ID          id.DeviceID      `json:"id"`
-    UserID      id.UserID        `json:"user_id"`
-    AppID       id.AppID         `json:"app_id"`
-    EnvID       id.EnvironmentID `json:"env_id"`
-    Name        string           `json:"name,omitempty"`
-    Type        string           `json:"type,omitempty"`
-    Browser     string           `json:"browser,omitempty"`
-    OS          string           `json:"os,omitempty"`
-    IPAddress   string           `json:"ip_address,omitempty"`
-    Fingerprint string           `json:"fingerprint,omitempty"`
-    Trusted     bool             `json:"trusted"`
-    LastSeenAt  time.Time        `json:"last_seen_at"`
-    CreatedAt   time.Time        `json:"created_at"`
-    UpdatedAt   time.Time        `json:"updated_at"`
+    ID           id.DeviceID      `json:"id"`
+    UserID       id.UserID        `json:"user_id"`
+    AppID        id.AppID         `json:"app_id"`
+    EnvID        id.EnvironmentID `json:"env_id"`
+    Name         string           `json:"name,omitempty"`
+    Type         string           `json:"type,omitempty"`
+    Browser      string           `json:"browser,omitempty"`
+    OS           string           `json:"os,omitempty"`
+    IPAddress    string           `json:"ip_address,omitempty"`
+    Fingerprint  string           `json:"fingerprint,omitempty"`
+    Trusted      bool             `json:"trusted"`
+    TrustedUntil *time.Time       `json:"trusted_until,omitempty"`
+    LastSeenAt   time.Time        `json:"last_seen_at"`
+    CreatedAt    time.Time        `json:"created_at"`
+    UpdatedAt    time.Time        `json:"updated_at"`
 }
 ```
 
@@ -97,7 +95,7 @@ New devices start as untrusted.
 
 Users can mark a device as trusted to skip additional verification steps (like MFA) on subsequent sign-ins:
 
-`PUT /v1/auth/devices/:deviceId/trust`
+`PATCH /v1/devices/:deviceId/trust`
 
 ```json
 {"trusted": true}
@@ -105,7 +103,7 @@ Users can mark a device as trusted to skip additional verification steps (like M
 
 ### Listing user devices
 
-`GET /v1/auth/devices`
+`GET /v1/devices`
 
 Returns all devices registered for the authenticated user:
 
@@ -132,7 +130,7 @@ Returns all devices registered for the authenticated user:
 
 ### Removing a device
 
-`DELETE /v1/auth/devices/:deviceId`
+`DELETE /v1/devices/:deviceId`
 
 Removes the device record. Any sessions bound to this device are not automatically revoked.
 
@@ -148,10 +146,10 @@ When device tracking is enabled, sessions are associated with the device they we
 
 The engine can detect potentially suspicious device activity:
 
-- **New device sign-in** -- A user signs in from a device not seen before
-- **IP address change** -- A known device appears from a different IP
-- **Multiple devices** -- An unusual number of new devices in a short period
-- **Impossible travel** -- Sign-ins from geographically distant locations in a short timeframe
+- New device sign-in: A user signs in from a device not seen before
+- IP address change: A known device appears from a different IP
+- Multiple devices: An unusual number of new devices in a short period
+- Impossible travel: Sign-ins from geographically distant locations in a short timeframe
 
 When suspicious activity is detected, the engine can:
 

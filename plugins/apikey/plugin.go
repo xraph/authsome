@@ -20,6 +20,7 @@ import (
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/principal"
@@ -215,6 +216,7 @@ func (p *Plugin) Strategy() strategy.Strategy {
 		failLimiter:      p.failLimiter,
 		failLimit:        p.failLimit,
 		failWindow:       p.failWindow,
+		tel:              telemetry.From(p.engine),
 	}
 }
 
@@ -615,7 +617,15 @@ type apikeyStrategy struct {
 	failLimiter ratelimit.Limiter
 	failLimit   int
 	failWindow  time.Duration
+
+	// tel counts every authentication. Nil records nothing.
+	tel *telemetry.Metrics
 }
+
+// spanAuthenticateAPIKey is the span an API key authentication runs in.
+// authsome reads keysmith's store directly here, so keysmith's own validate
+// key span never fires for these requests; this one stands in for it.
+const spanAuthenticateAPIKey = "authenticate api key"
 
 func failureKey(r *http.Request) string { return "apikey-fail:" + middleware.ClientIP(r) }
 
@@ -635,12 +645,12 @@ func (s *apikeyStrategy) exhausted(ctx context.Context, r *http.Request) bool {
 }
 
 // refuse counts a failed authentication against the client address and
-// returns err unchanged.
-func (s *apikeyStrategy) refuse(ctx context.Context, r *http.Request, err error) (*strategy.Result, error) {
+// returns err unchanged, with the result the counter records.
+func (s *apikeyStrategy) refuse(ctx context.Context, r *http.Request, result string, err error) (*strategy.Result, string, error) {
 	if s.failLimiter != nil && s.failLimit > 0 {
 		_, _ = s.failLimiter.Allow(ctx, failureKey(r), s.failLimit, s.failWindow) //nolint:errcheck // counting only
 	}
-	return nil, err
+	return nil, result, err
 }
 
 // serviceAccountState returns the service account's registered kind and
@@ -672,22 +682,38 @@ func (s *apikeyStrategy) Name() string { return "apikey" }
 // Authenticate checks for an API key in the Authorization or X-API-Key header.
 // API keys are identified by their marker prefix (ask_, sk_*, pk_*).
 // Public keys (pk_*) are rejected — only secret keys can authenticate.
+//
+// Each authentication of a key-bearing request runs in an authenticate api
+// key span and is counted by result. Neither carries the key, its prefix,
+// the app or the caller; an unknown prefix and a wrong secret are both
+// "invalid", so the counter can't be used to learn which prefixes exist.
 func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*strategy.Result, error) {
 	rawKey := extractAPIKey(r)
 	if rawKey == "" {
 		return nil, strategy.NotApplicableError{}
 	}
+	ctx, span := telemetry.Start(ctx, spanAuthenticateAPIKey)
+	defer span.End()
+	res, result, err := s.authenticate(ctx, r, rawKey)
+	span.SetAttributes(telemetry.AttrResult.String(result))
+	if result == telemetry.APIKeyError {
+		telemetry.FailErr(span, err)
+	}
+	s.tel.APIKeyAuth(result)
+	return res, err
+}
 
+func (s *apikeyStrategy) authenticate(ctx context.Context, r *http.Request, rawKey string) (*strategy.Result, string, error) {
 	// An address that has spent its failed-attempt budget is refused before
 	// any lookup, so guessing keys costs the guesser the window, not the
 	// store a query per guess.
 	if s.exhausted(ctx, r) {
-		return nil, fmt.Errorf("apikey: too many failed attempts from this address")
+		return nil, telemetry.APIKeyThrottled, fmt.Errorf("apikey: too many failed attempts from this address")
 	}
 
 	// Reject public keys — they are not for authentication.
 	if apikey.IsPublicKey(rawKey) {
-		return nil, fmt.Errorf("apikey: public keys (pk_*) cannot be used for authentication; use the secret key (sk_*) instead")
+		return nil, telemetry.APIKeyInvalid, fmt.Errorf("apikey: public keys (pk_*) cannot be used for authentication; use the secret key (sk_*) instead")
 	}
 
 	// Extract the app_id from query or X-App-ID header
@@ -696,32 +722,32 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 		appIDStr = r.URL.Query().Get("app_id")
 	}
 	if appIDStr == "" {
-		return nil, fmt.Errorf("apikey: X-App-ID header or app_id query parameter required")
+		return nil, telemetry.APIKeyInvalid, fmt.Errorf("apikey: X-App-ID header or app_id query parameter required")
 	}
 
 	appID, err := id.ParseAppID(appIDStr)
 	if err != nil {
-		return nil, fmt.Errorf("apikey: invalid app_id: %w", err)
+		return nil, telemetry.APIKeyInvalid, fmt.Errorf("apikey: invalid app_id: %w", err)
 	}
 
 	// Extract prefix from the raw key for lookup
 	prefix := extractPrefix(rawKey)
 	if prefix == "" {
-		return nil, fmt.Errorf("apikey: invalid key format")
+		return nil, telemetry.APIKeyInvalid, fmt.Errorf("apikey: invalid key format")
 	}
 
 	key, err := s.store.GetAPIKeyByPrefix(ctx, appID, prefix)
 	if err != nil {
-		return s.refuse(ctx, r, fmt.Errorf("apikey: key not found"))
+		return s.refuse(ctx, r, telemetry.APIKeyInvalid, fmt.Errorf("apikey: key not found"))
 	}
 
 	// Verify the raw key against stored hash
 	if !apikey.VerifyKey(rawKey, key.KeyHash) {
-		return s.refuse(ctx, r, fmt.Errorf("apikey: invalid key"))
+		return s.refuse(ctx, r, telemetry.APIKeyInvalid, fmt.Errorf("apikey: invalid key"))
 	}
 
 	if !key.IsValid() {
-		return s.refuse(ctx, r, fmt.Errorf("apikey: key is revoked or expired"))
+		return s.refuse(ctx, r, telemetry.APIKeyExpired, fmt.Errorf("apikey: key is revoked or expired"))
 	}
 
 	// Record the use (best-effort, never failing auth): a single-column
@@ -760,7 +786,7 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 		subjectKind, active = s.serviceAccountState(ctx, key.ServiceAccountID, now)
 		if !active {
 			// Only a successfully resolved, active service account can use keys.
-			return s.refuse(ctx, r, fmt.Errorf("apikey: service account is not active"))
+			return s.refuse(ctx, r, telemetry.APIKeyDenied, fmt.Errorf("apikey: service account is not active"))
 		}
 		subject = principal.Ref{Kind: subjectKind, ID: key.ServiceAccountID.String()}
 	}
@@ -776,7 +802,7 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 	}
 	if s.gate != nil {
 		if authErr := s.gate.Authorize(ctx, att); authErr != nil {
-			return nil, fmt.Errorf("apikey: %w", authErr)
+			return nil, telemetry.APIKeyDenied, fmt.Errorf("apikey: %w", authErr)
 		}
 	}
 
@@ -794,12 +820,12 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 		if s.gate != nil {
 			s.gate.Observe(ctx, att, syntheticSession)
 		}
-		return &strategy.Result{Session: syntheticSession}, nil
+		return &strategy.Result{Session: syntheticSession}, telemetry.APIKeyOK, nil
 	}
 
 	// Resolve the user associated with this API key.
 	if s.resolveUser == nil {
-		return nil, fmt.Errorf("apikey: user resolver not configured")
+		return nil, telemetry.APIKeyError, fmt.Errorf("apikey: user resolver not configured")
 	}
 	// Reject keys that were created without a user binding (a bug
 	// in an older dashboard handler used to mint these). Without an
@@ -808,14 +834,14 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 	// "authentication required" 401 — we'd rather state the
 	// specific cause so operators can re-mint the key correctly.
 	if key.UserID.IsNil() {
-		return nil, fmt.Errorf("apikey: key %s has no user binding (re-mint via /v1/keys or the dashboard)", key.KeyPrefix)
+		return nil, telemetry.APIKeyError, fmt.Errorf("apikey: key %s has no user binding (re-mint via /v1/keys or the dashboard)", key.KeyPrefix)
 	}
 	u, err := s.resolveUser(ctx, key.UserID.String())
 	if err != nil {
-		return nil, fmt.Errorf("apikey: resolve user: %w", err)
+		return nil, telemetry.APIKeyError, fmt.Errorf("apikey: resolve user: %w", err)
 	}
 	if u.IsBanned(now) {
-		return s.refuse(ctx, r, fmt.Errorf("apikey: user is banned"))
+		return s.refuse(ctx, r, telemetry.APIKeyDenied, fmt.Errorf("apikey: user is banned"))
 	}
 
 	// Create a synthetic (non-persisted) session for context propagation.
@@ -831,7 +857,7 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 		s.gate.Observe(ctx, att, syntheticSession)
 	}
 
-	return &strategy.Result{User: u, Session: syntheticSession}, nil
+	return &strategy.Result{User: u, Session: syntheticSession}, telemetry.APIKeyOK, nil
 }
 
 // extractAPIKey extracts the API key from the request.

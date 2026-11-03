@@ -7,10 +7,15 @@ import (
 	"time"
 
 	log "github.com/xraph/go-utils/log"
+	"go.opentelemetry.io/otel/trace"
 
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/store"
 )
+
+// spanSweepRetention is the span a sweep that holds the lease runs in.
+const spanSweepRetention = "sweep retention"
 
 // retentionLeaseKey is the authsome_kv key one replica takes before a sweep
 // so that a fleet of replicas runs one sweep per interval, not one each.
@@ -46,6 +51,10 @@ func (e *Engine) retentionTTLs() map[string]time.Duration {
 // first run waits a full interval so boot is not slowed by a sweep, and the
 // database's own expiry indexes, where it has them, are brought in line
 // with the configured windows first.
+//
+// ctx must carry no span (Start passes it through telemetry.Detach): each
+// sweep that wins the lease is its own trace, and the lease check that
+// loses is no trace at all.
 func (e *Engine) startRetentionSweeper(ctx context.Context) {
 	interval := e.retentionInterval()
 	if interval <= 0 {
@@ -97,6 +106,10 @@ func (e *Engine) stopRetentionSweeper() {
 // replica holds it. Each kind is removed in batches of Retention.BatchSize
 // until a batch comes back short. A failure in one kind does not stop the
 // others; the errors are joined and returned together.
+//
+// A sweep that holds the lease runs in a sweep retention span: a root span
+// when the background sweeper calls this, a child when you call it under a
+// span of your own. Losing the lease starts no span.
 func (e *Engine) SweepRetention(ctx context.Context) (int64, error) {
 	lease := e.retentionInterval() / 2
 	if lease <= 0 {
@@ -104,11 +117,24 @@ func (e *Engine) SweepRetention(ctx context.Context) (int64, error) {
 	}
 	held, err := e.store.KVSetNX(ctx, retentionLeaseKey, []byte(time.Now().UTC().Format(time.RFC3339)), lease)
 	if err != nil {
+		e.tel.RetentionSweep(telemetry.SweepError)
 		return 0, fmt.Errorf("authsome: retention lease: %w", err)
 	}
 	if !held {
+		e.tel.RetentionSweep(telemetry.SweepSkipped)
 		e.logger.Debug("authsome: retention sweep skipped; another replica holds the lease")
 		return 0, nil
+	}
+
+	ctx, span := telemetry.Start(ctx, spanSweepRetention)
+	defer span.End()
+	// failed notes one kind that did not finish, by kind and error type
+	// only: a store's message can quote the rows it was working on.
+	failed := func(kind string, err error) {
+		span.AddEvent("sweep failed", trace.WithAttributes(
+			telemetry.AttrRetentionKind.String(kind),
+			telemetry.AttrExceptionType.String(telemetry.TypeOf(err)),
+		))
 	}
 
 	batch := e.config.Retention.BatchSize
@@ -121,13 +147,14 @@ func (e *Engine) SweepRetention(ctx context.Context) (int64, error) {
 	var total int64
 	var errs []error
 	sweeps := []struct {
-		kind string
-		del  func(ctx context.Context, before time.Time, batch int) (int64, error)
+		kind  string
+		label string
+		del   func(ctx context.Context, before time.Time, batch int) (int64, error)
 	}{
-		{store.RetentionSessions, e.store.DeleteExpiredSessions},
-		{store.RetentionVerifications, e.store.DeleteExpiredVerifications},
-		{store.RetentionPasswordResets, e.store.DeleteExpiredPasswordResets},
-		{store.RetentionRevokedRefreshTokens, e.store.DeleteExpiredRevokedRefreshTokens},
+		{store.RetentionSessions, telemetry.RetentionSessions, e.store.DeleteExpiredSessions},
+		{store.RetentionVerifications, telemetry.RetentionVerifications, e.store.DeleteExpiredVerifications},
+		{store.RetentionPasswordResets, telemetry.RetentionPasswordResets, e.store.DeleteExpiredPasswordResets},
+		{store.RetentionRevokedRefreshTokens, telemetry.RetentionRevokedRefreshTokens, e.store.DeleteExpiredRevokedRefreshTokens},
 	}
 	for _, sw := range sweeps {
 		before := cutoff(sw.kind)
@@ -138,17 +165,23 @@ func (e *Engine) SweepRetention(ctx context.Context) (int64, error) {
 			return sw.del(ctx, before, batch)
 		})
 		total += n
+		e.tel.RetentionRowsDeleted(sw.label, n)
 		if sweepErr != nil {
+			failed(sw.label, sweepErr)
 			errs = append(errs, fmt.Errorf("authsome: sweep %s: %w", sw.kind, sweepErr))
 		}
 	}
 
 	n, err := e.store.KVDeleteExpired(ctx, now)
 	total += n
+	e.tel.RetentionRowsDeleted(telemetry.RetentionCeremonyState, n)
 	if err != nil {
+		failed(telemetry.RetentionCeremonyState, err)
 		errs = append(errs, fmt.Errorf("authsome: sweep ceremony state: %w", err))
 	}
 
+	// Plugin sweepers share one label: a custom plugin's name is not a
+	// bounded value.
 	for _, p := range e.plugins.Plugins() {
 		sw, ok := p.(plugin.RetentionSweeper)
 		if !ok {
@@ -156,10 +189,20 @@ func (e *Engine) SweepRetention(ctx context.Context) (int64, error) {
 		}
 		n, sweepErr := sw.SweepRetention(ctx, cutoff, batch)
 		total += n
+		e.tel.RetentionRowsDeleted(telemetry.RetentionPlugins, n)
 		if sweepErr != nil {
+			failed(telemetry.RetentionPlugins, sweepErr)
 			errs = append(errs, fmt.Errorf("authsome: sweep plugin %s: %w", p.Name(), sweepErr))
 		}
 	}
+
+	span.SetAttributes(telemetry.AttrRetentionRemoved.Int64(total))
+	result := telemetry.SweepOK
+	if len(errs) > 0 {
+		result = telemetry.SweepError
+		telemetry.Fail(span, "sweep_incomplete", nil)
+	}
+	e.tel.RetentionSweep(result)
 
 	if total > 0 {
 		e.logger.Info("authsome: retention sweep removed rows", log.Int64("removed", total))

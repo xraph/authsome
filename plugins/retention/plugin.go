@@ -12,6 +12,7 @@ import (
 	"github.com/xraph/grove/migrate"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/settings"
 )
@@ -362,6 +363,8 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	if err != nil {
 		return fmt.Errorf("retention: %w", err)
 	}
+	tel := telemetry.From(engine)
+	instrumentProviders(built, tel)
 	if p.providers == nil {
 		p.providers = newProviderRegistry(nil)
 	}
@@ -391,6 +394,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		Store:       p.store,
 		Providers:   p.providers,
 		Logger:      p.logger,
+		Tel:         tel,
 		Interval:    p.config.TickInterval,
 		Lease:       p.config.Lease,
 		BatchSize:   p.config.BatchSize,

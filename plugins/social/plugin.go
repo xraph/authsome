@@ -28,6 +28,7 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/browserbind"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/session"
@@ -832,6 +833,15 @@ func verifyOIDCNonce(token *oauth2.Token, expectedNonce string) bool {
 // handleCallback processes the OAuth callback, exchanges the code for a token,
 // fetches the user profile, and either links to an existing user or creates a new one.
 func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*CallbackResponse, error) {
+	attempt := telemetry.From(p.engine).StartSignIn(telemetry.MethodSocial)
+	resp, err := p.callback(ctx, req, attempt)
+	attempt.Done(err)
+	return resp, err
+}
+
+// callback is handleCallback's body. attempt is told where IssueSession
+// takes over the count and which refusals answer with a redirect.
+func (p *Plugin) callback(ctx forge.Context, req *CallbackRequest, attempt *telemetry.SignInAttempt) (*CallbackResponse, error) {
 	provider, ok := p.resolveProvider(ctx.Context(), req.Provider)
 	if !ok {
 		return nil, forge.BadRequest(fmt.Sprintf("unsupported provider: %s", req.Provider))
@@ -885,19 +895,28 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	// burned for nothing.
 	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
 		if bindErr := eng.DPoPBindingUnavailable(ctx.Context(), appID); bindErr != nil {
+			attempt.Refuse(telemetry.SignInDenied)
 			return nil, bindErr
 		}
 	}
 
 	// Check for error from provider
 	if req.Error != "" {
+		attempt.Refuse(telemetry.SignInDenied)
 		return p.callbackError(ctx, stateInfo, fmt.Sprintf("provider error: %s", req.Error))
 	}
 
 	// Exchange code for token
 	if req.Code == "" {
+		attempt.Refuse(telemetry.SignInInvalid)
 		return p.callbackError(ctx, stateInfo, "missing code parameter")
 	}
+
+	// The token exchange and the profile fetch go through a client that
+	// measures each call and traces it under this request, sending the
+	// provider no trace headers and none of the caller's baggage.
+	providerCtx := context.WithValue(ctx.Context(), oauth2.HTTPClient, telemetry.InstrumentClient(
+		contextHTTPClient(ctx.Context()), telemetry.Endpoint{Kind: telemetry.ProviderSocial}, telemetry.From(p.engine)))
 
 	cfg := provider.OAuth2Config()
 
@@ -914,7 +933,7 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		// providers that did require it will reject mismatches.
 		exchangeOpts = append(exchangeOpts, oauth2.SetAuthURLParam("code_verifier", verifier))
 	}
-	token, err := exchangeCfg.Exchange(ctx.Context(), req.Code, exchangeOpts...)
+	token, err := exchangeCfg.Exchange(providerCtx, req.Code, exchangeOpts...)
 	if err != nil {
 		return nil, forge.BadRequest("failed to exchange code")
 	}
@@ -928,7 +947,7 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	}
 
 	// Fetch user profile from provider
-	providerUser, err := provider.FetchUser(ctx.Context(), token)
+	providerUser, err := provider.FetchUser(providerCtx, token)
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to fetch user from provider: %w", err))
 	}
@@ -962,6 +981,7 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	// (e.g. test wiring without a full engine).
 	var sess *session.Session
 	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
+		attempt.HandOff()
 		result, issueErr := eng.IssueSession(goCtx, &authsome.IssueSessionRequest{
 			User:       u,
 			AppID:      appID,
@@ -1216,6 +1236,15 @@ func (p *Plugin) callbackError(ctx forge.Context, stateInfo map[string]string, m
 	ctx.Response().Header().Set("Location", parsed.String())
 	ctx.Response().WriteHeader(http.StatusFound)
 	return nil, nil
+}
+
+// contextHTTPClient returns the client golang.org/x/oauth2 would use for
+// ctx: the one stored under oauth2.HTTPClient, or nil for its default.
+func contextHTTPClient(ctx context.Context) *http.Client {
+	if c, ok := ctx.Value(oauth2.HTTPClient).(*http.Client); ok {
+		return c
+	}
+	return nil
 }
 
 // relayEvent sends a webhook event to EventRelay (nil-safe).

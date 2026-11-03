@@ -3,7 +3,7 @@ title: Plugin Architecture
 description: How Authsome's plugin system extends the engine with authentication strategies, hooks, routes, and migrations.
 ---
 
-Authsome is built around a composable plugin architecture. Every authentication method, lifecycle behavior, and integration point is implemented as a plugin that registers itself with the engine. The core engine provides session management, user storage, and the hook bus -- plugins add everything else.
+Authsome is built around a composable plugin architecture. Every authentication method, lifecycle behavior, and integration point is implemented as a plugin that registers itself with the engine. The core engine provides session management, user storage, and the hook bus: plugins add everything else.
 
 ## The Plugin interface
 
@@ -35,7 +35,7 @@ Plugins declare what they can do by implementing zero or more of the following i
 
 ## Hook interfaces
 
-Plugins can subscribe to lifecycle events by implementing hook interfaces. **Before-hooks** can abort the operation by returning an error. **After-hooks** are fire-and-forget -- errors are logged but never block the pipeline.
+Plugins can subscribe to lifecycle events by implementing hook interfaces. **Before-hooks** can abort the operation by returning an error. **After-hooks** are fire-and-forget: errors are logged but never block the pipeline.
 
 ### Auth event hooks
 
@@ -70,7 +70,7 @@ Plugins can subscribe to lifecycle events by implementing hook interfaces. **Bef
 
 ## Plugin registry
 
-The `plugin.Registry` is the core dispatch mechanism. It type-caches plugins at registration time so that emit calls iterate only over plugins implementing the relevant hook -- there is no runtime type assertion on the hot path.
+The `plugin.Registry` is the core dispatch mechanism. It type-caches plugins at registration time so that emit calls iterate only over plugins implementing the relevant hook: there is no runtime type assertion on the hot path.
 
 ```go
 registry := plugin.NewRegistry(logger)
@@ -86,11 +86,11 @@ err := registry.EmitBeforeSignUp(ctx, req)
 
 When you call `engine.Start()`, the following sequence executes:
 
-1. **Registration** -- Plugins passed via `WithPlugin()` are registered with the plugin registry. Each plugin is type-asserted into all applicable hook caches.
-2. **Migration** -- The engine collects migration groups from all `MigrationProvider` plugins and runs them alongside core schema migrations.
-3. **Initialization** -- The registry calls `OnInit(ctx, engine)` on every plugin that implements `OnInit`. Plugins use this to capture store references, bridge handles, and other engine capabilities.
-4. **Strategy registration** -- Plugins implementing `StrategyProvider` have their strategies auto-registered with the strategy registry.
-5. **Route registration** -- Plugins implementing `RouteProvider` have their HTTP routes registered on the Forge router.
+1. **Registration**: Plugins passed via `WithPlugin()` are registered with the plugin registry. Each plugin is type-asserted into all applicable hook caches.
+2. **Migration**: The engine collects migration groups from all `MigrationProvider` plugins and runs them alongside core schema migrations.
+3. **Initialization**: The registry calls `OnInit(ctx, engine)` on every plugin that implements `OnInit`. Plugins use this to capture store references, bridge handles, and other engine capabilities.
+4. **Strategy registration**: Plugins implementing `StrategyProvider` have their strategies auto-registered with the strategy registry.
+5. **Route registration**: Plugins implementing `RouteProvider` have their HTTP routes registered on the Forge router.
 
 ## Built-in plugins
 
@@ -124,13 +124,14 @@ import (
 )
 
 eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
     authsome.WithPlugin(password.New()),
     authsome.WithPlugin(mfa.New(mfa.Config{Issuer: "MyApp"})),
     authsome.WithPlugin(social.New(social.Config{
         Providers: []social.Provider{
-            social.NewGoogle(googleCfg),
-            social.NewGitHub(githubCfg),
+            social.NewGoogleProvider(googleCfg),
+            social.NewGitHubProvider(githubCfg),
         },
     })),
 )

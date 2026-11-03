@@ -1,6 +1,6 @@
 # Plugins
 
-Authsome ships 26 plugins. The core engine handles users, sessions, devices and RBAC; every
+Authsome ships 27 plugins. The core engine handles users, sessions, devices and RBAC; every
 authentication method and every policy control is a plugin you register explicitly. Nothing
 here is on by default, so you only carry what you use.
 
@@ -12,7 +12,7 @@ engine, err := authsome.NewEngine(
 )
 ```
 
-Each plugin has its own README with config, settings, endpoints and the hooks it runs on.
+Each plugin has its own README with config, settings, endpoints and the hooks it runs on, except `retention`, which is documented in its package comment (`go doc github.com/xraph/authsome/plugins/retention`).
 
 ## Pick by what you are trying to do
 
@@ -44,6 +44,7 @@ Each plugin has its own README with config, settings, endpoints and the hooks it
 | Compromise signals pushed from Google or Okta | [`sharedsignals`](sharedsignals/) |
 | To let an AI agent act for a user, on a leash | [`agentauth`](agentauth/) |
 | Country and city on every session | [`geoip`](geoip/) |
+| Sign-ups, sign-ins and profile updates mirrored into a CRM (HubSpot or a generic REST endpoint) | [`retention`](retention/) |
 
 ## By category
 
@@ -54,6 +55,7 @@ Each plugin has its own README with config, settings, endpoints and the hooks it
 | Communication | [`email`](email/), [`notification`](notification/) |
 | Risk and security | [`anomaly`](anomaly/), [`geofence`](geofence/), [`geoip`](geoip/), [`impossibletravel`](impossibletravel/), [`ipreputation`](ipreputation/), [`riskengine`](riskengine/), [`vpndetect`](vpndetect/), [`sharedsignals`](sharedsignals/) |
 | Provisioning | [`scim`](scim/), [`deviceverify`](deviceverify/), [`oauth2provider`](oauth2provider/), [`agentauth`](agentauth/) |
+| Data | [`retention`](retention/) |
 
 ## What depends on what
 
@@ -67,6 +69,7 @@ Most plugins stand alone. These do not, and registration order matters where it 
 - `subscription` in organisation mode needs `organization` for its tenants.
 - `phone` and `mfa` share the engine's SMS bridge. Configure it once.
 - `waitlist` contributes notification mappings that `notification` renders.
+- `retention` can gate CRM delivery on a consent grant, which needs `consent` registered and `retention.require_consent` turned on. Without them every user syncs.
 - `agentauth` plugs its consent gate into `oauth2provider`, automatically when both are registered on the same engine. Its org policy surface needs `organization`.
 
 Pick one of `email` or `notification`, not both. They hook the same events and you will send

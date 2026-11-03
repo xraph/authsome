@@ -8,15 +8,17 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/xraph/authsome/internal/telemetry"
 )
 
 // turnstileEndpoint is Cloudflare's siteverify endpoint.
 const turnstileEndpoint = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
-// defaultTurnstileTimeout is the default HTTP timeout for the Turnstile
+// DefaultTurnstileTimeout is the default HTTP timeout for the Turnstile
 // verifier. Captcha verification sits on the auth path; we'd rather fail fast
 // than hang the request.
-const defaultTurnstileTimeout = 5 * time.Second
+const DefaultTurnstileTimeout = 5 * time.Second
 
 // TurnstileVerifier verifies Cloudflare Turnstile tokens.
 //
@@ -29,10 +31,12 @@ type TurnstileVerifier struct {
 }
 
 // NewTurnstileVerifier returns a verifier configured with the given secret.
-// httpClient may be nil — defaults to a client with a 5s timeout.
+// httpClient may be nil: it defaults to a client with a 5s timeout, whose
+// calls to Cloudflare are client spans under the request's span.
 func NewTurnstileVerifier(secret string, httpClient *http.Client) *TurnstileVerifier {
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: defaultTurnstileTimeout}
+		httpClient = telemetry.InstrumentClient(&http.Client{Timeout: DefaultTurnstileTimeout},
+			telemetry.Endpoint{Kind: telemetry.ProviderCaptcha}, nil)
 	}
 	return &TurnstileVerifier{
 		secret:     secret,

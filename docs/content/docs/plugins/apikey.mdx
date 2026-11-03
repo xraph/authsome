@@ -14,9 +14,10 @@ import (
 )
 
 eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
     authsome.WithPlugin(apikey.New(apiKeyStore, apikey.Config{
-        PathPrefix:     "/v1/auth/keys",
+        PathPrefix:     "/v1/keys",
         MaxKeysPerUser: 10,
         DefaultExpiry:  90 * 24 * time.Hour,
     })),
@@ -27,7 +28,7 @@ eng, err := authsome.NewEngine(
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `PathPrefix` | `string` | `"/v1/auth/keys"` | HTTP path prefix for API key management routes |
+| `PathPrefix` | `string` | `"/v1/keys"` | HTTP path prefix for API key management routes |
 | `MaxKeysPerUser` | `int` | `0` (unlimited) | Maximum number of active keys per user |
 | `DefaultExpiry` | `time.Duration` | `0` (never) | Default TTL for newly created keys |
 
@@ -42,7 +43,7 @@ eng, err := authsome.NewEngine(
 
 ## API key generation
 
-`POST /v1/auth/keys`
+`POST /v1/keys`
 
 All key-management routes require an authenticated session.
 
@@ -94,15 +95,15 @@ Keys can be scoped to specific permissions:
 }
 ```
 
-Scopes are stored on the key and can be checked by your application logic. The plugin does not enforce scope semantics -- it stores and retrieves them.
+Scopes are stored on the key and can be checked by your application logic. The plugin does not enforce scope semantics: it stores and retrieves them.
 
 ## Listing keys
 
-`GET /v1/auth/keys?app_id=aapp_01j9...`
+`GET /v1/keys?app_id=aapp_01j9...`
 
 Optionally filter by user:
 
-`GET /v1/auth/keys?app_id=aapp_01j9...&user_id=ausr_01j9...`
+`GET /v1/keys?app_id=aapp_01j9...&user_id=ausr_01j9...`
 
 **Response:**
 
@@ -128,7 +129,7 @@ The raw key is never returned in list responses. Only the prefix is shown for id
 
 ## Key revocation
 
-`DELETE /v1/auth/keys/:keyId`
+`DELETE /v1/keys/:keyId`
 
 Marks the key as revoked. Revoked keys are rejected during authentication. The key record is preserved for audit purposes.
 
@@ -183,15 +184,15 @@ their own keys unless they hold the `manage`/`apikey` permission.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/v1/auth/keys` | Create a new API key (defaults to the caller) |
-| `GET` | `/v1/auth/keys` | List your keys; app-wide listing requires `manage`/`apikey` |
-| `DELETE` | `/v1/auth/keys/:keyId` | Revoke one of your keys |
+| `POST` | `/v1/keys` | Create a new API key (defaults to the caller) |
+| `GET` | `/v1/keys` | List your keys; app-wide listing requires `manage`/`apikey` |
+| `DELETE` | `/v1/keys/:keyId` | Revoke one of your keys |
 
 ## Observability
 
 The plugin emits events for:
 
-- `apikey.created` -- New API key generated
-- `apikey.revoked` -- API key revoked
+- `apikey.created`: New API key generated
+- `apikey.revoked`: API key revoked
 
 Events are sent to Chronicle (audit), Relay (webhooks), and the global hook bus.

@@ -1,16 +1,9 @@
 ---
 title: Warden Bridge
-description: Advanced RBAC engine — delegates permission checks to Warden for richer RBAC, ReBAC, and ABAC policy evaluation.
+description: The required authorization engine. Authsome's roles, permissions and permission checks all go through Warden.
 ---
 
-The Warden bridge connects Authsome to the Warden authorization engine. When configured, Authsome's RBAC permission checks are delegated to Warden, which supports more expressive authorization models: full RBAC with inheritance, Relationship-Based Access Control (ReBAC), and Attribute-Based Access Control (ABAC) — all in a single policy engine.
-
-Without Warden, Authsome evaluates permissions using its built-in RBAC store (`rbac.Store`), which supports role-permission assignments and a single level of role hierarchy. Warden unlocks policies like:
-
-- "Allow access if the user owns the resource"
-- "Allow access if the user is a member of the resource's parent organisation"
-- "Deny access during weekends regardless of role"
-- "Allow if user has role `admin` in the requesting tenant AND is in the EMEA region"
+Warden is Authsome's authorization engine, and it's required: `NewEngine` returns an error without `WithWarden`. Roles, permissions, role assignments and permission checks (`eng.HasPermission`, `middleware.RequirePermission`) all go through Warden's RBAC, ReBAC and ABAC evaluation.
 
 ## Interface
 
@@ -34,106 +27,45 @@ type AuthzResult struct {
 }
 ```
 
-## Setup with the Warden engine (recommended)
-
-Authsome provides a first-class `WithWarden` option that accepts the concrete `*warden.Engine` directly. This is the recommended approach — it provides Warden's full RBAC/ReBAC/ABAC evaluation and also satisfies the `bridge.Authorizer` interface for backward compatibility:
+## Setup
 
 ```go
 import (
-    "github.com/xraph/authsome"
     "github.com/xraph/warden"
-    "github.com/xraph/authsome/store/postgres"
+    wmemory "github.com/xraph/warden/store/memory"
+
+    "github.com/xraph/authsome"
 )
 
-// Build the Warden engine.
-wardenEng, err := warden.New(
-    warden.WithStore(wardenStore),
-    warden.WithPolicy(warden.PolicyOPA), // or PolicyCasbin, PolicyCEL
+wardenEng, err := warden.NewEngine(
+    warden.WithStore(wmemory.New()), // or one of Warden's persistent stores
 )
 if err != nil {
     log.Fatal(err)
 }
 
-// Register with Authsome using the first-class option.
-eng, err := authsome.New(
+eng, err := authsome.NewEngine(
     authsome.WithStore(pgStore),
+    authsome.WithChronicle(chronicleBridge),
     authsome.WithWarden(wardenEng),
 )
 ```
 
-Internally, `WithWarden` calls:
+`WithWarden` also sets the `bridge.Authorizer` to `wardenadapter.New(wardenEng)`. Other Warden options include `WithCache`, `WithEvaluator`, `WithLogger` and `WithConfig`; see Warden's documentation.
+
+## A custom Authorizer
+
+`WithAuthorizer` replaces the `bridge.Authorizer` that `WithWarden` set, for code paths that check through the bridge. It doesn't replace Warden: you still pass `WithWarden`, because role and permission storage live there.
 
 ```go
-e.warden_ = wardenEng
-e.authorizer = wardenadapter.New(wardenEng)
+authsome.WithWarden(wardenEng),
+authsome.WithAuthorizer(myAuthorizer), // implements bridge.Authorizer
 ```
 
-## Setup with the generic Authorizer interface
+## How Authsome uses Warden
 
-If you want to integrate a different authorization engine, implement `bridge.Authorizer` directly:
+- `eng.HasPermission(ctx, userID, action, resource)` and the `middleware.RequirePermission` guard check permissions in Warden.
+- Role and permission management on the engine (`CreateRole`, `AssignUserRole`, `AddPermission` and the rest) writes to Warden's store.
+- `WithBootstrap` seeds the default roles into Warden when the engine starts.
 
-```go
-import (
-    "github.com/xraph/authsome"
-    "github.com/xraph/authsome/bridge/wardenadapter"
-)
-
-eng, err := authsome.New(
-    authsome.WithStore(pgStore),
-    authsome.WithAuthorizer(wardenadapter.New(wardenEng)),
-)
-```
-
-## How Authsome uses the Authorizer
-
-Authsome calls the Authorizer bridge for:
-
-1. **RBAC permission checks** — Before allowing any `HasPermission` evaluation on the RBAC service, the authorizer is called if Warden is configured.
-2. **API endpoint access control** — Auth-protected management routes (user ban/unban, RBAC management) check the authorizer.
-3. **Plugin-level checks** — Plugins that perform sensitive operations (e.g., the organization plugin before allowing member removal) can call the authorizer.
-
-When the Authorizer is not configured (nil), Authsome falls back to its built-in RBAC store evaluation.
-
-## The NoopAuthorizer
-
-During development, use the built-in `NoopAuthorizer` that always allows all requests:
-
-```go
-import "github.com/xraph/authsome/bridge"
-
-eng, err := authsome.New(
-    authsome.WithStore(memory.New()),
-    authsome.WithAuthorizer(bridge.NewNoopAuthorizer()),
-)
-```
-
-<Callout type="warn">
-The `NoopAuthorizer` always returns `allowed: true` with the reason `"standalone mode: always allowed"`. Never use it in production. In production, either configure Warden or rely on Authsome's built-in RBAC (which evaluates real role and permission assignments from the database).
-</Callout>
-
-## Warden policy example
-
-With Warden's OPA backend, you can write policies that express complex authorization logic:
-
-```text
-package authsome
-
-import future.keywords.if
-
-default allow = false
-
-# Allow if user has the required role in the tenant.
-allow if {
-    role := data.roles[input.subject][input.tenant]
-    action_allowed(role, input.action, input.resource)
-}
-
-# Allow admins everything.
-action_allowed("admin", _, _) = true
-
-# Allow editors to write but not delete.
-action_allowed("editor", "read", _) = true
-action_allowed("editor", "write", _) = true
-```
-
-Refer to the [Warden documentation](/docs/guides/forge-extension) for the full policy language reference.
+Policies themselves are written in Warden. See Warden's documentation for its policy language and stores.

@@ -775,3 +775,24 @@ func TestRefreshAll_IsANoOpOnAColdCache(t *testing.T) {
 	c := New(hardLimitOptions(srv, &now))
 	assert.Empty(t, c.RefreshAll(context.Background()))
 }
+
+// Due counts the key sets a background round would fetch: none on a cold
+// cache, none inside MinRefetchInterval, one once that has passed. The
+// plugin uses it to start a trace only for a round that has work.
+func TestDue_CountsWhatRefreshAllWouldFetch(t *testing.T) {
+	srv, _ := flakyJWKS(t, &newKey(t).PublicKey)
+	defer srv.Close()
+
+	now := time.Now()
+	c := New(hardLimitOptions(srv, &now))
+	assert.Equal(t, 0, c.Due(), "a cold cache has nothing to refresh")
+
+	_, err := c.Key(context.Background(), srv.URL, "kid-1")
+	require.NoError(t, err)
+	assert.Equal(t, 0, c.Due(), "a set fetched inside MinRefetchInterval is not due")
+
+	now = now.Add(10 * time.Minute)
+	assert.Equal(t, 1, c.Due())
+	require.Empty(t, c.RefreshAll(context.Background()))
+	assert.Equal(t, 0, c.Due(), "the round that fetched it resets the clock")
+}

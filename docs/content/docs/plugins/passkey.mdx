@@ -14,6 +14,7 @@ import (
 )
 
 eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
     authsome.WithPlugin(passkey.New(passkey.Config{
         RPDisplayName:  "My App",
@@ -49,7 +50,7 @@ The registration ceremony creates a new passkey credential for the authenticated
 
 ### Step 1: Begin registration
 
-`POST /v1/auth/passkey/register/begin`
+`POST /v1/passkeys/register/begin`
 
 The server generates a challenge and returns `PublicKeyCredentialCreationOptions` for the browser's `navigator.credentials.create()` API.
 
@@ -73,7 +74,7 @@ The server generates a challenge and returns `PublicKeyCredentialCreationOptions
 
 ### Step 2: Complete registration
 
-`POST /v1/auth/passkey/register/finish`
+`POST /v1/passkeys/register/finish`
 
 The client sends the `AuthenticatorAttestationResponse` from the browser. The server validates the attestation, extracts the public key, and stores the credential.
 
@@ -95,13 +96,13 @@ The authentication ceremony verifies the user's passkey credential.
 
 ### Step 1: Begin authentication
 
-`POST /v1/auth/passkey/login/begin`
+`POST /v1/passkeys/login/begin`
 
 Returns `PublicKeyCredentialRequestOptions` for `navigator.credentials.get()`.
 
 ### Step 2: Complete authentication
 
-`POST /v1/auth/passkey/login/finish`
+`POST /v1/passkeys/login/finish`
 
 The client sends the `AuthenticatorAssertionResponse`. The server verifies the signature against the stored public key, updates the sign count, and creates a session.
 
@@ -109,7 +110,7 @@ The client sends the `AuthenticatorAssertionResponse`. The server verifies the s
 
 ### Resident keys (discoverable credentials)
 
-When `residentKey` is set to `"required"` or `"preferred"`, the authenticator stores the credential internally. Users can authenticate without entering a username first -- the authenticator presents all stored credentials for the relying party.
+When `residentKey` is set to `"required"` or `"preferred"`, the authenticator stores the credential internally. Users can authenticate without entering a username first: the authenticator presents all stored credentials for the relying party.
 
 ### Non-resident keys
 
@@ -117,8 +118,8 @@ The server must provide a list of allowed credential IDs during authentication. 
 
 ### Platform vs roaming authenticators
 
-- **Platform authenticators** -- Built into the device (Touch ID, Face ID, Windows Hello). Use `authenticatorAttachment: "platform"` to prefer these.
-- **Roaming authenticators** -- External security keys (YubiKey, SoloKeys). Use `authenticatorAttachment: "cross-platform"`.
+- Platform authenticators: Built into the device (Touch ID, Face ID, Windows Hello). Use `authenticatorAttachment: "platform"` to prefer these.
+- Roaming authenticators: External security keys (YubiKey, SoloKeys). Use `authenticatorAttachment: "cross-platform"`.
 
 ## Credential storage
 
@@ -151,12 +152,12 @@ The passkey plugin implements `AuthMethodContributor`, returning one entry per r
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/v1/auth/passkey/register/begin` | Start passkey registration ceremony |
-| `POST` | `/v1/auth/passkey/register/finish` | Complete passkey registration |
-| `POST` | `/v1/auth/passkey/login/begin` | Start passkey authentication ceremony |
-| `POST` | `/v1/auth/passkey/login/finish` | Complete passkey authentication |
-| `GET` | `/v1/auth/passkey/credentials` | List user's registered passkeys |
-| `DELETE` | `/v1/auth/passkey/credentials/:id` | Remove a registered passkey |
+| `POST` | `/v1/passkeys/register/begin` | Start passkey registration ceremony |
+| `POST` | `/v1/passkeys/register/finish` | Complete passkey registration |
+| `POST` | `/v1/passkeys/login/begin` | Start passkey authentication ceremony |
+| `POST` | `/v1/passkeys/login/finish` | Complete passkey authentication |
+| `GET` | `/v1/passkeys` | List user's registered passkeys |
+| `DELETE` | `/v1/passkeys/:credentialId` | Remove a registered passkey |
 
 ## Ceremony state management
 

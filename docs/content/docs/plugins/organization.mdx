@@ -14,9 +14,10 @@ import (
 )
 
 eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
     authsome.WithPlugin(organization.New(store, organization.Config{
-        PathPrefix: "/v1/auth",
+        PathPrefix: "/v1",
     })),
 )
 ```
@@ -40,7 +41,7 @@ eng, err := authsome.NewEngine(
 
 ### Create organization
 
-`POST /v1/auth/organizations`
+`POST /v1/orgs`
 
 ```json
 {
@@ -52,11 +53,11 @@ eng, err := authsome.NewEngine(
 
 ### Get organization
 
-`GET /v1/auth/organizations/:orgId`
+`GET /v1/orgs/:orgId`
 
 ### Update organization
 
-`PUT /v1/auth/organizations/:orgId`
+`PATCH /v1/orgs/:orgId`
 
 ```json
 {
@@ -67,13 +68,13 @@ eng, err := authsome.NewEngine(
 
 ### Delete organization
 
-`DELETE /v1/auth/organizations/:orgId`
+`DELETE /v1/orgs/:orgId`
 
 ## Member management
 
 ### Add member
 
-`POST /v1/auth/organizations/:orgId/members`
+`POST /v1/orgs/:orgId/members`
 
 ```json
 {
@@ -84,11 +85,11 @@ eng, err := authsome.NewEngine(
 
 ### List members
 
-`GET /v1/auth/organizations/:orgId/members`
+`GET /v1/orgs/:orgId/members`
 
 ### Update member role
 
-`PUT /v1/auth/organizations/:orgId/members/:memberId`
+`PATCH /v1/orgs/:orgId/members/:memberId`
 
 ```json
 {"role": "owner"}
@@ -96,7 +97,7 @@ eng, err := authsome.NewEngine(
 
 ### Remove member
 
-`DELETE /v1/auth/organizations/:orgId/members/:memberId`
+`DELETE /v1/orgs/:orgId/members/:memberId`
 
 ## Team management
 
@@ -104,7 +105,7 @@ Teams provide sub-grouping within organizations:
 
 ### Create team
 
-`POST /v1/auth/organizations/:orgId/teams`
+`POST /v1/orgs/:orgId/teams`
 
 ```json
 {
@@ -113,13 +114,7 @@ Teams provide sub-grouping within organizations:
 }
 ```
 
-### Add team member
-
-`POST /v1/auth/organizations/:orgId/teams/:teamId/members`
-
-```json
-{"user_id": "ausr_01j9..."}
-```
+Teams can also be read, updated and deleted at `GET`, `PATCH` and `DELETE /v1/orgs/:orgId/teams/:teamId`. There's no HTTP route for team membership.
 
 ## Invitation system
 
@@ -127,7 +122,7 @@ Invite users to join an organization by email:
 
 ### Send invitation
 
-`POST /v1/auth/organizations/:orgId/invitations`
+`POST /v1/orgs/:orgId/invitations`
 
 ```json
 {
@@ -140,17 +135,15 @@ The engine creates an invitation record and, if the email plugin or notification
 
 ### Accept invitation
 
-`POST /v1/auth/invitations/:token/accept`
+`POST /v1/orgs/invitations/accept`
 
 The user clicks the invitation link, which resolves the token and adds them as a member with the specified role.
 
 ### List pending invitations
 
-`GET /v1/auth/organizations/:orgId/invitations`
+`GET /v1/orgs/:orgId/invitations`
 
-### Revoke invitation
-
-`DELETE /v1/auth/organizations/:orgId/invitations/:invitationId`
+Invitees can also decline with `POST /v1/orgs/invitations/decline`. There's no route to revoke an invitation.
 
 ## Organization-scoped roles
 

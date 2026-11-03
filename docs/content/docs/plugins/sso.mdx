@@ -14,22 +14,18 @@ import (
 )
 
 eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
     authsome.WithPlugin(sso.New(sso.Config{
         Providers: []sso.Provider{
-            sso.NewOIDC(sso.OIDCConfig{
+            sso.NewOIDCProvider(sso.OIDCConfig{
                 Name:         "okta",
                 Issuer:       "https://mycompany.okta.com",
                 ClientID:     "your-client-id",
                 ClientSecret: "your-client-secret",
-                RedirectURL:  "https://example.com/v1/auth/sso/okta/callback",
+                RedirectURL:  "https://example.com/v1/sso/okta/callback",
             }),
-            sso.NewSAML(sso.SAMLConfig{
-                Name:       "azure-ad",
-                MetadataURL: "https://login.microsoftonline.com/.../metadata",
-                ACSPath:    "/v1/auth/sso/azure-ad/acs",
-                EntityID:   "https://example.com",
-            }),
+            samlProvider, // from sso.NewSAMLProvider, which returns an error; see below
         },
         SessionTokenTTL:   1 * time.Hour,
         SessionRefreshTTL: 30 * 24 * time.Hour,
@@ -59,12 +55,12 @@ eng, err := authsome.NewEngine(
 OIDC providers (Okta, Auth0, Azure AD, Google Workspace) are configured with standard OpenID Connect discovery:
 
 ```go
-sso.NewOIDC(sso.OIDCConfig{
+sso.NewOIDCProvider(sso.OIDCConfig{
     Name:         "okta",
     Issuer:       "https://mycompany.okta.com",
     ClientID:     "your-client-id",
     ClientSecret: "your-client-secret",
-    RedirectURL:  "https://example.com/v1/auth/sso/okta/callback",
+    RedirectURL:  "https://example.com/v1/sso/okta/callback",
     Scopes:       []string{"openid", "email", "profile"},
 })
 ```
@@ -78,14 +74,18 @@ Every OIDC login carries a `nonce` and an S256 PKCE challenge. The plugin keeps 
 SAML 2.0 providers (Azure AD, ADFS, OneLogin) use XML metadata for configuration:
 
 ```go
-sso.NewSAML(sso.SAMLConfig{
+samlProvider, err := sso.NewSAMLProvider(sso.SAMLConfig{
     Name:        "azure-ad",
     MetadataURL: "https://login.microsoftonline.com/.../federationmetadata/2007-06/federationmetadata.xml",
-    ACSPath:     "/v1/auth/sso/azure-ad/acs",
     EntityID:    "https://example.com",
-    Certificate: samlCertPEM,
+    ACSURL:      "https://example.com/v1/sso/azure-ad/acs",
 })
+if err != nil {
+    log.Fatal(err)
+}
 ```
+
+Instead of `MetadataURL` you can pass the IdP's metadata inline (`IDPMetadataXML`) or its SSO URL and certificate (`IDPSSOURL`, `IDPCertificatePEM`). `SPCertificatePEM`, `SPPrivateKeyPEM` and `SignRequests` sign the AuthnRequests, `AllowIDPInitiated` accepts IdP-initiated logins, and `AttributeMap` maps assertion attributes to user fields.
 
 The ACS (Assertion Consumer Service) endpoint receives the SAML response from the IdP and extracts the user identity.
 
@@ -97,7 +97,7 @@ The ACS (Assertion Consumer Service) endpoint receives the SAML response from th
 
 **Start login**: The client requests the SSO login URL.
 
-`POST /v1/auth/sso/:provider/login`
+`POST /v1/sso/:provider/login`
 
 **Response:**
 
@@ -114,8 +114,8 @@ The ACS (Assertion Consumer Service) endpoint receives the SAML response from th
 
 **Callback**: For OIDC, the callback exchanges the code for tokens. For SAML, the ACS endpoint processes the SAML response.
 
-`POST /v1/auth/sso/:provider/callback` (OIDC)
-`POST /v1/auth/sso/:provider/acs` (SAML)
+`POST /v1/sso/:provider/callback` (OIDC)
+`POST /v1/sso/:provider/acs` (SAML)
 
 **Response:**
 
@@ -166,13 +166,13 @@ Both `allowed_domains` and `trusted_federation` are set through the admin connec
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/v1/auth/sso/:provider/login` | Start SSO login flow, returns IdP login URL |
-| `POST` | `/v1/auth/sso/:provider/callback` | OIDC callback endpoint |
-| `POST` | `/v1/auth/sso/:provider/acs` | SAML ACS (Assertion Consumer Service) endpoint |
+| `POST` | `/v1/sso/:provider/login` | Start SSO login flow, returns IdP login URL |
+| `POST` | `/v1/sso/:provider/callback` | OIDC callback endpoint |
+| `POST` | `/v1/sso/:provider/acs` | SAML ACS (Assertion Consumer Service) endpoint |
 
 ## Observability
 
 The plugin emits events for:
 
-- `auth.sso.signup` -- New user created via SSO
-- `auth.sso.signin` -- Existing user signed in via SSO
+- `auth.sso.signup`: New user created via SSO
+- `auth.sso.signin`: Existing user signed in via SSO

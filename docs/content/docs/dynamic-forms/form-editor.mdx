@@ -3,15 +3,19 @@ title: Form Editor
 description: Visual dashboard editor for building and previewing custom signup forms without code.
 ---
 
+<Callout type="warn">
+The HTTP routes this page shows don't exist. Neither the standalone API nor the Forge extension mounts form or branding routes. Manage them from Go with the engine methods (`GetSignupFormConfig`, `SaveSignupFormConfig`, `DeleteSignupFormConfig`, `ListFormConfigs`, `GetOrgBranding`, `SaveOrgBranding`, `DeleteOrgBranding`) or through the Forge dashboard, which edits them over its contract. Clients get the app's branding from `GET /v1/client-config`.
+</Callout>
+
 The Authsome Dashboard includes a visual form editor that lets non-technical users create, modify, and preview custom signup forms. The editor produces `FormConfig` records (see [Custom Schemas](/docs/dynamic-forms/custom-schemas)) and publishes them to the Authsome engine.
 
 ## Overview
 
 The form editor provides a drag-and-drop interface for building signup forms. It is available in the Authsome Dashboard under **Settings > Forms** for each application. The editor consists of three panels:
 
-1. **Field palette** — available field types that can be added to the form
-2. **Form canvas** — the current form layout with fields in display order
-3. **Properties panel** — configuration for the selected field (label, validation, options)
+1. Field palette: available field types that can be added to the form
+2. Form canvas: the current form layout with fields in display order
+3. Properties panel: configuration for the selected field (label, validation, options)
 
 ## Adding fields
 
@@ -114,7 +118,7 @@ To revert to a previous form version:
 
 The form editor generates `FormConfig` records that the Authsome UI consumes to render signup forms. The UI components:
 
-1. Fetch the active FormConfig via `GET /v1/auth/forms/active`
+1. Fetch the active FormConfig via `GET /v1/forms/active`
 2. Render each `FormField` using the appropriate input component based on `Type`
 3. Apply client-side validation rules from the `Validation` object
 4. Submit metadata values alongside the standard signup fields

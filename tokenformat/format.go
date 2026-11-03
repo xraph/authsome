@@ -64,6 +64,14 @@ type TokenClaims struct {
 	// means a user. That ambiguity is what made the JWT auth path parse an
 	// empty sub and panic on a machine token.
 	PrincipalID string `json:"pid,omitempty"`
+
+	// ClientID names the OAuth2 client a token was issued to, and is empty
+	// for a first-party login. It is the RFC 9068 client_id claim. The auth
+	// middleware reads it to park a third-party token until a RequireScope
+	// route admits it; an opaque token gets the same answer from its session
+	// row, but a JWT is validated without loading one, so the token has to
+	// say it.
+	ClientID string `json:"client_id,omitempty"`
 }
 
 // Format generates and validates access tokens. Refresh tokens are always

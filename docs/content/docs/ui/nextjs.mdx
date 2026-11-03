@@ -44,7 +44,7 @@ export default async function DashboardPage() {
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `baseURL` | `string` | -- | Authsome API URL |
+| `baseURL` | `string` | none | Authsome API URL |
 | `cookieName` | `string` | `"authsome_session_token"` | Cookie name for the session token |
 
 ### getClientConfig
@@ -80,8 +80,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `baseURL` | `string` | -- | Authsome API URL |
-| `publishableKey` | `string` | -- | Publishable key to identify the app |
+| `baseURL` | `string` | none | Authsome API URL |
+| `publishableKey` | `string` | none | Publishable key to identify the app |
 
 #### ClientConfig shape
 
@@ -162,7 +162,7 @@ export const config = {
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `baseURL` | `string` | -- | Authsome API URL |
+| `baseURL` | `string` | none | Authsome API URL |
 | `signInPage` | `string` | `"/sign-in"` | Redirect target for unauthenticated users |
 | `publicPaths` | `string[]` | `["/", signInPage]` | Paths that do not require authentication. Supports glob suffixes with `*` |
 | `cookieName` | `string` | `"authsome_session_token"` | Cookie name to read |
@@ -196,13 +196,13 @@ const handler = createProxyHandler({
 export { handler as GET, handler as POST, handler as PUT, handler as DELETE, handler as PATCH };
 ```
 
-This single file replaces any manual proxy implementation. All requests to `/api/authsome/*` will be forwarded to the corresponding path on your Authsome backend (e.g., `/api/authsome/v1/auth/signin` proxies to `<baseURL>/v1/auth/signin`).
+This single file replaces any manual proxy implementation. All requests to `/api/authsome/*` will be forwarded to the corresponding path on your Authsome backend (e.g., `/api/authsome/v1/signin` proxies to `<baseURL>/v1/signin`).
 
 #### Configuration
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `baseURL` | `string` | -- | Base URL of the Authsome backend API |
+| `baseURL` | `string` | none | Base URL of the Authsome backend API |
 
 > **Important:** Add `/api/authsome/*` to your middleware's `publicPaths` array so the proxy route is accessible without authentication.
 
@@ -390,7 +390,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     return { redirect: { destination: "/sign-in", permanent: false } };
   }
 
-  const res = await fetch(`${process.env.AUTHSOME_API_URL}/v1/auth/me`, {
+  const res = await fetch(`${process.env.AUTHSOME_API_URL}/v1/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 

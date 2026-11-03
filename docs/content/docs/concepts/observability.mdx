@@ -1,0 +1,128 @@
+---
+title: Observability
+description: "The spans and metrics authsome records, what each one carries, and what never reaches them."
+---
+
+In a Forge app you don't have to wire anything. The authsome extension hands the engine the app's metrics registry, so authsome's metric families show up on `/_/metrics` next to everything else, and its spans go to the tracer provider forge installs. Turn on forge's tracing and metrics the way you normally would and you'll see them.
+
+Embedding the engine yourself works too. Pass any `github.com/xraph/go-utils/metrics` registry to `WithMetricsSink`, and install an OpenTelemetry tracer provider with `otel.SetTracerProvider`:
+
+```go
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithChronicle(chronicle),
+    authsome.WithWarden(warden),
+    authsome.WithMetricsSink(registry),
+)
+```
+
+Leave the sink out and the families are off. The engine then pays a nil check per event and nothing else.
+
+## What forge already records
+
+forge traces every request with a server span and records the semconv `http_server_request_duration_seconds` histogram, labelled by route template and status. authsome doesn't measure HTTP latency itself. grove records a `db.client` span and `db_client_operation_duration_seconds` for every query, and the forgery libraries authsome uses (Chronicle, Relay, Warden, Keysmith, Herald, Dispatch) trace and measure their own work, so authsome doesn't wrap those calls again.
+
+One thing to know about forge's server span: it records `url.path` and `user_agent.original` as they arrive. A few authsome routes carry something sensitive in the path. The shared-signals push route (`/streams/:push_path/events`) carries the stream's push secret, and session and passkey routes carry session and credential IDs. Until forge redacts those, you can keep a route out of tracing with forge's `exclude_paths` tracing setting.
+
+## Spans
+
+Every span below uses the instrumentation scope `github.com/xraph/authsome`. A span that fails gets an error status whose description is a class (the error's Go type, an HTTP status, or a transport class like `timeout`), an `error.type` attribute with the same value, and an `exception` event carrying only `exception.type`. An error's message never goes on a span, because store, driver and provider messages quote the values they were given.
+
+| Span | Kind | Attributes |
+|------|------|------------|
+| `issue session` | internal | `authsome.auth.method`, `authsome.mfa.verified`, `authsome.mfa.required`, `authsome.result` (the sign-in results below), `authsome.session.format` (`opaque` or `jwt`) |
+| `verify password` | internal | none |
+| `hash password` | internal | `authsome.password.algorithm` (`argon2id` or `bcrypt`) |
+| `refresh session` | internal | `authsome.refresh.via` (`refresh_token`, `oauth2_client`, `session_token`, `session_id`), `authsome.result` (the refresh results below) |
+| `run plugin hook` | internal | `authsome.plugin.name`, `authsome.plugin.hook` (`before_sign_up`, `after_sign_up`, `before_sign_in`, `after_sign_in`, `before_principal_auth`, `after_principal_auth`, `before_session_create`, `after_session_create`), `authsome.result` (`ok`, `refused`, `error`) |
+| `authenticate api key` | internal | `authsome.result` (the API key results below) |
+| `verify client secret` | internal | none |
+| `verify saml assertion` | internal | `authsome.result` (`ok`, `invalid`) |
+| `send email`, `send sms` | internal | `authsome.message.channel` (`email`, `sms`) |
+| `sweep retention` | internal, a root span when the background sweeper runs it | `authsome.retention.removed`; a `sweep failed` event per kind that failed, with `authsome.retention.kind` and `exception.type` |
+| `deliver retention jobs` | internal, root | `authsome.retention.jobs` |
+| `deliver retention job` | internal | `authsome.retention.job_kind` (`contact_upsert`, `activity_log`), `authsome.retention.provider` (`hubspot`, `generic`, `other`), `authsome.retention.outcome` (the job outcomes below) |
+| `purge retention outbox` | internal, root | `authsome.retention.removed` |
+| `refresh stream keys` | internal, root | `authsome.jwks.sets`, `authsome.jwks.failed` |
+| `GET`, `POST` and so on | client | `http.request.method`, `authsome.provider.kind`, `server.address` and `server.port` for vendor hosts only, `http.response.status_code`, `error.type` |
+
+`verify password` carries no algorithm and no outcome on purpose. A sign-in for an identifier nobody holds runs a stand-in hash under the same span name, so a wrong password and an unknown identifier look identical in a trace. Sign-up works the same way the other round: an address that's already taken gets a stand-in hash under the same `hash password` span, and the same histogram observation, a fresh sign-up gets.
+
+The client spans are every third-party call authsome makes: social sign-in token exchanges and profile fetches, SSO OIDC discovery, token exchange and userinfo, the SAML metadata fetch, shared-signals key sets, Twilio, Resend, Turnstile, the HIBP breach check, CRM deliveries and the webhook URL test. The span is named after the method alone. It never records the URL, its path or its query, which matters for the breach check (the path carries a prefix of the password's SHA-1) and for Twilio (the path carries your account SID). The host is left off when the URL is your customer's: an SSO issuer, a SAML metadata URL, a shared-signals JWKS URI, a generic CRM endpoint, a HubSpot base URL you've overridden, a webhook. None of these requests carries a `traceparent`, `tracestate` or `baggage` header. A call made outside any request (a metadata fetch while a connection loads, say) is measured but starts no trace of its own.
+
+Background work runs on a context with no inherited span, so nothing it does hangs off forge's boot trace. A unit of work gets a root span only when there is work: a sweep that wins the lease, a CRM tick that claims jobs, a key refresh round with a set due.
+
+## Metrics
+
+Names below are as you'll scrape them from a Forge app, with forge's `forge_` namespace in front. Every label is a bounded enum. None is an ID, a tenant, an app, a user, a provider name, an SSO connection, a route or an error string, and every series in a family carries the same label keys.
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `forge_authsome_signin_attempts_total` | counter | `method`, `result` |
+| `forge_authsome_mfa_verifications_total` | counter | `flow` (`signin`, `verify`), `method` (`totp`, `sms`, `recovery`), `result` (`ok`, `invalid`, `replayed`, `expired`, `exhausted`, `error`) |
+| `forge_authsome_sessions_refreshed_total` | counter | `result` |
+| `forge_authsome_password_hash_duration_seconds` | histogram, 5 ms to 2 s | `operation` (`hash`, `verify`), `algorithm` (`argon2id`, `bcrypt`) |
+| `forge_authsome_apikey_authentications_total` | counter | `result` |
+| `forge_authsome_oauth2_tokens_requested_total` | counter | `grant_type` (`authorization_code`, `refresh_token`, `client_credentials`, `device_code`, `token_exchange`, `other`), `result` (`ok`, `invalid_client`, `rejected`, `pending`, `error`) |
+| `forge_authsome_provider_request_duration_seconds` | histogram, 10 ms to 30 s | `kind` (`social`, `oidc`, `saml_metadata`, `jwks`, `sms`, `email`, `captcha`, `breach`, `crm`, `webhook`), `result` (`ok`, `4xx`, `5xx`, `timeout`, `canceled`, `error`) |
+| `forge_authsome_retention_sweeps_attempted_total` | counter | `result` (`ok`, `error`, `skipped`) |
+| `forge_authsome_retention_rows_deleted_total` | counter | `kind` (`sessions`, `verifications`, `password_resets`, `revoked_refresh_tokens`, `ceremony_state`, `plugins`) |
+| `forge_authsome_retention_jobs_processed_total` | counter | `provider` (`hubspot`, `generic`, `other`), `outcome` (`done`, `retry`, `dead`, `deferred`, `suppressed`) |
+| `forge_authsome_controls_degraded_total` | counter | `control` (`ratelimit`, `identifier_limit`, `settings`, `password_history`, `breach_check`) |
+| `forge_authsome_requests_throttled_total` | counter | `limiter` (`route`, `identifier`) |
+| `forge_authsome_ratelimiter_errors_total` | counter | `limiter` (`route`, `identifier`) |
+| `forge_authsome_audit_records_failed_total` | counter | none |
+| `forge_authsome_events_total` | counter | `action`, `resource`, `outcome`, from the hook bus |
+
+A few of those need more than a table cell.
+
+`method` on sign-in attempts is one of `password`, `passkey`, `social`, `sso`, `magic_link`, `phone`, `email_verification` or `other`. A social sign-in through GitHub is `social`, an SSO sign-in through any connection is `sso`, and a custom plugin's own method is `other`. `result` is one of `ok`, `invalid`, `locked`, `banned`, `unverified`, `password_expired`, `mfa_required`, `rate_limited`, `denied` (a plugin hook or a DPoP mandate refused it) or `error`. Each attempt is counted once. `invalid` covers a wrong password and an identifier nobody holds alike. When the MFA gate fires the attempt counts as `mfa_required`, and the second factor is counted in `forge_authsome_mfa_verifications_total`, not as another sign-in. The sessions sign-in produces are roughly `result="ok"` here plus `flow="signin",result="ok"` there.
+
+Refresh results are `ok`, `invalid` (an unknown token, a binding mismatch, or a concurrent refresh that lost the race), `expired`, `banned`, `replay_detected` (the first time a rotated token comes back), `dpop_rejected` and `error`.
+
+API key results are `ok`, `invalid` (malformed, unknown prefix, or wrong secret, so the counter can't be used to learn which prefixes exist), `expired` (revoked or expired), `throttled` (the address spent its failure budget), `denied` (a banned user, an inactive service account, or a principal-auth hook) and `error`.
+
+On the provider histogram, `email` and `sms` are measured around the configured mailer or SMS bridge, so their result is `ok`, `timeout`, `canceled` or `error` and never a status class. Every other kind is measured at the HTTP client, up to the response headers.
+
+`breach_check` counts a HIBP lookup that couldn't run (a failed request, a non-200 answer) during sign-up, a password reset or a password change. The check fails open, so the password goes through as not breached; this counter is how you see that it was skipped rather than passed.
+
+`forge_authsome_events_total` counts every hook-bus event. The values are the bus's own constants (`auth.signin`, `session`, `success`); anything that isn't shaped like one folds into `other`.
+
+## What never reaches telemetry
+
+None of this ever goes on a span, an event, a status or a label: passwords or their hashes, OTP, recovery and magic-link codes, reset and verification tokens, session, refresh and access tokens, session IDs, MFA tickets, OAuth codes, state, nonces and PKCE verifiers, client secrets, API keys and their prefixes, DPoP thumbprints, push paths, webhook, JWKS and metadata URLs, a Twilio account SID, emails, phone numbers, usernames, identifier hashes, lockout keys, IP addresses, user agents, user, organization and app IDs, SSO connection names, provider response bodies and error messages. A test drives sign-in, MFA, refresh, API key and OAuth2 token flows with recognisable values and fails if any of them shows up on a span or in the scrape.
+
+## Migrating from the old metrics
+
+Earlier releases recorded authsome's metrics through `bridge/metricsadapter`. In a Forge app these names change:
+
+| Before | Now |
+|--------|-----|
+| `forge_authsome_events_total{action,resource,outcome,tenant}` | `forge_authsome_events_total{action,resource,outcome}` |
+| `forge_authsome_events_total{action="http.request"}` and `forge_authsome_event_duration_seconds` | forge's `http_server_request_duration_seconds` |
+| `forge_authsome_audit_record_failed` | `forge_authsome_audit_records_failed_total` |
+| `forge_authsome_auth_lockout` | `forge_authsome_signin_attempts_total{result="locked"}` |
+| `forge_authsome_refresh_replay_detected` | `forge_authsome_sessions_refreshed_total{result="replay_detected"}` |
+| `forge_authsome_control_degraded` | `forge_authsome_controls_degraded_total` |
+| `forge_authsome_identifier_limit_rejected` | `forge_authsome_requests_throttled_total{limiter="identifier"}` |
+| `forge_authsome_ratelimit_rejected` | `forge_authsome_requests_throttled_total{limiter="route"}` |
+| `forge_authsome_ratelimit_error` | `forge_authsome_ratelimiter_errors_total` |
+
+No family is labelled by tenant any more. A collector you pass to `WithMetrics` still gets every call it got before, except the per-request `http.request` events the removed `middleware.Metrics` used to send; see the [Metrics bridge](/docs/bridges/metrics).
+
+## A few queries
+
+```text
+# Share of password sign-ins refused as invalid, over five minutes
+sum(rate(forge_authsome_signin_attempts_total{method="password",result="invalid"}[5m]))
+  / sum(rate(forge_authsome_signin_attempts_total{method="password"}[5m]))
+
+# Refresh-token replays, which mean a leaked or double-spent token
+increase(forge_authsome_sessions_refreshed_total{result="replay_detected"}[1h])
+
+# p95 latency of each kind of third-party call
+histogram_quantile(0.95, sum by (kind, le) (rate(forge_authsome_provider_request_duration_seconds_bucket[5m])))
+
+# Any control that let a request through because it couldn't run
+sum by (control) (increase(forge_authsome_controls_degraded_total[15m])) > 0
+```

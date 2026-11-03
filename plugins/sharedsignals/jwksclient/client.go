@@ -412,6 +412,26 @@ func (c *Client) refresh(ctx context.Context, jwksURI string) (err error) {
 	return err
 }
 
+// Due reports how many cached key sets RefreshAll would fetch right now:
+// those whose last fetch is older than MinRefetchInterval and that no
+// other goroutine is already fetching. A background round that finds none
+// has no work to do.
+func (c *Client) Due() int {
+	now := c.opts.Now()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := 0
+	for uri, e := range c.cache {
+		if _, busy := c.inflight[uri]; busy {
+			continue
+		}
+		if now.Sub(e.lastAttempt) >= c.opts.MinRefetchInterval {
+			n++
+		}
+	}
+	return n
+}
+
 // RefreshFailure names one URI whose background refresh did not succeed.
 type RefreshFailure struct {
 	URI string

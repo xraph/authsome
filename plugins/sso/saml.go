@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/plugins/sharedsignals/jwksclient"
 
 	"github.com/crewjam/saml"
@@ -51,7 +52,15 @@ type SAMLConfig struct {
 	// AttributeMap maps SAML attribute names to user fields
 	// ("email" | "first_name" | "last_name" | "groups"). Empty uses defaults.
 	AttributeMap map[string]string
+
+	// tel is where the metadata fetch is measured. Unset for a provider
+	// built outside the plugin.
+	tel *telemetry.Metrics
 }
+
+// spanVerifySAMLAssertion is the span the assertion's signature and
+// conditions are checked in.
+const spanVerifySAMLAssertion = "verify saml assertion"
 
 // samlProvider implements Provider (and SAMLMetadataProvider) for SAML 2.0
 // backed by a configured crewjam ServiceProvider.
@@ -149,7 +158,7 @@ func (p *samlProvider) LoginURLWithRequestID(state string) (loginURL, requestID 
 
 // HandleCallback validates the SAMLResponse (signature against the pinned IdP
 // cert, conditions, audience, recipient, timestamps) and maps it to a User.
-func (p *samlProvider) HandleCallback(_ context.Context, params map[string]string) (*User, error) {
+func (p *samlProvider) HandleCallback(ctx context.Context, params map[string]string) (*User, error) {
 	raw := params["SAMLResponse"]
 	if raw == "" {
 		return nil, fmt.Errorf("sso/saml: missing SAMLResponse")
@@ -167,7 +176,18 @@ func (p *samlProvider) HandleCallback(_ context.Context, params map[string]strin
 	if reqID := params["request_id"]; reqID != "" {
 		possibleRequestIDs = []string{reqID}
 	}
+	// The XML signature check is the expensive part of a SAML sign-in, so
+	// it gets a span of its own. An assertion that fails it is a refusal,
+	// not a fault, and crewjam's error text can quote the assertion, so
+	// only the outcome goes on the span.
+	_, span := telemetry.Start(ctx, spanVerifySAMLAssertion)
 	assertion, err := p.sp.ParseXMLResponse(decoded, possibleRequestIDs, p.sp.AcsURL)
+	result := "ok"
+	if err != nil {
+		result = "invalid"
+	}
+	span.SetAttributes(telemetry.AttrResult.String(result))
+	span.End()
 	if err != nil {
 		return nil, fmt.Errorf("sso/saml: invalid assertion: %w", err)
 	}
@@ -200,7 +220,12 @@ func resolveIDPMetadata(cfg SAMLConfig) (*saml.EntityDescriptor, error) {
 		defer cancel()
 		// The hardened client: a deadline, no redirects into private space,
 		// and a bounded body, the same as OIDC discovery.
-		md, err := samlsp.FetchMetadata(ctx, jwksclient.NewHTTPClient(metadataFetchTimeout), *u)
+		// The metadata URL is the customer's, so its host stays off the
+		// span. Built at connection load with no request around it, the
+		// fetch is measured but starts no trace of its own.
+		client := telemetry.InstrumentClient(jwksclient.NewHTTPClient(metadataFetchTimeout),
+			telemetry.Endpoint{Kind: telemetry.ProviderSAMLMetadata, HideHost: true}, cfg.tel)
+		md, err := samlsp.FetchMetadata(ctx, client, *u)
 		if err != nil {
 			return nil, fmt.Errorf("sso/saml: fetch metadata: %w", err)
 		}

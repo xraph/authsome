@@ -14,19 +14,20 @@ import (
 )
 
 eng, err := authsome.NewEngine(
+    // plus WithChronicle and WithWarden, which every engine needs (see Getting Started)
     authsome.WithStore(store),
     authsome.WithPlugin(social.New(social.Config{
         Providers: []social.Provider{
-            social.NewGoogle(social.GoogleConfig{
+            social.NewGoogleProvider(social.ProviderConfig{
                 ClientID:     "your-client-id",
                 ClientSecret: "your-client-secret",
-                RedirectURL:  "https://example.com/v1/auth/social/google/callback",
+                RedirectURL:  "https://example.com/v1/social/google/callback",
                 Scopes:       []string{"openid", "email", "profile"},
             }),
-            social.NewGitHub(social.GitHubConfig{
+            social.NewGitHubProvider(social.ProviderConfig{
                 ClientID:     "your-client-id",
                 ClientSecret: "your-client-secret",
-                RedirectURL:  "https://example.com/v1/auth/social/github/callback",
+                RedirectURL:  "https://example.com/v1/social/github/callback",
             }),
         },
         SessionTokenTTL:   1 * time.Hour,
@@ -40,6 +41,7 @@ eng, err := authsome.NewEngine(
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `Providers` | `[]Provider` | `[]` | List of enabled OAuth providers |
+| `Domain` | `string` | `""` | Public base URL. A provider without a `RedirectURL` gets `{Domain}/v1/social/{provider}/callback` |
 | `SessionTokenTTL` | `time.Duration` | `1h` | Lifetime of sessions created via social sign-in |
 | `SessionRefreshTTL` | `time.Duration` | `30d` | Lifetime of refresh tokens |
 
@@ -49,20 +51,22 @@ eng, err := authsome.NewEngine(
 |-----------|---------|
 | `Plugin` | Base plugin identity (`"social"`) |
 | `OnInit` | Captures store, bridges, ceremony store, and session config resolver |
-| `RouteProvider` | Registers `/v1/auth/social/:provider` and callback endpoints |
+| `RouteProvider` | Registers `/v1/social/:provider` and callback endpoints |
 | `MigrationProvider` | Contributes the `oauth_connections` table |
 | `AuthMethodContributor` | Reports linked social accounts as auth methods |
 | `AuthMethodUnlinker` | Supports unlinking a social account from a user |
 
 ## Supported providers
 
+The package has 22 constructors, all taking `social.ProviderConfig` (`ClientID`, `ClientSecret`, `RedirectURL`, `Scopes`): Amazon, Apple, Bitbucket, Discord, Dropbox, Facebook, GitHub, GitLab, Google, Instagram, Line, LinkedIn, Microsoft, Patreon, Pinterest, Slack, Spotify, Strava, Twitch, Twitter, Yahoo and Zoom (`social.NewGoogleProvider`, `social.NewGitHubProvider` and so on).
+
 ### Google
 
 ```go
-social.NewGoogle(social.GoogleConfig{
+social.NewGoogleProvider(social.ProviderConfig{
     ClientID:     "your-client-id.apps.googleusercontent.com",
     ClientSecret: "your-client-secret",
-    RedirectURL:  "https://example.com/v1/auth/social/google/callback",
+    RedirectURL:  "https://example.com/v1/social/google/callback",
     Scopes:       []string{"openid", "email", "profile"},
 })
 ```
@@ -70,33 +74,31 @@ social.NewGoogle(social.GoogleConfig{
 ### GitHub
 
 ```go
-social.NewGitHub(social.GitHubConfig{
+social.NewGitHubProvider(social.ProviderConfig{
     ClientID:     "your-client-id",
     ClientSecret: "your-client-secret",
-    RedirectURL:  "https://example.com/v1/auth/social/github/callback",
+    RedirectURL:  "https://example.com/v1/social/github/callback",
 })
 ```
 
 ### Microsoft
 
 ```go
-social.NewMicrosoft(social.MicrosoftConfig{
+social.NewMicrosoftProvider(social.ProviderConfig{
     ClientID:     "your-client-id",
     ClientSecret: "your-client-secret",
-    TenantID:     "common",
-    RedirectURL:  "https://example.com/v1/auth/social/microsoft/callback",
+    RedirectURL:  "https://example.com/v1/social/microsoft/callback",
 })
+// Always uses the "common" tenant; there's no tenant option.
 ```
 
 ### Apple
 
 ```go
-social.NewApple(social.AppleConfig{
-    ClientID:    "your-service-id",
-    TeamID:      "your-team-id",
-    KeyID:       "your-key-id",
-    PrivateKey:  applePrivateKeyPEM,
-    RedirectURL: "https://example.com/v1/auth/social/apple/callback",
+social.NewAppleProvider(social.ProviderConfig{
+    ClientID:     "your-service-id",
+    ClientSecret: appleClientSecretJWT, // the signed client-secret JWT Apple expects; the provider doesn't mint it
+    RedirectURL:  "https://example.com/v1/social/apple/callback",
 })
 ```
 
@@ -122,7 +124,7 @@ A login started from a browser (the start request carries fetch metadata or an `
 
 **Start OAuth flow**: The client calls the start endpoint to get the authorization URL.
 
-`POST /v1/auth/social/:provider`
+`POST /v1/social/:provider`
 
 **Response:**
 
@@ -138,7 +140,7 @@ The plugin generates a cryptographic state parameter for CSRF protection and sto
 
 **Callback**: The provider redirects back with an authorization code.
 
-`GET /v1/auth/social/:provider/callback?code=...&state=...`
+`GET /v1/social/:provider/callback?code=...&state=...`
 
 The plugin validates the state parameter, exchanges the code for an access token, fetches the user profile from the provider, and either links to an existing user or creates a new one.
 
@@ -180,12 +182,12 @@ The `CanUnlink` method checks whether the provider is managed by this plugin. Th
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/v1/auth/social/:provider` | Start OAuth flow, returns authorization URL |
-| `GET` | `/v1/auth/social/:provider/callback` | OAuth callback, exchanges code for session |
+| `POST` | `/v1/social/:provider` | Start OAuth flow, returns authorization URL |
+| `GET` | `/v1/social/:provider/callback` | OAuth callback, exchanges code for session |
 
 ## Observability
 
 The plugin emits events for:
 
-- `auth.social.signup` -- New user created via social login
-- `auth.social.signin` -- Existing user signed in via social login
+- `auth.social.signup`: New user created via social login
+- `auth.social.signin`: Existing user signed in via social login

@@ -111,6 +111,11 @@ type ProviderError struct {
 	// the local contact ref and let the retry recreate the contact rather
 	// than keep updating something that no longer exists.
 	DropRef bool
+
+	// Status is the HTTP status the CRM answered with, or zero when the
+	// request never landed. The worker logs its class (4xx, 5xx) in place
+	// of the error text.
+	Status int
 }
 
 func (e *ProviderError) Error() string {

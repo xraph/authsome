@@ -45,13 +45,14 @@ Users are typically created through the sign-up flow, but can also be created di
 
 ### Via sign-up
 
-`POST /v1/auth/signup`
+`POST /v1/signup`
 
 ```json
 {
   "email": "alice@example.com",
   "password": "Secure!Pass99",
-  "name": "Alice Liddell",
+  "first_name": "Alice",
+  "last_name": "Liddell",
   "username": "alice",
   "app_id": "myapp",
   "metadata": {
@@ -90,7 +91,7 @@ err := engine.CreateUser(ctx, u)
 
 Authenticated users can retrieve their own profile:
 
-`GET /v1/auth/me`
+`GET /v1/me`
 
 ```
 Authorization: Bearer <session_token>
@@ -104,7 +105,8 @@ Authorization: Bearer <session_token>
   "app_id": "aapp_01j9...",
   "email": "alice@example.com",
   "email_verified": true,
-  "name": "Alice Liddell",
+  "first_name": "Alice",
+  "last_name": "Liddell",
   "username": "alice",
   "phone": "+15551234567",
   "phone_verified": true,
@@ -125,11 +127,12 @@ u, err := engine.GetMe(ctx, userID)
 
 Authenticated users can update their own profile fields:
 
-`PATCH /v1/auth/me`
+`PATCH /v1/me`
 
 ```json
 {
-  "name": "Alice Wonderland",
+  "first_name": "Alice",
+  "last_name": "Wonderland",
   "username": "alicew",
   "image": "https://cdn.example.com/alice.jpg"
 }
@@ -150,7 +153,7 @@ err = engine.UpdateMe(ctx, u)
 
 Users can permanently delete their own account (GDPR right to erasure):
 
-`DELETE /v1/auth/me`
+`DELETE /v1/me`
 
 ```
 Authorization: Bearer <session_token>
@@ -176,7 +179,7 @@ err := engine.DeleteAccount(ctx, userID)
 
 For GDPR data portability, users can export all their data:
 
-`GET /v1/auth/me/export`
+`GET /v1/me/export`
 
 ```
 Authorization: Bearer <session_token>
@@ -251,7 +254,7 @@ The engine checks ban status during every sign-in attempt:
 // Simplified engine logic:
 if u.Banned {
     if u.BanExpires != nil && time.Now().After(*u.BanExpires) {
-        // Ban expired — auto-unban
+        // Ban expired: auto-unban
         u.Banned = false
         store.UpdateUser(ctx, u)
     } else {
@@ -264,57 +267,55 @@ if u.Banned {
 
 List users with filtering and pagination:
 
-### Via Go SDK
+### From Go
 
 ```go
 import "github.com/xraph/authsome/user"
 
-result, err := engine.ListUsers(ctx, &user.UserQuery{
-    AppID:    appID,
-    Email:    "alice@",        // partial match
-    Search:   "Liddell",       // search name, email, username
-    Banned:   boolPtr(false),  // filter by ban status
-    Limit:    20,
-    Offset:   0,
+result, err := eng.AdminListUsers(ctx, &user.Query{
+    AppID: appID,
+    EnvID: envID,     // optional
+    Email: "alice@",  // optional email filter
+    Limit: 20,
 })
 
-// result.Users  → []*user.User
-// result.Total  → total count (for pagination)
+// result.Users      → []*user.User
+// result.NextCursor → pass back as Query.Cursor for the next page
+// result.Total      → total count
 ```
 
-### UserQuery parameters
+### Query fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `AppID` | `id.AppID` | Required. Scope to an application |
 | `EnvID` | `id.EnvironmentID` | Optional. Scope to an environment |
-| `Email` | `string` | Filter by email (partial match) |
-| `Username` | `string` | Filter by username (partial match) |
-| `Phone` | `string` | Filter by phone number |
-| `Search` | `string` | Full-text search across name, email, username |
-| `Banned` | `*bool` | Filter by ban status |
-| `EmailVerified` | `*bool` | Filter by email verification status |
-| `Limit` | `int` | Max results (default 20, max 100) |
-| `Offset` | `int` | Pagination offset |
-| `SortBy` | `string` | Sort field: `created_at`, `updated_at`, `email`, `name` |
-| `SortOrder` | `string` | `asc` or `desc` (default `desc`) |
+| `Email` | `string` | Optional email filter |
+| `Cursor` | `string` | Cursor from the previous page |
+| `Limit` | `int` | Page size |
+
+There's no full-text search, ban-status filter or sort option.
 
 ## User store interface
 
-The user store is part of the composite store and implements:
+The user store is part of `store.Store`. Its core methods (abridged; it also manages secondary email addresses):
 
 ```go
 type Store interface {
     CreateUser(ctx context.Context, u *User) error
     GetUser(ctx context.Context, userID id.UserID) (*User, error)
-    GetUserByEmail(ctx context.Context, appID id.AppID, email string) (*User, error)
-    GetUserByPhone(ctx context.Context, appID id.AppID, phone string) (*User, error)
-    GetUserByUsername(ctx context.Context, appID id.AppID, username string) (*User, error)
+    GetUserByEmail(ctx context.Context, appID id.AppID, envID id.EnvironmentID, email string) (*User, error)
+    GetUserByPhone(ctx context.Context, appID id.AppID, envID id.EnvironmentID, phone string) (*User, error)
+    GetUserByUsername(ctx context.Context, appID id.AppID, envID id.EnvironmentID, username string) (*User, error)
     UpdateUser(ctx context.Context, u *User) error
     DeleteUser(ctx context.Context, userID id.UserID) error
-    ListUsers(ctx context.Context, q *UserQuery) (*UserList, error)
+    ListUsers(ctx context.Context, q *Query) (*List, error)
+    // ...CreateUserWithPrimaryEmail, AddUserEmail, GetUserByAnyEmail, GetUserEmails,
+    // MarkUserEmailVerified, SetPrimaryEmail, DeleteUserEmail
 }
 ```
+
+A nil `envID` matches across the whole app.
 
 ## API routes
 
