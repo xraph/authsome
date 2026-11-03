@@ -601,3 +601,44 @@ func TestKeyManager_RotateInvalidatesMemo(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, info, 2)
 }
+
+func TestKeyManager_CountsRotations(t *testing.T) {
+	ctx := context.Background()
+	var got []string
+	m := newTestKeyManager(t, Config{}, NewMemoryStore(), testEncryptor(t))
+	m.onRotate = func(scope, result string) { got = append(got, scope+"|"+result) }
+
+	_, err := m.Active(ctx, "")
+	require.NoError(t, err)
+	assert.Empty(t, got, "the first key is not a rotation")
+
+	_, err = m.Rotate(ctx, "")
+	require.NoError(t, err)
+	_, err = m.Rotate(ctx, "app_1")
+	require.NoError(t, err)
+	_, err = m.Rotate(ctx, "app_1")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"|ok", "app_1|ok"}, got, "an app's first key is not a rotation either")
+}
+
+func TestKeyManager_CountsRotationConflict(t *testing.T) {
+	ctx := context.Background()
+	st := NewMemoryStore()
+	m := newTestKeyManager(t, Config{}, st, testEncryptor(t))
+	_, err := m.Active(ctx, "")
+	require.NoError(t, err)
+
+	var got []string
+	m.onRotate = func(_, result string) { got = append(got, result) }
+	m.store = &conflictStore{Store: st}
+	_, err = m.Rotate(ctx, "")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"conflict"}, got)
+}
+
+// conflictStore refuses every key insert as a lost race.
+type conflictStore struct{ Store }
+
+func (conflictStore) CreateSigningKey(context.Context, *SigningKey) error {
+	return ErrSigningKeyConflict
+}

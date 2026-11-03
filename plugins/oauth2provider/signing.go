@@ -23,6 +23,7 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/jwkutil"
+	"github.com/xraph/authsome/internal/telemetry"
 )
 
 // errNoSigningKey means no key can sign an id_token for the scope: there is
@@ -85,6 +86,9 @@ type keyManager struct {
 	rotation time.Duration
 	grace    time.Duration
 	now      func() time.Time
+	// onRotate, when set, is told how each rotation attempt went: "ok",
+	// "conflict" or "error". The first key for a scope is not a rotation.
+	onRotate func(scope, result string)
 
 	// operator signs for scope "" when set; operatorPrev are published
 	// alongside it and never sign.
@@ -545,7 +549,7 @@ func (m *keyManager) retireForOperator(ctx context.Context) error {
 		if k.RetiresAt != nil {
 			continue
 		}
-		if err := m.store.RetireSigningKey(ctx, k.ID, retireAt); err != nil {
+		if retireErr := m.store.RetireSigningKey(ctx, k.ID, retireAt); retireErr != nil {
 			return fmt.Errorf("oauth2: retire signing key %s: %w", k.ID, err)
 		}
 	}
@@ -560,7 +564,19 @@ func (m *keyManager) due(k *SigningKey, now time.Time) bool {
 // create generates and inserts the next managed key for scope, then starts
 // the retirement grace of every key that was unretired. keys is the scope's
 // current listing, newest generation first.
-func (m *keyManager) create(ctx context.Context, scope string, keys []*SigningKey, now time.Time) (*SigningKey, error) {
+func (m *keyManager) create(ctx context.Context, scope string, keys []*SigningKey, now time.Time) (row *SigningKey, err error) {
+	if len(keys) > 0 && m.onRotate != nil {
+		defer func() {
+			switch {
+			case err == nil:
+				m.onRotate(scope, telemetry.RotationOK)
+			case errors.Is(err, ErrSigningKeyConflict):
+				m.onRotate(scope, telemetry.RotationConflict)
+			default:
+				m.onRotate(scope, telemetry.RotationError)
+			}
+		}()
+	}
 	// The next generation is the active key's plus one. Keys are listed
 	// newest generation first, so keys[0] is the active key unless a newer
 	// one was retired, in which case going past it is the only way through
@@ -570,7 +586,7 @@ func (m *keyManager) create(ctx context.Context, scope string, keys []*SigningKe
 		gen = keys[0].Generation + 1
 	}
 
-	row, err := m.mint(scope, gen, now)
+	row, err = m.mint(scope, gen, now)
 	if err != nil {
 		return nil, err
 	}
@@ -588,11 +604,11 @@ func (m *keyManager) create(ctx context.Context, scope string, keys []*SigningKe
 		if k.RetiresAt != nil {
 			continue
 		}
-		if err := m.store.RetireSigningKey(ctx, k.ID, retireAt); err != nil {
+		if retireErr := m.store.RetireSigningKey(ctx, k.ID, retireAt); retireErr != nil {
 			// The new key already signs. The old one just stays published
 			// until a later rotation retires it.
 			m.logger.Warn("oauth2: retire previous id_token signing key",
-				log.String("key_id", k.ID.String()), log.Error(err))
+				log.String("key_id", k.ID.String()), log.Error(retireErr))
 		}
 	}
 	return row, nil

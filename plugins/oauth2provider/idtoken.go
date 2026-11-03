@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -15,6 +16,7 @@ import (
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/user"
 )
 
@@ -26,6 +28,9 @@ type oidcRequest struct {
 	Nonce string
 	// AuthTime is when the user signed in. Zero leaves auth_time out.
 	AuthTime time.Time
+	// Grant is the grant_type the token request used. It only labels
+	// metrics.
+	Grant string
 }
 
 // idTokenInput is everything one id_token is built from.
@@ -37,6 +42,8 @@ type idTokenInput struct {
 	Nonce       string
 	// AuthTime is when the user signed in. Zero leaves auth_time out.
 	AuthTime time.Time
+	// Grant is the grant_type of the request, for metrics.
+	Grant string
 }
 
 // idTokenClaims is the id_token payload (OpenID Connect Core 2): the
@@ -59,6 +66,7 @@ func (p *Plugin) idTokenFor(ctx context.Context, client *OAuth2Client, userID id
 	}
 	u, err := p.store.GetUser(ctx, userID)
 	if err != nil {
+		telemetry.From(p.engine).OAuth2IDTokenFailure(telemetry.IDTokenUserLookup)
 		return "", fmt.Errorf("oauth2: load id_token subject: %w", err)
 	}
 	return p.mintIDToken(ctx, idTokenInput{
@@ -68,26 +76,35 @@ func (p *Plugin) idTokenFor(ctx context.Context, client *OAuth2Client, userID id
 		AccessToken: accessToken,
 		Nonce:       oidc.Nonce,
 		AuthTime:    oidc.AuthTime,
+		Grant:       oidc.Grant,
 	})
 }
 
 // mintIDToken signs an id_token for in with the active key of the client's
 // issuer.
 func (p *Plugin) mintIDToken(ctx context.Context, in idTokenInput) (string, error) {
+	m := telemetry.From(p.engine)
+	fail := func(reason string, err error) (string, error) {
+		m.OAuth2IDTokenFailure(reason)
+		return "", err
+	}
 	if p.keys == nil {
-		return "", errNoSigningKey
+		return fail(telemetry.IDTokenNoKey, errNoSigningKey)
 	}
 	issuer, scope, err := p.issuerFor(ctx, in.Client.AppID)
 	if err != nil {
-		return "", err
+		return fail(telemetry.IDTokenIssuer, err)
 	}
 	s, err := p.keys.Active(ctx, scope)
 	if err != nil {
-		return "", err
+		if errors.Is(err, errNoSigningKey) {
+			return fail(telemetry.IDTokenNoKey, err)
+		}
+		return fail(telemetry.IDTokenSignError, err)
 	}
 	hash, err := atHash(in.AccessToken, s.alg)
 	if err != nil {
-		return "", err
+		return fail(telemetry.IDTokenSignError, err)
 	}
 
 	now := time.Now()
@@ -109,7 +126,12 @@ func (p *Plugin) mintIDToken(ctx context.Context, in idTokenInput) (string, erro
 	if !in.AuthTime.IsZero() {
 		claims.AuthTime = jwt.NewNumericDate(in.AuthTime)
 	}
-	return signIDToken(s, claims)
+	tok, err := signIDToken(s, claims)
+	if err != nil {
+		return fail(telemetry.IDTokenSignError, err)
+	}
+	m.OAuth2IDToken(grantLabel(in.Grant), issuerLabel(scope))
+	return tok, nil
 }
 
 // signIDToken signs claims with s. The key's concrete type has to match the

@@ -272,6 +272,9 @@ func (p *Plugin) initSigningKeys(ctx context.Context, enc bridge.Encryptor) erro
 	if err != nil {
 		return err
 	}
+	keys.onRotate = func(scope, result string) {
+		telemetry.From(p.engine).OAuth2KeyRotation(issuerLabel(scope), result)
+	}
 	p.keys = keys
 	// Managed keys the deployment issuer used before an operator key was
 	// configured start their retirement grace now. Failing here is not
@@ -1328,7 +1331,7 @@ func (p *Plugin) handleRefreshTokenGrant(ctx forge.Context, req *TokenRequest) (
 	// 12.2). It carries no nonce and no auth_time: neither belongs to this
 	// request. The session is already rotated, so if signing fails it is
 	// revoked rather than handed out without the id_token the client expects.
-	idToken, err := p.idTokenFor(ctx.Context(), client, sess.UserID, sess.Scopes, sess.Token, &oidcRequest{})
+	idToken, err := p.idTokenFor(ctx.Context(), client, sess.UserID, sess.Scopes, sess.Token, &oidcRequest{Grant: "refresh_token"})
 	if err != nil {
 		if revokeErr := eng.RevokeSession(ctx.Context(), sess.ID); revokeErr != nil {
 			p.logger.Error("oauth2: revoke refreshed session after id_token failure",
@@ -1463,7 +1466,7 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 
 	// Generate tokens.
 	return p.issueTokens(ctx, client, authCode.UserID, authCode.AppID, authCode.Scopes, resources, jkt,
-		&oidcRequest{Nonce: authCode.Nonce, AuthTime: authCode.AuthTime})
+		&oidcRequest{Nonce: authCode.Nonce, AuthTime: authCode.AuthTime, Grant: "authorization_code"})
 }
 
 func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
@@ -2219,7 +2222,7 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 		// A device code carries no nonce: the device authorization request
 		// has nowhere to send one.
 		return p.issueTokens(ctx, client, dc.UserID, dc.AppID, dc.Scopes, resources, jkt,
-			&oidcRequest{AuthTime: dc.AuthTime})
+			&oidcRequest{AuthTime: dc.AuthTime, Grant: "urn:ietf:params:oauth:grant-type:device_code"})
 
 	default:
 		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "unexpected device code status")

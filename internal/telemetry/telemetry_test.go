@@ -109,6 +109,48 @@ func TestSignInAttemptCountsOnce(t *testing.T) {
 	}, telemetrytest.Series(scrape(), "forge_authsome_signin_"))
 }
 
+func TestMetrics_OAuth2IDToken(t *testing.T) {
+	reg, scrape := telemetrytest.Registry(t)
+	m := telemetry.NewMetrics(reg)
+
+	m.OAuth2IDToken(telemetry.GrantAuthorizationCode, telemetry.IssuerDeployment)
+	m.OAuth2IDToken(telemetry.GrantRefreshToken, telemetry.IssuerApp)
+	assert.ElementsMatch(t, []string{
+		`forge_authsome_oauth2_id_tokens_issued_total{grant_type="authorization_code",issuer="deployment"}`,
+		`forge_authsome_oauth2_id_tokens_issued_total{grant_type="refresh_token",issuer="app"}`,
+	}, telemetrytest.Series(scrape(), "forge_authsome_oauth2_id_tokens_issued_"))
+}
+
+func TestMetrics_OAuth2KeyRotation(t *testing.T) {
+	reg, scrape := telemetrytest.Registry(t)
+	m := telemetry.NewMetrics(reg)
+
+	m.OAuth2KeyRotation(telemetry.IssuerDeployment, telemetry.RotationOK)
+	m.OAuth2KeyRotation(telemetry.IssuerApp, telemetry.RotationConflict)
+	m.OAuth2KeyRotation(telemetry.IssuerApp, telemetry.RotationError)
+	assert.ElementsMatch(t, []string{
+		`forge_authsome_oauth2_signing_key_rotations_total{issuer="deployment",result="ok"}`,
+		`forge_authsome_oauth2_signing_key_rotations_total{issuer="app",result="conflict"}`,
+		`forge_authsome_oauth2_signing_key_rotations_total{issuer="app",result="error"}`,
+	}, telemetrytest.Series(scrape(), "forge_authsome_oauth2_signing_key_"))
+}
+
+func TestMetrics_OAuth2IDTokenFailure(t *testing.T) {
+	reg, scrape := telemetrytest.Registry(t)
+	m := telemetry.NewMetrics(reg)
+
+	m.OAuth2IDTokenFailure(telemetry.IDTokenNoKey)
+	m.OAuth2IDTokenFailure(telemetry.IDTokenSignError)
+	m.OAuth2IDTokenFailure(telemetry.IDTokenUserLookup)
+	m.OAuth2IDTokenFailure(telemetry.IDTokenIssuer)
+	assert.ElementsMatch(t, []string{
+		`forge_authsome_oauth2_id_token_failures_total{reason="no_key"}`,
+		`forge_authsome_oauth2_id_token_failures_total{reason="sign_error"}`,
+		`forge_authsome_oauth2_id_token_failures_total{reason="user_lookup"}`,
+		`forge_authsome_oauth2_id_token_failures_total{reason="issuer"}`,
+	}, telemetrytest.Series(scrape(), "forge_authsome_oauth2_id_token_failures_"))
+}
+
 // A nil *Metrics is what an engine without a sink holds; nothing on it may
 // panic.
 func TestNilMetricsRecordNothing(t *testing.T) {
@@ -120,6 +162,9 @@ func TestNilMetricsRecordNothing(t *testing.T) {
 		m.PasswordHash("hash", "bcrypt", 0)
 		m.APIKeyAuth("ok")
 		m.OAuth2Token("client_credentials", "ok")
+		m.OAuth2IDToken("authorization_code", "deployment")
+		m.OAuth2KeyRotation("deployment", "ok")
+		m.OAuth2IDTokenFailure("no_key")
 		m.ProviderRequest("email", "ok", 0)
 		m.RetentionRowsDeleted("sessions", 1)
 		m.RetentionSweep("ok")

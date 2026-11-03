@@ -27,6 +27,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/jwkutil"
 	"github.com/xraph/authsome/internal/secutil"
+	"github.com/xraph/authsome/internal/telemetry/telemetrytest"
 	"github.com/xraph/authsome/plugins/oauth2provider"
 	"github.com/xraph/authsome/user"
 )
@@ -189,6 +190,21 @@ func TestCodeGrant_IssuesIDTokenForOpenID(t *testing.T) {
 	assert.Equal(t, false, claims["email_verified"])
 	assert.Equal(t, "Ada", claims["given_name"])
 	assert.NotContains(t, claims, "phone_number_verified", "phone was not granted")
+}
+
+func TestCodeGrant_CountsIDToken(t *testing.T) {
+	reg, scrape := telemetrytest.Registry(t)
+	f := newOIDCFixture(t, oauth2provider.Config{}, true, authsome.WithMetricsSink(reg))
+
+	decodeTokenBody(t, f.codeGrant(t, publicID, "openid profile", "", time.Time{}))
+	decodeTokenBody(t, f.codeGrant(t, noOpenIDID, "profile", "", time.Time{}))
+
+	assert.Equal(t, []string{
+		`forge_authsome_oauth2_id_tokens_issued_total{grant_type="authorization_code",issuer="deployment"}`,
+	}, telemetrytest.Series(scrape(), "forge_authsome_oauth2_id_tokens_issued_"))
+	// The first key a scope gets is not a rotation.
+	assert.Empty(t, telemetrytest.Series(scrape(), "forge_authsome_oauth2_signing_key_"))
+	assert.Empty(t, telemetrytest.Series(scrape(), "forge_authsome_oauth2_id_token_failures_"))
 }
 
 func TestCodeGrant_NoOpenIDNoIDToken(t *testing.T) {

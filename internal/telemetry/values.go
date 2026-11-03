@@ -149,6 +149,22 @@ const (
 	OAuth2Error         = "error"
 )
 
+// Values of the issuer, result and reason labels on the id_token metrics.
+// issuer is never the issuer URL or an app id: both are unbounded.
+const (
+	IssuerDeployment = "deployment"
+	IssuerApp        = "app"
+
+	RotationOK       = "ok"
+	RotationConflict = "conflict"
+	RotationError    = "error"
+
+	IDTokenNoKey      = "no_key"
+	IDTokenSignError  = "sign_error"
+	IDTokenUserLookup = "user_lookup"
+	IDTokenIssuer     = "issuer"
+)
+
 // Values of the kind label on authsome_provider_request_duration_seconds
 // and of authsome.provider.kind on the client spans.
 const (
