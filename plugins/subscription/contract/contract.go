@@ -18,6 +18,7 @@ import (
 	"github.com/xraph/ledger/subscription"
 
 	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/id"
 
 	"github.com/xraph/forge/extensions/dashboard/contract"
 	"github.com/xraph/forge/extensions/dashboard/contract/dispatcher"
@@ -68,6 +69,12 @@ type Deps struct {
 	Engine  *authsome.Engine
 	Service SubscriptionService
 	Usage   func(context.Context, string, string) ([]UsageSummary, error)
+
+	// CanManageBilling reports whether userID holds manage/billing. The
+	// plugin passes its own check so both surfaces fail closed the same way.
+	// Every intent here refuses a caller it says no to, and a nil func says
+	// no to everyone.
+	CanManageBilling func(ctx context.Context, userID id.UserID) bool
 }
 
 func Register(
@@ -94,72 +101,120 @@ func Register(
 	}
 
 	const c = "subscription"
-	if err := dispatcher.RegisterQuery(d, c, "plans.list", 1, plansListHandler(deps)); err != nil {
+	if err := dispatcher.RegisterQuery(d, c, "plans.list", 1, billingManagers(deps, plansListHandler(deps))); err != nil {
 		return fmt.Errorf("subscription/contract: register plans.list: %w", err)
 	}
-	if err := dispatcher.RegisterQuery(d, c, "plans.detail", 1, plansDetailHandler(deps)); err != nil {
+	if err := dispatcher.RegisterQuery(d, c, "plans.detail", 1, billingManagers(deps, plansDetailHandler(deps))); err != nil {
 		return fmt.Errorf("subscription/contract: register plans.detail: %w", err)
 	}
-	if err := dispatcher.RegisterCommand(d, c, "plans.archive", 1, plansArchiveHandler(deps)); err != nil {
+	if err := dispatcher.RegisterCommand(d, c, "plans.archive", 1, billingManagers(deps, plansArchiveHandler(deps))); err != nil {
 		return fmt.Errorf("subscription/contract: register plans.archive: %w", err)
 	}
-	if err := dispatcher.RegisterCommand(d, c, "plans.activate", 1, plansActivateHandler(deps)); err != nil {
+	if err := dispatcher.RegisterCommand(d, c, "plans.activate", 1, billingManagers(deps, plansActivateHandler(deps))); err != nil {
 		return fmt.Errorf("subscription/contract: register plans.activate: %w", err)
 	}
-	if err := dispatcher.RegisterQuery(d, c, "subscriptions.list", 1, subscriptionsListHandler(deps)); err != nil {
+	if err := dispatcher.RegisterQuery(d, c, "subscriptions.list", 1, billingManagers(deps, subscriptionsListHandler(deps))); err != nil {
 		return fmt.Errorf("subscription/contract: register subscriptions.list: %w", err)
 	}
 	registrations := []func() error{
-		func() error { return dispatcher.RegisterCommand(d, c, "plans.create", 1, plansCreateHandler(deps)) },
-		func() error { return dispatcher.RegisterCommand(d, c, "plans.update", 1, plansUpdateHandler(deps)) },
 		func() error {
-			return dispatcher.RegisterQuery(d, c, "subscriptions.all", 1, subscriptionsAllHandler(deps))
+			return dispatcher.RegisterCommand(d, c, "plans.create", 1, billingManagers(deps, plansCreateHandler(deps)))
 		},
 		func() error {
-			return dispatcher.RegisterQuery(d, c, "subscriptions.detail", 1, subscriptionsDetailHandler(deps))
+			return dispatcher.RegisterCommand(d, c, "plans.update", 1, billingManagers(deps, plansUpdateHandler(deps)))
 		},
 		func() error {
-			return dispatcher.RegisterCommand(d, c, "subscriptions.create", 1, subscriptionsCreateHandler(deps))
+			return dispatcher.RegisterQuery(d, c, "subscriptions.all", 1, billingManagers(deps, subscriptionsAllHandler(deps)))
 		},
 		func() error {
-			return dispatcher.RegisterCommand(d, c, "subscriptions.change", 1, subscriptionsChangeHandler(deps))
+			return dispatcher.RegisterQuery(d, c, "subscriptions.detail", 1, billingManagers(deps, subscriptionsDetailHandler(deps)))
 		},
 		func() error {
-			return dispatcher.RegisterCommand(d, c, "subscriptions.pause", 1, subscriptionsPauseHandler(deps))
+			return dispatcher.RegisterCommand(d, c, "subscriptions.create", 1, billingManagers(deps, subscriptionsCreateHandler(deps)))
 		},
 		func() error {
-			return dispatcher.RegisterCommand(d, c, "subscriptions.resume", 1, subscriptionsResumeHandler(deps))
+			return dispatcher.RegisterCommand(d, c, "subscriptions.change", 1, billingManagers(deps, subscriptionsChangeHandler(deps)))
 		},
 		func() error {
-			return dispatcher.RegisterCommand(d, c, "subscriptions.cancel", 1, subscriptionsCancelHandler(deps))
-		},
-		func() error { return dispatcher.RegisterQuery(d, c, "invoices.list", 1, invoicesListHandler(deps)) },
-		func() error { return dispatcher.RegisterQuery(d, c, "invoices.detail", 1, invoicesDetailHandler(deps)) },
-		func() error {
-			return dispatcher.RegisterCommand(d, c, "invoices.generate", 1, invoicesGenerateHandler(deps))
+			return dispatcher.RegisterCommand(d, c, "subscriptions.pause", 1, billingManagers(deps, subscriptionsPauseHandler(deps)))
 		},
 		func() error {
-			return dispatcher.RegisterCommand(d, c, "invoices.markPaid", 1, invoicesMarkPaidHandler(deps))
-		},
-		func() error { return dispatcher.RegisterCommand(d, c, "invoices.void", 1, invoicesVoidHandler(deps)) },
-		func() error { return dispatcher.RegisterQuery(d, c, "coupons.list", 1, couponsListHandler(deps)) },
-		func() error { return dispatcher.RegisterCommand(d, c, "coupons.create", 1, couponsCreateHandler(deps)) },
-		func() error { return dispatcher.RegisterCommand(d, c, "coupons.delete", 1, couponsDeleteHandler(deps)) },
-		func() error { return dispatcher.RegisterQuery(d, c, "features.list", 1, featuresListHandler(deps)) },
-		func() error {
-			return dispatcher.RegisterCommand(d, c, "features.create", 1, featuresCreateHandler(deps))
+			return dispatcher.RegisterCommand(d, c, "subscriptions.resume", 1, billingManagers(deps, subscriptionsResumeHandler(deps)))
 		},
 		func() error {
-			return dispatcher.RegisterCommand(d, c, "features.update", 1, featuresUpdateHandler(deps))
+			return dispatcher.RegisterCommand(d, c, "subscriptions.cancel", 1, billingManagers(deps, subscriptionsCancelHandler(deps)))
 		},
 		func() error {
-			return dispatcher.RegisterCommand(d, c, "features.archive", 1, featuresArchiveHandler(deps))
+			return dispatcher.RegisterQuery(d, c, "invoices.list", 1, billingManagers(deps, invoicesListHandler(deps)))
+		},
+		func() error {
+			return dispatcher.RegisterQuery(d, c, "invoices.detail", 1, billingManagers(deps, invoicesDetailHandler(deps)))
+		},
+		func() error {
+			return dispatcher.RegisterCommand(d, c, "invoices.generate", 1, billingManagers(deps, invoicesGenerateHandler(deps)))
+		},
+		func() error {
+			return dispatcher.RegisterCommand(d, c, "invoices.markPaid", 1, billingManagers(deps, invoicesMarkPaidHandler(deps)))
+		},
+		func() error {
+			return dispatcher.RegisterCommand(d, c, "invoices.void", 1, billingManagers(deps, invoicesVoidHandler(deps)))
+		},
+		func() error {
+			return dispatcher.RegisterQuery(d, c, "coupons.list", 1, billingManagers(deps, couponsListHandler(deps)))
+		},
+		func() error {
+			return dispatcher.RegisterCommand(d, c, "coupons.create", 1, billingManagers(deps, couponsCreateHandler(deps)))
+		},
+		func() error {
+			return dispatcher.RegisterCommand(d, c, "coupons.delete", 1, billingManagers(deps, couponsDeleteHandler(deps)))
+		},
+		func() error {
+			return dispatcher.RegisterQuery(d, c, "features.list", 1, billingManagers(deps, featuresListHandler(deps)))
+		},
+		func() error {
+			return dispatcher.RegisterCommand(d, c, "features.create", 1, billingManagers(deps, featuresCreateHandler(deps)))
+		},
+		func() error {
+			return dispatcher.RegisterCommand(d, c, "features.update", 1, billingManagers(deps, featuresUpdateHandler(deps)))
+		},
+		func() error {
+			return dispatcher.RegisterCommand(d, c, "features.archive", 1, billingManagers(deps, featuresArchiveHandler(deps)))
 		},
 	}
 	for _, register := range registrations {
 		if err := register(); err != nil {
 			return fmt.Errorf("subscription/contract: register billing intent: %w", err)
 		}
+	}
+	return nil
+}
+
+// billingManagers puts h behind manage/billing. This contributor is the
+// operator's billing console: it lists every tenant's subscriptions and
+// invoices and changes them, so membership in a tenant isn't enough to use
+// any of it. Register wraps every intent with it, reads and writes alike.
+func billingManagers[I, O any](deps Deps, h func(context.Context, I, contract.Principal) (O, error)) func(context.Context, I, contract.Principal) (O, error) {
+	return func(ctx context.Context, in I, p contract.Principal) (O, error) {
+		if err := requireBillingManage(ctx, deps, p); err != nil {
+			var zero O
+			return zero, err
+		}
+		return h(ctx, in, p)
+	}
+}
+
+// requireBillingManage refuses a principal with no user, and one whose user
+// deps.CanManageBilling doesn't clear.
+func requireBillingManage(ctx context.Context, deps Deps, p contract.Principal) error {
+	if p.User == nil || p.User.Subject == "" {
+		return &contract.Error{Code: contract.CodeUnauthenticated, Message: "billing needs a signed-in user"}
+	}
+	userID, err := id.ParseUserID(p.User.Subject)
+	if err != nil {
+		return &contract.Error{Code: contract.CodeUnauthenticated, Message: "principal subject is not a valid user id"}
+	}
+	if deps.CanManageBilling == nil || !deps.CanManageBilling(ctx, userID) {
+		return &contract.Error{Code: contract.CodePermissionDenied, Message: "billing needs the manage billing permission"}
 	}
 	return nil
 }

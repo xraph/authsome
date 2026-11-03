@@ -24,6 +24,15 @@ type Config struct {
 
 	// AllowSelfService lets users/orgs change their own plan.
 	AllowSelfService bool
+
+	// DisableRoutes mounts no HTTP routes. Use it when the host serves its
+	// own billing API on top of the plugin's ledger.
+	DisableRoutes bool
+
+	// DisableAutoSubscribe turns off both the org-create and user-signup
+	// auto-subscribe hooks, whatever the settings say. Use it when the host
+	// creates subscriptions itself.
+	DisableAutoSubscribe bool
 }
 
 func (c *Config) defaults() {

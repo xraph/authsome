@@ -22,7 +22,8 @@ import (
 
 // writeGuard gates a billing mutation behind manage/billing, layered on top of
 // the session requirement every billing group already carries. Reads stay at
-// session-only so end users can list plans and check their own entitlements.
+// session-only so end users can list plans and check their own entitlements;
+// the tenant-scoped ones check the tenant in the handler (see requireTenant).
 //
 // Returns a pass-through when the engine exposes no RBAC (bare test wiring),
 // leaving the group's session check as the effective bar rather than failing
@@ -32,6 +33,12 @@ import (
 // gets the same answer whatever its user may do and can't probe its user's
 // billing rights. The deny-by-default interceptor would refuse it too, but
 // interceptors run after route middleware.
+//
+// The two bars differ on purpose. writeGuard (and so GET /coupons) refuses
+// any delegated session, while the tenant reads in requireTenant let a
+// delegated chain through when the chain itself holds manage/billing. Don't
+// align one with the other: writes and the app-wide coupon catalog stay
+// human-only, and tenant reads already check the whole chain.
 func (p *Plugin) writeGuard() forge.RouteOption {
 	if guards := plugin.PermissionGuard(p.engine, "manage", "billing"); len(guards) > 0 {
 		return forge.WithMiddleware(middleware.DenyDelegatedSession(), guards[0])
@@ -41,6 +48,9 @@ func (p *Plugin) writeGuard() forge.RouteOption {
 
 // RegisterRoutes registers billing API routes on a forge.Router.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
+	if p.config.DisableRoutes {
+		return nil
+	}
 	prefix := p.config.PathPrefix
 
 	// Plan routes
@@ -222,6 +232,9 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithOperationID("listCoupons"),
 		forge.WithResponseSchema(http.StatusOK, "Coupons list", ListCouponsResponse{}),
 		forge.WithErrorResponses(),
+		// The catalog holds every redeemable code in the app, so it is an
+		// operator read, not a tenant one.
+		p.writeGuard(),
 	); err != nil {
 		return err
 	}
@@ -477,6 +490,8 @@ type CouponResponse struct {
 
 type CheckEntitlementRequest struct {
 	FeatureKey string `path:"featureKey"`
+	AppID      string `query:"app_id,omitempty"`
+	TenantID   string `query:"tenant_id"`
 }
 
 type EntitlementResponse struct {
@@ -514,9 +529,9 @@ type UsageItemResponse struct {
 // ──────────────────────────────────────────────────
 
 func (p *Plugin) handleListPlans(ctx forge.Context, req *ListPlansRequest) (*ListPlansResponse, error) {
-	appID := req.AppID
-	if appID == "" {
-		appID = p.defaultAppID
+	appID, err := p.requestApp(ctx, req.AppID)
+	if err != nil {
+		return nil, err
 	}
 
 	plans, err := p.service.ListPlans(ctx.Context(), appID)
@@ -539,7 +554,7 @@ func (p *Plugin) handleGetPlan(ctx forge.Context, req *GetPlanRequest) (*PlanRes
 	}
 
 	pl, err := p.service.GetPlan(ctx.Context(), planID)
-	if err != nil {
+	if err != nil || !inRequestApp(ctx, pl.AppID) {
 		return nil, forge.NotFound("plan not found")
 	}
 
@@ -550,6 +565,9 @@ func (p *Plugin) handleGetPlan(ctx forge.Context, req *GetPlanRequest) (*PlanRes
 func (p *Plugin) handleCreatePlan(ctx forge.Context, req *CreatePlanRequest) (*PlanResponse, error) {
 	if req.Name == "" || req.Slug == "" || req.AppID == "" {
 		return nil, forge.BadRequest("name, slug, and app_id are required")
+	}
+	if _, err := p.requestApp(ctx, req.AppID); err != nil {
+		return nil, err
 	}
 
 	currency := req.Currency
@@ -617,6 +635,10 @@ func (p *Plugin) handleArchivePlan(ctx forge.Context, req *PlanIDRequest) (*apit
 		return nil, forge.BadRequest("invalid plan_id")
 	}
 
+	if err := p.requirePlanInApp(ctx, planID); err != nil {
+		return nil, err
+	}
+
 	if err := p.service.ArchivePlan(ctx.Context(), planID); err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to archive plan: %w", err))
 	}
@@ -631,6 +653,10 @@ func (p *Plugin) handleActivatePlan(ctx forge.Context, req *PlanIDRequest) (*api
 		return nil, forge.BadRequest("invalid plan_id")
 	}
 
+	if err := p.requirePlanInApp(ctx, planID); err != nil {
+		return nil, err
+	}
+
 	if err := p.service.ActivatePlan(ctx.Context(), planID); err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to activate plan: %w", err))
 	}
@@ -640,9 +666,13 @@ func (p *Plugin) handleActivatePlan(ctx forge.Context, req *PlanIDRequest) (*api
 }
 
 func (p *Plugin) handleListSubscriptions(ctx forge.Context, req *ListSubscriptionsRequest) (*ListSubscriptionsResponse, error) {
-	appID := req.AppID
-	if appID == "" {
-		appID = p.defaultAppID
+	if err := p.requireTenant(ctx, req.TenantID); err != nil {
+		return nil, err
+	}
+
+	appID, err := p.requestApp(ctx, req.AppID)
+	if err != nil {
+		return nil, err
 	}
 
 	opts := lsub.ListOpts{}
@@ -667,6 +697,12 @@ func (p *Plugin) handleGetActiveSubscription(ctx forge.Context, req *GetActiveSu
 	if req.AppID == "" || req.TenantID == "" {
 		return nil, forge.BadRequest("app_id and tenant_id are required")
 	}
+	if _, err := p.requestApp(ctx, req.AppID); err != nil {
+		return nil, err
+	}
+	if err := p.requireTenant(ctx, req.TenantID); err != nil {
+		return nil, err
+	}
 
 	sub, err := p.service.GetActiveSubscription(ctx.Context(), req.TenantID, req.AppID)
 	if err != nil {
@@ -680,6 +716,9 @@ func (p *Plugin) handleGetActiveSubscription(ctx forge.Context, req *GetActiveSu
 func (p *Plugin) handleCreateSubscription(ctx forge.Context, req *CreateSubscriptionRequest) (*Response, error) {
 	if req.TenantID == "" || req.PlanID == "" || req.AppID == "" {
 		return nil, forge.BadRequest("tenant_id, plan_id, and app_id are required")
+	}
+	if _, err := p.requestApp(ctx, req.AppID); err != nil {
+		return nil, err
 	}
 
 	planID, err := ledgerid.ParsePlanID(req.PlanID)
@@ -709,6 +748,12 @@ func (p *Plugin) handleChangePlan(ctx forge.Context, req *ChangePlanRequest) (*a
 	if err != nil {
 		return nil, forge.BadRequest("invalid new_plan_id")
 	}
+	if err := p.requireSubscriptionInApp(ctx, subID); err != nil {
+		return nil, err
+	}
+	if err := p.requirePlanInApp(ctx, newPlanID); err != nil {
+		return nil, err
+	}
 
 	if err := p.service.ChangePlan(ctx.Context(), subID, newPlanID); err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to change plan: %w", err))
@@ -724,6 +769,10 @@ func (p *Plugin) handleCancelSubscription(ctx forge.Context, req *CancelSubscrip
 	subID, err := ledgerid.ParseSubscriptionID(req.SubID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid subscription id")
+	}
+
+	if err := p.requireSubscriptionInApp(ctx, subID); err != nil {
+		return nil, err
 	}
 
 	if err := p.service.CancelSubscription(ctx.Context(), subID, req.Immediately); err != nil {
@@ -744,6 +793,10 @@ func (p *Plugin) handlePauseSubscription(ctx forge.Context, req *SubIDRequest) (
 		return nil, forge.BadRequest("invalid subscription id")
 	}
 
+	if err := p.requireSubscriptionInApp(ctx, subID); err != nil {
+		return nil, err
+	}
+
 	if err := p.service.PauseSubscription(ctx.Context(), subID); err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to pause subscription: %w", err))
 	}
@@ -758,6 +811,10 @@ func (p *Plugin) handleResumeSubscription(ctx forge.Context, req *SubIDRequest) 
 		return nil, forge.BadRequest("invalid subscription id")
 	}
 
+	if err := p.requireSubscriptionInApp(ctx, subID); err != nil {
+		return nil, err
+	}
+
 	if err := p.service.ResumeSubscription(ctx.Context(), subID); err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to resume subscription: %w", err))
 	}
@@ -767,12 +824,16 @@ func (p *Plugin) handleResumeSubscription(ctx forge.Context, req *SubIDRequest) 
 }
 
 func (p *Plugin) handleListInvoices(ctx forge.Context, req *ListInvoicesRequest) (*ListInvoicesResponse, error) {
-	appID := req.AppID
-	if appID == "" {
-		appID = p.defaultAppID
+	if err := p.requireTenant(ctx, req.TenantID); err != nil {
+		return nil, err
 	}
 
-	invoices, err := p.service.ListAllInvoices(ctx.Context(), appID)
+	appID, err := p.requestApp(ctx, req.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	invoices, err := p.service.ListInvoices(ctx.Context(), req.TenantID, appID)
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list invoices: %w", err))
 	}
@@ -801,7 +862,15 @@ func (p *Plugin) handleGetInvoice(ctx forge.Context, req *GetInvoiceRequest) (*I
 	}
 
 	inv, err := p.service.GetInvoice(ctx.Context(), invID)
+	if err != nil || !inRequestApp(ctx, inv.AppID) {
+		return nil, forge.NotFound("invoice not found")
+	}
+	// Another tenant's invoice gets the same answer as a missing one.
+	allowed, err := p.tenantAllowed(ctx, inv.TenantID)
 	if err != nil {
+		return nil, err
+	}
+	if !allowed {
 		return nil, forge.NotFound("invoice not found")
 	}
 
@@ -828,6 +897,10 @@ func (p *Plugin) handleMarkInvoicePaid(ctx forge.Context, req *MarkInvoicePaidRe
 		paymentRef = "api"
 	}
 
+	if err := p.requireInvoiceInApp(ctx, invID); err != nil {
+		return nil, err
+	}
+
 	if err := p.service.MarkInvoicePaid(ctx.Context(), invID, paymentRef); err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to mark invoice paid: %w", err))
 	}
@@ -844,6 +917,10 @@ func (p *Plugin) handleVoidInvoice(ctx forge.Context, req *VoidInvoiceRequest) (
 		return nil, forge.BadRequest("invalid invoice_id")
 	}
 
+	if err := p.requireInvoiceInApp(ctx, invID); err != nil {
+		return nil, err
+	}
+
 	if err := p.service.MarkInvoiceVoided(ctx.Context(), invID, req.Reason); err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to void invoice: %w", err))
 	}
@@ -853,9 +930,9 @@ func (p *Plugin) handleVoidInvoice(ctx forge.Context, req *VoidInvoiceRequest) (
 }
 
 func (p *Plugin) handleListCoupons(ctx forge.Context, req *ListCouponsRequest) (*ListCouponsResponse, error) {
-	appID := req.AppID
-	if appID == "" {
-		appID = p.defaultAppID
+	appID, err := p.requestApp(ctx, req.AppID)
+	if err != nil {
+		return nil, err
 	}
 
 	coupons, err := p.service.ListCoupons(ctx.Context(), appID)
@@ -874,6 +951,9 @@ func (p *Plugin) handleListCoupons(ctx forge.Context, req *ListCouponsRequest) (
 func (p *Plugin) handleCreateCoupon(ctx forge.Context, req *CreateCouponRequest) (*CouponResponse, error) {
 	if req.Code == "" || req.Name == "" || req.AppID == "" {
 		return nil, forge.BadRequest("code, name, and app_id are required")
+	}
+	if _, err := p.requestApp(ctx, req.AppID); err != nil {
+		return nil, err
 	}
 
 	c := &coupon.Coupon{
@@ -927,6 +1007,10 @@ func (p *Plugin) handleDeleteCoupon(ctx forge.Context, req *DeleteCouponRequest)
 		return nil, forge.BadRequest("invalid coupon_id")
 	}
 
+	if err := p.requireCouponInApp(ctx, couponID); err != nil {
+		return nil, err
+	}
+
 	if err := p.service.DeleteCoupon(ctx.Context(), couponID); err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to delete coupon: %w", err))
 	}
@@ -936,7 +1020,19 @@ func (p *Plugin) handleDeleteCoupon(ctx forge.Context, req *DeleteCouponRequest)
 }
 
 func (p *Plugin) handleCheckEntitlement(ctx forge.Context, req *CheckEntitlementRequest) (*EntitlementResponse, error) {
-	result, err := p.service.CheckEntitlement(ctx.Context(), req.FeatureKey)
+	if req.TenantID == "" {
+		return nil, forge.BadRequest("tenant_id is required")
+	}
+	if err := p.requireTenant(ctx, req.TenantID); err != nil {
+		return nil, err
+	}
+
+	appID, err := p.requestApp(ctx, req.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := p.service.CheckEntitlement(entitlementContext(ctx.Context(), req.TenantID, appID), req.FeatureKey)
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to check entitlement: %w", err))
 	}
@@ -955,6 +1051,12 @@ func (p *Plugin) handleGetUsageSummary(ctx forge.Context, req *UsageSummaryReque
 	if req.AppID == "" || req.TenantID == "" {
 		return nil, forge.BadRequest("app_id and tenant_id are required")
 	}
+	if _, err := p.requestApp(ctx, req.AppID); err != nil {
+		return nil, err
+	}
+	if err := p.requireTenant(ctx, req.TenantID); err != nil {
+		return nil, err
+	}
 
 	summaries, err := p.service.GetUsageSummary(ctx.Context(), req.TenantID, req.AppID)
 	if err != nil {
@@ -972,6 +1074,41 @@ func (p *Plugin) handleGetUsageSummary(ctx forge.Context, req *UsageSummaryReque
 // ──────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────
+
+// The by-ID writes load their record first and refuse one outside the
+// request's app with the 404 a missing record gets (see requestApp).
+
+func (p *Plugin) requirePlanInApp(ctx forge.Context, planID ledgerid.PlanID) error {
+	pl, err := p.service.GetPlan(ctx.Context(), planID)
+	if err != nil || !inRequestApp(ctx, pl.AppID) {
+		return forge.NotFound("plan not found")
+	}
+	return nil
+}
+
+func (p *Plugin) requireSubscriptionInApp(ctx forge.Context, subID ledgerid.SubscriptionID) error {
+	sub, err := p.service.GetSubscription(ctx.Context(), subID)
+	if err != nil || !inRequestApp(ctx, sub.AppID) {
+		return forge.NotFound("subscription not found")
+	}
+	return nil
+}
+
+func (p *Plugin) requireInvoiceInApp(ctx forge.Context, invID ledgerid.InvoiceID) error {
+	inv, err := p.service.GetInvoice(ctx.Context(), invID)
+	if err != nil || !inRequestApp(ctx, inv.AppID) {
+		return forge.NotFound("invoice not found")
+	}
+	return nil
+}
+
+func (p *Plugin) requireCouponInApp(ctx forge.Context, couponID ledgerid.CouponID) error {
+	c, err := p.service.GetCouponByID(ctx.Context(), couponID)
+	if err != nil || !inRequestApp(ctx, c.AppID) {
+		return forge.NotFound("coupon not found")
+	}
+	return nil
+}
 
 func toPlanResponse(pl *plan.Plan) PlanResponse {
 	resp := PlanResponse{

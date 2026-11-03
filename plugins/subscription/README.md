@@ -42,6 +42,8 @@ authsome.WithPlugin(subscription.New(subscription.Config{
 | `AutoSubscribeOnUser` | `bool` | `false` | Subscribe on signup, in user mode |
 | `TrialDays` | `int` | `0` | Default trial length. `0` means no trial |
 | `AllowSelfService` | `bool` | `false` | Let tenants change their own plan |
+| `DisableRoutes` | `bool` | `false` | Mount no HTTP routes. Set it when you serve your own billing API on top of the plugin's ledger |
+| `DisableAutoSubscribe` | `bool` | `false` | Turn off the org-create and signup hooks, whatever the settings say. Set it when you create subscriptions yourself |
 
 ## Settings
 
@@ -82,6 +84,25 @@ Mounted under `PathPrefix`, `/v1/billing` by default.
 | `GET` | `/coupons` | List coupons |
 | `POST` | `/coupons` | Create a coupon |
 | `DELETE` | `/coupons/:couponId` | Delete a coupon |
+
+Subscription, invoice, entitlement and usage reads are scoped to a tenant: pass its
+`tenant_id`. You can read a tenant you belong to (organisation mode) or are (user mode).
+Anyone else gets a 404, whether the tenant exists or not, unless they hold
+`billing:manage`, which reads every tenant. Plans stay app-wide. You need
+`billing:manage` for `GET /coupons` and for the dashboard billing views as well, because
+both list data from the whole app. One caveat: on an engine with no RBAC, the coupon list
+and the write routes only ask for a session, since there is no permission to check. The
+tenant reads go the other way and treat a missing RBAC as not holding `billing:manage`.
+
+`billing:manage` doesn't cross apps. When your request is scoped to an app (an API key
+or an app-bound session), every billing route stays inside it. An `app_id` naming another
+app gets a 404, and so does a subscription, invoice, coupon or plan from another app
+addressed by ID. Leave `app_id` off and the route uses your request's app.
+
+To run your own billing API, set `DisableRoutes` and call `plugin.Service()` from your
+handlers. Pass your ledger to `authsome.WithLedgerEngine` and the plugin picks it up
+when the engine starts, so you can skip `RebindLedgerOnPlugins`. If you build the ledger
+after the engine and hand it over with `SetLedgerEngine`, you still need to call it.
 
 ## Lifecycle hooks
 

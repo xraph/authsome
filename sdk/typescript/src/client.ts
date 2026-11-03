@@ -1407,8 +1407,12 @@ export class AuthClient {
    * Check feature entitlement
    * GET /v1/billing/entitlements/{featureKey}
    */
-  async checkEntitlement(featureKey: string): Promise<EntitlementResponse> {
-    const path = `/v1/billing/entitlements/${featureKey}`;
+  async checkEntitlement(featureKey: string, tenant_id: string, app_id?: string): Promise<EntitlementResponse> {
+    const params = new URLSearchParams();
+    if (app_id !== undefined) params.set('app_id', String(app_id));
+    if (tenant_id !== undefined) params.set('tenant_id', String(tenant_id));
+    const qs = params.toString();
+    const path = `/v1/billing/entitlements/${featureKey}` + (qs ? `?${qs}` : '');
     return this.request<EntitlementResponse>(
       'GET',
       path,

@@ -1101,11 +1101,20 @@ class AuthClient {
 
   /// Check feature entitlement
   /// GET /v1/billing/entitlements/{featureKey}
-  Future<EntitlementResponse> checkEntitlement({required String featureKey, required String token}) async {
+  Future<EntitlementResponse> checkEntitlement({required String featureKey, required String tenantId, required String token, String? appId}) async {
     final path = '/v1/billing/entitlements/$featureKey';
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    if (appId != null) queryPairs.add(MapEntry('app_id', appId.toString()));
+    queryPairs.add(MapEntry('tenant_id', tenantId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
       token: token,
     );
     return EntitlementResponse.fromJson(Map<String, dynamic>.from(res as Map));

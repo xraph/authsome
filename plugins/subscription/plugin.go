@@ -200,15 +200,29 @@ func (p *Plugin) Name() string { return "subscription" }
 
 // OnInit captures bridge and engine references.
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
-	// Discover ledger engine (optional capability).
-	if lep, ok := engine.(plugin.LedgerEngineProvider); ok {
+	// The engine's ledger wins over one set earlier with SetLedger, and a later
+	// RebindLedgerOnPlugins overrides both.
+	// Discover ledger engine (optional capability). *authsome.Engine returns
+	// concrete types, so try those first; the any-typed providers stay for
+	// engines that hide the ledger behind plugin.LedgerEngineProvider.
+	switch lep := engine.(type) {
+	case interface{ LedgerEngine() *ledger.Ledger }:
+		if l := lep.LedgerEngine(); l != nil {
+			p.ledger = l
+		}
+	case plugin.LedgerEngineProvider:
 		if l, ok := lep.LedgerEngine().(*ledger.Ledger); ok {
 			p.ledger = l
 		}
 	}
 
 	// Discover ledger store (optional capability).
-	if lsp, ok := engine.(plugin.LedgerStoreProvider); ok {
+	switch lsp := engine.(type) {
+	case interface{ LedgerStore() ledgerstore.Store }:
+		if ls := lsp.LedgerStore(); ls != nil {
+			p.ledgerStore = ls
+		}
+	case plugin.LedgerStoreProvider:
 		if ls, ok := lsp.LedgerStore().(ledgerstore.Store); ok {
 			p.ledgerStore = ls
 		}
@@ -247,7 +261,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 // OnAfterOrgCreate auto-creates a subscription for new organizations
 // when tenant mode is "organization" and auto-subscribe is enabled.
 func (p *Plugin) OnAfterOrgCreate(ctx context.Context, o *organization.Organization) error {
-	if p.ledger == nil {
+	if p.ledger == nil || p.config.DisableAutoSubscribe {
 		return nil
 	}
 
@@ -273,7 +287,7 @@ func (p *Plugin) OnAfterOrgCreate(ctx context.Context, o *organization.Organizat
 func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, _ *session.Session) error {
 	// s is nil when the account signed up but must verify its email
 	// before it gets a session; the user carries the app either way.
-	if p.ledger == nil || u == nil {
+	if p.ledger == nil || u == nil || p.config.DisableAutoSubscribe {
 		return nil
 	}
 

@@ -13,7 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/rbac"
 	authclient "github.com/xraph/authsome/sdk/go"
 	"github.com/xraph/authsome/testutil"
 )
@@ -870,21 +872,69 @@ func TestClient_GetUsageSummary(t *testing.T) {
 	assert.NotNil(t, resp)
 }
 
+// grantBillingManage gives the user the manage/billing permission through a
+// role of their own, the way an operator would grant it.
+func grantBillingManage(t *testing.T, ts *testutil.TestServer, userID string) {
+	t.Helper()
+	ctx := context.Background()
+
+	appID, err := id.ParseAppID(ts.AppID)
+	require.NoError(t, err)
+
+	role := &rbac.Role{
+		ID:    id.NewRoleID().String(),
+		AppID: appID.String(),
+		Name:  "Billing manager",
+		Slug:  "billing-manager",
+	}
+	require.NoError(t, ts.Engine.CreateRole(ctx, role))
+	require.NoError(t, ts.Engine.AddPermission(ctx, appID, &rbac.Permission{
+		ID:       id.NewPermissionID().String(),
+		RoleID:   role.ID,
+		Action:   "manage",
+		Resource: "billing",
+	}))
+	require.NoError(t, ts.Engine.AssignUserRole(ctx, appID, &rbac.UserRole{
+		UserID: userID,
+		RoleID: role.ID,
+	}))
+}
+
 func TestClient_ListCoupons(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := ts.CreateUserClient(t, "coupons@example.com", "SecureP@ss123")
+	resp, token := ts.CreateUser(t, "coupons@example.com", "SecureP@ss123")
+	grantBillingManage(t, ts, resp.User.ID)
+	client := authclient.NewClient(ts.Server.URL,
+		authclient.WithToken(token),
+		authclient.WithSessionCookies(),
+	)
 
-	resp, err := client.ListCoupons(ctx, nil)
-	if err != nil {
-		var ce *authclient.ClientError
-		if errors.As(err, &ce) && (ce.StatusCode == 404 || ce.StatusCode == 400) {
-			t.Skip("coupons: requires app_id query param not in client")
-		}
-		require.NoError(t, err)
+	// The test server has no ledger engine, so the handler itself may fail
+	// after the gate. What this test pins is that a billing manager gets
+	// past the gate.
+	_, err := client.ListCoupons(ctx, &authclient.ListCouponsParams{AppID: ts.AppID})
+	var ce *authclient.ClientError
+	if errors.As(err, &ce) {
+		assert.NotEqual(t, http.StatusForbidden, ce.StatusCode, "a billing manager must pass the coupons gate")
 	}
-	assert.NotNil(t, resp)
+}
+
+// Coupon codes are app-wide, so listing them is gated behind manage/billing.
+// An ordinary signed-in user must be refused.
+func TestClient_ListCoupons_RequiresBillingManage(t *testing.T) {
+	ts := testutil.NewTestServer(t)
+	ctx := context.Background()
+
+	client := ts.CreateUserClient(t, "plain-coupons@example.com", "SecureP@ss123")
+
+	_, err := client.ListCoupons(ctx, &authclient.ListCouponsParams{AppID: ts.AppID})
+	require.Error(t, err, "a plain user must not list coupons")
+
+	var ce *authclient.ClientError
+	require.ErrorAs(t, err, &ce)
+	assert.Equal(t, http.StatusForbidden, ce.StatusCode)
 }
 
 func TestClient_ListInvoices(t *testing.T) {
