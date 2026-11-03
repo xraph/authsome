@@ -42,6 +42,8 @@ authsome.WithPlugin(subscription.New(subscription.Config{
 | `AutoSubscribeOnUser` | `bool` | `false` | Subscribe on signup, in user mode |
 | `TrialDays` | `int` | `0` | Default trial length. `0` means no trial |
 | `AllowSelfService` | `bool` | `false` | Let tenants change their own plan |
+| `DisableRoutes` | `bool` | `false` | Mount no HTTP routes. Use it when your host serves its own billing API on the plugin's ledger |
+| `DisableAutoSubscribe` | `bool` | `false` | Turn off the org-create and signup hooks, whatever the settings say. Use it when your host creates subscriptions itself |
 
 ## Settings
 
@@ -86,8 +88,13 @@ Mounted under `PathPrefix`, `/v1/billing` by default.
 Subscription, invoice, entitlement and usage reads are scoped to a tenant: pass its
 `tenant_id`. You can read a tenant you belong to (organisation mode) or are (user mode).
 Anyone else gets a 404, whether the tenant exists or not, unless they hold
-`billing:manage`, which reads every tenant. Plans stay app-wide. Listing coupons
-needs `billing:manage`, since the list holds every code in the app.
+`billing:manage`, which reads every tenant. Plans stay app-wide. `GET /coupons` and the
+dashboard billing views need `billing:manage` too, since they show every code and every
+tenant in the app.
+
+If your host runs its own billing API, set `DisableRoutes` and call
+`plugin.Service()` directly. The plugin finds the ledger engine you gave
+`authsome.WithLedgerEngine`, so you do not need to call `RebindLedgerOnPlugins`.
 
 ## Lifecycle hooks
 
