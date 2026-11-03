@@ -37,8 +37,6 @@ import (
 	"github.com/xraph/authsome/tokenformat"
 
 	"github.com/xraph/grove/migrate"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Compile-time interface checks.
@@ -1662,17 +1660,6 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 	if req.AppID == "" {
 		return nil, forge.BadRequest("app_id required")
 	}
-	if len(req.RedirectURIs) == 0 && !req.Public {
-		return nil, forge.BadRequest("redirect_uris required for confidential clients")
-	}
-	// Same rule the update path and dynamic registration apply. Leaving create
-	// more permissive would mean a client could be registered with a URI that
-	// can never be edited afterwards, since any later edit would be refused.
-	for _, u := range req.RedirectURIs {
-		if uriErr := validateRedirectURI(u); uriErr != nil {
-			return nil, forge.BadRequest(registrationErrorDescription(uriErr))
-		}
-	}
 
 	// manage:oauth2_client says the caller may administer clients. It does not
 	// say whose. A client carries redirect URIs and a secret, so minting one
@@ -1683,90 +1670,10 @@ func (p *Plugin) handleCreateClient(ctx forge.Context, req *CreateClientRequest)
 		return nil, err
 	}
 
-	// Generate client credentials.
-	clientIDStr, err := generateSecureToken(16)
+	resp, err := p.CreateClientFor(ctx.Context(), appID, *req)
 	if err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate client_id: %w", err))
+		return nil, clientHTTPError(ctx, err)
 	}
-
-	var rawSecret string
-	var hashedSecret string
-	if !req.Public {
-		rawSecret, err = generateSecureToken(32)
-		if err != nil {
-			return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: generate client_secret: %w", err))
-		}
-		hash, err := bcrypt.GenerateFromPassword([]byte(rawSecret), bcrypt.DefaultCost)
-		if err != nil {
-			return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: hash client_secret: %w", err))
-		}
-		hashedSecret = string(hash)
-	}
-
-	grantTypes := req.GrantTypes
-	if len(grantTypes) == 0 {
-		grantTypes = []string{"authorization_code"}
-	}
-	scopes := req.Scopes
-	if len(scopes) == 0 {
-		scopes = []string{"openid", "profile", "email"}
-	}
-
-	// Validate the allowlist at registration so a malformed entry is caught
-	// here rather than turning every later authorize request into an opaque
-	// invalid_target. This shares the exact rule resolveResources applies at
-	// request time, so the two can never disagree about what counts as valid.
-	for _, raw := range req.Resources {
-		if msg := resourceURISyntaxError(raw); msg != "" {
-			return nil, forge.BadRequest(msg)
-		}
-	}
-
-	// Normalise through ParseMode so an unrecognised value is stored as a
-	// known one rather than sitting in the column waiting to be misread.
-	// Empty stays empty, which means inherit.
-	dpopMode := ""
-	if req.DPoPMode != "" {
-		dpopMode = string(dpop.ParseMode(req.DPoPMode))
-	}
-
-	client := &OAuth2Client{
-		ID:                      id.NewOAuth2ClientID(),
-		AppID:                   appID,
-		Name:                    req.Name,
-		ClientID:                clientIDStr,
-		ClientSecret:            hashedSecret,
-		RedirectURIs:            req.RedirectURIs,
-		Scopes:                  scopes,
-		Resources:               req.Resources,
-		GrantTypes:              grantTypes,
-		Public:                  req.Public,
-		FirstParty:              req.FirstParty,
-		TokenEndpointAuthMethod: authMethodForPublic(req.Public),
-		DPoPMode:                dpopMode,
-		CreatedAt:               time.Now(),
-		UpdatedAt:               time.Now(),
-	}
-
-	if err := p.oauth2Store.CreateClient(ctx.Context(), client); err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: create client: %w", err))
-	}
-
-	resp := &CreateClientResponse{
-		ID:           client.ID.String(),
-		ClientID:     client.ClientID,
-		Name:         client.Name,
-		RedirectURIs: client.RedirectURIs,
-		Scopes:       client.Scopes,
-		Resources:    client.Resources,
-		GrantTypes:   client.GrantTypes,
-		Public:       client.Public,
-	}
-	// Only return the raw secret once.
-	if rawSecret != "" {
-		resp.ClientSecret = rawSecret
-	}
-
 	return resp, nil
 }
 
@@ -1780,46 +1687,23 @@ func (p *Plugin) handleListClients(ctx forge.Context, req *ListClientsRequest) (
 		return nil, err
 	}
 
-	clients, err := p.oauth2Store.ListClients(ctx.Context(), appID)
+	clients, err := p.ListClientsFor(ctx.Context(), appID)
 	if err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: list clients: %w", err))
+		return nil, clientHTTPError(ctx, err)
 	}
-	if clients == nil {
-		clients = []*OAuth2Client{}
-	}
-
 	return &ListClientsResponse{Clients: clients}, nil
 }
 
 func (p *Plugin) handleDeleteClient(ctx forge.Context, req *DeleteClientRequest) (*DeleteClientResponse, error) {
-	if req.ClientID == "" {
-		return nil, forge.BadRequest("client ID required")
+	appID, ok := plugin.CallerAppID(ctx)
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
 	}
-
-	clientID, err := id.ParseOAuth2ClientID(req.ClientID)
-	if err != nil {
-		return nil, forge.BadRequest("invalid client ID")
+	// A client of another app answers 404, not 403, so the route cannot be
+	// used to probe for the existence of another app's clients.
+	if err := p.DeleteClientFor(ctx.Context(), appID, req.ClientID); err != nil {
+		return nil, clientHTTPError(ctx, err)
 	}
-
-	// Load before deleting. The tenancy check needs the row's AppID and
-	// DeleteClient takes only an id, so there is no way to make this one call.
-	// A mismatch answers 404, not 403, so the route cannot be used to probe
-	// for the existence of another app's clients.
-	client, err := p.oauth2Store.GetClientByID(ctx.Context(), clientID)
-	if err != nil {
-		if errors.Is(err, ErrClientNotFound) {
-			return nil, forge.NotFound("oauth2 client not found")
-		}
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: load client: %w", err))
-	}
-	if err := plugin.AssertAppScope(ctx, client.AppID); err != nil {
-		return nil, err
-	}
-
-	if err := p.oauth2Store.DeleteClient(ctx.Context(), clientID); err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: delete client: %w", err))
-	}
-
 	return &DeleteClientResponse{Status: "deleted"}, nil
 }
 
