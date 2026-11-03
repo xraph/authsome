@@ -4469,6 +4469,10 @@
       },
       "RegisterBeginRequest": {
         "properties": {
+          "code": {
+            "description": "Current TOTP or recovery code, required when two-step verification is on",
+            "type": "string"
+          },
           "display_name": {
             "type": "string"
           }

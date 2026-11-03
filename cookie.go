@@ -4,6 +4,9 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
+
+	"github.com/xraph/authsome/middleware"
 
 	"github.com/xraph/authsome/settings"
 )
@@ -84,4 +87,23 @@ func SessionCookieTemplate(ctx context.Context, mgr *settings.Manager, appID str
 		SameSite: sameSite,
 	}
 	return cookie
+}
+
+// SetSessionCookie writes the session cookie for a session a plugin route
+// minted, with the attributes the core sign-in uses, so a browser in cookie
+// session mode is signed in by the response. appID picks per-app cookie
+// settings; empty reads the global ones. The cookie lasts as long as the
+// session does.
+func SetSessionCookie(w http.ResponseWriter, r *http.Request, mgr *settings.Manager, appID, token string, expiresAt time.Time) {
+	if mgr == nil || token == "" {
+		return
+	}
+	maxAge := int(time.Until(expiresAt).Seconds())
+	if maxAge <= 0 {
+		return
+	}
+	c := SessionCookieTemplate(r.Context(), mgr, appID, middleware.IsHTTPS(r)) // #nosec G124 -- template sets HttpOnly+SameSite+Secure
+	c.Value = token
+	c.MaxAge = maxAge
+	http.SetCookie(w, c)
 }

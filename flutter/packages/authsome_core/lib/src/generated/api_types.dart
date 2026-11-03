@@ -6043,20 +6043,24 @@ class RefreshRequest {
 }
 
 class RegisterBeginRequest {
+  final String? code;
   final String? displayName;
 
   const RegisterBeginRequest({
+    this.code,
     this.displayName,
   });
 
   factory RegisterBeginRequest.fromJson(Map<String, dynamic> json) {
     return RegisterBeginRequest(
+      code: json['code'] as String?,
       displayName: json['display_name'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      if (code != null) 'code': code,
       if (displayName != null) 'display_name': displayName,
     };
   }

@@ -143,7 +143,7 @@ func newTestAPI(t *testing.T) (*api.API, *authsome.Engine) {
 	return a, eng
 }
 
-func signUp(t *testing.T, eng *authsome.Engine, email, password string) (*json.RawMessage, string, string) { //nolint:unparam // test helper with configurable password
+func signUp(t *testing.T, eng *authsome.Engine, email, password string) (*json.RawMessage, string, string) {
 	t.Helper()
 	ctx := context.Background()
 	appID, err := id.ParseAppID(testAppIDStr)

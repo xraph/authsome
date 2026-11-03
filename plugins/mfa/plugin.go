@@ -706,6 +706,10 @@ func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*Cha
 	expires := ""
 	if result.Session != nil {
 		expires = result.Session.ExpiresAt.UTC().Format(time.RFC3339)
+		// The first leg of sign-in set no cookie, so a browser that keeps
+		// its session in the cookie is only signed in once this one is.
+		authsome.SetSessionCookie(ctx.Response(), ctx.Request(), eng.Settings(), payload.AppID.String(),
+			result.Session.Token, result.Session.ExpiresAt)
 	}
 
 	return &ChallengeResponse{
@@ -982,6 +986,45 @@ func (p *Plugin) HasMFA(ctx context.Context, userID id.UserID) bool {
 		return true
 	}
 	return false
+}
+
+// Enrolled reports whether the user has a verified TOTP enrollment, the
+// factor /v1/mfa/challenge checks at sign-in. SMS isn't counted: the
+// challenge can't check an SMS code, so gating on it would lock the user
+// out. Unlike HasMFA it returns lookup failures, so the engine's sign-in
+// gate can refuse rather than skip the second factor.
+func (p *Plugin) Enrolled(ctx context.Context, userID id.UserID) (bool, error) {
+	if p.store == nil {
+		return false, nil
+	}
+	enrollment, err := p.store.GetEnrollment(ctx, userID, "totp")
+	if errors.Is(err, ErrEnrollmentNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("mfa: get totp enrollment: %w", err)
+	}
+	return enrollment.Verified, nil
+}
+
+// VerifyStepUp checks a current TOTP code or an unused recovery code from a
+// user with two-step on, for a change that adds a way into the account. A
+// recovery code is spent. A user without two-step on passes with no code.
+func (p *Plugin) VerifyStepUp(ctx context.Context, userID id.UserID, code string) error {
+	if p.store == nil {
+		return nil
+	}
+	enrollment, err := p.store.GetEnrollment(ctx, userID, "totp")
+	if errors.Is(err, ErrEnrollmentNotFound) || (err == nil && !enrollment.Verified) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("mfa: get totp enrollment: %w", err)
+	}
+	if code == "" {
+		return forge.NewHTTPError(http.StatusUnauthorized, "code required: two-step verification is on, so enter a code from your authenticator app")
+	}
+	return p.verifyStepUp(ctx, userID, enrollment, code)
 }
 
 // ──────────────────────────────────────────────────

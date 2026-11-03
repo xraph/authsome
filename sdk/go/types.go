@@ -1392,6 +1392,7 @@ type RefreshRequest struct {
 
 // RegisterBeginRequest represents the RegisterBeginRequest schema.
 type RegisterBeginRequest struct {
+	Code        string `json:"code,omitempty"`
 	DisplayName string `json:"display_name,omitempty"`
 }
 
@@ -2304,6 +2305,7 @@ type PasskeyLoginFinishRequest struct {
 
 // PasskeyRegisterBeginRequest is the request body for PasskeyRegisterBegin.
 type PasskeyRegisterBeginRequest struct {
+	Code        string `json:"code,omitempty"`
 	DisplayName string `json:"display_name,omitempty"`
 }
 

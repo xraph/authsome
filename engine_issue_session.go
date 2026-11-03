@@ -65,6 +65,13 @@ type IssueSessionRequest struct {
 	// DPoPJKT binds the issued session to a client-held key (RFC 9449).
 	// Empty issues an ordinary unbound session.
 	DPoPJKT string
+
+	// UserVerifiedByKey reports that the sign-in was a passkey assertion
+	// whose authenticator verified the user (a biometric or PIN on top of
+	// holding the key). That is two factors already, so the user's own
+	// second factor isn't asked for after it. Set it only from a verified
+	// WebAuthn assertion's UV flag.
+	UserVerifiedByKey bool
 }
 
 // IssueSessionResult is the gate's success output. On the
@@ -263,7 +270,22 @@ func (e *Engine) issueSession(ctx context.Context, req *IssueSessionRequest) (*I
 	// flow (forced enrollment via partial-auth ticket); the challenge
 	// handler returns "no MFA enrollment for user" in that case so the
 	// UI can route to the enrollment surface.
-	if !req.MFAJustVerified && e.mfaRequiredFor(ctx, req.AppID) {
+	//
+	// A user who turned a second factor on for themselves is asked for it
+	// too, app rule or not. A passkey that verified its user is the
+	// exception: it already proves possession plus a biometric or PIN, so
+	// only the app-wide rule follows it with a code.
+	gate := !req.MFAJustVerified && e.mfaRequiredFor(ctx, req.AppID)
+	if !gate && !req.MFAJustVerified && !req.UserVerifiedByKey {
+		enrolled, err := e.userHasMFA(ctx, req.User.ID)
+		if err != nil {
+			// Fail closed: a sign-in that can't tell whether the user
+			// holds a second factor doesn't get to skip it.
+			return nil, fmt.Errorf("authsome: check mfa enrollment: %w", err)
+		}
+		gate = enrolled
+	}
+	if gate {
 		ticket, err := e.persistMFATicket(ctx, req)
 		if err != nil {
 			return nil, fmt.Errorf("authsome: persist mfa ticket: %w", err)
@@ -318,6 +340,23 @@ func (e *Engine) mfaRequiredFor(ctx context.Context, appID id.AppID) bool {
 		return false
 	}
 	return *cfg.MFARequired
+}
+
+// mfaEnrollmentChecker is the part of the mfa plugin the gate asks
+// whether a user has a verified second factor.
+type mfaEnrollmentChecker interface {
+	Enrolled(ctx context.Context, userID id.UserID) (bool, error)
+}
+
+// userHasMFA reports whether the user has a verified second factor. With
+// no mfa plugin registered nobody does.
+func (e *Engine) userHasMFA(ctx context.Context, userID id.UserID) (bool, error) {
+	for _, p := range e.plugins.Plugins() {
+		if c, ok := p.(mfaEnrollmentChecker); ok {
+			return c.Enrolled(ctx, userID)
+		}
+	}
+	return false, nil
 }
 
 // availableMFAMethods reports which MFA methods the user could
