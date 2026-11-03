@@ -22,8 +22,8 @@ import (
 // manage/billing reads any tenant, which is how operators see across them.
 //
 // Every refusal is a 404, so a caller outside the tenant can't tell a tenant
-// that exists from one that doesn't. An empty tenantID passes only for a
-// billing manager, which keeps the app-wide listings an operator view.
+// that exists from one that doesn't. An empty tenantID belongs to no one, so
+// only a billing manager gets past it.
 func (p *Plugin) requireTenant(ctx forge.Context, tenantID string) error {
 	ok, err := p.tenantAllowed(ctx, tenantID)
 	if err != nil {

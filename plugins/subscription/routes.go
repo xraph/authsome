@@ -226,6 +226,9 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithOperationID("listCoupons"),
 		forge.WithResponseSchema(http.StatusOK, "Coupons list", ListCouponsResponse{}),
 		forge.WithErrorResponses(),
+		// The catalog holds every redeemable code in the app, so it is an
+		// operator read, not a tenant one.
+		p.writeGuard(),
 	); err != nil {
 		return err
 	}

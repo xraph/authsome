@@ -86,7 +86,8 @@ Mounted under `PathPrefix`, `/v1/billing` by default.
 Subscription, invoice, entitlement and usage reads are scoped to a tenant: pass its
 `tenant_id`. You can read a tenant you belong to (organisation mode) or are (user mode).
 Anyone else gets a 404, whether the tenant exists or not, unless they hold
-`billing:manage`, which reads every tenant. Plans and coupons stay app-wide.
+`billing:manage`, which reads every tenant. Plans stay app-wide. Listing coupons
+needs `billing:manage`, since the list holds every code in the app.
 
 ## Lifecycle hooks
 
