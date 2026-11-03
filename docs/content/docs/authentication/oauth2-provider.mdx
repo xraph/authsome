@@ -251,6 +251,8 @@ You have two options. With no extra config, authsome manages the key for you. It
 
 Managed keys rotate on a schedule. A key older than `IDTokenKeyRotation` (90 days by default) is replaced, and the old one stays in the JWKS for `IDTokenKeyRetireGrace` (7 days by default) so tokens it already signed still verify. An id_token lives for `IDTokenTTL` (1 hour by default), so the grace period is far longer than anyone needs.
 
+You can rotate an app's own key from the dashboard, but at most once an hour, and only when the app has its own issuer (see below). The deployment issuer's key is shared by every app, so the dashboard won't rotate it. It rotates on its schedule.
+
 If you'd rather hold the key yourself, hand the plugin a PEM private key. It wins over any managed key.
 
 ```go
@@ -264,7 +266,9 @@ oauth2provider.New(oauth2provider.Config{
 
 An operator key is either RSA of at least 2048 bits or EC P-256 (ES256). One that doesn't parse, or an RSA key that's too small, stops the boot. You rotate it yourself: move the old key into `IDTokenPreviousKeys` and keep it there until every token it signed has expired. A previous key's `kid` is always its thumbprint, so if the old key signed under a custom `IDTokenSigningKeyID`, its tokens stop verifying once the `kid` changes.
 
-The JWKS lives at `{issuer}/v1/oauth/jwks` and is advertised as `jwks_uri`. It's served with `Cache-Control: public, max-age=300`, and HMAC keys never appear in it.
+If your deployment signs only with an ES256 operator key, discovery advertises only ES256. OIDC Discovery expects RS256 support, and a relying party that only accepts RS256 will reject your tokens. Keep an RSA key unless you know every client accepts ES256.
+
+The JWKS lives at `{issuer}/v1/oauth/jwks` and is advertised as `jwks_uri`. It's served with `Cache-Control: public, max-age=300`, and HMAC keys never appear in it. If the signing keys can't be read from the store, the JWKS still answers with the access token keys, marked `Cache-Control: no-store` so no cache holds on to the partial set.
 
 ### One issuer per app
 
