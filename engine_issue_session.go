@@ -263,7 +263,22 @@ func (e *Engine) issueSession(ctx context.Context, req *IssueSessionRequest) (*I
 	// flow (forced enrollment via partial-auth ticket); the challenge
 	// handler returns "no MFA enrollment for user" in that case so the
 	// UI can route to the enrollment surface.
-	if !req.MFAJustVerified && e.mfaRequiredFor(ctx, req.AppID) {
+	//
+	// A user who turned a second factor on for themselves is asked for it
+	// too, app rule or not. A passkey sign-in is the exception: it already
+	// proves possession plus a local biometric or PIN, so only the app-wide
+	// rule follows it with a code.
+	gate := !req.MFAJustVerified && e.mfaRequiredFor(ctx, req.AppID)
+	if !gate && !req.MFAJustVerified && req.AuthMethod != authMethodPasskey {
+		enrolled, err := e.userHasMFA(ctx, req.User.ID)
+		if err != nil {
+			// Fail closed: a sign-in that can't tell whether the user
+			// holds a second factor doesn't get to skip it.
+			return nil, fmt.Errorf("authsome: check mfa enrollment: %w", err)
+		}
+		gate = enrolled
+	}
+	if gate {
 		ticket, err := e.persistMFATicket(ctx, req)
 		if err != nil {
 			return nil, fmt.Errorf("authsome: persist mfa ticket: %w", err)
@@ -318,6 +333,26 @@ func (e *Engine) mfaRequiredFor(ctx context.Context, appID id.AppID) bool {
 		return false
 	}
 	return *cfg.MFARequired
+}
+
+// authMethodPasskey is the AuthMethod the passkey plugin signs in with.
+const authMethodPasskey = "passkey"
+
+// mfaEnrollmentChecker is the part of the mfa plugin the gate asks
+// whether a user has a verified second factor.
+type mfaEnrollmentChecker interface {
+	Enrolled(ctx context.Context, userID id.UserID) (bool, error)
+}
+
+// userHasMFA reports whether the user has a verified second factor. With
+// no mfa plugin registered nobody does.
+func (e *Engine) userHasMFA(ctx context.Context, userID id.UserID) (bool, error) {
+	for _, p := range e.plugins.Plugins() {
+		if c, ok := p.(mfaEnrollmentChecker); ok {
+			return c.Enrolled(ctx, userID)
+		}
+	}
+	return false, nil
 }
 
 // availableMFAMethods reports which MFA methods the user could

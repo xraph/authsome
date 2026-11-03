@@ -984,6 +984,28 @@ func (p *Plugin) HasMFA(ctx context.Context, userID id.UserID) bool {
 	return false
 }
 
+// Enrolled reports whether the user has a verified TOTP or SMS
+// enrollment. Unlike HasMFA it returns lookup failures, so the engine's
+// sign-in gate can refuse rather than skip the second factor.
+func (p *Plugin) Enrolled(ctx context.Context, userID id.UserID) (bool, error) {
+	if p.store == nil {
+		return false, nil
+	}
+	for _, method := range []string{"totp", "sms"} {
+		enrollment, err := p.store.GetEnrollment(ctx, userID, method)
+		if errors.Is(err, ErrEnrollmentNotFound) {
+			continue
+		}
+		if err != nil {
+			return false, fmt.Errorf("mfa: get %s enrollment: %w", method, err)
+		}
+		if enrollment.Verified {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // ──────────────────────────────────────────────────
 // SMS MFA Handlers
 // ──────────────────────────────────────────────────
