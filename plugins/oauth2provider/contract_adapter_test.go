@@ -17,6 +17,8 @@ func TestToContractErr(t *testing.T) {
 	for _, c := range []struct{ in, want error }{
 		{ErrClientNotFound, oauth2contract.ErrClientNotFound},
 		{ErrOperatorKey, oauth2contract.ErrOperatorKey},
+		{ErrSharedKey, oauth2contract.ErrSharedKey},
+		{ErrKeyTooNew, oauth2contract.ErrKeyTooNew},
 		{errNoSigningKey, oauth2contract.ErrNoSigningKey},
 	} {
 		if got := toContractErr(c.in); !errors.Is(got, c.want) {

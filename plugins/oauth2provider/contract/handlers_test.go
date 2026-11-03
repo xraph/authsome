@@ -173,6 +173,26 @@ func TestKeysRotate_OperatorKeyIsBadRequest(t *testing.T) {
 	expectCode(t, err, contract.CodeBadRequest)
 }
 
+func TestKeysRotate_SharedKeyIsBadRequest(t *testing.T) {
+	h := keysRotateHandler(Deps{Plugin: &fakeService{rotateErr: ErrSharedKey}})
+	_, err := h(context.Background(), struct{}{}, contract.Principal{})
+	expectCode(t, err, contract.CodeBadRequest)
+	var ce *contract.Error
+	if !errors.As(err, &ce) || ce.Message != "the deployment issuer's signing key is shared by every app and rotates on its own schedule" {
+		t.Fatalf("message = %q", ce.Message)
+	}
+}
+
+func TestKeysRotate_KeyTooNewIsBadRequest(t *testing.T) {
+	h := keysRotateHandler(Deps{Plugin: &fakeService{rotateErr: ErrKeyTooNew}})
+	_, err := h(context.Background(), struct{}{}, contract.Principal{})
+	expectCode(t, err, contract.CodeBadRequest)
+	var ce *contract.Error
+	if !errors.As(err, &ce) || ce.Message != "the current signing key is less than an hour old; try again later" {
+		t.Fatalf("message = %q", ce.Message)
+	}
+}
+
 func TestKeysRotate_ReturnsPostRotationList(t *testing.T) {
 	ret := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 	f := &fakeService{rotated: KeyInfo{KID: "new"}, keys: []KeyInfo{

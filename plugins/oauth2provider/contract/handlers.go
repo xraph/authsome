@@ -364,6 +364,10 @@ func mapErr(err error) error {
 		return &contract.Error{Code: contract.CodeNotFound, Message: "oauth2 client not found"}
 	case errors.Is(err, ErrOperatorKey):
 		return badReq("the signing key for this issuer is managed by configuration")
+	case errors.Is(err, ErrSharedKey):
+		return badReq("the deployment issuer's signing key is shared by every app and rotates on its own schedule")
+	case errors.Is(err, ErrKeyTooNew):
+		return badReq("the current signing key is less than an hour old; try again later")
 	case errors.Is(err, ErrNoSigningKey):
 		return &contract.Error{Code: contract.CodeUnavailable, Message: "no id_token signing key is available; configure an encryption key or an operator key"}
 	default:

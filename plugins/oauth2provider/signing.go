@@ -34,6 +34,16 @@ var errNoSigningKey = errors.New("oauth2: no id_token signing key available")
 // comes from Config. Rotating it means changing the configuration.
 var ErrOperatorKey = errors.New("oauth2: the signing key for this issuer is managed by configuration")
 
+// ErrSharedKey is returned when the dashboard asks to rotate the deployment
+// issuer's managed key. Every app that has not opted into its own issuer
+// signs with it, so one app's operator must not rotate it; it rotates on
+// IDTokenKeyRotation.
+var ErrSharedKey = errors.New("oauth2: the deployment issuer's signing key is shared by every app")
+
+// ErrKeyTooNew is returned when a manual rotation is asked for while the
+// active key is younger than manualRotationMinAge.
+var ErrKeyTooNew = errors.New("oauth2: the current signing key is too new to rotate")
+
 const (
 	// activeKeyCacheTTL is how long a scope's active key is trusted before
 	// the store is read again.
@@ -44,6 +54,12 @@ const (
 	// store read. It is short because another replica's rotation is only
 	// seen once it lapses; this replica's own rotations invalidate it at once.
 	listMemoTTL = 45 * time.Second
+
+	// manualRotationMinAge is how old an app's active key must be before the
+	// dashboard may rotate it again. Each rotation keeps the old key
+	// published for IDTokenKeyRetireGrace, so without a floor repeated clicks
+	// would pile keys into the JWKS.
+	manualRotationMinAge = time.Hour
 
 	// managedKeyBits is the size of every key authsome generates.
 	managedKeyBits = 2048
@@ -333,9 +349,11 @@ func (m *keyManager) Active(ctx context.Context, scope string) (*signer, error) 
 	return s, nil
 }
 
-// Rotate generates the next managed key for scope straight away, whatever
-// the age of the current one. It is what the dashboard calls.
-func (m *keyManager) Rotate(ctx context.Context, scope string) (*SigningKey, error) {
+// Rotate generates the next managed key for scope straight away. It is what
+// the dashboard calls. minAge, when positive, refuses with ErrKeyTooNew while
+// the active key is younger than that; the check runs under the scope lock
+// against a fresh listing, so two replicas can't both pass it on stale state.
+func (m *keyManager) Rotate(ctx context.Context, scope string, minAge time.Duration) (*SigningKey, error) {
 	if m.usesOperatorKey(scope) {
 		return nil, ErrOperatorKey
 	}
@@ -346,15 +364,20 @@ func (m *keyManager) Rotate(ctx context.Context, scope string) (*SigningKey, err
 	st := m.scopeState(scope)
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	// Whatever happens next, the cached key is no longer the newest.
-	st.active, st.row = nil, nil
-	defer m.invalidate(scope)
 
 	keys, err := m.store.ListSigningKeys(ctx, scope)
 	if err != nil {
 		return nil, fmt.Errorf("oauth2: list signing keys: %w", err)
 	}
-	row, err := m.create(ctx, scope, keys, m.now())
+	now := m.now()
+	if active := activeRow(keys); minAge > 0 && active != nil && now.Sub(active.CreatedAt) < minAge {
+		return nil, ErrKeyTooNew
+	}
+	// Whatever happens next, the cached key is no longer the newest.
+	st.active, st.row = nil, nil
+	defer m.invalidate(scope)
+
+	row, err := m.create(ctx, scope, keys, now)
 	if errors.Is(err, ErrSigningKeyConflict) {
 		// A scheduled rotation landed at the same moment. Its key is just
 		// as fresh, so hand that one back.

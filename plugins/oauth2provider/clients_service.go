@@ -355,9 +355,11 @@ func (p *Plugin) SigningKeys(ctx context.Context, appID id.AppID) (issuer string
 	return issuer, keys, nil
 }
 
-// RotateSigningKey generates the next managed signing key for appID's issuer
-// straight away. It returns ErrOperatorKey when a configured key serves that
-// issuer.
+// RotateSigningKey generates the next managed signing key for appID's own
+// issuer. It only rotates an app's own key: an app on the deployment issuer
+// gets ErrOperatorKey when a configured key serves it and ErrSharedKey
+// otherwise, since that key signs for every app and rotates on its own
+// schedule. An app key younger than an hour gets ErrKeyTooNew.
 func (p *Plugin) RotateSigningKey(ctx context.Context, appID id.AppID) (KeyInfo, error) {
 	_, scope, err := p.issuerFor(ctx, appID)
 	if err != nil {
@@ -366,7 +368,13 @@ func (p *Plugin) RotateSigningKey(ctx context.Context, appID id.AppID) (KeyInfo,
 	if p.keys == nil {
 		return KeyInfo{}, errNoSigningKey
 	}
-	row, err := p.keys.Rotate(ctx, scope)
+	if scope == "" {
+		if p.keys.usesOperatorKey(scope) {
+			return KeyInfo{}, ErrOperatorKey
+		}
+		return KeyInfo{}, ErrSharedKey
+	}
+	row, err := p.keys.Rotate(ctx, scope, manualRotationMinAge)
 	if err != nil {
 		return KeyInfo{}, err
 	}

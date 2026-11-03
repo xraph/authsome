@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -107,6 +108,40 @@ func TestRotateSigningKey_OperatorKeyRefused(t *testing.T) {
 	f := newOIDCFixture(t, oauth2provider.Config{IDTokenSigningKey: testSigningKeyPEM(t)}, true)
 	_, err := f.p.RotateSigningKey(context.Background(), f.appID)
 	assert.ErrorIs(t, err, oauth2provider.ErrOperatorKey, "the app is on the deployment issuer, served by the operator key")
+}
+
+// The deployment issuer's managed key signs for every app that has not
+// opted into its own issuer, so no single app's dashboard may rotate it.
+func TestRotateSigningKey_SharedDeploymentKeyRefused(t *testing.T) {
+	f := newOIDCFixture(t, oauth2provider.Config{}, true)
+	ctx := context.Background()
+	decodeTokenBody(t, f.codeGrant(t, publicID, "openid", "n-shared", time.Now()))
+	_, before, err := f.p.SigningKeys(ctx, f.appID)
+	require.NoError(t, err)
+	require.Len(t, before, 1)
+
+	_, err = f.p.RotateSigningKey(ctx, f.appID)
+	require.ErrorIs(t, err, oauth2provider.ErrSharedKey)
+
+	_, after, err := f.p.SigningKeys(ctx, f.appID)
+	require.NoError(t, err)
+	assert.Equal(t, before, after, "nothing was rotated")
+}
+
+// An app's own key can be rotated from the dashboard at most once an hour.
+func TestRotateSigningKey_AppKeyTooNewRefused(t *testing.T) {
+	f := newOIDCFixture(t, oauth2provider.Config{}, true)
+	setAppIssuer(t, f, f.appID, true)
+	ctx := context.Background()
+
+	_, err := f.p.RotateSigningKey(ctx, f.appID)
+	require.NoError(t, err, "the app has no key yet, so the first one is not too new")
+	_, err = f.p.RotateSigningKey(ctx, f.appID)
+	require.ErrorIs(t, err, oauth2provider.ErrKeyTooNew)
+
+	_, keys, err := f.p.SigningKeys(ctx, f.appID)
+	require.NoError(t, err)
+	assert.Len(t, keys, 1, "the refused rotation added no key")
 }
 
 func TestRotateSigningKey_ManagedKeyUsesThumbprint(t *testing.T) {

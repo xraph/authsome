@@ -49,6 +49,10 @@ func toContractErr(err error) error {
 		return oauth2contract.ErrClientNotFound
 	case errors.Is(err, ErrOperatorKey):
 		return oauth2contract.ErrOperatorKey
+	case errors.Is(err, ErrSharedKey):
+		return oauth2contract.ErrSharedKey
+	case errors.Is(err, ErrKeyTooNew):
+		return oauth2contract.ErrKeyTooNew
 	case errors.Is(err, errNoSigningKey):
 		return oauth2contract.ErrNoSigningKey
 	default:

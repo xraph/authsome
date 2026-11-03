@@ -96,12 +96,14 @@ type KeyInfo struct {
 	RetiresAt *time.Time
 }
 
-// ErrClientNotFound, ErrOperatorKey and ErrNoSigningKey are what an
-// OAuth2Service answers for the three failures the handlers name. A request
-// the service refused is a *ValidationError.
+// ErrClientNotFound, ErrOperatorKey, ErrSharedKey, ErrKeyTooNew and
+// ErrNoSigningKey are what an OAuth2Service answers for the failures the
+// handlers name. A request the service refused is a *ValidationError.
 var (
 	ErrClientNotFound = fmt.Errorf("oauth2 client not found")
 	ErrOperatorKey    = fmt.Errorf("signing key is managed by configuration")
+	ErrSharedKey      = fmt.Errorf("signing key is shared by every app")
+	ErrKeyTooNew      = fmt.Errorf("signing key is too new to rotate")
 	ErrNoSigningKey   = fmt.Errorf("no id_token signing key available")
 )
 

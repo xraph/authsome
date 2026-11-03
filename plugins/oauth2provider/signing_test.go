@@ -90,7 +90,7 @@ func TestKeyManager_OperatorKeyWins(t *testing.T) {
 
 	assert.Equal(t, []string{s.kid}, publishedKIDs(t, m, ""))
 
-	_, err = m.Rotate(ctx, "")
+	_, err = m.Rotate(ctx, "", 0)
 	require.ErrorIs(t, err, ErrOperatorKey)
 
 	info, err := m.Describe(ctx, "")
@@ -181,7 +181,7 @@ func TestKeyManager_RetiredKeyLeavesJWKS(t *testing.T) {
 
 	first, err := m.Active(ctx, "app")
 	require.NoError(t, err)
-	_, err = m.Rotate(ctx, "app")
+	_, err = m.Rotate(ctx, "app", 0)
 	require.NoError(t, err)
 	current, err := m.Active(ctx, "app")
 	require.NoError(t, err)
@@ -591,7 +591,7 @@ func TestKeyManager_RotateInvalidatesMemo(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, info, 1)
 
-	_, err = m.Rotate(ctx, "app")
+	_, err = m.Rotate(ctx, "app", 0)
 	require.NoError(t, err)
 
 	after, err := m.Published(ctx, "app")
@@ -612,11 +612,11 @@ func TestKeyManager_CountsRotations(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, got, "the first key is not a rotation")
 
-	_, err = m.Rotate(ctx, "")
+	_, err = m.Rotate(ctx, "", 0)
 	require.NoError(t, err)
-	_, err = m.Rotate(ctx, "app_1")
+	_, err = m.Rotate(ctx, "app_1", 0)
 	require.NoError(t, err)
-	_, err = m.Rotate(ctx, "app_1")
+	_, err = m.Rotate(ctx, "app_1", 0)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"|ok", "app_1|ok"}, got, "an app's first key is not a rotation either")
 }
@@ -631,7 +631,7 @@ func TestKeyManager_CountsRotationConflict(t *testing.T) {
 	var got []string
 	m.onRotate = func(_, result string) { got = append(got, result) }
 	m.store = &conflictStore{Store: st}
-	_, err = m.Rotate(ctx, "")
+	_, err = m.Rotate(ctx, "", 0)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"conflict"}, got)
 }
@@ -666,4 +666,35 @@ type retireFailStore struct {
 
 func (s *retireFailStore) RetireSigningKey(context.Context, id.OAuth2SigningKeyID, time.Time) error {
 	return s.err
+}
+
+// A manual rotation with a minimum age is refused while the active key is
+// younger than that, and goes through once it is old enough.
+func TestKeyManager_RotateRefusesNewKey(t *testing.T) {
+	ctx := context.Background()
+	st := NewMemoryStore()
+	m := newTestKeyManager(t, Config{}, st, testEncryptor(t))
+	clock := time.Now()
+	m.now = func() time.Time { return clock }
+
+	first, err := m.Active(ctx, "app")
+	require.NoError(t, err)
+
+	_, err = m.Rotate(ctx, "app", time.Hour)
+	require.ErrorIs(t, err, ErrKeyTooNew)
+	keys, err := st.ListSigningKeys(ctx, "app")
+	require.NoError(t, err)
+	assert.Len(t, keys, 1, "a refused rotation inserts nothing")
+	still, err := m.Active(ctx, "app")
+	require.NoError(t, err)
+	assert.Equal(t, first.kid, still.kid)
+
+	clock = clock.Add(time.Hour)
+	row, err := m.Rotate(ctx, "app", time.Hour)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), row.Generation)
+
+	// A scope with no key yet has nothing too new to replace.
+	_, err = m.Rotate(ctx, "fresh", time.Hour)
+	require.NoError(t, err)
 }
