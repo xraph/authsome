@@ -166,6 +166,23 @@ func TestUserInfo_ClaimsFollowTheTokenScopes(t *testing.T) {
 	assert.Equal(t, "Claire", body["name"])
 }
 
+func TestUserInfo_AnswersPOST(t *testing.T) {
+	eng, mux, appID := newEngineFixture(t)
+	u, _, err := eng.SignUp(context.Background(), &account.SignUpRequest{AppID: appID, Email: "post@example.com", Password: "SecureP@ss123"})
+	require.NoError(t, err)
+
+	sess := &session.Session{ID: id.NewSessionID(), AppID: appID, UserID: u.ID, ClientID: publicID, Scopes: []string{"openid", "email"}}
+	ctx := middleware.WithPendingOAuthSession(context.Background(), &middleware.PendingOAuthSession{Session: sess})
+	req := httptest.NewRequestWithContext(ctx, "POST", "/v1/oauth/userinfo", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, "post@example.com", body["email"])
+	assert.Contains(t, body, "email_verified")
+}
+
 func TestDeviceAuthorize_ScopesAreBoundedByTheRegistration(t *testing.T) {
 	_, _, mux := newFixture(t)
 	form := url.Values{"client_id": {publicID}, "scope": {"openid admin:everything"}}

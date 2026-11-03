@@ -318,6 +318,18 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
+	// OIDC Core 5.3.1 requires userinfo to answer POST as well as GET.
+	if err := g.POST("/userinfo", p.handleUserInfo,
+		forge.WithMiddleware(middleware.RequireScope("openid")),
+		forge.WithSummary("OIDC UserInfo (POST)"),
+		forge.WithDescription("Returns claims about the authenticated user. Same as the GET form."),
+		forge.WithOperationID("oauth2UserInfoPost"),
+		forge.WithResponseSchema(http.StatusOK, "UserInfo", UserInfo{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
 	// Device Authorization Grant (RFC 8628) — public endpoint
 	if err := g.POST("/device/authorize", p.handleDeviceAuthorize, append([]forge.RouteOption{
 		forge.WithSummary("Device Authorization"),
@@ -1473,17 +1485,7 @@ func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInf
 	granted := func(scope string) bool {
 		return sess == nil || sess.ClientID == "" || middleware.HasScopes(sess, scope)
 	}
-	info := &UserInfo{Sub: u.ID.String()}
-	if granted("profile") {
-		info.Name = u.Name()
-	}
-	if granted("email") {
-		info.Email = u.Email
-		info.EmailVerified = u.EmailVerified
-	}
-	if granted("phone") {
-		info.Phone = u.Phone
-	}
+	info := &UserInfo{Sub: u.ID.String(), StandardClaims: standardClaims(u, granted)}
 	return info, nil
 }
 

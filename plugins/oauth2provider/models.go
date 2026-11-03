@@ -148,11 +148,8 @@ const (
 
 // UserInfo is the OIDC userinfo response.
 type UserInfo struct {
-	Sub           string `json:"sub"`
-	Email         string `json:"email,omitempty"`
-	EmailVerified bool   `json:"email_verified,omitempty"`
-	Name          string `json:"name,omitempty"`
-	Phone         string `json:"phone_number,omitempty"`
+	Sub string `json:"sub"`
+	StandardClaims
 }
 
 // Grant records that a user approved a client for a set of scopes in an app.
