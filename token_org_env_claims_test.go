@@ -191,8 +191,14 @@ func TestOpaque_SwitchOrgKeepsToken(t *testing.T) {
 	ctx := context.Background()
 	appID := testAppID(t)
 
-	_, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
+	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 		AppID: appID, Email: "claims-opaque@example.com", Password: "SecureP@ss123", FirstName: "Opaque",
+	})
+	require.NoError(t, err)
+	// The seeded environment asks for a verified address before a session.
+	secutil.VerifyEmail(t, eng, u.ID)
+	_, sess, err := eng.SignIn(ctx, &account.SignInRequest{
+		AppID: appID, Email: "claims-opaque@example.com", Password: "SecureP@ss123",
 	})
 	require.NoError(t, err)
 	require.False(t, tokenformat.IsJWT(sess.Token))
