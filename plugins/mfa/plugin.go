@@ -706,6 +706,10 @@ func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*Cha
 	expires := ""
 	if result.Session != nil {
 		expires = result.Session.ExpiresAt.UTC().Format(time.RFC3339)
+		// The first leg of sign-in set no cookie, so a browser that keeps
+		// its session in the cookie is only signed in once this one is.
+		authsome.SetSessionCookie(ctx.Response(), ctx.Request(), eng.Settings(), payload.AppID.String(),
+			result.Session.Token, result.Session.ExpiresAt)
 	}
 
 	return &ChallengeResponse{

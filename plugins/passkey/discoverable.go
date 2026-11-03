@@ -157,6 +157,12 @@ func (p *Plugin) finishDiscoverableLogin(ctx forge.Context, ceremonyID string) (
 		return nil, err
 	}
 
+	// Like a password sign-in, so a browser that keeps its session in the
+	// cookie is signed in by this response.
+	if p.engine != nil {
+		authsome.SetSessionCookie(ctx.Response(), ctx.Request(), p.engine.Settings(), sess.AppID.String(), sess.Token, sess.ExpiresAt)
+	}
+
 	userIDStr := loggedIn.ID.String()
 	p.audit(ctx.Context(), hook.ActionPasskeyLogin, hook.ResourcePasskey, "", userIDStr, "", bridge.OutcomeSuccess)
 	p.relayEvent(ctx.Context(), "auth.passkey.authenticated", "", map[string]string{"user_id": userIDStr})
