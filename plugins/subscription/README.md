@@ -83,6 +83,11 @@ Mounted under `PathPrefix`, `/v1/billing` by default.
 | `POST` | `/coupons` | Create a coupon |
 | `DELETE` | `/coupons/:couponId` | Delete a coupon |
 
+Subscription, invoice, entitlement and usage reads are scoped to a tenant: pass its
+`tenant_id`. You can read a tenant you belong to (organisation mode) or are (user mode).
+Anyone else gets a 404, whether the tenant exists or not, unless they hold
+`billing:manage`, which reads every tenant. Plans and coupons stay app-wide.
+
 ## Lifecycle hooks
 
 | Hook | What happens |

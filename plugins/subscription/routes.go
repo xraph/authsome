@@ -22,7 +22,8 @@ import (
 
 // writeGuard gates a billing mutation behind manage/billing, layered on top of
 // the session requirement every billing group already carries. Reads stay at
-// session-only so end users can list plans and check their own entitlements.
+// session-only so end users can list plans and check their own entitlements;
+// the tenant-scoped ones check the tenant in the handler (see requireTenant).
 //
 // Returns a pass-through when the engine exposes no RBAC (bare test wiring),
 // leaving the group's session check as the effective bar rather than failing
@@ -480,6 +481,8 @@ type CouponResponse struct {
 
 type CheckEntitlementRequest struct {
 	FeatureKey string `path:"featureKey"`
+	AppID      string `query:"app_id,omitempty"`
+	TenantID   string `query:"tenant_id"`
 }
 
 type EntitlementResponse struct {
@@ -643,6 +646,10 @@ func (p *Plugin) handleActivatePlan(ctx forge.Context, req *PlanIDRequest) (*api
 }
 
 func (p *Plugin) handleListSubscriptions(ctx forge.Context, req *ListSubscriptionsRequest) (*ListSubscriptionsResponse, error) {
+	if err := p.requireTenant(ctx, req.TenantID); err != nil {
+		return nil, err
+	}
+
 	appID := req.AppID
 	if appID == "" {
 		appID = p.defaultAppID
@@ -669,6 +676,9 @@ func (p *Plugin) handleListSubscriptions(ctx forge.Context, req *ListSubscriptio
 func (p *Plugin) handleGetActiveSubscription(ctx forge.Context, req *GetActiveSubRequest) (*Response, error) {
 	if req.AppID == "" || req.TenantID == "" {
 		return nil, forge.BadRequest("app_id and tenant_id are required")
+	}
+	if err := p.requireTenant(ctx, req.TenantID); err != nil {
+		return nil, err
 	}
 
 	sub, err := p.service.GetActiveSubscription(ctx.Context(), req.TenantID, req.AppID)
@@ -770,12 +780,16 @@ func (p *Plugin) handleResumeSubscription(ctx forge.Context, req *SubIDRequest) 
 }
 
 func (p *Plugin) handleListInvoices(ctx forge.Context, req *ListInvoicesRequest) (*ListInvoicesResponse, error) {
+	if err := p.requireTenant(ctx, req.TenantID); err != nil {
+		return nil, err
+	}
+
 	appID := req.AppID
 	if appID == "" {
 		appID = p.defaultAppID
 	}
 
-	invoices, err := p.service.ListAllInvoices(ctx.Context(), appID)
+	invoices, err := p.service.ListInvoices(ctx.Context(), req.TenantID, appID)
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list invoices: %w", err))
 	}
@@ -805,6 +819,14 @@ func (p *Plugin) handleGetInvoice(ctx forge.Context, req *GetInvoiceRequest) (*I
 
 	inv, err := p.service.GetInvoice(ctx.Context(), invID)
 	if err != nil {
+		return nil, forge.NotFound("invoice not found")
+	}
+	// Another tenant's invoice gets the same answer as a missing one.
+	allowed, err := p.tenantAllowed(ctx, inv.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
 		return nil, forge.NotFound("invoice not found")
 	}
 
@@ -939,7 +961,19 @@ func (p *Plugin) handleDeleteCoupon(ctx forge.Context, req *DeleteCouponRequest)
 }
 
 func (p *Plugin) handleCheckEntitlement(ctx forge.Context, req *CheckEntitlementRequest) (*EntitlementResponse, error) {
-	result, err := p.service.CheckEntitlement(ctx.Context(), req.FeatureKey)
+	if req.TenantID == "" {
+		return nil, forge.BadRequest("tenant_id is required")
+	}
+	if err := p.requireTenant(ctx, req.TenantID); err != nil {
+		return nil, err
+	}
+
+	appID := req.AppID
+	if appID == "" {
+		appID = p.defaultAppID
+	}
+
+	result, err := p.service.CheckEntitlement(entitlementContext(ctx.Context(), req.TenantID, appID), req.FeatureKey)
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to check entitlement: %w", err))
 	}
@@ -957,6 +991,9 @@ func (p *Plugin) handleCheckEntitlement(ctx forge.Context, req *CheckEntitlement
 func (p *Plugin) handleGetUsageSummary(ctx forge.Context, req *UsageSummaryRequest) (*UsageSummaryResponse, error) {
 	if req.AppID == "" || req.TenantID == "" {
 		return nil, forge.BadRequest("app_id and tenant_id are required")
+	}
+	if err := p.requireTenant(ctx, req.TenantID); err != nil {
+		return nil, err
 	}
 
 	summaries, err := p.service.GetUsageSummary(ctx.Context(), req.TenantID, req.AppID)
