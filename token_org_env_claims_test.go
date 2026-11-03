@@ -103,8 +103,11 @@ func signUpJWT(t *testing.T, eng *authsome.Engine, email string) (signUp, signIn
 func TestJWT_SignInStampsEnvAndOmitsOrgWithoutOne(t *testing.T) {
 	eng, _, _ := newJWTOrgEngine(t)
 	up, in := signUpJWT(t, eng, "claims-signin@example.com")
+	// The seeded environment asks for a verified address, so sign-up hands
+	// out no session and only the sign-in token carries the claims.
+	require.Nil(t, up, "sign-up must give no session before the email is verified")
 
-	for name, sess := range map[string]*session.Session{"sign-up": up, "sign-in": in} {
+	for name, sess := range map[string]*session.Session{"sign-in": in} {
 		t.Run(name, func(t *testing.T) {
 			require.False(t, sess.EnvID.IsNil(), "the session should be bound to the default environment")
 			claims := rawJWTClaims(t, sess.Token)
