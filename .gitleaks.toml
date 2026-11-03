@@ -9,7 +9,7 @@
 useDefault = true
 
 [[allowlists]]
-description = "Fake credentials in Go tests"
+description = "Fake credentials in Go tests and docs"
 regexTarget = "secret"
 regexes = [
   # plugins/apikey/failure_limit_test.go: a made-up test-mode API key.
@@ -17,4 +17,7 @@ regexes = [
   # plugins/social/apple_test.go: base64 of {"alg":"RS256"}, the header of
   # a JWT the test assembles around a generated payload.
   '''^eyJhbGciOiJSUzI1NiJ9\.$''',
+  # docs/content/docs/plugins/oauth2provider.mdx: the id_token in the sample
+  # token response, cut off after the start of an RS256 header.
+  '''^eyJhbGciOiJSUzI1NiIs\.\.\.$''',
 ]
