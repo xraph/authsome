@@ -77,6 +77,8 @@ type authCodeDoc struct {
 	ExpiresAt           time.Time `bson:"expires_at"`
 	Consumed            bool      `bson:"consumed"`
 	CreatedAt           time.Time `bson:"created_at"`
+	Nonce               string    `bson:"nonce,omitempty"`
+	AuthTime            time.Time `bson:"auth_time,omitempty"`
 }
 
 // ──────────────────────────────────────────────────
@@ -223,6 +225,8 @@ func authCodeDocToModel(d *authCodeDoc) (*AuthorizationCode, error) {
 		ExpiresAt:           d.ExpiresAt,
 		Consumed:            d.Consumed,
 		CreatedAt:           d.CreatedAt,
+		Nonce:               d.Nonce,
+		AuthTime:            d.AuthTime,
 	}, nil
 }
 
@@ -250,6 +254,8 @@ func authCodeToDoc(c *AuthorizationCode) *authCodeDoc {
 		ExpiresAt:           c.ExpiresAt,
 		Consumed:            c.Consumed,
 		CreatedAt:           c.CreatedAt,
+		Nonce:               c.Nonce,
+		AuthTime:            c.AuthTime,
 	}
 }
 
@@ -268,6 +274,7 @@ type deviceCodeDoc struct {
 	UserID          string    `bson:"user_id"`
 	LastPolledAt    time.Time `bson:"last_polled_at,omitempty"`
 	CreatedAt       time.Time `bson:"created_at"`
+	AuthTime        time.Time `bson:"auth_time,omitempty"`
 }
 
 // ──────────────────────────────────────────────────
@@ -316,6 +323,7 @@ func deviceCodeDocToModel(d *deviceCodeDoc) (*DeviceCode, error) {
 		UserID:          userID,
 		LastPolledAt:    d.LastPolledAt,
 		CreatedAt:       d.CreatedAt,
+		AuthTime:        d.AuthTime,
 	}, nil
 }
 
@@ -344,6 +352,7 @@ func deviceCodeToDoc(dc *DeviceCode) *deviceCodeDoc {
 		UserID:          dc.UserID.String(),
 		LastPolledAt:    dc.LastPolledAt,
 		CreatedAt:       dc.CreatedAt,
+		AuthTime:        dc.AuthTime,
 	}
 }
 
@@ -543,6 +552,7 @@ func (s *MongoStore) UpdateDeviceCode(ctx context.Context, dc *DeviceCode) error
 			"status":         dc.Status,
 			"user_id":        dc.UserID.String(),
 			"last_polled_at": dc.LastPolledAt,
+			"auth_time":      dc.AuthTime,
 		}},
 	)
 	return oauth2MongoError(err)

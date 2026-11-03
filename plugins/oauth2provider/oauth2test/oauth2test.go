@@ -67,6 +67,8 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"ConsumeAuthCodeReplay", testConsumeAuthCodeReplay},
 		{"ConsumeAuthCodeIsAtomic", testConsumeAuthCodeIsAtomic},
 		{"ConsumeAuthCodeUnknown", testConsumeAuthCodeUnknown},
+		{"AuthCodes/NonceAndAuthTimeRoundTrip", testAuthCodeNonceAndAuthTimeRoundTrip},
+		{"DeviceCodes/AuthTimeRoundTrip", testDeviceCodeAuthTimeRoundTrip},
 		{"DeviceCodeRoundTrip", testDeviceCodeRoundTrip},
 		{"DeviceCodeUpdate", testDeviceCodeUpdate},
 		{"DeleteExpiredDeviceCodes", testDeleteExpiredDeviceCodes},

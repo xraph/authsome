@@ -218,6 +218,7 @@ func (s *PostgresStore) UpdateDeviceCode(ctx context.Context, dc *DeviceCode) er
 		Set("status = ?", dc.Status).
 		Set("user_id = ?", dc.UserID.String()).
 		Set("last_polled_at = ?", dc.LastPolledAt).
+		Set("auth_time = ?", nullableTime(dc.AuthTime)).
 		Where("id = ?", dc.ID.String()).
 		Exec(ctx)
 	return oauth2PgError(err)

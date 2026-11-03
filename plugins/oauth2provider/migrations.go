@@ -565,6 +565,65 @@ CREATE TABLE IF NOT EXISTS authsome_oauth2_signing_keys (
 			},
 		},
 	)
+	// nonce and auth_time are what an id_token echoes about the login that
+	// produced it. Both are nullable: a code minted before this migration
+	// has neither, and id_token minting reads the empty nonce and the zero
+	// time as absent. auth_time on device codes is set when the user approves.
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_oauth2_nonce_auth_time",
+			Version: "20261103000002",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_oauth2_auth_codes ADD COLUMN IF NOT EXISTS nonce TEXT;
+ALTER TABLE authsome_oauth2_auth_codes ADD COLUMN IF NOT EXISTS auth_time TIMESTAMPTZ;
+ALTER TABLE authsome_oauth2_device_codes ADD COLUMN IF NOT EXISTS auth_time TIMESTAMPTZ;
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_oauth2_device_codes DROP COLUMN IF EXISTS auth_time;
+ALTER TABLE authsome_oauth2_auth_codes DROP COLUMN IF EXISTS auth_time;
+ALTER TABLE authsome_oauth2_auth_codes DROP COLUMN IF EXISTS nonce;
+`)
+				return err
+			},
+		},
+	)
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_oauth2_nonce_auth_time",
+			Version: "20261103000002",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				// TIMESTAMP, matching the columns convert_text_timestamps_to_timestamp
+				// (20260824000050) rebuilt. That rebuild runs earlier, so its
+				// copy lists do not need these columns.
+				for _, stmt := range []string{
+					`ALTER TABLE authsome_oauth2_auth_codes ADD COLUMN nonce TEXT;`,
+					`ALTER TABLE authsome_oauth2_auth_codes ADD COLUMN auth_time TIMESTAMP;`,
+					`ALTER TABLE authsome_oauth2_device_codes ADD COLUMN auth_time TIMESTAMP;`,
+				} {
+					if _, err := exec.Exec(ctx, stmt); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				for _, stmt := range []string{
+					`ALTER TABLE authsome_oauth2_device_codes DROP COLUMN auth_time;`,
+					`ALTER TABLE authsome_oauth2_auth_codes DROP COLUMN auth_time;`,
+					`ALTER TABLE authsome_oauth2_auth_codes DROP COLUMN nonce;`,
+				} {
+					if _, err := exec.Exec(ctx, stmt); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+		},
+	)
 	MongoMigrations.MustRegister(
 		&migrate.Migration{
 			Name:    "create_oauth2_signing_key_indexes",

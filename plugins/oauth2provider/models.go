@@ -101,6 +101,13 @@ type AuthorizationCode struct {
 	ExpiresAt           time.Time `json:"expires_at"`
 	Consumed            bool      `json:"consumed"`
 	CreatedAt           time.Time `json:"created_at"`
+	// Nonce is the client's OpenID Connect nonce from the authorization
+	// request, empty when it sent none. It is echoed into the id_token.
+	Nonce string `json:"-"`
+	// AuthTime is when the user authenticated: the creation time of the
+	// session that approved the request. Zero on codes minted before this
+	// field existed.
+	AuthTime time.Time `json:"-"`
 }
 
 // TokenResponse is the OAuth2 token endpoint response.
@@ -136,6 +143,9 @@ type DeviceCode struct {
 	UserID          id.UserID `json:"user_id,omitempty"`        // set when user authorizes
 	LastPolledAt    time.Time `json:"last_polled_at,omitempty"` // last time the CLI polled for this code
 	CreatedAt       time.Time `json:"created_at"`
+	// AuthTime is when the approving user authenticated, set at approval from
+	// that user's session. Zero until approved.
+	AuthTime time.Time `json:"-"`
 }
 
 // Device code status constants.

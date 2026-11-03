@@ -705,6 +705,10 @@ type AuthorizeRequest struct {
 	// in field order, so a field added above Resource moves it, and a caller
 	// passing resources by position would hand them to this one instead.
 	Prompt string `query:"prompt,omitempty"`
+	// Nonce is the OpenID Connect replay guard (Core 3.1.2.1), echoed into the
+	// id_token. At most maxNonceBytes. It stays last for the same reason
+	// Prompt did: generated clients pass query parameters positionally.
+	Nonce string `query:"nonce,omitempty"`
 }
 
 // TokenRequest is the OAuth2 token request.
@@ -891,6 +895,10 @@ func (e *OAuth2HTTPError) ResponseBody() any {
 }
 
 // newOAuth2Error creates an OAuth2HTTPError for device flow error responses.
+// maxNonceBytes bounds the nonce an authorization request may carry. It is
+// stored on the code and echoed into the id_token, so it must not be free.
+const maxNonceBytes = 512
+
 func newOAuth2Error(status int, errorCode, description string) *OAuth2HTTPError {
 	return &OAuth2HTTPError{
 		httpStatus:  status,
@@ -915,6 +923,11 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 	client, err := p.oauth2Store.GetClient(ctx.Context(), req.ClientID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid client_id")
+	}
+
+	// Refused before a code or a consent record exists.
+	if len(req.Nonce) > maxNonceBytes {
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_request", "nonce must be at most 512 bytes")
 	}
 
 	// Resolve the redirect URI. Omitting it is only legal when exactly one is
@@ -983,6 +996,14 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		return nil, gateErr
 	}
 
+	// auth_time is when the user logged in, not when they approved this
+	// client, so it is read here, with the user present, and carried through
+	// consent. A request with no session record falls back to now.
+	authTime := time.Now()
+	if sess, ok := middleware.SessionFrom(ctx.Context()); ok && sess != nil && !sess.CreatedAt.IsZero() {
+		authTime = sess.CreatedAt
+	}
+
 	// A third-party client needs the user's recorded approval for every
 	// scope it asks for; otherwise the user decides on the consent page and
 	// the code is issued from there.
@@ -991,6 +1012,7 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 			ClientID: req.ClientID, UserID: userID.String(), AppID: client.AppID.String(), OrgID: orgID.String(),
 			RedirectURI: redirectURI, Scopes: scopes, Resources: resources, State: req.State,
 			CodeChallenge: req.CodeChallenge, CodeChallengeMethod: req.CodeChallengeMethod,
+			Nonce: req.Nonce, AuthTime: authTime,
 		})
 	}
 
@@ -999,6 +1021,7 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		ClientID: req.ClientID, UserID: userID.String(), AppID: client.AppID.String(),
 		RedirectURI: redirectURI, Scopes: scopes, Resources: resources, State: req.State,
 		CodeChallenge: req.CodeChallenge, CodeChallengeMethod: req.CodeChallengeMethod,
+		Nonce: req.Nonce, AuthTime: authTime,
 	})
 	if err != nil {
 		return nil, err
@@ -2208,6 +2231,10 @@ func (p *Plugin) handleDeviceComplete(ctx forge.Context, req *DeviceCompleteRequ
 		}
 		dc.Status = DeviceCodeStatusAuthorized
 		dc.UserID = userID
+		dc.AuthTime = time.Now()
+		if sess, ok := middleware.SessionFrom(ctx.Context()); ok && sess != nil && !sess.CreatedAt.IsZero() {
+			dc.AuthTime = sess.CreatedAt
+		}
 	} else {
 		dc.Status = DeviceCodeStatusDenied
 	}

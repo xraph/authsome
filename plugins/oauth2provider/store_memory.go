@@ -204,6 +204,7 @@ func (s *MemoryStore) UpdateDeviceCode(_ context.Context, dc *DeviceCode) error 
 	stored.Status = dc.Status
 	stored.UserID = dc.UserID
 	stored.LastPolledAt = dc.LastPolledAt
+	stored.AuthTime = dc.AuthTime
 	return nil
 }
 

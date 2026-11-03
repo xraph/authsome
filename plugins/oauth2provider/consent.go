@@ -43,6 +43,11 @@ type pendingConsent struct {
 	State               string   `json:"state,omitempty"`
 	CodeChallenge       string   `json:"code_challenge,omitempty"`
 	CodeChallengeMethod string   `json:"code_challenge_method,omitempty"`
+	// Nonce and AuthTime come from the /authorize request and the session
+	// that made it. They ride along so the code issued after consent records
+	// the login, not the click on the approve button.
+	Nonce    string    `json:"nonce,omitempty"`
+	AuthTime time.Time `json:"auth_time,omitempty"`
 	// CSRF is minted with the record and must come back with the decision.
 	CSRF string `json:"csrf"`
 }
@@ -154,6 +159,8 @@ func (p *Plugin) issueAuthorizationCode(ctx context.Context, pc pendingConsent) 
 		CodeChallengeMethod: pc.CodeChallengeMethod,
 		ExpiresAt:           time.Now().Add(p.config.AuthCodeTTL),
 		CreatedAt:           time.Now(),
+		Nonce:               pc.Nonce,
+		AuthTime:            pc.AuthTime,
 	}
 	if createErr := p.oauth2Store.CreateAuthCode(ctx, authCode); createErr != nil {
 		return "", middleware.InternalErrorCtx(ctx, fmt.Errorf("oauth2: store auth code: %w", createErr))
