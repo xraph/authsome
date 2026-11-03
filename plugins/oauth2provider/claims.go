@@ -5,7 +5,8 @@ import "github.com/xraph/authsome/user"
 // StandardClaims are the OpenID Connect Core 5.1 claims authsome can fill from
 // a user. Userinfo and id_tokens share this one shape, so a claim cannot be
 // present in one and missing from the other. The verified flags are pointers
-// so a false value is still written when its scope is granted.
+// so a false value is still written when its scope is granted. They point
+// at copies, never into the user.
 type StandardClaims struct {
 	Name                string `json:"name,omitempty"`
 	GivenName           string `json:"given_name,omitempty"`
@@ -35,11 +36,13 @@ func standardClaims(u *user.User, has func(scope string) bool) StandardClaims {
 	}
 	if has("email") {
 		c.Email = u.Email
-		c.EmailVerified = &u.EmailVerified
+		verified := u.EmailVerified
+		c.EmailVerified = &verified
 	}
 	if has("phone") {
 		c.PhoneNumber = u.Phone
-		c.PhoneNumberVerified = &u.PhoneVerified
+		verified := u.PhoneVerified
+		c.PhoneNumberVerified = &verified
 	}
 	return c
 }

@@ -24,6 +24,7 @@ import (
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apitypes"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/dpop"
 	"github.com/xraph/authsome/id"
@@ -259,9 +260,14 @@ func (p *Plugin) OnInit(ctx context.Context, engine plugin.Engine) error {
 		p.logger.Warn("oauth2: Issuer is unset, so discovery and id_tokens use https://localhost and no OIDC client will verify them")
 	}
 
-	// A bad operator key is a configuration error, so it stops the boot
-	// here rather than failing the first login with a server_error.
-	keys, err := newKeyManager(p.config, p.oauth2Store, engine.TokenEncryptor(), p.logger)
+	return p.initSigningKeys(ctx, engine.TokenEncryptor())
+}
+
+// initSigningKeys builds the id_token key manager over the OAuth2 store. A
+// bad operator key is a configuration error, so it stops the boot here
+// rather than failing the first login with a server_error.
+func (p *Plugin) initSigningKeys(ctx context.Context, enc bridge.Encryptor) error {
+	keys, err := newKeyManager(p.config, p.oauth2Store, enc, p.logger)
 	if err != nil {
 		return err
 	}
@@ -272,7 +278,6 @@ func (p *Plugin) OnInit(ctx context.Context, engine plugin.Engine) error {
 	if err := keys.retireForOperator(ctx); err != nil {
 		p.logger.Warn("oauth2: retire managed id_token keys under an operator key", log.Error(err))
 	}
-
 	return nil
 }
 
@@ -1304,6 +1309,18 @@ func (p *Plugin) handleRefreshTokenGrant(ctx forge.Context, req *TokenRequest) (
 	if err != nil {
 		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "invalid refresh token")
 	}
+	// A refreshed id_token restates who the user is (OpenID Connect Core
+	// 12.2). It carries no nonce and no auth_time: neither belongs to this
+	// request. The session is already rotated, so if signing fails it is
+	// revoked rather than handed out without the id_token the client expects.
+	idToken, err := p.idTokenFor(ctx.Context(), client, sess.UserID, sess.Scopes, sess.Token, &oidcRequest{})
+	if err != nil {
+		if revokeErr := eng.RevokeSession(ctx.Context(), sess.ID); revokeErr != nil {
+			p.logger.Error("oauth2: revoke refreshed session after id_token failure",
+				log.String("session_id", sess.ID.String()), log.Error(revokeErr))
+		}
+		return nil, p.idTokenServerError(err)
+	}
 	tokenType := "Bearer"
 	if sess.DPoPJKT != "" {
 		tokenType = "DPoP"
@@ -1314,6 +1331,7 @@ func (p *Plugin) handleRefreshTokenGrant(ctx forge.Context, req *TokenRequest) (
 		ExpiresIn:    int(time.Until(sess.ExpiresAt).Seconds()),
 		RefreshToken: sess.RefreshToken,
 		Scope:        strings.Join(sess.Scopes, " "),
+		IDToken:      idToken,
 	}, nil
 }
 
@@ -1429,7 +1447,8 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 	}
 
 	// Generate tokens.
-	return p.issueTokens(ctx, client, authCode.UserID, authCode.AppID, authCode.Scopes, resources, jkt)
+	return p.issueTokens(ctx, client, authCode.UserID, authCode.AppID, authCode.Scopes, resources, jkt,
+		&oidcRequest{Nonce: authCode.Nonce, AuthTime: authCode.AuthTime})
 }
 
 func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
@@ -1850,7 +1869,11 @@ func (p *Plugin) bindDPoP(ctx forge.Context, client *OAuth2Client, appID id.AppI
 // retried: the retry the RFC requires would arrive against a code the
 // store already rejects as used. See handleAuthorizationCodeGrant and
 // handleDeviceCodeGrant for where jkt is actually resolved.
-func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.UserID, appID id.AppID, scopes, resources []string, jkt string) (*TokenResponse, error) {
+//
+// oidc is non-nil for the grants that can carry an OpenID Connect login.
+// When the granted scopes include openid the id_token is minted before the
+// session is stored, so a signing failure leaves no access token behind.
+func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.UserID, appID id.AppID, scopes, resources []string, jkt string, oidc *oidcRequest) (*TokenResponse, error) {
 	// Resolve session config for the app.
 	sessCfg := account.SessionConfig{
 		TokenTTL:        p.config.AccessTokenTTL,
@@ -1917,6 +1940,11 @@ func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.
 		}
 	}
 
+	idToken, idErr := p.idTokenFor(ctx.Context(), client, userID, scopes, sess.Token, oidc)
+	if idErr != nil {
+		return nil, p.idTokenServerError(idErr)
+	}
+
 	if err := p.store.CreateSession(ctx.Context(), sess); err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: save session: %w", err))
 	}
@@ -1932,6 +1960,7 @@ func (p *Plugin) issueTokens(ctx forge.Context, client *OAuth2Client, userID id.
 		ExpiresIn:    int(time.Until(sess.ExpiresAt).Seconds()),
 		RefreshToken: sess.RefreshToken,
 		Scope:        strings.Join(scopes, " "),
+		IDToken:      idToken,
 	}, nil
 }
 
@@ -2168,7 +2197,10 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 			return nil, resErr
 		}
 
-		return p.issueTokens(ctx, client, dc.UserID, dc.AppID, dc.Scopes, resources, jkt)
+		// A device code carries no nonce: the device authorization request
+		// has nowhere to send one.
+		return p.issueTokens(ctx, client, dc.UserID, dc.AppID, dc.Scopes, resources, jkt,
+			&oidcRequest{AuthTime: dc.AuthTime})
 
 	default:
 		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "unexpected device code status")

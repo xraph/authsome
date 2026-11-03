@@ -124,6 +124,9 @@ type TokenResponse struct {
 	// IssuedTokenType is required by RFC 8693 section 2.2.1 and omitted by
 	// every other grant, which is why it carries omitempty.
 	IssuedTokenType string `json:"issued_token_type,omitempty"`
+	// IDToken is the OpenID Connect id_token, present only when the grant
+	// is for a user and the granted scopes include openid.
+	IDToken string `json:"id_token,omitempty"`
 }
 
 // DeviceCode represents an OAuth2 device authorization code (RFC 8628).
