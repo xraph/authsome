@@ -102,7 +102,7 @@ The `id_token` appears only when the granted scopes include `openid`.
 
 ### PKCE verification
 
-The plugin supports both `S256` and `plain` challenge methods. `S256` is the recommended method:
+The plugin accepts the `S256` challenge method only; `plain` is refused:
 
 - The client generates a random `code_verifier`
 - Computes `code_challenge = BASE64URL(SHA256(code_verifier))`

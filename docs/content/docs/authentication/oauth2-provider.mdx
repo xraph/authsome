@@ -230,7 +230,7 @@ The endpoint always returns `200 OK` regardless of whether the token was found, 
 
 ## Sign in with your app (OpenID Connect)
 
-Once a client asks for the `openid` scope, the token endpoint returns an `id_token` next to the access token, and any OIDC library can sign users in against your deployment with an issuer URL, a client ID and a client secret. That's the whole setup on the relying-party side.
+Once a client asks for the `openid` scope, the token endpoint returns an `id_token` next to the access token, and any OIDC library can sign users in against your deployment with an issuer URL, a client ID and a client secret. Nothing else needs configuring on the relying-party side.
 
 ### Set the issuer first
 
@@ -284,7 +284,7 @@ An unknown slug and an app that hasn't opted in get the same 404.
 
 ### Claims
 
-The id_token always carries `iss`, `sub`, `aud`, `azp`, `iat`, `exp` and `at_hash`, plus `nonce` and `auth_time` on the code flow (a refresh drops `nonce`). The scopes the client was granted add the rest, and `GET` or `POST /v1/oauth/userinfo` returns the same set.
+The id_token always carries `iss`, `sub`, `aud`, `azp`, `iat`, `exp` and `at_hash`, plus `nonce` and `auth_time` on the code flow, `auth_time` alone on the device flow, and neither on a refresh. The scopes the client was granted add the rest, and `GET` or `POST /v1/oauth/userinfo` returns the same set.
 
 | Scope | Claims |
 |-------|--------|
@@ -336,7 +336,11 @@ conf := oauth2.Config{
 }
 verifier := provider.Verifier(&oidc.Config{ClientID: clientID})
 
-// In the callback, after conf.Exchange(ctx, code):
+// In the callback handler:
+tok, err := conf.Exchange(ctx, code)
+if err != nil {
+    return err
+}
 raw, _ := tok.Extra("id_token").(string)
 idToken, err := verifier.Verify(ctx, raw)
 if err != nil {
@@ -353,11 +357,13 @@ if err := idToken.Claims(&claims); err != nil {
 // Compare claims.Nonce with the nonce you sent on the authorize request.
 ```
 
+go-oidc accepts only RS256 unless you say otherwise. If your deployment signs with an EC P-256 operator key, set `SupportedSigningAlgs: []string{oidc.ES256}` in `oidc.Config` (or list both `oidc.RS256` and `oidc.ES256` if you might switch).
+
 The `nonce` you send on `/v1/oauth/authorize` can be up to 512 bytes. It's optional on the code flow.
 
 ### What this doesn't do yet
 
-A signed-out user who reaches `/v1/oauth/authorize` gets a 401 rather than a login page, so a browser app has to sign the user in to authsome first. `prompt=none`, `max_age`, `id_token_hint`, RP-initiated logout and CORS on the OIDC endpoints are also not there yet, and neither is a way to add custom claims.
+A signed-out user who reaches `/v1/oauth/authorize` gets a 401 and no login page, so a browser app has to sign the user in to authsome first. `prompt=none`, `max_age`, `id_token_hint`, RP-initiated logout and CORS on the OIDC endpoints are also not there yet, and neither is a way to add custom claims.
 
 ## Scopes and consent
 
