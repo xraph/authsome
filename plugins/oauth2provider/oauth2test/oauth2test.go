@@ -7,10 +7,12 @@
 package oauth2test
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -78,6 +80,8 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"SigningKeys/DuplicateGenerationConflicts", testSigningKeysDuplicateGenerationConflicts},
 		{"SigningKeys/ScopesAreIsolated", testSigningKeysScopesAreIsolated},
 		{"SigningKeys/Retire", testSigningKeysRetire},
+		{"SigningKeys/RetireUnknownIsNoop", testSigningKeysRetireUnknownIsNoop},
+		{"SigningKeys/ConcurrentCreateOneWins", testSigningKeysConcurrentCreateOneWins},
 	}
 	for _, tc := range cases {
 		if skipSet[tc.name] {
@@ -131,6 +135,21 @@ func newSigningKey(scope string, generation int64) *oauth2provider.SigningKey {
 	}
 }
 
+// sameJSON compares two JSON documents by value. Postgres JSONB normalizes
+// whitespace and key order, so a byte comparison would fail there for a
+// document that round-tripped faithfully.
+func sameJSON(t *testing.T, a, b []byte) bool {
+	t.Helper()
+	var av, bv any
+	if err := json.Unmarshal(a, &av); err != nil {
+		t.Fatalf("invalid JSON %q: %v", a, err)
+	}
+	if err := json.Unmarshal(b, &bv); err != nil {
+		t.Fatalf("invalid JSON %q: %v", b, err)
+	}
+	return reflect.DeepEqual(av, bv)
+}
+
 func testSigningKeysCreateAndList(t *testing.T, f Fixture) {
 	ctx := context.Background()
 	scope := unique("scope")
@@ -151,7 +170,7 @@ func testSigningKeysCreateAndList(t *testing.T, f Fixture) {
 	}
 	k := got[0]
 	if k.ID != newer.ID || k.Scope != scope || k.Alg != "RS256" ||
-		k.PrivateKey != newer.PrivateKey || !bytes.Equal(k.PublicJWK, newer.PublicJWK) {
+		k.PrivateKey != newer.PrivateKey || !sameJSON(t, k.PublicJWK, newer.PublicJWK) {
 		t.Fatalf("round trip mismatch: got %+v want %+v", k, newer)
 	}
 	if !k.CreatedAt.Equal(newer.CreatedAt) {
@@ -233,5 +252,63 @@ func testSigningKeysRetire(t *testing.T, f Fixture) {
 	}
 	if got[1].RetiresAt == nil || !got[1].RetiresAt.Equal(at) {
 		t.Fatalf("RetiresAt: got %v want %v", got[1].RetiresAt, at)
+	}
+
+	// Retiring again overwrites the earlier time.
+	later := at.Add(time.Hour)
+	if err = f.Store.RetireSigningKey(ctx, retired.ID, later); err != nil {
+		t.Fatalf("RetireSigningKey again: %v", err)
+	}
+	got, err = f.Store.ListSigningKeys(ctx, scope)
+	if err != nil {
+		t.Fatalf("ListSigningKeys: %v", err)
+	}
+	if got[1].RetiresAt == nil || !got[1].RetiresAt.Equal(later) {
+		t.Fatalf("re-retire must overwrite RetiresAt: got %v want %v", got[1].RetiresAt, later)
+	}
+}
+
+func testSigningKeysRetireUnknownIsNoop(t *testing.T, f Fixture) {
+	if err := f.Store.RetireSigningKey(context.Background(), id.NewOAuth2SigningKeyID(), now()); err != nil {
+		t.Fatalf("retiring an unknown key must be a no-op, got %v", err)
+	}
+}
+
+func testSigningKeysConcurrentCreateOneWins(t *testing.T, f Fixture) {
+	ctx := context.Background()
+	scope := unique("scope")
+	const writers = 8
+	errs := make([]error, writers)
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := range writers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			errs[i] = f.Store.CreateSigningKey(ctx, newSigningKey(scope, 1))
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	wins := 0
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			wins++
+		case !errors.Is(err, oauth2provider.ErrSigningKeyConflict):
+			t.Fatalf("loser must get ErrSigningKeyConflict, got %v", err)
+		}
+	}
+	if wins != 1 {
+		t.Fatalf("exactly one writer must win, got %d", wins)
+	}
+	got, err := f.Store.ListSigningKeys(ctx, scope)
+	if err != nil {
+		t.Fatalf("ListSigningKeys: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want one stored key, got %d", len(got))
 	}
 }

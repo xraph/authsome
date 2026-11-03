@@ -35,22 +35,13 @@ type backend struct {
 // keeps a single TestConformance entry point regardless of build tags.
 var extraBackends []backend
 
-// pendingSigningKeyCases are skipped by every backend that does not persist
-// signing keys yet.
-var pendingSigningKeyCases = []string{
-	"SigningKeys/CreateAndList",
-	"SigningKeys/DuplicateGenerationConflicts",
-	"SigningKeys/ScopesAreIsolated",
-	"SigningKeys/Retire",
-}
-
 // TestConformance runs the OAuth2 provider store contract against every
 // backend. Memory and SQLite always run; postgres and mongo join under
 // `-tags integration`.
 func TestConformance(t *testing.T) {
 	backends := append([]backend{
 		{"Memory", func(*testing.T) oauth2test.Factory { return memoryFixture }, nil},
-		{"SQLite", func(*testing.T) oauth2test.Factory { return sqliteFixture }, pendingSigningKeyCases},
+		{"SQLite", func(*testing.T) oauth2test.Factory { return sqliteFixture }, nil},
 	}, extraBackends...)
 
 	for _, b := range backends {

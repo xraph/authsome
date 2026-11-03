@@ -2,7 +2,13 @@ package oauth2provider
 
 import (
 	"context"
+	"fmt"
 
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	"github.com/xraph/grove/drivers/mongodriver/mongomigrate"
 	"github.com/xraph/grove/migrate"
 )
 
@@ -494,6 +500,94 @@ ALTER TABLE authsome_oauth2_clients DROP COLUMN IF EXISTS first_party;
 			Down: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_oauth2_grants;`)
 				return err
+			},
+		},
+	)
+}
+
+// MongoMigrations is the MongoDB migration group for the OAuth2 plugin. The
+// only thing it creates is the signing key uniqueness index: mongo makes
+// collections on first write, and the unique index is what makes concurrent
+// CreateSigningKey calls for one (scope, generation) pick a single winner.
+var MongoMigrations = migrate.NewGroup("authsome-oauth2", migrate.DependsOn("authsome"))
+
+func init() {
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "create_oauth2_signing_keys",
+			Version: "20261103000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS authsome_oauth2_signing_keys (
+    id          TEXT PRIMARY KEY,
+    scope       TEXT NOT NULL DEFAULT '',
+    alg         TEXT NOT NULL,
+    private_key TEXT NOT NULL,
+    public_jwk  JSONB NOT NULL,
+    generation  BIGINT NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    retires_at  TIMESTAMPTZ,
+    UNIQUE (scope, generation)
+);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_oauth2_signing_keys;`)
+				return err
+			},
+		},
+	)
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "create_oauth2_signing_keys",
+			Version: "20261103000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				// TIMESTAMP, not TEXT: see migrations_timestamps.go.
+				_, err := exec.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS authsome_oauth2_signing_keys (
+    id          TEXT PRIMARY KEY,
+    scope       TEXT NOT NULL DEFAULT '',
+    alg         TEXT NOT NULL,
+    private_key TEXT NOT NULL,
+    public_jwk  TEXT NOT NULL,
+    generation  INTEGER NOT NULL,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    retires_at  TIMESTAMP,
+    UNIQUE (scope, generation)
+);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_oauth2_signing_keys;`)
+				return err
+			},
+		},
+	)
+	MongoMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "create_oauth2_signing_key_indexes",
+			Version: "20261103000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				return mexec.CreateIndexes(ctx, oauth2SigningKeysColl, []mongo.IndexModel{
+					{
+						Keys:    bson.D{{Key: "scope", Value: 1}, {Key: "generation", Value: -1}},
+						Options: options.Index().SetUnique(true),
+					},
+				})
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				_ = mexec.DB().Collection(oauth2SigningKeysColl).Drop(ctx) //nolint:errcheck // best-effort rollback
+				return nil
 			},
 		},
 	)

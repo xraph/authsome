@@ -337,17 +337,49 @@ func (s *SqliteStore) DeleteGrant(ctx context.Context, appID id.AppID, userID id
 	return nil
 }
 
-// Signing keys are not persisted by this backend yet.
-var errSigningKeysUnsupportedSqlite = errors.New("oauth2: signing keys not implemented for sqlite")
+// ──────────────────────────────────────────────────
+// Signing keys
+// ──────────────────────────────────────────────────
 
-func (s *SqliteStore) CreateSigningKey(_ context.Context, _ *SigningKey) error {
-	return errSigningKeysUnsupportedSqlite
+func (s *SqliteStore) CreateSigningKey(ctx context.Context, k *SigningKey) error {
+	if k.CreatedAt.IsZero() {
+		k.CreatedAt = utc(time.Now())
+	}
+	if _, err := s.sdb.NewInsert(fromSigningKey(k)).Exec(ctx); err != nil {
+		if isSigningKeyConflict(err) {
+			return ErrSigningKeyConflict
+		}
+		return err
+	}
+	return nil
 }
 
-func (s *SqliteStore) ListSigningKeys(_ context.Context, _ string) ([]*SigningKey, error) {
-	return nil, errSigningKeysUnsupportedSqlite
+func (s *SqliteStore) ListSigningKeys(ctx context.Context, scope string) ([]*SigningKey, error) {
+	var models []signingKeyModel
+	err := s.sdb.NewSelect(&models).
+		Where("scope = ?", scope).
+		OrderExpr("generation DESC").
+		Scan(ctx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	out := make([]*SigningKey, 0, len(models))
+	for i := range models {
+		k, convErr := toSigningKey(&models[i])
+		if convErr != nil {
+			return nil, convErr
+		}
+		out = append(out, k)
+	}
+	return out, nil
 }
 
-func (s *SqliteStore) RetireSigningKey(_ context.Context, _ id.OAuth2SigningKeyID, _ time.Time) error {
-	return errSigningKeysUnsupportedSqlite
+// RetireSigningKey sets RetiresAt, overwriting an earlier value. An unknown
+// id updates no rows and is not an error.
+func (s *SqliteStore) RetireSigningKey(ctx context.Context, keyID id.OAuth2SigningKeyID, at time.Time) error {
+	_, err := s.sdb.NewUpdate((*signingKeyModel)(nil)).
+		Set("retires_at = ?", utc(at)).
+		Where("id = ?", keyID.String()).
+		Exec(ctx)
+	return err
 }

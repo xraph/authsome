@@ -2,6 +2,7 @@ package oauth2provider
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/xraph/grove"
@@ -451,4 +452,73 @@ func toGrant(m *grantModel) (*Grant, error) {
 		scopes = []string{}
 	}
 	return &Grant{ID: grantID, AppID: appID, UserID: userID, ClientID: m.ClientID, Scopes: scopes, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}, nil
+}
+
+// ──────────────────────────────────────────────────
+// Signing key model (shared across SQL stores)
+// ──────────────────────────────────────────────────
+
+type signingKeyModel struct {
+	grove.BaseModel `grove:"table:authsome_oauth2_signing_keys,alias:sk"`
+
+	ID         string          `grove:"id,pk"`
+	Scope      string          `grove:"scope,notnull"`
+	Alg        string          `grove:"alg,notnull"`
+	PrivateKey string          `grove:"private_key,notnull"`
+	PublicJWK  json.RawMessage `grove:"public_jwk,type:jsonb"`
+	Generation int64           `grove:"generation,notnull"`
+	CreatedAt  time.Time       `grove:"created_at,notnull,default:now()"`
+	RetiresAt  *time.Time      `grove:"retires_at"`
+}
+
+func fromSigningKey(k *SigningKey) *signingKeyModel {
+	m := &signingKeyModel{
+		ID:         k.ID.String(),
+		Scope:      k.Scope,
+		Alg:        k.Alg,
+		PrivateKey: k.PrivateKey,
+		PublicJWK:  append(json.RawMessage(nil), k.PublicJWK...),
+		Generation: k.Generation,
+		CreatedAt:  utc(k.CreatedAt),
+	}
+	if k.RetiresAt != nil {
+		t := utc(*k.RetiresAt)
+		m.RetiresAt = &t
+	}
+	return m
+}
+
+func toSigningKey(m *signingKeyModel) (*SigningKey, error) {
+	keyID, err := id.ParseOAuth2SigningKeyID(m.ID)
+	if err != nil {
+		return nil, err
+	}
+	k := &SigningKey{
+		ID:         keyID,
+		Scope:      m.Scope,
+		Alg:        m.Alg,
+		PrivateKey: m.PrivateKey,
+		PublicJWK:  append([]byte(nil), m.PublicJWK...),
+		Generation: m.Generation,
+		CreatedAt:  m.CreatedAt,
+	}
+	if m.RetiresAt != nil {
+		t := *m.RetiresAt
+		k.RetiresAt = &t
+	}
+	return k, nil
+}
+
+// isSigningKeyConflict reports whether err is a (scope, generation) unique
+// violation. pgx surfaces SQLSTATE 23505 and SQLite says "UNIQUE constraint
+// failed"; matching on text survives any wrapping grove adds, the same way
+// the core store's pgError does.
+func isSigningKeyConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "SQLSTATE 23505") ||
+		strings.Contains(msg, "duplicate key value") ||
+		strings.Contains(msg, "UNIQUE constraint failed")
 }

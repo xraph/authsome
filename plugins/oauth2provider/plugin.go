@@ -242,6 +242,8 @@ func (p *Plugin) MigrationGroups(driverName string) []*migrate.Group {
 		return []*migrate.Group{PostgresMigrations}
 	case "sqlite", "sqlite3":
 		return []*migrate.Group{SqliteMigrations}
+	case "mongo", "mongodb":
+		return []*migrate.Group{MongoMigrations}
 	default:
 		return nil
 	}
