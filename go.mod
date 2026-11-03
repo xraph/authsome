@@ -27,10 +27,10 @@ require (
 	github.com/xraph/grove/drivers/sqlitedriver v1.10.1
 	github.com/xraph/herald v1.10.0
 	github.com/xraph/keysmith v1.8.0
-	github.com/xraph/ledger v1.8.0
+	github.com/xraph/ledger v1.9.1
 	github.com/xraph/relay v1.8.0
 	github.com/xraph/vault v1.8.0
-	github.com/xraph/vessel v1.0.4
+	github.com/xraph/vessel v1.0.5
 	github.com/xraph/warden v1.8.0
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 	go.mongodb.org/mongo-driver/v2 v2.9.1
