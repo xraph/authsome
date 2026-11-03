@@ -120,6 +120,28 @@ type Config struct {
 	// ConsentGate, if set, is consulted before every authorization code is
 	// issued. See SetConsentGate for post-construction wiring.
 	ConsentGate ConsentGate
+
+	// IDTokenSigningKey is a PEM private key (RSA of at least 2048 bits, or
+	// EC P-256) that signs id_tokens for the deployment issuer. When it or
+	// IDTokenSigningKeyFile is set, no key is generated for that issuer.
+	IDTokenSigningKey     []byte
+	IDTokenSigningKeyFile string
+	// IDTokenSigningKeyID is the kid. Defaults to the key's RFC 7638
+	// thumbprint.
+	IDTokenSigningKeyID string
+	// IDTokenPreviousKeys are PEM keys, public or private, that are published
+	// in JWKS but never sign. Keep a rotated-out key here until every token it
+	// signed has expired.
+	IDTokenPreviousKeys [][]byte
+
+	// IDTokenTTL is the lifetime of id_tokens (default: 1 hour).
+	IDTokenTTL time.Duration
+	// IDTokenKeyRotation is how old a managed signing key gets before the
+	// next one replaces it (default: 90 days).
+	IDTokenKeyRotation time.Duration
+	// IDTokenKeyRetireGrace is how long a replaced managed key stays in
+	// JWKS so tokens it signed still verify (default: 7 days).
+	IDTokenKeyRetireGrace time.Duration
 }
 
 // Plugin is the OAuth2 provider plugin.
@@ -139,6 +161,10 @@ type Plugin struct {
 	// registrationLimiter.
 	regLimiter  ratelimit.Limiter
 	consentGate ConsentGate
+
+	// keys resolves the id_token signing key for each issuer. Built at the
+	// end of OnInit, once the store and encryptor are known.
+	keys *keyManager
 }
 
 // New creates a new OAuth2 provider plugin.
@@ -164,6 +190,15 @@ func New(cfg ...Config) *Plugin {
 	}
 	if c.RegistrationRateLimit.Limit == 0 {
 		c.RegistrationRateLimit = RateLimit{Limit: 10, Window: time.Hour}
+	}
+	if c.IDTokenTTL == 0 {
+		c.IDTokenTTL = time.Hour
+	}
+	if c.IDTokenKeyRotation == 0 {
+		c.IDTokenKeyRotation = 90 * 24 * time.Hour
+	}
+	if c.IDTokenKeyRetireGrace == 0 {
+		c.IDTokenKeyRetireGrace = 7 * 24 * time.Hour
 	}
 
 	p := &Plugin{config: c, logger: log.NewNoopLogger(), consentGate: c.ConsentGate}
@@ -214,6 +249,14 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 			"dynamic client registration falls back to a process-local limiter, " +
 			"so the cap is per-replica behind a load balancer")
 	}
+
+	// A bad operator key is a configuration error, so it stops the boot
+	// here rather than failing the first login with a server_error.
+	keys, err := newKeyManager(p.config, p.oauth2Store, engine.TokenEncryptor(), p.logger)
+	if err != nil {
+		return err
+	}
+	p.keys = keys
 
 	return nil
 }
