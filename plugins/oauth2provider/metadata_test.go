@@ -102,6 +102,9 @@ func TestMetadata_OIDCAndAuthServerAgree(t *testing.T) {
 	for _, k := range asKeys {
 		assert.Equal(t, as[k], oidc[k], "field %q differs between the two documents", k)
 	}
+	for _, k := range []string{"claims_supported", "response_modes_supported", "jwks_uri"} {
+		assert.Contains(t, asKeys, k, "both documents must carry %q", k)
+	}
 }
 
 func jsonKeys(m map[string]any) []string {

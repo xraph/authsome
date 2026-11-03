@@ -203,4 +203,7 @@ func TestDiscovery_AdvertisesOnlyWhatExists(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &doc))
 	assert.Contains(t, doc.GrantTypesSupported, "refresh_token")
 	assert.Equal(t, []string{"S256"}, doc.CodeChallengeMethodsSupported)
+	assert.Equal(t, []string{"query"}, doc.ResponseModesSupported)
+	assert.Contains(t, doc.ClaimsSupported, "sub")
+	assert.Equal(t, "https://auth.example.com/v1/oauth/jwks", doc.JWKSURI)
 }

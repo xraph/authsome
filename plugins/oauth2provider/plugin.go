@@ -255,6 +255,10 @@ func (p *Plugin) OnInit(ctx context.Context, engine plugin.Engine) error {
 			"so the cap is per-replica behind a load balancer")
 	}
 
+	if p.config.Issuer == "" {
+		p.logger.Warn("oauth2: Issuer is unset, so discovery and id_tokens use https://localhost and no OIDC client will verify them")
+	}
+
 	// A bad operator key is a configuration error, so it stops the boot
 	// here rather than failing the first login with a server_error.
 	keys, err := newKeyManager(p.config, p.oauth2Store, engine.TokenEncryptor(), p.logger)
@@ -346,6 +350,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(http.StatusOK, "Token response", TokenResponse{}),
 		forge.WithErrorResponses(),
 	}, tokenRL...)...); err != nil {
+		return err
+	}
+
+	// Public: relying parties fetch this unauthenticated to verify tokens.
+	if err := p.registerJWKSRoute(g); err != nil {
 		return err
 	}
 
@@ -766,6 +775,9 @@ type DiscoveryResponse struct {
 	// DPoPSigningAlgValuesSupported lists the JWS algorithms accepted in DPoP
 	// proofs (RFC 9449 section 5.1).
 	DPoPSigningAlgValuesSupported []string `json:"dpop_signing_alg_values_supported,omitempty"`
+
+	ClaimsSupported        []string `json:"claims_supported"`
+	ResponseModesSupported []string `json:"response_modes_supported"`
 }
 
 // CreateClientRequest is the admin request to create an OAuth2 client.
@@ -1551,7 +1563,7 @@ func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInf
 // struct types, so a field added to one is not automatically added to the
 // other; TestMetadata_OIDCAndAuthServerAgree is what actually catches that.
 func (p *Plugin) handleDiscovery(_ forge.Context, _ *DiscoveryRequest) (*DiscoveryResponse, error) {
-	m := p.buildAuthServerMetadata()
+	m := p.buildAuthServerMetadata(p.issuerURL(), "")
 	return &DiscoveryResponse{
 		Issuer:                            m.Issuer,
 		AuthorizationEndpoint:             m.AuthorizationEndpoint,
@@ -1570,6 +1582,8 @@ func (p *Plugin) handleDiscovery(_ forge.Context, _ *DiscoveryRequest) (*Discove
 		CodeChallengeMethodsSupported:     m.CodeChallengeMethodsSupported,
 		ResourceIndicatorsSupported:       m.ResourceIndicatorsSupported,
 		DPoPSigningAlgValuesSupported:     m.DPoPSigningAlgValuesSupported,
+		ClaimsSupported:                   m.ClaimsSupported,
+		ResponseModesSupported:            m.ResponseModesSupported,
 	}, nil
 }
 
