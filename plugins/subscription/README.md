@@ -94,7 +94,8 @@ both list data from the whole app.
 
 To run your own billing API, set `DisableRoutes` and call `plugin.Service()` from your
 handlers. Pass your ledger to `authsome.WithLedgerEngine` and the plugin picks it up
-when the engine starts. You no longer need `RebindLedgerOnPlugins`.
+when the engine starts, so you can skip `RebindLedgerOnPlugins`. If you build the ledger
+after the engine and hand it over with `SetLedgerEngine`, you still need to call it.
 
 ## Lifecycle hooks
 

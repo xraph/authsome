@@ -200,6 +200,8 @@ func (p *Plugin) Name() string { return "subscription" }
 
 // OnInit captures bridge and engine references.
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	// The engine's ledger wins over one set earlier with SetLedger, and a later
+	// RebindLedgerOnPlugins overrides both.
 	// Discover ledger engine (optional capability). *authsome.Engine returns
 	// concrete types, so try those first; the any-typed providers stay for
 	// engines that hide the ledger behind plugin.LedgerEngineProvider.
