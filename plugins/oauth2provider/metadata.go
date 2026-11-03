@@ -75,7 +75,7 @@ type ProtectedResourceRequest struct {
 // scope picks the signing keys whose algorithms are advertised. Endpoint URLs
 // always come from p.issuerURL(), since the endpoints are served by this
 // deployment whichever issuer is asking. It reads keys without creating any.
-func (p *Plugin) buildAuthServerMetadata(issuer, scope string) *AuthServerMetadata {
+func (p *Plugin) buildAuthServerMetadata(ctx context.Context, issuer, scope string) *AuthServerMetadata {
 	base := p.issuerURL()
 
 	m := &AuthServerMetadata{
@@ -95,7 +95,7 @@ func (p *Plugin) buildAuthServerMetadata(issuer, scope string) *AuthServerMetada
 			tokenExchangeGrantType,
 		},
 		SubjectTypesSupported:            []string{"public"},
-		IDTokenSigningAlgValuesSupported: p.idTokenAlgs(context.Background(), scope),
+		IDTokenSigningAlgValuesSupported: p.idTokenAlgs(ctx, scope),
 		// The configured DynamicRegistrationScopes allowlist, not a
 		// separate hardcoded list: advertising a scope here that
 		// registration would then silently drop (or vice versa) is
@@ -120,8 +120,8 @@ func (p *Plugin) buildAuthServerMetadata(issuer, scope string) *AuthServerMetada
 	return m
 }
 
-func (p *Plugin) handleAuthServerMetadata(_ forge.Context, _ *DiscoveryRequest) (*AuthServerMetadata, error) {
-	return p.buildAuthServerMetadata(p.issuerURL(), ""), nil
+func (p *Plugin) handleAuthServerMetadata(ctx forge.Context, _ *DiscoveryRequest) (*AuthServerMetadata, error) {
+	return p.buildAuthServerMetadata(ctx.Context(), p.issuerURL(), ""), nil
 }
 
 // handleProtectedResourceMetadata always describes AuthSome itself,

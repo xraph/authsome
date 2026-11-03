@@ -24,9 +24,10 @@ type JWKSResponse struct {
 }
 
 // jwksFor assembles the key set for one issuer scope: the id_token keys the
-// key manager publishes, and for the deployment issuer ("") also the
-// asymmetric access token keys the engine verifies with. HMAC keys are never
-// included. Entries are deduplicated by kid.
+// key manager publishes, and the asymmetric access token keys the engine
+// verifies with. The deployment issuer ("") gets every JWT format's key; an
+// app scope gets only its own app's, and nothing from the deployment scope.
+// HMAC keys are never included. Entries are deduplicated by kid.
 func (p *Plugin) jwksFor(ctx context.Context, scope string) (*JWKSResponse, error) {
 	out := &JWKSResponse{Keys: []jwkutil.JWK{}}
 	seen := map[string]bool{}
@@ -49,18 +50,18 @@ func (p *Plugin) jwksFor(ctx context.Context, scope string) (*JWKSResponse, erro
 			add(keys[i])
 		}
 	}
-	if scope == "" {
-		for _, j := range p.accessTokenJWKs() {
-			add(j)
-		}
+	for _, j := range p.accessTokenJWKs(scope) {
+		add(j)
 	}
 	return out, nil
 }
 
 // accessTokenJWKs returns the public halves of the engine's asymmetric JWT
-// access token formats. The plugin.Engine interface does not expose them, so
-// this asserts the concrete engine, as the refresh grant does.
-func (p *Plugin) accessTokenJWKs() []jwkutil.JWK {
+// access token formats: all of them, and the default format, for the
+// deployment scope (""), or just the format registered for the app for an
+// app scope. The plugin.Engine interface does not expose them, so this
+// asserts the concrete engine, as the refresh grant does.
+func (p *Plugin) accessTokenJWKs(scope string) []jwkutil.JWK {
 	eng, ok := p.engine.(*authsome.Engine)
 	if !ok || eng == nil {
 		return nil
@@ -77,6 +78,12 @@ func (p *Plugin) accessTokenJWKs() []jwkutil.JWK {
 			return
 		}
 		out = append(out, *j)
+	}
+	if scope != "" {
+		if f := eng.JWTFormats()[scope]; f != nil {
+			add(f)
+		}
+		return out
 	}
 	for _, f := range eng.JWTFormats() {
 		add(f)

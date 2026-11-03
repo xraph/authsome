@@ -203,6 +203,7 @@ func TestKeyManager_RetiredKeyLeavesJWKS(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, keys, 2)
 	require.NoError(t, st.RetireSigningKey(ctx, keys[1].ID, time.Now().Add(-time.Minute)))
+	m.invalidate("app") // the store changed behind the manager's back
 	assert.Equal(t, []string{current.kid}, publishedKIDs(t, m, "app"))
 }
 
@@ -416,6 +417,7 @@ func TestKeyManager_OperatorSwitchRetiresManagedKey(t *testing.T) {
 
 	// Once the grace is over the managed key leaves the JWKS.
 	require.NoError(t, st.RetireSigningKey(ctx, keys[0].ID, time.Now().Add(-time.Minute)))
+	p.keys.invalidate("") // the store changed behind the manager's back
 	assert.Equal(t, []string{op.kid}, publishedKIDs(t, p.keys, ""))
 }
 
@@ -518,4 +520,84 @@ func TestKeyManager_OperatorPathSkipsUnretiredManagedKey(t *testing.T) {
 	op, err := m.Active(ctx, "")
 	require.NoError(t, err)
 	assert.Equal(t, []string{op.kid}, publishedKIDs(t, m, ""))
+}
+
+// listCountingStore counts ListSigningKeys calls.
+type listCountingStore struct {
+	Store
+	mu    sync.Mutex
+	lists int
+}
+
+func (s *listCountingStore) ListSigningKeys(ctx context.Context, scope string) ([]*SigningKey, error) {
+	s.mu.Lock()
+	s.lists++
+	s.mu.Unlock()
+	return s.Store.ListSigningKeys(ctx, scope)
+}
+
+func (s *listCountingStore) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lists
+}
+
+func TestKeyManager_PublishedIsMemoized(t *testing.T) {
+	ctx := context.Background()
+	st := &listCountingStore{Store: NewMemoryStore()}
+	m := newTestKeyManager(t, Config{}, st, testEncryptor(t))
+	clock := time.Now()
+	m.now = func() time.Time { return clock }
+
+	first, err := m.Published(ctx, "app")
+	require.NoError(t, err)
+	require.Len(t, first, 1)
+	// The first call created the key, which invalidates; the second fills
+	// the memo and the third must not touch the store.
+	_, err = m.Published(ctx, "app")
+	require.NoError(t, err)
+	before := st.count()
+	again, err := m.Published(ctx, "app")
+	require.NoError(t, err)
+	assert.Equal(t, before, st.count(), "a second call inside the window must not read the store")
+	assert.Equal(t, first, again)
+
+	// Describe has its own memo and the same window.
+	_, err = m.Describe(ctx, "app")
+	require.NoError(t, err)
+	before = st.count()
+	_, err = m.Describe(ctx, "app")
+	require.NoError(t, err)
+	assert.Equal(t, before, st.count())
+
+	// Past the window the store is read again.
+	clock = clock.Add(listMemoTTL + time.Second)
+	_, err = m.Published(ctx, "app")
+	require.NoError(t, err)
+	assert.Greater(t, st.count(), before)
+}
+
+func TestKeyManager_RotateInvalidatesMemo(t *testing.T) {
+	ctx := context.Background()
+	m := newTestKeyManager(t, Config{}, &listCountingStore{Store: NewMemoryStore()}, testEncryptor(t))
+	m.now = time.Now
+
+	_, err := m.Published(ctx, "app")
+	require.NoError(t, err)
+	before, err := m.Published(ctx, "app")
+	require.NoError(t, err)
+	require.Len(t, before, 1)
+	info, err := m.Describe(ctx, "app")
+	require.NoError(t, err)
+	require.Len(t, info, 1)
+
+	_, err = m.Rotate(ctx, "app")
+	require.NoError(t, err)
+
+	after, err := m.Published(ctx, "app")
+	require.NoError(t, err)
+	assert.Len(t, after, 2, "the rotated key is published straight away, not after the window")
+	info, err = m.Describe(ctx, "app")
+	require.NoError(t, err)
+	assert.Len(t, info, 2)
 }

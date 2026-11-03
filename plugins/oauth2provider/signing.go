@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -36,6 +37,12 @@ const (
 	// activeKeyCacheTTL is how long a scope's active key is trusted before
 	// the store is read again.
 	activeKeyCacheTTL = 5 * time.Minute
+
+	// listMemoTTL is how long Published and Describe results are reused.
+	// Both back unauthenticated endpoints, so without it every hit costs a
+	// store read. It is short because another replica's rotation is only
+	// seen once it lapses; this replica's own rotations invalidate it at once.
+	listMemoTTL = 45 * time.Second
 
 	// managedKeyBits is the size of every key authsome generates.
 	managedKeyBits = 2048
@@ -88,7 +95,22 @@ type keyManager struct {
 	mu     sync.Mutex
 	scopes map[string]*scopeKeys
 
+	// memoMu guards memos. It is never held across a store call.
+	memoMu sync.Mutex
+	memos  map[string]*listMemo
+
 	noEncryptorOnce sync.Once
+}
+
+// listMemo holds one scope's recent Published and Describe results. epoch
+// goes up on every invalidation, so a result computed before a rotation
+// finished is not stored after it.
+type listMemo struct {
+	epoch       uint64
+	published   []jwkutil.JWK
+	publishedAt time.Time
+	described   []KeyInfo
+	describedAt time.Time
 }
 
 // scopeKeys caches one scope's active key. Its mutex is held across the
@@ -129,6 +151,7 @@ func newKeyManager(cfg Config, st Store, enc bridge.Encryptor, logger log.Logger
 		grace:    cfg.IDTokenKeyRetireGrace,
 		now:      time.Now,
 		scopes:   make(map[string]*scopeKeys),
+		memos:    make(map[string]*listMemo),
 	}
 
 	keyPEM := cfg.IDTokenSigningKey
@@ -208,6 +231,27 @@ func (m *keyManager) scopeState(scope string) *scopeKeys {
 		m.scopes[scope] = st
 	}
 	return st
+}
+
+// memoFor returns scope's memo entry. Callers hold memoMu.
+func (m *keyManager) memoFor(scope string) *listMemo {
+	e, ok := m.memos[scope]
+	if !ok {
+		e = &listMemo{}
+		m.memos[scope] = e
+	}
+	return e
+}
+
+// invalidate drops scope's memoized results. A key was created or rotated
+// here, so the next read has to see it.
+func (m *keyManager) invalidate(scope string) {
+	m.memoMu.Lock()
+	defer m.memoMu.Unlock()
+	e := m.memoFor(scope)
+	e.epoch++
+	e.published, e.publishedAt = nil, time.Time{}
+	e.described, e.describedAt = nil, time.Time{}
 }
 
 // Active returns the key that signs id_tokens for scope, generating the
@@ -300,6 +344,7 @@ func (m *keyManager) Rotate(ctx context.Context, scope string) (*SigningKey, err
 	defer st.mu.Unlock()
 	// Whatever happens next, the cached key is no longer the newest.
 	st.active, st.row = nil, nil
+	defer m.invalidate(scope)
 
 	keys, err := m.store.ListSigningKeys(ctx, scope)
 	if err != nil {
@@ -333,6 +378,29 @@ func (m *keyManager) Rotate(ctx context.Context, scope string) (*SigningKey, err
 // logged, not returned as an error, so a broken active key never takes the
 // keys that still verify out of the JWKS with it.
 func (m *keyManager) Published(ctx context.Context, scope string) ([]jwkutil.JWK, error) {
+	m.memoMu.Lock()
+	e := m.memoFor(scope)
+	epoch := e.epoch
+	if e.published != nil && m.now().Sub(e.publishedAt) < listMemoTTL {
+		out := slices.Clone(e.published)
+		m.memoMu.Unlock()
+		return out, nil
+	}
+	m.memoMu.Unlock()
+
+	out, err := m.publishedUncached(ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	m.memoMu.Lock()
+	if e := m.memoFor(scope); e.epoch == epoch {
+		e.published, e.publishedAt = slices.Clone(out), m.now()
+	}
+	m.memoMu.Unlock()
+	return out, nil
+}
+
+func (m *keyManager) publishedUncached(ctx context.Context, scope string) ([]jwkutil.JWK, error) {
 	operator := m.usesOperatorKey(scope)
 	out := make([]jwkutil.JWK, 0, 2+len(m.operatorPrev))
 	if operator {
@@ -384,6 +452,29 @@ func (m *keyManager) publishable(k *SigningKey, operator bool, now time.Time) bo
 // Describe lists the keys for scope as the dashboard shows them, active key
 // first. It reads only and never generates a key.
 func (m *keyManager) Describe(ctx context.Context, scope string) ([]KeyInfo, error) {
+	m.memoMu.Lock()
+	e := m.memoFor(scope)
+	epoch := e.epoch
+	if e.described != nil && m.now().Sub(e.describedAt) < listMemoTTL {
+		out := slices.Clone(e.described)
+		m.memoMu.Unlock()
+		return out, nil
+	}
+	m.memoMu.Unlock()
+
+	out, err := m.describeUncached(ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	m.memoMu.Lock()
+	if e := m.memoFor(scope); e.epoch == epoch {
+		e.described, e.describedAt = slices.Clone(out), m.now()
+	}
+	m.memoMu.Unlock()
+	return out, nil
+}
+
+func (m *keyManager) describeUncached(ctx context.Context, scope string) ([]KeyInfo, error) {
 	operator := m.usesOperatorKey(scope)
 	out := make([]KeyInfo, 0, 2+len(m.operatorPrev))
 	if operator {
@@ -483,9 +574,14 @@ func (m *keyManager) create(ctx context.Context, scope string, keys []*SigningKe
 	if err != nil {
 		return nil, err
 	}
-	if err := m.store.CreateSigningKey(ctx, row); err != nil {
+	// Invalidate after the insert and again on return: a read that started
+	// between the two must not keep what it saw.
+	err = m.store.CreateSigningKey(ctx, row)
+	m.invalidate(scope)
+	if err != nil {
 		return nil, err
 	}
+	defer m.invalidate(scope)
 
 	retireAt := now.Add(m.grace).UTC()
 	for _, k := range keys {

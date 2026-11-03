@@ -47,6 +47,7 @@ var (
 	_ plugin.RouteProvider     = (*Plugin)(nil)
 	_ plugin.RootRouteProvider = (*Plugin)(nil)
 	_ plugin.OnInit            = (*Plugin)(nil)
+	_ plugin.SettingsProvider  = (*Plugin)(nil)
 	_ plugin.MigrationProvider = (*Plugin)(nil)
 )
 
@@ -362,6 +363,9 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if err := p.registerJWKSRoute(g); err != nil {
 		return err
 	}
+	if err := p.registerAppJWKSRoute(router); err != nil {
+		return err
+	}
 
 	// Agent-safe: handleRevoke only revokes a token the caller itself holds
 	// (callerOwnsSession), which is how an OAuth2 client, an agent included,
@@ -575,6 +579,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	); err != nil {
 		return err
 	}
+	if err := router.GET("/apps/:slug/.well-known/openid-configuration", p.handleAppDiscovery,
+		forge.WithSummary("App OpenID Connect Discovery"),
+		forge.WithOperationID("oauth2AppDiscoveryPrefixed"),
+		forge.WithTags("OAuth2"),
+	); err != nil {
+		return err
+	}
 
 	// Admin endpoints for client management. Gated behind a session plus
 	// manage/oauth2_client — a caller who can mint clients can register an
@@ -661,6 +672,10 @@ func (p *Plugin) registerWellKnown(router forge.Router) error {
 		forge.WithResponseSchema(http.StatusOK, "Metadata", AuthServerMetadata{}),
 		forge.WithTags("OAuth2"),
 	); err != nil {
+		return err
+	}
+
+	if err := p.registerAppWellKnown(router); err != nil {
 		return err
 	}
 
@@ -1604,8 +1619,12 @@ func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInf
 // AuthServerMetadata and DiscoveryResponse are field-identical but distinct
 // struct types, so a field added to one is not automatically added to the
 // other; TestMetadata_OIDCAndAuthServerAgree is what actually catches that.
-func (p *Plugin) handleDiscovery(_ forge.Context, _ *DiscoveryRequest) (*DiscoveryResponse, error) {
-	m := p.buildAuthServerMetadata(p.issuerURL(), "")
+func (p *Plugin) handleDiscovery(ctx forge.Context, _ *DiscoveryRequest) (*DiscoveryResponse, error) {
+	return discoveryFrom(p.buildAuthServerMetadata(ctx.Context(), p.issuerURL(), "")), nil
+}
+
+// discoveryFrom copies an RFC 8414 document onto the OIDC discovery shape.
+func discoveryFrom(m *AuthServerMetadata) *DiscoveryResponse {
 	return &DiscoveryResponse{
 		Issuer:                            m.Issuer,
 		AuthorizationEndpoint:             m.AuthorizationEndpoint,
@@ -1626,7 +1645,7 @@ func (p *Plugin) handleDiscovery(_ forge.Context, _ *DiscoveryRequest) (*Discove
 		DPoPSigningAlgValuesSupported:     m.DPoPSigningAlgValuesSupported,
 		ClaimsSupported:                   m.ClaimsSupported,
 		ResponseModesSupported:            m.ResponseModesSupported,
-	}, nil
+	}
 }
 
 // ──────────────────────────────────────────────────

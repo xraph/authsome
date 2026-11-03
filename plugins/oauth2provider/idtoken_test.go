@@ -42,6 +42,7 @@ const (
 // withEncryptor decides whether a managed key can be stored, so a fixture
 // without one (and without an operator key) cannot sign anything.
 type oidcFixture struct {
+	p     *oauth2provider.Plugin
 	eng   *authsome.Engine
 	st    oauth2provider.Store
 	mux   forge.Router
@@ -49,7 +50,7 @@ type oidcFixture struct {
 	user  *user.User
 }
 
-func newOIDCFixture(t *testing.T, cfg oauth2provider.Config, withEncryptor bool) *oidcFixture {
+func newOIDCFixture(t *testing.T, cfg oauth2provider.Config, withEncryptor bool, extra ...authsome.Option) *oidcFixture {
 	t.Helper()
 	var opts []authsome.Option
 	if withEncryptor {
@@ -57,7 +58,7 @@ func newOIDCFixture(t *testing.T, cfg oauth2provider.Config, withEncryptor bool)
 		require.NoError(t, err)
 		opts = append(opts, authsome.WithTokenEncryptor(enc))
 	}
-	eng := secutil.NewTestEngine(t, opts...)
+	eng := secutil.NewTestEngine(t, append(opts, extra...)...)
 	secutil.RelaxAuthDefaults(t, eng)
 	appID, err := id.ParseAppID("aapp_01jf0000000000000000000000")
 	require.NoError(t, err)
@@ -67,6 +68,8 @@ func newOIDCFixture(t *testing.T, cfg oauth2provider.Config, withEncryptor bool)
 	st := oauth2provider.NewMemoryStore()
 	p.SetOAuth2Store(st)
 	require.NoError(t, p.OnInit(context.Background(), eng))
+	// The engine only declares settings for plugins registered with it.
+	require.NoError(t, p.DeclareSettings(eng.Settings()))
 
 	ctx := context.Background()
 	require.NoError(t, st.CreateClient(ctx, &oauth2provider.OAuth2Client{
@@ -92,7 +95,7 @@ func newOIDCFixture(t *testing.T, cfg oauth2provider.Config, withEncryptor bool)
 
 	mux := forge.NewRouter()
 	require.NoError(t, p.RegisterRoutes(mux))
-	return &oidcFixture{eng: eng, st: st, mux: mux, appID: appID, user: u}
+	return &oidcFixture{p: p, eng: eng, st: st, mux: mux, appID: appID, user: u}
 }
 
 // codeGrant runs authorize then the code exchange for clientID and returns

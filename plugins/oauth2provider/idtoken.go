@@ -51,13 +51,6 @@ type idTokenClaims struct {
 	Azp      string           `json:"azp"`
 }
 
-// issuerFor returns the issuer an id_token for appID names and the signing
-// key scope that goes with it. Every mint goes through here so per-app
-// issuers only have to change this one place.
-func (p *Plugin) issuerFor(_ context.Context, _ id.AppID) (issuer, scope string, err error) { //nolint:unparam // per-app issuers resolve settings here, which can fail
-	return p.issuerURL(), "", nil
-}
-
 // idTokenFor mints the id_token for a user grant, or returns "" when the
 // grant gets none: oidc is nil, or openid is not among the granted scopes.
 func (p *Plugin) idTokenFor(ctx context.Context, client *OAuth2Client, userID id.UserID, scopes []string, accessToken string, oidc *oidcRequest) (string, error) {
