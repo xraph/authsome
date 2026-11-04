@@ -16,7 +16,7 @@ require (
 	github.com/russellhaering/goxmldsig v1.6.1
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
-	github.com/xraph/chronicle v1.9.1
+	github.com/xraph/chronicle v1.11.0
 	github.com/xraph/dispatch v1.9.1
 	github.com/xraph/forge v1.13.2
 	github.com/xraph/forge/extensions/auth v1.12.9
@@ -34,7 +34,7 @@ require (
 	github.com/xraph/warden v1.8.0
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 	go.mongodb.org/mongo-driver/v2 v2.9.1
-	go.opentelemetry.io/otel/sdk v1.46.0
+	go.opentelemetry.io/otel/sdk v1.47.0
 	golang.org/x/crypto v0.57.0
 	golang.org/x/oauth2 v0.36.0
 	gotest.tools/v3 v3.5.2
@@ -87,7 +87,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.46.0 // indirect
 	go.opentelemetry.io/otel/log v1.47.0 // indirect
 	go.opentelemetry.io/otel/sdk/log v0.21.0 // indirect
-	go.opentelemetry.io/otel/sdk/metric v1.46.0 // indirect
+	go.opentelemetry.io/otel/sdk/metric v1.47.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
