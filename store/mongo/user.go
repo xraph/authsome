@@ -12,6 +12,9 @@ import (
 	"github.com/xraph/authsome/user"
 )
 
+// Compile-time check that the mongo store serves batch user reads.
+var _ user.BatchGetter = (*Store)(nil)
+
 // CreateUser persists a new user.
 func (s *Store) CreateUser(ctx context.Context, u *user.User) error {
 	m := toUserModel(u)
@@ -48,6 +51,43 @@ func (s *Store) GetUser(ctx context.Context, userID id.UserID) (*user.User, erro
 	}
 
 	return fromUserModel(&m)
+}
+
+// GetUsers reads the live users with the given IDs in one query, excluding
+// soft-deleted users. IDs with no live user are left out. See
+// user.BatchGetter.
+func (s *Store) GetUsers(ctx context.Context, userIDs []id.UserID) ([]*user.User, error) {
+	seen := make(map[string]struct{}, len(userIDs))
+	keys := make([]string, 0, len(userIDs))
+	for _, uid := range userIDs {
+		k := uid.String()
+		if _, dup := seen[k]; dup {
+			continue
+		}
+		seen[k] = struct{}{}
+		keys = append(keys, k)
+	}
+	if len(keys) == 0 {
+		return []*user.User{}, nil
+	}
+
+	var models []userModel
+	err := s.mdb.NewFind(&models).
+		Filter(bson.M{"_id": bson.M{"$in": keys}, "deleted_at": nil}).
+		Scan(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("authsome/mongo: get users: %w", err)
+	}
+
+	users := make([]*user.User, 0, len(models))
+	for i := range models {
+		u, err := fromUserModel(&models[i])
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
 }
 
 // GetUserByEmail returns a user by app ID, environment and email, excluding

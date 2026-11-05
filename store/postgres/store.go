@@ -38,7 +38,10 @@ type Store struct {
 }
 
 // Compile-time interface checks.
-var _ store.Store = (*Store)(nil)
+var (
+	_ store.Store      = (*Store)(nil)
+	_ user.BatchGetter = (*Store)(nil)
+)
 
 // New creates a new PostgreSQL-backed store.
 func New(db *grove.DB) *Store {
@@ -213,6 +216,52 @@ func (s *Store) GetUser(ctx context.Context, userID id.UserID) (*user.User, erro
 		return nil, pgError(err)
 	}
 	return toUser(m)
+}
+
+// GetUsers reads the live users with the given IDs in one query. IDs with no
+// live user are left out. See user.BatchGetter.
+func (s *Store) GetUsers(ctx context.Context, userIDs []id.UserID) ([]*user.User, error) {
+	keys := uniqueUserIDs(userIDs)
+	if len(keys) == 0 {
+		return []*user.User{}, nil
+	}
+	args := make([]any, len(keys))
+	for i, k := range keys {
+		args[i] = k
+	}
+	var models []UserModel
+	err := s.pg.NewSelect(&models).
+		Where("id IN (?"+strings.Repeat(", ?", len(keys)-1)+")", args...).
+		Where("deleted_at IS NULL").
+		Scan(ctx)
+	if err != nil {
+		return nil, pgError(err)
+	}
+	users := make([]*user.User, 0, len(models))
+	for i := range models {
+		u, err := toUser(&models[i])
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+// uniqueUserIDs returns the string form of each distinct ID, in first-seen
+// order.
+func uniqueUserIDs(userIDs []id.UserID) []string {
+	seen := make(map[string]struct{}, len(userIDs))
+	keys := make([]string, 0, len(userIDs))
+	for _, uid := range userIDs {
+		k := uid.String()
+		if _, dup := seen[k]; dup {
+			continue
+		}
+		seen[k] = struct{}{}
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func (s *Store) GetUserByEmail(ctx context.Context, appID id.AppID, envID id.EnvironmentID, email string) (*user.User, error) {

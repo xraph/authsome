@@ -37,6 +37,7 @@ import (
 var (
 	_ store.Store       = (*Store)(nil)
 	_ environment.Store = (*Store)(nil)
+	_ user.BatchGetter  = (*Store)(nil)
 )
 
 // Store is an in-memory implementation of the composite store interface.
@@ -286,6 +287,29 @@ func (s *Store) GetUser(_ context.Context, userID id.UserID) (*user.User, error)
 		return nil, store.ErrNotFound
 	}
 	return u, nil
+}
+
+// GetUsers returns the stored users with the given IDs. IDs with no user are
+// left out. See user.BatchGetter.
+func (s *Store) GetUsers(_ context.Context, userIDs []id.UserID) ([]*user.User, error) {
+	users := make([]*user.User, 0, len(userIDs))
+	if len(userIDs) == 0 {
+		return users, nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	seen := make(map[string]struct{}, len(userIDs))
+	for _, uid := range userIDs {
+		k := uid.String()
+		if _, dup := seen[k]; dup {
+			continue
+		}
+		seen[k] = struct{}{}
+		if u, ok := s.users[k]; ok {
+			users = append(users, u)
+		}
+	}
+	return users, nil
 }
 
 func (s *Store) GetUserByEmail(_ context.Context, appID id.AppID, envID id.EnvironmentID, email string) (*user.User, error) {
