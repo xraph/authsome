@@ -60,6 +60,7 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"UserUsernameLookupIsEnvScoped", testUserUsernameLookupIsEnvScoped},
 		{"ListUsersTotalAndFilter", testListUsersTotalAndFilter},
 		{"ListUsersEmailMetacharsAreSafe", testListUsersEmailMetacharsAreSafe},
+		{"GetUsersBatch", testGetUsersBatch},
 		{"UpdateUserWritesBackTimestamp", testUpdateUserWritesBackTimestamp},
 		{"UpdateAppWritesBackTimestamp", testUpdateAppWritesBackTimestamp},
 		{"UpdateSessionWritesBackTimestamp", testUpdateSessionWritesBackTimestamp},
@@ -514,6 +515,45 @@ func testListUsersTotalAndFilter(t *testing.T, s store.Store) {
 	scoped, err := s.ListUsers(ctx, &user.Query{AppID: tn.AppID, Limit: 50})
 	require.NoError(t, err)
 	assert.Len(t, scoped.Users, 2, "list must be scoped to the queried app")
+}
+
+func testGetUsersBatch(t *testing.T, s store.Store) {
+	bg, ok := s.(user.BatchGetter)
+	if !ok {
+		t.Skip("store does not implement user.BatchGetter")
+	}
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+
+	alice := seedUser(t, s, tn, "alice@test.com")
+	bob := seedUser(t, s, tn, "bob@test.com")
+	gone := seedUser(t, s, tn, "gone@test.com")
+	require.NoError(t, s.DeleteUser(ctx, gone.ID))
+
+	got, err := bg.GetUsers(ctx, []id.UserID{
+		alice.ID,
+		gone.ID,
+		id.NewUserID(), // never existed
+		bob.ID,
+		alice.ID, // duplicate
+	})
+	require.NoError(t, err)
+
+	ids := make([]string, 0, len(got))
+	for _, u := range got {
+		require.NotNil(t, u)
+		ids = append(ids, u.ID.String())
+	}
+	assert.ElementsMatch(t, []string{alice.ID.String(), bob.ID.String()}, ids,
+		"only live users come back, each once")
+
+	empty, err := bg.GetUsers(ctx, nil)
+	require.NoError(t, err)
+	assert.Empty(t, empty, "no IDs must give no users")
+
+	empty, err = bg.GetUsers(ctx, []id.UserID{})
+	require.NoError(t, err)
+	assert.Empty(t, empty, "no IDs must give no users")
 }
 
 func testListUsersEmailMetacharsAreSafe(t *testing.T, s store.Store) {
