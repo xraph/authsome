@@ -17,15 +17,15 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	github.com/xraph/chronicle v1.11.0
-	github.com/xraph/dispatch v1.9.1
+	github.com/xraph/dispatch v1.9.4
 	github.com/xraph/forge v1.13.2
 	github.com/xraph/forge/extensions/auth v1.12.9
 	github.com/xraph/go-utils v1.5.0
-	github.com/xraph/grove v1.10.1
+	github.com/xraph/grove v1.10.2
 	github.com/xraph/grove/drivers/mongodriver v1.10.1
-	github.com/xraph/grove/drivers/pgdriver v1.10.1
+	github.com/xraph/grove/drivers/pgdriver v1.10.2
 	github.com/xraph/grove/drivers/sqlitedriver v1.10.1
-	github.com/xraph/herald v1.10.0
+	github.com/xraph/herald v1.10.2
 	github.com/xraph/keysmith v1.8.0
 	github.com/xraph/ledger v1.9.1
 	github.com/xraph/relay v1.8.0
@@ -157,8 +157,8 @@ require (
 	github.com/hashicorp/serf v0.10.4 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.11.0 // indirect
-	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/jackc/pgx/v5 v5.12.0 // indirect
+	github.com/jackc/puddle/v2 v2.2.3 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.19.2 // indirect
 	github.com/leodido/go-urn v1.5.0 // indirect
