@@ -1081,6 +1081,7 @@ class AuthClient {
 
   /// List coupons
   /// GET /v1/billing/coupons
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<ListCouponsResponse> listCoupons({required String appId, required String token}) async {
     final path = '/v1/billing/coupons';
     // A list of pairs rather than a map, because a query string may carry the
@@ -1101,6 +1102,7 @@ class AuthClient {
 
   /// Create coupon
   /// POST /v1/billing/coupons
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<CouponResponse> createCoupon({required CreateCouponRequest body, required String token}) async {
     final path = '/v1/billing/coupons';
     final res = await _request(
@@ -1114,6 +1116,7 @@ class AuthClient {
 
   /// Delete coupon
   /// DELETE /v1/billing/coupons/{couponId}
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<void> deleteCoupon({required String couponId, required String token}) async {
     final path = '/v1/billing/coupons/$couponId';
     await _request(
@@ -1125,6 +1128,7 @@ class AuthClient {
 
   /// List your entitlements
   /// GET /v1/billing/entitlements
+  @Deprecated('Use the authsome_subscription package instead.')
   Future<EntitlementsResponse> listEntitlements({required String token, String? tenantId}) async {
     final path = '/v1/billing/entitlements';
     // A list of pairs rather than a map, because a query string may carry the
@@ -1145,6 +1149,7 @@ class AuthClient {
 
   /// Check feature entitlement
   /// GET /v1/billing/entitlements/{featureKey}
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<EntitlementResponse> checkEntitlement({required String featureKey, required String tenantId, required String token, String? appId}) async {
     final path = '/v1/billing/entitlements/$featureKey';
     // A list of pairs rather than a map, because a query string may carry the
@@ -1166,6 +1171,7 @@ class AuthClient {
 
   /// List invoices
   /// GET /v1/billing/invoices
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<ListInvoicesResponse> listInvoices({required String appId, required String tenantId, required String token}) async {
     final path = '/v1/billing/invoices';
     // A list of pairs rather than a map, because a query string may carry the
@@ -1187,6 +1193,7 @@ class AuthClient {
 
   /// Get invoice
   /// GET /v1/billing/invoices/{invoiceId}
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<InvoiceResponse> getInvoice({required String invoiceId, required String token}) async {
     final path = '/v1/billing/invoices/$invoiceId';
     final res = await _request(
@@ -1199,6 +1206,7 @@ class AuthClient {
 
   /// Mark invoice as paid
   /// POST /v1/billing/invoices/{invoiceId}/pay
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<void> markInvoicePaid({required String invoiceId, required MarkInvoicePaidRequest body, required String token}) async {
     final path = '/v1/billing/invoices/$invoiceId/pay';
     await _request(
@@ -1211,6 +1219,7 @@ class AuthClient {
 
   /// Void an invoice
   /// POST /v1/billing/invoices/{invoiceId}/void
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<void> voidInvoice({required String invoiceId, required VoidInvoiceRequest body, required String token}) async {
     final path = '/v1/billing/invoices/$invoiceId/void';
     await _request(
@@ -1223,6 +1232,7 @@ class AuthClient {
 
   /// List billing plans
   /// GET /v1/billing/plans
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<ListPlansResponse> listBillingPlans({required String appId, required String token, String? status, bool? includeAddons}) async {
     final path = '/v1/billing/plans';
     // A list of pairs rather than a map, because a query string may carry the
@@ -1245,6 +1255,7 @@ class AuthClient {
 
   /// Create billing plan
   /// POST /v1/billing/plans
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<PlanResponse> createBillingPlan({required CreatePlanRequest body, required String token}) async {
     final path = '/v1/billing/plans';
     final res = await _request(
@@ -1258,6 +1269,7 @@ class AuthClient {
 
   /// Get billing plan
   /// GET /v1/billing/plans/{planId}
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<PlanResponse> getBillingPlan({required String planId, required String token}) async {
     final path = '/v1/billing/plans/$planId';
     final res = await _request(
@@ -1270,6 +1282,7 @@ class AuthClient {
 
   /// Activate a billing plan
   /// POST /v1/billing/plans/{planId}/activate
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<void> activateBillingPlan({required String planId, required String token}) async {
     final path = '/v1/billing/plans/$planId/activate';
     await _request(
@@ -1281,6 +1294,7 @@ class AuthClient {
 
   /// Archive a billing plan
   /// POST /v1/billing/plans/{planId}/archive
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<void> archiveBillingPlan({required String planId, required String token}) async {
     final path = '/v1/billing/plans/$planId/archive';
     await _request(
@@ -1292,6 +1306,7 @@ class AuthClient {
 
   /// Open the billing portal
   /// POST /v1/billing/portal
+  @Deprecated('Use the authsome_subscription package instead.')
   Future<PortalResponse> createBillingPortalSession({required PortalRequest body, required String token}) async {
     final path = '/v1/billing/portal';
     final res = await _request(
@@ -1305,6 +1320,7 @@ class AuthClient {
 
   /// Get your subscription
   /// GET /v1/billing/subscription
+  @Deprecated('Use the authsome_subscription package instead.')
   Future<CurrentSubscriptionResponse> getCurrentSubscription({required String token, String? tenantId}) async {
     final path = '/v1/billing/subscription';
     // A list of pairs rather than a map, because a query string may carry the
@@ -1325,6 +1341,7 @@ class AuthClient {
 
   /// Subscribe to a plan
   /// POST /v1/billing/subscription
+  @Deprecated('Use the authsome_subscription package instead.')
   Future<SubscriptionMutationResponse> subscribe({required SubscribeRequest body, required String token}) async {
     final path = '/v1/billing/subscription';
     final res = await _request(
@@ -1338,6 +1355,7 @@ class AuthClient {
 
   /// Change plan or seats
   /// PATCH /v1/billing/subscription
+  @Deprecated('Use the authsome_subscription package instead.')
   Future<SubscriptionMutationResponse> updateSubscription({required UpdateSubscriptionRequest body, required String token}) async {
     final path = '/v1/billing/subscription';
     final res = await _request(
@@ -1351,6 +1369,7 @@ class AuthClient {
 
   /// Cancel your subscription
   /// POST /v1/billing/subscription/cancel
+  @Deprecated('Use the authsome_subscription package instead.')
   Future<SubscriptionMutationResponse> cancelCurrentSubscription({required CancelCurrentRequest body, required String token}) async {
     final path = '/v1/billing/subscription/cancel';
     final res = await _request(
@@ -1364,6 +1383,7 @@ class AuthClient {
 
   /// Keep your subscription
   /// POST /v1/billing/subscription/resume
+  @Deprecated('Use the authsome_subscription package instead.')
   Future<SubscriptionMutationResponse> resumeCurrentSubscription({required TenantRequest body, required String token}) async {
     final path = '/v1/billing/subscription/resume';
     final res = await _request(
@@ -1377,6 +1397,7 @@ class AuthClient {
 
   /// List subscriptions
   /// GET /v1/billing/subscriptions
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<ListSubscriptionsResponse> listSubscriptions({required String appId, required String tenantId, required String token, String? status}) async {
     final path = '/v1/billing/subscriptions';
     // A list of pairs rather than a map, because a query string may carry the
@@ -1399,6 +1420,7 @@ class AuthClient {
 
   /// Create subscription
   /// POST /v1/billing/subscriptions
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<SubscriptionResponse> createSubscription({required CreateSubscriptionRequest body, required String token}) async {
     final path = '/v1/billing/subscriptions';
     final res = await _request(
@@ -1412,6 +1434,7 @@ class AuthClient {
 
   /// Get active subscription
   /// GET /v1/billing/subscriptions/active
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<SubscriptionResponse> getActiveSubscription({required String appId, required String tenantId, required String token}) async {
     final path = '/v1/billing/subscriptions/active';
     // A list of pairs rather than a map, because a query string may carry the
@@ -1433,6 +1456,7 @@ class AuthClient {
 
   /// Cancel subscription
   /// POST /v1/billing/subscriptions/{subId}/cancel
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<void> cancelSubscription({required String subId, required CancelSubscriptionRequest body, required String token}) async {
     final path = '/v1/billing/subscriptions/$subId/cancel';
     await _request(
@@ -1445,6 +1469,7 @@ class AuthClient {
 
   /// Change subscription plan
   /// POST /v1/billing/subscriptions/{subId}/change-plan
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<void> changeSubscriptionPlan({required String subId, required ChangePlanRequest body, required String token}) async {
     final path = '/v1/billing/subscriptions/$subId/change-plan';
     await _request(
@@ -1457,6 +1482,7 @@ class AuthClient {
 
   /// Pause subscription
   /// POST /v1/billing/subscriptions/{subId}/pause
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<void> pauseSubscription({required String subId, required String token}) async {
     final path = '/v1/billing/subscriptions/$subId/pause';
     await _request(
@@ -1468,6 +1494,7 @@ class AuthClient {
 
   /// Resume subscription
   /// POST /v1/billing/subscriptions/{subId}/resume
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<void> resumeSubscription({required String subId, required String token}) async {
     final path = '/v1/billing/subscriptions/$subId/resume';
     await _request(
@@ -1479,6 +1506,7 @@ class AuthClient {
 
   /// Get usage summary
   /// GET /v1/billing/usage
+  @Deprecated('Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.')
   Future<UsageSummaryResponse> getUsageSummary({required String appId, required String tenantId, required String token}) async {
     final path = '/v1/billing/usage';
     // A list of pairs rather than a map, because a query string may carry the

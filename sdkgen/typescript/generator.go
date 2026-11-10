@@ -32,6 +32,11 @@ type GeneratorConfig struct {
 	// MethodOverrides maps operationID to a custom method name.
 	// e.g., {"refreshSession": "refresh", "deleteAccount": "deleteMe"}
 	MethodOverrides map[string]string
+
+	// DeprecatedTags marks every operation whose tag starts with a key as
+	// deprecated, with the value as the note. Used to point the embedded core
+	// clients at the plugin package that now owns those routes.
+	DeprecatedTags map[string]string
 }
 
 // Generator produces TypeScript SDK code from an OpenAPI spec.
@@ -186,6 +191,9 @@ type OperationDef struct {
 	PathParams        []PathParamDef
 	QueryParams       []QueryParamDef
 	NeedsRequestAlias bool // true when the request type alias differs from an existing schema type
+
+	// Deprecated is the deprecation note, empty when the operation isn't.
+	Deprecated string
 }
 
 func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
@@ -271,6 +279,7 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 				Summary: pair.op.Summary,
 				Tags:    pair.op.Tags,
 			}
+			opDef.Deprecated = jsDocText(openapi.DeprecationFor(pair.op.Tags, g.config.DeprecatedTags))
 
 			// Determine if auth is required
 			opDef.AuthRequired = openapi.OperationTakesToken(pair.op, spec.SecuritySchemes())

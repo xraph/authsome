@@ -1,0 +1,24 @@
+name: authsome_subscription_flutter
+description: Flutter widgets for authsome's subscription plugin. Pricing table, current plan card, usage meter, entitlement gate and billing portal button.
+version: 1.6.1
+homepage: https://github.com/xraph/authsome
+repository: https://github.com/xraph/authsome/tree/main/flutter/packages/authsome_subscription_flutter
+issue_tracker: https://github.com/xraph/authsome/issues
+
+environment:
+  sdk: ^3.6.0
+  flutter: ">=3.10.0"
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  authsome_flutter: ^1.6.1
+  authsome_subscription: ^1.6.1
+
+dev_dependencies:
+  http: ^1.6.0
+  flutter_lints: ^4.0.0
+  flutter_test:
+    sdk: flutter
