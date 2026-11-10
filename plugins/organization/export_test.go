@@ -9,3 +9,11 @@ import (
 func (p *Plugin) SetPermCheckerForTest(pc plugin.PermissionChecker) {
 	p.permChecker = pc
 }
+
+// MaskEmail and InviterName expose the invitation preview's two formatting
+// helpers so they can be tested directly. Both decide what a page shows to
+// someone who may not own the address, so their edges are worth pinning.
+var (
+	MaskEmail   = maskEmail
+	InviterName = inviterName
+)
