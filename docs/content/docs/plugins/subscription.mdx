@@ -197,7 +197,25 @@ final result = await billing.changePlan('team');
 
 The widgets hand checkout and portal URLs back to you (`onCheckout`, `onOpen`), so the packages don't depend on a URL launcher. On both platforms the components show plain words when a write fails and pass the server's error to `onError`.
 
+`CurrentPlanCard` asks before it cancels and says when the plan ends. If the server doesn't have the subscription plugin, the client packages say so once in the console during development, and every entitlement check fails closed.
+
 The billing methods on the core `ui-core` and `authsome_core` clients still work, and are marked deprecated in favour of these packages.
+
+### Another tenant's billing
+
+Support staff who hold `billing:manage` can look after a customer's billing from the same components. Pass the customer's tenant and every read and write carries it as `tenant_id`:
+
+```tsx
+<CurrentPlanCard tenantId={customer.orgId} />
+const { subscription } = useSubscription({ tenantId: customer.orgId });
+```
+
+```dart
+CurrentPlanCard(tenantId: customer.orgId);
+final billing = context.subscriptionFor(customer.orgId);
+```
+
+Underneath that's `api.forTenant(id)`, which returns the same API with its own cache. It keeps its tenant when you switch organization and clears when you sign out. The server refuses anyone without `billing:manage`.
 
 ## Operator routes
 

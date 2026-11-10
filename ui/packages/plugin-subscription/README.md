@@ -73,6 +73,12 @@ They're built on `@authsome/ui-components`, so they pick up the same theme as th
 @source "../node_modules/@authsome/plugin-subscription/dist";
 ```
 
+`CurrentPlanCard` asks before it cancels. Every component, hook and `<Entitled>` takes a `tenantId` for support staff who hold `billing:manage` and look after a customer's billing:
+
+```tsx
+<CurrentPlanCard tenantId={customer.orgId} />
+```
+
 ## Without React
 
 ```ts
@@ -86,4 +92,6 @@ await billing.load();
 billing.onChange(() => render(billing.getSnapshot()));
 ```
 
-The snapshot follows the session: signing out clears it, and signing in or switching organization reloads it. A response for an organization you've already left is dropped rather than shown.
+The snapshot follows the session: signing out clears it, and signing in or switching organization reloads it. A response for an organization you've already left is dropped rather than shown. `billing.forTenant(id)` gives you the same API pinned to another tenant, with its own cache.
+
+If the server doesn't have the subscription plugin, you get one console warning outside production, and the resources read as `unavailable` without a request.

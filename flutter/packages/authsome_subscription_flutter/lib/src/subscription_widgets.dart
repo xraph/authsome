@@ -9,16 +9,23 @@ extension SubscriptionContext on BuildContext {
   /// The subscription plugin's API. The plugin has to be in the
   /// [AuthConfig.plugins] of the surrounding [AuthProvider].
   SubscriptionApi get subscription => AuthProvider.of(this).plugin<SubscriptionApi>();
+
+  /// The API for [tenantId], or the session's own when it's null. Passing a
+  /// tenant is for operators who hold billing:manage.
+  SubscriptionApi subscriptionFor(String? tenantId) =>
+      tenantId == null ? subscription : subscription.forTenant(tenantId);
 }
 
 /// Builds from the subscription plugin's snapshot and rebuilds when it
 /// changes. Loads the subscription (and, with [loadPlans], the plans) the
-/// first time it's built while signed in.
+/// first time it's built while signed in. Pass [tenantId] to read another
+/// tenant than the session's (operators holding billing:manage only).
 class SubscriptionBuilder extends StatefulWidget {
-  const SubscriptionBuilder({required this.builder, this.loadPlans = false, super.key});
+  const SubscriptionBuilder({required this.builder, this.loadPlans = false, this.tenantId, super.key});
 
   final Widget Function(BuildContext context, SubscriptionSnapshot snapshot) builder;
   final bool loadPlans;
+  final String? tenantId;
 
   @override
   State<SubscriptionBuilder> createState() => _SubscriptionBuilderState();
@@ -30,8 +37,18 @@ class _SubscriptionBuilderState extends State<SubscriptionBuilder> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(SubscriptionBuilder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.tenantId != widget.tenantId) _resolve();
+  }
+
+  void _resolve() {
     final auth = AuthProvider.of(context);
-    final api = auth.plugin<SubscriptionApi>();
+    final api = context.subscriptionFor(widget.tenantId);
     _api = api;
     // AuthProvider is inherited, so this runs again when the user signs in.
     if (!auth.isAuthenticated) return;
@@ -67,17 +84,19 @@ class EntitlementGate extends StatelessWidget {
     required this.child,
     this.fallback = const SizedBox.shrink(),
     this.loading,
+    this.tenantId,
     super.key,
   });
 
   final String feature;
+  final String? tenantId;
   final Widget child;
   final Widget fallback;
   final Widget? loading;
 
   @override
   Widget build(BuildContext context) {
-    return SubscriptionBuilder(builder: (context, snap) {
+    return SubscriptionBuilder(tenantId: tenantId, builder: (context, snap) {
       final entitlements = snap.entitlements;
       if (entitlements.status == ResourceStatus.ready &&
           entitlements.data[feature]?.allowed == true) {
@@ -111,10 +130,14 @@ class PricingTable extends StatefulWidget {
     this.returnUrl,
     this.cancelUrl,
     this.onError,
+    this.tenantId,
     super.key,
   });
 
   final ValueChanged<Plan>? onSelected;
+
+  /// Another tenant than the session's, for operators holding billing:manage.
+  final String? tenantId;
 
   /// Gets the payment page URL when a plan needs paying for. Without it the
   /// table can't take payment: it tells the user and passes a [StateError]
@@ -170,6 +193,7 @@ class _PricingTableState extends State<PricingTable> {
     final theme = Theme.of(context);
     return SubscriptionBuilder(
       loadPlans: true,
+      tenantId: widget.tenantId,
       builder: (context, snap) {
         if (_isLoading(context, snap.plans)) {
           return const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
@@ -232,7 +256,7 @@ class _PricingTableState extends State<PricingTable> {
                                 : FilledButton(
                                     onPressed: _busy
                                         ? null
-                                        : () => _choose(context.subscription, plan, current != null),
+                                        : () => _choose(context.subscriptionFor(widget.tenantId), plan, current != null),
                                     child: Text('Choose ${plan.name}'),
                                   ),
                           ),
@@ -252,7 +276,10 @@ class _PricingTableState extends State<PricingTable> {
 /// The tenant's plan: name, price, when it renews or ends, seats, and
 /// cancel or keep for someone who can manage billing.
 class CurrentPlanCard extends StatefulWidget {
-  const CurrentPlanCard({this.onError, super.key});
+  const CurrentPlanCard({this.onError, this.tenantId, super.key});
+
+  /// Another tenant than the session's, for operators holding billing:manage.
+  final String? tenantId;
 
   /// Called with the error when cancel or keep fails; the card shows plain words.
   final ValueChanged<Object>? onError;
@@ -308,7 +335,7 @@ class _CurrentPlanCardState extends State<CurrentPlanCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SubscriptionBuilder(builder: (context, snap) {
+    return SubscriptionBuilder(tenantId: widget.tenantId, builder: (context, snap) {
       if (_isLoading(context, snap.subscription)) {
         return const Card(child: Padding(padding: EdgeInsets.all(24), child: LinearProgressIndicator()));
       }
@@ -324,7 +351,7 @@ class _CurrentPlanCardState extends State<CurrentPlanCard> {
           ),
         );
       }
-      final api = context.subscription;
+      final api = context.subscriptionFor(widget.tenantId);
       final seats = sub.seats;
       return Card(
         child: Padding(
@@ -373,9 +400,10 @@ class _CurrentPlanCardState extends State<CurrentPlanCard> {
 
 /// How much of a metered feature is used, against the plan's limit.
 class UsageMeter extends StatelessWidget {
-  const UsageMeter({required this.feature, this.label, super.key});
+  const UsageMeter({required this.feature, this.label, this.tenantId, super.key});
 
   final String feature;
+  final String? tenantId;
 
   /// What to call it. Defaults to the feature key.
   final String? label;
@@ -383,7 +411,7 @@ class UsageMeter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SubscriptionBuilder(builder: (context, snap) {
+    return SubscriptionBuilder(tenantId: tenantId, builder: (context, snap) {
       if (_isLoading(context, snap.entitlements)) return const LinearProgressIndicator();
       final e = snap.entitlements.data[feature];
       if (e == null) return const SizedBox.shrink();
@@ -412,9 +440,10 @@ class UsageMeter extends StatelessWidget {
 /// can manage billing. [onOpen] gets the portal URL; open it with your
 /// launcher of choice.
 class ManageBillingButton extends StatefulWidget {
-  const ManageBillingButton({required this.onOpen, this.returnUrl, this.child, super.key});
+  const ManageBillingButton({required this.onOpen, this.returnUrl, this.child, this.tenantId, super.key});
 
   final ValueChanged<Uri> onOpen;
+  final String? tenantId;
   final String? returnUrl;
   final Widget? child;
 
@@ -442,10 +471,10 @@ class _ManageBillingButtonState extends State<ManageBillingButton> {
 
   @override
   Widget build(BuildContext context) {
-    return SubscriptionBuilder(builder: (context, snap) {
+    return SubscriptionBuilder(tenantId: widget.tenantId, builder: (context, snap) {
       if (!snap.canManage) return const SizedBox.shrink();
       return OutlinedButton(
-        onPressed: _busy ? null : () => _open(context.subscription),
+        onPressed: _busy ? null : () => _open(context.subscriptionFor(widget.tenantId)),
         child: widget.child ?? const Text('Manage billing'),
       );
     });

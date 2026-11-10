@@ -384,4 +384,72 @@ void main() {
       expect(seen, isNotEmpty);
     });
   });
+
+  group('a server without the plugin', () {
+    Future<List<String>> printed(Future<void> Function() body) async {
+      final lines = <String>[];
+      await runZoned(body, zoneSpecification: ZoneSpecification(
+        print: (self, parent, zone, line) => lines.add(line),
+      ));
+      return lines;
+    }
+
+    test('warns once in debug, naming the fix', () async {
+      final lines = await printed(() async {
+        final s = _setup(serverPlugins: ['organization']);
+        await s.manager.initialize();
+        await s.api().load();
+        await s.api().load();
+        await s.api().loadPlans();
+        await s.api().forTenant('org_9').load();
+      });
+      expect(lines.where((l) => l.contains('subscription.New')), hasLength(1));
+    });
+
+    test('stays quiet when the server has it', () async {
+      final lines = await printed(() async {
+        final s = _setup(serverPlugins: ['subscription']);
+        await s.manager.initialize();
+        await s.api().load();
+      });
+      expect(lines, isEmpty);
+    });
+  });
+
+  group('forTenant', () {
+    test('reads and writes another tenant, with its own cache', () async {
+      final s = _setup();
+      Object? cancelBody;
+      s.routes['POST /v1/billing/subscription/cancel'] = (req) {
+        cancelBody = jsonDecode(req.body);
+        return _json({'subscription': subJson({'tenant_id': 'org_9', 'cancel_at': '2026-12-01T00:00:00Z'})});
+      };
+      await s.manager.initialize();
+      final other = s.api().forTenant('org_9');
+      expect(identical(s.api().forTenant('org_9'), other), isTrue);
+      expect(other.tenantId, 'org_9');
+      expect(s.api().tenantId, isNull);
+
+      await other.load();
+      expect(s.calls, contains('GET /v1/billing/subscription?tenant_id=org_9'));
+      expect(s.calls, contains('GET /v1/billing/entitlements?tenant_id=org_9'));
+      expect(s.api().snapshot.subscription.status, ResourceStatus.idle);
+
+      await other.cancel();
+      expect(cancelBody, {'when': 'period_end', 'tenant_id': 'org_9'});
+      expect(other.snapshot.subscription.data!.willCancel, isTrue);
+    });
+
+    test('keeps a pinned tenant across org switches and forgets it on sign-out', () async {
+      final s = _setup();
+      await s.manager.initialize();
+      final other = s.api().forTenant('org_9');
+      await other.load();
+      s.routes['POST /v1/me/switch-org'] = (_) => _json({'session_id': 's', 'org_id': 'org_2'});
+      await s.manager.switchOrg('org_2');
+      expect(other.snapshot.subscription.status, ResourceStatus.ready);
+      await s.manager.signOut();
+      expect(other.snapshot.subscription.status, ResourceStatus.idle);
+    });
+  });
 }
