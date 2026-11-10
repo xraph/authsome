@@ -11,6 +11,7 @@
 
 import { AuthClient, AuthManager } from "@authsome/ui-core";
 import type {
+  AuthPlugin,
   AuthState,
   ClientConfig,
   Session,
@@ -175,6 +176,12 @@ export function stubAuth(opts: {
    * dependency the component keys its fetch on.
    */
   client?: AuthClient;
+  /**
+   * Client plugins to register, so a component under test can reach one
+   * through usePlugin. Without this the manager has an empty registry and
+   * usePlugin throws PluginNotRegisteredError.
+   */
+  plugins?: AuthPlugin<unknown>[];
 }): AuthContextValue {
   const client =
     opts.client ?? new AuthClient({ baseURL: BASE, fetch: opts.fetch });
@@ -186,7 +193,11 @@ export function stubAuth(opts: {
 
   return {
     state,
-    manager: new AuthManager({ baseURL: BASE, fetch: opts.fetch }),
+    manager: new AuthManager({
+      baseURL: BASE,
+      fetch: opts.fetch,
+      plugins: opts.plugins,
+    }),
     client,
     user: opts.session ? user : null,
     session: opts.session,

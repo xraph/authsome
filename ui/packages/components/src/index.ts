@@ -11,6 +11,16 @@ export {
   CardFooter,
 } from "./primitives/card";
 export { Input, type InputProps } from "./primitives/input";
+export {
+  InputGroup,
+  InputAddon,
+  InputGroupInput,
+} from "./primitives/input-group";
+export {
+  PhoneInput,
+  type PhoneInputProps,
+  type PhoneCountryCode,
+} from "./primitives/phone-input";
 export { Label } from "./primitives/label";
 export { Alert, AlertDescription } from "./primitives/alert";
 export {
@@ -26,7 +36,11 @@ export {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "./primitives/dropdown-menu";
-export { Separator } from "./primitives/separator";
+export {
+  Separator,
+  LabelledSeparator,
+  type LabelledSeparatorProps,
+} from "./primitives/separator";
 export { Badge, type BadgeProps, badgeVariants } from "./primitives/badge";
 export { Skeleton } from "./primitives/skeleton";
 export { Checkbox } from "./primitives/checkbox";
@@ -36,6 +50,12 @@ export {
   InputOTPSlot,
   InputOTPSeparator,
 } from "./primitives/otp-input";
+export {
+  VerificationCodeInput,
+  type VerificationCodeInputProps,
+  type VerificationCodeMode,
+  type VerificationCodeSize,
+} from "./primitives/verification-code-input";
 export {
   Dialog,
   DialogPortal,
@@ -84,6 +104,23 @@ export { AuthCard, type AuthCardProps, type AuthCardAlign, type AuthCardVariant 
 export { ErrorDisplay, type ErrorDisplayProps } from "./components/error-display";
 export { LoadingSpinner, type LoadingSpinnerProps } from "./components/loading-spinner";
 export { PasswordInput } from "./components/password-input";
+export {
+  LastUsedAccount,
+  type LastUsedAccountProps,
+} from "./components/last-used-account";
+export {
+  AccountSummaryCard,
+  type AccountSummaryCardProps,
+  type AccountSummaryIdentity,
+} from "./components/account-summary-card";
+export {
+  readLastAccount,
+  rememberLastAccount,
+  subscribeToLastAccount,
+  getLastAccountSnapshot,
+  forgetLastAccount,
+  type LastUsedAccount as LastUsedAccountRecord,
+} from "./lib/last-used-account";
 export { SocialButtons, OrDivider, type SocialButtonsProps, type SocialProvider, type SocialButtonLayout } from "./components/social-buttons";
 export { openOAuthPopup, handleSocialLogin } from "./lib/social-login";
 

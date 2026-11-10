@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { AuthContext, type AuthContextValue } from "@authsome/ui-react";
-import { AuthClientError } from "@authsome/ui-core";
+import { AuthClientError, pluginKeyName } from "@authsome/ui-core";
+import type { PluginKey } from "@authsome/ui-core";
 import type {
   AuthState,
   User,
@@ -218,6 +219,17 @@ export interface MockAuthProviderProps {
     | "email_verification_required";
   signUpBehavior?: "authenticated" | "email_verification_required";
   waitlistStatus?: WaitlistStatus;
+  /**
+   * Stub plugin APIs, keyed by the plugin's name, so a story can render a
+   * component that calls usePlugin. The real manager builds these from
+   * registered plugins; here a story just hands over the object it wants
+   * the component to see.
+   *
+   * ```tsx
+   * <MockAuthProvider plugins={{ subscription: { getCurrent: async () => ... } }}>
+   * ```
+   */
+  plugins?: Record<string, unknown>;
 }
 
 /**
@@ -235,6 +247,7 @@ export function MockAuthProvider({
   signInBehavior = "authenticated",
   signUpBehavior,
   waitlistStatus = "pending",
+  plugins,
 }: MockAuthProviderProps) {
   const [state, setState] = useState<AuthState>(
     stateFromPreset(initialState, user, MOCK_SESSION),
@@ -469,7 +482,23 @@ export function MockAuthProvider({
       state,
       manager: {
         getState: () => stateRef.current,
-      } as AuthContextValue["manager"],
+        // usePlugin goes through the manager, so a stub that only answers
+        // getState makes manager.plugin a TypeError rather than a readable
+        // failure. Looking the name up in the stub map keeps stories from
+        // needing a registered plugin, and an unknown name says which one
+        // the story forgot.
+        plugin: (key: PluginKey<unknown>) => {
+          const name = pluginKeyName(key);
+          const api = plugins?.[name];
+          if (!api) {
+            throw new Error(
+              `MockAuthProvider: no stub for the "${name}" plugin. ` +
+                `Pass plugins={{ ${name}: { ... } }} in the story.`,
+            );
+          }
+          return api;
+        },
+      } as unknown as AuthContextValue["manager"],
       client: mockClient,
       user: currentUser,
       session: currentSession,
@@ -518,6 +547,7 @@ export function MockAuthProvider({
       simulateError,
       errorMessage,
       updateState,
+      plugins,
     ],
   );
 

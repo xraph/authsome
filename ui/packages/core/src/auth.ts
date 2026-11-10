@@ -994,6 +994,36 @@ export class AuthManager {
     }
   }
 
+  /**
+   * Adopts a session this manager did not create.
+   *
+   * Some plugins mint a session of their own: `phoneAuthVerify` is the first,
+   * and anything that authenticates out-of-band will be the next. They come
+   * back with the same body `signIn` gets, and before this existed there was
+   * no way to hand it over, so a perfectly good session sat in a component's
+   * local state while the rest of the app still thought nobody was signed in.
+   *
+   * It does exactly what signing in with a password does from here on:
+   * persists the session (or leaves it to the cookie in cookie mode), moves
+   * state to authenticated, schedules the refresh, and fires `signedIn`.
+   *
+   * ```ts
+   * const res = await auth.plugin(phone).verify({ phone, code });
+   * await auth.adoptSession(res);
+   * ```
+   *
+   * The caller is trusting whatever produced that response. Only pass one
+   * that came from this deployment's own API.
+   */
+  async adoptSession(res: {
+    session_token: string;
+    refresh_token: string;
+    expires_at?: string;
+    user: User;
+  }): Promise<void> {
+    await this.handleAuthResponse(res.user, toSession(res));
+  }
+
   // ── Internals ─────────────────────────────────────
 
   private async handleAuthResponse(

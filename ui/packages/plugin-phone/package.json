@@ -1,0 +1,70 @@
+{
+  "name": "@authsome/plugin-phone",
+  "version": "1.5.5",
+  "description": "Phone sign-in for AuthSome: client plugin and React hooks",
+  "license": "MIT",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xraph/authsome.git",
+    "directory": "ui/packages/plugin-phone"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./react": {
+      "import": "./dist/react.js",
+      "types": "./dist/react.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@authsome/ui-core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@authsome/ui-react": "workspace:*",
+    "react": "^18.0.0 || ^19.0.0",
+    "@authsome/ui-components": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@authsome/ui-react": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "@authsome/ui-components": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@authsome/ui-react": "workspace:*",
+    "@testing-library/react": "^16.3.0",
+    "@types/react": "^19.2.18",
+    "jsdom": "^28.0.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.4",
+    "vitest": "^4.1.12",
+    "@authsome/ui-components": "workspace:*"
+  }
+}
