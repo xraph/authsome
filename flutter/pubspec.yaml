@@ -8,4 +8,5 @@ workspace:
   - packages/authsome_core
   - packages/authsome_flutter
   - packages/authsome_flutter_ui
+  - packages/authsome_subscription
   - example

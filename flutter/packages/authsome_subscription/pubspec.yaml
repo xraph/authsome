@@ -1,0 +1,19 @@
+name: authsome_subscription
+description: Client plugin for authsome's subscription plugin. Plans, subscriptions, seats and entitlements for Dart and Flutter apps.
+version: 1.6.1
+homepage: https://github.com/xraph/authsome
+repository: https://github.com/xraph/authsome/tree/main/flutter/packages/authsome_subscription
+issue_tracker: https://github.com/xraph/authsome/issues
+
+environment:
+  sdk: ^3.6.0
+
+resolution: workspace
+
+dependencies:
+  authsome_core: ^1.6.1
+
+dev_dependencies:
+  http: ^1.2.0
+  lints: ^4.0.0
+  test: ^1.25.0
