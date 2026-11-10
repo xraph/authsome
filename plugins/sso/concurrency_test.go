@@ -29,6 +29,12 @@ import (
 const (
 	ssoHammerWorkers = 4
 	ssoHammerBudget  = 150 * time.Millisecond
+	// ssoHammerMinIters is how many iterations every hammer goroutine runs
+	// whatever the clock says. The budget lets a fast machine hammer harder;
+	// the minimum stops a slow, race-instrumented CI runner from finishing
+	// with too little work to prove anything, so the floor asserted below
+	// does not depend on machine speed.
+	ssoHammerMinIters = 200
 )
 
 func newConnection(appID id.AppID, domain, provider string) *Connection {
@@ -62,7 +68,7 @@ func TestMemoryStore_ConcurrentReadsAndWrites(t *testing.T) {
 		wg.Add(1)
 		go func(w int) {
 			defer wg.Done()
-			for i := 0; time.Now().Before(deadline); i++ {
+			for i := 0; i < ssoHammerMinIters || time.Now().Before(deadline); i++ {
 				c := conns[(w+i)%len(conns)]
 
 				if got, err := s.GetConnection(ctx, c.ID); err == nil {
@@ -86,7 +92,7 @@ func TestMemoryStore_ConcurrentReadsAndWrites(t *testing.T) {
 	}
 	wg.Wait()
 
-	require.Greater(t, ops.Load(), int64(500),
+	require.GreaterOrEqual(t, ops.Load(), int64(ssoHammerWorkers*ssoHammerMinIters),
 		"the hammer did no meaningful work; it is not exercising the store concurrently")
 
 	for i, c := range conns {
@@ -183,7 +189,7 @@ func TestMemoryStore_ConcurrentCreateUpdateDelete(t *testing.T) {
 		wg.Add(1)
 		go func(w int) {
 			defer wg.Done()
-			for i := 0; time.Now().Before(deadline); i++ {
+			for i := 0; i < ssoHammerMinIters || time.Now().Before(deadline); i++ {
 				c := newConnection(appID, fmt.Sprintf("w%d-%d.example.com", w, i%8), fmt.Sprintf("p%d", w))
 				if err := s.CreateConnection(ctx, c); err != nil {
 					t.Errorf("CreateConnection: %v", err)
@@ -204,5 +210,5 @@ func TestMemoryStore_ConcurrentCreateUpdateDelete(t *testing.T) {
 	}
 	wg.Wait()
 
-	require.Greater(t, ops.Load(), int64(300), "the hammer did no meaningful work")
+	require.GreaterOrEqual(t, ops.Load(), int64(ssoHammerWorkers*ssoHammerMinIters), "the hammer did no meaningful work")
 }

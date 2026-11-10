@@ -407,6 +407,33 @@ These return errors at the client's redirect URI, with its `state`:
 | `prompt=none` together with any other value | `invalid_request` |
 | `max_age` that isn't a non-negative integer | `invalid_request` |
 
+### Sign users out
+
+When a user signs out of a client, the client can end their session here as well. Register where you want them sent afterwards:
+
+```bash
+curl -X PATCH "https://auth.myapp.com/v1/admin/oauth/clients/$CLIENT_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"post_logout_redirect_uris": ["https://reports.example.com/signed-out"]}'
+```
+
+Then send the browser to the `end_session_endpoint` from discovery:
+
+```
+GET https://auth.myapp.com/v1/oauth/logout
+    ?id_token_hint=<the id_token you got at sign-in>
+    &post_logout_redirect_uri=https://reports.example.com/signed-out
+    &state=abc
+```
+
+If the hint is an id_token this server issued for the user who's signed in, their session ends and the browser goes to your URI with `state` attached. The hint may have expired; it still counts, since logout often happens long after sign-in. Its signature, issuer and audience still have to check out.
+
+Without a hint, or with one for somebody else, the user sees a page asking whether to sign out. That stops a link on some other site from signing people out. Pass `client_id` in place of the hint if you don't have one, and the page names your client.
+
+`post_logout_redirect_uri` has to match one of the client's registered URIs exactly, with the same rules as `redirect_uris`. Leave it out and the user lands on a plain "You're signed out" page. Dynamic registration takes `post_logout_redirect_uris` too, and `POST` with a form body works the same as `GET`.
+
+This ends the session on this server. It doesn't revoke tokens the client already holds, so revoke those yourself if the client needs to.
+
 ### Calling it from a browser app
 
 A single-page app on another origin can talk to the provider directly: discovery, both key sets, token, userinfo, revoke and dynamic registration all answer CORS requests, preflights included. You don't need a backend just to swap the code for a token.
@@ -426,7 +453,7 @@ If something in front of authsome already handles CORS, set `DisableCORS: true`.
 
 ### What this doesn't do yet
 
-`id_token_hint` and RP-initiated logout aren't there yet, and neither is a way to add custom claims.
+Front-channel and back-channel logout aren't there yet, and neither is a way to add custom claims.
 
 ## Scopes and consent
 
@@ -599,6 +626,24 @@ Authsome publishes an OpenID Connect discovery document:
 }
 ```
 
+## Errors
+
+Every error from the authorize, token, revoke and device endpoints carries an RFC 6749 code in `error`, with a human-readable `error_description` next to it. Your client library can branch on the code and never parse the prose.
+
+From `/v1/oauth/authorize`, an error goes back to the client's `redirect_uri` with `state`, the way RFC 6749 section 4.1.2.1 describes, once the client and its redirect URI check out. Before that (a missing or unknown `client_id`, a `redirect_uri` that isn't registered) it's answered as a 400 directly, because redirecting to an unverified URI would turn the endpoint into an open redirector.
+
+| Code | Where | Means |
+|------|-------|-------|
+| `invalid_request` | both | A parameter is missing or malformed |
+| `invalid_client` | token (401) | Client authentication failed. With HTTP Basic, the response carries `WWW-Authenticate: Basic` |
+| `invalid_grant` | token | The code, refresh token or PKCE verifier is wrong, used, expired or for another client |
+| `unauthorized_client` | both | The client isn't registered for this grant |
+| `unsupported_grant_type` | token | Unknown `grant_type` |
+| `unsupported_response_type` | authorize | Anything but `response_type=code` |
+| `invalid_scope` | both | A scope the client isn't registered for |
+| `invalid_target` | both | A `resource` the client isn't registered for (RFC 8707) |
+| `login_required`, `consent_required` | authorize | `prompt=none` couldn't be answered without UI |
+
 ## Configuration reference
 
 | Option | Type | Default | Description |
@@ -619,6 +664,8 @@ Authsome publishes an OpenID Connect discovery document:
 | `POST` | `/oauth/token` | Token endpoint (code exchange, client credentials, refresh) |
 | `POST` | `/introspect` | Token introspection |
 | `POST` | `/oauth/revoke` | Token revocation |
+| `GET`, `POST` | `/oauth/logout` | RP-initiated logout (`end_session_endpoint`) |
+| `POST` | `/oauth/logout/confirm` | Answer to the logout confirmation page |
 | `POST` | `/admin/oauth/clients` | Register a new OAuth2 client |
 | `GET` | `/admin/oauth/clients` | List registered clients |
 | `GET` | `/admin/oauth/clients/:clientId` | Get client details |

@@ -376,6 +376,26 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// back carries no pk claim and no grant, so the middleware later takes it
 	// for the user's own login. The same deny sits on the consent and device
 	// approval routes below.
+	// RP-initiated logout. Open to signed-out callers: with no session
+	// there is nothing to end and the browser is just sent back.
+	logoutOpts := func(op, summary string) []forge.RouteOption {
+		return append([]forge.RouteOption{
+			forge.WithSummary(summary),
+			forge.WithDescription("OpenID Connect RP-Initiated Logout. Ends the session when id_token_hint names the signed-in user, otherwise asks first, then returns to a registered post_logout_redirect_uri."),
+			forge.WithOperationID(op),
+			forge.WithErrorResponses(),
+		}, authorizeRL...)
+	}
+	if err := g.GET("/logout", p.handleLogout, logoutOpts("oauth2Logout", "OpenID Connect logout")...); err != nil {
+		return err
+	}
+	if err := g.POST("/logout", p.handleLogoutPost, logoutOpts("oauth2LogoutPost", "OpenID Connect logout (form post)")...); err != nil {
+		return err
+	}
+	if err := g.POST("/logout/confirm", p.handleLogoutConfirm, logoutOpts("oauth2LogoutConfirm", "Confirm OpenID Connect logout")...); err != nil {
+		return err
+	}
+
 	if err := g.GET("/authorize", p.handleAuthorize, append([]forge.RouteOption{
 		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("OAuth2 Authorization"),
@@ -764,8 +784,12 @@ func (p *Plugin) registerWellKnown(router forge.Router) error {
 
 // AuthorizeRequest is the OAuth2 authorization request.
 type AuthorizeRequest struct {
-	ResponseType string `query:"response_type"`
-	ClientID     string `query:"client_id"`
+	// ResponseType and ClientID are checked by the handler, not the binder,
+	// so a request missing one gets an RFC 6749 error rather than the
+	// router's generic one. A missing response_type with a good client goes
+	// back to the client as invalid_request.
+	ResponseType string `query:"response_type,omitempty"`
+	ClientID     string `query:"client_id,omitempty"`
 	// Optional per RFC 6749 §4.1.1 — when omitted the client must have exactly
 	// one registered URI, which resolveRedirectURI selects. Marking it
 	// required here rejected such requests at the binder, before the handler
@@ -798,7 +822,8 @@ type AuthorizeRequest struct {
 
 // TokenRequest is the OAuth2 token request.
 type TokenRequest struct {
-	GrantType    string `json:"grant_type" form:"grant_type"`
+	// Checked by the handler so a missing one is invalid_request.
+	GrantType    string `json:"grant_type,omitempty" form:"grant_type"`
 	Code         string `json:"code,omitempty" form:"code"`
 	RedirectURI  string `json:"redirect_uri,omitempty" form:"redirect_uri"`
 	ClientID     string `json:"client_id,omitempty" form:"client_id"`
@@ -823,7 +848,7 @@ type TokenRequest struct {
 
 // RevokeRequest is the OAuth2 revocation request.
 type RevokeRequest struct {
-	Token         string `json:"token" form:"token"`
+	Token         string `json:"token,omitempty" form:"token"`
 	TokenTypeHint string `json:"token_type_hint,omitempty" form:"token_type_hint"`
 	ClientID      string `json:"client_id,omitempty" form:"client_id"`
 	ClientSecret  string `json:"client_secret,omitempty" form:"client_secret"`
@@ -844,6 +869,7 @@ type DiscoveryResponse struct {
 	RevocationEndpoint                string   `json:"revocation_endpoint"`
 	DeviceAuthorizationEndpoint       string   `json:"device_authorization_endpoint"`
 	RegistrationEndpoint              string   `json:"registration_endpoint,omitempty"`
+	EndSessionEndpoint                string   `json:"end_session_endpoint,omitempty"`
 	JWKSURI                           string   `json:"jwks_uri"`
 	ResponseTypesSupported            []string `json:"response_types_supported"`
 	GrantTypesSupported               []string `json:"grant_types_supported"`
@@ -882,6 +908,8 @@ type CreateClientRequest struct {
 	// FirstParty marks a client the operator owns; authorization skips the
 	// consent page for it.
 	FirstParty bool `json:"first_party,omitempty"`
+	// PostLogoutRedirectURIs are where logout may send the browser back to.
+	PostLogoutRedirectURIs []string `json:"post_logout_redirect_uris,omitempty"`
 }
 
 // CreateClientResponse is returned when an OAuth2 client is created.
@@ -895,6 +923,8 @@ type CreateClientResponse struct {
 	Resources    []string `json:"resources"`
 	GrantTypes   []string `json:"grant_types"`
 	Public       bool     `json:"public"`
+
+	PostLogoutRedirectURIs []string `json:"post_logout_redirect_uris"`
 }
 
 // ListClientsRequest is the request to list OAuth2 clients.
@@ -997,22 +1027,15 @@ func newOAuth2Error(status int, errorCode, description string) *OAuth2HTTPError 
 // ──────────────────────────────────────────────────
 
 func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*apitypes.Empty, error) {
-	if req.ResponseType != "code" {
-		return nil, forge.BadRequest("unsupported response_type; use 'code'")
-	}
+	// Until the client and its redirect URI check out, an error is answered
+	// here and never redirected (RFC 6749 section 4.1.2.1): sending it to
+	// an unverified URI would make this endpoint an open redirector.
 	if req.ClientID == "" {
-		return nil, forge.BadRequest("client_id required")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_request", "client_id is required")
 	}
-
-	// Validate client.
 	client, err := p.oauth2Store.GetClient(ctx.Context(), req.ClientID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid client_id")
-	}
-
-	// Refused before a code or a consent record exists.
-	if len(req.Nonce) > maxNonceBytes {
-		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_request", "nonce must be at most 512 bytes")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_client", "invalid client_id")
 	}
 
 	// Resolve the redirect URI. Omitting it is only legal when exactly one is
@@ -1023,9 +1046,22 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		return nil, err
 	}
 
+	// From here the redirect URI is known good, so every error goes back to
+	// the client with its state.
+	switch req.ResponseType {
+	case "code":
+	case "":
+		return nil, p.authorizeError(ctx, redirectURI, "invalid_request", "response_type is required", req.State)
+	default:
+		return nil, p.authorizeError(ctx, redirectURI, "unsupported_response_type", "response_type must be code", req.State)
+	}
+	// Refused before a code or a consent record exists.
+	if len(req.Nonce) > maxNonceBytes {
+		return nil, p.authorizeError(ctx, redirectURI, "invalid_request", "nonce must be at most 512 bytes", req.State)
+	}
+
 	// prompt=none rules out every other value (OpenID Connect Core
-	// 3.1.2.1). From here the redirect URI is known good, so errors go to
-	// the client.
+	// 3.1.2.1).
 	if hasPrompt(req.Prompt, "none") && len(strings.Fields(req.Prompt)) > 1 {
 		return nil, p.authorizeError(ctx, redirectURI, "invalid_request", "prompt=none cannot be combined with other values", req.State)
 	}
@@ -1037,7 +1073,7 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 	// The client must be registered for this grant. GrantTypes was recorded at
 	// registration but never enforced, so any client could run any flow.
 	if !clientAllowsGrant(client, "authorization_code") {
-		return nil, forge.BadRequest("client is not authorized for the authorization_code grant")
+		return nil, p.authorizeError(ctx, redirectURI, "unauthorized_client", "client is not authorized for the authorization_code grant", req.State)
 	}
 
 	// Confine the request to the scopes the client was registered with.
@@ -1045,13 +1081,13 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 	// limited to "profile" could mint a token for any scope it names.
 	scopes, err := resolveScopes(client, req.Scope)
 	if err != nil {
-		return nil, err
+		return nil, p.authorizeErrorFrom(ctx, redirectURI, err, req.State)
 	}
 
 	// RFC 8707.
 	resources, err := resolveResources(client, req.Resource)
 	if err != nil {
-		return nil, err
+		return nil, p.authorizeErrorFrom(ctx, redirectURI, err, req.State)
 	}
 
 	// PKCE is mandatory for public clients (RFC 8252 §8.1): they hold no
@@ -1060,12 +1096,12 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 	// Enforcing only when a challenge happens to be present lets a client opt
 	// out of its own protection by simply omitting it.
 	if client.Public && req.CodeChallenge == "" {
-		return nil, forge.BadRequest("code_challenge required (PKCE) for public clients")
+		return nil, p.authorizeError(ctx, redirectURI, "invalid_request", "code_challenge is required (PKCE) for public clients", req.State)
 	}
 	// Only S256 is accepted from any client: a plain challenge is the
 	// verifier itself, recoverable wherever the authorization URL is logged.
 	if req.CodeChallenge != "" && req.CodeChallengeMethod != "" && req.CodeChallengeMethod != "S256" {
-		return nil, forge.BadRequest("code_challenge_method must be S256")
+		return nil, p.authorizeError(ctx, redirectURI, "invalid_request", "code_challenge_method must be S256", req.State)
 	}
 
 	// Require authenticated user. No resource_metadata hint here, unlike
@@ -1190,7 +1226,7 @@ func resolveScopes(client *OAuth2Client, requested string) ([]string, error) {
 	out := make([]string, 0, len(fields))
 	for _, s := range fields {
 		if _, ok := allowed[s]; !ok {
-			return nil, forge.BadRequest(fmt.Sprintf("scope %q is not registered for this client", s))
+			return nil, newOAuth2Error(http.StatusBadRequest, "invalid_scope", fmt.Sprintf("scope %q is not registered for this client", s))
 		}
 		out = append(out, s)
 	}
@@ -1351,6 +1387,16 @@ func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (_ *TokenResp
 	ctx.SetHeader("Cache-Control", "no-store")
 	ctx.SetHeader("Pragma", "no-cache")
 
+	// A 401 invalid_client to a client that authenticated with Basic
+	// carries the challenge for that scheme (RFC 6749 section 5.2).
+	defer func() {
+		var oe *OAuth2HTTPError
+		if errors.As(err, &oe) && oe.httpStatus == http.StatusUnauthorized && oe.oauthError == "invalid_client" &&
+			strings.HasPrefix(strings.ToLower(ctx.Request().Header.Get("Authorization")), basicAuthScheme+" ") {
+			ctx.SetHeader("WWW-Authenticate", `Basic realm="oauth2"`)
+		}
+	}()
+
 	// Runs before the grant switch so every grant authenticates the same
 	// way, and so a malformed header is answered once rather than per grant.
 	if err := applyBasicClientAuth(ctx.Request(), &req.ClientID, &req.ClientSecret); err != nil {
@@ -1368,8 +1414,10 @@ func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (_ *TokenResp
 		return p.handleDeviceCodeGrant(ctx, req)
 	case tokenExchangeGrantType:
 		return p.handleTokenExchangeGrant(ctx, req)
+	case "":
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_request", "grant_type is required")
 	default:
-		return nil, forge.BadRequest("unsupported grant_type")
+		return nil, newOAuth2Error(http.StatusBadRequest, "unsupported_grant_type", "unsupported grant_type")
 	}
 }
 
@@ -1475,40 +1523,40 @@ func (p *Plugin) callerAppMatches(ctx forge.Context, appID id.AppID) bool {
 
 func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
 	if req.Code == "" {
-		return nil, forge.BadRequest("code required")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_request", "code is required")
 	}
 
 	// Look up the authorization code.
 	authCode, err := p.oauth2Store.GetAuthCode(ctx.Context(), req.Code)
 	if err != nil {
-		return nil, forge.BadRequest("invalid authorization code")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "invalid authorization code")
 	}
 	if authCode.Consumed {
-		return nil, forge.BadRequest("authorization code already used")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "authorization code already used")
 	}
 	if time.Now().After(authCode.ExpiresAt) {
-		return nil, forge.BadRequest("authorization code expired")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "authorization code expired")
 	}
 
 	// Validate client.
 	client, err := p.oauth2Store.GetClient(ctx.Context(), authCode.ClientID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid client")
+		return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "invalid client")
 	}
 
 	// The presented client_id must be the one the code was issued to.
 	// Otherwise a client can redeem a code minted for a different client.
 	if req.ClientID != "" && req.ClientID != authCode.ClientID {
-		return nil, forge.BadRequest("client_id does not match the authorization code")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "client_id does not match the authorization code")
 	}
 
 	// Validate client authentication (confidential clients).
 	if !client.Public {
 		if req.ClientSecret == "" {
-			return nil, forge.Unauthorized("client_secret required for confidential clients")
+			return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "client_secret required for confidential clients")
 		}
 		if cmpErr := compareClientSecret(ctx.Context(), client.ClientSecret, req.ClientSecret); cmpErr != nil {
-			return nil, forge.Unauthorized("invalid client_secret")
+			return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "invalid client_secret")
 		}
 	}
 
@@ -1518,21 +1566,21 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 	// different registered URI — or to an attacker who got one registered —
 	// can still be exchanged here.
 	if authCode.RedirectURI != "" && req.RedirectURI != authCode.RedirectURI {
-		return nil, forge.BadRequest("redirect_uri does not match the authorization request")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "redirect_uri does not match the authorization request")
 	}
 
 	// PKCE verification (RFC 7636). Public clients are required to have bound
 	// a challenge at /authorize; re-assert it here so a code minted before
 	// that rule existed, or through any other path, still cannot skip it.
 	if client.Public && authCode.CodeChallenge == "" {
-		return nil, forge.BadRequest("authorization code is not PKCE-bound")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "authorization code is not PKCE-bound")
 	}
 	if authCode.CodeChallenge != "" {
 		if req.CodeVerifier == "" {
-			return nil, forge.BadRequest("code_verifier required (PKCE)")
+			return nil, newOAuth2Error(http.StatusBadRequest, "invalid_request", "code_verifier is required (PKCE)")
 		}
 		if !verifyPKCE(authCode.CodeChallenge, authCode.CodeChallengeMethod, req.CodeVerifier) {
-			return nil, forge.BadRequest("invalid code_verifier")
+			return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "invalid code_verifier")
 		}
 	}
 
@@ -1557,7 +1605,7 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 		return nil, middleware.InternalError(ctx, fmt.Errorf("oauth2: consume auth code: %w", err))
 	}
 	if !consumed {
-		return nil, forge.BadRequest("authorization code already used")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "authorization code already used")
 	}
 
 	// The code carries what the user authorized; the token request may
@@ -1574,22 +1622,23 @@ func (p *Plugin) handleAuthorizationCodeGrant(ctx forge.Context, req *TokenReque
 
 func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
 	if req.ClientID == "" || req.ClientSecret == "" {
-		return nil, forge.BadRequest("client_id and client_secret required")
+		return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "client_id and client_secret are required")
 	}
 
 	client, err := p.oauth2Store.GetClient(ctx.Context(), req.ClientID)
 	if err != nil {
-		return nil, forge.Unauthorized("invalid client")
+		return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "invalid client")
 	}
 	if client.Public {
-		return nil, forge.BadRequest("client_credentials grant not allowed for public clients")
+		return nil, newOAuth2Error(http.StatusBadRequest, "unauthorized_client", "client_credentials grant not allowed for public clients")
+	}
+	// Authenticate before saying what the client may do: a caller with the
+	// wrong secret learns nothing about the client's registration.
+	if cmpErr := compareClientSecret(ctx.Context(), client.ClientSecret, req.ClientSecret); cmpErr != nil {
+		return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "invalid client_secret")
 	}
 	if !clientAllowsGrant(client, "client_credentials") {
-		return nil, forge.BadRequest("client is not registered for the client_credentials grant")
-	}
-
-	if cmpErr := compareClientSecret(ctx.Context(), client.ClientSecret, req.ClientSecret); cmpErr != nil {
-		return nil, forge.Unauthorized("invalid client_secret")
+		return nil, newOAuth2Error(http.StatusBadRequest, "unauthorized_client", "client is not registered for the client_credentials grant")
 	}
 
 	// There is no prior authorization to narrow against here, so the
@@ -1612,7 +1661,7 @@ func (p *Plugin) handleClientCredentialsGrant(ctx forge.Context, req *TokenReque
 
 func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeRequest) (*apitypes.Empty, error) {
 	if req.Token == "" {
-		return nil, forge.BadRequest("token required")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_request", "token is required")
 	}
 
 	if err := applyBasicClientAuth(ctx.Request(), &req.ClientID, &req.ClientSecret); err != nil {
@@ -1739,6 +1788,7 @@ func discoveryFrom(m *AuthServerMetadata) *DiscoveryResponse {
 		RevocationEndpoint:                m.RevocationEndpoint,
 		DeviceAuthorizationEndpoint:       m.DeviceAuthorizationEndpoint,
 		RegistrationEndpoint:              m.RegistrationEndpoint,
+		EndSessionEndpoint:                m.EndSessionEndpoint,
 		JWKSURI:                           m.JWKSURI,
 		ResponseTypesSupported:            m.ResponseTypesSupported,
 		GrantTypesSupported:               m.GrantTypesSupported,
@@ -2031,18 +2081,18 @@ const deviceCodeGrantType = "urn:ietf:params:oauth:grant-type:device_code"
 
 func (p *Plugin) handleDeviceAuthorize(ctx forge.Context, req *DeviceAuthRequest) (*DeviceAuthResponse, error) {
 	if req.ClientID == "" {
-		return nil, forge.BadRequest("client_id required")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_request", "client_id is required")
 	}
 
 	// Validate client.
 	client, err := p.oauth2Store.GetClient(ctx.Context(), req.ClientID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid client_id")
+		return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "invalid client_id")
 	}
 
 	// Check that client supports device_code grant type.
 	if !p.clientSupportsGrant(client, deviceCodeGrantType) && !p.clientSupportsGrant(client, "device_code") {
-		return nil, forge.BadRequest("client does not support device authorization grant")
+		return nil, newOAuth2Error(http.StatusBadRequest, "unauthorized_client", "client does not support the device authorization grant")
 	}
 
 	// Generate device code (256-bit, hex-encoded).
@@ -2111,10 +2161,10 @@ func (p *Plugin) handleDeviceAuthorize(ctx forge.Context, req *DeviceAuthRequest
 
 func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
 	if req.DeviceCode == "" {
-		return nil, forge.BadRequest("device_code required")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_request", "device_code is required")
 	}
 	if req.ClientID == "" {
-		return nil, forge.BadRequest("client_id required")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_request", "client_id is required")
 	}
 
 	// Authenticate the client before touching the device code at all.
@@ -2314,14 +2364,14 @@ func (p *Plugin) resolveRedirectURI(client *OAuth2Client, uri string) (string, e
 		if len(client.RedirectURIs) == 1 {
 			return client.RedirectURIs[0], nil
 		}
-		return "", forge.BadRequest("redirect_uri required")
+		return "", newOAuth2Error(http.StatusBadRequest, "invalid_request", "redirect_uri is required")
 	}
 	for _, u := range client.RedirectURIs {
 		if u == uri {
 			return uri, nil
 		}
 	}
-	return "", forge.BadRequest("invalid redirect_uri")
+	return "", newOAuth2Error(http.StatusBadRequest, "invalid_request", "redirect_uri is not registered for this client")
 }
 
 // verifyPKCE validates a PKCE code_verifier against a code_challenge.

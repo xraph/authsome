@@ -49,6 +49,26 @@ func regError(status int, code, desc string) *oauthRegError {
 	return &oauthRegError{status: status, Code: code, Desc: desc}
 }
 
+// validatePostLogoutRedirectURIs applies the redirect URI rules to the list
+// the logout endpoint may send the browser to. The open-redirect argument
+// for exact, vetted URIs is the same.
+func validatePostLogoutRedirectURIs(uris []string) error {
+	if len(uris) > maxRegisterRedirectURIs {
+		return regError(http.StatusBadRequest, errInvalidClientMetadata,
+			fmt.Sprintf("post_logout_redirect_uris must not exceed %d entries", maxRegisterRedirectURIs))
+	}
+	for _, u := range uris {
+		if len(u) > maxRegisterRedirectURILen {
+			return regError(http.StatusBadRequest, errInvalidClientMetadata,
+				fmt.Sprintf("post_logout_redirect_uris entries must not exceed %d characters", maxRegisterRedirectURILen))
+		}
+		if err := validateRedirectURI(u); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // validateRedirectURI reports whether a redirect URI may be registered.
 //
 // Runtime matching is already exact-string in resolveRedirectURI, so this is

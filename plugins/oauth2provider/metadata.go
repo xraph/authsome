@@ -23,6 +23,7 @@ type AuthServerMetadata struct {
 	RevocationEndpoint                string   `json:"revocation_endpoint"`
 	DeviceAuthorizationEndpoint       string   `json:"device_authorization_endpoint"`
 	RegistrationEndpoint              string   `json:"registration_endpoint,omitempty"`
+	EndSessionEndpoint                string   `json:"end_session_endpoint,omitempty"`
 	JWKSURI                           string   `json:"jwks_uri"`
 	ResponseTypesSupported            []string `json:"response_types_supported"`
 	GrantTypesSupported               []string `json:"grant_types_supported"`
@@ -85,6 +86,7 @@ func (p *Plugin) buildAuthServerMetadata(ctx context.Context, issuer, scope stri
 		UserinfoEndpoint:            base + "/v1/oauth/userinfo",
 		RevocationEndpoint:          base + "/v1/oauth/revoke",
 		DeviceAuthorizationEndpoint: base + "/v1/oauth/device/authorize",
+		EndSessionEndpoint:          base + "/v1/oauth/logout",
 		JWKSURI:                     issuer + "/v1/oauth/jwks",
 		ResponseTypesSupported:      []string{"code"},
 		GrantTypesSupported: []string{

@@ -66,6 +66,12 @@ const (
 	hammerWorkers = 4
 	// hammerBudget bounds the duration-driven hammers.
 	hammerBudget = 150 * time.Millisecond
+	// hammerMinIters is how many iterations every hammer goroutine runs
+	// whatever the clock says. The budget lets a fast machine hammer harder;
+	// the minimum stops a slow, race-instrumented CI runner from finishing
+	// with too little work to prove anything, so the floor asserted below
+	// does not depend on machine speed.
+	hammerMinIters = 200
 	// resurrectionRounds is how many separate revocations
 	// TestGrantCache_RevocationSurvivesConcurrentPuts stages. Each round is
 	// one chance to land an invalidate inside put's critical section, and
@@ -135,7 +141,7 @@ func TestGrantCache_ConcurrentAccessIsRaceFree(t *testing.T) {
 			wg.Add(1)
 			go func(w int) {
 				defer wg.Done()
-				for i := 0; time.Now().Before(deadline); i++ {
+				for i := 0; i < hammerMinIters || time.Now().Before(deadline); i++ {
 					fn(w*len(grants) + i)
 					ops.Add(1)
 				}
@@ -170,7 +176,7 @@ func TestGrantCache_ConcurrentAccessIsRaceFree(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; time.Now().Before(deadline); i++ {
+		for i := 0; i < hammerMinIters || time.Now().Before(deadline); i++ {
 			if i%64 == 0 {
 				c.clear()
 			}
@@ -181,9 +187,10 @@ func TestGrantCache_ConcurrentAccessIsRaceFree(t *testing.T) {
 
 	wg.Wait()
 
-	// A floor low enough never to flake on a loaded CI box, high enough that
-	// "the goroutines never actually ran" cannot slip past.
-	require.Greater(t, ops.Load(), int64(1000), "the hammer did no meaningful work; it is not exercising the cache concurrently")
+	// Every goroutine runs at least hammerMinIters, so this floor holds on
+	// any machine, however loaded, while "the goroutines never actually ran"
+	// still cannot slip past.
+	require.GreaterOrEqual(t, ops.Load(), int64((3*hammerWorkers+1)*hammerMinIters), "the hammer did no meaningful work; it is not exercising the cache concurrently")
 }
 
 // TestGrantCache_RevocationSurvivesConcurrentPuts pins down the generation

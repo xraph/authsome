@@ -614,3 +614,23 @@ func TestManage_RateLimitKeyIncludesCallerIP(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code,
 		"a different caller IP must not inherit another IP's exhausted budget for the same client_id")
 }
+
+// RFC 7592 update replaces the whole registration, the logout list
+// included, and holds it to the same rules as registration.
+func TestManage_UpdatePostLogoutRedirectURIs(t *testing.T) {
+	_, _, router, _ := newRegistrationFixture(t, true)
+	clientID, token := registerOne(t, router)
+
+	rec := manageReq(t, router, http.MethodPut, clientID, token,
+		`{"redirect_uris":["https://app.example.com/cb"],"post_logout_redirect_uris":["https://app.example.com/bye"]}`)
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	assert.Contains(t, rec.Body.String(), `"post_logout_redirect_uris":["https://app.example.com/bye"]`)
+
+	rec = manageReq(t, router, http.MethodPut, clientID, token,
+		`{"redirect_uris":["https://app.example.com/cb"],"post_logout_redirect_uris":["https://app.example.com/bye#frag"]}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	rec = manageReq(t, router, http.MethodPut, clientID, token, `{"redirect_uris":["https://app.example.com/cb"]}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.NotContains(t, rec.Body.String(), "post_logout_redirect_uris", "leaving it out clears it")
+}

@@ -284,6 +284,7 @@ export type {
   Oauth2ConsentDecisionRequest,
   Oauth2DeviceAuthorizeRequest,
   Oauth2DeviceCompleteRequest,
+  Oauth2LogoutPostRequest,
   Oauth2RegisterClientRequest,
   Oauth2UpdateRegistrationRequest,
   Oauth2RevokeRequest,

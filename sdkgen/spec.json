@@ -1986,6 +1986,12 @@
           "name": {
             "type": "string"
           },
+          "post_logout_redirect_uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "public": {
             "type": "boolean"
           },
@@ -2035,6 +2041,12 @@
           "name": {
             "type": "string"
           },
+          "post_logout_redirect_uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "public": {
             "type": "boolean"
           },
@@ -2065,7 +2077,8 @@
           "scopes",
           "resources",
           "grant_types",
-          "public"
+          "public",
+          "post_logout_redirect_uris"
         ],
         "type": "object"
       },
@@ -2839,6 +2852,9 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "end_session_endpoint": {
+            "type": "string"
           },
           "grant_types_supported": {
             "items": {
@@ -4232,6 +4248,12 @@
           "name": {
             "type": "string"
           },
+          "post_logout_redirect_uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "principal_id": {
             "type": "string"
           },
@@ -4270,6 +4292,7 @@
           "name",
           "client_id",
           "redirect_uris",
+          "post_logout_redirect_uris",
           "scopes",
           "resources",
           "grant_types",
@@ -4771,6 +4794,12 @@
           "policy_uri": {
             "type": "string"
           },
+          "post_logout_redirect_uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "redirect_uris": {
             "items": {
               "type": "string"
@@ -4841,6 +4870,12 @@
           },
           "policy_uri": {
             "type": "string"
+          },
+          "post_logout_redirect_uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "redirect_uris": {
             "items": {
@@ -6086,6 +6121,12 @@
           "name": {
             "type": "string"
           },
+          "post_logout_redirect_uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "public": {
             "type": "boolean"
           },
@@ -6130,6 +6171,12 @@
           "name": {
             "type": "string"
           },
+          "post_logout_redirect_uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "public": {
             "type": "boolean"
           },
@@ -6160,7 +6207,8 @@
           "scopes",
           "grant_types",
           "resources",
-          "public"
+          "public",
+          "post_logout_redirect_uris"
         ],
         "type": "object"
       },
@@ -6309,6 +6357,12 @@
           },
           "policy_uri": {
             "type": "string"
+          },
+          "post_logout_redirect_uris": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "redirect_uris": {
             "items": {
@@ -30210,7 +30264,6 @@
           {
             "in": "query",
             "name": "response_type",
-            "required": true,
             "schema": {
               "type": "string"
             }
@@ -30218,7 +30271,6 @@
           {
             "in": "query",
             "name": "client_id",
-            "required": true,
             "schema": {
               "type": "string"
             }
@@ -31340,6 +31392,538 @@
         ]
       }
     },
+    "/v1/oauth/logout": {
+      "get": {
+        "description": "OpenID Connect RP-Initiated Logout. Ends the session when id_token_hint names the signed-in user, otherwise asks first, then returns to a registered post_logout_redirect_uri.",
+        "operationId": "oauth2Logout",
+        "parameters": [
+          {
+            "description": "An id_token this server issued; ends the session without asking when it names the signed-in user",
+            "in": "query",
+            "name": "id_token_hint",
+            "schema": {
+              "description": "An id_token this server issued; ends the session without asking when it names the signed-in user",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The client asking, when there is no id_token_hint",
+            "in": "query",
+            "name": "client_id",
+            "schema": {
+              "description": "The client asking, when there is no id_token_hint",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Where to send the browser afterwards; must be registered for the client",
+            "in": "query",
+            "name": "post_logout_redirect_uri",
+            "schema": {
+              "description": "Where to send the browser afterwards; must be registered for the client",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Echoed on the post-logout redirect",
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "description": "Echoed on the post-logout redirect",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "OpenID Connect logout",
+        "tags": [
+          "OAuth2"
+        ]
+      },
+      "post": {
+        "description": "OpenID Connect RP-Initiated Logout. Ends the session when id_token_hint names the signed-in user, otherwise asks first, then returns to a registered post_logout_redirect_uri.",
+        "operationId": "oauth2LogoutPost",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "properties": {
+                  "client_id": {
+                    "type": "string"
+                  },
+                  "id_token_hint": {
+                    "type": "string"
+                  },
+                  "post_logout_redirect_uri": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "Request body",
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "OpenID Connect logout (form post)",
+        "tags": [
+          "OAuth2"
+        ]
+      }
+    },
+    "/v1/oauth/logout/confirm": {
+      "post": {
+        "description": "OpenID Connect RP-Initiated Logout. Ends the session when id_token_hint names the signed-in user, otherwise asks first, then returns to a registered post_logout_redirect_uri.",
+        "operationId": "oauth2LogoutConfirm",
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Confirm OpenID Connect logout",
+        "tags": [
+          "OAuth2"
+        ]
+      }
+    },
     "/v1/oauth/register": {
       "post": {
         "description": "RFC 7591 dynamic client registration.",
@@ -32068,9 +32652,6 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "token"
-                ],
                 "type": "object"
               }
             }
@@ -32292,9 +32873,6 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "grant_type"
-                ],
                 "type": "object"
               }
             }

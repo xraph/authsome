@@ -46,6 +46,8 @@ type ClientDetail struct {
 	AuthMethod string   `json:"authMethod"`
 	DPoPMode   string   `json:"dpopMode"`
 	UpdatedAt  string   `json:"updatedAt"`
+
+	PostLogoutRedirectURIs []string `json:"postLogoutRedirectUris"`
 }
 
 type ClientIDInput struct {
@@ -60,6 +62,8 @@ type CreateClientInput struct {
 	Scopes       []string `json:"scopes"`
 	GrantTypes   []string `json:"grantTypes"`
 	Resources    []string `json:"resources"`
+
+	PostLogoutRedirectURIs []string `json:"postLogoutRedirectUris,omitempty"`
 }
 
 // UpdateClientInput changes the fields it carries. A nil field is left alone.
@@ -70,6 +74,8 @@ type UpdateClientInput struct {
 	Scopes       *[]string `json:"scopes,omitempty"`
 	GrantTypes   *[]string `json:"grantTypes,omitempty"`
 	Resources    *[]string `json:"resources,omitempty"`
+
+	PostLogoutRedirectURIs *[]string `json:"postLogoutRedirectUris,omitempty"`
 }
 
 // CreatedClient carries the plaintext secret of a confidential client, once.
@@ -162,6 +168,7 @@ func clientsCreateHandler(deps Deps) func(context.Context, CreateClientInput, co
 			Name: name, Public: in.Public, FirstParty: in.FirstParty,
 			RedirectURIs: in.RedirectURIs, Scopes: in.Scopes,
 			GrantTypes: in.GrantTypes, Resources: in.Resources,
+			PostLogoutRedirectURIs: in.PostLogoutRedirectURIs,
 		})
 		if err != nil {
 			return CreatedClient{}, mapErr(err)
@@ -181,6 +188,7 @@ func clientsUpdateHandler(deps Deps) func(context.Context, UpdateClientInput, co
 		c, err := deps.Plugin.UpdateClientFor(ctx, authcontract.AppIDFromPrincipal(p, deps.Engine), in.ID, UpdateParams{
 			Name: in.Name, RedirectURIs: in.RedirectURIs, Scopes: in.Scopes,
 			GrantTypes: in.GrantTypes, Resources: in.Resources,
+			PostLogoutRedirectURIs: in.PostLogoutRedirectURIs,
 		})
 		if err != nil {
 			return ClientDetail{}, mapErr(err)
@@ -313,6 +321,8 @@ func projectDetail(c Client) ClientDetail {
 		AuthMethod:    c.AuthMethod,
 		DPoPMode:      c.DPoPMode,
 		UpdatedAt:     rfc3339(c.UpdatedAt),
+
+		PostLogoutRedirectURIs: nonNil(c.PostLogoutRedirectURIs),
 	}
 }
 

@@ -651,3 +651,36 @@ ALTER TABLE authsome_oauth2_auth_codes DROP COLUMN IF EXISTS nonce;
 		},
 	)
 }
+
+// post_logout_redirect_uris holds where RP-initiated logout may send the
+// browser back to. Mongo needs no migration: an absent field reads as empty.
+func init() {
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_oauth2_post_logout_redirect_uris",
+			Version: "20261110000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_oauth2_clients ADD COLUMN IF NOT EXISTS post_logout_redirect_uris JSONB NOT NULL DEFAULT '[]'`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_oauth2_clients DROP COLUMN IF EXISTS post_logout_redirect_uris`)
+				return err
+			},
+		},
+	)
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_oauth2_post_logout_redirect_uris",
+			Version: "20261110000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_oauth2_clients ADD COLUMN post_logout_redirect_uris TEXT NOT NULL DEFAULT '[]'`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_oauth2_clients DROP COLUMN post_logout_redirect_uris`)
+				return err
+			},
+		},
+	)
+}

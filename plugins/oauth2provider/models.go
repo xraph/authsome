@@ -14,7 +14,12 @@ type OAuth2Client struct {
 	ClientID     string            `json:"client_id"`
 	ClientSecret string            `json:"-"` // Hashed; never exposed
 	RedirectURIs []string          `json:"redirect_uris"`
-	Scopes       []string          `json:"scopes"`
+	// PostLogoutRedirectURIs are where the logout endpoint may send the
+	// browser afterwards (OpenID Connect RP-Initiated Logout 1.0 section
+	// 3.1). Matched exactly, like RedirectURIs. Empty means the logout
+	// endpoint shows its own page.
+	PostLogoutRedirectURIs []string `json:"post_logout_redirect_uris"`
+	Scopes                 []string `json:"scopes"`
 	// Resources is the allowlist of resource identifiers this client may
 	// request a token for (RFC 8707). Empty means the client may target
 	// nothing, so a request naming any resource is rejected with

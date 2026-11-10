@@ -103,6 +103,19 @@ func baseAuthorizeQuery(clientID string) url.Values {
 	}
 }
 
+// redirectedError asserts the authorize response sent an RFC 6749
+// section 4.1.2.1 error back to the client's redirect URI, with no code,
+// and returns the error and its description.
+func redirectedError(t *testing.T, rec *httptest.ResponseRecorder) (code, description string) {
+	t.Helper()
+	require.Equal(t, http.StatusFound, rec.Code, "body: %s", rec.Body.String())
+	loc, err := url.Parse(rec.Header().Get("Location"))
+	require.NoError(t, err)
+	assert.Equal(t, registeredURI, loc.Scheme+"://"+loc.Host+loc.Path, "the error goes to the client")
+	assert.Empty(t, loc.Query().Get("code"))
+	return loc.Query().Get("error"), loc.Query().Get("error_description")
+}
+
 // codeFrom extracts the authorization code from a 302 Location header.
 func codeFrom(t *testing.T, rec *httptest.ResponseRecorder) string {
 	t.Helper()
@@ -180,10 +193,9 @@ func TestTokenExchange_RejectsMismatchedClientID(t *testing.T) {
 func TestAuthorize_PublicClientMustSendCodeChallenge(t *testing.T) {
 	_, _, mux := newFixture(t)
 
-	rec := authorize(t, mux, baseAuthorizeQuery(publicID))
-
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "code_challenge")
+	code, desc := redirectedError(t, authorize(t, mux, baseAuthorizeQuery(publicID)))
+	assert.Equal(t, "invalid_request", code)
+	assert.Contains(t, desc, "code_challenge")
 }
 
 // "plain" leaves the verifier recoverable wherever the challenge is observable
@@ -195,10 +207,9 @@ func TestAuthorize_PublicClientMustUseS256(t *testing.T) {
 	q.Set("code_challenge", "some-verifier")
 	q.Set("code_challenge_method", "plain")
 
-	rec := authorize(t, mux, q)
-
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "S256")
+	code, desc := redirectedError(t, authorize(t, mux, q))
+	assert.Equal(t, "invalid_request", code)
+	assert.Contains(t, desc, "S256")
 }
 
 func TestPKCE_HappyPathAndWrongVerifier(t *testing.T) {
@@ -242,10 +253,9 @@ func TestAuthorize_RejectsUnregisteredScope(t *testing.T) {
 	q := baseAuthorizeQuery(confidentialID)
 	q.Set("scope", "openid admin:all")
 
-	rec := authorize(t, mux, q)
-
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "admin:all")
+	code, desc := redirectedError(t, authorize(t, mux, q))
+	assert.Equal(t, "invalid_scope", code)
+	assert.Contains(t, desc, "admin:all")
 }
 
 func TestAuthorize_OmittedScopeYieldsRegisteredSet(t *testing.T) {
@@ -274,10 +284,9 @@ func TestAuthorize_RejectsUnregisteredGrantType(t *testing.T) {
 		GrantTypes:   []string{"client_credentials"},
 	}))
 
-	rec := authorize(t, mux, baseAuthorizeQuery("cc-only"))
-
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "authorization_code")
+	code, desc := redirectedError(t, authorize(t, mux, baseAuthorizeQuery("cc-only")))
+	assert.Equal(t, "unauthorized_client", code)
+	assert.Contains(t, desc, "authorization_code")
 }
 
 // handleClientCredentialsGrant never consulted the client's registered grant

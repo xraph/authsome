@@ -2090,14 +2090,14 @@ class AuthClient {
 
   /// OAuth2 Authorization
   /// GET /v1/oauth/authorize
-  Future<void> oauth2Authorize({required String responseType, required String clientId, String? redirectUri, String? scope, String? state, String? codeChallenge, String? codeChallengeMethod, List<String>? resource, String? prompt, String? nonce, String? maxAge}) async {
+  Future<void> oauth2Authorize({String? responseType, String? clientId, String? redirectUri, String? scope, String? state, String? codeChallenge, String? codeChallengeMethod, List<String>? resource, String? prompt, String? nonce, String? maxAge}) async {
     final path = '/v1/oauth/authorize';
     // A list of pairs rather than a map, because a query string may carry the
     // same key more than once. RFC 8707 sends `resource` that way, and a map
     // would keep only the last value.
     final queryPairs = <MapEntry<String, String>>[];
-    queryPairs.add(MapEntry('response_type', responseType.toString()));
-    queryPairs.add(MapEntry('client_id', clientId.toString()));
+    if (responseType != null) queryPairs.add(MapEntry('response_type', responseType.toString()));
+    if (clientId != null) queryPairs.add(MapEntry('client_id', clientId.toString()));
     if (redirectUri != null) queryPairs.add(MapEntry('redirect_uri', redirectUri.toString()));
     if (scope != null) queryPairs.add(MapEntry('scope', scope.toString()));
     if (state != null) queryPairs.add(MapEntry('state', state.toString()));
@@ -2188,6 +2188,52 @@ class AuthClient {
       token: token,
     );
     return JWKSResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// OpenID Connect logout
+  /// GET /v1/oauth/logout
+  Future<void> oauth2Logout({required String token, String? idTokenHint, String? clientId, String? postLogoutRedirectUri, String? state}) async {
+    final path = '/v1/oauth/logout';
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    if (idTokenHint != null) queryPairs.add(MapEntry('id_token_hint', idTokenHint.toString()));
+    if (clientId != null) queryPairs.add(MapEntry('client_id', clientId.toString()));
+    if (postLogoutRedirectUri != null) queryPairs.add(MapEntry('post_logout_redirect_uri', postLogoutRedirectUri.toString()));
+    if (state != null) queryPairs.add(MapEntry('state', state.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
+    await _request(
+'GET',
+      '$path$queryString',
+      token: token,
+    );
+  }
+
+  /// OpenID Connect logout (form post)
+  /// POST /v1/oauth/logout
+  Future<void> oauth2LogoutPost({required Oauth2LogoutPostRequest body, required String token}) async {
+    final path = '/v1/oauth/logout';
+    await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      form: true,
+      token: token,
+    );
+  }
+
+  /// Confirm OpenID Connect logout
+  /// POST /v1/oauth/logout/confirm
+  Future<void> oauth2LogoutConfirm({required String token}) async {
+    final path = '/v1/oauth/logout/confirm';
+    await _request(
+'POST',
+      path,
+      token: token,
+    );
   }
 
   /// Register OAuth2 client

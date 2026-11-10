@@ -58,6 +58,8 @@ type UpdateClientRequest struct {
 	// FirstParty marks a client the operator owns; authorization skips the
 	// consent page for it.
 	FirstParty *bool `json:"first_party,omitempty"`
+
+	PostLogoutRedirectURIs *[]string `json:"post_logout_redirect_uris,omitempty"`
 }
 
 // UpdateClientResponse echoes the client as it stands after the edit. It
@@ -71,6 +73,8 @@ type UpdateClientResponse struct {
 	GrantTypes   []string `json:"grant_types"`
 	Resources    []string `json:"resources"`
 	Public       bool     `json:"public"`
+
+	PostLogoutRedirectURIs []string `json:"post_logout_redirect_uris"`
 }
 
 // adminGrantTypes is what an operator holding manage:oauth2_client may put on
@@ -179,5 +183,7 @@ func (p *Plugin) handleUpdateClient(ctx forge.Context, req *UpdateClientRequest)
 		GrantTypes:   client.GrantTypes,
 		Resources:    client.Resources,
 		Public:       client.Public,
+
+		PostLogoutRedirectURIs: client.PostLogoutRedirectURIs,
 	}, nil
 }

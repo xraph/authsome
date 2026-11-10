@@ -418,3 +418,63 @@ func TestRFC8693_DiscoveryAdvertisesTheGrant(t *testing.T) {
 
 	assert.Contains(t, rec.Body.String(), exchangeGrant)
 }
+
+// Every token exchange refusal carries an RFC 6749 or RFC 8693 code, so a
+// client can tell bad credentials from a bad subject.
+func TestRFC8693_ErrorCodes(t *testing.T) {
+	f := newExchangeFixture(t)
+	ctx := context.Background()
+	require.NoError(t, f.oauth.CreateClient(ctx, &oauth2provider.OAuth2Client{
+		ID: id.NewOAuth2ClientID(), AppID: f.appID, ClientID: "public-xchg", Name: "Public",
+		GrantTypes: []string{exchangeGrant}, Public: true, TokenEndpointAuthMethod: "none",
+	}))
+	hashed, err := bcrypt.GenerateFromPassword([]byte("other-secret"), bcrypt.MinCost)
+	require.NoError(t, err)
+	require.NoError(t, f.oauth.CreateClient(ctx, &oauth2provider.OAuth2Client{
+		ID: id.NewOAuth2ClientID(), AppID: f.appID, ClientID: "no-xchg", Name: "No exchange",
+		ClientSecret: string(hashed), GrantTypes: []string{"client_credentials"}, PrincipalID: id.NewServiceAccountID(),
+	}))
+
+	subject := f.seedSubject(t, f.appID, []string{"a"}, "")
+	expired := "expired-" + id.NewSessionID().String()
+	require.NoError(t, f.core.CreateSession(ctx, &session.Session{
+		ID: id.NewSessionID(), AppID: f.appID, UserID: id.NewUserID(), Token: expired, ExpiresAt: time.Now().Add(-time.Minute),
+	}))
+
+	for _, tc := range []struct {
+		name   string
+		body   map[string]string
+		status int
+		code   string
+	}{
+		{"no secret", map[string]string{"client_secret": ""}, http.StatusUnauthorized, "invalid_client"},
+		{"unknown client", map[string]string{"client_id": "nobody"}, http.StatusUnauthorized, "invalid_client"},
+		{"public client", map[string]string{"client_id": "public-xchg", "client_secret": "x"}, http.StatusBadRequest, "unauthorized_client"},
+		{"wrong secret", map[string]string{"client_secret": "wrong"}, http.StatusUnauthorized, "invalid_client"},
+		{"grant not registered", map[string]string{"client_id": "no-xchg", "client_secret": "other-secret"}, http.StatusBadRequest, "unauthorized_client"},
+		{"no subject", map[string]string{}, http.StatusBadRequest, "invalid_request"},
+		{"unsupported requested type", map[string]string{
+			"subject_token": subject, "subject_token_type": accessTokenType,
+			"requested_token_type": "urn:ietf:params:oauth:token-type:id_token",
+		}, http.StatusBadRequest, "invalid_request"},
+		{"unknown subject", map[string]string{"subject_token": "nope", "subject_token_type": accessTokenType}, http.StatusBadRequest, "invalid_grant"},
+		{"expired subject", map[string]string{"subject_token": expired, "subject_token_type": accessTokenType}, http.StatusBadRequest, "invalid_grant"},
+		{"unsupported subject type", map[string]string{
+			"subject_token": subject, "subject_token_type": "urn:ietf:params:oauth:token-type:refresh_token",
+		}, http.StatusBadRequest, "unsupported_token_type"},
+		{"unsupported actor type", map[string]string{
+			"subject_token": subject, "subject_token_type": accessTokenType, "scope": "a",
+			"actor_token": subject, "actor_token_type": "urn:ietf:params:oauth:token-type:refresh_token",
+		}, http.StatusBadRequest, "unsupported_token_type"},
+		{"unknown actor", map[string]string{
+			"subject_token": subject, "subject_token_type": accessTokenType, "scope": "a",
+			"actor_token": "nope", "actor_token_type": accessTokenType,
+		}, http.StatusBadRequest, "invalid_grant"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := f.exchange(t, tc.body)
+			assert.Equal(t, tc.status, rec.Code, rec.Body.String())
+			assert.Equal(t, tc.code, oauthErrorCode(t, rec))
+		})
+	}
+}
