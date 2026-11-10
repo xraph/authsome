@@ -2688,6 +2688,7 @@ class CreateClientRequest {
   final bool? firstParty;
   final List<String>? grantTypes;
   final String name;
+  final List<String>? postLogoutRedirectUris;
   final bool? public;
   final List<String> redirectUris;
   final List<String>? resources;
@@ -2699,6 +2700,7 @@ class CreateClientRequest {
     this.firstParty,
     this.grantTypes,
     required this.name,
+    this.postLogoutRedirectUris,
     this.public,
     required this.redirectUris,
     this.resources,
@@ -2712,6 +2714,7 @@ class CreateClientRequest {
       firstParty: json['first_party'] as bool?,
       grantTypes: json['grant_types'] == null ? null : (json['grant_types'] as List).map((e) => e as String).toList(),
       name: json['name'] as String,
+      postLogoutRedirectUris: json['post_logout_redirect_uris'] == null ? null : (json['post_logout_redirect_uris'] as List).map((e) => e as String).toList(),
       public: json['public'] as bool?,
       redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
       resources: json['resources'] == null ? null : (json['resources'] as List).map((e) => e as String).toList(),
@@ -2726,6 +2729,7 @@ class CreateClientRequest {
       if (firstParty != null) 'first_party': firstParty,
       if (grantTypes != null) 'grant_types': grantTypes,
       'name': name,
+      if (postLogoutRedirectUris != null) 'post_logout_redirect_uris': postLogoutRedirectUris,
       if (public != null) 'public': public,
       'redirect_uris': redirectUris,
       if (resources != null) 'resources': resources,
@@ -2743,6 +2747,7 @@ class CreateClientResponse {
   final List<String> grantTypes;
   final String id;
   final String name;
+  final List<String> postLogoutRedirectUris;
   final bool public;
   final List<String> redirectUris;
   final List<String> resources;
@@ -2754,6 +2759,7 @@ class CreateClientResponse {
     required this.grantTypes,
     required this.id,
     required this.name,
+    required this.postLogoutRedirectUris,
     required this.public,
     required this.redirectUris,
     required this.resources,
@@ -2767,6 +2773,7 @@ class CreateClientResponse {
       grantTypes: (json['grant_types'] as List).map((e) => e as String).toList(),
       id: json['id'] as String,
       name: json['name'] as String,
+      postLogoutRedirectUris: (json['post_logout_redirect_uris'] as List).map((e) => e as String).toList(),
       public: json['public'] as bool,
       redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
       resources: (json['resources'] as List).map((e) => e as String).toList(),
@@ -2781,6 +2788,7 @@ class CreateClientResponse {
       'grant_types': grantTypes,
       'id': id,
       'name': name,
+      'post_logout_redirect_uris': postLogoutRedirectUris,
       'public': public,
       'redirect_uris': redirectUris,
       'resources': resources,
@@ -3764,6 +3772,7 @@ class DiscoveryResponse {
   final List<String> codeChallengeMethodsSupported;
   final String deviceAuthorizationEndpoint;
   final List<String>? dpopSigningAlgValuesSupported;
+  final String? endSessionEndpoint;
   final List<String> grantTypesSupported;
   final List<String> idTokenSigningAlgValuesSupported;
   final String issuer;
@@ -3785,6 +3794,7 @@ class DiscoveryResponse {
     required this.codeChallengeMethodsSupported,
     required this.deviceAuthorizationEndpoint,
     this.dpopSigningAlgValuesSupported,
+    this.endSessionEndpoint,
     required this.grantTypesSupported,
     required this.idTokenSigningAlgValuesSupported,
     required this.issuer,
@@ -3808,6 +3818,7 @@ class DiscoveryResponse {
       codeChallengeMethodsSupported: (json['code_challenge_methods_supported'] as List).map((e) => e as String).toList(),
       deviceAuthorizationEndpoint: json['device_authorization_endpoint'] as String,
       dpopSigningAlgValuesSupported: json['dpop_signing_alg_values_supported'] == null ? null : (json['dpop_signing_alg_values_supported'] as List).map((e) => e as String).toList(),
+      endSessionEndpoint: json['end_session_endpoint'] as String?,
       grantTypesSupported: (json['grant_types_supported'] as List).map((e) => e as String).toList(),
       idTokenSigningAlgValuesSupported: (json['id_token_signing_alg_values_supported'] as List).map((e) => e as String).toList(),
       issuer: json['issuer'] as String,
@@ -3832,6 +3843,7 @@ class DiscoveryResponse {
       'code_challenge_methods_supported': codeChallengeMethodsSupported,
       'device_authorization_endpoint': deviceAuthorizationEndpoint,
       if (dpopSigningAlgValuesSupported != null) 'dpop_signing_alg_values_supported': dpopSigningAlgValuesSupported,
+      if (endSessionEndpoint != null) 'end_session_endpoint': endSessionEndpoint,
       'grant_types_supported': grantTypesSupported,
       'id_token_signing_alg_values_supported': idTokenSigningAlgValuesSupported,
       'issuer': issuer,
@@ -5703,6 +5715,7 @@ class OAuth2Client {
   final String id;
   final Map<String, dynamic>? metadata;
   final String name;
+  final List<String> postLogoutRedirectUris;
   final String? principalId;
   final bool public;
   final List<String> redirectUris;
@@ -5723,6 +5736,7 @@ class OAuth2Client {
     required this.id,
     this.metadata,
     required this.name,
+    required this.postLogoutRedirectUris,
     this.principalId,
     required this.public,
     required this.redirectUris,
@@ -5745,6 +5759,7 @@ class OAuth2Client {
       id: json['id'] as String,
       metadata: json['metadata'] == null ? null : Map<String, dynamic>.from(json['metadata'] as Map),
       name: json['name'] as String,
+      postLogoutRedirectUris: (json['post_logout_redirect_uris'] as List).map((e) => e as String).toList(),
       principalId: json['principal_id'] as String?,
       public: json['public'] as bool,
       redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
@@ -5768,6 +5783,7 @@ class OAuth2Client {
       'id': id,
       if (metadata != null) 'metadata': metadata,
       'name': name,
+      'post_logout_redirect_uris': postLogoutRedirectUris,
       if (principalId != null) 'principal_id': principalId,
       'public': public,
       'redirect_uris': redirectUris,
@@ -6492,6 +6508,7 @@ class RegisterClientRequest {
   final List<String>? grantTypes;
   final String? logoUri;
   final String? policyUri;
+  final List<String>? postLogoutRedirectUris;
   final List<String> redirectUris;
   final List<String>? responseTypes;
   final String? scope;
@@ -6507,6 +6524,7 @@ class RegisterClientRequest {
     this.grantTypes,
     this.logoUri,
     this.policyUri,
+    this.postLogoutRedirectUris,
     required this.redirectUris,
     this.responseTypes,
     this.scope,
@@ -6524,6 +6542,7 @@ class RegisterClientRequest {
       grantTypes: json['grant_types'] == null ? null : (json['grant_types'] as List).map((e) => e as String).toList(),
       logoUri: json['logo_uri'] as String?,
       policyUri: json['policy_uri'] as String?,
+      postLogoutRedirectUris: json['post_logout_redirect_uris'] == null ? null : (json['post_logout_redirect_uris'] as List).map((e) => e as String).toList(),
       redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
       responseTypes: json['response_types'] == null ? null : (json['response_types'] as List).map((e) => e as String).toList(),
       scope: json['scope'] as String?,
@@ -6542,6 +6561,7 @@ class RegisterClientRequest {
       if (grantTypes != null) 'grant_types': grantTypes,
       if (logoUri != null) 'logo_uri': logoUri,
       if (policyUri != null) 'policy_uri': policyUri,
+      if (postLogoutRedirectUris != null) 'post_logout_redirect_uris': postLogoutRedirectUris,
       'redirect_uris': redirectUris,
       if (responseTypes != null) 'response_types': responseTypes,
       if (scope != null) 'scope': scope,
@@ -6567,6 +6587,7 @@ class RegisterClientResponse {
   final List<String> grantTypes;
   final String? logoUri;
   final String? policyUri;
+  final List<String>? postLogoutRedirectUris;
   final List<String> redirectUris;
   final String? registrationAccessToken;
   final String? registrationClientUri;
@@ -6588,6 +6609,7 @@ class RegisterClientResponse {
     required this.grantTypes,
     this.logoUri,
     this.policyUri,
+    this.postLogoutRedirectUris,
     required this.redirectUris,
     this.registrationAccessToken,
     this.registrationClientUri,
@@ -6611,6 +6633,7 @@ class RegisterClientResponse {
       grantTypes: (json['grant_types'] as List).map((e) => e as String).toList(),
       logoUri: json['logo_uri'] as String?,
       policyUri: json['policy_uri'] as String?,
+      postLogoutRedirectUris: json['post_logout_redirect_uris'] == null ? null : (json['post_logout_redirect_uris'] as List).map((e) => e as String).toList(),
       redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
       registrationAccessToken: json['registration_access_token'] as String?,
       registrationClientUri: json['registration_client_uri'] as String?,
@@ -6635,6 +6658,7 @@ class RegisterClientResponse {
       'grant_types': grantTypes,
       if (logoUri != null) 'logo_uri': logoUri,
       if (policyUri != null) 'policy_uri': policyUri,
+      if (postLogoutRedirectUris != null) 'post_logout_redirect_uris': postLogoutRedirectUris,
       'redirect_uris': redirectUris,
       if (registrationAccessToken != null) 'registration_access_token': registrationAccessToken,
       if (registrationClientUri != null) 'registration_client_uri': registrationClientUri,
@@ -8439,6 +8463,7 @@ class UpdateClientRequest {
   final bool? firstParty;
   final List<String>? grantTypes;
   final String? name;
+  final List<String>? postLogoutRedirectUris;
   final bool? public;
   final List<String>? redirectUris;
   final List<String>? resources;
@@ -8451,6 +8476,7 @@ class UpdateClientRequest {
     this.firstParty,
     this.grantTypes,
     this.name,
+    this.postLogoutRedirectUris,
     this.public,
     this.redirectUris,
     this.resources,
@@ -8465,6 +8491,7 @@ class UpdateClientRequest {
       firstParty: json['first_party'] as bool?,
       grantTypes: json['grant_types'] == null ? null : (json['grant_types'] as List).map((e) => e as String).toList(),
       name: json['name'] as String?,
+      postLogoutRedirectUris: json['post_logout_redirect_uris'] == null ? null : (json['post_logout_redirect_uris'] as List).map((e) => e as String).toList(),
       public: json['public'] as bool?,
       redirectUris: json['redirect_uris'] == null ? null : (json['redirect_uris'] as List).map((e) => e as String).toList(),
       resources: json['resources'] == null ? null : (json['resources'] as List).map((e) => e as String).toList(),
@@ -8480,6 +8507,7 @@ class UpdateClientRequest {
       if (firstParty != null) 'first_party': firstParty,
       if (grantTypes != null) 'grant_types': grantTypes,
       if (name != null) 'name': name,
+      if (postLogoutRedirectUris != null) 'post_logout_redirect_uris': postLogoutRedirectUris,
       if (public != null) 'public': public,
       if (redirectUris != null) 'redirect_uris': redirectUris,
       if (resources != null) 'resources': resources,
@@ -8497,6 +8525,7 @@ class UpdateClientResponse {
   final List<String> grantTypes;
   final String id;
   final String name;
+  final List<String> postLogoutRedirectUris;
   final bool public;
   final List<String> redirectUris;
   final List<String> resources;
@@ -8507,6 +8536,7 @@ class UpdateClientResponse {
     required this.grantTypes,
     required this.id,
     required this.name,
+    required this.postLogoutRedirectUris,
     required this.public,
     required this.redirectUris,
     required this.resources,
@@ -8519,6 +8549,7 @@ class UpdateClientResponse {
       grantTypes: (json['grant_types'] as List).map((e) => e as String).toList(),
       id: json['id'] as String,
       name: json['name'] as String,
+      postLogoutRedirectUris: (json['post_logout_redirect_uris'] as List).map((e) => e as String).toList(),
       public: json['public'] as bool,
       redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
       resources: (json['resources'] as List).map((e) => e as String).toList(),
@@ -8532,6 +8563,7 @@ class UpdateClientResponse {
       'grant_types': grantTypes,
       'id': id,
       'name': name,
+      'post_logout_redirect_uris': postLogoutRedirectUris,
       'public': public,
       'redirect_uris': redirectUris,
       'resources': resources,
@@ -8747,6 +8779,7 @@ class UpdateRegistrationRequest {
   final List<String>? grantTypes;
   final String? logoUri;
   final String? policyUri;
+  final List<String>? postLogoutRedirectUris;
   final List<String> redirectUris;
   final String? scope;
   final String? softwareId;
@@ -8763,6 +8796,7 @@ class UpdateRegistrationRequest {
     this.grantTypes,
     this.logoUri,
     this.policyUri,
+    this.postLogoutRedirectUris,
     required this.redirectUris,
     this.scope,
     this.softwareId,
@@ -8781,6 +8815,7 @@ class UpdateRegistrationRequest {
       grantTypes: json['grant_types'] == null ? null : (json['grant_types'] as List).map((e) => e as String).toList(),
       logoUri: json['logo_uri'] as String?,
       policyUri: json['policy_uri'] as String?,
+      postLogoutRedirectUris: json['post_logout_redirect_uris'] == null ? null : (json['post_logout_redirect_uris'] as List).map((e) => e as String).toList(),
       redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
       scope: json['scope'] as String?,
       softwareId: json['software_id'] as String?,
@@ -8800,6 +8835,7 @@ class UpdateRegistrationRequest {
       if (grantTypes != null) 'grant_types': grantTypes,
       if (logoUri != null) 'logo_uri': logoUri,
       if (policyUri != null) 'policy_uri': policyUri,
+      if (postLogoutRedirectUris != null) 'post_logout_redirect_uris': postLogoutRedirectUris,
       'redirect_uris': redirectUris,
       if (scope != null) 'scope': scope,
       if (softwareId != null) 'software_id': softwareId,
@@ -9571,6 +9607,41 @@ class Oauth2DeviceCompleteRequest {
 
   @override
   String toString() => 'Oauth2DeviceCompleteRequest(${toJson()})';
+}
+
+class Oauth2LogoutPostRequest {
+  final String? clientId;
+  final String? idTokenHint;
+  final String? postLogoutRedirectUri;
+  final String? state;
+
+  const Oauth2LogoutPostRequest({
+    this.clientId,
+    this.idTokenHint,
+    this.postLogoutRedirectUri,
+    this.state,
+  });
+
+  factory Oauth2LogoutPostRequest.fromJson(Map<String, dynamic> json) {
+    return Oauth2LogoutPostRequest(
+      clientId: json['client_id'] as String?,
+      idTokenHint: json['id_token_hint'] as String?,
+      postLogoutRedirectUri: json['post_logout_redirect_uri'] as String?,
+      state: json['state'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (clientId != null) 'client_id': clientId,
+      if (idTokenHint != null) 'id_token_hint': idTokenHint,
+      if (postLogoutRedirectUri != null) 'post_logout_redirect_uri': postLogoutRedirectUri,
+      if (state != null) 'state': state,
+    };
+  }
+
+  @override
+  String toString() => 'Oauth2LogoutPostRequest(${toJson()})';
 }
 
 class Oauth2RevokeRequest {

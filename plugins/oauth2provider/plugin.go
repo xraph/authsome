@@ -376,6 +376,26 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// back carries no pk claim and no grant, so the middleware later takes it
 	// for the user's own login. The same deny sits on the consent and device
 	// approval routes below.
+	// RP-initiated logout. Open to signed-out callers: with no session
+	// there is nothing to end and the browser is just sent back.
+	logoutOpts := func(op, summary string) []forge.RouteOption {
+		return append([]forge.RouteOption{
+			forge.WithSummary(summary),
+			forge.WithDescription("OpenID Connect RP-Initiated Logout. Ends the session when id_token_hint names the signed-in user, otherwise asks first, then returns to a registered post_logout_redirect_uri."),
+			forge.WithOperationID(op),
+			forge.WithErrorResponses(),
+		}, authorizeRL...)
+	}
+	if err := g.GET("/logout", p.handleLogout, logoutOpts("oauth2Logout", "OpenID Connect logout")...); err != nil {
+		return err
+	}
+	if err := g.POST("/logout", p.handleLogoutPost, logoutOpts("oauth2LogoutPost", "OpenID Connect logout (form post)")...); err != nil {
+		return err
+	}
+	if err := g.POST("/logout/confirm", p.handleLogoutConfirm, logoutOpts("oauth2LogoutConfirm", "Confirm OpenID Connect logout")...); err != nil {
+		return err
+	}
+
 	if err := g.GET("/authorize", p.handleAuthorize, append([]forge.RouteOption{
 		forge.WithMiddleware(middleware.DenyDelegatedSession()),
 		forge.WithSummary("OAuth2 Authorization"),
@@ -844,6 +864,7 @@ type DiscoveryResponse struct {
 	RevocationEndpoint                string   `json:"revocation_endpoint"`
 	DeviceAuthorizationEndpoint       string   `json:"device_authorization_endpoint"`
 	RegistrationEndpoint              string   `json:"registration_endpoint,omitempty"`
+	EndSessionEndpoint                string   `json:"end_session_endpoint,omitempty"`
 	JWKSURI                           string   `json:"jwks_uri"`
 	ResponseTypesSupported            []string `json:"response_types_supported"`
 	GrantTypesSupported               []string `json:"grant_types_supported"`
@@ -882,6 +903,8 @@ type CreateClientRequest struct {
 	// FirstParty marks a client the operator owns; authorization skips the
 	// consent page for it.
 	FirstParty bool `json:"first_party,omitempty"`
+	// PostLogoutRedirectURIs are where logout may send the browser back to.
+	PostLogoutRedirectURIs []string `json:"post_logout_redirect_uris,omitempty"`
 }
 
 // CreateClientResponse is returned when an OAuth2 client is created.
@@ -895,6 +918,8 @@ type CreateClientResponse struct {
 	Resources    []string `json:"resources"`
 	GrantTypes   []string `json:"grant_types"`
 	Public       bool     `json:"public"`
+
+	PostLogoutRedirectURIs []string `json:"post_logout_redirect_uris"`
 }
 
 // ListClientsRequest is the request to list OAuth2 clients.
@@ -1739,6 +1764,7 @@ func discoveryFrom(m *AuthServerMetadata) *DiscoveryResponse {
 		RevocationEndpoint:                m.RevocationEndpoint,
 		DeviceAuthorizationEndpoint:       m.DeviceAuthorizationEndpoint,
 		RegistrationEndpoint:              m.RegistrationEndpoint,
+		EndSessionEndpoint:                m.EndSessionEndpoint,
 		JWKSURI:                           m.JWKSURI,
 		ResponseTypesSupported:            m.ResponseTypesSupported,
 		GrantTypesSupported:               m.GrantTypesSupported,

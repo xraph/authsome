@@ -550,6 +550,7 @@ export interface CreateClientRequest {
   first_party?: boolean;
   grant_types?: string[];
   name: string;
+  post_logout_redirect_uris?: string[];
   public?: boolean;
   redirect_uris: string[];
   resources?: string[];
@@ -562,6 +563,7 @@ export interface CreateClientResponse {
   grant_types: string[];
   id: string;
   name: string;
+  post_logout_redirect_uris: string[];
   public: boolean;
   redirect_uris: string[];
   resources: string[];
@@ -770,6 +772,7 @@ export interface DiscoveryResponse {
   code_challenge_methods_supported: string[];
   device_authorization_endpoint: string;
   dpop_signing_alg_values_supported?: string[];
+  end_session_endpoint?: string;
   grant_types_supported: string[];
   id_token_signing_alg_values_supported: string[];
   issuer: string;
@@ -1165,6 +1168,7 @@ export interface OAuth2Client {
   id: string;
   metadata?: Record<string, unknown>;
   name: string;
+  post_logout_redirect_uris: string[];
   principal_id?: string;
   public: boolean;
   redirect_uris: string[];
@@ -1320,6 +1324,7 @@ export interface RegisterClientRequest {
   grant_types?: string[];
   logo_uri?: string;
   policy_uri?: string;
+  post_logout_redirect_uris?: string[];
   redirect_uris: string[];
   response_types?: string[];
   scope?: string;
@@ -1340,6 +1345,7 @@ export interface RegisterClientResponse {
   grant_types: string[];
   logo_uri?: string;
   policy_uri?: string;
+  post_logout_redirect_uris?: string[];
   redirect_uris: string[];
   registration_access_token?: string;
   registration_client_uri?: string;
@@ -1714,6 +1720,7 @@ export interface UpdateClientRequest {
   first_party?: boolean;
   grant_types?: string[];
   name?: string;
+  post_logout_redirect_uris?: string[];
   public?: boolean;
   redirect_uris?: string[];
   resources?: string[];
@@ -1726,6 +1733,7 @@ export interface UpdateClientResponse {
   grant_types: string[];
   id: string;
   name: string;
+  post_logout_redirect_uris: string[];
   public: boolean;
   redirect_uris: string[];
   resources: string[];
@@ -1781,6 +1789,7 @@ export interface UpdateRegistrationRequest {
   grant_types?: string[];
   logo_uri?: string;
   policy_uri?: string;
+  post_logout_redirect_uris?: string[];
   redirect_uris: string[];
   scope?: string;
   software_id?: string;
@@ -1982,6 +1991,8 @@ export type Oauth2ConsentDecisionRequest = ConsentDecisionBody;
 export type Oauth2DeviceAuthorizeRequest = { client_id: string; resource?: string[]; scope?: string };
 
 export type Oauth2DeviceCompleteRequest = { action: string; user_code: string };
+
+export type Oauth2LogoutPostRequest = { client_id?: string; id_token_hint?: string; post_logout_redirect_uri?: string; state?: string };
 
 export type Oauth2RegisterClientRequest = RegisterClientRequest;
 

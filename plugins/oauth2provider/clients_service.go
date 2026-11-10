@@ -94,6 +94,9 @@ func (p *Plugin) CreateClientFor(ctx context.Context, appID id.AppID, req Create
 			return nil, invalidClient(msg)
 		}
 	}
+	if uriErr := validatePostLogoutRedirectURIs(req.PostLogoutRedirectURIs); uriErr != nil {
+		return nil, invalidClient(registrationErrorDescription(uriErr))
+	}
 
 	clientIDStr, err := generateSecureToken(16)
 	if err != nil {
@@ -137,6 +140,7 @@ func (p *Plugin) CreateClientFor(ctx context.Context, appID id.AppID, req Create
 		ClientID:                clientIDStr,
 		ClientSecret:            hashedSecret,
 		RedirectURIs:            req.RedirectURIs,
+		PostLogoutRedirectURIs:  req.PostLogoutRedirectURIs,
 		Scopes:                  scopes,
 		Resources:               req.Resources,
 		GrantTypes:              grantTypes,
@@ -160,6 +164,8 @@ func (p *Plugin) CreateClientFor(ctx context.Context, appID id.AppID, req Create
 		Resources:    client.Resources,
 		GrantTypes:   client.GrantTypes,
 		Public:       client.Public,
+
+		PostLogoutRedirectURIs: client.PostLogoutRedirectURIs,
 	}
 	// Only return the raw secret once.
 	if rawSecret != "" {
@@ -229,6 +235,13 @@ func (p *Plugin) UpdateClientFor(ctx context.Context, appID id.AppID, clientID s
 			}
 		}
 		client.RedirectURIs = uris
+	}
+	if req.PostLogoutRedirectURIs != nil {
+		uris := *req.PostLogoutRedirectURIs
+		if uriErr := validatePostLogoutRedirectURIs(uris); uriErr != nil {
+			return nil, invalidClient(registrationErrorDescription(uriErr))
+		}
+		client.PostLogoutRedirectURIs = uris
 	}
 	if req.Scopes != nil {
 		// Deliberately not clampScopes. Silently dropping unknown scopes is

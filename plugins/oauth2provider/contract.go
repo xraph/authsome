@@ -67,6 +67,7 @@ func toContractClient(c *OAuth2Client) oauth2contract.Client {
 		RedirectURIs: c.RedirectURIs, Scopes: c.Scopes, GrantTypes: c.GrantTypes, Resources: c.Resources,
 		AuthMethod: c.TokenEndpointAuthMethod, DPoPMode: c.DPoPMode,
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
+		PostLogoutRedirectURIs: c.PostLogoutRedirectURIs,
 	}
 }
 
@@ -81,6 +82,7 @@ func (s contractService) CreateClientFor(ctx context.Context, appID id.AppID, in
 	r, err := s.p.CreateClientFor(ctx, appID, CreateClientRequest{
 		Name: in.Name, Public: in.Public, FirstParty: in.FirstParty,
 		RedirectURIs: in.RedirectURIs, Scopes: in.Scopes, GrantTypes: in.GrantTypes, Resources: in.Resources,
+		PostLogoutRedirectURIs: in.PostLogoutRedirectURIs,
 	})
 	if err != nil {
 		return oauth2contract.Created{}, toContractErr(err)
@@ -112,6 +114,7 @@ func (s contractService) UpdateClientFor(ctx context.Context, appID id.AppID, cl
 	c, err := s.p.UpdateClientFor(ctx, appID, clientID, UpdateClientRequest{
 		Name: in.Name, RedirectURIs: in.RedirectURIs, Scopes: in.Scopes,
 		GrantTypes: in.GrantTypes, Resources: in.Resources,
+		PostLogoutRedirectURIs: in.PostLogoutRedirectURIs,
 	})
 	if err != nil {
 		return oauth2contract.Client{}, toContractErr(err)

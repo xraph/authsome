@@ -88,6 +88,9 @@ type RegisterClientRequest struct {
 	SoftwareID              string   `json:"software_id,omitempty"`
 	SoftwareVersion         string   `json:"software_version,omitempty"`
 	Contacts                []string `json:"contacts,omitempty"`
+	// PostLogoutRedirectURIs is OpenID Connect RP-Initiated Logout 1.0
+	// section 3.1 client metadata.
+	PostLogoutRedirectURIs []string `json:"post_logout_redirect_uris,omitempty"`
 }
 
 // RegisterClientResponse is an RFC 7591 client information response. It is
@@ -112,6 +115,7 @@ type RegisterClientResponse struct {
 	SoftwareID              string   `json:"software_id,omitempty"`
 	SoftwareVersion         string   `json:"software_version,omitempty"`
 	Contacts                []string `json:"contacts,omitempty"`
+	PostLogoutRedirectURIs  []string `json:"post_logout_redirect_uris,omitempty"`
 }
 
 // resolveRegistrationAppID picks the app a new dynamic client belongs to.
@@ -198,6 +202,9 @@ func (p *Plugin) handleRegisterClient(ctx forge.Context, req *RegisterClientRequ
 			return nil, uriErr
 		}
 	}
+	if uriErr := validatePostLogoutRedirectURIs(req.PostLogoutRedirectURIs); uriErr != nil {
+		return nil, uriErr
+	}
 
 	grantTypes, err := clampGrantTypes(req.GrantTypes)
 	if err != nil {
@@ -260,6 +267,7 @@ func (p *Plugin) handleRegisterClient(ctx forge.Context, req *RegisterClientRequ
 		ClientID:                clientIDStr,
 		ClientSecret:            hashedSecret,
 		RedirectURIs:            req.RedirectURIs,
+		PostLogoutRedirectURIs:  req.PostLogoutRedirectURIs,
 		Scopes:                  scopes,
 		GrantTypes:              grantTypes,
 		Public:                  isPublic,
@@ -336,6 +344,7 @@ func (p *Plugin) clientInfoResponse(c *OAuth2Client) *RegisterClientResponse {
 		ClientSecretExpiresAt:   secretExpires,
 		RegistrationClientURI:   p.registrationClientURI(c.ClientID),
 		RedirectURIs:            c.RedirectURIs,
+		PostLogoutRedirectURIs:  c.PostLogoutRedirectURIs,
 		GrantTypes:              c.GrantTypes,
 		ResponseTypes:           []string{"code"},
 		Scope:                   strings.Join(c.Scopes, " "),
@@ -414,6 +423,7 @@ type UpdateRegistrationRequest struct {
 	SoftwareID              string   `json:"software_id,omitempty"`
 	SoftwareVersion         string   `json:"software_version,omitempty"`
 	Contacts                []string `json:"contacts,omitempty"`
+	PostLogoutRedirectURIs  []string `json:"post_logout_redirect_uris,omitempty"`
 }
 
 // authenticateRegistration resolves the client named in the path and checks
@@ -521,6 +531,9 @@ func (p *Plugin) handleUpdateRegistration(ctx forge.Context, req *UpdateRegistra
 			return nil, uriErr
 		}
 	}
+	if uriErr := validatePostLogoutRedirectURIs(req.PostLogoutRedirectURIs); uriErr != nil {
+		return nil, uriErr
+	}
 
 	// Same clamps as registration. An update must not be able to buy a
 	// capability that registration refused.
@@ -559,6 +572,9 @@ func (p *Plugin) handleUpdateRegistration(ctx forge.Context, req *UpdateRegistra
 
 	client.Name = req.ClientName
 	client.RedirectURIs = req.RedirectURIs
+	// Replacement semantics (RFC 7592 section 2.2): leaving the list out
+	// clears it, like every other field.
+	client.PostLogoutRedirectURIs = req.PostLogoutRedirectURIs
 	client.GrantTypes = grantTypes
 	client.Scopes = scopes
 	client.TokenEndpointAuthMethod = authMethod

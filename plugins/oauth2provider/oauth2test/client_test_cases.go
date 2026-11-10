@@ -104,6 +104,8 @@ func testClientEmptySlicesRoundTrip(t *testing.T, f Fixture) {
 	assert.NotNil(t, got.GrantTypes, "nil grant types must read back as [], not null")
 	assert.Empty(t, got.Resources)
 	assert.NotNil(t, got.Resources, "nil resources must read back as [], not null")
+	assert.Empty(t, got.PostLogoutRedirectURIs)
+	assert.NotNil(t, got.PostLogoutRedirectURIs, "nil post-logout URIs must read back as [], not null")
 }
 
 func testClientSlicesRoundTrip(t *testing.T, f Fixture) {
@@ -113,6 +115,7 @@ func testClientSlicesRoundTrip(t *testing.T, f Fixture) {
 	c.Scopes = []string{"openid", "profile", "email"}
 	c.GrantTypes = []string{"authorization_code", "refresh_token"}
 	c.Resources = []string{"https://api.example.test", "https://admin.example.test"}
+	c.PostLogoutRedirectURIs = []string{"https://a.test/bye", "https://b.test/bye"}
 	c.Public = true
 	require.NoError(t, f.Store.CreateClient(ctx, c))
 
@@ -123,7 +126,15 @@ func testClientSlicesRoundTrip(t *testing.T, f Fixture) {
 	assert.Equal(t, c.GrantTypes, got.GrantTypes)
 	assert.Equal(t, c.Resources, got.Resources,
 		"the resource allow-list decides which audiences a token may be issued for")
+	assert.Equal(t, c.PostLogoutRedirectURIs, got.PostLogoutRedirectURIs,
+		"the logout allow-list decides where a sign-out may send the browser")
 	assert.True(t, got.Public)
+
+	got.PostLogoutRedirectURIs = []string{"https://c.test/bye"}
+	require.NoError(t, f.Store.UpdateClient(ctx, got))
+	again, err := f.Store.GetClient(ctx, c.ClientID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"https://c.test/bye"}, again.PostLogoutRedirectURIs, "an update replaces the list")
 }
 
 // testUpdateClientPersistsEveryField covers the full-record replace that the

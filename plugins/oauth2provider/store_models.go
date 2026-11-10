@@ -29,6 +29,8 @@ type oauth2ClientModel struct {
 	GrantTypes   json.RawMessage `grove:"grant_types,type:jsonb"`
 	Public       bool            `grove:"public,notnull"`
 
+	PostLogoutRedirectURIs json.RawMessage `grove:"post_logout_redirect_uris,type:jsonb"`
+
 	TokenEndpointAuthMethod string          `grove:"token_endpoint_auth_method,notnull"`
 	RegistrationTokenHash   string          `grove:"registration_token_hash,notnull"`
 	DynamicallyRegistered   bool            `grove:"dynamically_registered,notnull"`
@@ -129,6 +131,13 @@ func toOAuth2Client(m *oauth2ClientModel) (*OAuth2Client, error) {
 	if len(m.Resources) > 0 {
 		_ = json.Unmarshal(m.Resources, &resources) //nolint:errcheck // best-effort decode
 	}
+	postLogout := []string{}
+	if len(m.PostLogoutRedirectURIs) > 0 {
+		_ = json.Unmarshal(m.PostLogoutRedirectURIs, &postLogout) //nolint:errcheck // best-effort decode
+		if postLogout == nil {
+			postLogout = []string{}
+		}
+	}
 
 	var metadata map[string]any
 	if len(m.Metadata) > 0 {
@@ -158,6 +167,7 @@ func toOAuth2Client(m *oauth2ClientModel) (*OAuth2Client, error) {
 		ClientID:                m.ClientID,
 		ClientSecret:            m.ClientSecret,
 		RedirectURIs:            redirectURIs,
+		PostLogoutRedirectURIs:  postLogout,
 		Scopes:                  scopes,
 		Resources:               resources,
 		GrantTypes:              grantTypes,
@@ -192,6 +202,10 @@ func fromOAuth2Client(c *OAuth2Client) *oauth2ClientModel {
 	if len(c.Resources) == 0 {
 		resources = []byte("[]")
 	}
+	postLogout, _ := json.Marshal(c.PostLogoutRedirectURIs) //nolint:errcheck // marshaling known types
+	if len(c.PostLogoutRedirectURIs) == 0 {
+		postLogout = []byte("[]")
+	}
 
 	metadata, _ := json.Marshal(c.Metadata) //nolint:errcheck // marshaling known types
 	if len(metadata) == 0 || string(metadata) == "null" {
@@ -205,6 +219,7 @@ func fromOAuth2Client(c *OAuth2Client) *oauth2ClientModel {
 		ClientID:                c.ClientID,
 		ClientSecret:            c.ClientSecret,
 		RedirectURIs:            redirectURIs,
+		PostLogoutRedirectURIs:  postLogout,
 		Scopes:                  scopes,
 		Resources:               resources,
 		GrantTypes:              grantTypes,

@@ -45,10 +45,13 @@ type oauth2ClientDoc struct {
 	ClientID     string   `bson:"client_id"`
 	ClientSecret string   `bson:"client_secret"`
 	RedirectURIs []string `bson:"redirect_uris"`
-	Scopes       []string `bson:"scopes"`
-	Resources    []string `bson:"resources"`
-	GrantTypes   []string `bson:"grant_types"`
-	Public       bool     `bson:"public"`
+	// PostLogoutRedirectURIs is absent on documents written before logout
+	// existed; it decodes to nil and reads back as empty.
+	PostLogoutRedirectURIs []string `bson:"post_logout_redirect_uris"`
+	Scopes                 []string `bson:"scopes"`
+	Resources              []string `bson:"resources"`
+	GrantTypes             []string `bson:"grant_types"`
+	Public                 bool     `bson:"public"`
 
 	TokenEndpointAuthMethod string         `bson:"token_endpoint_auth_method"`
 	RegistrationTokenHash   string         `bson:"registration_token_hash"`
@@ -124,6 +127,7 @@ func oauth2ClientDocToModel(d *oauth2ClientDoc) (*OAuth2Client, error) {
 		ClientID:                d.ClientID,
 		ClientSecret:            d.ClientSecret,
 		RedirectURIs:            redirectURIs,
+		PostLogoutRedirectURIs:  nonNilStrings(d.PostLogoutRedirectURIs),
 		Scopes:                  scopes,
 		Resources:               resources,
 		GrantTypes:              grantTypes,
@@ -171,6 +175,7 @@ func oauth2ClientToDoc(c *OAuth2Client) *oauth2ClientDoc {
 		ClientID:                c.ClientID,
 		ClientSecret:            c.ClientSecret,
 		RedirectURIs:            redirectURIs,
+		PostLogoutRedirectURIs:  nonNilStrings(c.PostLogoutRedirectURIs),
 		Scopes:                  scopes,
 		Resources:               resources,
 		GrantTypes:              grantTypes,
@@ -788,4 +793,13 @@ func (s *MongoStore) RetireSigningKey(ctx context.Context, keyID id.OAuth2Signin
 		bson.M{"_id": keyID.String()},
 		bson.M{"$set": bson.M{"retires_at": at}})
 	return err
+}
+
+// nonNilStrings returns v, or an empty slice for nil, so a list reads and
+// stores as [] rather than null.
+func nonNilStrings(v []string) []string {
+	if v == nil {
+		return []string{}
+	}
+	return v
 }

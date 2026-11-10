@@ -280,6 +280,7 @@ import type {
   Oauth2ConsentDecisionRequest,
   Oauth2DeviceAuthorizeRequest,
   Oauth2DeviceCompleteRequest,
+  Oauth2LogoutPostRequest,
   Oauth2RegisterClientRequest,
   Oauth2UpdateRegistrationRequest,
   Oauth2RevokeRequest,
@@ -2475,6 +2476,52 @@ export class AuthClient {
     const path = "/v1/oauth/jwks";
     return this.request<JWKSResponse>(
       'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * OpenID Connect logout
+   * GET /v1/oauth/logout
+   */
+  async oauth2Logout(id_token_hint?: string, client_id?: string, post_logout_redirect_uri?: string, state?: string): Promise<void> {
+    const params = new URLSearchParams();
+    if (id_token_hint !== undefined) params.set('id_token_hint', String(id_token_hint));
+    if (client_id !== undefined) params.set('client_id', String(client_id));
+    if (post_logout_redirect_uri !== undefined) params.set('post_logout_redirect_uri', String(post_logout_redirect_uri));
+    if (state !== undefined) params.set('state', String(state));
+    const qs = params.toString();
+    const path = "/v1/oauth/logout" + (qs ? `?${qs}` : '');
+    return this.request<void>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * OpenID Connect logout (form post)
+   * POST /v1/oauth/logout
+   */
+  async oauth2LogoutPost(body: Oauth2LogoutPostRequest): Promise<void> {
+    const path = "/v1/oauth/logout";
+    return this.request<void>(
+      'POST',
+      path,
+      body,
+      true,
+    );
+  }
+
+  /**
+   * Confirm OpenID Connect logout
+   * POST /v1/oauth/logout/confirm
+   */
+  async oauth2LogoutConfirm(): Promise<void> {
+    const path = "/v1/oauth/logout/confirm";
+    return this.request<void>(
+      'POST',
       path,
       undefined,
     );

@@ -620,28 +620,30 @@ type CouponResponse struct {
 
 // CreateClientRequest represents the CreateClientRequest schema.
 type CreateClientRequest struct {
-	AppID        string   `json:"app_id"`
-	DpopMode     string   `json:"dpop_mode,omitempty"`
-	FirstParty   bool     `json:"first_party,omitempty"`
-	GrantTypes   []string `json:"grant_types,omitempty"`
-	Name         string   `json:"name"`
-	Public       bool     `json:"public,omitempty"`
-	RedirectUris []string `json:"redirect_uris"`
-	Resources    []string `json:"resources,omitempty"`
-	Scopes       []string `json:"scopes,omitempty"`
+	AppID                  string   `json:"app_id"`
+	DpopMode               string   `json:"dpop_mode,omitempty"`
+	FirstParty             bool     `json:"first_party,omitempty"`
+	GrantTypes             []string `json:"grant_types,omitempty"`
+	Name                   string   `json:"name"`
+	PostLogoutRedirectUris []string `json:"post_logout_redirect_uris,omitempty"`
+	Public                 bool     `json:"public,omitempty"`
+	RedirectUris           []string `json:"redirect_uris"`
+	Resources              []string `json:"resources,omitempty"`
+	Scopes                 []string `json:"scopes,omitempty"`
 }
 
 // CreateClientResponse represents the CreateClientResponse schema.
 type CreateClientResponse struct {
-	ClientID     string   `json:"client_id"`
-	ClientSecret string   `json:"client_secret,omitempty"`
-	GrantTypes   []string `json:"grant_types"`
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Public       bool     `json:"public"`
-	RedirectUris []string `json:"redirect_uris"`
-	Resources    []string `json:"resources"`
-	Scopes       []string `json:"scopes"`
+	ClientID               string   `json:"client_id"`
+	ClientSecret           string   `json:"client_secret,omitempty"`
+	GrantTypes             []string `json:"grant_types"`
+	ID                     string   `json:"id"`
+	Name                   string   `json:"name"`
+	PostLogoutRedirectUris []string `json:"post_logout_redirect_uris"`
+	Public                 bool     `json:"public"`
+	RedirectUris           []string `json:"redirect_uris"`
+	Resources              []string `json:"resources"`
+	Scopes                 []string `json:"scopes"`
 }
 
 // CreateCouponRequest represents the CreateCouponRequest schema.
@@ -873,6 +875,7 @@ type DiscoveryResponse struct {
 	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
 	DeviceAuthorizationEndpoint       string   `json:"device_authorization_endpoint"`
 	DpopSigningAlgValuesSupported     []string `json:"dpop_signing_alg_values_supported,omitempty"`
+	EndSessionEndpoint                string   `json:"end_session_endpoint,omitempty"`
 	GrantTypesSupported               []string `json:"grant_types_supported"`
 	IDTokenSigningAlgValuesSupported  []string `json:"id_token_signing_alg_values_supported"`
 	Issuer                            string   `json:"issuer"`
@@ -1322,6 +1325,7 @@ type OAuth2Client struct {
 	ID                      string         `json:"id"`
 	Metadata                map[string]any `json:"metadata,omitempty"`
 	Name                    string         `json:"name"`
+	PostLogoutRedirectUris  []string       `json:"post_logout_redirect_uris"`
 	PrincipalID             string         `json:"principal_id,omitempty"`
 	Public                  bool           `json:"public"`
 	RedirectUris            []string       `json:"redirect_uris"`
@@ -1499,6 +1503,7 @@ type RegisterClientRequest struct {
 	GrantTypes              []string `json:"grant_types,omitempty"`
 	LogoURI                 string   `json:"logo_uri,omitempty"`
 	PolicyURI               string   `json:"policy_uri,omitempty"`
+	PostLogoutRedirectUris  []string `json:"post_logout_redirect_uris,omitempty"`
 	RedirectUris            []string `json:"redirect_uris"`
 	ResponseTypes           []string `json:"response_types,omitempty"`
 	Scope                   string   `json:"scope,omitempty"`
@@ -1520,6 +1525,7 @@ type RegisterClientResponse struct {
 	GrantTypes              []string `json:"grant_types"`
 	LogoURI                 string   `json:"logo_uri,omitempty"`
 	PolicyURI               string   `json:"policy_uri,omitempty"`
+	PostLogoutRedirectUris  []string `json:"post_logout_redirect_uris,omitempty"`
 	RedirectUris            []string `json:"redirect_uris"`
 	RegistrationAccessToken string   `json:"registration_access_token,omitempty"`
 	RegistrationClientURI   string   `json:"registration_client_uri,omitempty"`
@@ -1946,6 +1952,7 @@ type UpdateClientRequest struct {
 	FirstParty              bool     `json:"first_party,omitempty"`
 	GrantTypes              []string `json:"grant_types,omitempty"`
 	Name                    string   `json:"name,omitempty"`
+	PostLogoutRedirectUris  []string `json:"post_logout_redirect_uris,omitempty"`
 	Public                  bool     `json:"public,omitempty"`
 	RedirectUris            []string `json:"redirect_uris,omitempty"`
 	Resources               []string `json:"resources,omitempty"`
@@ -1955,14 +1962,15 @@ type UpdateClientRequest struct {
 
 // UpdateClientResponse represents the UpdateClientResponse schema.
 type UpdateClientResponse struct {
-	ClientID     string   `json:"client_id"`
-	GrantTypes   []string `json:"grant_types"`
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Public       bool     `json:"public"`
-	RedirectUris []string `json:"redirect_uris"`
-	Resources    []string `json:"resources"`
-	Scopes       []string `json:"scopes"`
+	ClientID               string   `json:"client_id"`
+	GrantTypes             []string `json:"grant_types"`
+	ID                     string   `json:"id"`
+	Name                   string   `json:"name"`
+	PostLogoutRedirectUris []string `json:"post_logout_redirect_uris"`
+	Public                 bool     `json:"public"`
+	RedirectUris           []string `json:"redirect_uris"`
+	Resources              []string `json:"resources"`
+	Scopes                 []string `json:"scopes"`
 }
 
 // UpdateEnvironmentRequest represents the UpdateEnvironmentRequest schema.
@@ -2020,6 +2028,7 @@ type UpdateRegistrationRequest struct {
 	GrantTypes              []string `json:"grant_types,omitempty"`
 	LogoURI                 string   `json:"logo_uri,omitempty"`
 	PolicyURI               string   `json:"policy_uri,omitempty"`
+	PostLogoutRedirectUris  []string `json:"post_logout_redirect_uris,omitempty"`
 	RedirectUris            []string `json:"redirect_uris"`
 	Scope                   string   `json:"scope,omitempty"`
 	SoftwareID              string   `json:"software_id,omitempty"`
@@ -2202,15 +2211,16 @@ type AdminBulkImportUsersRequest struct {
 
 // CreateOAuth2ClientRequest is the request body for CreateOAuth2Client.
 type CreateOAuth2ClientRequest struct {
-	AppID        string   `json:"app_id"`
-	DpopMode     string   `json:"dpop_mode,omitempty"`
-	FirstParty   bool     `json:"first_party,omitempty"`
-	GrantTypes   []string `json:"grant_types,omitempty"`
-	Name         string   `json:"name"`
-	Public       bool     `json:"public,omitempty"`
-	RedirectUris []string `json:"redirect_uris"`
-	Resources    []string `json:"resources,omitempty"`
-	Scopes       []string `json:"scopes,omitempty"`
+	AppID                  string   `json:"app_id"`
+	DpopMode               string   `json:"dpop_mode,omitempty"`
+	FirstParty             bool     `json:"first_party,omitempty"`
+	GrantTypes             []string `json:"grant_types,omitempty"`
+	Name                   string   `json:"name"`
+	PostLogoutRedirectUris []string `json:"post_logout_redirect_uris,omitempty"`
+	Public                 bool     `json:"public,omitempty"`
+	RedirectUris           []string `json:"redirect_uris"`
+	Resources              []string `json:"resources,omitempty"`
+	Scopes                 []string `json:"scopes,omitempty"`
 }
 
 // UpdateOAuth2ClientRequest is the request body for UpdateOAuth2Client.
@@ -2220,6 +2230,7 @@ type UpdateOAuth2ClientRequest struct {
 	FirstParty              bool     `json:"first_party,omitempty"`
 	GrantTypes              []string `json:"grant_types,omitempty"`
 	Name                    string   `json:"name,omitempty"`
+	PostLogoutRedirectUris  []string `json:"post_logout_redirect_uris,omitempty"`
 	Public                  bool     `json:"public,omitempty"`
 	RedirectUris            []string `json:"redirect_uris,omitempty"`
 	Resources               []string `json:"resources,omitempty"`
@@ -2396,6 +2407,14 @@ type Oauth2DeviceCompleteRequest struct {
 	UserCode string `json:"user_code"`
 }
 
+// Oauth2LogoutPostRequest is the request body for Oauth2LogoutPost.
+type Oauth2LogoutPostRequest struct {
+	ClientID              string `json:"client_id,omitempty"`
+	IDTokenHint           string `json:"id_token_hint,omitempty"`
+	PostLogoutRedirectURI string `json:"post_logout_redirect_uri,omitempty"`
+	State                 string `json:"state,omitempty"`
+}
+
 // Oauth2RegisterClientRequest is the request body for Oauth2RegisterClient.
 type Oauth2RegisterClientRequest struct {
 	ClientName              string   `json:"client_name,omitempty"`
@@ -2404,6 +2423,7 @@ type Oauth2RegisterClientRequest struct {
 	GrantTypes              []string `json:"grant_types,omitempty"`
 	LogoURI                 string   `json:"logo_uri,omitempty"`
 	PolicyURI               string   `json:"policy_uri,omitempty"`
+	PostLogoutRedirectUris  []string `json:"post_logout_redirect_uris,omitempty"`
 	RedirectUris            []string `json:"redirect_uris"`
 	ResponseTypes           []string `json:"response_types,omitempty"`
 	Scope                   string   `json:"scope,omitempty"`
@@ -2423,6 +2443,7 @@ type Oauth2UpdateRegistrationRequest struct {
 	GrantTypes              []string `json:"grant_types,omitempty"`
 	LogoURI                 string   `json:"logo_uri,omitempty"`
 	PolicyURI               string   `json:"policy_uri,omitempty"`
+	PostLogoutRedirectUris  []string `json:"post_logout_redirect_uris,omitempty"`
 	RedirectUris            []string `json:"redirect_uris"`
 	Scope                   string   `json:"scope,omitempty"`
 	SoftwareID              string   `json:"software_id,omitempty"`
