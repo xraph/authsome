@@ -226,6 +226,13 @@ jobs:
           cd ui/packages/nextjs
           npm publish --provenance --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
 
+      # Trusted publishing only works for a package that already exists on
+      # npm, so the first release of this one is published by hand.
+      - name: Publish @authsome/plugin-subscription
+        run: |
+          cd ui/packages/plugin-subscription
+          npm publish --provenance --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+
   # ─── Flutter/pub.dev Release ─────────────────────────────────────────
   # Authentication is OIDC, provisioned inside the reusable workflow -- there is
   # no pub credential to configure here. Two consequences:
@@ -252,5 +259,5 @@ jobs:
     with:
       # Ordered: authsome_flutter depends on authsome_core, and
       # authsome_flutter_ui depends on authsome_flutter.
-      packages: '["flutter/packages/authsome_core", "flutter/packages/authsome_flutter", "flutter/packages/authsome_flutter_ui"]'
+      packages: '["flutter/packages/authsome_core", "flutter/packages/authsome_flutter", "flutter/packages/authsome_flutter_ui", "flutter/packages/authsome_subscription", "flutter/packages/authsome_subscription_flutter"]'
       dry-run: ${{ github.event_name != 'push' || github.event.inputs.dry_run == 'true' }}

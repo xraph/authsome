@@ -147,6 +147,58 @@ route a tenant's billing writes to one of them, or check for an existing subscri
 webhook.
 </Callout>
 
+## In React
+
+The client half ships as `@authsome/plugin-subscription`. Add it to your provider the way you added the server plugin to the engine:
+
+```tsx
+import { subscription } from "@authsome/plugin-subscription";
+import { useSubscription, Entitled } from "@authsome/plugin-subscription/react";
+import { PricingTable, CurrentPlanCard } from "@authsome/plugin-subscription/components";
+
+<AuthProvider baseURL={url} publishableKey={pk} plugins={[subscription()]}>
+  <App />
+</AuthProvider>
+
+function Billing() {
+  const { plan, subscription, changePlan, isPending } = useSubscription();
+  return (
+    <>
+      <CurrentPlanCard />
+      <PricingTable highlight="team" returnUrl={location.href} />
+    </>
+  );
+}
+
+<Entitled feature="sso" fallback={<UpgradePrompt />}>
+  <SsoSettings />
+</Entitled>
+```
+
+Everything reading the subscription shares one cache. A write updates it, a sign-out clears it, and switching organization reloads it. `<Entitled>` shows the fallback until it has a positive answer, so loading or an outage never opens a paid feature.
+
+## In Flutter
+
+Two packages: `authsome_subscription` (pure Dart: models and state) and `authsome_subscription_flutter` (widgets).
+
+```dart
+AuthProvider(
+  config: AuthConfig(baseUrl: url, plugins: const [SubscriptionPlugin()]),
+  child: const MyApp(),
+);
+
+const CurrentPlanCard();
+PricingTable(onCheckout: (uri) => launchUrl(uri));
+const EntitlementGate(feature: 'sso', fallback: UpgradePrompt(), child: SsoSettings());
+
+final billing = context.subscription;
+final result = await billing.changePlan('team');
+```
+
+The widgets hand checkout and portal URLs back to you (`onCheckout`, `onOpen`), so the packages don't depend on a URL launcher.
+
+The billing methods on the core `ui-core` and `authsome_core` clients still work, and are marked deprecated in favour of these packages.
+
 ## Operator routes
 
 Plans, coupons, invoices and the ID-based subscription routes (`/subscriptions/:subId/...`)

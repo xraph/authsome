@@ -18,7 +18,7 @@ if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+].+)?$'; then
 fi
 
 PKG_DIR="$(cd "$(dirname "$0")/../flutter/packages" && pwd)"
-PACKAGES=(authsome_core authsome_flutter authsome_flutter_ui)
+PACKAGES=(authsome_core authsome_flutter authsome_flutter_ui authsome_subscription authsome_subscription_flutter)
 
 echo "Bumping Flutter packages to $VERSION..."
 
@@ -29,11 +29,13 @@ for pkg in "${PACKAGES[@]}"; do
   echo "  $pkg -> $VERSION"
 done
 
-# Inter-package constraints track the release version: the three are published as
+# Inter-package constraints track the release version: the packages are published as
 # a set, so a dependent never wants an older sibling. Anchored on leading
 # whitespace so the `name:` key at column 0 can't match.
 perl -pi -e "s{^(\s+authsome_core:).*}{\$1 ^$VERSION}" "$PKG_DIR/authsome_flutter/pubspec.yaml"
 perl -pi -e "s{^(\s+authsome_flutter:).*}{\$1 ^$VERSION}" "$PKG_DIR/authsome_flutter_ui/pubspec.yaml"
+perl -pi -e "s{^(\s+authsome_core:).*}{\$1 ^$VERSION}" "$PKG_DIR/authsome_subscription/pubspec.yaml"
+perl -pi -e "s{^(\s+authsome_(flutter|subscription):).*}{\$1 ^$VERSION}" "$PKG_DIR/authsome_subscription_flutter/pubspec.yaml"
 echo "  inter-package constraints -> ^$VERSION"
 
 echo
