@@ -28791,6 +28791,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "max_age",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {

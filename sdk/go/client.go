@@ -2173,6 +2173,9 @@ func (c *Client) Oauth2Authorize(ctx context.Context, params *Oauth2AuthorizePar
 		if params.Nonce != "" {
 			q.Set("nonce", params.Nonce)
 		}
+		if params.MaxAge != "" {
+			q.Set("max_age", params.MaxAge)
+		}
 		if encoded := q.Encode(); encoded != "" {
 			path += "?" + encoded
 		}
@@ -3545,6 +3548,7 @@ type Oauth2AuthorizeParams struct {
 	Resource            []string `json:"resource,omitempty"`
 	Prompt              string   `json:"prompt,omitempty"`
 	Nonce               string   `json:"nonce,omitempty"`
+	MaxAge              string   `json:"max_age,omitempty"`
 }
 
 // Oauth2ConsentPageParams holds optional query parameters for Oauth2ConsentPage.

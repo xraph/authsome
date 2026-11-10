@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/xraph/forge"
 	log "github.com/xraph/go-utils/log"
@@ -73,11 +75,7 @@ func (p *Plugin) signedOutAuthorize(ctx forge.Context, client *OAuth2Client, red
 	// prompt=none forbids any UI, a login page included. The client hears
 	// about it at its redirect URI and decides what to do.
 	if hasPrompt(req.Prompt, "none") {
-		to, err := errorRedirect(redirectURI, errLoginRequired, "the user is not signed in", req.State)
-		if err != nil {
-			return err
-		}
-		return ctx.Redirect(http.StatusFound, to)
+		return p.authorizeError(ctx, redirectURI, errLoginRequired, "the user is not signed in", req.State)
 	}
 
 	login, err := p.loginURLFor(ctx.Context(), client.AppID)
@@ -87,7 +85,86 @@ func (p *Plugin) signedOutAuthorize(ctx forge.Context, client *OAuth2Client, red
 	if login == nil {
 		return forge.Unauthorized("authentication required to authorize")
 	}
-	return ctx.Redirect(http.StatusFound, p.loginRedirect(login, ctx.Request()))
+	return ctx.Redirect(http.StatusFound, p.loginRedirect(login, returnURL(ctx.Request(), time.Now())))
+}
+
+// loginAfterParam marks an authorize URL that has already sent the user to
+// sign in for prompt=login. It holds the Unix time the trip began.
+const loginAfterParam = "login_after"
+
+// returnURL is the authorize URL the login page sends the browser back to.
+// The trip to the login page is what prompt=login asked for, so "login"
+// leaves the prompt and login_after records when the trip began. Without
+// that, the request coming back would ask for a login again, forever.
+// login_after only ever adds a requirement, so a client gains nothing by
+// setting it.
+func returnURL(r *http.Request, now time.Time) *url.URL {
+	back := *r.URL
+	q := back.Query()
+	if !hasPrompt(q.Get("prompt"), "login") {
+		return &back
+	}
+	var rest []string
+	for _, v := range strings.Fields(q.Get("prompt")) {
+		if v != "login" {
+			rest = append(rest, v)
+		}
+	}
+	if len(rest) == 0 {
+		q.Del("prompt")
+	} else {
+		q.Set("prompt", strings.Join(rest, " "))
+	}
+	q.Set(loginAfterParam, strconv.FormatInt(now.Unix(), 10))
+	back.RawQuery = q.Encode()
+	return &back
+}
+
+// parseMaxAge reads max_age (OpenID Connect Core 3.1.2.1): seconds since
+// the user last signed in, a non-negative integer. ok is false when the
+// request did not send one.
+func parseMaxAge(raw string) (maxAge int64, ok bool, err error) {
+	if raw == "" {
+		return 0, false, nil
+	}
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || v < 0 {
+		return 0, false, errors.New("max_age must be a non-negative integer")
+	}
+	return v, true, nil
+}
+
+// freshLoginRequired reports whether a signed-in user has to sign in again
+// before this request is answered: prompt=login asks for it outright,
+// max_age when the sign-in is older than that many seconds, and
+// login_after when the session predates the trip to the login page.
+func freshLoginRequired(prompt string, maxAge int64, hasMaxAge bool, loginAfter string, authTime, now time.Time) bool {
+	if hasPrompt(prompt, "login") {
+		return true
+	}
+	if hasMaxAge && now.Sub(authTime) > time.Duration(maxAge)*time.Second {
+		return true
+	}
+	if after, err := strconv.ParseInt(loginAfter, 10, 64); err == nil && authTime.Unix() < after {
+		return true
+	}
+	return false
+}
+
+// reauthenticate sends a signed-in user back to the login page. With
+// prompt=none, or with no login page to send them to, the client hears
+// login_required instead.
+func (p *Plugin) reauthenticate(ctx forge.Context, client *OAuth2Client, redirectURI string, req *AuthorizeRequest) error {
+	if !hasPrompt(req.Prompt, "none") {
+		login, err := p.loginURLFor(ctx.Context(), client.AppID)
+		if err != nil {
+			return err
+		}
+		if login != nil {
+			return ctx.Redirect(http.StatusFound, p.loginRedirect(login, returnURL(ctx.Request(), time.Now())))
+		}
+	}
+	return p.authorizeError(ctx, redirectURI, errLoginRequired, "the user has to sign in again", req.State)
 }
 
 // loginURLFor returns the login page for appID: the app's own setting when
@@ -134,10 +211,10 @@ func (p *Plugin) appLoginURL(ctx context.Context, appID id.AppID) string {
 // is what sign-in pages that refuse off-site redirects accept; one on
 // another origin gets the absolute URL, since a path would resolve against
 // the wrong host.
-func (p *Plugin) loginRedirect(login *url.URL, r *http.Request) string {
-	back := r.URL.Path
-	if r.URL.RawQuery != "" {
-		back += "?" + r.URL.RawQuery
+func (p *Plugin) loginRedirect(login, authorize *url.URL) string {
+	back := authorize.Path
+	if authorize.RawQuery != "" {
+		back += "?" + authorize.RawQuery
 	}
 
 	issuer, err := url.Parse(p.issuerURL())
@@ -151,6 +228,16 @@ func (p *Plugin) loginRedirect(login *url.URL, r *http.Request) string {
 	q.Set(p.config.LoginReturnParam, back)
 	to.RawQuery = q.Encode()
 	return to.String()
+}
+
+// authorizeError sends an RFC 6749 4.1.2.1 error to the client's redirect
+// URI, which the caller has already validated.
+func (p *Plugin) authorizeError(ctx forge.Context, redirectURI, code, description, state string) error {
+	to, err := errorRedirect(redirectURI, code, description, state)
+	if err != nil {
+		return err
+	}
+	return ctx.Redirect(http.StatusFound, to)
 }
 
 // hasPrompt reports whether the space-separated prompt list carries value.

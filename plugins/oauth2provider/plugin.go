@@ -790,6 +790,10 @@ type AuthorizeRequest struct {
 	// id_token. At most maxNonceBytes. It stays last for the same reason
 	// Prompt did: generated clients pass query parameters positionally.
 	Nonce string `query:"nonce,omitempty"`
+	// MaxAge is the most seconds since the user signed in that the client
+	// accepts (OpenID Connect Core 3.1.2.1). An older sign-in sends the
+	// user to sign in again. Last, like Nonce.
+	MaxAge string `query:"max_age,omitempty"`
 }
 
 // TokenRequest is the OAuth2 token request.
@@ -1019,6 +1023,17 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		return nil, err
 	}
 
+	// prompt=none rules out every other value (OpenID Connect Core
+	// 3.1.2.1). From here the redirect URI is known good, so errors go to
+	// the client.
+	if hasPrompt(req.Prompt, "none") && len(strings.Fields(req.Prompt)) > 1 {
+		return nil, p.authorizeError(ctx, redirectURI, "invalid_request", "prompt=none cannot be combined with other values", req.State)
+	}
+	maxAge, hasMaxAge, err := parseMaxAge(req.MaxAge)
+	if err != nil {
+		return nil, p.authorizeError(ctx, redirectURI, "invalid_request", err.Error(), req.State)
+	}
+
 	// The client must be registered for this grant. GrantTypes was recorded at
 	// registration but never enforced, so any client could run any flow.
 	if !clientAllowsGrant(client, "authorization_code") {
@@ -1069,6 +1084,17 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		return nil, forge.NewHTTPError(http.StatusForbidden, "this client belongs to a different app than the signed-in session")
 	}
 
+	// auth_time is when the user logged in, not when they approved this
+	// client, so it is read here, with the user present, and carried through
+	// consent. A request with no session record falls back to now.
+	authTime := time.Now()
+	if sess, ok := middleware.SessionFrom(ctx.Context()); ok && sess != nil && !sess.CreatedAt.IsZero() {
+		authTime = sess.CreatedAt
+	}
+	if freshLoginRequired(req.Prompt, maxAge, hasMaxAge, ctx.Request().URL.Query().Get(loginAfterParam), authTime, time.Now()) {
+		return nil, p.reauthenticate(ctx, client, redirectURI, req)
+	}
+
 	// Give a registered gate (e.g. an agent-delegation policy) a chance to
 	// veto the authorization before a code is issued. orgID is whatever the
 	// session carries; it may be the zero value when the session has none.
@@ -1077,18 +1103,14 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 		return nil, gateErr
 	}
 
-	// auth_time is when the user logged in, not when they approved this
-	// client, so it is read here, with the user present, and carried through
-	// consent. A request with no session record falls back to now.
-	authTime := time.Now()
-	if sess, ok := middleware.SessionFrom(ctx.Context()); ok && sess != nil && !sess.CreatedAt.IsZero() {
-		authTime = sess.CreatedAt
-	}
-
 	// A third-party client needs the user's recorded approval for every
 	// scope it asks for; otherwise the user decides on the consent page and
 	// the code is issued from there.
 	if p.needsConsent(ctx.Context(), client, userID, scopes, req.Prompt) {
+		// prompt=none forbids the consent page as much as the login page.
+		if hasPrompt(req.Prompt, "none") {
+			return nil, p.authorizeError(ctx, redirectURI, "consent_required", "the user has not approved this client for the requested scopes", req.State)
+		}
 		return nil, p.redirectToConsent(ctx, pendingConsent{
 			ClientID: req.ClientID, UserID: userID.String(), AppID: client.AppID.String(), OrgID: orgID.String(),
 			RedirectURI: redirectURI, Scopes: scopes, Resources: resources, State: req.State,
