@@ -46,3 +46,25 @@ func TestGenerate_DeprecatesTaggedOperations(t *testing.T) {
 	assert.Contains(t, docFor("subscribe"), "@deprecated")
 	assert.NotContains(t, docFor("getMe"), "@deprecated")
 }
+
+// A note sits inside a JSDoc block, so "*/" can't close it early.
+func TestGenerate_EscapesDeprecationNotes(t *testing.T) {
+	spec, err := openapi.LoadSpecFromFile("../spec.json")
+	require.NoError(t, err)
+
+	gen := typescript.NewGenerator(typescript.GeneratorConfig{
+		OutputMode:     "embedded",
+		DeprecatedTags: map[string]string{"Billing": "Read docs/*/billing */ first"},
+	})
+	files, err := gen.Generate(spec)
+	require.NoError(t, err)
+
+	for _, f := range files {
+		if strings.HasSuffix(f.Path, "api-client.ts") {
+			assert.Contains(t, f.Content, `@deprecated Read docs/*\/billing *\/ first`)
+			assert.NotContains(t, f.Content, "billing */ first")
+			return
+		}
+	}
+	t.Fatal("no api-client.ts")
+}
