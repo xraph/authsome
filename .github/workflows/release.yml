@@ -245,6 +245,11 @@ jobs:
   #   2. pub.dev rejects automated publishing from anything but a tag push, so a
   #      workflow_dispatch run can only ever rehearse. dry-run is forced on for
   #      those, which is also what the dry_run input maps to on a tag push.
+  #
+  # Automated publishing can only be switched on for a package that already
+  # exists on pub.dev, so authsome_subscription and
+  # authsome_subscription_flutter go up by hand (`dart pub publish`) once,
+  # then get the tag pattern above. Until then their step here fails.
   flutter-release:
     name: Flutter Release
     needs: [prepare]
