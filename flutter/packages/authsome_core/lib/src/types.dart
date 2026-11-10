@@ -5,6 +5,8 @@ library;
 
 import 'package:http/http.dart' as http;
 
+import 'plugins.dart' show AuthPlugin;
+
 // Re-export generated API types.
 export 'generated/api_types.dart';
 
@@ -597,6 +599,11 @@ class AuthConfig {
   /// Callback invoked on authentication error.
   final void Function(String error, int? code)? onError;
 
+  /// Client plugins to load, the client half of the server plugins you
+  /// installed, e.g. `[SubscriptionPlugin()]`. Look one up with
+  /// `manager.plugin<SubscriptionApi>()`.
+  final List<AuthPlugin<Object>> plugins;
+
   const AuthConfig({
     required this.baseUrl,
     this.publishableKey,
@@ -605,6 +612,7 @@ class AuthConfig {
     this.httpClient,
     this.onStateChange,
     this.onError,
+    this.plugins = const [],
   });
 }
 
