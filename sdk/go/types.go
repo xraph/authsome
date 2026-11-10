@@ -1229,6 +1229,7 @@ type MarkInvoicePaidRequest struct {
 
 // MeResponse represents the MeResponse schema.
 type MeResponse struct {
+	ActiveOrgID       string         `json:"active_org_id,omitempty"`
 	AppID             string         `json:"app_id"`
 	BanExpires        string         `json:"ban_expires,omitempty"`
 	BanReason         string         `json:"ban_reason,omitempty"`

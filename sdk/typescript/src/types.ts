@@ -1080,6 +1080,7 @@ export interface MarkInvoicePaidRequest {
 }
 
 export interface MeResponse {
+  active_org_id?: string;
   app_id: string;
   ban_expires?: string;
   ban_reason?: string;
