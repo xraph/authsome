@@ -379,7 +379,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if err := g.GET("/logout", p.handleLogout, logoutOpts("oauth2Logout", "OpenID Connect logout")...); err != nil {
 		return err
 	}
-	if err := g.POST("/logout", p.handleLogout, logoutOpts("oauth2LogoutPost", "OpenID Connect logout (form post)")...); err != nil {
+	if err := g.POST("/logout", p.handleLogoutPost, logoutOpts("oauth2LogoutPost", "OpenID Connect logout (form post)")...); err != nil {
 		return err
 	}
 	if err := g.POST("/logout/confirm", p.handleLogoutConfirm, logoutOpts("oauth2LogoutConfirm", "Confirm OpenID Connect logout")...); err != nil {

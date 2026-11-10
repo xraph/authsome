@@ -9068,6 +9068,41 @@ class Oauth2DeviceCompleteRequest {
   String toString() => 'Oauth2DeviceCompleteRequest(${toJson()})';
 }
 
+class Oauth2LogoutPostRequest {
+  final String? clientId;
+  final String? idTokenHint;
+  final String? postLogoutRedirectUri;
+  final String? state;
+
+  const Oauth2LogoutPostRequest({
+    this.clientId,
+    this.idTokenHint,
+    this.postLogoutRedirectUri,
+    this.state,
+  });
+
+  factory Oauth2LogoutPostRequest.fromJson(Map<String, dynamic> json) {
+    return Oauth2LogoutPostRequest(
+      clientId: json['client_id'] as String?,
+      idTokenHint: json['id_token_hint'] as String?,
+      postLogoutRedirectUri: json['post_logout_redirect_uri'] as String?,
+      state: json['state'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (clientId != null) 'client_id': clientId,
+      if (idTokenHint != null) 'id_token_hint': idTokenHint,
+      if (postLogoutRedirectUri != null) 'post_logout_redirect_uri': postLogoutRedirectUri,
+      if (state != null) 'state': state,
+    };
+  }
+
+  @override
+  String toString() => 'Oauth2LogoutPostRequest(${toJson()})';
+}
+
 class Oauth2RevokeRequest {
   final String? clientId;
   final String? clientSecret;

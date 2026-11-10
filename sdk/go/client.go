@@ -2240,15 +2240,49 @@ func (c *Client) Oauth2JWKS(ctx context.Context) (*JWKSResponse, error) {
 }
 
 // Oauth2Logout — OpenID Connect logout
-func (c *Client) Oauth2Logout(ctx context.Context) error {
+func (c *Client) Oauth2Logout(ctx context.Context, params *Oauth2LogoutParams) error {
 	path := "/v1/oauth/logout"
+	if params != nil {
+		q := url.Values{}
+		if params.IDTokenHint != "" {
+			q.Set("id_token_hint", params.IDTokenHint)
+		}
+		if params.ClientID != "" {
+			q.Set("client_id", params.ClientID)
+		}
+		if params.PostLogoutRedirectURI != "" {
+			q.Set("post_logout_redirect_uri", params.PostLogoutRedirectURI)
+		}
+		if params.State != "" {
+			q.Set("state", params.State)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
 	return c.do(ctx, "GET", path, nil, nil)
 }
 
 // Oauth2LogoutPost — OpenID Connect logout (form post)
-func (c *Client) Oauth2LogoutPost(ctx context.Context) error {
+func (c *Client) Oauth2LogoutPost(ctx context.Context, req *Oauth2LogoutPostRequest) error {
+	form := url.Values{}
+	if req != nil {
+		if req.ClientID != "" {
+			form.Set("client_id", req.ClientID)
+		}
+		if req.IDTokenHint != "" {
+			form.Set("id_token_hint", req.IDTokenHint)
+		}
+		if req.PostLogoutRedirectURI != "" {
+			form.Set("post_logout_redirect_uri", req.PostLogoutRedirectURI)
+		}
+		if req.State != "" {
+			form.Set("state", req.State)
+		}
+	}
+	body := []byte(form.Encode())
 	path := "/v1/oauth/logout"
-	return c.do(ctx, "POST", path, nil, nil)
+	return c.doForm(ctx, "POST", path, body, nil)
 }
 
 // Oauth2LogoutConfirm — Confirm OpenID Connect logout
@@ -3542,6 +3576,14 @@ type Oauth2AuthorizeParams struct {
 	Resource            []string `json:"resource,omitempty"`
 	Prompt              string   `json:"prompt,omitempty"`
 	Nonce               string   `json:"nonce,omitempty"`
+}
+
+// Oauth2LogoutParams holds optional query parameters for Oauth2Logout.
+type Oauth2LogoutParams struct {
+	IDTokenHint           string `json:"id_token_hint,omitempty"`
+	ClientID              string `json:"client_id,omitempty"`
+	PostLogoutRedirectURI string `json:"post_logout_redirect_uri,omitempty"`
+	State                 string `json:"state,omitempty"`
 }
 
 // ListOrganizationsParams holds optional query parameters for ListOrganizations.

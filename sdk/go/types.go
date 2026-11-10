@@ -2256,6 +2256,14 @@ type Oauth2DeviceCompleteRequest struct {
 	UserCode string `json:"user_code"`
 }
 
+// Oauth2LogoutPostRequest is the request body for Oauth2LogoutPost.
+type Oauth2LogoutPostRequest struct {
+	ClientID              string `json:"client_id,omitempty"`
+	IDTokenHint           string `json:"id_token_hint,omitempty"`
+	PostLogoutRedirectURI string `json:"post_logout_redirect_uri,omitempty"`
+	State                 string `json:"state,omitempty"`
+}
+
 // Oauth2RegisterClientRequest is the request body for Oauth2RegisterClient.
 type Oauth2RegisterClientRequest struct {
 	ClientName              string   `json:"client_name,omitempty"`

@@ -29496,6 +29496,44 @@
       "get": {
         "description": "OpenID Connect RP-Initiated Logout. Ends the session when id_token_hint names the signed-in user, otherwise asks first, then returns to a registered post_logout_redirect_uri.",
         "operationId": "oauth2Logout",
+        "parameters": [
+          {
+            "description": "An id_token this server issued; ends the session without asking when it names the signed-in user",
+            "in": "query",
+            "name": "id_token_hint",
+            "schema": {
+              "description": "An id_token this server issued; ends the session without asking when it names the signed-in user",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The client asking, when there is no id_token_hint",
+            "in": "query",
+            "name": "client_id",
+            "schema": {
+              "description": "The client asking, when there is no id_token_hint",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Where to send the browser afterwards; must be registered for the client",
+            "in": "query",
+            "name": "post_logout_redirect_uri",
+            "schema": {
+              "description": "Where to send the browser afterwards; must be registered for the client",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Echoed on the post-logout redirect",
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "description": "Echoed on the post-logout redirect",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "400": {
             "content": {
@@ -29651,6 +29689,31 @@
       "post": {
         "description": "OpenID Connect RP-Initiated Logout. Ends the session when id_token_hint names the signed-in user, otherwise asks first, then returns to a registered post_logout_redirect_uri.",
         "operationId": "oauth2LogoutPost",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "properties": {
+                  "client_id": {
+                    "type": "string"
+                  },
+                  "id_token_hint": {
+                    "type": "string"
+                  },
+                  "post_logout_redirect_uri": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "Request body",
+          "required": true
+        },
         "responses": {
           "400": {
             "content": {

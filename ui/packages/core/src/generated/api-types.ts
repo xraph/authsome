@@ -1875,6 +1875,8 @@ export type Oauth2DeviceAuthorizeRequest = { client_id: string; resource?: strin
 
 export type Oauth2DeviceCompleteRequest = { action: string; user_code: string };
 
+export type Oauth2LogoutPostRequest = { client_id?: string; id_token_hint?: string; post_logout_redirect_uri?: string; state?: string };
+
 export type Oauth2RegisterClientRequest = RegisterClientRequest;
 
 export type Oauth2UpdateRegistrationRequest = UpdateRegistrationRequest;

@@ -17,6 +17,7 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome"
+	"github.com/xraph/authsome/apitypes"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/jwkutil"
 	"github.com/xraph/authsome/middleware"
@@ -50,17 +51,35 @@ type pendingLogout struct {
 
 func logoutKey(lid string) string { return "oauth2:logout:" + lid }
 
-// handleLogout is the end_session_endpoint. It takes its parameters from
-// the query on GET and from the form body on POST, as the spec allows.
-func (p *Plugin) handleLogout(ctx forge.Context) error {
-	r := ctx.Request()
-	if err := r.ParseForm(); err != nil {
-		return forge.BadRequest("invalid logout request")
-	}
-	hintRaw := r.Form.Get("id_token_hint")
-	clientIDParam := r.Form.Get("client_id")
-	postLogout := r.Form.Get("post_logout_redirect_uri")
-	state := r.Form.Get("state")
+// LogoutRequest is the end_session_endpoint's query on GET.
+type LogoutRequest struct {
+	IDTokenHint           string `query:"id_token_hint,omitempty" description:"An id_token this server issued; ends the session without asking when it names the signed-in user"`
+	ClientID              string `query:"client_id,omitempty" description:"The client asking, when there is no id_token_hint"`
+	PostLogoutRedirectURI string `query:"post_logout_redirect_uri,omitempty" description:"Where to send the browser afterwards; must be registered for the client"`
+	State                 string `query:"state,omitempty" description:"Echoed on the post-logout redirect"`
+}
+
+// LogoutForm is the same request as a form post, which the spec also
+// allows.
+type LogoutForm struct {
+	IDTokenHint           string `json:"id_token_hint,omitempty" form:"id_token_hint,omitempty"`
+	ClientID              string `json:"client_id,omitempty" form:"client_id,omitempty"`
+	PostLogoutRedirectURI string `json:"post_logout_redirect_uri,omitempty" form:"post_logout_redirect_uri,omitempty"`
+	State                 string `json:"state,omitempty" form:"state,omitempty"`
+}
+
+// handleLogout is the end_session_endpoint on GET.
+func (p *Plugin) handleLogout(ctx forge.Context, req *LogoutRequest) (*apitypes.Empty, error) {
+	return nil, p.logout(ctx, LogoutForm(*req))
+}
+
+// handleLogoutPost is the end_session_endpoint on POST.
+func (p *Plugin) handleLogoutPost(ctx forge.Context, req *LogoutForm) (*apitypes.Empty, error) {
+	return nil, p.logout(ctx, *req)
+}
+
+func (p *Plugin) logout(ctx forge.Context, in LogoutForm) error {
+	hintRaw, clientIDParam, postLogout, state := in.IDTokenHint, in.ClientID, in.PostLogoutRedirectURI, in.State
 
 	var (
 		hintSub string
