@@ -93,6 +93,11 @@ type MeResponse struct {
 	// live session (Engine.restampUserSessions), so the two agree, and the
 	// live list is the one a client can rely on straight after a change.
 	Roles []string `json:"roles"`
+
+	// ActiveOrgID is the organization the session has switched into with
+	// POST /v1/me/switch-org, empty when it hasn't. Clients read it on reload
+	// rather than remembering it themselves.
+	ActiveOrgID string `json:"active_org_id,omitempty"`
 }
 
 func (a *API) handleGetMe(ctx forge.Context, _ *GetMeRequest) (*MeResponse, error) {
@@ -108,6 +113,16 @@ func (a *API) handleGetMe(ctx forge.Context, _ *GetMeRequest) (*MeResponse, erro
 
 	resp := &MeResponse{User: u}
 	sess, hasSess := middleware.SessionFrom(ctx.Context())
+	switch {
+	case hasSess && sess != nil && !sess.OrgID.IsNil():
+		resp.ActiveOrgID = sess.OrgID.String()
+	default:
+		// A JWT carries the organization in its claims rather than on a
+		// session row; the auth middleware puts it on the context.
+		if orgID, ok := middleware.OrgIDFrom(ctx.Context()); ok && !orgID.IsNil() {
+			resp.ActiveOrgID = orgID.String()
+		}
+	}
 	appID := u.AppID
 	if hasSess && sess != nil && !sess.AppID.IsNil() {
 		appID = sess.AppID
