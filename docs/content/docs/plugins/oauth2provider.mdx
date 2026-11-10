@@ -31,6 +31,8 @@ eng, err := authsome.NewEngine(
 | `Issuer` | `string` | `"https://localhost"` | OAuth2 issuer URL used in OIDC discovery |
 | `AuthCodeTTL` | `time.Duration` | `10m` | Lifetime of authorization codes |
 | `AccessTokenTTL` | `time.Duration` | `1h` | Lifetime of issued access tokens |
+| `LoginURL` | `string` | none | Where a signed-out `/authorize` sends the browser: a path on the issuer's origin or an absolute http(s) URL. Empty keeps the 401 |
+| `LoginReturnParam` | `string` | `"redirect"` | The query parameter that carries the authorize URL to the login page |
 | `IDTokenTTL` | `time.Duration` | `1h` | Lifetime of id_tokens |
 | `IDTokenSigningKey` | `[]byte` | none | PEM private key (RSA of 2048 bits or more, or EC P-256) that signs id_tokens. Wins over a managed key |
 | `IDTokenSigningKeyFile` | `string` | none | Path to the same PEM key |

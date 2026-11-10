@@ -31,7 +31,10 @@ var SettingAppIssuer = settings.Define("oauth2.app_issuer", false,
 
 // DeclareSettings implements plugin.SettingsProvider.
 func (p *Plugin) DeclareSettings(m *settings.Manager) error {
-	return settings.RegisterTyped(m, settingsNamespace, SettingAppIssuer)
+	if err := settings.RegisterTyped(m, settingsNamespace, SettingAppIssuer); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, settingsNamespace, SettingAppLoginURL)
 }
 
 // errUnknownIssuer is the one answer for a slug that names no app and an app

@@ -436,6 +436,27 @@ func (f *samlE2EFixture) mintResponse(t *testing.T, state string) (samlResponse,
 	if err = authnReq.Validate(); err != nil {
 		t.Fatalf("authn request validate: %v", err)
 	}
+	return f.signResponse(t, authnReq), reqID
+}
+
+// mintIDPInitiatedResponse returns an unsolicited response, the kind an IdP
+// sends when the user starts from the IdP's own app launcher. It answers no
+// AuthnRequest, so it carries no InResponseTo.
+func (f *samlE2EFixture) mintIDPInitiatedResponse(t *testing.T) string {
+	t.Helper()
+
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "https://idp.example.com/sso", nil)
+	authnReq, err := f.idp.NewIdpInitiatedRequest(r, f.sp.sp.EntityID, "")
+	if err != nil {
+		t.Fatalf("NewIdpInitiatedRequest: %v", err)
+	}
+	return f.signResponse(t, authnReq)
+}
+
+// signResponse makes the assertion for authnReq and returns the base64
+// SAMLResponse the IdP would POST to the ACS.
+func (f *samlE2EFixture) signResponse(t *testing.T, authnReq *saml.IdpAuthnRequest) string {
+	t.Helper()
 
 	session := &saml.Session{
 		ID:            "sess-1",
@@ -444,14 +465,14 @@ func (f *samlE2EFixture) mintResponse(t *testing.T, state string) (samlResponse,
 		UserGivenName: "Ada",
 		UserSurname:   "Lovelace",
 	}
-	if err = (saml.DefaultAssertionMaker{}).MakeAssertion(authnReq, session); err != nil {
+	if err := (saml.DefaultAssertionMaker{}).MakeAssertion(authnReq, session); err != nil {
 		t.Fatalf("MakeAssertion: %v", err)
 	}
 	form, err := authnReq.PostBinding()
 	if err != nil {
 		t.Fatalf("PostBinding: %v", err)
 	}
-	return form.SAMLResponse, reqID
+	return form.SAMLResponse
 }
 
 // TestSAMLProvider_HandleCallback_e2e exercises the full assertion round-trip
@@ -505,7 +526,7 @@ func TestSAMLProvider_HandleCallback_e2e(t *testing.T) {
 
 	t.Run("IdP-initiated accepted when allowed", func(t *testing.T) {
 		f := newSAMLE2EFixture(t, true)
-		resp, _ := f.mintResponse(t, "state-jkl")
+		resp := f.mintIDPInitiatedResponse(t)
 
 		u, err := f.sp.HandleCallback(context.Background(), map[string]string{
 			"SAMLResponse": resp,
@@ -515,6 +536,20 @@ func TestSAMLProvider_HandleCallback_e2e(t *testing.T) {
 		}
 		if u.Email != "user@corp.com" {
 			t.Errorf("Email = %q, want user@corp.com", u.Email)
+		}
+	})
+
+	t.Run("solicited response without its request_id rejected even when IdP-initiated is allowed", func(t *testing.T) {
+		// A response that answers a login names it in InResponseTo. Taking
+		// that response and posting it with no request_id must not pass it
+		// off as IdP-initiated.
+		f := newSAMLE2EFixture(t, true)
+		resp, _ := f.mintResponse(t, "state-mno")
+
+		if _, err := f.sp.HandleCallback(context.Background(), map[string]string{
+			"SAMLResponse": resp,
+		}); err == nil {
+			t.Fatal("HandleCallback accepted a solicited response replayed without its request_id")
 		}
 	})
 }
