@@ -70,7 +70,7 @@ func (p *Plugin) needsConsent(ctx context.Context, client *OAuth2Client, userID 
 	if client.FirstParty {
 		return false
 	}
-	if strings.Contains(prompt, "consent") {
+	if hasPrompt(prompt, "consent") {
 		return true
 	}
 	g, err := p.oauth2Store.GetGrant(ctx, client.AppID, userID, client.ClientID)

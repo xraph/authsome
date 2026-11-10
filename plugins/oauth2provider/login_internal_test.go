@@ -81,7 +81,7 @@ func TestLoginRedirect_UnparsableIssuerStaysRelative(t *testing.T) {
 	login, err := ValidateLoginURL("https://login.example.com/in")
 	require.NoError(t, err)
 	r := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/oauth/authorize", nil)
-	assert.Equal(t, "https://login.example.com/in?redirect=%2Fv1%2Foauth%2Fauthorize", p.loginRedirect(login, r))
+	assert.Equal(t, "https://login.example.com/in?redirect=%2Fv1%2Foauth%2Fauthorize", p.loginRedirect(login, r.URL))
 }
 
 func TestErrorRedirect(t *testing.T) {
