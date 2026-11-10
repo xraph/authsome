@@ -103,6 +103,13 @@ func TestAuthorizeSignedOut(t *testing.T) {
 		}
 	})
 
+	t.Run("a bad login URL that skipped OnInit fails closed", func(t *testing.T) {
+		mux := newLoginFixture(t, oauth2provider.Config{LoginURL: "sign-in"})
+		rec := authorizeSignedOut(t, mux, q)
+		assert.GreaterOrEqual(t, rec.Code, http.StatusInternalServerError, "body: %s", rec.Body.String())
+		assert.Empty(t, rec.Header().Get("Location"))
+	})
+
 	t.Run("a bad request is refused before any redirect", func(t *testing.T) {
 		mux := newLoginFixture(t, oauth2provider.Config{LoginURL: "/sign-in"})
 		bad := baseAuthorizeQuery(confidentialID)
