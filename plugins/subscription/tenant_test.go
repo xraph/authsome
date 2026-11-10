@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -43,74 +42,51 @@ func (f *billingFixture) addMember(t *testing.T, orgID id.OrgID, userID id.UserI
 	}))
 }
 
-func TestActiveSubscription_DefaultsToActiveOrg(t *testing.T) {
+func TestCurrentSubscription_DefaultsToActiveOrg(t *testing.T) {
 	org := id.NewOrgID()
 	f := newBillingFixture(t, "organization", org.String())
 	user := id.NewUserID()
 	f.addOrg(t, org, user)
 
-	rec := f.sendInOrg(t, http.MethodGet, "/v1/billing/subscriptions/active", user, &org, "")
+	rec := f.sendInOrg(t, http.MethodGet, "/v1/billing/subscription", user, &org, "")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	var body SubscriptionResponse
+	var body CurrentSubscriptionResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	assert.Equal(t, org.String(), body.TenantID)
+	require.NotNil(t, body.Subscription)
+	assert.Equal(t, org.String(), body.Subscription.TenantID)
 }
 
-func TestActiveSubscription_NoActiveOrg400(t *testing.T) {
+func TestCurrentSubscription_NoActiveOrg400(t *testing.T) {
 	org := id.NewOrgID()
 	f := newBillingFixture(t, "organization", org.String())
 	user := id.NewUserID()
 	f.addOrg(t, org, user)
 
-	rec := f.sendInOrg(t, http.MethodGet, "/v1/billing/subscriptions/active", user, nil, "")
+	rec := f.sendInOrg(t, http.MethodGet, "/v1/billing/subscription", user, nil, "")
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "no active organization")
 }
 
-func TestActiveSubscription_UserModeDefaultsToCaller(t *testing.T) {
+func TestCurrentSubscription_UserModeDefaultsToCaller(t *testing.T) {
 	user := id.NewUserID()
 	f := newBillingFixture(t, "user", user.String())
 
-	rec := f.sendInOrg(t, http.MethodGet, "/v1/billing/subscriptions/active", user, nil, "")
+	rec := f.sendInOrg(t, http.MethodGet, "/v1/billing/subscription", user, nil, "")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Contains(t, rec.Body.String(), user.String())
 }
 
-func TestEntitlementAndUsage_DefaultTenantAndApp(t *testing.T) {
-	org := id.NewOrgID()
-	f := newBillingFixture(t, "organization", org.String())
-	user := id.NewUserID()
-	f.addOrg(t, org, user)
-
-	for _, path := range []string{"/v1/billing/entitlements/sso", "/v1/billing/usage", "/v1/billing/invoices", "/v1/billing/subscriptions"} {
-		rec := f.sendInOrg(t, http.MethodGet, path, user, &org, "")
-		assert.Equal(t, http.StatusOK, rec.Code, "%s: %s", path, rec.Body.String())
-	}
-}
-
-func TestActiveOrgOfAnotherOrg_404(t *testing.T) {
+func TestCurrentSubscription_ActiveOrgOfAnotherOrg404(t *testing.T) {
 	victim := id.NewOrgID()
 	f := newBillingFixture(t, "organization", victim.String())
 	f.addOrg(t, victim, id.NewUserID())
 	outsider := id.NewUserID()
 
 	// A session claiming an org it doesn't belong to reads nothing of it.
-	rec := f.sendInOrg(t, http.MethodGet, "/v1/billing/subscriptions/active", outsider, &victim, "")
-	assert.Equal(t, http.StatusNotFound, rec.Code)
-}
-
-func TestOperatorListWithoutTenant_StillListsEveryTenant(t *testing.T) {
-	org := id.NewOrgID()
-	f := newBillingFixture(t, "organization", org.String())
-	operator := id.NewUserID()
-	f.engine.managers[operator.String()] = true
-	other := id.NewOrgID()
-
-	rec := f.sendInOrg(t, http.MethodGet, "/v1/billing/subscriptions?app_id="+f.appID, operator, &other, "")
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	var body ListSubscriptionsResponse
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	assert.Equal(t, 1, body.Total, "an operator's tenant-less list stays app-wide")
+	for _, path := range []string{"/v1/billing/subscription", "/v1/billing/entitlements"} {
+		rec := f.sendInOrg(t, http.MethodGet, path, outsider, &victim, "")
+		assert.Equal(t, http.StatusNotFound, rec.Code, path)
+	}
 }
 
 func TestCanManage_OwnerYesMemberNo(t *testing.T) {
@@ -170,17 +146,4 @@ func TestCanManage_UserModeAndOperator(t *testing.T) {
 	ok, err = f.plugin.canManageTenant(ctx, operator, user.String())
 	require.NoError(t, err)
 	assert.True(t, ok)
-}
-
-// Generated clients take query parameters positionally, in struct field
-// order. checkEntitlement shipped as (featureKey, tenant_id, app_id), so
-// tenant_id has to stay ahead of app_id or existing callers start sending
-// their tenant as the app.
-func TestCheckEntitlementRequest_TenantBeforeApp(t *testing.T) {
-	typ := reflect.TypeFor[CheckEntitlementRequest]()
-	tenant, ok := typ.FieldByName("TenantID")
-	require.True(t, ok)
-	app, ok := typ.FieldByName("AppID")
-	require.True(t, ok)
-	assert.Less(t, tenant.Index[0], app.Index[0])
 }

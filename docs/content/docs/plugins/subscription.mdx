@@ -49,7 +49,7 @@ These are the routes a billing page calls, all under `/v1/billing`.
 
 | Method | Path | What it does |
 |--------|------|--------------|
-| `GET` | `/plans` | Plans you can buy, cheapest first, with their features |
+| `GET` | `/plans?app_id=...` | Plans you can buy, cheapest first, with their features |
 | `GET` | `/subscription` | Your subscription with its plan embedded, or `null`, and `can_manage` |
 | `POST` | `/subscription` | Subscribe: `{"plan": "team", "seats": 5}` |
 | `PATCH` | `/subscription` | Change plan, seats, or both |
@@ -59,7 +59,8 @@ These are the routes a billing page calls, all under `/v1/billing`.
 | `POST` | `/portal` | A billing portal link, when your checkout provider has one |
 
 `plan` takes a slug or an ID. Every write answers with the updated subscription, so your
-UI can render the response as it is.
+UI can render the response as it is. `/plans` is the one route that wants your `app_id`;
+the client config your SDK already fetches carries it.
 
 A few things in that payload are there so the page can say the right thing:
 

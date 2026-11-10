@@ -38,18 +38,6 @@ func (p *Plugin) resolveTenant(ctx forge.Context, explicit string) (string, erro
 	return orgID.String(), nil
 }
 
-// listTenant is resolveTenant for the list routes, where an operator who
-// names no tenant has always read every tenant in the app. That stays: only
-// callers without manage/billing get their own tenant filled in.
-func (p *Plugin) listTenant(ctx forge.Context, explicit string) (string, error) {
-	if explicit == "" {
-		if userID, ok := middleware.UserIDFrom(ctx.Context()); ok && p.holdsBillingManage(ctx.Context(), userID) {
-			return "", nil
-		}
-	}
-	return p.resolveTenant(ctx, explicit)
-}
-
 // canManageTenant reports whether userID may change tenantID's subscription
 // through the self-service routes. An operator holding manage/billing always
 // may. In user mode only the user is their own tenant. In organization mode

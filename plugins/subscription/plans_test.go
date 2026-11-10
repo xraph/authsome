@@ -15,9 +15,10 @@ import (
 	"github.com/xraph/authsome/id"
 )
 
-func (tf *tenantFixture) planSlugs(t *testing.T, query string, userID id.UserID) (int, []string) {
+// planSlugs lists plans as userID; extra is appended to the query string.
+func (tf *tenantFixture) planSlugs(t *testing.T, extra string, userID id.UserID) (int, []string) {
 	t.Helper()
-	rec := tf.sendInOrg(t, http.MethodGet, "/v1/billing/plans"+query, userID, &tf.org, "")
+	rec := tf.sendInOrg(t, http.MethodGet, "/v1/billing/plans?app_id="+tf.appID+extra, userID, &tf.org, "")
 	if rec.Code != http.StatusOK {
 		return rec.Code, nil
 	}
@@ -57,23 +58,23 @@ func TestListPlans_SortedByPrice(t *testing.T) {
 
 func TestListPlans_IncludeAddons(t *testing.T) {
 	tf := newTenantFixture(t)
-	_, slugs := tf.planSlugs(t, "?include_addons=true", tf.member)
+	_, slugs := tf.planSlugs(t, "&include_addons=true", tf.member)
 	assert.ElementsMatch(t, []string{"pro", "team", "extra"}, slugs)
 }
 
 func TestListPlans_StatusAllNeedsManage(t *testing.T) {
 	tf := newTenantFixture(t)
-	code, _ := tf.planSlugs(t, "?status=all", tf.member)
+	code, _ := tf.planSlugs(t, "&status=all", tf.member)
 	assert.Equal(t, http.StatusForbidden, code)
-	code, _ = tf.planSlugs(t, "?status=archived", tf.member)
+	code, _ = tf.planSlugs(t, "&status=archived", tf.member)
 	assert.Equal(t, http.StatusForbidden, code)
 
 	operator := id.NewUserID()
 	tf.engine.managers[operator.String()] = true
-	code, slugs := tf.planSlugs(t, "?status=all&include_addons=true", operator)
+	code, slugs := tf.planSlugs(t, "&status=all&include_addons=true", operator)
 	require.Equal(t, http.StatusOK, code)
 	assert.ElementsMatch(t, []string{"pro", "team", "legacy", "extra"}, slugs)
 
-	_, slugs = tf.planSlugs(t, "?status=archived", operator)
+	_, slugs = tf.planSlugs(t, "&status=archived", operator)
 	assert.Equal(t, []string{"legacy"}, slugs)
 }

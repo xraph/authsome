@@ -162,13 +162,11 @@ these are the rest, mostly for operators.
 | `POST` | `/coupons` | Create a coupon |
 | `DELETE` | `/coupons/:couponId` | Delete a coupon |
 
-Subscription, invoice, entitlement and usage reads are scoped to a tenant. Pass its
-`tenant_id`, or leave it off to use the session's active organization (user mode: the
-user). With no active organization in organization mode you get a 400 telling you to
-switch to one. You can read a tenant you belong to (organisation mode) or are (user mode).
+Subscription, invoice, entitlement and usage reads on these routes are scoped to a tenant:
+pass its `tenant_id`. (The self-service routes above fill it in from the session instead.)
+You can read a tenant you belong to (organisation mode) or are (user mode).
 Anyone else gets a 404, whether the tenant exists or not, unless they hold
-`billing:manage`, which reads every tenant. An operator who lists subscriptions or
-invoices without a `tenant_id` still gets every tenant in the app. Plans stay app-wide.
+`billing:manage`, which reads every tenant. Plans stay app-wide.
 
 The ID routes answer a transition the ledger refuses (changing or resuming a canceled
 subscription, say) with a 409. You need
