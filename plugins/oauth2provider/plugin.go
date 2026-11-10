@@ -553,13 +553,19 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("OAuth2 consent"),
 		forge.WithDescription("Shows the pending authorization request for the signed-in user to approve or deny. Renders HTML, or JSON when Accept asks for it."),
 		forge.WithOperationID("oauth2ConsentPage"),
+		forge.WithRequestSchema(ConsentPageRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "The pending request", ConsentView{}),
+		forge.WithErrorResponses(),
 	); err != nil {
 		return err
 	}
 	if err := authG.POST("/consent", p.handleConsentDecision,
 		forge.WithSummary("OAuth2 consent decision"),
-		forge.WithDescription("Records the signed-in user's approval or denial of a pending authorization request and completes it."),
+		forge.WithDescription("Records the signed-in user's approval or denial of a pending authorization request and completes it. A form post is answered with a redirect, a JSON post with the redirect URL."),
 		forge.WithOperationID("oauth2ConsentDecision"),
+		forge.WithRequestSchema(ConsentDecision{}),
+		forge.WithResponseSchema(http.StatusOK, "Where to send the browser", ConsentResult{}),
+		forge.WithErrorResponses(),
 	); err != nil {
 		return err
 	}
