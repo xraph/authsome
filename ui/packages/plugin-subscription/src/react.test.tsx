@@ -55,6 +55,42 @@ describe("useSubscription", () => {
   });
 });
 
+describe("sharing", () => {
+  it("makes one request pair however many components read the subscription", async () => {
+    const h = harness();
+    function Probe() {
+      useSubscription();
+      return null;
+    }
+    await h.mount(
+      <>
+        <Probe />
+        <Probe />
+        <Entitled feature="sso"><span /></Entitled>
+        <Entitled feature="audit"><span /></Entitled>
+      </>,
+    );
+    await waitFor(() => expect(h.calls.filter((c) => c === "GET /v1/billing/subscription")).toHaveLength(1));
+    expect(h.calls.filter((c) => c === "GET /v1/billing/entitlements")).toHaveLength(1);
+  });
+
+  it("keeps the write functions stable between renders", async () => {
+    const h = harness();
+    const seen: ReturnType<typeof useSubscription>[] = [];
+    function Probe() {
+      seen.push(useSubscription());
+      return null;
+    }
+    await h.mount(<Probe />);
+    await waitFor(() => expect(seen.at(-1)?.subscription).not.toBeNull());
+    const first = seen[0];
+    const last = seen.at(-1)!;
+    expect(last.changePlan).toBe(first.changePlan);
+    expect(last.cancel).toBe(first.cancel);
+    expect(last.refresh).toBe(first.refresh);
+  });
+});
+
 describe("usePlans", () => {
   it("loads the plans on mount", async () => {
     let seen = null as unknown as ReturnType<typeof usePlans>;

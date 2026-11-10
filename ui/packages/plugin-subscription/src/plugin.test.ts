@@ -99,6 +99,15 @@ describe("models", () => {
     expect(formatMoney({ amountMinor: 2900, currency: "usd" }, "en-US")).toBe("$29.00");
     expect(formatMoney({ amountMinor: 500, currency: "jpy" }, "en-US")).toBe("¥500");
   });
+
+  it("splits minor units the way the server's ledger does", () => {
+    // Ledger stores these with no decimals and everything else with two,
+    // whatever the currency's ISO digits are.
+    expect(formatMoney({ amountMinor: 5000, currency: "idr" }, "en-US")).toMatch(/5,000(?!\.)/);
+    expect(formatMoney({ amountMinor: 150, currency: "kwd" }, "en-US")).toMatch(/1\.50$/);
+    expect(formatMoney({ amountMinor: 1050, currency: "ugx" }, "en-US")).toMatch(/10\.50$/);
+    expect(formatMoney({ amountMinor: 1050, currency: "huf" }, "en-US")).toMatch(/10\.50$/);
+  });
 });
 
 describe("loading", () => {
@@ -141,6 +150,46 @@ describe("loading", () => {
     await loading;
     await vi.waitFor(() => expect(api().getSnapshot().subscription.status).toBe("ready"));
     expect(api().getSnapshot().subscription.data).toBeNull();
+  });
+
+  it("shares one request between loads that overlap", async () => {
+    const { manager, api, calls } = setup();
+    await manager.initialize();
+    await Promise.all([api().load(), api().load(), api().load()]);
+    expect(calls.filter((c) => c.startsWith("GET /v1/billing/subscription"))).toHaveLength(1);
+    expect(calls.filter((c) => c.startsWith("GET /v1/billing/entitlements"))).toHaveLength(1);
+  });
+
+  it("forgets the old org's subscription as soon as the org switches", async () => {
+    const { manager, routes, api } = setup();
+    await manager.initialize();
+    await api().load();
+    expect(api().getSnapshot().canManage).toBe(true);
+    routes.set("POST /v1/me/switch-org", () => json({ session_id: "s", org_id: "org_2" }));
+    routes.set("GET /v1/billing/subscription", () => new Promise<Response>(() => {}));
+
+    await manager.switchOrg("org_2");
+    const snap = api().getSnapshot();
+    expect(snap.subscription.status).toBe("loading");
+    expect(snap.subscription.data).toBeNull();
+    expect(snap.canManage).toBe(false);
+  });
+
+  it("ignores a plans response that lands after sign-out", async () => {
+    const { manager, routes, api } = setup({ appId: "app_1" });
+    await manager.initialize();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    routes.set("GET /v1/billing/plans", async () => {
+      await gate;
+      return json({ plans: [planJSON("pro")] });
+    });
+    const loading = api().loadPlans();
+    await manager.signOut();
+    release();
+    await loading;
+    expect(api().getSnapshot().plans.status).toBe("idle");
+    expect(api().getSnapshot().plans.data).toEqual([]);
   });
 
   it("resets on sign-out and reloads on an org switch", async () => {
@@ -224,6 +273,46 @@ describe("writes", () => {
     expect((await api().cancel()).willCancel).toBe(true);
     expect(api().getSnapshot().subscription.data?.willCancel).toBe(true);
     expect((await api().resume()).willCancel).toBe(false);
+  });
+
+  it("keeps a write that lands after an org switch out of the new org's cache", async () => {
+    const { manager, routes, api } = setup();
+    await manager.initialize();
+    await api().load();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    routes.set("POST /v1/billing/subscription/cancel", async () => {
+      await gate;
+      return json({ subscription: subJSON({ cancel_at: "2026-12-01T00:00:00Z" }) });
+    });
+    const canceling = api().cancel();
+
+    routes.set("POST /v1/me/switch-org", () => json({ session_id: "s", org_id: "org_2" }));
+    routes.set("GET /v1/billing/subscription", () => json({ subscription: null, can_manage: true }));
+    await manager.switchOrg("org_2");
+    await vi.waitFor(() => expect(api().getSnapshot().subscription.status).toBe("ready"));
+    release();
+
+    expect((await canceling).willCancel).toBe(true);
+    expect(api().getSnapshot().subscription.data).toBeNull();
+  });
+
+  it("keeps a write that lands after sign-out out of the cache", async () => {
+    const { manager, routes, api } = setup();
+    await manager.initialize();
+    await api().load();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    routes.set("POST /v1/billing/subscription/resume", async () => {
+      await gate;
+      return json({ subscription: subJSON() });
+    });
+    const resuming = api().resume();
+    await manager.signOut();
+    release();
+    await resuming;
+    expect(api().getSnapshot().subscription.status).toBe("idle");
+    expect(api().getSnapshot().subscription.data).toBeNull();
   });
 
   it("notifies listeners on every change", async () => {

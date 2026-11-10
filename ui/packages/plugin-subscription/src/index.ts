@@ -1,5 +1,5 @@
 /**
- * @authsome/plugin-subscription — the client half of authsome's
+ * @authsome/plugin-subscription: the client half of authsome's
  * subscription plugin.
  *
  * ```ts
@@ -24,6 +24,7 @@ export {
   type SubscriptionSnapshot,
 } from "./plugin";
 export {
+  currencyDecimals,
   formatMoney,
   type Entitlement,
   type Money,

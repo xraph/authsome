@@ -57,6 +57,8 @@ export interface PricingTableProps {
   cancelUrl?: string;
   /** Locale for prices. Defaults to the browser's. */
   locale?: string;
+  /** Called with the server's error when a change fails; the table shows plain words. */
+  onError?: (error: unknown) => void;
   className?: string;
 }
 
@@ -68,18 +70,19 @@ export function PricingTable({
   returnUrl,
   cancelUrl,
   locale,
+  onError,
   className,
 }: PricingTableProps) {
   const { plans, isLoading, error } = usePlans();
   const { subscription, canManage, subscribe, changePlan, isPending } = useSubscription();
-  const [failed, setFailed] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
   const choose = async (plan: Plan) => {
     if (onSelect) {
       onSelect(plan);
       return;
     }
-    setFailed(null);
+    setFailed(false);
     try {
       const options = { returnUrl, cancelUrl };
       const result: ChangeResult = subscription
@@ -87,7 +90,8 @@ export function PricingTable({
         : await subscribe(plan.slug, options);
       if (result.type === "checkout") onCheckout(result.url);
     } catch (err) {
-      setFailed(err instanceof Error ? err.message : "Couldn't change plan");
+      setFailed(true);
+      onError?.(err);
     }
   };
 
@@ -111,7 +115,10 @@ export function PricingTable({
           return (
             <Card key={plan.id} className={cn(plan.slug === highlight && "ring-2 ring-primary")}>
               <CardHeader>
-                <CardTitle>{plan.name}</CardTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle>{plan.name}</CardTitle>
+                  {plan.slug === highlight && <Badge>Recommended</Badge>}
+                </div>
                 {plan.description && <CardDescription>{plan.description}</CardDescription>}
               </CardHeader>
               <CardContent className="space-y-3">
@@ -158,7 +165,7 @@ export function PricingTable({
           );
         })}
       </div>
-      {failed && <ErrorLine>{failed}</ErrorLine>}
+      {failed && <ErrorLine>Couldn't change your plan. Try again.</ErrorLine>}
     </div>
   );
 }
@@ -170,6 +177,8 @@ export interface CurrentPlanCardProps {
   locale?: string;
   /** Time zone for dates. Defaults to the browser's. */
   timeZone?: string;
+  /** Called with the server's error when cancel or keep fails; the card shows plain words. */
+  onError?: (error: unknown) => void;
   className?: string;
 }
 
@@ -183,7 +192,7 @@ function statusLine(sub: Subscription, locale?: string, timeZone?: string): stri
 }
 
 /** The tenant's plan: name, price, when it renews or ends, seats, and cancel/keep. */
-export function CurrentPlanCard({ locale, timeZone, className }: CurrentPlanCardProps) {
+export function CurrentPlanCard({ locale, timeZone, onError, className }: CurrentPlanCardProps) {
   const { subscription: sub, canManage, isLoading, error, cancel, resume, isPending } =
     useSubscription();
   const [failed, setFailed] = useState<string | null>(null);
@@ -193,7 +202,8 @@ export function CurrentPlanCard({ locale, timeZone, className }: CurrentPlanCard
     try {
       await write();
     } catch (err) {
-      setFailed(err instanceof Error ? err.message : "Something went wrong");
+      setFailed("Couldn't update your plan. Try again.");
+      onError?.(err);
     }
   };
 
@@ -286,7 +296,8 @@ export function UsageMeter({ feature, label, className }: UsageMeterProps) {
         aria-label={label ?? feature}
         aria-valuemin={0}
         aria-valuemax={unlimited ? undefined : entitlement.limit}
-        aria-valuenow={entitlement.used}
+        aria-valuenow={unlimited ? undefined : entitlement.used}
+        aria-valuetext={unlimited ? `${entitlement.used} used, no limit` : `${entitlement.used} of ${entitlement.limit}`}
         className="h-2 w-full overflow-hidden rounded-full bg-secondary"
       >
         <div

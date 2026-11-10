@@ -209,14 +209,27 @@ export function toEntitlement(e: EntitlementJSON): Entitlement {
 }
 
 /**
- * Formats an amount for display, dividing by the currency's own number of
- * decimal places (2 for usd, 0 for jpy).
+ * Currencies the server's ledger stores with no minor unit. Every other
+ * currency it stores in hundredths, whatever the currency's ISO digits are,
+ * so this list has to match ledger's, not ISO 4217's.
+ */
+const ZERO_DECIMAL = new Set(["jpy", "krw", "vnd", "clp", "pyg", "idr"]);
+
+/** Decimal places the server uses for a currency's amounts: 0 or 2. */
+export function currencyDecimals(currency: string): number {
+  return ZERO_DECIMAL.has(currency.toLowerCase()) ? 0 : 2;
+}
+
+/**
+ * Formats an amount for display. amountMinor is split the way the server
+ * stored it (see currencyDecimals) and shown with that many decimals.
  */
 export function formatMoney(money: Money, locale?: string): string {
-  const format = new Intl.NumberFormat(locale, {
+  const digits = currencyDecimals(money.currency);
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency: money.currency.toUpperCase(),
-  });
-  const digits = format.resolvedOptions().maximumFractionDigits ?? 2;
-  return format.format(money.amountMinor / 10 ** digits);
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(money.amountMinor / 10 ** digits);
 }

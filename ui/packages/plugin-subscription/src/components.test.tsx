@@ -35,6 +35,20 @@ describe("PricingTable", () => {
     expect(onCheckout).toHaveBeenCalledWith("https://pay.example/s/1");
   });
 
+  it("shows plain words, not the server's message, when a change fails", async () => {
+    const h = harness();
+    h.routes.set("PATCH /v1/billing/subscription", () => json({ error: "already subscribed: use PATCH to change plan" }, 409));
+    await h.mount(<PricingTable />);
+    const choose = await screen.findByRole("button", { name: "Choose Team" });
+    await act(async () => { fireEvent.click(choose); });
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Couldn't change your plan. Try again."));
+  });
+
+  it("says which plan is highlighted, not only with colour", async () => {
+    await harness().mount(<PricingTable highlight="team" />);
+    await waitFor(() => expect(screen.getByText("Recommended")).toBeTruthy());
+  });
+
   it("lets the app take over selection", async () => {
     const onSelect = vi.fn();
     await harness().mount(<PricingTable onSelect={onSelect} />);
@@ -103,6 +117,17 @@ describe("UsageMeter", () => {
     await waitFor(() => expect(screen.getByText("2 of 10")).toBeTruthy());
     expect(screen.getByText("SSO connections")).toBeTruthy();
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("2");
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuetext")).toBe("2 of 10");
+  });
+
+  it("describes unlimited use in words", async () => {
+    const h = harness();
+    h.routes.set("GET /v1/billing/entitlements", () => json({ entitlements: { api: { allowed: true, feature: "api", used: 40, limit: -1, remaining: -1 } } }));
+    await h.mount(<UsageMeter feature="api" />);
+    await waitFor(() => expect(screen.getByText("40 used")).toBeTruthy());
+    const bar = screen.getByRole("progressbar");
+    expect(bar.getAttribute("aria-valuetext")).toBe("40 used, no limit");
+    expect(bar.getAttribute("aria-valuenow")).toBeNull();
   });
 });
 

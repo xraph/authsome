@@ -13,6 +13,7 @@ import { useAuth, usePlugin } from "@authsome/ui-react";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -90,6 +91,20 @@ export function useSubscription(): UseSubscriptionResult {
   const signedIn = useAutoLoad(snap.subscription.status, api.load);
   const { isPending, track } = usePendingWrites();
 
+  // Stable across renders, so they're safe in effect and memo dependencies.
+  const writes = useMemo(
+    () => ({
+      subscribe: (plan: string, options?: ChangeOptions) => track(() => api.subscribe(plan, options)),
+      changePlan: (plan: string, options?: ChangeOptions) => track(() => api.changePlan(plan, options)),
+      setSeats: (seats: number, options?: Omit<ChangeOptions, "seats">) =>
+        track(() => api.setSeats(seats, options)),
+      cancel: (options?: { when?: "period_end" | "now" }) => track(() => api.cancel(options)),
+      resume: () => track(() => api.resume()),
+      openPortal: (returnUrl?: string) => track(() => api.openPortal(returnUrl)),
+    }),
+    [api, track],
+  );
+
   return {
     subscription: snap.subscription.data,
     plan: snap.subscription.data?.plan ?? null,
@@ -98,12 +113,7 @@ export function useSubscription(): UseSubscriptionResult {
     isLoading: isPendingStatus(snap.subscription.status, signedIn),
     error: snap.subscription.error,
     refresh: api.load,
-    subscribe: (plan, options) => track(() => api.subscribe(plan, options)),
-    changePlan: (plan, options) => track(() => api.changePlan(plan, options)),
-    setSeats: (seats, options) => track(() => api.setSeats(seats, options)),
-    cancel: (options) => track(() => api.cancel(options)),
-    resume: () => track(() => api.resume()),
-    openPortal: (returnUrl) => track(() => api.openPortal(returnUrl)),
+    ...writes,
     isPending,
   };
 }

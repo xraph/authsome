@@ -91,9 +91,16 @@ function asError(err: unknown): Error {
 export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
   let snapshot = initialSnapshot();
   const listeners = new Set<() => void>();
-  // Bumped whenever the session or organization changes, so a response for
-  // the one the user just left is dropped instead of shown.
+  // Bumped whenever the session or organization changes. Anything that
+  // started before the bump (a load, a plans fetch, a write) finds a
+  // different number when it lands, and leaves the cache alone, so a
+  // response for the organization or user the session just left is never
+  // shown as the current one.
   let generation = 0;
+  // In-flight loads, shared by every caller in the same generation, so ten
+  // components mounting at once make one pair of requests.
+  let loading: { gen: number; promise: Promise<void> } | null = null;
+  let loadingPlans: { gen: number; promise: Promise<void> } | null = null;
 
   const set = (patch: Partial<SubscriptionSnapshot>) => {
     snapshot = { ...snapshot, ...patch };
@@ -128,16 +135,7 @@ export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
     }
   };
 
-  const load = async () => {
-    if (unavailable()) {
-      set({
-        subscription: { status: "unavailable", data: null, error: null },
-        entitlements: { status: "unavailable", data: {}, error: null },
-      });
-      return;
-    }
-    if (!signedIn()) return;
-    const gen = generation;
+  const fetchSubscription = async (gen: number) => {
     set({ subscription: { ...snapshot.subscription, status: "loading", error: null } });
     const entitlements = loadEntitlements(gen);
     try {
@@ -161,11 +159,25 @@ export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
     await entitlements;
   };
 
-  const loadPlans = async () => {
+  const load = (): Promise<void> => {
     if (unavailable()) {
-      set({ plans: { status: "unavailable", data: [], error: null } });
-      return;
+      set({
+        subscription: { status: "unavailable", data: null, error: null },
+        entitlements: { status: "unavailable", data: {}, error: null },
+      });
+      return Promise.resolve();
     }
+    if (!signedIn()) return Promise.resolve();
+    if (loading && loading.gen === generation) return loading.promise;
+    const gen = generation;
+    const promise = fetchSubscription(gen).finally(() => {
+      if (loading?.promise === promise) loading = null;
+    });
+    loading = { gen, promise };
+    return promise;
+  };
+
+  const fetchPlans = async (gen: number) => {
     // /plans is app-wide and wants the app's ID: the client config carries
     // it, and so does the signed-in user.
     const state = ctx.getState();
@@ -177,19 +189,39 @@ export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
       const res = await ctx.request<{ plans: PlanJSON[] }>("GET", "/v1/billing/plans", {
         query: { app_id: appId },
       });
+      if (gen !== generation) return;
       set({ plans: { status: "ready", data: (res.plans ?? []).map(toPlan), error: null } });
     } catch (err) {
+      if (gen !== generation) return;
       set({ plans: { ...snapshot.plans, status: "error", error: asError(err) } });
     }
   };
 
-  // Writes answer with the new subscription. It goes straight into the
-  // cache, and the entitlements are rechecked since the plan may have moved.
-  const commit = (json: SubscriptionJSON | undefined): Subscription | null => {
+  const loadPlans = (): Promise<void> => {
+    if (unavailable()) {
+      set({ plans: { status: "unavailable", data: [], error: null } });
+      return Promise.resolve();
+    }
+    if (loadingPlans && loadingPlans.gen === generation) return loadingPlans.promise;
+    const gen = generation;
+    const promise = fetchPlans(gen).finally(() => {
+      if (loadingPlans?.promise === promise) loadingPlans = null;
+    });
+    loadingPlans = { gen, promise };
+    return promise;
+  };
+
+  // Writes answer with the new subscription. It goes into the cache, and the
+  // entitlements are rechecked since the plan may have moved, unless the
+  // session changed while the write was out: then the caller still gets the
+  // result, but the cache now belongs to someone else.
+  const commit = (json: SubscriptionJSON | undefined, gen: number): Subscription | null => {
     if (!json) return null;
     const sub = toSubscription(json);
-    set({ subscription: { status: "ready", data: sub, error: null } });
-    void loadEntitlements(generation);
+    if (gen === generation) {
+      set({ subscription: { status: "ready", data: sub, error: null } });
+      void loadEntitlements(gen);
+    }
     return sub;
   };
 
@@ -197,13 +229,14 @@ export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
     method: "POST" | "PATCH",
     body: Record<string, unknown>,
   ): Promise<ChangeResult> => {
+    const gen = generation;
     const res = await ctx.request<{ subscription?: SubscriptionJSON; checkout_url?: string }>(
       method,
       "/v1/billing/subscription",
       { body },
     );
     if (res.checkout_url) return { type: "checkout", url: res.checkout_url };
-    const sub = commit(res.subscription);
+    const sub = commit(res.subscription, gen);
     if (!sub) throw new Error("authsome: the server answered with neither a subscription nor a checkout URL");
     return { type: "changed", subscription: sub };
   };
@@ -216,14 +249,17 @@ export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
   });
 
   const mutate = async (path: string, body: unknown): Promise<Subscription> => {
+    const gen = generation;
     const res = await ctx.request<{ subscription?: SubscriptionJSON }>("POST", path, { body });
-    const sub = commit(res.subscription);
+    const sub = commit(res.subscription, gen);
     if (!sub) throw new Error("authsome: the server answered without a subscription");
     return sub;
   };
 
-  // Follow the session: a sign-out forgets everything, and a sign-in or an
-  // organization switch reloads whatever had been loaded.
+  // Follow the session: a sign-out forgets everything; a sign-in or an
+  // organization switch drops the previous tenant's subscription at once
+  // (so no screen shows it, or offers buttons for it, while the new one
+  // loads) and reloads whatever had been loaded.
   ctx.on("signedOut", () => {
     generation++;
     snapshot = initialSnapshot();
@@ -231,7 +267,13 @@ export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
   });
   const reload = () => {
     generation++;
-    if (snapshot.subscription.status !== "idle") void load();
+    if (snapshot.subscription.status === "idle") return;
+    set({
+      subscription: { status: "loading", data: null, error: null },
+      entitlements: { status: "loading", data: {}, error: null },
+      canManage: false,
+    });
+    void load();
   };
   ctx.on("signedIn", reload);
   ctx.on("orgChanged", reload);
