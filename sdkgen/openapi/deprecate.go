@@ -1,29 +1,33 @@
 package openapi
 
-import (
-	"slices"
-	"strings"
-)
+import "strings"
 
-// DeprecationFor returns the note of the first rule whose tag prefix starts
-// one of tags, or "" when none does. Rules map a tag prefix (e.g. "Billing")
-// to the note shown to callers. Prefixes are tried in sorted order so the
-// output is stable.
+// DeprecationFor returns the note of the rule whose tag prefix starts one of
+// tags, or "" when none does. Rules map a tag prefix (e.g. "Billing") to the
+// note shown to callers. When several match, the longest prefix wins, so
+// "Billing " (the operator groups such as "Billing Plans") can carry a
+// different note from "Billing"; ties go to the alphabetically first prefix
+// so the output is stable.
 func DeprecationFor(tags []string, rules map[string]string) string {
-	if len(rules) == 0 {
-		return ""
-	}
-	prefixes := make([]string, 0, len(rules))
+	best := ""
+	found := false
 	for p := range rules {
-		prefixes = append(prefixes, p)
-	}
-	slices.Sort(prefixes)
-	for _, p := range prefixes {
+		matches := false
 		for _, tag := range tags {
 			if strings.HasPrefix(tag, p) {
-				return rules[p]
+				matches = true
+				break
 			}
 		}
+		if !matches {
+			continue
+		}
+		if !found || len(p) > len(best) || (len(p) == len(best) && p < best) {
+			best, found = p, true
+		}
 	}
-	return ""
+	if !found {
+		return ""
+	}
+	return rules[best]
 }

@@ -28,10 +28,13 @@ UI_CORE_OVERRIDES = refreshTokens=refresh,deleteAccount=deleteMe,exportUserData=
 FLUTTER_CORE_OVERRIDES = refreshTokens=refresh,deleteAccount=deleteMe,exportUserData=exportMyData,verifyMFARecovery=verifyRecoveryCode
 
 # The embedded core clients point billing callers at the subscription plugin
-# packages, which own those routes now. The standalone SDKs keep them as is:
-# operators call the billing routes from servers.
-UI_CORE_DEPRECATIONS = Billing=Use @authsome/plugin-subscription instead.
-FLUTTER_CORE_DEPRECATIONS = Billing=Use the authsome_subscription package instead.
+# packages, which own the tenant routes (tagged "Billing") now. The operator
+# routes ("Billing Plans", "Billing Usage", ...) belong on a server, so the
+# longer "Billing " rule says that instead. The standalone SDKs keep all of
+# them undeprecated. Notes can't contain a semicolon, and the Dart ones no
+# quotes, since they land in a quoted annotation.
+UI_CORE_DEPRECATIONS = Billing=Use @authsome/plugin-subscription instead.;Billing =Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
+FLUTTER_CORE_DEPRECATIONS = Billing=Use the authsome_subscription package instead.;Billing =Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.
 
 SDKGEN_CMD  = go run ./cmd
 SPECGEN_CMD = go run ./cmd/specgen

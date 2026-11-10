@@ -1456,7 +1456,7 @@ export class AuthClient {
   /**
    * List coupons
    * GET /v1/billing/coupons
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async listCoupons(app_id: string, token: string): Promise<ListCouponsResponse> {
     const params = new URLSearchParams();
@@ -1474,7 +1474,7 @@ export class AuthClient {
   /**
    * Create coupon
    * POST /v1/billing/coupons
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async createCoupon(body: CreateCouponRequest, token: string): Promise<CouponResponse> {
     const path = "/v1/billing/coupons";
@@ -1489,7 +1489,7 @@ export class AuthClient {
   /**
    * Delete coupon
    * DELETE /v1/billing/coupons/{couponId}
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async deleteCoupon(couponId: string, token: string): Promise<void> {
     const path = `/v1/billing/coupons/${couponId}`;
@@ -1522,7 +1522,7 @@ export class AuthClient {
   /**
    * Check feature entitlement
    * GET /v1/billing/entitlements/{featureKey}
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async checkEntitlement(featureKey: string, tenant_id: string, token: string, app_id?: string): Promise<EntitlementResponse> {
     const params = new URLSearchParams();
@@ -1541,7 +1541,7 @@ export class AuthClient {
   /**
    * List invoices
    * GET /v1/billing/invoices
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async listInvoices(app_id: string, tenant_id: string, token: string): Promise<ListInvoicesResponse> {
     const params = new URLSearchParams();
@@ -1560,7 +1560,7 @@ export class AuthClient {
   /**
    * Get invoice
    * GET /v1/billing/invoices/{invoiceId}
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async getInvoice(invoiceId: string, token: string): Promise<InvoiceResponse> {
     const path = `/v1/billing/invoices/${invoiceId}`;
@@ -1575,7 +1575,7 @@ export class AuthClient {
   /**
    * Mark invoice as paid
    * POST /v1/billing/invoices/{invoiceId}/pay
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async markInvoicePaid(invoiceId: string, body: MarkInvoicePaidRequest, token: string): Promise<void> {
     const path = `/v1/billing/invoices/${invoiceId}/pay`;
@@ -1590,7 +1590,7 @@ export class AuthClient {
   /**
    * Void an invoice
    * POST /v1/billing/invoices/{invoiceId}/void
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async voidInvoice(invoiceId: string, body: VoidInvoiceRequest, token: string): Promise<void> {
     const path = `/v1/billing/invoices/${invoiceId}/void`;
@@ -1605,7 +1605,7 @@ export class AuthClient {
   /**
    * List billing plans
    * GET /v1/billing/plans
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async listBillingPlans(app_id: string, token: string, status?: string, include_addons?: boolean): Promise<ListPlansResponse> {
     const params = new URLSearchParams();
@@ -1625,7 +1625,7 @@ export class AuthClient {
   /**
    * Create billing plan
    * POST /v1/billing/plans
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async createBillingPlan(body: CreateBillingPlanRequest, token: string): Promise<PlanResponse> {
     const path = "/v1/billing/plans";
@@ -1640,7 +1640,7 @@ export class AuthClient {
   /**
    * Get billing plan
    * GET /v1/billing/plans/{planId}
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async getBillingPlan(planId: string, token: string): Promise<PlanResponse> {
     const path = `/v1/billing/plans/${planId}`;
@@ -1655,7 +1655,7 @@ export class AuthClient {
   /**
    * Activate a billing plan
    * POST /v1/billing/plans/{planId}/activate
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async activateBillingPlan(planId: string, token: string): Promise<void> {
     const path = `/v1/billing/plans/${planId}/activate`;
@@ -1670,7 +1670,7 @@ export class AuthClient {
   /**
    * Archive a billing plan
    * POST /v1/billing/plans/{planId}/archive
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async archiveBillingPlan(planId: string, token: string): Promise<void> {
     const path = `/v1/billing/plans/${planId}/archive`;
@@ -1778,7 +1778,7 @@ export class AuthClient {
   /**
    * List subscriptions
    * GET /v1/billing/subscriptions
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async listSubscriptions(app_id: string, tenant_id: string, token: string, status?: string): Promise<ListSubscriptionsResponse> {
     const params = new URLSearchParams();
@@ -1798,7 +1798,7 @@ export class AuthClient {
   /**
    * Create subscription
    * POST /v1/billing/subscriptions
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async createSubscription(body: CreateSubscriptionRequest, token: string): Promise<SubscriptionResponse> {
     const path = "/v1/billing/subscriptions";
@@ -1813,7 +1813,7 @@ export class AuthClient {
   /**
    * Get active subscription
    * GET /v1/billing/subscriptions/active
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async getActiveSubscription(app_id: string, tenant_id: string, token: string): Promise<SubscriptionResponse> {
     const params = new URLSearchParams();
@@ -1832,7 +1832,7 @@ export class AuthClient {
   /**
    * Cancel subscription
    * POST /v1/billing/subscriptions/{subId}/cancel
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async cancelSubscription(subId: string, body: CancelSubscriptionRequest, token: string): Promise<void> {
     const path = `/v1/billing/subscriptions/${subId}/cancel`;
@@ -1847,7 +1847,7 @@ export class AuthClient {
   /**
    * Change subscription plan
    * POST /v1/billing/subscriptions/{subId}/change-plan
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async changeSubscriptionPlan(subId: string, body: ChangeSubscriptionPlanRequest, token: string): Promise<void> {
     const path = `/v1/billing/subscriptions/${subId}/change-plan`;
@@ -1862,7 +1862,7 @@ export class AuthClient {
   /**
    * Pause subscription
    * POST /v1/billing/subscriptions/{subId}/pause
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async pauseSubscription(subId: string, token: string): Promise<void> {
     const path = `/v1/billing/subscriptions/${subId}/pause`;
@@ -1877,7 +1877,7 @@ export class AuthClient {
   /**
    * Resume subscription
    * POST /v1/billing/subscriptions/{subId}/resume
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async resumeSubscription(subId: string, token: string): Promise<void> {
     const path = `/v1/billing/subscriptions/${subId}/resume`;
@@ -1892,7 +1892,7 @@ export class AuthClient {
   /**
    * Get usage summary
    * GET /v1/billing/usage
-   * @deprecated Use @authsome/plugin-subscription instead.
+   * @deprecated Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
    */
   async getUsageSummary(app_id: string, tenant_id: string, token: string): Promise<UsageSummaryResponse> {
     const params = new URLSearchParams();

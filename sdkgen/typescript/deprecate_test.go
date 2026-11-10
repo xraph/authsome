@@ -19,7 +19,10 @@ func TestGenerate_DeprecatesTaggedOperations(t *testing.T) {
 
 	gen := typescript.NewGenerator(typescript.GeneratorConfig{
 		OutputMode:     "embedded",
-		DeprecatedTags: map[string]string{"Billing": "Use @authsome/plugin-subscription instead."},
+		DeprecatedTags: map[string]string{
+			"Billing":  "Use @authsome/plugin-subscription instead.",
+			"Billing ": "Operator route. Call it from your server with @authsome/client.",
+		},
 	})
 	files, err := gen.Generate(spec)
 	require.NoError(t, err)
@@ -38,7 +41,8 @@ func TestGenerate_DeprecatesTaggedOperations(t *testing.T) {
 		start := strings.LastIndex(client[:i], "/**")
 		return client[start:i]
 	}
-	assert.Contains(t, docFor("getActiveSubscription"), "@deprecated Use @authsome/plugin-subscription instead.")
+	assert.Contains(t, docFor("getCurrentSubscription"), "@deprecated Use @authsome/plugin-subscription instead.")
+	assert.Contains(t, docFor("getActiveSubscription"), "@deprecated Operator route. Call it from your server with @authsome/client.")
 	assert.Contains(t, docFor("subscribe"), "@deprecated")
 	assert.NotContains(t, docFor("getMe"), "@deprecated")
 }

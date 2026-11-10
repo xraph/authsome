@@ -19,7 +19,10 @@ func TestGenerate_DeprecatesTaggedOperations(t *testing.T) {
 
 	gen := dart.NewGenerator(dart.GeneratorConfig{
 		OutputMode:     "embedded",
-		DeprecatedTags: map[string]string{"Billing": "Use the authsome_subscription package instead."},
+		DeprecatedTags: map[string]string{
+			"Billing":  "Use the authsome_subscription package instead.",
+			"Billing ": "Operator route. Call it from your server.",
+		},
 	})
 	files, err := gen.Generate(spec)
 	require.NoError(t, err)
@@ -38,6 +41,7 @@ func TestGenerate_DeprecatesTaggedOperations(t *testing.T) {
 		start := strings.LastIndex(client[:i], "\n\n")
 		return client[start:i]
 	}
-	assert.Contains(t, before("getActiveSubscription"), "@Deprecated('Use the authsome_subscription package instead.')")
+	assert.Contains(t, before("getCurrentSubscription"), "@Deprecated('Use the authsome_subscription package instead.')")
+	assert.Contains(t, before("getActiveSubscription"), "@Deprecated('Operator route. Call it from your server.')")
 	assert.NotContains(t, before("getMe"), "@Deprecated")
 }
