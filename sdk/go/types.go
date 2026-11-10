@@ -556,15 +556,37 @@ type Consent struct {
 	Version   string `json:"version"`
 }
 
+// ConsentDecisionBody represents the ConsentDecisionBody schema.
+type ConsentDecisionBody struct {
+	Cid      string `json:"cid"`
+	Csrf     string `json:"csrf"`
+	Decision string `json:"decision"`
+}
+
 // ConsentListResponse represents the ConsentListResponse schema.
 type ConsentListResponse struct {
 	Consents   []*Consent `json:"consents"`
 	NextCursor string     `json:"next_cursor,omitempty"`
 }
 
+// ConsentResult represents the ConsentResult schema.
+type ConsentResult struct {
+	RedirectURL string `json:"redirect_url"`
+}
+
 // ConsentStatusResponse represents the ConsentStatusResponse schema.
 type ConsentStatusResponse struct {
 	Status string `json:"status"`
+}
+
+// ConsentView represents the ConsentView schema.
+type ConsentView struct {
+	Action     string   `json:"action"`
+	Cid        string   `json:"cid"`
+	ClientID   string   `json:"client_id"`
+	ClientName string   `json:"client_name"`
+	Csrf       string   `json:"csrf"`
+	Scopes     []string `json:"scopes"`
 }
 
 // CouponResponse represents the CouponResponse schema.
@@ -2241,6 +2263,13 @@ type SendSMSCodeRequest struct {
 // VerifySMSCodeRequest is the request body for VerifySMSCode.
 type VerifySMSCodeRequest struct {
 	Code string `json:"code"`
+}
+
+// Oauth2ConsentDecisionRequest is the request body for Oauth2ConsentDecision.
+type Oauth2ConsentDecisionRequest struct {
+	Cid      string `json:"cid"`
+	Csrf     string `json:"csrf"`
+	Decision string `json:"decision"`
 }
 
 // Oauth2DeviceAuthorizeRequest is the request body for Oauth2DeviceAuthorize.

@@ -413,9 +413,26 @@ Without a hint, or with one for somebody else, the user sees a page asking wheth
 
 This ends the session on this server. It doesn't revoke tokens the client already holds, so revoke those yourself if the client needs to.
 
+### Calling it from a browser app
+
+A single-page app on another origin can talk to the provider directly: discovery, both key sets, token, userinfo, revoke and dynamic registration all answer CORS requests, preflights included. You don't need a backend just to swap the code for a token.
+
+Any origin is allowed by default, and credentials never are. None of those endpoints reads a cookie (token and revoke authenticate the client, userinfo takes a bearer token), so letting any site read them doesn't expose anyone's session. Authorize, consent and logout do use the session cookie, and they're page navigations, so they get no CORS headers at all.
+
+To narrow it, list your origins:
+
+```go
+oauth2provider.New(oauth2provider.Config{
+    Issuer:      "https://auth.myapp.com",
+    CORSOrigins: []string{"https://reports.example.com", "http://localhost:5173"},
+})
+```
+
+If something in front of authsome already handles CORS, set `DisableCORS: true`. A host-wide CORS middleware that allows credentials for your own frontend can sit alongside this: these endpoints drop `Access-Control-Allow-Credentials` on the way out.
+
 ### What this doesn't do yet
 
-`prompt=login`, `max_age`, front-channel and back-channel logout and CORS on the OIDC endpoints aren't there yet, and neither is a way to add custom claims.
+`prompt=login`, `max_age`, front-channel and back-channel logout aren't there yet, and neither is a way to add custom claims.
 
 ## Scopes and consent
 

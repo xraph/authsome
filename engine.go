@@ -1437,6 +1437,12 @@ type socialProviderLister interface {
 	Providers() []string
 }
 
+// appSocialProviderLister lists the providers one app can use, including
+// the ones configured for that app alone.
+type appSocialProviderLister interface {
+	ProvidersForApp(ctx context.Context, appID id.AppID) []string
+}
+
 // ssoConnectionLister is implemented by the SSO plugin to expose connections.
 type ssoConnectionLister interface {
 	Connections() []string
@@ -1508,13 +1514,18 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 			passwordEnabled = true
 		case "social":
 			socialEnabled = true
-			if lister, ok := p.(socialProviderLister); ok {
-				for _, prov := range lister.Providers() {
-					socialProviders = append(socialProviders, ClientConfigSocialProvider{
-						ID:   prov,
-						Name: providerDisplayName(prov),
-					})
-				}
+			var names []string
+			switch lister := p.(type) {
+			case appSocialProviderLister:
+				names = lister.ProvidersForApp(ctx, appID)
+			case socialProviderLister:
+				names = lister.Providers()
+			}
+			for _, prov := range names {
+				socialProviders = append(socialProviders, ClientConfigSocialProvider{
+					ID:   prov,
+					Name: providerDisplayName(prov),
+				})
 			}
 		case "passkey":
 			passkeyEnabled = true

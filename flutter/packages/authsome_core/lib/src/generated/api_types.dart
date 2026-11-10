@@ -2413,6 +2413,37 @@ class Consent {
   String toString() => 'Consent(${toJson()})';
 }
 
+class ConsentDecisionBody {
+  final String cid;
+  final String csrf;
+  final String decision;
+
+  const ConsentDecisionBody({
+    required this.cid,
+    required this.csrf,
+    required this.decision,
+  });
+
+  factory ConsentDecisionBody.fromJson(Map<String, dynamic> json) {
+    return ConsentDecisionBody(
+      cid: json['cid'] as String,
+      csrf: json['csrf'] as String,
+      decision: json['decision'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'cid': cid,
+      'csrf': csrf,
+      'decision': decision,
+    };
+  }
+
+  @override
+  String toString() => 'ConsentDecisionBody(${toJson()})';
+}
+
 class ConsentListResponse {
   final List<Consent> consents;
   final String? nextCursor;
@@ -2440,6 +2471,29 @@ class ConsentListResponse {
   String toString() => 'ConsentListResponse(${toJson()})';
 }
 
+class ConsentResult {
+  final String redirectUrl;
+
+  const ConsentResult({
+    required this.redirectUrl,
+  });
+
+  factory ConsentResult.fromJson(Map<String, dynamic> json) {
+    return ConsentResult(
+      redirectUrl: json['redirect_url'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'redirect_url': redirectUrl,
+    };
+  }
+
+  @override
+  String toString() => 'ConsentResult(${toJson()})';
+}
+
 class ConsentStatusResponse {
   final String status;
 
@@ -2461,6 +2515,49 @@ class ConsentStatusResponse {
 
   @override
   String toString() => 'ConsentStatusResponse(${toJson()})';
+}
+
+class ConsentView {
+  final String action;
+  final String cid;
+  final String clientId;
+  final String clientName;
+  final String csrf;
+  final List<String> scopes;
+
+  const ConsentView({
+    required this.action,
+    required this.cid,
+    required this.clientId,
+    required this.clientName,
+    required this.csrf,
+    required this.scopes,
+  });
+
+  factory ConsentView.fromJson(Map<String, dynamic> json) {
+    return ConsentView(
+      action: json['action'] as String,
+      cid: json['cid'] as String,
+      clientId: json['client_id'] as String,
+      clientName: json['client_name'] as String,
+      csrf: json['csrf'] as String,
+      scopes: (json['scopes'] as List).map((e) => e as String).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'action': action,
+      'cid': cid,
+      'client_id': clientId,
+      'client_name': clientName,
+      'csrf': csrf,
+      'scopes': scopes,
+    };
+  }
+
+  @override
+  String toString() => 'ConsentView(${toJson()})';
 }
 
 class CouponResponse {

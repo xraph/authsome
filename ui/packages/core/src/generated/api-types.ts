@@ -489,13 +489,32 @@ export interface Consent {
   version: string;
 }
 
+export interface ConsentDecisionBody {
+  cid: string;
+  csrf: string;
+  decision: string;
+}
+
 export interface ConsentListResponse {
   consents: Consent[];
   next_cursor?: string;
 }
 
+export interface ConsentResult {
+  redirect_url: string;
+}
+
 export interface ConsentStatusResponse {
   status: string;
+}
+
+export interface ConsentView {
+  action: string;
+  cid: string;
+  client_id: string;
+  client_name: string;
+  csrf: string;
+  scopes: string[];
 }
 
 export interface CouponResponse {
@@ -1870,6 +1889,8 @@ export type VerifyRecoveryCodeRequest = RecoveryVerifyRequest;
 export type SendSMSCodeRequest = SMSSendRequest;
 
 export type VerifySMSCodeRequest = SMSVerifyRequest;
+
+export type Oauth2ConsentDecisionRequest = ConsentDecisionBody;
 
 export type Oauth2DeviceAuthorizeRequest = { client_id: string; resource?: string[]; scope?: string };
 
