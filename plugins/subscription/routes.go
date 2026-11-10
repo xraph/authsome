@@ -125,7 +125,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if err := subs.GET("/active", p.handleGetActiveSubscription,
 		forge.WithSummary("Get active subscription"),
 		forge.WithOperationID("getActiveSubscription"),
-		forge.WithResponseSchema(http.StatusOK, "Active subscription", Response{}),
+		forge.WithResponseSchema(http.StatusOK, "Active subscription", SubscriptionResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -134,7 +134,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if err := subs.POST("", p.handleCreateSubscription,
 		forge.WithSummary("Create subscription"),
 		forge.WithOperationID("createSubscription"),
-		forge.WithCreatedResponse(Response{}),
+		forge.WithCreatedResponse(SubscriptionResponse{}),
 		forge.WithErrorResponses(),
 		p.writeGuard(),
 	); err != nil {
@@ -345,6 +345,22 @@ type PlanResponse struct {
 	IsAddon       bool              `json:"is_addon"`
 	AppID         string            `json:"app_id"`
 	Metadata      map[string]string `json:"metadata,omitempty"`
+	// AmountMinor is the base price in minor units (cents for usd), for
+	// arithmetic and locale formatting. BaseAmount is the same price
+	// formatted in major units.
+	AmountMinor *int64                `json:"amount_minor,omitempty"`
+	Features    []PlanFeatureResponse `json:"features"`
+}
+
+// PlanFeatureResponse is one feature a plan includes. A nil Limit means
+// unlimited.
+type PlanFeatureResponse struct {
+	Key       string `json:"key"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	Limit     *int64 `json:"limit"`
+	Period    string `json:"period,omitempty"`
+	SoftLimit bool   `json:"soft_limit"`
 }
 
 type PlanIDRequest struct {
@@ -360,7 +376,7 @@ type ListSubscriptionsRequest struct {
 }
 
 type ListSubscriptionsResponse struct {
-	Subscriptions []Response `json:"subscriptions"`
+	Subscriptions []SubscriptionResponse `json:"subscriptions"`
 	Total         int        `json:"total"`
 }
 
@@ -389,7 +405,7 @@ type SubIDRequest struct {
 	SubID string `path:"subId"`
 }
 
-type Response struct {
+type SubscriptionResponse struct {
 	ID                 string  `json:"id"`
 	TenantID           string  `json:"tenant_id"`
 	PlanID             string  `json:"plan_id"`
@@ -400,6 +416,10 @@ type Response struct {
 	TrialEnd           *string `json:"trial_end,omitempty"`
 	CanceledAt         *string `json:"canceled_at,omitempty"`
 	AppID              string  `json:"app_id"`
+	// CancelAt is when a cancellation scheduled for the period end takes
+	// effect. CanceledAt stays empty until it does.
+	CancelAt *string `json:"cancel_at,omitempty"`
+	PausedAt *string `json:"paused_at,omitempty"`
 }
 
 // Invoice types
@@ -685,7 +705,7 @@ func (p *Plugin) handleListSubscriptions(ctx forge.Context, req *ListSubscriptio
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list subscriptions: %w", err))
 	}
 
-	items := make([]Response, 0, len(subs))
+	items := make([]SubscriptionResponse, 0, len(subs))
 	for _, s := range subs {
 		items = append(items, toSubResponse(s))
 	}
@@ -693,7 +713,7 @@ func (p *Plugin) handleListSubscriptions(ctx forge.Context, req *ListSubscriptio
 	return &ListSubscriptionsResponse{Subscriptions: items, Total: len(items)}, nil
 }
 
-func (p *Plugin) handleGetActiveSubscription(ctx forge.Context, req *GetActiveSubRequest) (*Response, error) {
+func (p *Plugin) handleGetActiveSubscription(ctx forge.Context, req *GetActiveSubRequest) (*SubscriptionResponse, error) {
 	if req.AppID == "" || req.TenantID == "" {
 		return nil, forge.BadRequest("app_id and tenant_id are required")
 	}
@@ -713,7 +733,7 @@ func (p *Plugin) handleGetActiveSubscription(ctx forge.Context, req *GetActiveSu
 	return &resp, nil
 }
 
-func (p *Plugin) handleCreateSubscription(ctx forge.Context, req *CreateSubscriptionRequest) (*Response, error) {
+func (p *Plugin) handleCreateSubscription(ctx forge.Context, req *CreateSubscriptionRequest) (*SubscriptionResponse, error) {
 	if req.TenantID == "" || req.PlanID == "" || req.AppID == "" {
 		return nil, forge.BadRequest("tenant_id, plan_id, and app_id are required")
 	}
@@ -1137,12 +1157,29 @@ func toPlanResponse(pl *plan.Plan) PlanResponse {
 	if pl.Pricing != nil {
 		resp.BaseAmount = pl.Pricing.BaseAmount.FormatMajor()
 		resp.BillingPeriod = string(pl.Pricing.BillingPeriod)
+		amount := pl.Pricing.BaseAmount.Amount
+		resp.AmountMinor = &amount
+	}
+	resp.Features = make([]PlanFeatureResponse, 0, len(pl.Features))
+	for _, f := range pl.Features {
+		pf := PlanFeatureResponse{
+			Key:       f.Key,
+			Name:      f.Name,
+			Type:      string(f.Type),
+			Period:    string(f.Period),
+			SoftLimit: f.SoftLimit,
+		}
+		if f.Limit >= 0 {
+			limit := f.Limit
+			pf.Limit = &limit
+		}
+		resp.Features = append(resp.Features, pf)
 	}
 	return resp
 }
 
-func toSubResponse(s *lsub.Subscription) Response {
-	resp := Response{
+func toSubResponse(s *lsub.Subscription) SubscriptionResponse {
+	resp := SubscriptionResponse{
 		ID:                 s.ID.String(),
 		TenantID:           s.TenantID,
 		PlanID:             s.PlanID.String(),
@@ -1162,6 +1199,14 @@ func toSubResponse(s *lsub.Subscription) Response {
 	if s.CanceledAt != nil {
 		ca := s.CanceledAt.Format("2006-01-02")
 		resp.CanceledAt = &ca
+	}
+	if s.CancelAt != nil {
+		ca := s.CancelAt.Format("2006-01-02")
+		resp.CancelAt = &ca
+	}
+	if s.PausedAt != nil {
+		pa := s.PausedAt.Format("2006-01-02")
+		resp.PausedAt = &pa
 	}
 	return resp
 }
