@@ -646,6 +646,21 @@ export interface CreateRoleRequest {
   slug: string;
 }
 
+export interface CreateSCIMConfigRequest {
+  auto_create?: boolean;
+  auto_suspend?: boolean;
+  default_role?: string;
+  enabled?: boolean;
+  group_sync?: boolean;
+  metadata?: Record<string, unknown>;
+  name: string;
+}
+
+export interface CreateSCIMTokenRequest {
+  expires_at?: string;
+  name: string;
+}
+
 export interface CreateSubscriptionRequest {
   app_id: string;
   plan_id: string;
@@ -819,6 +834,18 @@ export interface EnrollResponse {
   secret: string;
 }
 
+export interface EnrolledFactor {
+  enrolled_at: string;
+  method: string;
+  verified: boolean;
+}
+
+export interface EnrollmentResponse {
+  enabled: boolean;
+  factors: EnrolledFactor[];
+  recovery_codes_remaining: number;
+}
+
 export interface EntitlementResponse {
   allowed: boolean;
   feature: string;
@@ -961,6 +988,16 @@ export interface Invitation {
 export interface InvitationListResponse {
   invitations: Invitation[];
   next_cursor?: string;
+}
+
+export interface InvitationPreview {
+  email_masked: string;
+  expires_at: string;
+  inviter_name: string;
+  org_id: string;
+  org_name: string;
+  org_slug?: string;
+  role: string;
 }
 
 export interface InvoiceResponse {
@@ -1420,8 +1457,46 @@ export interface RotateClientSecretResponse {
   id: string;
 }
 
+export interface RotateSCIMTokenRequest {
+  grace_seconds?: number;
+  name?: string;
+}
+
 export interface RotateWebhookSecretResponse {
   secret: string;
+}
+
+export interface SCIMConfig {
+  app_id: string;
+  auto_create: boolean;
+  auto_suspend: boolean;
+  created_at: string;
+  default_role: string;
+  enabled: boolean;
+  group_sync: boolean;
+  id: string;
+  metadata?: Record<string, unknown>;
+  name: string;
+  org_id?: string;
+  updated_at: string;
+}
+
+export interface SCIMConfigListResponse {
+  configs: SCIMConfig[];
+}
+
+export interface SCIMStatusResponse {
+  status: string;
+}
+
+export interface SCIMTokenCreatedResponse {
+  base_url: string;
+  plaintext: string;
+  token?: Token;
+}
+
+export interface SCIMTokenListResponse {
+  tokens: Token[];
 }
 
 export interface SMSSendRequest {
@@ -1679,6 +1754,15 @@ export interface TenantRequest {
   tenant_id?: string;
 }
 
+export interface Token {
+  config_id: string;
+  created_at: string;
+  expires_at?: string;
+  id: string;
+  last_used_at?: string;
+  name: string;
+}
+
 export interface TokenExchangeRequest {
   scopes?: string[];
   subject: string;
@@ -1803,6 +1887,16 @@ export interface UpdateRoleRequest {
   description?: string;
   name?: string;
   parent_id?: string;
+}
+
+export interface UpdateSCIMConfigRequest {
+  auto_create?: boolean;
+  auto_suspend?: boolean;
+  default_role?: string;
+  enabled?: boolean;
+  group_sync?: boolean;
+  metadata?: Record<string, unknown>;
+  name?: string;
 }
 
 export interface UpdateSubscriptionRequest {

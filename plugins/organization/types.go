@@ -1,5 +1,7 @@
 package organization
 
+import "time"
+
 // ---------------------------------------------------------------------------
 // Organization requests
 // ---------------------------------------------------------------------------
@@ -92,6 +94,29 @@ type AcceptInvitationRequest struct {
 // DeclineInvitationRequest binds the body for POST /orgs/invitations/decline.
 type DeclineInvitationRequest struct {
 	Token string `json:"token" description:"Invitation token"`
+}
+
+// GetInvitationRequest binds GET /orgs/invitations/:token.
+type GetInvitationRequest struct {
+	Token string `path:"inviteToken" description:"Invitation token"`
+}
+
+// InvitationPreview is what the person holding an invitation token is shown
+// before they accept it.
+//
+// Deliberately not organization.Invitation. That row has no organization name
+// and no inviter name, which are the two things the page actually needs, and
+// it carries the token and the raw invited address, which the page does not.
+// The email is masked so the screen can say who the invitation is for without
+// handing the address to whoever opened the link.
+type InvitationPreview struct {
+	OrgID       string    `json:"org_id" description:"Organization the invitation is for"`
+	OrgName     string    `json:"org_name" description:"Organization's display name"`
+	OrgSlug     string    `json:"org_slug,omitempty" description:"Organization's slug"`
+	InviterName string    `json:"inviter_name" description:"Who sent the invitation"`
+	Role        string    `json:"role" description:"Role the invitee will hold"`
+	EmailMasked string    `json:"email_masked" description:"Partially masked invited address"`
+	ExpiresAt   time.Time `json:"expires_at" description:"When the invitation stops working"`
 }
 
 // ---------------------------------------------------------------------------

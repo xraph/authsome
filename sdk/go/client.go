@@ -2172,6 +2172,16 @@ func (c *Client) EnrollMFA(ctx context.Context, req *EnrollMFARequest) (*EnrollR
 	return &result, nil
 }
 
+// GetMFAEnrollment — Read MFA enrollment
+func (c *Client) GetMFAEnrollment(ctx context.Context) (*EnrollmentResponse, error) {
+	path := "/v1/mfa/enrollment"
+	var result EnrollmentResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // DisableMFA — Disable MFA
 func (c *Client) DisableMFA(ctx context.Context, req *DisableMFARequest) (*DisableResponse, error) {
 	body, err := json.Marshal(req)
@@ -2667,6 +2677,17 @@ func (c *Client) DeclineInvitation(ctx context.Context, req *DeclineInvitationRe
 	return &result, nil
 }
 
+// GetInvitation — Get invitation
+func (c *Client) GetInvitation(ctx context.Context, inviteToken string) (*InvitationPreview, error) {
+	path := "/v1/orgs/invitations/{inviteToken}"
+	path = strings.Replace(path, "{inviteToken}", inviteToken, 1)
+	var result InvitationPreview
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // GetOrganization — Get organization
 func (c *Client) GetOrganization(ctx context.Context, orgId string) (*Organization, error) {
 	path := "/v1/orgs/{orgId}"
@@ -2805,6 +2826,32 @@ func (c *Client) RemoveMember(ctx context.Context, orgId string, memberId string
 	path = strings.Replace(path, "{memberId}", memberId, 1)
 	var result OrganizationStatusResponse
 	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListSCIMConfigs — List SCIM configurations
+func (c *Client) ListSCIMConfigs(ctx context.Context, orgId string) (*SCIMConfigListResponse, error) {
+	path := "/v1/orgs/{orgId}/scim/configs"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result SCIMConfigListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateSCIMConfig — Create SCIM configuration
+func (c *Client) CreateSCIMConfig(ctx context.Context, orgId string, req *CreateSCIMConfigRequest) (*SCIMConfig, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/orgs/{orgId}/scim/configs"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result SCIMConfig
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -3175,6 +3222,95 @@ func (c *Client) AuthsomeUnassignRole(ctx context.Context, roleId string, req *A
 	path := "/v1/roles/{roleId}/unassign"
 	path = strings.Replace(path, "{roleId}", roleId, 1)
 	var result ApiStatusResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetSCIMConfig — Get SCIM configuration
+func (c *Client) GetSCIMConfig(ctx context.Context, configId string) (*SCIMConfig, error) {
+	path := "/v1/scim/configs/{configId}"
+	path = strings.Replace(path, "{configId}", configId, 1)
+	var result SCIMConfig
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateSCIMConfig — Update SCIM configuration
+func (c *Client) UpdateSCIMConfig(ctx context.Context, configId string, req *UpdateSCIMConfigRequest) (*SCIMConfig, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/scim/configs/{configId}"
+	path = strings.Replace(path, "{configId}", configId, 1)
+	var result SCIMConfig
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteSCIMConfig — Delete SCIM configuration
+func (c *Client) DeleteSCIMConfig(ctx context.Context, configId string) (*SCIMStatusResponse, error) {
+	path := "/v1/scim/configs/{configId}"
+	path = strings.Replace(path, "{configId}", configId, 1)
+	var result SCIMStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListSCIMTokens — List SCIM tokens
+func (c *Client) ListSCIMTokens(ctx context.Context, configId string) (*SCIMTokenListResponse, error) {
+	path := "/v1/scim/configs/{configId}/tokens"
+	path = strings.Replace(path, "{configId}", configId, 1)
+	var result SCIMTokenListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateSCIMToken — Create SCIM token
+func (c *Client) CreateSCIMToken(ctx context.Context, configId string, req *CreateSCIMTokenRequest) (*SCIMTokenCreatedResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/scim/configs/{configId}/tokens"
+	path = strings.Replace(path, "{configId}", configId, 1)
+	var result SCIMTokenCreatedResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RevokeSCIMToken — Revoke SCIM token
+func (c *Client) RevokeSCIMToken(ctx context.Context, tokenId string) (*SCIMStatusResponse, error) {
+	path := "/v1/scim/tokens/{tokenId}"
+	path = strings.Replace(path, "{tokenId}", tokenId, 1)
+	var result SCIMStatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RotateSCIMToken — Rotate SCIM token
+func (c *Client) RotateSCIMToken(ctx context.Context, tokenId string, req *RotateSCIMTokenRequest) (*SCIMTokenCreatedResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/scim/tokens/{tokenId}/rotate"
+	path = strings.Replace(path, "{tokenId}", tokenId, 1)
+	var result SCIMTokenCreatedResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}

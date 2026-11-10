@@ -730,6 +730,23 @@ type CreateRoleRequest struct {
 	Slug        string `json:"slug"`
 }
 
+// CreateSCIMConfigRequest represents the CreateSCIMConfigRequest schema.
+type CreateSCIMConfigRequest struct {
+	AutoCreate  bool           `json:"auto_create,omitempty"`
+	AutoSuspend bool           `json:"auto_suspend,omitempty"`
+	DefaultRole string         `json:"default_role,omitempty"`
+	Enabled     bool           `json:"enabled,omitempty"`
+	GroupSync   bool           `json:"group_sync,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	Name        string         `json:"name"`
+}
+
+// CreateSCIMTokenRequest represents the CreateSCIMTokenRequest schema.
+type CreateSCIMTokenRequest struct {
+	ExpiresAt string `json:"expires_at,omitempty"`
+	Name      string `json:"name"`
+}
+
 // CreateSubscriptionRequest represents the CreateSubscriptionRequest schema.
 type CreateSubscriptionRequest struct {
 	AppID    string `json:"app_id"`
@@ -927,6 +944,20 @@ type EnrollResponse struct {
 	Secret     string `json:"secret"`
 }
 
+// EnrolledFactor represents the EnrolledFactor schema.
+type EnrolledFactor struct {
+	EnrolledAt string `json:"enrolled_at"`
+	Method     string `json:"method"`
+	Verified   bool   `json:"verified"`
+}
+
+// EnrollmentResponse represents the EnrollmentResponse schema.
+type EnrollmentResponse struct {
+	Enabled                bool              `json:"enabled"`
+	Factors                []*EnrolledFactor `json:"factors"`
+	RecoveryCodesRemaining int64             `json:"recovery_codes_remaining"`
+}
+
 // EntitlementResponse represents the EntitlementResponse schema.
 type EntitlementResponse struct {
 	Allowed   bool   `json:"allowed"`
@@ -1089,6 +1120,17 @@ type Invitation struct {
 type InvitationListResponse struct {
 	Invitations []*Invitation `json:"invitations"`
 	NextCursor  string        `json:"next_cursor,omitempty"`
+}
+
+// InvitationPreview represents the InvitationPreview schema.
+type InvitationPreview struct {
+	EmailMasked string `json:"email_masked"`
+	ExpiresAt   string `json:"expires_at"`
+	InviterName string `json:"inviter_name"`
+	OrgID       string `json:"org_id"`
+	OrgName     string `json:"org_name"`
+	OrgSlug     string `json:"org_slug,omitempty"`
+	Role        string `json:"role"`
 }
 
 // InvoiceResponse represents the InvoiceResponse schema.
@@ -1611,9 +1653,53 @@ type RotateClientSecretResponse struct {
 	ID           string `json:"id"`
 }
 
+// RotateSCIMTokenRequest represents the RotateSCIMTokenRequest schema.
+type RotateSCIMTokenRequest struct {
+	GraceSeconds int64  `json:"grace_seconds,omitempty"`
+	Name         string `json:"name,omitempty"`
+}
+
 // RotateWebhookSecretResponse represents the RotateWebhookSecretResponse schema.
 type RotateWebhookSecretResponse struct {
 	Secret string `json:"secret"`
+}
+
+// SCIMConfig represents the SCIMConfig schema.
+type SCIMConfig struct {
+	AppID       string         `json:"app_id"`
+	AutoCreate  bool           `json:"auto_create"`
+	AutoSuspend bool           `json:"auto_suspend"`
+	CreatedAt   string         `json:"created_at"`
+	DefaultRole string         `json:"default_role"`
+	Enabled     bool           `json:"enabled"`
+	GroupSync   bool           `json:"group_sync"`
+	ID          string         `json:"id"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	Name        string         `json:"name"`
+	OrgID       string         `json:"org_id,omitempty"`
+	UpdatedAt   string         `json:"updated_at"`
+}
+
+// SCIMConfigListResponse represents the SCIMConfigListResponse schema.
+type SCIMConfigListResponse struct {
+	Configs []*SCIMConfig `json:"configs"`
+}
+
+// SCIMStatusResponse represents the SCIMStatusResponse schema.
+type SCIMStatusResponse struct {
+	Status string `json:"status"`
+}
+
+// SCIMTokenCreatedResponse represents the SCIMTokenCreatedResponse schema.
+type SCIMTokenCreatedResponse struct {
+	BaseURL   string `json:"base_url"`
+	Plaintext string `json:"plaintext"`
+	Token     *Token `json:"token,omitempty"`
+}
+
+// SCIMTokenListResponse represents the SCIMTokenListResponse schema.
+type SCIMTokenListResponse struct {
+	Tokens []*Token `json:"tokens"`
 }
 
 // SMSSendRequest represents the SMSSendRequest schema.
@@ -1905,6 +1991,16 @@ type TenantRequest struct {
 	TenantID string `json:"tenant_id,omitempty"`
 }
 
+// Token represents the Token schema.
+type Token struct {
+	ConfigID   string `json:"config_id"`
+	CreatedAt  string `json:"created_at"`
+	ExpiresAt  string `json:"expires_at,omitempty"`
+	ID         string `json:"id"`
+	LastUsedAt string `json:"last_used_at,omitempty"`
+	Name       string `json:"name"`
+}
+
 // TokenExchangeRequest represents the TokenExchangeRequest schema.
 type TokenExchangeRequest struct {
 	Scopes  []string `json:"scopes,omitempty"`
@@ -2043,6 +2139,17 @@ type UpdateRoleRequest struct {
 	Description string `json:"description,omitempty"`
 	Name        string `json:"name,omitempty"`
 	ParentID    string `json:"parent_id,omitempty"`
+}
+
+// UpdateSCIMConfigRequest represents the UpdateSCIMConfigRequest schema.
+type UpdateSCIMConfigRequest struct {
+	AutoCreate  bool           `json:"auto_create,omitempty"`
+	AutoSuspend bool           `json:"auto_suspend,omitempty"`
+	DefaultRole string         `json:"default_role,omitempty"`
+	Enabled     bool           `json:"enabled,omitempty"`
+	GroupSync   bool           `json:"group_sync,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	Name        string         `json:"name,omitempty"`
 }
 
 // UpdateSubscriptionRequest represents the UpdateSubscriptionRequest schema.
