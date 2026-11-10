@@ -3,6 +3,7 @@ package oauth2provider
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"testing"
 
@@ -142,3 +143,10 @@ func TestLoginURLFor_InvalidStoredValueWithoutLogger(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, u)
 }
+
+func TestAuthorizeErrorFrom_PassesOtherErrorsThrough(t *testing.T) {
+	boom := errors.New("store down")
+	assert.Same(t, boom, New().authorizeErrorFrom(nil, registeredURIForTest, boom, "st"))
+}
+
+const registeredURIForTest = "https://app.example.com/cb"
