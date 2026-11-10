@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -75,4 +76,67 @@ func TestSocial_AppScopedProviderReachesOnlyItsApp(t *testing.T) {
 	require.Equal(t, http.StatusOK, recA.Code, recA.Body.String())
 	assert.Contains(t, recA.Body.String(), "client_id=app-a-client")
 	assert.Equal(t, http.StatusBadRequest, start(appB).Code)
+}
+
+// The callback looks the provider up again, for the app the flow started
+// in. A provider removed from that app between start and callback is gone.
+func TestSocial_CallbackResolvesTheProviderForTheFlowsApp(t *testing.T) {
+	ctx := context.Background()
+	sp := social.New()
+	eng, _ := newTestEngine(t, authsome.WithPlugin(sp))
+	appA := testAppID(t)
+
+	save := func(list []social.ProviderSetting) {
+		raw, err := json.Marshal(list)
+		require.NoError(t, err)
+		require.NoError(t, eng.Settings().Set(ctx, social.SettingSocialProviders.Def.Key, raw,
+			settings.ScopeApp, appA.String(), appA.String(), "", "test"))
+	}
+	save([]social.ProviderSetting{{Name: "github", ClientID: "app-a-client", ClientSecret: "s", Enabled: true}})
+
+	router := forge.NewRouter()
+	require.NoError(t, sp.RegisterRoutes(router))
+	scoped := forge.WithScope(ctx, forge.NewAppScope(appA.String()))
+	serve := func(method, target string) *httptest.ResponseRecorder {
+		req := httptest.NewRequestWithContext(scoped, method, target, nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		return rec
+	}
+	stateFrom := func() string {
+		rec := serve(http.MethodPost, "/v1/social/github")
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		var body struct {
+			AuthURL string `json:"auth_url"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+		u, err := url.Parse(body.AuthURL)
+		require.NoError(t, err)
+		return u.Query().Get("state")
+	}
+
+	// Resolved for app A, so the request gets as far as the provider
+	// error, which is answered without a token exchange.
+	rec := serve(http.MethodGet, "/v1/social/github/callback?error=access_denied&state="+url.QueryEscape(stateFrom()))
+	assert.NotContains(t, rec.Body.String(), "unsupported provider")
+
+	state := stateFrom()
+	save([]social.ProviderSetting{})
+	rec = serve(http.MethodGet, "/v1/social/github/callback?code=x&state="+url.QueryEscape(state))
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "unsupported provider")
+}
+
+// labelOnlySocial is a social plugin from before ProvidersForApp: the
+// engine still lists its providers.
+type labelOnlySocial struct{}
+
+func (labelOnlySocial) Name() string        { return "social" }
+func (labelOnlySocial) Providers() []string { return []string{"google"} }
+
+func TestClientConfig_OlderSocialPluginStillListed(t *testing.T) {
+	eng, _ := newTestEngine(t, authsome.WithPlugin(labelOnlySocial{}))
+	cfg := eng.ClientConfig(context.Background(), testAppID(t))
+	require.NotNil(t, cfg.Social)
+	assert.Equal(t, []authsome.ClientConfigSocialProvider{{ID: "google", Name: "Google"}}, cfg.Social.Providers)
 }
