@@ -18,7 +18,7 @@ func TestGenerate_DeprecatesTaggedOperations(t *testing.T) {
 	require.NoError(t, err)
 
 	gen := dart.NewGenerator(dart.GeneratorConfig{
-		OutputMode:     "embedded",
+		OutputMode: "embedded",
 		DeprecatedTags: map[string]string{
 			"Billing":  "Use the authsome_subscription package instead.",
 			"Billing ": "Operator route. Call it from your server.",

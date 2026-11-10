@@ -18,7 +18,7 @@ func TestGenerate_DeprecatesTaggedOperations(t *testing.T) {
 	require.NoError(t, err)
 
 	gen := typescript.NewGenerator(typescript.GeneratorConfig{
-		OutputMode:     "embedded",
+		OutputMode: "embedded",
 		DeprecatedTags: map[string]string{
 			"Billing":  "Use @authsome/plugin-subscription instead.",
 			"Billing ": "Operator route. Call it from your server with @authsome/client.",
