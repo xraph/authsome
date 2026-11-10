@@ -34,6 +34,12 @@ import (
 const (
 	travelHammerWorkers = 4
 	travelHammerBudget  = 150 * time.Millisecond
+	// travelHammerMinIters is how many iterations every hammer goroutine runs
+	// whatever the clock says. The budget lets a fast machine hammer harder;
+	// the minimum stops a slow, race-instrumented CI runner from finishing
+	// with too little work to prove anything, so the floor asserted below
+	// does not depend on machine speed.
+	travelHammerMinIters = 200
 )
 
 // TestRecordLocation_ConcurrentSamePrincipal drives the real path from
@@ -64,7 +70,7 @@ func TestRecordLocation_ConcurrentSamePrincipal(t *testing.T) {
 		wg.Add(1)
 		go func(w int) {
 			defer wg.Done()
-			for i := 0; time.Now().Before(deadline); i++ {
+			for i := 0; i < travelHammerMinIters || time.Now().Before(deadline); i++ {
 				ip := ips[(w+i)%len(ips)]
 				if err := p.recordLocation(ctx, ref, "app-1", id.NewSessionID(), ip); err != nil {
 					t.Errorf("recordLocation: %v", err)
@@ -81,7 +87,7 @@ func TestRecordLocation_ConcurrentSamePrincipal(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for time.Now().Before(deadline) {
+			for i := 0; i < travelHammerMinIters || time.Now().Before(deadline); i++ {
 				_ = p.RecordedEvents()
 				ops.Add(1)
 			}
@@ -90,7 +96,7 @@ func TestRecordLocation_ConcurrentSamePrincipal(t *testing.T) {
 
 	wg.Wait()
 
-	require.Greater(t, ops.Load(), int64(500),
+	require.GreaterOrEqual(t, ops.Load(), int64(2*travelHammerWorkers*travelHammerMinIters),
 		"the hammer did no meaningful work; it is not exercising the plugin concurrently")
 }
 
@@ -238,7 +244,7 @@ func TestOnAfterSignIn_ConcurrentIsRaceFree(t *testing.T) {
 		wg.Add(1)
 		go func(w int) {
 			defer wg.Done()
-			for i := 0; time.Now().Before(deadline); i++ {
+			for i := 0; i < travelHammerMinIters || time.Now().Before(deadline); i++ {
 				u := users[(w+i)%len(users)]
 				ip := ips[(w+i)%len(ips)]
 				if err := p.OnAfterSignIn(ctx, u, &session.Session{ID: id.NewSessionID(), IPAddress: ip}); err != nil {
@@ -251,7 +257,7 @@ func TestOnAfterSignIn_ConcurrentIsRaceFree(t *testing.T) {
 	}
 	wg.Wait()
 
-	require.Greater(t, ops.Load(), int64(200), "the hammer did no meaningful work")
+	require.GreaterOrEqual(t, ops.Load(), int64(travelHammerWorkers*travelHammerMinIters), "the hammer did no meaningful work")
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	require.NotZero(t, p.lastLogins.Len(), "the hammer recorded nothing")

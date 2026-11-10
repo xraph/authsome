@@ -26,6 +26,12 @@ import (
 const (
 	waitlistHammerWorkers = 4
 	waitlistHammerBudget  = 150 * time.Millisecond
+	// waitlistHammerMinIters is how many iterations every hammer goroutine runs
+	// whatever the clock says. The budget lets a fast machine hammer harder;
+	// the minimum stops a slow, race-instrumented CI runner from finishing
+	// with too little work to prove anything, so the floor asserted below
+	// does not depend on machine speed.
+	waitlistHammerMinIters = 200
 )
 
 func newEntry(appID id.AppID, email string) *WaitlistEntry {
@@ -56,7 +62,7 @@ func TestMemoryStore_ConcurrentStatusUpdatesAndReads(t *testing.T) {
 		wg.Add(1)
 		go func(w int) {
 			defer wg.Done()
-			for i := 0; time.Now().Before(deadline); i++ {
+			for i := 0; i < waitlistHammerMinIters || time.Now().Before(deadline); i++ {
 				e := entries[(w+i)%len(entries)]
 				if err := s.UpdateEntryStatus(ctx, e.ID, StatusRejected, "not this time"); err != nil {
 					t.Errorf("UpdateEntryStatus: %v", err)
@@ -71,7 +77,7 @@ func TestMemoryStore_ConcurrentStatusUpdatesAndReads(t *testing.T) {
 		wg.Add(1)
 		go func(w int) {
 			defer wg.Done()
-			for i := 0; time.Now().Before(deadline); i++ {
+			for i := 0; i < waitlistHammerMinIters || time.Now().Before(deadline); i++ {
 				e := entries[(w+i)%len(entries)]
 				if got, err := s.GetEntry(ctx, e.ID); err == nil {
 					// Approve ourselves, on our own copy. This must not reach
@@ -92,7 +98,7 @@ func TestMemoryStore_ConcurrentStatusUpdatesAndReads(t *testing.T) {
 	}
 	wg.Wait()
 
-	require.Greater(t, ops.Load(), int64(500),
+	require.GreaterOrEqual(t, ops.Load(), int64(2*waitlistHammerWorkers*waitlistHammerMinIters),
 		"the hammer did no meaningful work; it is not exercising the store concurrently")
 
 	for i, e := range entries {
