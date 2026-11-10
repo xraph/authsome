@@ -2832,10 +2832,10 @@ func (c *Client) RemoveMember(ctx context.Context, orgId string, memberId string
 }
 
 // ListSCIMConfigs — List SCIM configurations
-func (c *Client) ListSCIMConfigs(ctx context.Context, orgId string) (*SCIMConfigListResponse, error) {
+func (c *Client) ListSCIMConfigs(ctx context.Context, orgId string) (*ConfigListResponse, error) {
 	path := "/v1/orgs/{orgId}/scim/configs"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
-	var result SCIMConfigListResponse
+	var result ConfigListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -3255,10 +3255,10 @@ func (c *Client) UpdateSCIMConfig(ctx context.Context, configId string, req *Upd
 }
 
 // DeleteSCIMConfig — Delete SCIM configuration
-func (c *Client) DeleteSCIMConfig(ctx context.Context, configId string) (*SCIMStatusResponse, error) {
+func (c *Client) DeleteSCIMConfig(ctx context.Context, configId string) (*ScimStatusResponse, error) {
 	path := "/v1/scim/configs/{configId}"
 	path = strings.Replace(path, "{configId}", configId, 1)
-	var result SCIMStatusResponse
+	var result ScimStatusResponse
 	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -3266,10 +3266,10 @@ func (c *Client) DeleteSCIMConfig(ctx context.Context, configId string) (*SCIMSt
 }
 
 // ListSCIMTokens — List SCIM tokens
-func (c *Client) ListSCIMTokens(ctx context.Context, configId string) (*SCIMTokenListResponse, error) {
+func (c *Client) ListSCIMTokens(ctx context.Context, configId string) (*TokenListResponse, error) {
 	path := "/v1/scim/configs/{configId}/tokens"
 	path = strings.Replace(path, "{configId}", configId, 1)
-	var result SCIMTokenListResponse
+	var result TokenListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -3277,14 +3277,14 @@ func (c *Client) ListSCIMTokens(ctx context.Context, configId string) (*SCIMToke
 }
 
 // CreateSCIMToken — Create SCIM token
-func (c *Client) CreateSCIMToken(ctx context.Context, configId string, req *CreateSCIMTokenRequest) (*SCIMTokenCreatedResponse, error) {
+func (c *Client) CreateSCIMToken(ctx context.Context, configId string, req *CreateSCIMTokenRequest) (*TokenCreatedResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/scim/configs/{configId}/tokens"
 	path = strings.Replace(path, "{configId}", configId, 1)
-	var result SCIMTokenCreatedResponse
+	var result TokenCreatedResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -3292,10 +3292,10 @@ func (c *Client) CreateSCIMToken(ctx context.Context, configId string, req *Crea
 }
 
 // RevokeSCIMToken — Revoke SCIM token
-func (c *Client) RevokeSCIMToken(ctx context.Context, tokenId string) (*SCIMStatusResponse, error) {
+func (c *Client) RevokeSCIMToken(ctx context.Context, tokenId string) (*ScimStatusResponse, error) {
 	path := "/v1/scim/tokens/{tokenId}"
 	path = strings.Replace(path, "{tokenId}", tokenId, 1)
-	var result SCIMStatusResponse
+	var result ScimStatusResponse
 	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -3303,14 +3303,14 @@ func (c *Client) RevokeSCIMToken(ctx context.Context, tokenId string) (*SCIMStat
 }
 
 // RotateSCIMToken — Rotate SCIM token
-func (c *Client) RotateSCIMToken(ctx context.Context, tokenId string, req *RotateSCIMTokenRequest) (*SCIMTokenCreatedResponse, error) {
+func (c *Client) RotateSCIMToken(ctx context.Context, tokenId string, req *RotateSCIMTokenRequest) (*TokenCreatedResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/scim/tokens/{tokenId}/rotate"
 	path = strings.Replace(path, "{tokenId}", tokenId, 1)
-	var result SCIMTokenCreatedResponse
+	var result TokenCreatedResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}

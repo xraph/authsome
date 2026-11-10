@@ -84,10 +84,13 @@ func (p *Plugin) scimBaseURL() string {
 	return strings.TrimRight(p.config.BasePath, "/")
 }
 
-func (p *Plugin) handleListConfigs(ctx forge.Context, req *ListSCIMConfigsRequest) (*SCIMConfigListResponse, error) {
-	orgID, err := id.ParseOrgID(req.OrgID)
-	if err != nil {
-		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
+func (p *Plugin) handleListConfigs(ctx forge.Context, req *ListSCIMConfigsRequest) (*ConfigListResponse, error) {
+	// Distinct names on purpose. Reusing err makes gocritic call the second
+	// one a sloppy reassignment, and shadowing it makes govet call it a
+	// shadow, so neither linter is happy with the other's fix.
+	orgID, parseErr := id.ParseOrgID(req.OrgID)
+	if parseErr != nil {
+		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", parseErr))
 	}
 	if err := p.requireOrgAdmin(ctx, orgID); err != nil {
 		return nil, err
@@ -102,13 +105,16 @@ func (p *Plugin) handleListConfigs(ctx forge.Context, req *ListSCIMConfigsReques
 	if configs == nil {
 		configs = []*SCIMConfig{}
 	}
-	return nil, ctx.JSON(http.StatusOK, &SCIMConfigListResponse{Configs: configs})
+	return nil, ctx.JSON(http.StatusOK, &ConfigListResponse{Configs: configs})
 }
 
 func (p *Plugin) handleCreateConfig(ctx forge.Context, req *CreateSCIMConfigRequest) (*SCIMConfig, error) {
-	orgID, err := id.ParseOrgID(req.OrgID)
-	if err != nil {
-		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
+	// Distinct names on purpose. Reusing err makes gocritic call the second
+	// one a sloppy reassignment, and shadowing it makes govet call it a
+	// shadow, so neither linter is happy with the other's fix.
+	orgID, parseErr := id.ParseOrgID(req.OrgID)
+	if parseErr != nil {
+		return nil, forge.BadRequest(fmt.Sprintf("invalid org id: %v", parseErr))
 	}
 	if err := p.requireOrgAdmin(ctx, orgID); err != nil {
 		return nil, err
@@ -183,7 +189,7 @@ func (p *Plugin) handleUpdateConfig(ctx forge.Context, req *UpdateSCIMConfigRequ
 	return nil, ctx.JSON(http.StatusOK, cfg)
 }
 
-func (p *Plugin) handleDeleteConfig(ctx forge.Context, req *GetSCIMConfigRequest) (*SCIMStatusResponse, error) {
+func (p *Plugin) handleDeleteConfig(ctx forge.Context, req *GetSCIMConfigRequest) (*StatusResponse, error) {
 	cfg, err := p.configForCaller(ctx, req.ConfigID)
 	if err != nil {
 		return nil, err
@@ -191,10 +197,10 @@ func (p *Plugin) handleDeleteConfig(ctx forge.Context, req *GetSCIMConfigRequest
 	if err := p.service.DeleteConfig(ctx.Context(), cfg.ID); err != nil {
 		return nil, forge.NewHTTPError(http.StatusInternalServerError, "delete scim configuration")
 	}
-	return nil, ctx.JSON(http.StatusOK, &SCIMStatusResponse{Status: "deleted"})
+	return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "deleted"})
 }
 
-func (p *Plugin) handleListTokens(ctx forge.Context, req *ListSCIMTokensRequest) (*SCIMTokenListResponse, error) {
+func (p *Plugin) handleListTokens(ctx forge.Context, req *ListSCIMTokensRequest) (*TokenListResponse, error) {
 	cfg, err := p.configForCaller(ctx, req.ConfigID)
 	if err != nil {
 		return nil, err
@@ -206,10 +212,10 @@ func (p *Plugin) handleListTokens(ctx forge.Context, req *ListSCIMTokensRequest)
 	if tokens == nil {
 		tokens = []*Token{}
 	}
-	return nil, ctx.JSON(http.StatusOK, &SCIMTokenListResponse{Tokens: tokens})
+	return nil, ctx.JSON(http.StatusOK, &TokenListResponse{Tokens: tokens})
 }
 
-func (p *Plugin) handleCreateToken(ctx forge.Context, req *CreateSCIMTokenRequest) (*SCIMTokenCreatedResponse, error) {
+func (p *Plugin) handleCreateToken(ctx forge.Context, req *CreateSCIMTokenRequest) (*TokenCreatedResponse, error) {
 	cfg, err := p.configForCaller(ctx, req.ConfigID)
 	if err != nil {
 		return nil, err
@@ -227,15 +233,15 @@ func (p *Plugin) handleCreateToken(ctx forge.Context, req *CreateSCIMTokenReques
 	if err != nil {
 		return nil, forge.NewHTTPError(http.StatusInternalServerError, "generate scim token")
 	}
-	return nil, ctx.JSON(http.StatusCreated, &SCIMTokenCreatedResponse{
+	return nil, ctx.JSON(http.StatusCreated, &TokenCreatedResponse{
 		Token:     token,
 		Plaintext: plaintext,
 		BaseURL:   p.scimBaseURL(),
 	})
 }
 
-func (p *Plugin) handleRotateToken(ctx forge.Context, req *RotateSCIMTokenRequest) (*SCIMTokenCreatedResponse, error) {
-	_, tokenID, err := p.tokenForCaller(ctx, req.TokenID)
+func (p *Plugin) handleRotateToken(ctx forge.Context, req *RotateSCIMTokenRequest) (*TokenCreatedResponse, error) {
+	tokenID, err := p.tokenForCaller(ctx, req.TokenID)
 	if err != nil {
 		return nil, err
 	}
@@ -250,44 +256,45 @@ func (p *Plugin) handleRotateToken(ctx forge.Context, req *RotateSCIMTokenReques
 	if err != nil {
 		return nil, forge.NewHTTPError(http.StatusInternalServerError, "rotate scim token")
 	}
-	return nil, ctx.JSON(http.StatusCreated, &SCIMTokenCreatedResponse{
+	return nil, ctx.JSON(http.StatusCreated, &TokenCreatedResponse{
 		Token:     token,
 		Plaintext: plaintext,
 		BaseURL:   p.scimBaseURL(),
 	})
 }
 
-func (p *Plugin) handleRevokeToken(ctx forge.Context, req *RevokeSCIMTokenRequest) (*SCIMStatusResponse, error) {
-	_, tokenID, err := p.tokenForCaller(ctx, req.TokenID)
+func (p *Plugin) handleRevokeToken(ctx forge.Context, req *RevokeSCIMTokenRequest) (*StatusResponse, error) {
+	tokenID, err := p.tokenForCaller(ctx, req.TokenID)
 	if err != nil {
 		return nil, err
 	}
 	if err := p.service.RevokeToken(ctx.Context(), tokenID); err != nil {
 		return nil, forge.NewHTTPError(http.StatusInternalServerError, "revoke scim token")
 	}
-	return nil, ctx.JSON(http.StatusOK, &SCIMStatusResponse{Status: "revoked"})
+	return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "revoked"})
 }
 
 // tokenForCaller resolves a token ID and checks the caller may manage the
 // configuration it belongs to. Without this a token ID alone would be enough
 // to rotate or revoke someone else's connection.
-func (p *Plugin) tokenForCaller(ctx forge.Context, raw string) (*SCIMConfig, id.SCIMTokenID, error) {
+func (p *Plugin) tokenForCaller(ctx forge.Context, raw string) (id.SCIMTokenID, error) {
 	if p.service == nil {
-		return nil, id.SCIMTokenID{}, forge.NewHTTPError(http.StatusInternalServerError, "scim service unavailable")
+		return id.SCIMTokenID{}, forge.NewHTTPError(http.StatusInternalServerError, "scim service unavailable")
 	}
 	tokenID, err := id.ParseSCIMTokenID(raw)
 	if err != nil {
-		return nil, id.SCIMTokenID{}, forge.BadRequest(fmt.Sprintf("invalid token id: %v", err))
+		return id.SCIMTokenID{}, forge.BadRequest(fmt.Sprintf("invalid token id: %v", err))
 	}
 	tok, err := p.scimStore.GetToken(ctx.Context(), tokenID)
 	if err != nil || tok == nil {
-		return nil, id.SCIMTokenID{}, forge.NotFound("scim token not found")
+		return id.SCIMTokenID{}, forge.NotFound("scim token not found")
 	}
-	cfg, err := p.configForCaller(ctx, tok.ConfigID.String())
-	if err != nil {
-		return nil, id.SCIMTokenID{}, err
+	// The configuration itself is not needed here, only the check that the
+	// caller may manage it.
+	if _, err = p.configForCaller(ctx, tok.ConfigID.String()); err != nil {
+		return id.SCIMTokenID{}, err
 	}
-	return cfg, tokenID, nil
+	return tokenID, nil
 }
 
 // configAppID is the app a new configuration belongs to. SCIM configs are

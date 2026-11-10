@@ -65,6 +65,7 @@ import type {
   ClientConfigToggle,
   CloneEnvironmentRequest,
   CloneEnvironmentResponse,
+  ConfigListResponse,
   Connection,
   Consent,
   ConsentDecisionBody,
@@ -198,16 +199,13 @@ import type {
   RotateSCIMTokenRequest,
   RotateWebhookSecretResponse,
   SCIMConfig,
-  SCIMConfigListResponse,
-  SCIMStatusResponse,
-  SCIMTokenCreatedResponse,
-  SCIMTokenListResponse,
   SMSSendRequest,
   SMSSendResponse,
   SMSVerifyRequest,
   SMSVerifyResponse,
   SchemaList,
   ScimListResponse,
+  ScimStatusResponse,
   ScopeValue,
   SeatsView,
   SelectOption,
@@ -237,8 +235,10 @@ import type {
   TeamListResponse,
   TenantRequest,
   Token,
+  TokenCreatedResponse,
   TokenExchangeRequest,
   TokenExchangeResponse,
+  TokenListResponse,
   UIMetadata,
   UnassignRoleRequest,
   UnlinkAuthMethodResponse,
@@ -2874,9 +2874,9 @@ export class AuthClient {
    * List SCIM configurations
    * GET /v1/orgs/{orgId}/scim/configs
    */
-  async listSCIMConfigs(orgId: string): Promise<SCIMConfigListResponse> {
+  async listSCIMConfigs(orgId: string): Promise<ConfigListResponse> {
     const path = `/v1/orgs/${orgId}/scim/configs`;
-    return this.request<SCIMConfigListResponse>(
+    return this.request<ConfigListResponse>(
       'GET',
       path,
       undefined,
@@ -3284,9 +3284,9 @@ export class AuthClient {
    * Delete SCIM configuration
    * DELETE /v1/scim/configs/{configId}
    */
-  async deleteSCIMConfig(configId: string): Promise<SCIMStatusResponse> {
+  async deleteSCIMConfig(configId: string): Promise<ScimStatusResponse> {
     const path = `/v1/scim/configs/${configId}`;
-    return this.request<SCIMStatusResponse>(
+    return this.request<ScimStatusResponse>(
       'DELETE',
       path,
       undefined,
@@ -3297,9 +3297,9 @@ export class AuthClient {
    * List SCIM tokens
    * GET /v1/scim/configs/{configId}/tokens
    */
-  async listSCIMTokens(configId: string): Promise<SCIMTokenListResponse> {
+  async listSCIMTokens(configId: string): Promise<TokenListResponse> {
     const path = `/v1/scim/configs/${configId}/tokens`;
-    return this.request<SCIMTokenListResponse>(
+    return this.request<TokenListResponse>(
       'GET',
       path,
       undefined,
@@ -3310,9 +3310,9 @@ export class AuthClient {
    * Create SCIM token
    * POST /v1/scim/configs/{configId}/tokens
    */
-  async createSCIMToken(configId: string, body: CreateSCIMTokenRequest): Promise<SCIMTokenCreatedResponse> {
+  async createSCIMToken(configId: string, body: CreateSCIMTokenRequest): Promise<TokenCreatedResponse> {
     const path = `/v1/scim/configs/${configId}/tokens`;
-    return this.request<SCIMTokenCreatedResponse>(
+    return this.request<TokenCreatedResponse>(
       'POST',
       path,
       body,
@@ -3323,9 +3323,9 @@ export class AuthClient {
    * Revoke SCIM token
    * DELETE /v1/scim/tokens/{tokenId}
    */
-  async revokeSCIMToken(tokenId: string): Promise<SCIMStatusResponse> {
+  async revokeSCIMToken(tokenId: string): Promise<ScimStatusResponse> {
     const path = `/v1/scim/tokens/${tokenId}`;
-    return this.request<SCIMStatusResponse>(
+    return this.request<ScimStatusResponse>(
       'DELETE',
       path,
       undefined,
@@ -3336,9 +3336,9 @@ export class AuthClient {
    * Rotate SCIM token
    * POST /v1/scim/tokens/{tokenId}/rotate
    */
-  async rotateSCIMToken(tokenId: string, body: RotateSCIMTokenRequest): Promise<SCIMTokenCreatedResponse> {
+  async rotateSCIMToken(tokenId: string, body: RotateSCIMTokenRequest): Promise<TokenCreatedResponse> {
     const path = `/v1/scim/tokens/${tokenId}/rotate`;
-    return this.request<SCIMTokenCreatedResponse>(
+    return this.request<TokenCreatedResponse>(
       'POST',
       path,
       body,

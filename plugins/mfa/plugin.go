@@ -866,7 +866,7 @@ func safePrefix(s string) string {
 // A delegated session may read this. It is the one MFA route that changes
 // nothing, and an agent acting for a user has a legitimate reason to know
 // whether that user is protected.
-func (p *Plugin) handleGetEnrollment(ctx forge.Context, req *EnrollmentRequest) (*EnrollmentResponse, error) {
+func (p *Plugin) handleGetEnrollment(ctx forge.Context, _ *EnrollmentRequest) (*EnrollmentResponse, error) {
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok || userID.Prefix() == "" {
 		return nil, forge.Unauthorized("authentication required")

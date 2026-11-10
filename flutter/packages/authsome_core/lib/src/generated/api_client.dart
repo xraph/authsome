@@ -2572,14 +2572,14 @@ class AuthClient {
 
   /// List SCIM configurations
   /// GET /v1/orgs/{orgId}/scim/configs
-  Future<SCIMConfigListResponse> listSCIMConfigs({required String orgId, required String token}) async {
+  Future<ConfigListResponse> listSCIMConfigs({required String orgId, required String token}) async {
     final path = '/v1/orgs/$orgId/scim/configs';
     final res = await _request(
 'GET',
       path,
       token: token,
     );
-    return SCIMConfigListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ConfigListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Create SCIM configuration
@@ -2972,31 +2972,31 @@ class AuthClient {
 
   /// Delete SCIM configuration
   /// DELETE /v1/scim/configs/{configId}
-  Future<SCIMStatusResponse> deleteSCIMConfig({required String configId, required String token}) async {
+  Future<ScimStatusResponse> deleteSCIMConfig({required String configId, required String token}) async {
     final path = '/v1/scim/configs/$configId';
     final res = await _request(
 'DELETE',
       path,
       token: token,
     );
-    return SCIMStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ScimStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List SCIM tokens
   /// GET /v1/scim/configs/{configId}/tokens
-  Future<SCIMTokenListResponse> listSCIMTokens({required String configId, required String token}) async {
+  Future<TokenListResponse> listSCIMTokens({required String configId, required String token}) async {
     final path = '/v1/scim/configs/$configId/tokens';
     final res = await _request(
 'GET',
       path,
       token: token,
     );
-    return SCIMTokenListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return TokenListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Create SCIM token
   /// POST /v1/scim/configs/{configId}/tokens
-  Future<SCIMTokenCreatedResponse> createSCIMToken({required String configId, required CreateSCIMTokenRequest body, required String token}) async {
+  Future<TokenCreatedResponse> createSCIMToken({required String configId, required CreateSCIMTokenRequest body, required String token}) async {
     final path = '/v1/scim/configs/$configId/tokens';
     final res = await _request(
 'POST',
@@ -3004,24 +3004,24 @@ class AuthClient {
       body: body.toJson(),
       token: token,
     );
-    return SCIMTokenCreatedResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return TokenCreatedResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Revoke SCIM token
   /// DELETE /v1/scim/tokens/{tokenId}
-  Future<SCIMStatusResponse> revokeSCIMToken({required String tokenId, required String token}) async {
+  Future<ScimStatusResponse> revokeSCIMToken({required String tokenId, required String token}) async {
     final path = '/v1/scim/tokens/$tokenId';
     final res = await _request(
 'DELETE',
       path,
       token: token,
     );
-    return SCIMStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return ScimStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Rotate SCIM token
   /// POST /v1/scim/tokens/{tokenId}/rotate
-  Future<SCIMTokenCreatedResponse> rotateSCIMToken({required String tokenId, required RotateSCIMTokenRequest body, required String token}) async {
+  Future<TokenCreatedResponse> rotateSCIMToken({required String tokenId, required RotateSCIMTokenRequest body, required String token}) async {
     final path = '/v1/scim/tokens/$tokenId/rotate';
     final res = await _request(
 'POST',
@@ -3029,7 +3029,7 @@ class AuthClient {
       body: body.toJson(),
       token: token,
     );
-    return SCIMTokenCreatedResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return TokenCreatedResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List sessions

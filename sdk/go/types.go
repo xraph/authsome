@@ -525,6 +525,11 @@ type CloneEnvironmentResponse struct {
 	WebhooksCloned    int64          `json:"webhooks_cloned"`
 }
 
+// ConfigListResponse represents the ConfigListResponse schema.
+type ConfigListResponse struct {
+	Configs []*SCIMConfig `json:"configs"`
+}
+
 // Connection represents the Connection schema.
 type Connection struct {
 	AcsURL            string         `json:"acs_url,omitempty"`
@@ -1680,28 +1685,6 @@ type SCIMConfig struct {
 	UpdatedAt   string         `json:"updated_at"`
 }
 
-// SCIMConfigListResponse represents the SCIMConfigListResponse schema.
-type SCIMConfigListResponse struct {
-	Configs []*SCIMConfig `json:"configs"`
-}
-
-// SCIMStatusResponse represents the SCIMStatusResponse schema.
-type SCIMStatusResponse struct {
-	Status string `json:"status"`
-}
-
-// SCIMTokenCreatedResponse represents the SCIMTokenCreatedResponse schema.
-type SCIMTokenCreatedResponse struct {
-	BaseURL   string `json:"base_url"`
-	Plaintext string `json:"plaintext"`
-	Token     *Token `json:"token,omitempty"`
-}
-
-// SCIMTokenListResponse represents the SCIMTokenListResponse schema.
-type SCIMTokenListResponse struct {
-	Tokens []*Token `json:"tokens"`
-}
-
 // SMSSendRequest represents the SMSSendRequest schema.
 type SMSSendRequest struct {
 	Phone string `json:"phone,omitempty"`
@@ -1736,6 +1719,11 @@ type ScimListResponse struct {
 	Schemas      []string `json:"schemas"`
 	StartIndex   int64    `json:"start_index"`
 	TotalResults int64    `json:"total_results"`
+}
+
+// ScimStatusResponse represents the ScimStatusResponse schema.
+type ScimStatusResponse struct {
+	Status string `json:"status"`
 }
 
 // ScopeValue represents the ScopeValue schema.
@@ -2001,6 +1989,13 @@ type Token struct {
 	Name       string `json:"name"`
 }
 
+// TokenCreatedResponse represents the TokenCreatedResponse schema.
+type TokenCreatedResponse struct {
+	BaseURL   string `json:"base_url"`
+	Plaintext string `json:"plaintext"`
+	Token     *Token `json:"token,omitempty"`
+}
+
 // TokenExchangeRequest represents the TokenExchangeRequest schema.
 type TokenExchangeRequest struct {
 	Scopes  []string `json:"scopes,omitempty"`
@@ -2016,6 +2011,11 @@ type TokenExchangeResponse struct {
 	Scopes          []string `json:"scopes,omitempty"`
 	Subject         string   `json:"subject"`
 	TokenType       string   `json:"token_type"`
+}
+
+// TokenListResponse represents the TokenListResponse schema.
+type TokenListResponse struct {
+	Tokens []*Token `json:"tokens"`
 }
 
 // UIMetadata represents the UIMetadata schema.

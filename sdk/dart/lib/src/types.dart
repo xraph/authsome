@@ -2286,6 +2286,29 @@ class CloneEnvironmentResponse {
   String toString() => 'CloneEnvironmentResponse(${toJson()})';
 }
 
+class ConfigListResponse {
+  final List<SCIMConfig> configs;
+
+  const ConfigListResponse({
+    required this.configs,
+  });
+
+  factory ConfigListResponse.fromJson(Map<String, dynamic> json) {
+    return ConfigListResponse(
+      configs: (json['configs'] as List).map((e) => SCIMConfig.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'configs': configs.map((e) => e.toJson()).toList(),
+    };
+  }
+
+  @override
+  String toString() => 'ConfigListResponse(${toJson()})';
+}
+
 class Connection {
   final String? acsUrl;
   final bool active;
@@ -7303,106 +7326,6 @@ class SCIMConfig {
   String toString() => 'SCIMConfig(${toJson()})';
 }
 
-class SCIMConfigListResponse {
-  final List<SCIMConfig> configs;
-
-  const SCIMConfigListResponse({
-    required this.configs,
-  });
-
-  factory SCIMConfigListResponse.fromJson(Map<String, dynamic> json) {
-    return SCIMConfigListResponse(
-      configs: (json['configs'] as List).map((e) => SCIMConfig.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'configs': configs.map((e) => e.toJson()).toList(),
-    };
-  }
-
-  @override
-  String toString() => 'SCIMConfigListResponse(${toJson()})';
-}
-
-class SCIMStatusResponse {
-  final String status;
-
-  const SCIMStatusResponse({
-    required this.status,
-  });
-
-  factory SCIMStatusResponse.fromJson(Map<String, dynamic> json) {
-    return SCIMStatusResponse(
-      status: json['status'] as String,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'status': status,
-    };
-  }
-
-  @override
-  String toString() => 'SCIMStatusResponse(${toJson()})';
-}
-
-class SCIMTokenCreatedResponse {
-  final String baseUrl;
-  final String plaintext;
-  final Token? token;
-
-  const SCIMTokenCreatedResponse({
-    required this.baseUrl,
-    required this.plaintext,
-    this.token,
-  });
-
-  factory SCIMTokenCreatedResponse.fromJson(Map<String, dynamic> json) {
-    return SCIMTokenCreatedResponse(
-      baseUrl: json['base_url'] as String,
-      plaintext: json['plaintext'] as String,
-      token: json['token'] == null ? null : Token.fromJson(Map<String, dynamic>.from(json['token'] as Map)),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'base_url': baseUrl,
-      'plaintext': plaintext,
-      if (token != null) 'token': token?.toJson(),
-    };
-  }
-
-  @override
-  String toString() => 'SCIMTokenCreatedResponse(${toJson()})';
-}
-
-class SCIMTokenListResponse {
-  final List<Token> tokens;
-
-  const SCIMTokenListResponse({
-    required this.tokens,
-  });
-
-  factory SCIMTokenListResponse.fromJson(Map<String, dynamic> json) {
-    return SCIMTokenListResponse(
-      tokens: (json['tokens'] as List).map((e) => Token.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'tokens': tokens.map((e) => e.toJson()).toList(),
-    };
-  }
-
-  @override
-  String toString() => 'SCIMTokenListResponse(${toJson()})';
-}
-
 class SMSSendRequest {
   final String? phone;
 
@@ -7562,6 +7485,29 @@ class ScimListResponse {
 
   @override
   String toString() => 'ScimListResponse(${toJson()})';
+}
+
+class ScimStatusResponse {
+  final String status;
+
+  const ScimStatusResponse({
+    required this.status,
+  });
+
+  factory ScimStatusResponse.fromJson(Map<String, dynamic> json) {
+    return ScimStatusResponse(
+      status: json['status'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'status': status,
+    };
+  }
+
+  @override
+  String toString() => 'ScimStatusResponse(${toJson()})';
 }
 
 class ScopeValue {
@@ -8702,6 +8648,37 @@ class Token {
   String toString() => 'Token(${toJson()})';
 }
 
+class TokenCreatedResponse {
+  final String baseUrl;
+  final String plaintext;
+  final Token? token;
+
+  const TokenCreatedResponse({
+    required this.baseUrl,
+    required this.plaintext,
+    this.token,
+  });
+
+  factory TokenCreatedResponse.fromJson(Map<String, dynamic> json) {
+    return TokenCreatedResponse(
+      baseUrl: json['base_url'] as String,
+      plaintext: json['plaintext'] as String,
+      token: json['token'] == null ? null : Token.fromJson(Map<String, dynamic>.from(json['token'] as Map)),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'base_url': baseUrl,
+      'plaintext': plaintext,
+      if (token != null) 'token': token?.toJson(),
+    };
+  }
+
+  @override
+  String toString() => 'TokenCreatedResponse(${toJson()})';
+}
+
 class TokenExchangeRequest {
   final List<String>? scopes;
   final String subject;
@@ -8774,6 +8751,29 @@ class TokenExchangeResponse {
 
   @override
   String toString() => 'TokenExchangeResponse(${toJson()})';
+}
+
+class TokenListResponse {
+  final List<Token> tokens;
+
+  const TokenListResponse({
+    required this.tokens,
+  });
+
+  factory TokenListResponse.fromJson(Map<String, dynamic> json) {
+    return TokenListResponse(
+      tokens: (json['tokens'] as List).map((e) => Token.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'tokens': tokens.map((e) => e.toJson()).toList(),
+    };
+  }
+
+  @override
+  String toString() => 'TokenListResponse(${toJson()})';
 }
 
 class UIMetadata {

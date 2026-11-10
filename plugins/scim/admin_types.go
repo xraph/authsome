@@ -17,8 +17,8 @@ type ListSCIMConfigsRequest struct {
 	OrgID string `path:"orgId" description:"Organization ID"`
 }
 
-// SCIMConfigListResponse is a page of SCIM configurations.
-type SCIMConfigListResponse struct {
+// ConfigListResponse is a page of SCIM configurations.
+type ConfigListResponse struct {
 	Configs []*SCIMConfig `json:"configs" description:"SCIM configurations for the organization"`
 }
 
@@ -58,9 +58,9 @@ type ListSCIMTokensRequest struct {
 	ConfigID string `path:"configId" description:"SCIM configuration ID"`
 }
 
-// SCIMTokenListResponse is a config's tokens. The plaintext is never here:
+// TokenListResponse is a config's tokens. The plaintext is never here:
 // it exists once, in the response that created it.
-type SCIMTokenListResponse struct {
+type TokenListResponse struct {
 	Tokens []*Token `json:"tokens" description:"Tokens for this configuration"`
 }
 
@@ -86,19 +86,19 @@ type RevokeSCIMTokenRequest struct {
 	TokenID string `path:"tokenId" description:"Token to revoke"`
 }
 
-// SCIMTokenCreatedResponse carries a freshly minted token.
+// TokenCreatedResponse carries a freshly minted token.
 //
 // Plaintext appears here and nowhere else, ever: the store keeps a hash. A
 // caller that loses it has to rotate. The base URL is included because it is
 // the other half of what gets pasted into an IdP, and having to assemble it
 // from documentation is how people paste the wrong one.
-type SCIMTokenCreatedResponse struct {
+type TokenCreatedResponse struct {
 	Token     *Token `json:"token" description:"The token record"`
 	Plaintext string `json:"plaintext" description:"The bearer token. Shown once and never again"`
 	BaseURL   string `json:"base_url" description:"SCIM 2.0 base URL to configure in the identity provider"`
 }
 
-// SCIMStatusResponse is the answer to a delete.
-type SCIMStatusResponse struct {
+// StatusResponse is the answer to a delete.
+type StatusResponse struct {
 	Status string `json:"status" description:"Outcome"`
 }

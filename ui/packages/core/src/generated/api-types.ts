@@ -459,6 +459,10 @@ export interface CloneEnvironmentResponse {
   webhooks_cloned: number;
 }
 
+export interface ConfigListResponse {
+  configs: SCIMConfig[];
+}
+
 export interface Connection {
   acs_url?: string;
   active: boolean;
@@ -1481,24 +1485,6 @@ export interface SCIMConfig {
   updated_at: string;
 }
 
-export interface SCIMConfigListResponse {
-  configs: SCIMConfig[];
-}
-
-export interface SCIMStatusResponse {
-  status: string;
-}
-
-export interface SCIMTokenCreatedResponse {
-  base_url: string;
-  plaintext: string;
-  token?: Token;
-}
-
-export interface SCIMTokenListResponse {
-  tokens: Token[];
-}
-
 export interface SMSSendRequest {
   phone?: string;
 }
@@ -1527,6 +1513,10 @@ export interface ScimListResponse {
   schemas: string[];
   startIndex: number;
   totalResults: number;
+}
+
+export interface ScimStatusResponse {
+  status: string;
 }
 
 export interface ScopeValue {
@@ -1763,6 +1753,12 @@ export interface Token {
   name: string;
 }
 
+export interface TokenCreatedResponse {
+  base_url: string;
+  plaintext: string;
+  token?: Token;
+}
+
 export interface TokenExchangeRequest {
   scopes?: string[];
   subject: string;
@@ -1776,6 +1772,10 @@ export interface TokenExchangeResponse {
   scopes?: string[];
   subject: string;
   token_type: string;
+}
+
+export interface TokenListResponse {
+  tokens: Token[];
 }
 
 export interface UIMetadata {

@@ -146,7 +146,7 @@ func (p *Plugin) registerAdminRoutes(router forge.Router) error {
 		forge.WithSummary("List SCIM configurations"),
 		forge.WithDescription("Lists an organization's SCIM configurations. Requires an organization owner or admin."),
 		forge.WithOperationID("listSCIMConfigs"),
-		forge.WithResponseSchema(http.StatusOK, "SCIM configurations", SCIMConfigListResponse{}),
+		forge.WithResponseSchema(http.StatusOK, "SCIM configurations", ConfigListResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -187,7 +187,7 @@ func (p *Plugin) registerAdminRoutes(router forge.Router) error {
 		forge.WithSummary("Delete SCIM configuration"),
 		forge.WithDescription("Removes the configuration and stops accepting provisioning for it."),
 		forge.WithOperationID("deleteSCIMConfig"),
-		forge.WithResponseSchema(http.StatusOK, "Deleted", SCIMStatusResponse{}),
+		forge.WithResponseSchema(http.StatusOK, "Deleted", StatusResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -197,7 +197,7 @@ func (p *Plugin) registerAdminRoutes(router forge.Router) error {
 		forge.WithSummary("List SCIM tokens"),
 		forge.WithDescription("Lists a configuration's tokens. The token values themselves are never returned."),
 		forge.WithOperationID("listSCIMTokens"),
-		forge.WithResponseSchema(http.StatusOK, "Tokens", SCIMTokenListResponse{}),
+		forge.WithResponseSchema(http.StatusOK, "Tokens", TokenListResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -208,7 +208,7 @@ func (p *Plugin) registerAdminRoutes(router forge.Router) error {
 		forge.WithDescription("Mints a bearer token for an identity provider. The plaintext is returned once and never again."),
 		forge.WithOperationID("createSCIMToken"),
 		forge.WithRequestSchema(CreateSCIMTokenRequest{}),
-		forge.WithCreatedResponse(SCIMTokenCreatedResponse{}),
+		forge.WithCreatedResponse(TokenCreatedResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -219,7 +219,7 @@ func (p *Plugin) registerAdminRoutes(router forge.Router) error {
 		forge.WithDescription("Mints a replacement and optionally keeps the old token working for a grace period, so an identity provider can be updated without a gap in provisioning."),
 		forge.WithOperationID("rotateSCIMToken"),
 		forge.WithRequestSchema(RotateSCIMTokenRequest{}),
-		forge.WithCreatedResponse(SCIMTokenCreatedResponse{}),
+		forge.WithCreatedResponse(TokenCreatedResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -228,7 +228,7 @@ func (p *Plugin) registerAdminRoutes(router forge.Router) error {
 	return g.DELETE("/scim/tokens/:tokenId", p.handleRevokeToken,
 		forge.WithSummary("Revoke SCIM token"),
 		forge.WithOperationID("revokeSCIMToken"),
-		forge.WithResponseSchema(http.StatusOK, "Revoked", SCIMStatusResponse{}),
+		forge.WithResponseSchema(http.StatusOK, "Revoked", StatusResponse{}),
 		forge.WithErrorResponses(),
 	)
 }

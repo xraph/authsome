@@ -1657,6 +1657,32 @@
         ],
         "type": "object"
       },
+      "ConfigListResponse": {
+        "properties": {
+          "configs": {
+            "description": "SCIM configurations for the organization",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SCIMConfig"
+                },
+                {
+                  "enum": [
+                    null
+                  ],
+                  "nullable": true,
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "configs"
+        ],
+        "type": "object"
+      },
       "Connection": {
         "properties": {
           "acs_url": {
@@ -5358,91 +5384,6 @@
         ],
         "type": "object"
       },
-      "SCIMConfigListResponse": {
-        "properties": {
-          "configs": {
-            "description": "SCIM configurations for the organization",
-            "items": {
-              "oneOf": [
-                {
-                  "$ref": "#/components/schemas/SCIMConfig"
-                },
-                {
-                  "enum": [
-                    null
-                  ],
-                  "nullable": true,
-                  "type": "object"
-                }
-              ]
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "configs"
-        ],
-        "type": "object"
-      },
-      "SCIMStatusResponse": {
-        "properties": {
-          "status": {
-            "description": "Outcome",
-            "type": "string"
-          }
-        },
-        "required": [
-          "status"
-        ],
-        "type": "object"
-      },
-      "SCIMTokenCreatedResponse": {
-        "properties": {
-          "base_url": {
-            "description": "SCIM 2.0 base URL to configure in the identity provider",
-            "type": "string"
-          },
-          "plaintext": {
-            "description": "The bearer token. Shown once and never again",
-            "type": "string"
-          },
-          "token": {
-            "$ref": "#/components/schemas/Token",
-            "description": "The token record"
-          }
-        },
-        "required": [
-          "plaintext",
-          "base_url"
-        ],
-        "type": "object"
-      },
-      "SCIMTokenListResponse": {
-        "properties": {
-          "tokens": {
-            "description": "Tokens for this configuration",
-            "items": {
-              "oneOf": [
-                {
-                  "$ref": "#/components/schemas/Token"
-                },
-                {
-                  "enum": [
-                    null
-                  ],
-                  "nullable": true,
-                  "type": "object"
-                }
-              ]
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "tokens"
-        ],
-        "type": "object"
-      },
       "SMSSendRequest": {
         "properties": {
           "phone": {
@@ -5531,6 +5472,19 @@
         ],
         "type": "object",
         "x-forge-type": "github.com/xraph/authsome/plugins/scim.ListResponse"
+      },
+      "ScimStatusResponse": {
+        "properties": {
+          "status": {
+            "description": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object",
+        "x-forge-type": "github.com/xraph/authsome/plugins/scim.StatusResponse"
       },
       "ScopeValue": {
         "properties": {
@@ -6297,6 +6251,27 @@
         ],
         "type": "object"
       },
+      "TokenCreatedResponse": {
+        "properties": {
+          "base_url": {
+            "description": "SCIM 2.0 base URL to configure in the identity provider",
+            "type": "string"
+          },
+          "plaintext": {
+            "description": "The bearer token. Shown once and never again",
+            "type": "string"
+          },
+          "token": {
+            "$ref": "#/components/schemas/Token",
+            "description": "The token record"
+          }
+        },
+        "required": [
+          "plaintext",
+          "base_url"
+        ],
+        "type": "object"
+      },
       "TokenExchangeRequest": {
         "properties": {
           "scopes": {
@@ -6357,6 +6332,32 @@
           "expires_in",
           "subject",
           "actor"
+        ],
+        "type": "object"
+      },
+      "TokenListResponse": {
+        "properties": {
+          "tokens": {
+            "description": "Tokens for this configuration",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/Token"
+                },
+                {
+                  "enum": [
+                    null
+                  ],
+                  "nullable": true,
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "tokens"
         ],
         "type": "object"
       },
@@ -36705,7 +36706,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SCIMConfigListResponse"
+                  "$ref": "#/components/schemas/ConfigListResponse"
                 }
               }
             },
@@ -42002,7 +42003,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SCIMStatusResponse"
+                  "$ref": "#/components/schemas/ScimStatusResponse"
                 }
               }
             },
@@ -42545,7 +42546,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SCIMTokenListResponse"
+                  "$ref": "#/components/schemas/TokenListResponse"
                 }
               }
             },
@@ -42733,7 +42734,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SCIMTokenCreatedResponse"
+                  "$ref": "#/components/schemas/TokenCreatedResponse"
                 }
               }
             },
@@ -42911,7 +42912,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SCIMStatusResponse"
+                  "$ref": "#/components/schemas/ScimStatusResponse"
                 }
               }
             },
@@ -43101,7 +43102,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SCIMTokenCreatedResponse"
+                  "$ref": "#/components/schemas/TokenCreatedResponse"
                 }
               }
             },
