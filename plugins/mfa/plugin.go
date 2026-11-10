@@ -217,6 +217,16 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
+	if err := g.GET("/enrollment", p.handleGetEnrollment,
+		forge.WithSummary("Read MFA enrollment"),
+		forge.WithDescription("Reports whether the signed-in user has a second factor set up, which kinds, and how many recovery codes are left. Never returns a secret or a recovery code."),
+		forge.WithOperationID("getMFAEnrollment"),
+		forge.WithResponseSchema(http.StatusOK, "Enrollment state", EnrollmentResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
 	if err := g.DELETE("/enrollment", p.handleDisable,
 		ownSession,
 		forge.WithSummary("Disable MFA"),
@@ -340,6 +350,29 @@ type DisableRequest struct {
 // DisableResponse is returned when MFA is disabled.
 type DisableResponse struct {
 	Status string `json:"status"`
+}
+
+// EnrollmentRequest binds GET /mfa/enrollment. It takes nothing: the
+// enrollment it reports is always the caller's own.
+type EnrollmentRequest struct{}
+
+// EnrolledFactor is one second factor the caller has set up.
+type EnrolledFactor struct {
+	Method     string    `json:"method" description:"Factor kind: totp or sms"`
+	Verified   bool      `json:"verified" description:"Whether the factor completed its first verification"`
+	EnrolledAt time.Time `json:"enrolled_at" description:"When the factor was set up"`
+}
+
+// EnrollmentResponse answers "is two-step on for me, and with what".
+//
+// It carries no secret, no recovery code and nothing about anyone else. The
+// remaining recovery code count is a number rather than the codes, because
+// an account settings page needs to warn someone who is running low without
+// showing codes that only exist to be shown once.
+type EnrollmentResponse struct {
+	Enabled                bool             `json:"enabled" description:"Whether any factor is verified"`
+	Factors                []EnrolledFactor `json:"factors" description:"Every factor set up, verified or not"`
+	RecoveryCodesRemaining int              `json:"recovery_codes_remaining" description:"How many unused recovery codes are left"`
 }
 
 // RecoveryVerifyRequest is the request body for verifying an MFA recovery code.
@@ -828,6 +861,47 @@ func safePrefix(s string) string {
 }
 
 // handleDisable removes MFA enrollment for the authenticated user.
+// handleGetEnrollment answers whether two-step sign-in is on for the caller.
+//
+// A delegated session may read this. It is the one MFA route that changes
+// nothing, and an agent acting for a user has a legitimate reason to know
+// whether that user is protected.
+func (p *Plugin) handleGetEnrollment(ctx forge.Context, _ *EnrollmentRequest) (*EnrollmentResponse, error) {
+	userID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok || userID.Prefix() == "" {
+		return nil, forge.Unauthorized("authentication required")
+	}
+
+	resp := &EnrollmentResponse{Factors: []EnrolledFactor{}}
+	for _, method := range []string{"totp", "sms"} {
+		e, err := p.store.GetEnrollment(ctx.Context(), userID, method)
+		if err != nil || e == nil {
+			continue
+		}
+		resp.Factors = append(resp.Factors, EnrolledFactor{
+			Method:     e.Method,
+			Verified:   e.Verified,
+			EnrolledAt: e.CreatedAt,
+		})
+		if e.Verified {
+			resp.Enabled = true
+		}
+	}
+
+	// A failure to read recovery codes leaves the count at zero rather than
+	// failing the whole answer. The enrollment state is the part that matters
+	// and it is already known by this point.
+	if codes, err := p.store.GetRecoveryCodes(ctx.Context(), userID); err == nil {
+		for _, c := range codes {
+			if !c.Used {
+				resp.RecoveryCodesRemaining++
+			}
+		}
+	}
+
+	return nil, ctx.JSON(http.StatusOK, resp)
+}
+
 func (p *Plugin) handleDisable(ctx forge.Context, req *DisableRequest) (*DisableResponse, error) {
 	// The route refuses a delegated session too. Checked here as well so a
 	// mount without that guard still fails closed.

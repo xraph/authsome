@@ -206,3 +206,127 @@ export function useClientConfig(): {
   const { clientConfig, isConfigLoaded } = useAuth();
   return { config: clientConfig, isLoaded: isConfigLoaded };
 }
+
+// ── Last sign-in ───────────────────────────────────────
+
+/**
+ * What the account summary shows. This is public API, because
+ * `<AccountSummaryCard>` takes it as a prop so a host can render the card from
+ * data of its own.
+ */
+export interface LastSignInSummary {
+  /** When the current session began, ISO 8601, or null when unknown. */
+  lastSignInAt: string | null;
+  /** The IP that session came from. There is no geo lookup server-side yet. */
+  ipAddress: string | null;
+  /** Browser and OS of the device most recently seen, when known. */
+  device: string | null;
+  /** How many devices are marked trusted. */
+  trustedDeviceCount: number;
+  /**
+   * Whether a second factor is enrolled. null means "not known yet": there is
+   * no endpoint that answers it, so this stays null until one exists.
+   */
+  twoStepEnabled: boolean | null;
+}
+
+/** Narrows one untyped session record. `sessions` is Record<string, unknown>[]. */
+function readSessionRecord(raw: Record<string, unknown>): {
+  createdAt: string | null;
+  ip: string | null;
+} {
+  const str = (k: string): string | null => {
+    const v = raw[k];
+    return typeof v === "string" && v.length > 0 ? v : null;
+  };
+  return { createdAt: str("created_at"), ip: str("ip_address") };
+}
+
+/**
+ * useLastSignIn reports when and where this account last signed in.
+ *
+ * ```tsx
+ * const { summary, isLoading } = useLastSignIn();
+ * ```
+ *
+ * It is a reassurance surface, not an authorization one. Nothing here decides
+ * what the user can do, so a host that cannot load it should carry on.
+ */
+export function useLastSignIn(): {
+  summary: LastSignInSummary | null;
+  isLoading: boolean;
+  reload: () => Promise<void>;
+} {
+  const { client, session, isAuthenticated } = useAuth();
+  const [summary, setSummary] = useState<LastSignInSummary | null>(null);
+  const token = session?.session_token ?? null;
+
+  // Same shape as useOrganizations: which token the data we hold was fetched
+  // for, compared against the current one, so the automatic load's progress is
+  // derived rather than stored and no setState happens inside the effect.
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const isLoading = (isAuthenticated && loadedFor !== token) || isRefreshing;
+
+  const fetchSummary = useCallback(
+    async (sessionToken: string): Promise<LastSignInSummary> => {
+      // Both calls are independent and neither blocks the other. A failure in
+      // either is not worth failing the card over, so each falls back.
+      const [sessions, devices] = await Promise.all([
+        client.listSessions(sessionToken, 1).catch(() => null),
+        client.listDevices(sessionToken).catch(() => null),
+      ]);
+
+      const newest = sessions?.sessions?.[0]
+        ? readSessionRecord(sessions.sessions[0])
+        : null;
+
+      const seen = [...(devices?.devices ?? [])].sort((a, b) =>
+        (b.last_seen_at ?? "").localeCompare(a.last_seen_at ?? ""),
+      )[0];
+
+      return {
+        lastSignInAt: newest?.createdAt ?? seen?.last_seen_at ?? null,
+        ipAddress: newest?.ip ?? seen?.ip_address ?? null,
+        device:
+          [seen?.browser, seen?.os].filter(Boolean).join(" on ") || seen?.name || null,
+        trustedDeviceCount: (devices?.devices ?? []).filter((d) => d.trusted).length,
+        twoStepEnabled: null,
+      };
+    },
+    [client],
+  );
+
+  const load = useCallback(async () => {
+    if (!session) return;
+    setIsRefreshing(true);
+    try {
+      setSummary(await fetchSummary(session.session_token));
+      setLoadedFor(session.session_token);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [fetchSummary, session]);
+
+  // Inline rather than calling load(), which sets state before it awaits. The
+  // ignore flag stops a response for a session the user already left from
+  // overwriting a newer one.
+  useEffect(() => {
+    if (!isAuthenticated || !session) return;
+    let ignore = false;
+    void (async () => {
+      try {
+        const next = await fetchSummary(session.session_token);
+        if (!ignore) setSummary(next);
+      } finally {
+        if (!ignore) setLoadedFor(session.session_token);
+      }
+    })();
+    return () => {
+      ignore = true;
+    };
+  }, [isAuthenticated, session, fetchSummary]);
+
+  return { summary, isLoading, reload: load };
+}

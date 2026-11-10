@@ -10,7 +10,13 @@
   "dependencies": {
     "@authsome/ui-core": "workspace:*",
     "@authsome/ui-react": "workspace:*",
-    "@authsome/ui-components": "workspace:*"
+    "@authsome/ui-components": "workspace:*",
+    "@authsome/plugin-phone": "workspace:*",
+    "@authsome/plugin-consent": "workspace:*",
+    "@authsome/plugin-oauth2": "workspace:*",
+    "@authsome/plugin-subscription": "workspace:*",
+    "@authsome/plugin-organization": "workspace:*",
+    "@authsome/plugin-scim": "workspace:*"
   },
   "devDependencies": {
     "@storybook/addon-a11y": "^8.6.19",

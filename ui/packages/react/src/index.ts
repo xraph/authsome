@@ -25,7 +25,16 @@ export type {
 
 // Context + hooks
 export { AuthProvider, useAuth, AuthContext, type AuthProviderProps, type AuthContextValue } from "./context";
-export { useUser, useOrganizations, useSessionToken, useClientConfig, usePlugin, useActiveOrg } from "./hooks";
+export {
+  useUser,
+  useOrganizations,
+  useSessionToken,
+  useClientConfig,
+  usePlugin,
+  useActiveOrg,
+  useLastSignIn,
+  type LastSignInSummary,
+} from "./hooks";
 
 // Headless components
 export {

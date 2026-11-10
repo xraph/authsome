@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/xraph/forge"
 	log "github.com/xraph/go-utils/log"
@@ -16,6 +18,7 @@ import (
 	"github.com/xraph/authsome/page"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/store"
+	"github.com/xraph/authsome/user"
 )
 
 // RegisterRoutes registers organization management routes on a forge.Router.
@@ -136,6 +139,18 @@ func (p *Plugin) registerOrgRoutes(router forge.Router) error {
 		forge.WithOperationID("acceptInvitation"),
 		forge.WithRequestSchema(AcceptInvitationRequest{}),
 		forge.WithCreatedResponse(organization.Member{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	// Unauthenticated on purpose: whoever is deciding whether to accept has
+	// usually not signed in, and often has no account at all.
+	if err := g.GET("/orgs/invitations/:inviteToken", p.handleGetInvitation,
+		forge.WithSummary("Get invitation"),
+		forge.WithDescription("Reads a pending invitation by its token so the person holding it can see who invited them, to which organization, and as what, before accepting. No session required."),
+		forge.WithOperationID("getInvitation"),
+		forge.WithResponseSchema(http.StatusOK, "Invitation preview", InvitationPreview{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -621,6 +636,91 @@ func (p *Plugin) handleAcceptInvitation(ctx forge.Context, req *AcceptInvitation
 	}
 
 	return nil, ctx.JSON(http.StatusCreated, member)
+}
+
+// maskEmail turns "rex.raphael@acme.com" into "re***@acme.com".
+//
+// Enough for someone to recognise their own address, not enough for whoever
+// forwarded or intercepted the link to learn a new one. The domain stays
+// whole because it is the part that tells an invitee which of their accounts
+// to sign in with.
+func maskEmail(email string) string {
+	at := strings.LastIndex(email, "@")
+	if at <= 0 {
+		return "***"
+	}
+	local, domain := email[:at], email[at:]
+	keep := 2
+	if len(local) < keep {
+		keep = len(local)
+	}
+	return local[:keep] + "***" + domain
+}
+
+// inviterName is the best human-readable name available for a user, falling
+// back through the fields until something is non-empty. An inviter whose
+// account was deleted leaves "Someone" rather than an empty line.
+func inviterName(u *user.User) string {
+	if u == nil {
+		return "Someone"
+	}
+	if name := strings.TrimSpace(u.FirstName + " " + u.LastName); name != "" {
+		return name
+	}
+	if u.DisplayUsername != "" {
+		return u.DisplayUsername
+	}
+	if u.Username != "" {
+		return u.Username
+	}
+	if u.Email != "" {
+		return u.Email
+	}
+	return "Someone"
+}
+
+func (p *Plugin) handleGetInvitation(ctx forge.Context, req *GetInvitationRequest) (*InvitationPreview, error) {
+	token := req.Token
+	if token == "" {
+		token = ctx.Param("inviteToken")
+	}
+	if token == "" {
+		return nil, forge.BadRequest("token is required")
+	}
+
+	inv, err := p.store.GetInvitationByToken(ctx.Context(), token)
+	// One answer for every reason an invitation cannot be shown: never
+	// existed, already used, declined, expired. Telling them apart would let
+	// anyone holding a list of guesses learn which tokens are real.
+	if err != nil || inv == nil || inv.Status != organization.InvitationPending {
+		return nil, forge.NotFound("invitation not found")
+	}
+	if !inv.ExpiresAt.IsZero() && time.Now().After(inv.ExpiresAt) {
+		return nil, forge.NotFound("invitation not found")
+	}
+
+	org, err := p.store.GetOrganization(ctx.Context(), inv.OrgID)
+	if err != nil {
+		return nil, forge.NotFound("invitation not found")
+	}
+
+	// A missing inviter is not a reason to refuse the invitation. The account
+	// may have been deleted since it was sent, and the seat is still valid.
+	var invitedBy *user.User
+	if u, uErr := p.store.GetUser(ctx.Context(), inv.InviterID); uErr == nil {
+		invitedBy = u
+	}
+
+	resp := &InvitationPreview{
+		OrgID:       inv.OrgID.String(),
+		OrgName:     org.Name,
+		OrgSlug:     org.Slug,
+		InviterName: inviterName(invitedBy),
+		Role:        string(inv.Role),
+		EmailMasked: maskEmail(inv.Email),
+		ExpiresAt:   inv.ExpiresAt,
+	}
+	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
 func (p *Plugin) handleDeclineInvitation(ctx forge.Context, req *DeclineInvitationRequest) (*StatusResponse, error) {

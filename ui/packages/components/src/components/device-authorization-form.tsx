@@ -7,12 +7,7 @@ import { CheckCircle2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useCodeFromURL } from "../lib/use-code-from-url";
 import { Button } from "../primitives/button";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-  InputOTPSeparator,
-} from "../primitives/otp-input";
+import { VerificationCodeInput } from "../primitives/verification-code-input";
 import { AuthCard, type AuthCardAlign, type AuthCardVariant } from "./auth-card";
 import { ErrorDisplay } from "./error-display";
 import { LoadingSpinner } from "./loading-spinner";
@@ -42,7 +37,6 @@ export interface DeviceAuthorizationFormProps {
   autoSubmit?: boolean;
 }
 
-const REGEXP_ALPHANUMERIC = /^[A-Za-z0-9]*$/;
 
 /**
  * OAuth device authorization form (RFC 8628).
@@ -245,34 +239,17 @@ export function DeviceAuthorizationForm({
       <form onSubmit={handleFormSubmit} className="space-y-5">
         {/* OTP Code Input */}
         <div className="flex justify-center">
-          <InputOTP
-            maxLength={codeLength}
-            pattern={REGEXP_ALPHANUMERIC.source}
+          <VerificationCodeInput
+            length={codeLength}
+            mode="alphanumeric"
+            groupSize={halfLength}
             value={code}
             onChange={handleChange}
             onComplete={handleComplete}
             disabled={isSubmitting}
-          >
-            <InputOTPGroup>
-              {Array.from({ length: halfLength }).map((_, i) => (
-                <InputOTPSlot
-                  key={i}
-                  index={i}
-                  className="h-11 w-12 text-base font-semibold uppercase sm:h-12 sm:text-lg"
-                />
-              ))}
-            </InputOTPGroup>
-            <InputOTPSeparator />
-            <InputOTPGroup>
-              {Array.from({ length: codeLength - halfLength }).map((_, i) => (
-                <InputOTPSlot
-                  key={halfLength + i}
-                  index={halfLength + i}
-                  className="h-11 w-12 text-base font-semibold uppercase sm:h-12 sm:text-lg"
-                />
-              ))}
-            </InputOTPGroup>
-          </InputOTP>
+            invalid={Boolean(error)}
+            aria-label="Device code"
+          />
         </div>
 
         <ErrorDisplay error={error} />

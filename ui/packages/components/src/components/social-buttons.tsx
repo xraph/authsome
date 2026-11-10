@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "../lib/utils";
 import { Button } from "../primitives/button";
-import { Separator } from "../primitives/separator";
+import { LabelledSeparator } from "../primitives/separator";
 import {
   Tooltip,
   TooltipContent,
@@ -264,17 +264,15 @@ function ProviderIcon({ provider }: { provider: SocialProvider }) {
   return <Globe className="h-4 w-4" />;
 }
 
-export function OrDivider({ className }: { className?: string }) {
-  return (
-    <div className={cn("relative my-4", className)}>
-      <div className="absolute inset-0 flex items-center">
-        <Separator className="w-full" />
-      </div>
-      <div className="relative flex justify-center text-xs uppercase">
-        <span className="bg-card px-2 text-muted-foreground">or</span>
-      </div>
-    </div>
-  );
+export function OrDivider({
+  className,
+  label = "or",
+}: {
+  className?: string;
+  /** Text on the rule. Defaults to "or". */
+  label?: React.ReactNode;
+}) {
+  return <LabelledSeparator className={cn("my-4", className)}>{label}</LabelledSeparator>;
 }
 
 function GridLayout({

@@ -2013,6 +2013,18 @@ class AuthClient {
     return EnrollResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Read MFA enrollment
+  /// GET /v1/mfa/enrollment
+  Future<EnrollmentResponse> getMFAEnrollment({required String token}) async {
+    final path = '/v1/mfa/enrollment';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return EnrollmentResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Disable MFA
   /// DELETE /v1/mfa/enrollment
   Future<DisableResponse> disableMFA({required DisableRequest body, required String token}) async {
@@ -2416,6 +2428,18 @@ class AuthClient {
     return OrganizationStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Get invitation
+  /// GET /v1/orgs/invitations/{inviteToken}
+  Future<InvitationPreview> getInvitation({required String inviteToken, required String token}) async {
+    final path = '/v1/orgs/invitations/$inviteToken';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return InvitationPreview.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Get organization
   /// GET /v1/orgs/{orgId}
   Future<Organization> getOrganization({required String orgId, required String token}) async {
@@ -2544,6 +2568,31 @@ class AuthClient {
       token: token,
     );
     return OrganizationStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// List SCIM configurations
+  /// GET /v1/orgs/{orgId}/scim/configs
+  Future<ConfigListResponse> listSCIMConfigs({required String orgId, required String token}) async {
+    final path = '/v1/orgs/$orgId/scim/configs';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ConfigListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Create SCIM configuration
+  /// POST /v1/orgs/{orgId}/scim/configs
+  Future<SCIMConfig> createSCIMConfig({required String orgId, required CreateSCIMConfigRequest body, required String token}) async {
+    final path = '/v1/orgs/$orgId/scim/configs';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return SCIMConfig.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List teams
@@ -2894,6 +2943,93 @@ class AuthClient {
       token: token,
     );
     return ApiStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Get SCIM configuration
+  /// GET /v1/scim/configs/{configId}
+  Future<SCIMConfig> getSCIMConfig({required String configId, required String token}) async {
+    final path = '/v1/scim/configs/$configId';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return SCIMConfig.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Update SCIM configuration
+  /// PATCH /v1/scim/configs/{configId}
+  Future<SCIMConfig> updateSCIMConfig({required String configId, required UpdateSCIMConfigRequest body, required String token}) async {
+    final path = '/v1/scim/configs/$configId';
+    final res = await _request(
+'PATCH',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return SCIMConfig.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete SCIM configuration
+  /// DELETE /v1/scim/configs/{configId}
+  Future<ScimStatusResponse> deleteSCIMConfig({required String configId, required String token}) async {
+    final path = '/v1/scim/configs/$configId';
+    final res = await _request(
+'DELETE',
+      path,
+      token: token,
+    );
+    return ScimStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// List SCIM tokens
+  /// GET /v1/scim/configs/{configId}/tokens
+  Future<TokenListResponse> listSCIMTokens({required String configId, required String token}) async {
+    final path = '/v1/scim/configs/$configId/tokens';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return TokenListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Create SCIM token
+  /// POST /v1/scim/configs/{configId}/tokens
+  Future<TokenCreatedResponse> createSCIMToken({required String configId, required CreateSCIMTokenRequest body, required String token}) async {
+    final path = '/v1/scim/configs/$configId/tokens';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return TokenCreatedResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Revoke SCIM token
+  /// DELETE /v1/scim/tokens/{tokenId}
+  Future<ScimStatusResponse> revokeSCIMToken({required String tokenId, required String token}) async {
+    final path = '/v1/scim/tokens/$tokenId';
+    final res = await _request(
+'DELETE',
+      path,
+      token: token,
+    );
+    return ScimStatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Rotate SCIM token
+  /// POST /v1/scim/tokens/{tokenId}/rotate
+  Future<TokenCreatedResponse> rotateSCIMToken({required String tokenId, required RotateSCIMTokenRequest body, required String token}) async {
+    final path = '/v1/scim/tokens/$tokenId/rotate';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return TokenCreatedResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List sessions

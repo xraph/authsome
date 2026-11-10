@@ -5,6 +5,7 @@ export * from "./client";
 export { AuthManager, createLocalStorage, SESSION_STORAGE_KEY } from "./auth";
 export {
   definePlugin,
+  pluginKeyName,
   PluginNotRegisteredError,
   type AuthEvent,
   type AuthPlugin,

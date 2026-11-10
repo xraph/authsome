@@ -63,11 +63,69 @@ Ensure Tailwind CSS is configured in your project. The components use Tailwind u
 | `LoadingSpinner` | Animated loading indicator |
 | `ErrorDisplay` | Styled error message display |
 
+### Session components
+
+| Component | Description |
+|-----------|-------------|
+| `LastUsedAccount` | Who signed in last on this browser, as a one-click shortcut |
+| `AccountSummaryCard` | Who you are, when you last signed in, and from where |
+
+`LastUsedAccount` reads a record this browser keeps in `localStorage`, written on every successful sign-in and kept for ninety days. Signing out does not clear it: being remembered is the point. It renders nothing when there is no record, so you can drop it at the top of a sign-in form unconditionally, and `forgetLastAccount()` clears it.
+
+It is a convenience and never an authorization. Nothing in that record is trusted, and the person it names still has to authenticate.
+
+`AccountSummaryCard` takes a `summary` prop so you can render it from your own data, and falls back to `useLastSignIn()` when you leave it out.
+
 ### Primitives
 
 All Radix-based primitives are exported for building custom components:
 
-`Button`, `Card`, `Input`, `Label`, `Alert`, `Avatar`, `Badge`, `Checkbox`, `Dialog`, `DropdownMenu`, `InputOTP`, `Select`, `Separator`, `Sheet`, `Skeleton`, `Switch`, `Tabs`, `Tooltip`
+`Button`, `Card`, `Input`, `Label`, `Alert`, `Avatar`, `Badge`, `Checkbox`, `Dialog`, `DropdownMenu`, `InputOTP`, `InputGroup`, `PhoneInput`, `Select`, `Separator`, `Sheet`, `Skeleton`, `Switch`, `Tabs`, `Tooltip`, `VerificationCodeInput`
+
+#### VerificationCodeInput
+
+One field for every one-time code, replacing the hand-assembled `InputOTP` arrangements the auth forms used to carry.
+
+```tsx
+<VerificationCodeInput
+  length={6}
+  mode="numeric"          // or "alphanumeric", which upper-cases as you type
+  value={code}
+  onChange={setCode}
+  onComplete={submit}     // fires on the last character
+  groupSize={4}           // 0 for one flat run; 4 for WDJB-MJHT
+  invalid={Boolean(error)}
+/>
+```
+
+Built on `input-otp`, so paste, mobile SMS autofill and `autocomplete="one-time-code"` all work. Boxes shrink to fit their column, so an eight-character code still sits inside a 400px card. When the field is disabled while a code is checked and then re-enabled with the code still incomplete, it takes focus back, so someone correcting one wrong digit does not have to click into the boxes again.
+
+`InputOTP`, `InputOTPGroup`, `InputOTPSlot` and `InputOTPSeparator` are still exported for anyone who built their own arrangement.
+
+#### PhoneInput
+
+A country picker as an input addon, plus a national number that formats itself as you type.
+
+```tsx
+<PhoneInput
+  defaultCountry="PT"
+  value={e164}
+  onChange={(value, isValid) => { setE164(value); setValid(isValid); }}
+/>
+```
+
+The value handed back is always E.164, which is what the API wants and what a database should hold. What the person sees is their own country's grouping, which is the only format they can check at a glance against the handset in front of them. Gate your submit button on `isValid` rather than on a non-empty string.
+
+#### InputGroup and InputAddon
+
+A field that looks like one input but holds several controls: a country picker, a currency symbol, a unit, a suffix button. The group carries the border, height, radius and focus ring, and everything inside is drawn borderless.
+
+```tsx
+<InputGroup>
+  <InputAddon side="start">$</InputAddon>
+  <InputGroupInput inputMode="decimal" />
+</InputGroup>
+```
 
 ## Usage examples
 
@@ -185,16 +243,18 @@ Components use CSS variables for colors, radii, and spacing. Override them in yo
 
 ```css
 :root {
-  --authsome-primary: 220 90% 56%;
+  --authsome-primary: 221 83% 53%;
   --authsome-primary-foreground: 0 0% 100%;
   --authsome-background: 0 0% 100%;
   --authsome-foreground: 222 47% 11%;
-  --authsome-muted: 210 40% 96%;
-  --authsome-muted-foreground: 215 16% 47%;
-  --authsome-border: 214 32% 91%;
-  --authsome-radius: 0.5rem;
+  --authsome-muted: 220 14% 96%;
+  --authsome-muted-foreground: 220 9% 46%;
+  --authsome-border: 220 13% 91%;
+  --authsome-radius: 0.625rem;
 }
 ```
+
+Those are the defaults, not a suggestion. The blue is a token like any other, so one line puts it back to whatever you had.
 
 ### Dark mode
 

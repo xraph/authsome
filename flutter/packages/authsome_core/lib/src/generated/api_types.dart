@@ -2286,6 +2286,29 @@ class CloneEnvironmentResponse {
   String toString() => 'CloneEnvironmentResponse(${toJson()})';
 }
 
+class ConfigListResponse {
+  final List<SCIMConfig> configs;
+
+  const ConfigListResponse({
+    required this.configs,
+  });
+
+  factory ConfigListResponse.fromJson(Map<String, dynamic> json) {
+    return ConfigListResponse(
+      configs: (json['configs'] as List).map((e) => SCIMConfig.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'configs': configs.map((e) => e.toJson()).toList(),
+    };
+  }
+
+  @override
+  String toString() => 'ConfigListResponse(${toJson()})';
+}
+
 class Connection {
   final String? acsUrl;
   final bool active;
@@ -3160,6 +3183,80 @@ class CreateRoleRequest {
   String toString() => 'CreateRoleRequest(${toJson()})';
 }
 
+class CreateSCIMConfigRequest {
+  final bool? autoCreate;
+  final bool? autoSuspend;
+  final String? defaultRole;
+  final bool? enabled;
+  final bool? groupSync;
+  final Map<String, dynamic>? metadata;
+  final String name;
+
+  const CreateSCIMConfigRequest({
+    this.autoCreate,
+    this.autoSuspend,
+    this.defaultRole,
+    this.enabled,
+    this.groupSync,
+    this.metadata,
+    required this.name,
+  });
+
+  factory CreateSCIMConfigRequest.fromJson(Map<String, dynamic> json) {
+    return CreateSCIMConfigRequest(
+      autoCreate: json['auto_create'] as bool?,
+      autoSuspend: json['auto_suspend'] as bool?,
+      defaultRole: json['default_role'] as String?,
+      enabled: json['enabled'] as bool?,
+      groupSync: json['group_sync'] as bool?,
+      metadata: json['metadata'] == null ? null : Map<String, dynamic>.from(json['metadata'] as Map),
+      name: json['name'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (autoCreate != null) 'auto_create': autoCreate,
+      if (autoSuspend != null) 'auto_suspend': autoSuspend,
+      if (defaultRole != null) 'default_role': defaultRole,
+      if (enabled != null) 'enabled': enabled,
+      if (groupSync != null) 'group_sync': groupSync,
+      if (metadata != null) 'metadata': metadata,
+      'name': name,
+    };
+  }
+
+  @override
+  String toString() => 'CreateSCIMConfigRequest(${toJson()})';
+}
+
+class CreateSCIMTokenRequest {
+  final String? expiresAt;
+  final String name;
+
+  const CreateSCIMTokenRequest({
+    this.expiresAt,
+    required this.name,
+  });
+
+  factory CreateSCIMTokenRequest.fromJson(Map<String, dynamic> json) {
+    return CreateSCIMTokenRequest(
+      expiresAt: json['expires_at'] as String?,
+      name: json['name'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (expiresAt != null) 'expires_at': expiresAt,
+      'name': name,
+    };
+  }
+
+  @override
+  String toString() => 'CreateSCIMTokenRequest(${toJson()})';
+}
+
 class CreateSubscriptionRequest {
   final String appId;
   final String planId;
@@ -4019,6 +4116,68 @@ class EnrollResponse {
   String toString() => 'EnrollResponse(${toJson()})';
 }
 
+class EnrolledFactor {
+  final String enrolledAt;
+  final String method;
+  final bool verified;
+
+  const EnrolledFactor({
+    required this.enrolledAt,
+    required this.method,
+    required this.verified,
+  });
+
+  factory EnrolledFactor.fromJson(Map<String, dynamic> json) {
+    return EnrolledFactor(
+      enrolledAt: json['enrolled_at'] as String,
+      method: json['method'] as String,
+      verified: json['verified'] as bool,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'enrolled_at': enrolledAt,
+      'method': method,
+      'verified': verified,
+    };
+  }
+
+  @override
+  String toString() => 'EnrolledFactor(${toJson()})';
+}
+
+class EnrollmentResponse {
+  final bool enabled;
+  final List<EnrolledFactor> factors;
+  final int recoveryCodesRemaining;
+
+  const EnrollmentResponse({
+    required this.enabled,
+    required this.factors,
+    required this.recoveryCodesRemaining,
+  });
+
+  factory EnrollmentResponse.fromJson(Map<String, dynamic> json) {
+    return EnrollmentResponse(
+      enabled: json['enabled'] as bool,
+      factors: (json['factors'] as List).map((e) => EnrolledFactor.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      recoveryCodesRemaining: (json['recovery_codes_remaining'] as num).toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'enabled': enabled,
+      'factors': factors.map((e) => e.toJson()).toList(),
+      'recovery_codes_remaining': recoveryCodesRemaining,
+    };
+  }
+
+  @override
+  String toString() => 'EnrollmentResponse(${toJson()})';
+}
+
 class EntitlementResponse {
   final bool allowed;
   final String feature;
@@ -4733,6 +4892,53 @@ class InvitationListResponse {
 
   @override
   String toString() => 'InvitationListResponse(${toJson()})';
+}
+
+class InvitationPreview {
+  final String emailMasked;
+  final String expiresAt;
+  final String inviterName;
+  final String orgId;
+  final String orgName;
+  final String? orgSlug;
+  final String role;
+
+  const InvitationPreview({
+    required this.emailMasked,
+    required this.expiresAt,
+    required this.inviterName,
+    required this.orgId,
+    required this.orgName,
+    this.orgSlug,
+    required this.role,
+  });
+
+  factory InvitationPreview.fromJson(Map<String, dynamic> json) {
+    return InvitationPreview(
+      emailMasked: json['email_masked'] as String,
+      expiresAt: json['expires_at'] as String,
+      inviterName: json['inviter_name'] as String,
+      orgId: json['org_id'] as String,
+      orgName: json['org_name'] as String,
+      orgSlug: json['org_slug'] as String?,
+      role: json['role'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'email_masked': emailMasked,
+      'expires_at': expiresAt,
+      'inviter_name': inviterName,
+      'org_id': orgId,
+      'org_name': orgName,
+      if (orgSlug != null) 'org_slug': orgSlug,
+      'role': role,
+    };
+  }
+
+  @override
+  String toString() => 'InvitationPreview(${toJson()})';
 }
 
 class InvoiceResponse {
@@ -7003,6 +7209,33 @@ class RotateClientSecretResponse {
   String toString() => 'RotateClientSecretResponse(${toJson()})';
 }
 
+class RotateSCIMTokenRequest {
+  final int? graceSeconds;
+  final String? name;
+
+  const RotateSCIMTokenRequest({
+    this.graceSeconds,
+    this.name,
+  });
+
+  factory RotateSCIMTokenRequest.fromJson(Map<String, dynamic> json) {
+    return RotateSCIMTokenRequest(
+      graceSeconds: json['grace_seconds'] == null ? null : (json['grace_seconds'] as num).toInt(),
+      name: json['name'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (graceSeconds != null) 'grace_seconds': graceSeconds,
+      if (name != null) 'name': name,
+    };
+  }
+
+  @override
+  String toString() => 'RotateSCIMTokenRequest(${toJson()})';
+}
+
 class RotateWebhookSecretResponse {
   final String secret;
 
@@ -7024,6 +7257,73 @@ class RotateWebhookSecretResponse {
 
   @override
   String toString() => 'RotateWebhookSecretResponse(${toJson()})';
+}
+
+class SCIMConfig {
+  final String appId;
+  final bool autoCreate;
+  final bool autoSuspend;
+  final String createdAt;
+  final String defaultRole;
+  final bool enabled;
+  final bool groupSync;
+  final String id;
+  final Map<String, dynamic>? metadata;
+  final String name;
+  final String? orgId;
+  final String updatedAt;
+
+  const SCIMConfig({
+    required this.appId,
+    required this.autoCreate,
+    required this.autoSuspend,
+    required this.createdAt,
+    required this.defaultRole,
+    required this.enabled,
+    required this.groupSync,
+    required this.id,
+    this.metadata,
+    required this.name,
+    this.orgId,
+    required this.updatedAt,
+  });
+
+  factory SCIMConfig.fromJson(Map<String, dynamic> json) {
+    return SCIMConfig(
+      appId: json['app_id'] as String,
+      autoCreate: json['auto_create'] as bool,
+      autoSuspend: json['auto_suspend'] as bool,
+      createdAt: json['created_at'] as String,
+      defaultRole: json['default_role'] as String,
+      enabled: json['enabled'] as bool,
+      groupSync: json['group_sync'] as bool,
+      id: json['id'] as String,
+      metadata: json['metadata'] == null ? null : Map<String, dynamic>.from(json['metadata'] as Map),
+      name: json['name'] as String,
+      orgId: json['org_id'] as String?,
+      updatedAt: json['updated_at'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'app_id': appId,
+      'auto_create': autoCreate,
+      'auto_suspend': autoSuspend,
+      'created_at': createdAt,
+      'default_role': defaultRole,
+      'enabled': enabled,
+      'group_sync': groupSync,
+      'id': id,
+      if (metadata != null) 'metadata': metadata,
+      'name': name,
+      if (orgId != null) 'org_id': orgId,
+      'updated_at': updatedAt,
+    };
+  }
+
+  @override
+  String toString() => 'SCIMConfig(${toJson()})';
 }
 
 class SMSSendRequest {
@@ -7185,6 +7485,29 @@ class ScimListResponse {
 
   @override
   String toString() => 'ScimListResponse(${toJson()})';
+}
+
+class ScimStatusResponse {
+  final String status;
+
+  const ScimStatusResponse({
+    required this.status,
+  });
+
+  factory ScimStatusResponse.fromJson(Map<String, dynamic> json) {
+    return ScimStatusResponse(
+      status: json['status'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'status': status,
+    };
+  }
+
+  @override
+  String toString() => 'ScimStatusResponse(${toJson()})';
 }
 
 class ScopeValue {
@@ -8282,6 +8605,80 @@ class TenantRequest {
   String toString() => 'TenantRequest(${toJson()})';
 }
 
+class Token {
+  final String configId;
+  final String createdAt;
+  final String? expiresAt;
+  final String id;
+  final String? lastUsedAt;
+  final String name;
+
+  const Token({
+    required this.configId,
+    required this.createdAt,
+    this.expiresAt,
+    required this.id,
+    this.lastUsedAt,
+    required this.name,
+  });
+
+  factory Token.fromJson(Map<String, dynamic> json) {
+    return Token(
+      configId: json['config_id'] as String,
+      createdAt: json['created_at'] as String,
+      expiresAt: json['expires_at'] as String?,
+      id: json['id'] as String,
+      lastUsedAt: json['last_used_at'] as String?,
+      name: json['name'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'config_id': configId,
+      'created_at': createdAt,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      'id': id,
+      if (lastUsedAt != null) 'last_used_at': lastUsedAt,
+      'name': name,
+    };
+  }
+
+  @override
+  String toString() => 'Token(${toJson()})';
+}
+
+class TokenCreatedResponse {
+  final String baseUrl;
+  final String plaintext;
+  final Token? token;
+
+  const TokenCreatedResponse({
+    required this.baseUrl,
+    required this.plaintext,
+    this.token,
+  });
+
+  factory TokenCreatedResponse.fromJson(Map<String, dynamic> json) {
+    return TokenCreatedResponse(
+      baseUrl: json['base_url'] as String,
+      plaintext: json['plaintext'] as String,
+      token: json['token'] == null ? null : Token.fromJson(Map<String, dynamic>.from(json['token'] as Map)),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'base_url': baseUrl,
+      'plaintext': plaintext,
+      if (token != null) 'token': token?.toJson(),
+    };
+  }
+
+  @override
+  String toString() => 'TokenCreatedResponse(${toJson()})';
+}
+
 class TokenExchangeRequest {
   final List<String>? scopes;
   final String subject;
@@ -8354,6 +8751,29 @@ class TokenExchangeResponse {
 
   @override
   String toString() => 'TokenExchangeResponse(${toJson()})';
+}
+
+class TokenListResponse {
+  final List<Token> tokens;
+
+  const TokenListResponse({
+    required this.tokens,
+  });
+
+  factory TokenListResponse.fromJson(Map<String, dynamic> json) {
+    return TokenListResponse(
+      tokens: (json['tokens'] as List).map((e) => Token.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'tokens': tokens.map((e) => e.toJson()).toList(),
+    };
+  }
+
+  @override
+  String toString() => 'TokenListResponse(${toJson()})';
 }
 
 class UIMetadata {
@@ -8882,6 +9302,53 @@ class UpdateRoleRequest {
 
   @override
   String toString() => 'UpdateRoleRequest(${toJson()})';
+}
+
+class UpdateSCIMConfigRequest {
+  final bool? autoCreate;
+  final bool? autoSuspend;
+  final String? defaultRole;
+  final bool? enabled;
+  final bool? groupSync;
+  final Map<String, dynamic>? metadata;
+  final String? name;
+
+  const UpdateSCIMConfigRequest({
+    this.autoCreate,
+    this.autoSuspend,
+    this.defaultRole,
+    this.enabled,
+    this.groupSync,
+    this.metadata,
+    this.name,
+  });
+
+  factory UpdateSCIMConfigRequest.fromJson(Map<String, dynamic> json) {
+    return UpdateSCIMConfigRequest(
+      autoCreate: json['auto_create'] as bool?,
+      autoSuspend: json['auto_suspend'] as bool?,
+      defaultRole: json['default_role'] as String?,
+      enabled: json['enabled'] as bool?,
+      groupSync: json['group_sync'] as bool?,
+      metadata: json['metadata'] == null ? null : Map<String, dynamic>.from(json['metadata'] as Map),
+      name: json['name'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (autoCreate != null) 'auto_create': autoCreate,
+      if (autoSuspend != null) 'auto_suspend': autoSuspend,
+      if (defaultRole != null) 'default_role': defaultRole,
+      if (enabled != null) 'enabled': enabled,
+      if (groupSync != null) 'group_sync': groupSync,
+      if (metadata != null) 'metadata': metadata,
+      if (name != null) 'name': name,
+    };
+  }
+
+  @override
+  String toString() => 'UpdateSCIMConfigRequest(${toJson()})';
 }
 
 class UpdateSubscriptionRequest {

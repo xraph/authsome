@@ -1,15 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { useAuth } from "@authsome/ui-react";
 import { cn } from "../lib/utils";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-  InputOTPSeparator,
-} from "../primitives/otp-input";
+import { VerificationCodeInput } from "../primitives/verification-code-input";
 import { Button } from "../primitives/button";
 import { AuthCard } from "./auth-card";
 import { ErrorDisplay } from "./error-display";
@@ -167,26 +161,17 @@ export function EmailVerificationForm({
           </Button>
         )}
         <div className="flex justify-center">
-          <InputOTP
-            maxLength={6}
-            pattern={REGEXP_ONLY_DIGITS}
+          <VerificationCodeInput
+            length={6}
+            mode="numeric"
             value={code}
             onChange={handleChange}
             onComplete={handleComplete}
             disabled={isSubmitting}
-          >
-            <InputOTPGroup>
-              <InputOTPSlot index={0} />
-              <InputOTPSlot index={1} />
-              <InputOTPSlot index={2} />
-            </InputOTPGroup>
-            <InputOTPSeparator />
-            <InputOTPGroup>
-              <InputOTPSlot index={3} />
-              <InputOTPSlot index={4} />
-              <InputOTPSlot index={5} />
-            </InputOTPGroup>
-          </InputOTP>
+            invalid={Boolean(error)}
+            aria-label="Email verification code"
+            autoFocus
+          />
         </div>
 
         <ErrorDisplay error={error} />

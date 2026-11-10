@@ -65,6 +65,7 @@ import type {
   ClientConfigToggle,
   CloneEnvironmentRequest,
   CloneEnvironmentResponse,
+  ConfigListResponse,
   Connection,
   Consent,
   ConsentDecisionBody,
@@ -83,6 +84,8 @@ import type {
   CreateOrgRequest,
   CreatePlanRequest,
   CreateRoleRequest,
+  CreateSCIMConfigRequest,
+  CreateSCIMTokenRequest,
   CreateSubscriptionRequest,
   CreateTeamRequest,
   CreateWebhookRequest,
@@ -107,6 +110,8 @@ import type {
   EnforceSettingRequest,
   EnrollRequest,
   EnrollResponse,
+  EnrolledFactor,
+  EnrollmentResponse,
   EntitlementResponse,
   EntitlementsResponse,
   Environment,
@@ -127,6 +132,7 @@ import type {
   IntrospectUser,
   Invitation,
   InvitationListResponse,
+  InvitationPreview,
   InvoiceResponse,
   JWK,
   JWKSResponse,
@@ -190,13 +196,16 @@ import type {
   Role,
   RoleListResponse,
   RotateClientSecretResponse,
+  RotateSCIMTokenRequest,
   RotateWebhookSecretResponse,
+  SCIMConfig,
   SMSSendRequest,
   SMSSendResponse,
   SMSVerifyRequest,
   SMSVerifyResponse,
   SchemaList,
   ScimListResponse,
+  ScimStatusResponse,
   ScopeValue,
   SeatsView,
   SelectOption,
@@ -225,8 +234,11 @@ import type {
   Team,
   TeamListResponse,
   TenantRequest,
+  Token,
+  TokenCreatedResponse,
   TokenExchangeRequest,
   TokenExchangeResponse,
+  TokenListResponse,
   UIMetadata,
   UnassignRoleRequest,
   UnlinkAuthMethodResponse,
@@ -239,6 +251,7 @@ import type {
   UpdateOrgRequest,
   UpdateRegistrationRequest,
   UpdateRoleRequest,
+  UpdateSCIMConfigRequest,
   UpdateSubscriptionRequest,
   UpdateTeamRequest,
   UpdateWebhookRequest,
@@ -2305,6 +2318,19 @@ export class AuthClient {
   }
 
   /**
+   * Read MFA enrollment
+   * GET /v1/mfa/enrollment
+   */
+  async getMFAEnrollment(): Promise<EnrollmentResponse> {
+    const path = "/v1/mfa/enrollment";
+    return this.request<EnrollmentResponse>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
    * Disable MFA
    * DELETE /v1/mfa/enrollment
    */
@@ -2707,6 +2733,19 @@ export class AuthClient {
   }
 
   /**
+   * Get invitation
+   * GET /v1/orgs/invitations/{inviteToken}
+   */
+  async getInvitation(inviteToken: string): Promise<InvitationPreview> {
+    const path = `/v1/orgs/invitations/${inviteToken}`;
+    return this.request<InvitationPreview>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
    * Get organization
    * GET /v1/orgs/{orgId}
    */
@@ -2828,6 +2867,32 @@ export class AuthClient {
       'DELETE',
       path,
       undefined,
+    );
+  }
+
+  /**
+   * List SCIM configurations
+   * GET /v1/orgs/{orgId}/scim/configs
+   */
+  async listSCIMConfigs(orgId: string): Promise<ConfigListResponse> {
+    const path = `/v1/orgs/${orgId}/scim/configs`;
+    return this.request<ConfigListResponse>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Create SCIM configuration
+   * POST /v1/orgs/{orgId}/scim/configs
+   */
+  async createSCIMConfig(orgId: string, body: CreateSCIMConfigRequest): Promise<SCIMConfig> {
+    const path = `/v1/orgs/${orgId}/scim/configs`;
+    return this.request<SCIMConfig>(
+      'POST',
+      path,
+      body,
     );
   }
 
@@ -3183,6 +3248,97 @@ export class AuthClient {
   async authsomeUnassignRole(roleId: string, body: AuthsomeUnassignRoleRequest): Promise<ApiStatusResponse> {
     const path = `/v1/roles/${roleId}/unassign`;
     return this.request<ApiStatusResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * Get SCIM configuration
+   * GET /v1/scim/configs/{configId}
+   */
+  async getSCIMConfig(configId: string): Promise<SCIMConfig> {
+    const path = `/v1/scim/configs/${configId}`;
+    return this.request<SCIMConfig>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Update SCIM configuration
+   * PATCH /v1/scim/configs/{configId}
+   */
+  async updateSCIMConfig(configId: string, body: UpdateSCIMConfigRequest): Promise<SCIMConfig> {
+    const path = `/v1/scim/configs/${configId}`;
+    return this.request<SCIMConfig>(
+      'PATCH',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * Delete SCIM configuration
+   * DELETE /v1/scim/configs/{configId}
+   */
+  async deleteSCIMConfig(configId: string): Promise<ScimStatusResponse> {
+    const path = `/v1/scim/configs/${configId}`;
+    return this.request<ScimStatusResponse>(
+      'DELETE',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * List SCIM tokens
+   * GET /v1/scim/configs/{configId}/tokens
+   */
+  async listSCIMTokens(configId: string): Promise<TokenListResponse> {
+    const path = `/v1/scim/configs/${configId}/tokens`;
+    return this.request<TokenListResponse>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Create SCIM token
+   * POST /v1/scim/configs/{configId}/tokens
+   */
+  async createSCIMToken(configId: string, body: CreateSCIMTokenRequest): Promise<TokenCreatedResponse> {
+    const path = `/v1/scim/configs/${configId}/tokens`;
+    return this.request<TokenCreatedResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * Revoke SCIM token
+   * DELETE /v1/scim/tokens/{tokenId}
+   */
+  async revokeSCIMToken(tokenId: string): Promise<ScimStatusResponse> {
+    const path = `/v1/scim/tokens/${tokenId}`;
+    return this.request<ScimStatusResponse>(
+      'DELETE',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Rotate SCIM token
+   * POST /v1/scim/tokens/{tokenId}/rotate
+   */
+  async rotateSCIMToken(tokenId: string, body: RotateSCIMTokenRequest): Promise<TokenCreatedResponse> {
+    const path = `/v1/scim/tokens/${tokenId}/rotate`;
+    return this.request<TokenCreatedResponse>(
       'POST',
       path,
       body,

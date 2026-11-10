@@ -24,6 +24,22 @@
   --radius-md: calc(var(--authsome-radius) - 2px);
   --radius-lg: var(--authsome-radius);
   --radius-xl: calc(var(--authsome-radius) + 4px);
+
+  /* The one-time code slots render a fake caret and animate it with this.
+     It was referenced before it existed, so the caret sat there unblinking. */
+  --animate-caret-blink: caret-blink 1.25s ease-out infinite;
+}
+
+@keyframes caret-blink {
+  0%,
+  70%,
+  100% {
+    opacity: 1;
+  }
+  20%,
+  50% {
+    opacity: 0;
+  }
 }
 
 @layer base {
@@ -34,20 +50,20 @@
     --authsome-card-foreground: 240 10% 3.9%;
     --authsome-popover: 0 0% 100%;
     --authsome-popover-foreground: 240 10% 3.9%;
-    --authsome-primary: 240 5.9% 10%;
-    --authsome-primary-foreground: 0 0% 98%;
-    --authsome-secondary: 240 4.8% 95.9%;
-    --authsome-secondary-foreground: 240 5.9% 10%;
-    --authsome-muted: 240 4.8% 95.9%;
-    --authsome-muted-foreground: 240 3.8% 46.1%;
-    --authsome-accent: 240 4.8% 95.9%;
-    --authsome-accent-foreground: 240 5.9% 10%;
-    --authsome-destructive: 0 84.2% 60.2%;
-    --authsome-destructive-foreground: 0 0% 98%;
-    --authsome-border: 240 5.9% 90%;
-    --authsome-input: 240 5.9% 90%;
-    --authsome-ring: 240 5.9% 10%;
-    --authsome-radius: 0.5rem;
+    --authsome-primary: 221 83% 53%;
+    --authsome-primary-foreground: 0 0% 100%;
+    --authsome-secondary: 220 14% 96%;
+    --authsome-secondary-foreground: 222 47% 11%;
+    --authsome-muted: 220 14% 96%;
+    --authsome-muted-foreground: 220 9% 46%;
+    --authsome-accent: 220 14% 96%;
+    --authsome-accent-foreground: 222 47% 11%;
+    --authsome-destructive: 0 72% 51%;
+    --authsome-destructive-foreground: 0 0% 100%;
+    --authsome-border: 220 13% 91%;
+    --authsome-input: 220 13% 88%;
+    --authsome-ring: 221 83% 53%;
+    --authsome-radius: 0.625rem;
   }
 
   .dark {
@@ -57,18 +73,18 @@
     --authsome-card-foreground: 0 0% 98%;
     --authsome-popover: 240 10% 3.9%;
     --authsome-popover-foreground: 0 0% 98%;
-    --authsome-primary: 0 0% 98%;
-    --authsome-primary-foreground: 240 5.9% 10%;
-    --authsome-secondary: 240 3.7% 15.9%;
-    --authsome-secondary-foreground: 0 0% 98%;
-    --authsome-muted: 240 3.7% 15.9%;
-    --authsome-muted-foreground: 240 5% 64.9%;
-    --authsome-accent: 240 3.7% 15.9%;
-    --authsome-accent-foreground: 0 0% 98%;
-    --authsome-destructive: 0 62.8% 30.6%;
-    --authsome-destructive-foreground: 0 0% 98%;
-    --authsome-border: 240 3.7% 15.9%;
-    --authsome-input: 240 3.7% 15.9%;
-    --authsome-ring: 240 4.9% 83.9%;
+    --authsome-primary: 217 91% 60%;
+    --authsome-primary-foreground: 222 47% 11%;
+    --authsome-secondary: 217 33% 17%;
+    --authsome-secondary-foreground: 210 40% 98%;
+    --authsome-muted: 217 33% 17%;
+    --authsome-muted-foreground: 215 20% 65%;
+    --authsome-accent: 217 33% 17%;
+    --authsome-accent-foreground: 210 40% 98%;
+    --authsome-destructive: 0 72% 51%;
+    --authsome-destructive-foreground: 0 0% 100%;
+    --authsome-border: 217 33% 20%;
+    --authsome-input: 217 33% 24%;
+    --authsome-ring: 217 91% 60%;
   }
 }

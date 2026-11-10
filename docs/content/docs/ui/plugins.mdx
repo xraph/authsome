@@ -50,6 +50,95 @@ Asking for a plugin you didn't add throws an error that names it, so a missing r
 
 A plugin's setup runs the first time you ask for it, not when the provider mounts. If its setup throws (a bad option, say), you see the error there too.
 
+## The packages that ship today
+
+Six of them. Each exposes `.` for the plugin definition, which is framework-free, and `./react` for its hooks and components. Install the ones you use and nothing else.
+
+### @authsome/plugin-phone
+
+Phone sign-in, two steps.
+
+```tsx
+import { phone } from "@authsome/plugin-phone";
+import { PhoneSignInForm, usePhoneAuth } from "@authsome/plugin-phone/react";
+
+<AuthProvider plugins={[phone()]}>
+  <PhoneSignInForm onSuccess={({ newUser }) => ...} />
+</AuthProvider>
+```
+
+`usePhoneAuth()` gives you `start`, `verify`, `isSending`, `isVerifying` and `error` if you'd rather build the screens yourself. `verify` adopts the session, so by the time it resolves `useAuth()` already reports the person as signed in.
+
+### @authsome/plugin-consent
+
+GDPR purpose consent. Not the OAuth screen: that's the next one.
+
+```tsx
+import { consent } from "@authsome/plugin-consent";
+import { ConsentGate, ConsentList, useConsents } from "@authsome/plugin-consent/react";
+
+<ConsentGate purpose="marketing_email" version="2026-01" title="Can we email you?">
+  <NewsletterSignup />
+</ConsentGate>
+```
+
+`<ConsentGate>` holds its children back until a purpose has been agreed to. Bump `version` when the wording changes in a way that matters and everyone is asked again. `<ConsentList>` is the settings view, and a withdrawn consent stays in the list rather than vanishing, because the point of a consent record is that it's a history.
+
+### @authsome/plugin-oauth2
+
+The "App X wants access" screen, from `oauth2provider`.
+
+```tsx
+import { oauth2 } from "@authsome/plugin-oauth2";
+import { ConnectedAppsList, OAuthConsentScreen } from "@authsome/plugin-oauth2/react";
+
+<OAuthConsentScreen cid={searchParams.get("cid")} />
+```
+
+Scope strings come back raw, so the component ships readable labels for the standard ones and takes a `scopeLabels` map for yours. Anything unmapped falls back to the raw string, because asking someone to approve a blank line is worse than showing them `custom:widgets`.
+
+### @authsome/plugin-subscription
+
+Self-service billing. It wraps the tenant routes, so a client never carries a subscription ID and can't aim a write at someone else's.
+
+```tsx
+import { subscription } from "@authsome/plugin-subscription";
+import { Entitled, useSubscription, usePlans } from "@authsome/plugin-subscription/react";
+import { CurrentPlanCard, PricingTable, UsageMeter } from "@authsome/plugin-subscription/components";
+
+const { subscription: current, canManage } = useSubscription();
+```
+
+`canManage` comes from the server, and the components hide their write controls when it's false rather than letting you press a button that will 403. `<Entitled feature="...">` is the gate for a feature the current plan may or may not include. Styled components live under `./components`, separately from the hooks, so you can take one without the other.
+
+### @authsome/plugin-organization
+
+Invitations, both ends.
+
+```tsx
+import { organization } from "@authsome/plugin-organization";
+import { InvitationCard, InvitationList } from "@authsome/plugin-organization/react";
+
+<InvitationCard token={token} isSignedIn={isSignedIn} signInSlot={<YourSignInButtons />} />
+```
+
+`useInvitation(token)` needs no session, which is the point: whoever is deciding whether to accept usually hasn't signed in, and often has no account at all. Accepting does need one, so when nobody is signed in the card renders your `signInSlot` instead of the accept button rather than trying to build a sign-in flow of its own.
+
+### @authsome/plugin-scim
+
+The dashboard side of SCIM: connect an identity provider, mint the token it authenticates with, rotate it, revoke it.
+
+```tsx
+import { scim } from "@authsome/plugin-scim";
+import { ScimConnectionCard, ScimTokenList } from "@authsome/plugin-scim/react";
+
+<ScimConnectionCard orgId={orgId}>
+  <ScimTokenList configId={configId} />
+</ScimConnectionCard>
+```
+
+Every route needs an organization owner or admin. A token's plaintext exists once, in the response that minted it, and the store keeps only a hash, so `<ScimTokenList>` shows a new one in a banner you have to dismiss deliberately. Rotating takes a grace window, which keeps the old token working while you update the identity provider.
+
 ## Writing a plugin
 
 A plugin has a name and a setup function. The name has to be the server plugin's `Name()`, because that's how the plugin can tell from the client config whether the server side is installed.
