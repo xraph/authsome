@@ -29,6 +29,10 @@ jobs:
       # workflow sets check-latest, so this still resolves to the newest patch.
       go-versions: '["1.26"]'
       os: '["ubuntu-latest"]'
+      # The shared govulncheck step has no allowlist, so it only reports here.
+      # The vuln job below is the one that fails the build, on any reachable
+      # advisory missing from .govulncheck-allow.
+      govulncheck-fail-on-findings: false
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
@@ -184,6 +188,8 @@ jobs:
   # ─── Vulnerability Check ───────────────────────────────────────────
   # govulncheck reports only vulnerabilities in code paths this module
   # actually reaches, so a finding here is one to act on, not to triage.
+  # The exception is an advisory with no fix anywhere, which goes in
+  # .govulncheck-allow with its reason until a fixed release exists.
   vuln:
     name: Vulnerability check
     runs-on: ubuntu-latest
@@ -201,7 +207,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: ./scripts/govulncheck.sh
 
   # ─── Dependency Review ─────────────────────────────────────────────
   # On a pull request, refuse a dependency change that introduces a known
