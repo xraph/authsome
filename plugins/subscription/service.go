@@ -58,6 +58,14 @@ func (s *Service) GetPlan(ctx context.Context, planID ledgerid.PlanID) (*plan.Pl
 	return s.ledger.GetPlan(ctx, planID)
 }
 
+// GetPlanBySlug retrieves a plan by its slug within an app.
+func (s *Service) GetPlanBySlug(ctx context.Context, slug, appID string) (*plan.Plan, error) {
+	if s.ledger == nil {
+		return nil, fmt.Errorf("subscription: ledger not available")
+	}
+	return s.ledger.GetPlanBySlug(ctx, slug, appID)
+}
+
 // CreatePlan creates a new billing plan.
 func (s *Service) CreatePlan(ctx context.Context, p *plan.Plan) error {
 	if s.ledger == nil {

@@ -281,12 +281,16 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
 	)
 
-	return usage.GET("", p.handleGetUsageSummary,
+	if err := usage.GET("", p.handleGetUsageSummary,
 		forge.WithSummary("Get usage summary"),
 		forge.WithOperationID("getUsageSummary"),
 		forge.WithResponseSchema(http.StatusOK, "Usage summary", UsageSummaryResponse{}),
 		forge.WithErrorResponses(),
-	)
+	); err != nil {
+		return err
+	}
+
+	return p.registerTenantRoutes(router)
 }
 
 // ──────────────────────────────────────────────────
