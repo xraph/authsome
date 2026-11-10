@@ -157,6 +157,37 @@ function OrgSelector() {
 }
 ```
 
+### useActiveOrg
+
+The organization the session is working in, and a way to switch it. You get it back after a reload because `/v1/me` reports it, and it's cleared when you sign out.
+
+```tsx
+import { useActiveOrg } from "@authsome/ui-react";
+
+function OrgBadge() {
+  const { orgId, switchOrg, isSwitching } = useActiveOrg();
+  return (
+    <button disabled={isSwitching} onClick={() => switchOrg("org_123")}>
+      {orgId ?? "No organization"}
+    </button>
+  );
+}
+```
+
+`<OrgSwitcher />` from `@authsome/ui-components` uses this when you don't pass it `activeOrgId` and `onOrgChange`, so dropping it in with no props is enough. Pass both if your app keeps the active organization somewhere else.
+
+### usePlugin
+
+Returns a client plugin's API. Client plugins are the client half of server plugins: you add them to `AuthProvider` the way you add the server side with `authsome.WithPlugin`. See [Client plugins](/docs/ui/plugins).
+
+```tsx
+<AuthProvider baseURL={url} plugins={[subscription()]}>
+  <App />
+</AuthProvider>
+
+const billing = usePlugin(subscription);
+```
+
 ### useSessionToken
 
 Returns the raw session token string, useful for passing to custom API calls.
