@@ -370,8 +370,8 @@ type PlanIDRequest struct {
 // Subscription types
 
 type ListSubscriptionsRequest struct {
-	AppID    string `query:"app_id"`
-	TenantID string `query:"tenant_id"`
+	AppID    string `query:"app_id,omitempty"`
+	TenantID string `query:"tenant_id,omitempty"`
 	Status   string `query:"status,omitempty"`
 }
 
@@ -381,8 +381,8 @@ type ListSubscriptionsResponse struct {
 }
 
 type GetActiveSubRequest struct {
-	AppID    string `query:"app_id"`
-	TenantID string `query:"tenant_id"`
+	AppID    string `query:"app_id,omitempty"`
+	TenantID string `query:"tenant_id,omitempty"`
 }
 
 type CreateSubscriptionRequest struct {
@@ -425,8 +425,8 @@ type SubscriptionResponse struct {
 // Invoice types
 
 type ListInvoicesRequest struct {
-	AppID    string `query:"app_id"`
-	TenantID string `query:"tenant_id"`
+	AppID    string `query:"app_id,omitempty"`
+	TenantID string `query:"tenant_id,omitempty"`
 }
 
 type ListInvoicesResponse struct {
@@ -511,7 +511,7 @@ type CouponResponse struct {
 type CheckEntitlementRequest struct {
 	FeatureKey string `path:"featureKey"`
 	AppID      string `query:"app_id,omitempty"`
-	TenantID   string `query:"tenant_id"`
+	TenantID   string `query:"tenant_id,omitempty"`
 }
 
 type EntitlementResponse struct {
@@ -526,8 +526,8 @@ type EntitlementResponse struct {
 // Usage types
 
 type UsageSummaryRequest struct {
-	AppID    string `query:"app_id"`
-	TenantID string `query:"tenant_id"`
+	AppID    string `query:"app_id,omitempty"`
+	TenantID string `query:"tenant_id,omitempty"`
 }
 
 type UsageSummaryResponse struct {
@@ -686,7 +686,11 @@ func (p *Plugin) handleActivatePlan(ctx forge.Context, req *PlanIDRequest) (*api
 }
 
 func (p *Plugin) handleListSubscriptions(ctx forge.Context, req *ListSubscriptionsRequest) (*ListSubscriptionsResponse, error) {
-	if err := p.requireTenant(ctx, req.TenantID); err != nil {
+	tenantID, err := p.listTenant(ctx, req.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.requireTenant(ctx, tenantID); err != nil {
 		return nil, err
 	}
 
@@ -700,7 +704,7 @@ func (p *Plugin) handleListSubscriptions(ctx forge.Context, req *ListSubscriptio
 		opts.Status = lsub.Status(req.Status)
 	}
 
-	subs, err := p.service.ListSubscriptions(ctx.Context(), req.TenantID, appID, opts)
+	subs, err := p.service.ListSubscriptions(ctx.Context(), tenantID, appID, opts)
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list subscriptions: %w", err))
 	}
@@ -714,17 +718,19 @@ func (p *Plugin) handleListSubscriptions(ctx forge.Context, req *ListSubscriptio
 }
 
 func (p *Plugin) handleGetActiveSubscription(ctx forge.Context, req *GetActiveSubRequest) (*SubscriptionResponse, error) {
-	if req.AppID == "" || req.TenantID == "" {
-		return nil, forge.BadRequest("app_id and tenant_id are required")
-	}
-	if _, err := p.requestApp(ctx, req.AppID); err != nil {
+	appID, err := p.requestApp(ctx, req.AppID)
+	if err != nil {
 		return nil, err
 	}
-	if err := p.requireTenant(ctx, req.TenantID); err != nil {
+	tenantID, err := p.resolveTenant(ctx, req.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.requireTenant(ctx, tenantID); err != nil {
 		return nil, err
 	}
 
-	sub, err := p.service.GetActiveSubscription(ctx.Context(), req.TenantID, req.AppID)
+	sub, err := p.service.GetActiveSubscription(ctx.Context(), tenantID, appID)
 	if err != nil {
 		return nil, forge.NotFound("no active subscription found")
 	}
@@ -852,7 +858,11 @@ func (p *Plugin) handleResumeSubscription(ctx forge.Context, req *SubIDRequest) 
 }
 
 func (p *Plugin) handleListInvoices(ctx forge.Context, req *ListInvoicesRequest) (*ListInvoicesResponse, error) {
-	if err := p.requireTenant(ctx, req.TenantID); err != nil {
+	tenantID, err := p.listTenant(ctx, req.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.requireTenant(ctx, tenantID); err != nil {
 		return nil, err
 	}
 
@@ -861,7 +871,7 @@ func (p *Plugin) handleListInvoices(ctx forge.Context, req *ListInvoicesRequest)
 		return nil, err
 	}
 
-	invoices, err := p.service.ListInvoices(ctx.Context(), req.TenantID, appID)
+	invoices, err := p.service.ListInvoices(ctx.Context(), tenantID, appID)
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list invoices: %w", err))
 	}
@@ -1048,10 +1058,11 @@ func (p *Plugin) handleDeleteCoupon(ctx forge.Context, req *DeleteCouponRequest)
 }
 
 func (p *Plugin) handleCheckEntitlement(ctx forge.Context, req *CheckEntitlementRequest) (*EntitlementResponse, error) {
-	if req.TenantID == "" {
-		return nil, forge.BadRequest("tenant_id is required")
+	tenantID, err := p.resolveTenant(ctx, req.TenantID)
+	if err != nil {
+		return nil, err
 	}
-	if err := p.requireTenant(ctx, req.TenantID); err != nil {
+	if err := p.requireTenant(ctx, tenantID); err != nil {
 		return nil, err
 	}
 
@@ -1060,7 +1071,7 @@ func (p *Plugin) handleCheckEntitlement(ctx forge.Context, req *CheckEntitlement
 		return nil, err
 	}
 
-	result, err := p.service.CheckEntitlement(entitlementContext(ctx.Context(), req.TenantID, appID), req.FeatureKey)
+	result, err := p.service.CheckEntitlement(entitlementContext(ctx.Context(), tenantID, appID), req.FeatureKey)
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to check entitlement: %w", err))
 	}
@@ -1076,17 +1087,19 @@ func (p *Plugin) handleCheckEntitlement(ctx forge.Context, req *CheckEntitlement
 }
 
 func (p *Plugin) handleGetUsageSummary(ctx forge.Context, req *UsageSummaryRequest) (*UsageSummaryResponse, error) {
-	if req.AppID == "" || req.TenantID == "" {
-		return nil, forge.BadRequest("app_id and tenant_id are required")
-	}
-	if _, err := p.requestApp(ctx, req.AppID); err != nil {
+	appID, err := p.requestApp(ctx, req.AppID)
+	if err != nil {
 		return nil, err
 	}
-	if err := p.requireTenant(ctx, req.TenantID); err != nil {
+	tenantID, err := p.resolveTenant(ctx, req.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.requireTenant(ctx, tenantID); err != nil {
 		return nil, err
 	}
 
-	summaries, err := p.service.GetUsageSummary(ctx.Context(), req.TenantID, req.AppID)
+	summaries, err := p.service.GetUsageSummary(ctx.Context(), tenantID, appID)
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to get usage summary: %w", err))
 	}

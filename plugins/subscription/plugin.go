@@ -107,6 +107,22 @@ var (
 		settings.WithOrder(50),
 	)
 
+	// SettingBillingRoles lists the organization member roles that may change
+	// their own organization's plan through the self-service routes. It is
+	// the org-level billing permission: app roles in Warden aren't scoped to
+	// an organization yet, so the grant lives here, where an organization can
+	// override it for itself.
+	SettingBillingRoles = settings.Define("subscription.billing_roles", []string{"owner"},
+		settings.WithDisplayName("Billing Roles"),
+		settings.WithDescription("Organization roles that can change the organization's plan"),
+		settings.WithCategory("Subscription"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp, settings.ScopeOrg),
+		settings.WithInputType(formconfig.FieldTextarea),
+		settings.WithPlaceholder("owner\nadmin"),
+		settings.WithHelpText("One role per line. Members with any other role can see the plan but not change it. Default: owner"),
+		settings.WithOrder(55),
+	)
+
 	// SettingGracePeriodDays controls the grace period after billing failure.
 	SettingGracePeriodDays = settings.Define("subscription.grace_period_days", 3,
 		settings.WithDisplayName("Grace Period (days)"),
@@ -180,6 +196,9 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 		return err
 	}
 	if err := settings.RegisterTyped(m, "subscription", SettingSelfServiceUpgrade); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "subscription", SettingBillingRoles); err != nil {
 		return err
 	}
 	return settings.RegisterTyped(m, "subscription", SettingGracePeriodDays)

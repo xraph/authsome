@@ -30,20 +30,42 @@ import (
 // modeStore is a settings store that pins subscription.tenant_mode and lets
 // every other key fall through to its registered default, so
 // auto_subscribe_org stays true the way a fresh install has it.
+//
+// overrides, when set, holds extra values by key and then by org ID, with ""
+// for an app-wide value. It's a map so a test can add to it after the store
+// is handed to a settings manager.
 type modeStore struct {
 	settings.NilStore
-	mode string
+	mode      string
+	overrides map[string]map[string]any
 }
 
-func (s modeStore) ResolveSettings(_ context.Context, key string, _ settings.ResolveOpts) ([]*settings.Setting, error) {
-	if key != SettingTenantMode.Def.Key {
-		return nil, nil
+func (s modeStore) ResolveSettings(_ context.Context, key string, opts settings.ResolveOpts) ([]*settings.Setting, error) {
+	if key == SettingTenantMode.Def.Key {
+		raw, err := json.Marshal(s.mode)
+		if err != nil {
+			return nil, err
+		}
+		return []*settings.Setting{{Key: key, Value: raw, Scope: settings.ScopeGlobal}}, nil
 	}
-	raw, err := json.Marshal(s.mode)
-	if err != nil {
-		return nil, err
+
+	var rows []*settings.Setting
+	byOrg := s.overrides[key]
+	if v, ok := byOrg[""]; ok {
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, &settings.Setting{Key: key, Value: raw, Scope: settings.ScopeApp, ScopeID: opts.AppID})
 	}
-	return []*settings.Setting{{Key: key, Value: raw, Scope: settings.ScopeGlobal}}, nil
+	if v, ok := byOrg[opts.OrgID]; ok && opts.OrgID != "" {
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, &settings.Setting{Key: key, Value: raw, Scope: settings.ScopeOrg, ScopeID: opts.OrgID})
+	}
+	return rows, nil
 }
 
 func (s modeStore) BatchResolve(ctx context.Context, keys []string, opts settings.ResolveOpts) (map[string][]*settings.Setting, error) {

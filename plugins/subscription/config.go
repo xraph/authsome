@@ -22,7 +22,12 @@ type Config struct {
 	// 0 means no trial. Can be overridden by settings.
 	TrialDays int
 
-	// AllowSelfService lets users/orgs change their own plan.
+	// AllowSelfService is unused.
+	//
+	// Deprecated: self-service is governed by the
+	// subscription.self_service_upgrade setting (on by default), and who in an
+	// organization may use it by subscription.billing_roles. This field never
+	// had an effect and will be removed.
 	AllowSelfService bool
 
 	// DisableRoutes mounts no HTTP routes. Use it when the host serves its
