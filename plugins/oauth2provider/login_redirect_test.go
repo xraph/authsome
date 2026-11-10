@@ -163,4 +163,8 @@ func TestAppLoginURLSetting_RejectsBadValues(t *testing.T) {
 	err = f.eng.Settings().Set(context.Background(), "oauth2.login_url", raw,
 		settings.ScopeApp, f.appID.String(), f.appID.String(), "", "test")
 	assert.Error(t, err)
+
+	err = f.eng.Settings().Set(context.Background(), "oauth2.login_url", json.RawMessage("123"),
+		settings.ScopeApp, f.appID.String(), f.appID.String(), "", "test")
+	assert.Error(t, err, "a non-string value")
 }

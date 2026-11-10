@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	log "github.com/xraph/go-utils/log"
 
+	"github.com/xraph/authsome"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/settings"
@@ -90,4 +91,54 @@ func TestErrorRedirect(t *testing.T) {
 	to, err := errorRedirect("https://app.example.com/cb?x=1", errLoginRequired, "", "")
 	require.NoError(t, err)
 	assert.Equal(t, "https://app.example.com/cb?error=login_required&x=1", to)
+}
+
+func TestAppLoginURL_NoSettingsManager(t *testing.T) {
+	p := New()
+	p.engine = &authsome.Engine{}
+	assert.Empty(t, p.appLoginURL(context.Background(), id.NewAppID()))
+}
+
+func TestAppLoginURL_ReadErrorCountsAsUnset(t *testing.T) {
+	// The key holds a number, so reading it as a string fails with
+	// something other than ErrUnknownKey. With or without a logger, the
+	// read counts as unset.
+	ctx := context.Background()
+	eng := secutil.NewTestEngine(t)
+	p := New(Config{Issuer: "https://auth.example.com"})
+	p.SetOAuth2Store(NewMemoryStore())
+	require.NoError(t, p.OnInit(ctx, eng))
+
+	require.NoError(t, settings.RegisterTyped(eng.Settings(), settingsNamespace,
+		settings.Define(SettingAppLoginURL.Def.Key, 0, settings.WithScopes(settings.ScopeApp))))
+	appID := id.NewAppID()
+	require.NoError(t, eng.Settings().Set(ctx, SettingAppLoginURL.Def.Key, json.RawMessage("5"),
+		settings.ScopeApp, appID.String(), appID.String(), "", "test"))
+
+	tl := log.NewTestLogger()
+	p.logger = tl
+	assert.Empty(t, p.appLoginURL(ctx, appID))
+	assert.Len(t, tl.(*log.TestLogger).GetLogsByLevel("WARN"), 1)
+
+	p.logger = nil
+	assert.Empty(t, p.appLoginURL(ctx, appID))
+}
+
+func TestLoginURLFor_InvalidStoredValueWithoutLogger(t *testing.T) {
+	ctx := context.Background()
+	eng := secutil.NewTestEngine(t)
+	p := New(Config{Issuer: "https://auth.example.com"})
+	p.SetOAuth2Store(NewMemoryStore())
+	require.NoError(t, p.OnInit(ctx, eng))
+	p.logger = nil
+
+	require.NoError(t, settings.RegisterTyped(eng.Settings(), settingsNamespace,
+		settings.Define(SettingAppLoginURL.Def.Key, "", settings.WithScopes(settings.ScopeApp))))
+	appID := id.NewAppID()
+	require.NoError(t, eng.Settings().Set(ctx, SettingAppLoginURL.Def.Key, json.RawMessage(`"sign-in"`),
+		settings.ScopeApp, appID.String(), appID.String(), "", "test"))
+
+	u, err := p.loginURLFor(ctx, appID)
+	require.NoError(t, err)
+	assert.Nil(t, u)
 }
