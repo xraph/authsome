@@ -1,0 +1,29 @@
+# Codecov settings. Project and patch status stay at Codecov's defaults; this
+# file only keeps code out of the numbers that no unit test should be asked
+# to cover.
+#
+# - sdk/**: the client SDKs. sdk/go is written by sdkgen from the OpenAPI
+#   spec (never hand-edited) and the Dart and TypeScript SDKs are tested by
+#   their own toolchains, not by go test.
+# - **/generated/**: other generated output, such as the UI's generated
+#   client in ui/packages/core/src/generated.
+# - testutil/** and the *test packages: helpers other packages' tests import
+#   (fixtures, fakes, store and plugin conformance suites). They run as part
+#   of those tests and have no tests of their own, so per-package coverage
+#   reports them as 0%. sdkgen is the generator itself, so it stays counted.
+ignore:
+  - "sdk/**"
+  - "**/generated/**"
+  - "testutil/**"
+  - "store/storetest/**"
+  - "internal/dpoptest/**"
+  - "internal/telemetry/telemetrytest/**"
+  - "plugins/consent/consenttest/**"
+  - "plugins/mfa/mfatest/**"
+  - "plugins/oauth2provider/oauth2test/**"
+  - "plugins/passkey/passkeytest/**"
+  - "plugins/scim/scimtest/**"
+  - "plugins/sharedsignals/ssftest/**"
+  - "plugins/social/socialtest/**"
+  - "plugins/sso/ssotest/**"
+  - "plugins/waitlist/waitlisttest/**"

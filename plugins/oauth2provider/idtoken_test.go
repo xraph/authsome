@@ -92,10 +92,15 @@ func newOIDCFixture(t *testing.T, cfg oauth2provider.Config, withEncryptor bool,
 		Public: true, TokenEndpointAuthMethod: "none",
 	}))
 
-	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID: appID, Email: "oidc@example.com", Password: "SecureP@ss123", FirstName: "Ada", LastName: "Lovelace",
-	})
-	require.NoError(t, err)
+	// Written straight to the store: SignUp would hash a password at the
+	// production bcrypt cost, which under -race costs about two seconds per
+	// fixture and nothing here signs in with a password.
+	now := time.Now()
+	u := &user.User{
+		ID: id.NewUserID(), AppID: appID, Email: "oidc@example.com", FirstName: "Ada", LastName: "Lovelace",
+		CreatedAt: now, UpdatedAt: now,
+	}
+	require.NoError(t, eng.Store().CreateUser(ctx, u))
 
 	mux := forge.NewRouter()
 	require.NoError(t, p.RegisterRoutes(mux))
