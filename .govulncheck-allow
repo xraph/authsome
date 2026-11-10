@@ -3,7 +3,7 @@
 # other reachable finding still fails the build (scripts/govulncheck.sh).
 
 # crewjam/saml: nil Issuer panic and namespace-blind Subject.NameID. Fixed
-# upstream in v0.5.2 (PR #156 moves us to v0.6.3), but the advisory was filed
+# upstream in v0.5.2 (go.mod is on v0.6.3), but the advisory was filed
 # with no fixed version, so govulncheck still flags every release. The fix
 # version is being added in golang/vulndb#6939 (CL 861981). Once that lands,
 # scripts/govulncheck.sh reports this entry as stale; remove it then.
