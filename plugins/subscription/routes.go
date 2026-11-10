@@ -300,7 +300,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 // Plan types
 
 type ListPlansRequest struct {
-	AppID string `query:"app_id"`
+	AppID string `query:"app_id,omitempty"`
+	// Status filters by plan status. Empty means active. "all", "archived"
+	// and "draft" are for billing managers.
+	Status string `query:"status,omitempty"`
+	// IncludeAddons lists add-on plans as well as base plans.
+	IncludeAddons bool `query:"include_addons,omitempty"`
 }
 
 type ListPlansResponse struct {
@@ -558,15 +563,37 @@ func (p *Plugin) handleListPlans(ctx forge.Context, req *ListPlansRequest) (*Lis
 		return nil, err
 	}
 
-	plans, err := p.service.ListPlans(ctx.Context(), appID)
+	opts := plan.ListOpts{Status: plan.StatusActive}
+	switch req.Status {
+	case "", string(plan.StatusActive):
+	case "all", string(plan.StatusArchived), string(plan.StatusDraft):
+		// Archived and draft plans aren't for sale, so only a billing
+		// manager sees them.
+		userID, ok := middleware.UserIDFrom(ctx.Context())
+		if !ok || !p.holdsBillingManage(ctx.Context(), userID) {
+			return nil, forge.Forbidden("listing plans that aren't for sale needs billing:manage")
+		}
+		opts.Status = plan.Status(req.Status)
+		if req.Status == "all" {
+			opts.Status = ""
+		}
+	default:
+		return nil, forge.BadRequest(`status must be "active", "archived", "draft" or "all"`)
+	}
+
+	plans, err := p.service.ListPlansWithOpts(ctx.Context(), appID, opts)
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list plans: %w", err))
 	}
 
 	items := make([]PlanResponse, 0, len(plans))
 	for _, pl := range plans {
+		if isAddon(pl) && !req.IncludeAddons {
+			continue
+		}
 		items = append(items, toPlanResponse(pl))
 	}
+	sortPlansByPrice(items)
 
 	return &ListPlansResponse{Plans: items, Total: len(items)}, nil
 }

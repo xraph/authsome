@@ -1,8 +1,10 @@
 package subscription
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/xraph/ledger/plan"
@@ -120,4 +122,19 @@ func rfc3339Ptr(t *time.Time) *string {
 	}
 	s := rfc3339(*t)
 	return &s
+}
+
+// sortPlansByPrice orders plans the way a pricing table reads them: plans
+// without a price first, then cheapest first. Ties keep the store's order.
+func sortPlansByPrice(plans []PlanResponse) {
+	slices.SortStableFunc(plans, func(a, b PlanResponse) int {
+		return cmp.Compare(priceKey(a), priceKey(b))
+	})
+}
+
+func priceKey(p PlanResponse) int64 {
+	if p.AmountMinor == nil {
+		return -1
+	}
+	return *p.AmountMinor
 }

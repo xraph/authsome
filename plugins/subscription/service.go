@@ -50,6 +50,14 @@ func (s *Service) ListPlans(ctx context.Context, appID string) ([]*plan.Plan, er
 	return s.ledgerStore.ListPlans(ctx, appID, plan.ListOpts{})
 }
 
+// ListPlansWithOpts returns the app's plans filtered by opts.
+func (s *Service) ListPlansWithOpts(ctx context.Context, appID string, opts plan.ListOpts) ([]*plan.Plan, error) {
+	if s.ledgerStore == nil {
+		return nil, fmt.Errorf("subscription: ledger store not available")
+	}
+	return s.ledgerStore.ListPlans(ctx, appID, opts)
+}
+
 // GetPlan retrieves a plan by ID.
 func (s *Service) GetPlan(ctx context.Context, planID ledgerid.PlanID) (*plan.Plan, error) {
 	if s.ledger == nil {
