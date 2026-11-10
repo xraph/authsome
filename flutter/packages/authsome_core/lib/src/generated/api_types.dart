@@ -5215,6 +5215,7 @@ class MarkInvoicePaidRequest {
 }
 
 class MeResponse {
+  final String? activeOrgId;
   final String appId;
   final String? banExpires;
   final String? banReason;
@@ -5238,6 +5239,7 @@ class MeResponse {
   final String? username;
 
   const MeResponse({
+    this.activeOrgId,
     required this.appId,
     this.banExpires,
     this.banReason,
@@ -5263,6 +5265,7 @@ class MeResponse {
 
   factory MeResponse.fromJson(Map<String, dynamic> json) {
     return MeResponse(
+      activeOrgId: json['active_org_id'] as String?,
       appId: json['app_id'] as String,
       banExpires: json['ban_expires'] as String?,
       banReason: json['ban_reason'] as String?,
@@ -5289,6 +5292,7 @@ class MeResponse {
 
   Map<String, dynamic> toJson() {
     return {
+      if (activeOrgId != null) 'active_org_id': activeOrgId,
       'app_id': appId,
       if (banExpires != null) 'ban_expires': banExpires,
       if (banReason != null) 'ban_reason': banReason,
