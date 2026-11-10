@@ -37,6 +37,11 @@ export interface OrgSwitcherProps {
   onCreateOrg?: () => void;
   /** The currently selected organization ID. Leave it out to show the session's. */
   activeOrgId?: string;
+  /**
+   * Called when switching the session's organization fails. The switcher
+   * also shows a short message under itself.
+   */
+  onError?: (error: unknown) => void;
   /** Additional CSS class names. */
   className?: string;
 }
@@ -49,19 +54,25 @@ export function OrgSwitcher({
   onOrgChange,
   onCreateOrg,
   activeOrgId: activeOrgIdProp,
+  onError,
   className,
 }: OrgSwitcherProps) {
   const { client, session } = useAuth();
-  const { orgId: sessionOrgId, switchOrg } = useActiveOrg();
+  const { orgId: sessionOrgId, switchOrg, isSwitching } = useActiveOrg();
   const activeOrgId = activeOrgIdProp ?? sessionOrgId ?? undefined;
+  const [switchError, setSwitchError] = useState<string | null>(null);
   const select = (orgId: string) => {
     if (onOrgChange) {
       onOrgChange(orgId);
       return;
     }
-    // A failed switch leaves the session where it was, which is what the
-    // switcher already shows, so there's nothing to undo.
-    switchOrg(orgId).catch(() => {});
+    setSwitchError(null);
+    // A failed switch leaves the session where it was, which the switcher
+    // already shows; say so rather than leave the click unanswered.
+    switchOrg(orgId).catch((err: unknown) => {
+      setSwitchError("Couldn't switch organization. Try again.");
+      onError?.(err);
+    });
   };
   const { organizations: orgsRaw, isLoading, reload } = useOrganizations();
   const organizations = orgsRaw ?? [];
@@ -124,6 +135,7 @@ export function OrgSwitcher({
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
+            disabled={isSwitching}
             className={cn(
               "flex w-full items-center justify-between gap-2 px-3",
               className,
@@ -191,6 +203,11 @@ export function OrgSwitcher({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {switchError && (
+        <p role="alert" className="mt-1 text-xs text-destructive">
+          {switchError}
+        </p>
+      )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md">

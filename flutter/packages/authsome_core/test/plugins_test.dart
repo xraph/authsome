@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:authsome_core/authsome_core.dart';
@@ -56,7 +57,7 @@ final _me = {
   'updated_at': '2026-01-01T00:00:00Z',
 };
 
-typedef _Routes = Map<String, http.Response Function(http.Request)>;
+typedef _Routes = Map<String, FutureOr<http.Response> Function(http.Request)>;
 
 ({AuthManager manager, _Routes routes, List<http.Request> calls, MemoryTokenStorage storage}) _setup({
   bool signedIn = false,
@@ -65,7 +66,7 @@ typedef _Routes = Map<String, http.Response Function(http.Request)>;
   ClientConfig? clientConfig,
   String? publishableKey,
 }) {
-  final routes = <String, http.Response Function(http.Request)>{
+  final routes = <String, FutureOr<http.Response> Function(http.Request)>{
     'GET /v1/me': (_) => http.Response(jsonEncode({..._me, ...me}), 200),
     'POST /v1/signout': (_) => http.Response('{"status":"ok"}', 200),
   };
@@ -220,4 +221,90 @@ void main() {
       expect(s.manager.activeOrgId, isNull);
     });
   });
+
+  group('review fixes', () {
+    http.Response switched(String org, {String? token}) => http.Response(jsonEncode({
+          'session_id': 'ses_1',
+          'org_id': org,
+          if (token != null) 'session_token': token,
+          if (token != null) 'expires_at': _session['expires_at'],
+        }), 200);
+
+    test('keeps a token a refresh rotated while the switch was in flight', () async {
+      final s = _setup(signedIn: true);
+      await s.manager.initialize();
+      final gate = Completer<http.Response>();
+      s.routes['POST /v1/me/switch-org'] = (_) => gate.future;
+      s.routes['POST /v1/refresh'] = (_) => http.Response(jsonEncode({
+            ..._session,
+            'session_token': 'token-2',
+            'refresh_token': 'refresh-2',
+          }), 200);
+
+      final switching = s.manager.switchOrg('org_2');
+      final refreshing = s.manager.refreshNow();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      gate.complete(switched('org_2', token: 'token-org2'));
+      await Future.wait([switching, refreshing]);
+
+      final stored = jsonDecode((await s.storage.getItem('authsome:session'))!) as Map;
+      expect(stored['refresh_token'], 'refresh-2');
+    });
+
+    test('does not bring back a session that signed out during the switch', () async {
+      final s = _setup(signedIn: true);
+      await s.manager.initialize();
+      final gate = Completer<http.Response>();
+      s.routes['POST /v1/me/switch-org'] = (_) => gate.future;
+
+      final switching = s.manager.switchOrg('org_2');
+      await s.manager.signOut();
+      gate.complete(switched('org_2', token: 'token-org2'));
+      await switching.catchError((_) {});
+
+      expect(s.manager.state, isA<AuthUnauthenticated>());
+      expect(await s.storage.getItem('authsome:session'), isNull);
+      expect(s.manager.activeOrgId, isNull);
+    });
+
+    test('treats signing in as someone else as a sign-out and a sign-in', () async {
+      final s = _setup(signedIn: true, me: {'active_org_id': 'org_A'});
+      await s.manager.initialize();
+      final seen = <AuthEvent>[];
+      s.manager.events.listen(seen.add);
+      s.routes['POST /v1/signin'] = (_) => http.Response(jsonEncode({
+            'user': {..._me, 'id': 'usr_2'},
+            'session_token': 't2',
+            'refresh_token': 'r2',
+            'expires_at': _session['expires_at'],
+          }), 200);
+
+      await s.manager.signIn('grace@test', 'pw');
+      expect(seen, [AuthEvent.signedOut, AuthEvent.signedIn]);
+      expect(s.manager.activeOrgId, isNull);
+    });
+
+    test('refuses an untyped or ambiguous plugin lookup', () {
+      final untyped = _setup(plugins: [_ProbePlugin()]);
+      expect(() => untyped.manager.plugin(), throwsA(isA<ArgumentError>()));
+
+      final twice = _setup(plugins: [_OtherPlugin(), _OtherNamePlugin()]);
+      expect(() => twice.manager.plugin<String>(), throwsA(isA<StateError>()));
+    });
+
+    test('clears the org when switching to none', () async {
+      final s = _setup(signedIn: true, me: {'active_org_id': 'org_A'});
+      await s.manager.initialize();
+      s.routes['POST /v1/me/switch-org'] = (_) => http.Response('{"session_id":"ses_1"}', 200);
+      await s.manager.switchOrg('');
+      expect(s.manager.activeOrgId, isNull);
+    });
+  });
+}
+
+class _OtherNamePlugin extends AuthPlugin<String> {
+  @override
+  String get name => 'other-two';
+  @override
+  String init(PluginContext ctx) => 'two';
 }

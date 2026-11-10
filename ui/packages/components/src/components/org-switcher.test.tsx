@@ -37,6 +37,26 @@ describe("OrgSwitcher", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /Globex/ })).toBeTruthy());
   });
 
+  it("tells the user when a switch fails", async () => {
+    const onError = vi.fn();
+    const { fetchFn } = routedFetch({
+      "GET /v1/me": () => ({ ...makeUser(), active_org_id: "org_1" }),
+      "GET /v1/orgs": () => ({ organizations: orgs }),
+      "POST /v1/me/switch-org": () => new Response(JSON.stringify({ error: "conflict" }), { status: 409 }),
+    });
+
+    render(withProvider(<OrgSwitcher onError={onError} />, { fetch: fetchFn }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Acme/ })).toBeTruthy());
+
+    open("Acme");
+    const item = await screen.findByRole("menuitem", { name: /Globex/ });
+    await act(async () => { fireEvent.click(item); });
+
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/couldn't switch/i));
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: /Acme/ })).toBeTruthy();
+  });
+
   it("leaves switching to the app when it passes onOrgChange", async () => {
     const onOrgChange = vi.fn();
     const { fetchFn, calls } = routedFetch({

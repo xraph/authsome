@@ -329,6 +329,30 @@ function ProtectedArea() {
 }
 ```
 
+### Protect
+
+`AuthGuard` with requirements. It shows its children only when you're signed in and meet them, and the fallback otherwise.
+
+```tsx
+import { Protect } from "@authsome/ui-react";
+
+<Protect role="admin" fallback={<p>Admins only</p>}>
+  <AdminPanel />
+</Protect>
+
+<Protect permission="billing:manage" condition={(auth) => canManageBilling(auth)} fallback={null}>
+  <BillingSettings />
+</Protect>
+```
+
+- `role` checks the app roles `/v1/me` returns for the signed-in user. Organization member roles (owner, admin, member) aren't in that list.
+- `permission` can't be checked in the browser, so it needs a `condition` that does the check, usually against something your backend told you. Without one, `Protect` shows the fallback and logs a warning once.
+- `condition` alone works too, for anything else.
+
+<Callout type="warn">
+Before this release, `role` and `permission` didn't check anything: children rendered for every signed-in user. If you relied on that, your protected UI is now hidden until you pass a role the user actually holds, or a `condition` for permissions.
+</Callout>
+
 ## Integration with React Router
 
 ```tsx

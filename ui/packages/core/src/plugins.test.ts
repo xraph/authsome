@@ -202,3 +202,103 @@ describe("active organization", () => {
     expect(manager.getActiveOrgId()).toBeNull();
   });
 });
+
+describe("review fixes", () => {
+  const later = () => {
+    let resolve!: (r: Response) => void;
+    const promise = new Promise<Response>((r) => (resolve = r));
+    return { promise, resolve };
+  };
+  const switchBody = (org: string, token?: string) => json({
+    session_id: "ses_1", org_id: org,
+    ...(token ? { session_token: token, expires_at: new Date(Date.now() + 3_600_000).toISOString() } : {}),
+  });
+
+  it("keeps a token a refresh rotated while the switch was in flight", async () => {
+    const { manager, routes, store } = setup({ authenticated: true });
+    await manager.initialize();
+    const gate = later();
+    routes.set("POST /v1/me/switch-org", () => gate.promise);
+    routes.set("POST /v1/refresh", () => json({ session_token: "token-2", refresh_token: "refresh-2", expires_at: new Date(Date.now() + 3_600_000).toISOString() }));
+
+    const switching = manager.switchOrg("org_2");
+    const refreshing = manager.refreshNow();
+    // Give the refresh time to finish first if nothing holds it back.
+    await new Promise((r) => setTimeout(r, 20));
+    gate.resolve(switchBody("org_2", "token-org2"));
+    await Promise.all([switching, refreshing]);
+
+    expect(manager.getState().status).toBe("authenticated");
+    expect(JSON.parse(store.get(SESSION_STORAGE_KEY)!).refresh_token).toBe("refresh-2");
+  });
+
+  it("doesn't bring a session back that signed out during the switch", async () => {
+    const { manager, routes, store } = setup({ authenticated: true });
+    await manager.initialize();
+    const gate = later();
+    routes.set("POST /v1/me/switch-org", () => gate.promise);
+
+    const switching = manager.switchOrg("org_2");
+    await manager.signOut();
+    gate.resolve(switchBody("org_2", "token-org2"));
+    await switching.catch(() => {});
+
+    expect(manager.getState().status).toBe("unauthenticated");
+    expect(store.has(SESSION_STORAGE_KEY)).toBe(false);
+    expect(manager.getActiveOrgId()).toBeNull();
+  });
+
+  it("announces each switch once, with the new org", async () => {
+    const { manager, routes } = setup({ authenticated: true, me: { active_org_id: "org_A" } });
+    await manager.initialize();
+    const seen: (string | null)[] = [];
+    manager.on("orgChanged", () => seen.push(manager.getActiveOrgId()));
+    routes.set("POST /v1/me/switch-org", (init) => {
+      const { org_id } = JSON.parse(String(init?.body));
+      return switchBody(org_id, `token-${org_id}`);
+    });
+
+    await manager.switchOrg("org_B");
+    await manager.switchOrg("org_C");
+    expect(seen).toEqual(["org_B", "org_C"]);
+    expect((manager.getState() as { user: { active_org_id?: string } }).user.active_org_id).toBe("org_C");
+  });
+
+  it("treats signing in as someone else as a sign-out and a sign-in", async () => {
+    const { manager, routes } = setup({ authenticated: true, me: { active_org_id: "org_A" } });
+    await manager.initialize();
+    const seen: string[] = [];
+    for (const e of ["signedIn", "signedOut", "sessionRefreshed"] as const) manager.on(e, () => seen.push(e));
+    routes.set("POST /v1/signin", () => json({ user: { ...user, id: "usr_2" }, session_token: "t2", refresh_token: "r2", expires_at: new Date(Date.now() + 3_600_000).toISOString() }));
+
+    await manager.signIn({ email: "grace@test", password: "pw" });
+    expect(seen).toEqual(["signedOut", "signedIn"]);
+    expect(manager.getActiveOrgId()).toBeNull();
+  });
+
+  it("keeps plugin listeners across destroy and initialize (StrictMode remount)", async () => {
+    const heard = vi.fn();
+    const listening = definePlugin("listening", (ctx) => ctx.on("signedOut", heard));
+    const { manager } = setup({ authenticated: true, config: { plugins: [listening()] } });
+    manager.plugin(listening);
+    manager.destroy();
+    await manager.initialize();
+    await manager.signOut();
+    expect(heard).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the org when switching to none", async () => {
+    const { manager, routes } = setup({ authenticated: true, me: { active_org_id: "org_A" } });
+    await manager.initialize();
+    routes.set("POST /v1/me/switch-org", () => json({ session_id: "ses_1" }));
+    await manager.switchOrg("");
+    expect(manager.getActiveOrgId()).toBeNull();
+  });
+
+  it("types required plugin options as required", () => {
+    const needsKey = definePlugin("needs-key", (_ctx, options: { key: string }) => options.key);
+    // @ts-expect-error a plugin whose options are required can't be registered without them
+    needsKey();
+    expect(needsKey({ key: "k" }).name).toBe("needs-key");
+  });
+});
