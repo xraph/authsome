@@ -1,0 +1,131 @@
+---
+title: Subscription Plugin
+description: Plans, subscriptions, seats and feature entitlements for organizations or users, with self-service routes your app's billing page can call directly.
+---
+
+The `subscription` plugin keeps billing state next to identity. It hands the money side to
+the [Ledger](/docs/bridges/ledger) engine and spends its own effort on the parts that touch
+auth: who the tenant is, who in an organization may change the plan, and whether a tenant is
+entitled to a feature.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/subscription"
+)
+
+eng, err := authsome.NewEngine(
+    // plus WithStore, WithChronicle and WithWarden (see Getting Started)
+    authsome.WithLedgerEngine(ledgerEngine),
+    authsome.WithPlugin(subscription.New(subscription.Config{
+        DefaultPlanSlug:    "free",
+        AutoSubscribeOnOrg: true,
+    })),
+)
+```
+
+You need a ledger. Without one the plugin has nothing to delegate to.
+
+## Organizations or users
+
+One app-wide setting, `subscription.tenant_mode`, decides who a subscription belongs to.
+In `organization` mode (the default) the tenant is an organization and everyone in it
+shares the plan. In `user` mode each user is their own tenant.
+
+Nothing else in the API changes between the two, and you never pass the tenant from your
+UI: the plugin takes the session's active organization (or the user, in user mode) and
+checks that the caller belongs to it before answering.
+
+<Callout type="info">
+In organization mode the session needs an active organization. Switch to one with
+`POST /v1/me/switch-org`, or the self-service routes answer 400.
+</Callout>
+
+## Self-service
+
+These are the routes a billing page calls, all under `/v1/billing`.
+
+| Method | Path | What it does |
+|--------|------|--------------|
+| `GET` | `/plans` | Plans you can buy, cheapest first, with their features |
+| `GET` | `/subscription` | Your subscription with its plan embedded, or `null`, and `can_manage` |
+| `POST` | `/subscription` | Subscribe: `{"plan": "team", "seats": 5}` |
+| `PATCH` | `/subscription` | Change plan, seats, or both |
+| `POST` | `/subscription/cancel` | Cancel at the period end, or `{"when": "now"}` |
+| `POST` | `/subscription/resume` | Take back a scheduled cancellation |
+| `GET` | `/entitlements` | Every feature on your plan, checked in one call |
+| `POST` | `/portal` | A billing portal link, when your checkout provider has one |
+
+`plan` takes a slug or an ID. Every write answers with the updated subscription, so your
+UI can render the response as it is.
+
+A few things in that payload are there so the page can say the right thing:
+
+- `can_manage` is false for anyone who'd get a 403 on a write. Hide the buttons for them.
+- After a cancellation at the period end, `status` stays `active` and `cancel_at` holds the
+  date it ends. Show that date, and offer `/subscription/resume`.
+- `seats` appears on plans with a seat feature. `used` counts the organization's members
+  and `limit` is the number bought, or the plan's limit if none was. A `null` limit means
+  unlimited, and so does a `null` feature `limit` on a plan.
+- `amount_minor` is the price in cents (or your currency's minor unit). Format it with the
+  user's locale; `base_amount` is the same price as a plain string.
+- Times are RFC 3339 in UTC.
+
+## Who can change the plan
+
+Reading is open to everyone in the organization. Writing needs two things:
+
+1. `subscription.self_service_upgrade` is on for the app. It is by default.
+2. The caller's organization role is listed in `subscription.billing_roles`. Out of the box
+   that's `["owner"]`.
+
+`billing_roles` can be set per app and per organization. An organization that wants its
+admins to handle billing sets `["owner", "admin"]` for itself, and nobody else is affected.
+
+This lives in settings rather than in an app role because app roles in Warden aren't scoped
+to an organization yet (see [Org-Scoped Roles](/docs/organizations/org-scoped-roles)). A
+"billing" app role would reach every organization the user belongs to.
+
+Operators holding `billing:manage` pass both checks, and can name any tenant with
+`tenant_id`.
+
+## Taking payment
+
+With no checkout provider, subscribing grants the plan straight away, which suits free plans
+and trials. To charge for the paid ones, implement `CheckoutProvider`:
+
+```go
+type stripeCheckout struct{ client *stripe.Client }
+
+func (s stripeCheckout) Checkout(ctx context.Context, req subscription.CheckoutRequest) (string, error) {
+    // Create a checkout session for req.Plan, req.TenantID and req.Quantity,
+    // send the customer back to req.ReturnURL, and return the session URL.
+}
+
+subscription.New(subscription.Config{Checkout: stripeCheckout{client}})
+```
+
+Now subscribing or changing to a priced plan answers `{"checkout_url": "..."}` and changes
+nothing, so your client sends the customer to that URL and the plan only moves once you say
+so. When your provider's webhook confirms the payment, finish the change yourself:
+
+```go
+sub, err := plugin.Service().Subscribe(ctx, tenantID, planID, appID, quantity)
+// or, for an existing subscription:
+sub, err := plugin.Service().ChangePlan(ctx, subID, planID, quantity)
+```
+
+Add a `Portal` method (the `PortalProvider` interface) and `POST /v1/billing/portal`
+returns a link to your provider's hosted page for cards and invoices.
+
+If the provider fails, the error goes to your logs and the client gets a 502. Your
+provider's error text never reaches the browser.
+
+## Operator routes
+
+Plans, coupons, invoices and the ID-based subscription routes (`/subscriptions/:subId/...`)
+are for operators and need `billing:manage`. They're listed in the plugin's
+[README](https://github.com/xraph/authsome/tree/main/plugins/subscription), along with the
+config and settings tables.

@@ -12,6 +12,7 @@
     "sso",
     "oauth2provider",
     "organization",
+    "subscription",
     "consent",
     "phone",
     "notification",
