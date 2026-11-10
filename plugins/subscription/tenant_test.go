@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -169,4 +170,17 @@ func TestCanManage_UserModeAndOperator(t *testing.T) {
 	ok, err = f.plugin.canManageTenant(ctx, operator, user.String())
 	require.NoError(t, err)
 	assert.True(t, ok)
+}
+
+// Generated clients take query parameters positionally, in struct field
+// order. checkEntitlement shipped as (featureKey, tenant_id, app_id), so
+// tenant_id has to stay ahead of app_id or existing callers start sending
+// their tenant as the app.
+func TestCheckEntitlementRequest_TenantBeforeApp(t *testing.T) {
+	typ := reflect.TypeFor[CheckEntitlementRequest]()
+	tenant, ok := typ.FieldByName("TenantID")
+	require.True(t, ok)
+	app, ok := typ.FieldByName("AppID")
+	require.True(t, ok)
+	assert.Less(t, tenant.Index[0], app.Index[0])
 }

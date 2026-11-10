@@ -519,8 +519,8 @@ type CouponResponse struct {
 
 type CheckEntitlementRequest struct {
 	FeatureKey string `path:"featureKey"`
-	AppID      string `query:"app_id,omitempty"`
 	TenantID   string `query:"tenant_id,omitempty"`
+	AppID      string `query:"app_id,omitempty"`
 }
 
 type EntitlementResponse struct {
