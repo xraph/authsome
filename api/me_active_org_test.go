@@ -44,4 +44,9 @@ func TestGetMe_ActiveOrgID(t *testing.T) {
 	withOrg := *sess
 	withOrg.OrgID = orgID
 	assert.Equal(t, orgID.String(), get(middleware.WithSession(base, &withOrg))["active_org_id"])
+
+	// A JWT carries the organization in its claims and there's no session
+	// row; the auth middleware puts the org on the context instead.
+	jwtOrg := id.NewOrgID()
+	assert.Equal(t, jwtOrg.String(), get(middleware.WithOrgID(base, jwtOrg))["active_org_id"])
 }
