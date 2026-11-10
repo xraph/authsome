@@ -27,6 +27,15 @@ SPEC_FILE   ?= spec.json
 UI_CORE_OVERRIDES = refreshTokens=refresh,deleteAccount=deleteMe,exportUserData=exportMyData,verifyMFARecovery=verifyRecoveryCode
 FLUTTER_CORE_OVERRIDES = refreshTokens=refresh,deleteAccount=deleteMe,exportUserData=exportMyData,verifyMFARecovery=verifyRecoveryCode
 
+# The embedded core clients point billing callers at the subscription plugin
+# packages, which own the tenant routes (tagged "Billing") now. The operator
+# routes ("Billing Plans", "Billing Usage", ...) belong on a server, so the
+# longer "Billing " rule says that instead. The standalone SDKs keep all of
+# them undeprecated. Notes can't contain a semicolon, and the Dart ones no
+# quotes, since they land in a quoted annotation.
+UI_CORE_DEPRECATIONS = Billing=Use @authsome/plugin-subscription instead.;Billing =Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
+FLUTTER_CORE_DEPRECATIONS = Billing=Use the authsome_subscription package instead.;Billing =Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.
+
 SDKGEN_CMD  = go run ./cmd
 SPECGEN_CMD = go run ./cmd/specgen
 
@@ -66,13 +75,15 @@ generate-dart: dump-spec ## Generate Dart SDK only
 generate-ui-core: dump-spec ## Generate embedded client for ui-core package
 	@echo "==> Generating embedded TypeScript client for ui-core..."
 	$(SDKGEN_CMD) generate --lang=typescript --out=../ui/packages/core/src/generated \
-		--from-spec=$(SPEC_FILE) --output-mode=embedded --method-overrides=$(UI_CORE_OVERRIDES) $(SDKGEN_FLAGS)
+		--from-spec=$(SPEC_FILE) --output-mode=embedded --method-overrides=$(UI_CORE_OVERRIDES) \
+		--deprecate-tags="$(UI_CORE_DEPRECATIONS)" $(SDKGEN_FLAGS)
 	@echo "==> Embedded client generated in ../ui/packages/core/src/generated/"
 
 generate-flutter-core: dump-spec ## Generate embedded client for Flutter authsome_core package
 	@echo "==> Generating embedded Dart client for Flutter authsome_core..."
 	$(SDKGEN_CMD) generate --lang=dart --out=../flutter/packages/authsome_core/lib/src/generated \
-		--from-spec=$(SPEC_FILE) --output-mode=embedded --method-overrides=$(FLUTTER_CORE_OVERRIDES) $(SDKGEN_FLAGS)
+		--from-spec=$(SPEC_FILE) --output-mode=embedded --method-overrides=$(FLUTTER_CORE_OVERRIDES) \
+		--deprecate-tags="$(FLUTTER_CORE_DEPRECATIONS)" $(SDKGEN_FLAGS)
 	@echo "==> Embedded Dart client generated in ../flutter/packages/authsome_core/lib/src/generated/"
 
 clean: ## Remove generated SDK output and spec file

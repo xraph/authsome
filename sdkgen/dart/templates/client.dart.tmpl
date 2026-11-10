@@ -71,6 +71,9 @@ class AuthClient {
 {{ range $op := .Operations }}
   /// {{ $op.Summary }}
   /// {{ $op.Method }} {{ $op.Path }}
+{{- if $op.Deprecated }}
+  @Deprecated('{{ $op.Deprecated }}')
+{{- end }}
   Future<{{ if isVoid $op.ResponseType }}void{{ else }}{{ $op.ResponseType }}{{ end }}> {{ $op.Name }}({{ buildDartParams $op }}) async {
     final path = {{ buildDartPath $op.Path $op.PathParams }};
 {{- if hasQueryParams $op.QueryParams }}

@@ -226,6 +226,13 @@ jobs:
           cd ui/packages/nextjs
           npm publish --provenance --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
 
+      # Trusted publishing only works for a package that already exists on
+      # npm, so the first release of this one is published by hand.
+      - name: Publish @authsome/plugin-subscription
+        run: |
+          cd ui/packages/plugin-subscription
+          npm publish --provenance --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+
   # ─── Flutter/pub.dev Release ─────────────────────────────────────────
   # Authentication is OIDC, provisioned inside the reusable workflow -- there is
   # no pub credential to configure here. Two consequences:
@@ -238,6 +245,11 @@ jobs:
   #   2. pub.dev rejects automated publishing from anything but a tag push, so a
   #      workflow_dispatch run can only ever rehearse. dry-run is forced on for
   #      those, which is also what the dry_run input maps to on a tag push.
+  #
+  # Automated publishing can only be switched on for a package that already
+  # exists on pub.dev, so authsome_subscription and
+  # authsome_subscription_flutter go up by hand (`dart pub publish`) once,
+  # then get the tag pattern above. Until then their step here fails.
   flutter-release:
     name: Flutter Release
     needs: [prepare]
@@ -252,5 +264,5 @@ jobs:
     with:
       # Ordered: authsome_flutter depends on authsome_core, and
       # authsome_flutter_ui depends on authsome_flutter.
-      packages: '["flutter/packages/authsome_core", "flutter/packages/authsome_flutter", "flutter/packages/authsome_flutter_ui"]'
+      packages: '["flutter/packages/authsome_core", "flutter/packages/authsome_flutter", "flutter/packages/authsome_flutter_ui", "flutter/packages/authsome_subscription", "flutter/packages/authsome_subscription_flutter"]'
       dry-run: ${{ github.event_name != 'push' || github.event.inputs.dry_run == 'true' }}

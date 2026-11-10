@@ -31,6 +31,12 @@ type GeneratorConfig struct {
 
 	// MethodOverrides maps operationID to a custom method name.
 	MethodOverrides map[string]string
+
+	// DeprecatedTags marks every operation whose tag starts with a key as
+	// deprecated, with the value as the note. Used to point the embedded core
+	// client at the plugin package that now owns those routes. The note must
+	// not contain a single quote.
+	DeprecatedTags map[string]string
 }
 
 // Generator produces Dart SDK code from an OpenAPI spec.
@@ -158,6 +164,9 @@ type OperationDef struct {
 	AuthRequired bool
 	PathParams   []PathParamDef
 	QueryParams  []QueryParamDef
+
+	// Deprecated is the deprecation note, empty when the operation isn't.
+	Deprecated string
 }
 
 // ── Build Template Data ─────────────────────────────
@@ -239,6 +248,7 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 				Path:    path,
 				Summary: pair.op.Summary,
 			}
+			opDef.Deprecated = openapi.DeprecationFor(pair.op.Tags, g.config.DeprecatedTags)
 
 			// Determine if auth is required
 			opDef.AuthRequired = openapi.OperationTakesToken(pair.op, spec.SecuritySchemes())

@@ -161,6 +161,9 @@ export class AuthClient {
   /**
    * {{ $op.Summary }}
    * {{ $op.Method }} {{ $op.Path }}
+{{- if $op.Deprecated }}
+   * @deprecated {{ $op.Deprecated }}
+{{- end }}
    */
   async {{ $op.Name }}({{ buildParams $op $.OutputMode }}): Promise<{{ $op.ResponseType }}> {
 {{- if hasQueryParams $op.QueryParams }}

@@ -63,6 +63,7 @@ func main() {
 	outputMode := fs.String("output-mode", "standalone", "Output mode: standalone or embedded")
 	methodOverrides := fs.String("method-overrides", "", "Comma-separated operationID=name overrides")
 	fromSpec := fs.String("from-spec", "", "Path to pre-generated OpenAPI spec JSON (skip internal generation)")
+	deprecateTags := fs.String("deprecate-tags", "", "Semicolon-separated tagPrefix=note rules marking operations deprecated (e.g. \"Billing=Use @authsome/plugin-subscription instead.\")")
 
 	if err := fs.Parse(os.Args[2:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -86,6 +87,15 @@ func main() {
 			if len(parts) == 2 {
 				overrides[parts[0]] = parts[1]
 			}
+		}
+	}
+
+	// Parse deprecation rules
+	deprecated := make(map[string]string)
+	for _, rule := range strings.Split(*deprecateTags, ";") {
+		parts := strings.SplitN(strings.TrimSpace(rule), "=", 2)
+		if len(parts) == 2 && parts[0] != "" {
+			deprecated[parts[0]] = strings.TrimSpace(parts[1])
 		}
 	}
 
@@ -113,7 +123,7 @@ func main() {
 	// Generate SDKs
 	switch strings.ToLower(*lang) {
 	case "typescript", "ts":
-		if err := generateTypeScript(spec, *outDir, *outputMode, overrides); err != nil {
+		if err := generateTypeScript(spec, *outDir, *outputMode, overrides, deprecated); err != nil {
 			fmt.Fprintf(os.Stderr, "Error generating TypeScript SDK: %v\n", err)
 			os.Exit(1)
 		}
@@ -123,12 +133,12 @@ func main() {
 			os.Exit(1)
 		}
 	case "dart", "flutter":
-		if err := generateDart(spec, *outDir, *outputMode, overrides); err != nil {
+		if err := generateDart(spec, *outDir, *outputMode, overrides, deprecated); err != nil {
 			fmt.Fprintf(os.Stderr, "Error generating Dart SDK: %v\n", err)
 			os.Exit(1)
 		}
 	case "all":
-		if err := generateTypeScript(spec, filepath.Join(*outDir, "typescript"), *outputMode, overrides); err != nil {
+		if err := generateTypeScript(spec, filepath.Join(*outDir, "typescript"), *outputMode, overrides, deprecated); err != nil {
 			fmt.Fprintf(os.Stderr, "Error generating TypeScript SDK: %v\n", err)
 			os.Exit(1)
 		}
@@ -136,7 +146,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error generating Go SDK: %v\n", err)
 			os.Exit(1)
 		}
-		if err := generateDart(spec, filepath.Join(*outDir, "dart"), *outputMode, overrides); err != nil {
+		if err := generateDart(spec, filepath.Join(*outDir, "dart"), *outputMode, overrides, deprecated); err != nil {
 			fmt.Fprintf(os.Stderr, "Error generating Dart SDK: %v\n", err)
 			os.Exit(1)
 		}
@@ -148,12 +158,13 @@ func main() {
 	fmt.Println("Done!")
 }
 
-func generateTypeScript(spec *openapi.Spec, outDir, outputMode string, overrides map[string]string) error {
+func generateTypeScript(spec *openapi.Spec, outDir, outputMode string, overrides, deprecated map[string]string) error {
 	fmt.Printf("Generating TypeScript SDK -> %s (mode: %s)\n", outDir, outputMode)
 
 	gen := typescript.NewGenerator(typescript.GeneratorConfig{
 		OutputMode:      outputMode,
 		MethodOverrides: overrides,
+		DeprecatedTags:  deprecated,
 	})
 	files, err := gen.Generate(spec)
 	if err != nil {
@@ -163,12 +174,13 @@ func generateTypeScript(spec *openapi.Spec, outDir, outputMode string, overrides
 	return writeFiles(outDir, files)
 }
 
-func generateDart(spec *openapi.Spec, outDir, outputMode string, overrides map[string]string) error {
+func generateDart(spec *openapi.Spec, outDir, outputMode string, overrides, deprecated map[string]string) error {
 	fmt.Printf("Generating Dart SDK -> %s (mode: %s)\n", outDir, outputMode)
 
 	gen := dart.NewGenerator(dart.GeneratorConfig{
 		OutputMode:      outputMode,
 		MethodOverrides: overrides,
+		DeprecatedTags:  deprecated,
 	})
 	files, err := gen.Generate(spec)
 	if err != nil {
