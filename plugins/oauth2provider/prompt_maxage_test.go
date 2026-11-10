@@ -188,3 +188,28 @@ func TestAuthorize_LoginAfterAlone(t *testing.T) {
 	loc, _ = signedInFor(mux, appID, time.Hour, q)
 	assert.NotEmpty(t, loc.Query().Get("code"), "an unreadable value adds nothing")
 }
+
+func TestAuthorize_ReauthWithABrokenLoginPage(t *testing.T) {
+	// OnInit refuses this config; a plugin that skipped it gets an error
+	// rather than a redirect to somewhere nobody configured.
+	mux, appID := reauthFixture(t, oauth2provider.Config{LoginURL: "sign-in"})
+	q := reauthQuery()
+	q.Set("prompt", "login")
+	_, code := signedInFor(mux, appID, time.Minute, q)
+	assert.NotEqual(t, http.StatusFound, code)
+}
+
+func TestAuthorize_ErrorToAnUnparsableRedirectURI(t *testing.T) {
+	// Only reachable for a URI stored before registration validated them.
+	_, st, mux := newFixtureWithConfig(t, oauth2provider.Config{Issuer: "https://auth.example.com"})
+	c, err := st.GetClient(context.Background(), confidentialID)
+	require.NoError(t, err)
+	c.RedirectURIs = []string{"%zz"}
+	require.NoError(t, st.UpdateClient(context.Background(), c))
+
+	q := baseAuthorizeQuery(confidentialID)
+	q.Set("redirect_uri", "%zz")
+	q.Set("prompt", "none login")
+	rec := authorizeWith(sessionCtx(fixtureUserID, c.AppID, time.Now()), mux, q)
+	assert.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+}
