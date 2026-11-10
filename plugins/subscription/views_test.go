@@ -125,7 +125,7 @@ func TestSubscriptionResponse_CancelAtAndPausedAt(t *testing.T) {
 	sub, err := f.plugin.service.GetSubscription(ctx, fixtureSub(t, f))
 	require.NoError(t, err)
 
-	var resp SubscriptionResponse = toSubResponse(sub)
+	resp := toSubResponse(sub)
 	require.NotNil(t, resp.CancelAt)
 	assert.Nil(t, resp.PausedAt)
 }

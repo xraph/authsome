@@ -67,7 +67,7 @@ type TenantRequest struct {
 // SubscriptionMutationResponse holds the updated subscription, or a
 // checkout URL when a checkout provider takes payment first. Exactly one is
 // set.
-type SubscriptionMutationResponse struct {
+type SubscriptionMutationResponse struct { //nolint:revive // the SDKs name their type after this one; "MutationResponse" says nothing on its own there
 	Subscription *SubscriptionView `json:"subscription,omitempty"`
 	CheckoutURL  string            `json:"checkout_url,omitempty"`
 }
@@ -161,28 +161,32 @@ func (p *Plugin) registerTenantRoutes(router forge.Router) error {
 // tenantScope resolves the app and tenant of a tenant route and checks the
 // caller may read that tenant.
 func (p *Plugin) tenantScope(ctx forge.Context, appID, tenantID string) (app, tenant string, err error) {
-	if app, err = p.requestApp(ctx, appID); err != nil {
-		return "", "", err
+	app, appErr := p.requestApp(ctx, appID)
+	if appErr != nil {
+		return "", "", appErr
 	}
-	if tenant, err = p.resolveTenant(ctx, tenantID); err != nil {
-		return "", "", err
+	tenant, tenantErr := p.resolveTenant(ctx, tenantID)
+	if tenantErr != nil {
+		return "", "", tenantErr
 	}
-	if err = p.requireTenant(ctx, tenant); err != nil {
-		return "", "", err
+	if readErr := p.requireTenant(ctx, tenant); readErr != nil {
+		return "", "", readErr
 	}
 	return app, tenant, nil
 }
 
 // writeScope is tenantScope for the self-service writes.
 func (p *Plugin) writeScope(ctx forge.Context, tenantID string) (app, tenant string, err error) {
-	if app, err = p.requestApp(ctx, ""); err != nil {
-		return "", "", err
+	app, appErr := p.requestApp(ctx, "")
+	if appErr != nil {
+		return "", "", appErr
 	}
-	if tenant, err = p.resolveTenant(ctx, tenantID); err != nil {
-		return "", "", err
+	tenant, tenantErr := p.resolveTenant(ctx, tenantID)
+	if tenantErr != nil {
+		return "", "", tenantErr
 	}
-	if err = p.requireSelfService(ctx, tenant); err != nil {
-		return "", "", err
+	if writeErr := p.requireSelfService(ctx, tenant); writeErr != nil {
+		return "", "", writeErr
 	}
 	return app, tenant, nil
 }
@@ -215,9 +219,9 @@ func (p *Plugin) handleGetCurrentSubscription(ctx forge.Context, req *CurrentSub
 
 	resp := &CurrentSubscriptionResponse{}
 	if userID, ok := middleware.UserIDFrom(ctx.Context()); ok {
-		manage, err := p.canManageTenant(ctx.Context(), userID, tenantID)
-		if err != nil {
-			return nil, middleware.InternalError(ctx, err)
+		manage, manageErr := p.canManageTenant(ctx.Context(), userID, tenantID)
+		if manageErr != nil {
+			return nil, middleware.InternalError(ctx, manageErr)
 		}
 		resp.CanManage = manage && (p.selfServiceOn(ctx.Context()) || p.holdsBillingManage(ctx.Context(), userID))
 	}
@@ -323,8 +327,8 @@ func (p *Plugin) handleCancelCurrentSubscription(ctx forge.Context, req *CancelC
 		return nil, forge.NotFound("no active subscription")
 	}
 
-	if err := p.service.CancelSubscription(ctx.Context(), current.ID, immediately); err != nil {
-		return nil, writeErr(ctx, err, "cancel subscription")
+	if cancelErr := p.service.CancelSubscription(ctx.Context(), current.ID, immediately); cancelErr != nil {
+		return nil, writeErr(ctx, cancelErr, "cancel subscription")
 	}
 	p.audit(ctx.Context(), "subscription.canceled", "subscription", current.ID.String(), p.actor(ctx), tenantID, bridge.OutcomeSuccess)
 	p.relayEvent(ctx.Context(), "subscription.canceled", tenantID, map[string]string{"immediately": boolStr(immediately)})

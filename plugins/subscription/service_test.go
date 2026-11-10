@@ -44,9 +44,9 @@ func newLedgerService(t *testing.T) (svc *Service, appID string, pro, team *plan
 	return svc, appID, pro, team
 }
 
-func subscribeOrFail(t *testing.T, svc *Service, tenantID string, planID ledgerid.PlanID, appID string) *subscription.Subscription {
+func subscribeOrFail(t *testing.T, svc *Service, planID ledgerid.PlanID, appID string) *subscription.Subscription {
 	t.Helper()
-	sub, err := svc.Subscribe(context.Background(), tenantID, planID, appID, nil)
+	sub, err := svc.Subscribe(context.Background(), "tenant_a", planID, appID, nil)
 	require.NoError(t, err)
 	return sub
 }
@@ -54,7 +54,7 @@ func subscribeOrFail(t *testing.T, svc *Service, tenantID string, planID ledgeri
 func TestResume_CanceledSubscriptionRefused(t *testing.T) {
 	svc, appID, pro, _ := newLedgerService(t)
 	ctx := context.Background()
-	sub := subscribeOrFail(t, svc, "tenant_a", pro.ID, appID)
+	sub := subscribeOrFail(t, svc, pro.ID, appID)
 	require.NoError(t, svc.CancelSubscription(ctx, sub.ID, true))
 
 	_, err := svc.ResumeSubscription(ctx, sub.ID)
@@ -68,7 +68,7 @@ func TestResume_CanceledSubscriptionRefused(t *testing.T) {
 func TestChangePlan_CanceledSubscriptionRefused(t *testing.T) {
 	svc, appID, pro, team := newLedgerService(t)
 	ctx := context.Background()
-	sub := subscribeOrFail(t, svc, "tenant_a", pro.ID, appID)
+	sub := subscribeOrFail(t, svc, pro.ID, appID)
 	require.NoError(t, svc.CancelSubscription(ctx, sub.ID, true))
 
 	_, err := svc.ChangePlan(ctx, sub.ID, team.ID, nil)
@@ -77,7 +77,7 @@ func TestChangePlan_CanceledSubscriptionRefused(t *testing.T) {
 
 func TestChangePlan_ReturnsUpdatedSubscription(t *testing.T) {
 	svc, appID, pro, team := newLedgerService(t)
-	sub := subscribeOrFail(t, svc, "tenant_a", pro.ID, appID)
+	sub := subscribeOrFail(t, svc, pro.ID, appID)
 
 	got, err := svc.ChangePlan(context.Background(), sub.ID, team.ID, nil)
 	require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestChangePlan_ReturnsUpdatedSubscription(t *testing.T) {
 
 func TestSubscribe_UsesPlanTrialAndPeriod(t *testing.T) {
 	svc, appID, _, team := newLedgerService(t)
-	sub := subscribeOrFail(t, svc, "tenant_a", team.ID, appID)
+	sub := subscribeOrFail(t, svc, team.ID, appID)
 
 	assert.Equal(t, subscription.StatusTrialing, sub.Status)
 	require.NotNil(t, sub.TrialEnd)
@@ -97,7 +97,7 @@ func TestSubscribe_UsesPlanTrialAndPeriod(t *testing.T) {
 func TestPause_ReturnsPausedSubscription(t *testing.T) {
 	svc, appID, pro, _ := newLedgerService(t)
 	ctx := context.Background()
-	sub := subscribeOrFail(t, svc, "tenant_a", pro.ID, appID)
+	sub := subscribeOrFail(t, svc, pro.ID, appID)
 
 	paused, err := svc.PauseSubscription(ctx, sub.ID)
 	require.NoError(t, err)
@@ -112,7 +112,7 @@ func TestPause_ReturnsPausedSubscription(t *testing.T) {
 func TestKeep_ClearsScheduledCancel(t *testing.T) {
 	svc, appID, pro, _ := newLedgerService(t)
 	ctx := context.Background()
-	sub := subscribeOrFail(t, svc, "tenant_a", pro.ID, appID)
+	sub := subscribeOrFail(t, svc, pro.ID, appID)
 	require.NoError(t, svc.CancelSubscription(ctx, sub.ID, false))
 
 	scheduled, err := svc.GetSubscription(ctx, sub.ID)
@@ -131,7 +131,7 @@ func TestKeep_ClearsScheduledCancel(t *testing.T) {
 func TestKeep_CanceledSubscriptionRefused(t *testing.T) {
 	svc, appID, pro, _ := newLedgerService(t)
 	ctx := context.Background()
-	sub := subscribeOrFail(t, svc, "tenant_a", pro.ID, appID)
+	sub := subscribeOrFail(t, svc, pro.ID, appID)
 	require.NoError(t, svc.CancelSubscription(ctx, sub.ID, true))
 
 	_, err := svc.KeepSubscription(ctx, sub.ID)

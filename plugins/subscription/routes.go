@@ -386,7 +386,7 @@ type ListSubscriptionsRequest struct {
 
 type ListSubscriptionsResponse struct {
 	Subscriptions []SubscriptionResponse `json:"subscriptions"`
-	Total         int        `json:"total"`
+	Total         int                    `json:"total"`
 }
 
 type GetActiveSubRequest struct {
@@ -414,7 +414,7 @@ type SubIDRequest struct {
 	SubID string `path:"subId"`
 }
 
-type SubscriptionResponse struct {
+type SubscriptionResponse struct { //nolint:revive // the SDKs name their type after this one, and "Response" collides with fetch and package:http
 	ID                 string  `json:"id"`
 	TenantID           string  `json:"tenant_id"`
 	PlanID             string  `json:"plan_id"`

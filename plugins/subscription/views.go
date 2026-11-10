@@ -16,7 +16,7 @@ import (
 // SubscriptionView is the tenant-facing shape of a subscription: everything a
 // plan card needs in one payload, with the plan embedded and every time in
 // RFC 3339 UTC.
-type SubscriptionView struct {
+type SubscriptionView struct { //nolint:revive // the SDKs name their type after this one; "View" says nothing on its own there
 	ID                 string       `json:"id"`
 	TenantID           string       `json:"tenant_id"`
 	Status             string       `json:"status"`
