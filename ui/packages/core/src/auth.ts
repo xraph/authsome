@@ -801,7 +801,6 @@ export class AuthManager {
     return this.configFetchPromise;
   }
 
-  /** Tear down: clear timers and listeners. */
   // ── Plugins ───────────────────────────────────────
 
   /**
@@ -867,34 +866,64 @@ export class AuthManager {
     if (this.state.status !== "authenticated") {
       throw new Error("authsome: you have to be signed in to switch organization");
     }
-    const { user, session } = this.state;
+    // A reissued token has to land in the same lock the refresh uses, or a
+    // refresh rotating the refresh token meanwhile would be overwritten with
+    // the spent one. Cookie sessions keep no tokens here.
+    const apply = () => this.applyOrgSwitch(orgId);
+    return this.cookieSession ? apply() : withRefreshLock(this.refreshLockKey, apply);
+  }
+
+  private async applyOrgSwitch(orgId: string): Promise<void> {
+    const before = this.state;
+    if (before.status !== "authenticated") {
+      throw new Error("authsome: you have to be signed in to switch organization");
+    }
     const res = await this.client.switchOrg(
       { org_id: orgId },
-      this.cookieSession ? "" : session.session_token,
+      this.cookieSession ? "" : before.session.session_token,
     );
 
-    if (res.session_token && !this.cookieSession) {
-      const next: Session = {
-        ...session,
-        session_token: res.session_token,
-        expires_at: res.expires_at ?? session.expires_at,
-      };
-      await this.persistSession(next);
-      this.setState({ status: "authenticated", user, session: next });
-      this.scheduleRefresh(next);
+    // The session may have ended, or become someone else's, while the
+    // request was out. Don't bring it back.
+    const now = this.state;
+    if (now.status !== "authenticated" || now.user.id !== before.user.id) {
+      throw new Error("authsome: the session changed while switching organization");
     }
 
-    const changed = this.activeOrgId !== (res.org_id ?? orgId);
-    this.activeOrgId = res.org_id ?? orgId;
+    let session = now.session;
+    if (res.session_token && !this.cookieSession) {
+      const raw = await this.storage.getItem(SESSION_KEY);
+      const latest = raw ? (JSON.parse(raw) as Session) : now.session;
+      session = {
+        ...latest,
+        session_token: res.session_token,
+        expires_at: res.expires_at ?? latest.expires_at,
+      };
+      await this.persistSession(session);
+    }
+
+    // An empty org_id is the server saying the session has none now.
+    const org = res.org_id || null;
+    const changed = this.activeOrgId !== org;
+    this.activeOrgId = org;
+    // Keep user.active_org_id in step, so a later state change doesn't read
+    // the org the session was loaded with as a fresh report.
+    const user = { ...now.user, active_org_id: org ?? undefined } as User;
+    this.setState({ status: "authenticated", user, session });
+    if (session !== now.session) this.scheduleRefresh(session);
     if (changed) this.emit("orgChanged");
   }
 
+  /**
+   * Tear down: clear timers and state listeners. Plugin event listeners
+   * stay: a plugin subscribes once, when it is first used, and a remount
+   * (React StrictMode, Fast Refresh) initializes this same manager again.
+   */
   destroy(): void {
     this.active = false;
     this.clearRefreshTimer();
     this.listeners.clear();
     this.configListeners.clear();
-    this.eventListeners.clear();
   }
 
   // ── Plugin context ────────────────────────────────
@@ -1130,6 +1159,13 @@ export class AuthManager {
 
     const reported =
       (next.user as User & { active_org_id?: string }).active_org_id ?? null;
+    // Signing in as someone else without signing out first is a sign-out
+    // and a sign-in, so nothing of the previous user's carries over.
+    if (wasIn && prev.user.id !== next.user.id) {
+      this.activeOrgId = reported;
+      events.push("signedOut", "signedIn");
+      return events;
+    }
     if (!wasIn) {
       this.activeOrgId = reported;
       events.push("signedIn");

@@ -68,9 +68,14 @@ export interface AuthPlugin<Api> {
  * if it takes any), and pass it to `manager.plugin(...)` to look it up.
  */
 export interface PluginDefinition<Api, Options = undefined> {
-  (options?: Options): AuthPlugin<Api>;
+  (...options: OptionsArgs<Options>): AuthPlugin<Api>;
   readonly pluginName: string;
 }
+
+/** Options are optional to pass unless the plugin's init requires them. */
+type OptionsArgs<Options> = undefined extends Options
+  ? [options?: Options]
+  : [options: Options];
 
 /** Either a definition or a registered instance; both identify a plugin. */
 export type PluginKey<Api> =
@@ -84,11 +89,11 @@ export type PluginKey<Api> =
  */
 export function definePlugin<Api, Options = undefined>(
   name: string,
-  init: (ctx: PluginContext, options: Options | undefined) => Api,
+  init: (ctx: PluginContext, options: Options) => Api,
 ): PluginDefinition<Api, Options> {
-  const define = (options?: Options): AuthPlugin<Api> => ({
+  const define = (...args: OptionsArgs<Options>): AuthPlugin<Api> => ({
     name,
-    init: (ctx) => init(ctx, options),
+    init: (ctx) => init(ctx, args[0] as Options),
   });
   return Object.assign(define, { pluginName: name });
 }

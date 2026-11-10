@@ -1,11 +1,11 @@
 import { definePlugin } from "@authsome/ui-core";
 import type { AuthPlugin } from "@authsome/ui-core";
 import { act, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { StrictMode, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { Protect } from "./components";
-import { AuthProvider } from "./context";
+import { AuthProvider, useAuth } from "./context";
 import { useActiveOrg, usePlugin } from "./hooks";
 
 const BASE = "https://api.example.test";
@@ -69,6 +69,22 @@ describe("usePlugin", () => {
     }
     await expect(harness().mount(<Probe />)).rejects.toThrow(/greeter\(\)/);
     spy.mockRestore();
+  });
+});
+
+describe("usePlugin under StrictMode", () => {
+  it("still hears signedOut after the dev unmount and remount", async () => {
+    const heard = vi.fn();
+    const listening = definePlugin("listening", (ctx) => ctx.on("signedOut", heard));
+    let signOut!: () => Promise<void>;
+    function Probe() {
+      usePlugin(listening);
+      signOut = useAuth().signOut;
+      return null;
+    }
+    await harness({ plugins: [listening()] }).mount(<StrictMode><Probe /></StrictMode>);
+    await act(async () => { await signOut(); });
+    expect(heard).toHaveBeenCalledTimes(1);
   });
 });
 

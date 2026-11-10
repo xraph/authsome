@@ -146,10 +146,19 @@ class AuthManager {
   bool hasPlugin<Api extends Object>() => _slotFor<Api>() != null;
 
   _PluginSlot? _slotFor<Api extends Object>() {
-    for (final slot in _plugins.values) {
-      if (slot.plugin is AuthPlugin<Api>) return slot;
+    if (Api == Object) {
+      throw ArgumentError(
+          'authsome: plugin() needs the API type, e.g. plugin<SubscriptionApi>()');
     }
-    return null;
+    final matches = [
+      for (final slot in _plugins.values)
+        if (slot.plugin is AuthPlugin<Api>) slot,
+    ];
+    if (matches.length > 1) {
+      throw StateError('authsome: more than one registered plugin provides $Api '
+          '(${matches.map((s) => s.plugin.name).join(', ')})');
+    }
+    return matches.isEmpty ? null : matches.single;
   }
 
   /// Lifecycle events: [AuthEvent.signedIn], [AuthEvent.signedOut],
@@ -166,31 +175,72 @@ class AuthManager {
   /// JWTs the server hands back a new token carrying the organization; it
   /// replaces the stored one. Fires [AuthEvent.orgChanged].
   Future<void> switchOrg(String orgId) async {
-    final current = _state;
-    if (current is! AuthAuthenticated) {
+    if (_state is! AuthAuthenticated) {
+      throw StateError('authsome: you have to be signed in to switch organization');
+    }
+    // Runs in turn with refreshes, so a refresh rotating the refresh token
+    // meanwhile isn't overwritten with the spent one.
+    return _exclusive(() => _applyOrgSwitch(orgId));
+  }
+
+  Future<void> _applyOrgSwitch(String orgId) async {
+    final before = _state;
+    if (before is! AuthAuthenticated) {
       throw StateError('authsome: you have to be signed in to switch organization');
     }
     final res = await _client.switchOrg(
       body: SwitchOrgRequest(orgId: orgId),
-      token: current.session.sessionToken,
+      token: before.session.sessionToken,
     );
+
+    // The session may have ended, or become someone else's, while the
+    // request was out. Don't bring it back.
+    final now = _state;
+    if (now is! AuthAuthenticated || _userId(now) != _userId(before)) {
+      throw StateError('authsome: the session changed while switching organization');
+    }
 
     final token = res.sessionToken;
     if (token != null && token.isNotEmpty) {
+      final raw = await _storage.getItem(_sessionKey);
+      final latest = raw == null
+          ? now.session
+          : Session.fromJson(jsonDecode(raw) as Map<String, dynamic>);
       final next = Session(
         sessionToken: token,
-        refreshToken: current.session.refreshToken,
-        expiresAt: res.expiresAt ?? current.session.expiresAt,
+        refreshToken: latest.refreshToken,
+        expiresAt: res.expiresAt ?? latest.expiresAt,
       );
       await _persistSession(next);
-      _setState(AuthAuthenticated(user: current.user, session: next));
+      _setState(AuthAuthenticated(user: now.user, session: next));
       _scheduleRefresh(next);
     }
 
-    final now = res.orgId ?? orgId;
-    final changed = _activeOrgId != now;
-    _activeOrgId = now;
+    // An empty org id is the server saying the session has none now.
+    final reported = res.orgId;
+    final org = (reported != null && reported.isNotEmpty) ? reported : null;
+    final changed = _activeOrgId != org;
+    _activeOrgId = org;
     if (changed) _emit(AuthEvent.orgChanged);
+  }
+
+  /// Runs [op] after every operation queued before it has finished, so a
+  /// refresh and an organization switch never interleave.
+  Future<T> _exclusive<T>(Future<T> Function() op) {
+    final result = _serial.then((_) => op());
+    _serial = result.then((_) {}, onError: (Object _) {});
+    return result;
+  }
+
+  Future<void> _serial = Future<void>.value();
+
+  /// The signed-in user's id, null when unknown (an offline restore).
+  static String? _userId(AuthState state) {
+    if (state is! AuthAuthenticated) return null;
+    final user = state.user;
+    if (user is User) return user.id;
+    if (user is Map) return user['id'] as String?;
+    return null;
   }
 
   Future<User> _loadUser(String token) async {
@@ -708,7 +758,10 @@ class AuthManager {
   /// may still be valid and the server could be temporarily unreachable.
   /// Schedules a 30-second retry instead. Only [signOut] clears storage.
   /// Mirrors React `auth.ts` refreshSession (lines 476–492).
-  Future<void> _refreshSession(String refreshToken) async {
+  Future<void> _refreshSession(String refreshToken) =>
+      _exclusive(() => _doRefreshSession(refreshToken));
+
+  Future<void> _doRefreshSession(String refreshToken) async {
     try {
       final newSession = await _client.refreshWithToken(refreshToken);
       final user = await _loadUser(newSession.sessionToken);
@@ -810,6 +863,15 @@ class AuthManager {
     if (prev is! AuthAuthenticated) {
       _activeOrgId = reported;
       return const [AuthEvent.signedIn];
+    }
+
+    // Signing in as someone else without signing out first is a sign-out
+    // and a sign-in, so nothing of the previous user's carries over.
+    final prevUser = _userId(prev);
+    final nextUser = _userId(next);
+    if (prevUser != null && nextUser != null && prevUser != nextUser) {
+      _activeOrgId = reported;
+      return const [AuthEvent.signedOut, AuthEvent.signedIn];
     }
 
     final events = <AuthEvent>[];
