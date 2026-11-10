@@ -249,3 +249,45 @@ In client mode the extension validates incoming tokens against the remote deploy
 ## Dashboard integration
 
 When the Forge dashboard extension is present, Authsome registers as its authentication provider and contributes its pages through the dashboard contract.
+
+### What the dashboard knows about the operator
+
+Every request the dashboard makes to a contract contributor carries a principal built from the signed-in session. If you're writing an extension that plugs into the dashboard, this is what you get to work with.
+
+| Where | Key | Value |
+|---|---|---|
+| `Principal.Claims` | `app_id` | The app the operator is acting in. Always set. |
+| `Principal.Claims` | `env_id` | The active environment, when there is one. |
+| `Principal.Claims` | `org_id` | The session's organization, when it has one and the operator hasn't switched apps. |
+| `UserInfo.Roles` | | The role slugs on the session, for example `platform-admin` or `owner`. |
+| `UserInfo.Scopes` | | `<contributor>.admin` for every registered contributor when the operator is an admin, plus any `role_scopes` grants. |
+
+To gate a command, declare it in your manifest:
+
+```yaml
+intents:
+  - { name: retention.enforce, kind: command, version: 1, capability: write,
+      requires: { all: ["scope:chronicle.admin"] } }
+```
+
+The part before `.admin` is your contributor name, the `name` under `contributor:` in the same manifest. You can also gate on a role directly with `role:<slug>`.
+
+An operator counts as an admin when the session holds `platform-owner`, `platform-admin`, `owner` or `admin`. The scope is bounded by `app_id`, so an owner of one tenant app administers that app and nothing else. Scope your queries by the claim and never by anything in the request body.
+
+If a role that isn't an admin should reach one extension's gated intents, grant it in config:
+
+```yaml
+extensions:
+  authsome:
+    dashboard:
+      role_scopes:
+        auditor: ["chronicle.admin"]
+```
+
+#### Switching apps
+
+The app switcher writes an `authsome_app` cookie. On each request authsome reads it back and decides whether to honour it. You get the cookie's app in `app_id` when it's the session's own app, or when the session belongs to the platform app and holds `platform-owner` or `platform-admin`. Anyone else keeps the session's app, whatever the cookie says. `platform-user` doesn't qualify, because every platform sign-up gets it by default. The `authsome_env` cookie works the same way and only applies when the environment belongs to the resolved app.
+
+Authsome doesn't set `tenant_id`. Chronicle reads it as the tenant inside an app, Warden reads it as its own tenant (which in authsome is the app), and no single value is right for both. Read `org_id` if you need the organization.
+
+In client mode the claims come from the upstream's introspection response. Roles and scopes stay empty, since introspection doesn't return them yet, so a gated intent is denied there. The switcher cookies are ignored for the same reason: this service can't check whether the switch is allowed.

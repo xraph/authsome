@@ -144,12 +144,19 @@ func defaultAppID(eng *authsome.Engine) id.AppID {
 }
 
 // AppIDFromPrincipal resolves the active app ID a plugin handler should
-// scope its query to, given the request principal. Plugins reuse this
-// helper instead of reimplementing the app-resolution lookup so that
-// templui's dashboard.AppIDFromContext semantics carry over to the
-// contract path: prefer an explicit app claim on the principal (when
-// the dashboard's app switcher has set one), falling back to the
-// engine's platform app.
+// scope its query to, given the request principal.
+//
+// The "app_id" claim is where the answer lives. The dashboard's auth
+// checker (authChecker.CheckAuth in the extension package) sets it on
+// every authenticated request: the session's own app by default, or
+// the app named by the authsome_app switcher cookie once it has checked
+// the session may act there. Forge copies UserInfo.Claims onto
+// Principal.Claims, so this is the value the handler sees.
+//
+// The platform-app fallback covers a principal that carries no claim at
+// all, which in practice means a caller that did not come through that
+// checker (a unit test building a bare Principal, say). It is not a
+// second route to a different app: a claim that is present always wins.
 //
 // Exported so plugin contract packages can call it. Plugins should
 // receive the engine via their own Deps struct rather than referencing
@@ -158,10 +165,6 @@ func AppIDFromPrincipal(p contract.Principal, eng *authsome.Engine) id.AppID {
 	if eng == nil {
 		return id.AppID{}
 	}
-	// Principal claims may carry an explicit app override set by the
-	// dashboard's app switcher (Phase C.17 wires this server-side).
-	// The Claims map is the canonical surface for per-request scoping;
-	// "app_id" is the convention.
 	if raw, ok := p.Claims["app_id"].(string); ok && raw != "" {
 		if parsed, err := id.ParseAppID(raw); err == nil && !parsed.IsNil() {
 			return parsed

@@ -6,19 +6,29 @@
 //     the lists of available choices. The shell renders the switcher
 //     dropdowns from this single query and re-fetches after a
 //     successful switch command.
-//   - apps.switch (command): persists the active app by writing an
-//     `authsome_app` cookie. Subsequent requests carry the cookie;
-//     AppIDFromPrincipal reads it via the principal claims (set
-//     server-side by the dashboard's auth resolver).
+//   - apps.switch (command): records the operator's choice of app by
+//     writing an `authsome_app` cookie.
 //   - environments.switch (command): same shape, writes
 //     `authsome_env` with the environment ID.
 //
-// Switch commands deliberately do NOT validate that the user has
-// access to the chosen app/env. Access control runs at intent
-// dispatch time (each handler uses AppIDFromPrincipal which short-
-// circuits to the platform app when the claim is invalid), so an
-// attacker setting an arbitrary cookie sees an empty result set
-// rather than data they shouldn't have.
+// The cookies are a request, not a grant. The switch commands only
+// check that the ID names a real app or environment. The decision is
+// made on every later request by the dashboard's auth checker
+// (authChecker.CheckAuth in the extension package), which reads the
+// cookies back and projects them onto the principal's "app_id" and
+// "env_id" claims only when the session is allowed to act there:
+//
+//   - authsome_app is honoured when it names the session's own app, or
+//     when the session belongs to the platform app and holds
+//     platform-admin or platform-owner. Anything else is ignored and
+//     the claim stays on the session's app. An unverified cookie never
+//     widens what an operator can see.
+//   - authsome_env is honoured only when the environment belongs to
+//     whichever app was resolved above.
+//
+// So a hand-written cookie gets the operator exactly what they had
+// without it. Handlers read the result through AppIDFromPrincipal and
+// envIDFromPrincipal, never from the cookies directly.
 package contract
 
 import (
@@ -35,12 +45,11 @@ import (
 	"github.com/xraph/forge/extensions/dashboard/contract"
 )
 
-// Cookie names the dashboard's principal resolver looks for when
-// projecting an app/env claim onto the principal. Mirror these on
-// the read side (the resolver should treat them as opaque IDs).
+// Cookie names the switch commands write and the dashboard's auth
+// checker reads back. Exported so both sides share one spelling.
 const (
-	appSwitcherCookie = "authsome_app"
-	envSwitcherCookie = "authsome_env"
+	AppSwitcherCookie = "authsome_app"
+	EnvSwitcherCookie = "authsome_env"
 )
 
 // AppContextResponse is the apps.context query shape. Field names
@@ -112,9 +121,9 @@ func appsContextHandler(deps Deps) func(ctx context.Context, _ struct{}, p contr
 			out.AvailableApps = append(out.AvailableApps, projectSwitcherApp(a))
 		}
 
-		// Resolve the active app via the principal claim (set by the
-		// dashboard's auth resolver from authsome_app cookie). Falls back
-		// to the platform app when no claim is present.
+		// Resolve the active app via the principal's app_id claim, which
+		// the dashboard's auth checker sets from the session, or from the
+		// authsome_app cookie when the session may act in that app.
 		appID := AppIDFromPrincipal(p, eng)
 		if !appID.IsNil() {
 			if a, gerr := eng.GetApp(ctx, appID); gerr == nil && a != nil {
@@ -172,7 +181,7 @@ func appsSwitchHandler(deps Deps) func(ctx context.Context, in AppSwitchInput, _
 
 		raw := strings.TrimSpace(in.AppID)
 		if raw == "" {
-			clearSwitcherCookie(httpRes, httpReq, appSwitcherCookie, secureForRequest(httpReq, deps))
+			clearSwitcherCookie(httpRes, httpReq, AppSwitcherCookie, secureForRequest(httpReq, deps))
 			return SwitchResponse{OK: true}, nil
 		}
 		// Validate the ID parses and references an existing app so
@@ -184,10 +193,10 @@ func appsSwitchHandler(deps Deps) func(ctx context.Context, in AppSwitchInput, _
 		if _, err := deps.Engine.GetApp(ctx, appID); err != nil {
 			return SwitchResponse{}, mapEngineError(err)
 		}
-		writeSwitcherCookie(httpRes, httpReq, appSwitcherCookie, appID.String(), secureForRequest(httpReq, deps))
+		writeSwitcherCookie(httpRes, httpReq, AppSwitcherCookie, appID.String(), secureForRequest(httpReq, deps))
 		// Switching apps invalidates any env selection — the new app
 		// has a different env list. Clear the env cookie alongside.
-		clearSwitcherCookie(httpRes, httpReq, envSwitcherCookie, secureForRequest(httpReq, deps))
+		clearSwitcherCookie(httpRes, httpReq, EnvSwitcherCookie, secureForRequest(httpReq, deps))
 		return SwitchResponse{OK: true}, nil
 	}
 }
@@ -205,7 +214,7 @@ func environmentsSwitchHandler(deps Deps) func(ctx context.Context, in EnvSwitch
 
 		raw := strings.TrimSpace(in.EnvID)
 		if raw == "" {
-			clearSwitcherCookie(httpRes, httpReq, envSwitcherCookie, secureForRequest(httpReq, deps))
+			clearSwitcherCookie(httpRes, httpReq, EnvSwitcherCookie, secureForRequest(httpReq, deps))
 			return SwitchResponse{OK: true}, nil
 		}
 		envID, err := id.ParseEnvironmentID(raw)
@@ -221,7 +230,7 @@ func environmentsSwitchHandler(deps Deps) func(ctx context.Context, in EnvSwitch
 		if appID := AppIDFromPrincipal(p, deps.Engine); !appID.IsNil() && env.AppID != appID {
 			return SwitchResponse{}, &contract.Error{Code: contract.CodeBadRequest, Message: "environment does not belong to the current app"}
 		}
-		writeSwitcherCookie(httpRes, httpReq, envSwitcherCookie, envID.String(), secureForRequest(httpReq, deps))
+		writeSwitcherCookie(httpRes, httpReq, EnvSwitcherCookie, envID.String(), secureForRequest(httpReq, deps))
 		return SwitchResponse{OK: true}, nil
 	}
 }
@@ -256,9 +265,11 @@ func projectSwitcherEnv(e *environment.Environment) SwitcherEnv {
 	}
 }
 
-// envIDFromPrincipal reads the env_id claim (set by the dashboard's
-// auth resolver from the authsome_env cookie). Returns the zero
-// EnvironmentID when the claim is missing or unparseable.
+// envIDFromPrincipal reads the env_id claim. The dashboard's auth
+// checker sets it from the authsome_env cookie when that environment
+// belongs to the resolved app, and otherwise from the session's own
+// environment. Returns the zero EnvironmentID when the claim is missing
+// or unparseable.
 func envIDFromPrincipal(p contract.Principal) id.EnvironmentID {
 	raw, ok := p.Claims["env_id"].(string)
 	if !ok || raw == "" {
