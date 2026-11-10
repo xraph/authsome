@@ -1,0 +1,10 @@
+# Advisories govulncheck may report without failing CI. One OSV id per line,
+# each with the reason it can't be fixed yet and when to look again. Every
+# other reachable finding still fails the build (scripts/govulncheck.sh).
+
+# crewjam/saml: nil Issuer panic and namespace-blind Subject.NameID. Every
+# version is affected and upstream has no fix. The panic needs
+# ExpectedIDPEntityID, which plugins/sso never sets, and the NameID spoof
+# needs an assertion signed by the IdP the app already trusts. Remove this
+# line when a fixed release lands.
+GO-2026-6909
