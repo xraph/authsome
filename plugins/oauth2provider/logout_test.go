@@ -286,3 +286,49 @@ func TestRegister_PostLogoutRedirectURIs(t *testing.T) {
 		"post_logout_redirect_uris":["http://rp.example.com/bye"],"token_endpoint_auth_method":"none"}`)
 	assert.Equal(t, http.StatusBadRequest, rec.Code, "plain http off loopback is refused here too")
 }
+
+// Without an engine there is no way to end a session. The hint path and
+// the confirmation path both say so rather than claiming success.
+func TestLogout_NoEngineCannotSignOut(t *testing.T) {
+	_, st, mux := newFixture(t)
+	ctx := context.Background()
+	c, err := st.GetClient(ctx, confidentialID)
+	require.NoError(t, err)
+
+	q := baseAuthorizeQuery(confidentialID)
+	q.Set("scope", "openid")
+	code := codeFrom(t, authorize(t, mux, q))
+	body := decodeTokenBody(t, postToken(t, mux, map[string]string{
+		"grant_type": "authorization_code", "code": code, "client_id": confidentialID,
+		"client_secret": confidentialSecret, "redirect_uri": registeredURI,
+	}))
+	hint, _ := body["id_token"].(string)
+	require.NotEmpty(t, hint)
+
+	sess := sessionCtx(fixtureUserID, c.AppID, time.Now())
+	req := httptest.NewRequestWithContext(sess, http.MethodGet, "/v1/oauth/logout?id_token_hint="+url.QueryEscape(hint), nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code, rec.Body.String())
+
+	req = httptest.NewRequestWithContext(sess, http.MethodGet, "/v1/oauth/logout", nil)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	lid, csrf := confirmForm(t, rec)
+	form := url.Values{"lid": {lid}, "csrf": {csrf}, "decision": {"logout"}}
+	req = httptest.NewRequestWithContext(sess, http.MethodPost, "/v1/oauth/logout/confirm", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code, rec.Body.String())
+}
+
+func TestLogout_UnparsableRegisteredURI(t *testing.T) {
+	f := newLogoutFixture(t, oauth2provider.Config{})
+	c, err := f.st.GetClient(context.Background(), publicID)
+	require.NoError(t, err)
+	c.PostLogoutRedirectURIs = []string{"%zz"}
+	require.NoError(t, f.st.UpdateClient(context.Background(), c))
+	rec := f.logout(context.Background(), url.Values{"client_id": {publicID}, "post_logout_redirect_uri": {"%zz"}})
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
