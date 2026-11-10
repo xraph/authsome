@@ -29,9 +29,19 @@ import {
   type SubscriptionSnapshot,
 } from "./plugin";
 
+/**
+ * Which tenant a hook or component is about. Leave it out for the session's
+ * own; operators holding billing:manage can pass a customer's.
+ */
+export interface TenantOptions {
+  tenantId?: string;
+}
+
 /** The plugin's API, for anything the hooks don't cover. */
-export function useSubscriptionApi(): SubscriptionApi {
-  return usePlugin(subscription);
+export function useSubscriptionApi(options?: TenantOptions): SubscriptionApi {
+  const api = usePlugin(subscription);
+  // forTenant hands back one instance per ID, so this is stable.
+  return options?.tenantId ? api.forTenant(options.tenantId) : api;
 }
 
 function useSnapshot(api: SubscriptionApi): SubscriptionSnapshot {
@@ -85,8 +95,8 @@ export interface UseSubscriptionResult {
  * The tenant's subscription and everything you can do to it. Loads on first
  * use; writes update every component reading it.
  */
-export function useSubscription(): UseSubscriptionResult {
-  const api = useSubscriptionApi();
+export function useSubscription(options?: TenantOptions): UseSubscriptionResult {
+  const api = useSubscriptionApi(options);
   const snap = useSnapshot(api);
   const signedIn = useAutoLoad(snap.subscription.status, api.load);
   const { isPending, track } = usePendingWrites();
@@ -142,13 +152,13 @@ export function usePlans(): {
  * Whether the plan includes a feature. `allowed` stays false until the check
  * has loaded, and on an error, so gating on it fails closed.
  */
-export function useEntitlement(feature: string): {
+export function useEntitlement(feature: string, options?: TenantOptions): {
   allowed: boolean;
   entitlement: Entitlement | null;
   status: Resource<unknown>["status"];
   isLoading: boolean;
 } {
-  const api = useSubscriptionApi();
+  const api = useSubscriptionApi(options);
   const snap = useSnapshot(api);
   // Entitlements load with the subscription.
   const signedIn = useAutoLoad(snap.subscription.status, api.load);
@@ -161,7 +171,7 @@ export function useEntitlement(feature: string): {
   };
 }
 
-export interface EntitledProps {
+export interface EntitledProps extends TenantOptions {
   /** The plan feature to check, e.g. "sso". */
   feature: string;
   children: ReactNode;
@@ -176,8 +186,8 @@ export interface EntitledProps {
  * of a positive answer (loading, an error, billing not installed) shows the
  * fallback, so a paywall never opens by accident.
  */
-export function Entitled({ feature, children, fallback = null, loading }: EntitledProps) {
-  const { allowed, isLoading } = useEntitlement(feature);
+export function Entitled({ feature, children, fallback = null, loading, tenantId }: EntitledProps) {
+  const { allowed, isLoading } = useEntitlement(feature, { tenantId });
   if (allowed) return <>{children}</>;
   if (isLoading) return <>{loading ?? fallback}</>;
   return <>{fallback}</>;
