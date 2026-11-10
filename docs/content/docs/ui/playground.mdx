@@ -19,7 +19,7 @@ Storybook launches at `http://localhost:6006` by default.
 
 ## Story categories
 
-The playground organizes stories into 6 categories with 31 story files covering every component:
+The playground organizes stories into 9 categories with 49 story files covering every component:
 
 ### Auth Forms (9 stories)
 
@@ -56,6 +56,25 @@ The playground organizes stories into 6 categories with 31 story files covering 
 | `PasswordInput` | `<PasswordInput />` | Password field with visibility toggle |
 | `LoadingSpinner` | `<LoadingSpinner />` | Animated spinner in different sizes |
 | `ErrorDisplay` | `<ErrorDisplay />` | Error message rendering with dismiss |
+
+### Session (2 stories)
+
+| Story | Component | What it demonstrates |
+|-------|-----------|---------------------|
+| `LastUsedAccount` | `<LastUsedAccount />` | The returning-visitor chip, with and without a display name, and the nothing-remembered case |
+| `AccountSummaryCard` | `<AccountSummaryCard />` | Last sign-in, trusted devices, and two-step on, off or unknown |
+
+### Plugins (4 stories)
+
+| Story | Component | What it demonstrates |
+|-------|-----------|---------------------|
+| `PhoneSignInForm` | `<PhoneSignInForm />` | Number then code, with a stub that accepts 482917 and rejects everything else |
+| `ConsentList` | `<ConsentList />` | Granted and withdrawn purposes, with the empty state |
+| `OAuthConsentScreen` | `<OAuthConsentScreen />` | Scopes in readable language, a custom scope, and an invalid request |
+| `InvitationCard` | `<InvitationCard />` | Signed in, signed out with a sign-in slot, expired, and not valid |
+| `ScimConnection` | `<ScimConnectionCard />` | Connection settings, the token list, and nothing connected yet |
+
+Plugin stories stub the plugin API through `MockAuthProvider`'s `plugins` prop, so every state is reachable without a backend.
 
 ### Guards (1 story)
 
