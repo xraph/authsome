@@ -113,7 +113,7 @@ func TestAuthorizeSignedOut(t *testing.T) {
 }
 
 func TestNew_RejectsBadLoginURL(t *testing.T) {
-	for _, bad := range []string{"sign-in", "javascript:alert(1)", "//evil.example.com/x", "ftp://x.example.com/"} {
+	for _, bad := range []string{"sign-in", "javascript:alert(1)", "//evil.example.com/x", "ftp://x.example.com/", "https://[::1", "https:///no-host"} {
 		_, err := oauth2provider.ValidateLoginURL(bad)
 		assert.Error(t, err, "login URL %q", bad)
 	}
