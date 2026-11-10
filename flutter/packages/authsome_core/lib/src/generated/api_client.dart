@@ -2043,6 +2043,39 @@ class AuthClient {
     return JWKSResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// OpenID Connect logout
+  /// GET /v1/oauth/logout
+  Future<void> oauth2Logout({required String token}) async {
+    final path = '/v1/oauth/logout';
+    await _request(
+'GET',
+      path,
+      token: token,
+    );
+  }
+
+  /// OpenID Connect logout (form post)
+  /// POST /v1/oauth/logout
+  Future<void> oauth2LogoutPost({required String token}) async {
+    final path = '/v1/oauth/logout';
+    await _request(
+'POST',
+      path,
+      token: token,
+    );
+  }
+
+  /// Confirm OpenID Connect logout
+  /// POST /v1/oauth/logout/confirm
+  Future<void> oauth2LogoutConfirm({required String token}) async {
+    final path = '/v1/oauth/logout/confirm';
+    await _request(
+'POST',
+      path,
+      token: token,
+    );
+  }
+
   /// Register OAuth2 client
   /// POST /v1/oauth/register
   Future<RegisterClientResponse> oauth2RegisterClient({required RegisterClientRequest body, required String token}) async {

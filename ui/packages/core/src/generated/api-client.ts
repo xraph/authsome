@@ -2465,6 +2465,48 @@ export class AuthClient {
   }
 
   /**
+   * OpenID Connect logout
+   * GET /v1/oauth/logout
+   */
+  async oauth2Logout(token: string): Promise<void> {
+    const path = "/v1/oauth/logout";
+    return this.request<void>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * OpenID Connect logout (form post)
+   * POST /v1/oauth/logout
+   */
+  async oauth2LogoutPost(token: string): Promise<void> {
+    const path = "/v1/oauth/logout";
+    return this.request<void>(
+      'POST',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Confirm OpenID Connect logout
+   * POST /v1/oauth/logout/confirm
+   */
+  async oauth2LogoutConfirm(token: string): Promise<void> {
+    const path = "/v1/oauth/logout/confirm";
+    return this.request<void>(
+      'POST',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
    * Register OAuth2 client
    * POST /v1/oauth/register
    */

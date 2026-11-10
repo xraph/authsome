@@ -54,6 +54,9 @@ func (s *MemoryStore) CreateClient(_ context.Context, c *OAuth2Client) error {
 	if c.Resources == nil {
 		c.Resources = []string{}
 	}
+	if c.PostLogoutRedirectURIs == nil {
+		c.PostLogoutRedirectURIs = []string{}
+	}
 	s.clients[c.ClientID] = c
 	return nil
 }

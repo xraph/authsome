@@ -40,6 +40,8 @@ type Client struct {
 	DPoPMode     string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+
+	PostLogoutRedirectURIs []string
 }
 
 // CreateParams is what a new client is registered with.
@@ -51,6 +53,8 @@ type CreateParams struct {
 	Scopes       []string
 	GrantTypes   []string
 	Resources    []string
+
+	PostLogoutRedirectURIs []string
 }
 
 // UpdateParams carries the fields to change. A nil field is left alone.
@@ -60,6 +64,8 @@ type UpdateParams struct {
 	Scopes       *[]string
 	GrantTypes   *[]string
 	Resources    *[]string
+
+	PostLogoutRedirectURIs *[]string
 }
 
 // Created is a freshly registered client. ClientSecret is the plaintext, set

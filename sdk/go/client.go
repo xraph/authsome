@@ -2239,6 +2239,24 @@ func (c *Client) Oauth2JWKS(ctx context.Context) (*JWKSResponse, error) {
 	return &result, nil
 }
 
+// Oauth2Logout — OpenID Connect logout
+func (c *Client) Oauth2Logout(ctx context.Context) error {
+	path := "/v1/oauth/logout"
+	return c.do(ctx, "GET", path, nil, nil)
+}
+
+// Oauth2LogoutPost — OpenID Connect logout (form post)
+func (c *Client) Oauth2LogoutPost(ctx context.Context) error {
+	path := "/v1/oauth/logout"
+	return c.do(ctx, "POST", path, nil, nil)
+}
+
+// Oauth2LogoutConfirm — Confirm OpenID Connect logout
+func (c *Client) Oauth2LogoutConfirm(ctx context.Context) error {
+	path := "/v1/oauth/logout/confirm"
+	return c.do(ctx, "POST", path, nil, nil)
+}
+
 // Oauth2RegisterClient — Register OAuth2 client
 func (c *Client) Oauth2RegisterClient(ctx context.Context, req *Oauth2RegisterClientRequest) (*RegisterClientResponse, error) {
 	body, err := json.Marshal(req)

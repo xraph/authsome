@@ -386,9 +386,36 @@ Leave both empty and a signed-out `/authorize` answers 401, as it did before.
 
 A client that sends `prompt=none` never sees a login page. It's asking for an answer without any UI, so it gets `error=login_required` at its redirect URI (with its `state`) and decides what to do from there.
 
+### Sign users out
+
+When a user signs out of a client, the client can end their session here as well. Register where you want them sent afterwards:
+
+```bash
+curl -X PATCH "https://auth.myapp.com/v1/admin/oauth/clients/$CLIENT_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"post_logout_redirect_uris": ["https://reports.example.com/signed-out"]}'
+```
+
+Then send the browser to the `end_session_endpoint` from discovery:
+
+```
+GET https://auth.myapp.com/v1/oauth/logout
+    ?id_token_hint=<the id_token you got at sign-in>
+    &post_logout_redirect_uri=https://reports.example.com/signed-out
+    &state=abc
+```
+
+If the hint is an id_token this server issued for the user who's signed in, their session ends and the browser goes to your URI with `state` attached. The hint may have expired; it still counts, since logout often happens long after sign-in. Its signature, issuer and audience still have to check out.
+
+Without a hint, or with one for somebody else, the user sees a page asking whether to sign out. That stops a link on some other site from signing people out. Pass `client_id` in place of the hint if you don't have one, and the page names your client.
+
+`post_logout_redirect_uri` has to match one of the client's registered URIs exactly, with the same rules as `redirect_uris`. Leave it out and the user lands on a plain "You're signed out" page. Dynamic registration takes `post_logout_redirect_uris` too, and `POST` with a form body works the same as `GET`.
+
+This ends the session on this server. It doesn't revoke tokens the client already holds, so revoke those yourself if the client needs to.
+
 ### What this doesn't do yet
 
-`prompt=login`, `max_age`, `id_token_hint`, RP-initiated logout and CORS on the OIDC endpoints aren't there yet, and neither is a way to add custom claims.
+`prompt=login`, `max_age`, front-channel and back-channel logout and CORS on the OIDC endpoints aren't there yet, and neither is a way to add custom claims.
 
 ## Scopes and consent
 
@@ -581,6 +608,8 @@ Authsome publishes an OpenID Connect discovery document:
 | `POST` | `/oauth/token` | Token endpoint (code exchange, client credentials, refresh) |
 | `POST` | `/introspect` | Token introspection |
 | `POST` | `/oauth/revoke` | Token revocation |
+| `GET`, `POST` | `/oauth/logout` | RP-initiated logout (`end_session_endpoint`) |
+| `POST` | `/oauth/logout/confirm` | Answer to the logout confirmation page |
 | `POST` | `/admin/oauth/clients` | Register a new OAuth2 client |
 | `GET` | `/admin/oauth/clients` | List registered clients |
 | `GET` | `/admin/oauth/clients/:clientId` | Get client details |
