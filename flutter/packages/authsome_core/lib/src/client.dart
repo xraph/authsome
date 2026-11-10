@@ -358,4 +358,52 @@ class AuthSomeClient extends generated.AuthClient {
 
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
+
+  /// Sends any request and returns the decoded JSON body, null when the
+  /// body is empty. Client plugins call their routes through this (via
+  /// their PluginContext). Throws [AuthClientException] on an error status.
+  Future<Object?> send(
+    String method,
+    String path, {
+    Map<String, String?>? query,
+    Object? body,
+    String? token,
+  }) async {
+    final params = <String, String>{
+      for (final entry in (query ?? const <String, String?>{}).entries)
+        if (entry.value != null) entry.key: entry.value!,
+    };
+    final uri = Uri.parse('$_rawBaseUrl$path')
+        .replace(queryParameters: params.isEmpty ? null : params);
+    final request = http.Request(method, uri)
+      ..headers['Content-Type'] = 'application/json'
+      ..headers['Accept'] = 'application/json';
+    if (token != null && token.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+    final pk = publishableKey;
+    if (pk != null && pk.isNotEmpty) {
+      request.headers['X-Publishable-Key'] = pk;
+    }
+    if (body != null) request.body = jsonEncode(body);
+
+    final response = await http.Response.fromStream(await _http.send(request));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      Map<String, dynamic>? errorBody;
+      try {
+        errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (_) {
+        // Not JSON; fall back to the status below.
+      }
+      throw AuthClientException(
+        (errorBody?['error'] as String?) ??
+            'Request failed with status ${response.statusCode}',
+        code: response.statusCode,
+        type: errorBody?['type'] as String?,
+        details: errorBody,
+      );
+    }
+    if (response.body.isEmpty) return null;
+    return jsonDecode(response.body);
+  }
 }

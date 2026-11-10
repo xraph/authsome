@@ -15,6 +15,7 @@ import 'package:meta/meta.dart';
 import 'client.dart';
 import 'exceptions.dart';
 import 'passkey_authenticator.dart';
+import 'plugins.dart';
 import 'types.dart';
 import 'webauthn.dart';
 
@@ -52,6 +53,15 @@ class AuthManager {
   /// the UI without callers having to pass it again.
   String? _pendingEmail;
 
+  final Map<String, _PluginSlot> _plugins = {};
+  final StreamController<AuthEvent> _events =
+      StreamController<AuthEvent>.broadcast(sync: true);
+  String? _activeOrgId;
+
+  /// The active organization /v1/me reported on the last profile load. The
+  /// next transition to authenticated consumes it.
+  String? _reportedOrgId;
+
   AuthManager(AuthConfig config)
       : _client = AuthSomeClient(
           AuthClientConfig(
@@ -70,6 +80,7 @@ class AuthManager {
     if (config.onStateChange != null) {
       _listeners.add(config.onStateChange!);
     }
+    _registerPlugins(config.plugins);
   }
 
   /// Test-only constructor that accepts a pre-built [AuthSomeClient].
@@ -83,6 +94,7 @@ class AuthManager {
     ClientConfig? initialClientConfig,
     void Function(String, int?)? onError,
     void Function(AuthState)? onStateChange,
+    List<AuthPlugin<Object>> plugins = const [],
   })  : _client = client,
         _storage = storage ?? MemoryTokenStorage(),
         _onError = onError,
@@ -93,6 +105,102 @@ class AuthManager {
     if (onStateChange != null) {
       _listeners.add(onStateChange);
     }
+    _registerPlugins(plugins);
+  }
+
+  void _registerPlugins(List<AuthPlugin<Object>> plugins) {
+    for (final plugin in plugins) {
+      if (_plugins.containsKey(plugin.name)) {
+        throw ArgumentError.value(
+            plugin.name, 'plugins', 'the "${plugin.name}" plugin is registered twice');
+      }
+      _plugins[plugin.name] = _PluginSlot(plugin);
+    }
+  }
+
+  // ── Plugins ───────────────────────────────────────
+
+  /// The API of the registered plugin that provides [Api], built on first
+  /// use: `auth.plugin<SubscriptionApi>()`. Throws
+  /// [PluginNotRegisteredError] when no registered plugin provides it, and
+  /// rethrows whatever the plugin's init threw.
+  Api plugin<Api extends Object>() {
+    final slot = _slotFor<Api>();
+    if (slot == null) throw PluginNotRegisteredError(Api);
+    if (!slot.built) {
+      slot.built = true;
+      try {
+        slot.api = slot.plugin.init(_PluginContextImpl(this, slot.plugin.name));
+      } catch (error, stack) {
+        slot.error = error;
+        slot.stack = stack;
+      }
+    }
+    if (slot.error != null) {
+      Error.throwWithStackTrace(slot.error!, slot.stack ?? StackTrace.current);
+    }
+    return slot.api! as Api;
+  }
+
+  /// Whether a registered plugin provides [Api].
+  bool hasPlugin<Api extends Object>() => _slotFor<Api>() != null;
+
+  _PluginSlot? _slotFor<Api extends Object>() {
+    for (final slot in _plugins.values) {
+      if (slot.plugin is AuthPlugin<Api>) return slot;
+    }
+    return null;
+  }
+
+  /// Lifecycle events: [AuthEvent.signedIn], [AuthEvent.signedOut],
+  /// [AuthEvent.sessionRefreshed] and [AuthEvent.orgChanged].
+  Stream<AuthEvent> get events => _events.stream;
+
+  // ── Active organization ───────────────────────────
+
+  /// The organization the session is working in, null when it has none.
+  /// Restored from /v1/me on load, set by [switchOrg], cleared on sign-out.
+  String? get activeOrgId => _activeOrgId;
+
+  /// Switches the session into another organization. On an app that issues
+  /// JWTs the server hands back a new token carrying the organization; it
+  /// replaces the stored one. Fires [AuthEvent.orgChanged].
+  Future<void> switchOrg(String orgId) async {
+    final current = _state;
+    if (current is! AuthAuthenticated) {
+      throw StateError('authsome: you have to be signed in to switch organization');
+    }
+    final res = await _client.switchOrg(
+      body: SwitchOrgRequest(orgId: orgId),
+      token: current.session.sessionToken,
+    );
+
+    final token = res.sessionToken;
+    if (token != null && token.isNotEmpty) {
+      final next = Session(
+        sessionToken: token,
+        refreshToken: current.session.refreshToken,
+        expiresAt: res.expiresAt ?? current.session.expiresAt,
+      );
+      await _persistSession(next);
+      _setState(AuthAuthenticated(user: current.user, session: next));
+      _scheduleRefresh(next);
+    }
+
+    final now = res.orgId ?? orgId;
+    final changed = _activeOrgId != now;
+    _activeOrgId = now;
+    if (changed) _emit(AuthEvent.orgChanged);
+  }
+
+  Future<User> _loadUser(String token) async {
+    final me = await _client.getMe(token: token);
+    _reportedOrgId = me.activeOrgId;
+    return User.fromJson(me.toJson());
+  }
+
+  void _emit(AuthEvent event) {
+    if (!_events.isClosed) _events.add(event);
   }
 
   // ── Public API ────────────────────────────────────
@@ -155,7 +263,7 @@ class AuthManager {
 
       // Token still valid — fetch user profile.
       _setState(const AuthLoading());
-      final user = await _client.getMeWithToken(session.sessionToken);
+      final user = await _loadUser(session.sessionToken);
       _setState(AuthAuthenticated(user: user, session: session));
       _scheduleRefresh(session);
     } catch (_) {
@@ -538,6 +646,7 @@ class AuthManager {
     _clearRefreshTimer();
     _listeners.clear();
     _configListeners.clear();
+    _events.close();
   }
 
   // ── Internals ─────────────────────────────────────
@@ -602,7 +711,7 @@ class AuthManager {
   Future<void> _refreshSession(String refreshToken) async {
     try {
       final newSession = await _client.refreshWithToken(refreshToken);
-      final user = await _client.getMeWithToken(newSession.sessionToken);
+      final user = await _loadUser(newSession.sessionToken);
       await _persistSession(newSession);
       _setState(AuthAuthenticated(user: user, session: newSession));
       _scheduleRefresh(newSession);
@@ -671,7 +780,9 @@ class AuthManager {
   }
 
   void _setState(AuthState newState) {
+    final prev = _state;
     _state = newState;
+    final events = _transitionEvents(prev, newState);
     for (final listener in _listeners) {
       try {
         listener(newState);
@@ -679,6 +790,39 @@ class AuthManager {
         // Listener errors should not break the state machine.
       }
     }
+    for (final event in events) {
+      _emit(event);
+    }
+  }
+
+  /// Works out which lifecycle events a state change means, and keeps the
+  /// active organization in step: /v1/me reports it on every load, and
+  /// leaving the authenticated state forgets it.
+  List<AuthEvent> _transitionEvents(AuthState prev, AuthState next) {
+    final reported = _reportedOrgId;
+    _reportedOrgId = null;
+
+    if (prev is AuthAuthenticated && next is! AuthAuthenticated) {
+      _activeOrgId = null;
+      return const [AuthEvent.signedOut];
+    }
+    if (next is! AuthAuthenticated) return const [];
+    if (prev is! AuthAuthenticated) {
+      _activeOrgId = reported;
+      return const [AuthEvent.signedIn];
+    }
+
+    final events = <AuthEvent>[];
+    // A refresh rotates the refresh token; switching organization reissues
+    // only the access token, so it doesn't count.
+    if (prev.session.refreshToken != next.session.refreshToken) {
+      events.add(AuthEvent.sessionRefreshed);
+    }
+    if (reported != null && reported != _activeOrgId) {
+      _activeOrgId = reported;
+      events.add(AuthEvent.orgChanged);
+    }
+    return events;
   }
 
   void _handleError(Object err) {
@@ -708,4 +852,55 @@ class AuthManager {
     _setState(AuthError(error: message));
     _onError?.call(message, code);
   }
+}
+
+/// A registered plugin and, once used, what its init built (or threw).
+class _PluginSlot {
+  _PluginSlot(this.plugin);
+  final AuthPlugin<Object> plugin;
+  bool built = false;
+  Object? api;
+  Object? error;
+  StackTrace? stack;
+}
+
+/// The [PluginContext] one plugin sees.
+class _PluginContextImpl implements PluginContext {
+  _PluginContextImpl(this._manager, this._name);
+  final AuthManager _manager;
+  final String _name;
+
+  @override
+  Future<Object?> request(
+    String method,
+    String path, {
+    Map<String, String?>? query,
+    Object? body,
+  }) {
+    return _manager.client.send(
+      method,
+      path,
+      query: query,
+      body: body,
+      token: _manager.getSessionToken(),
+    );
+  }
+
+  @override
+  AuthState get state => _manager.state;
+
+  @override
+  ClientConfig? get clientConfig => _manager.clientConfig;
+
+  @override
+  bool? get isServerEnabled {
+    final supported = _manager.clientConfig?.supportedPlugins;
+    return supported?.contains(_name);
+  }
+
+  @override
+  String? get activeOrgId => _manager.activeOrgId;
+
+  @override
+  Stream<AuthEvent> get events => _manager.events;
 }
