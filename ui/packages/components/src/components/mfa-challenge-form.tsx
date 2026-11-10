@@ -1,13 +1,7 @@
 import * as React from "react";
-import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { useAuth } from "@authsome/ui-react";
 import { cn } from "../lib/utils";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-  InputOTPSeparator,
-} from "../primitives/otp-input";
+import { VerificationCodeInput } from "../primitives/verification-code-input";
 import { Button } from "../primitives/button";
 import { Input } from "../primitives/input";
 import { AuthCard } from "./auth-card";
@@ -83,9 +77,9 @@ function TOTPView({
       className="grid gap-3"
     >
       <div className="flex justify-center">
-        <InputOTP
-          maxLength={6}
-          pattern={REGEXP_ONLY_DIGITS}
+        <VerificationCodeInput
+          length={6}
+          mode="numeric"
           value={code}
           onChange={(v) => {
             setCode(v);
@@ -93,19 +87,10 @@ function TOTPView({
           }}
           onComplete={(v) => void handleSubmit(v)}
           disabled={isSubmitting}
-        >
-          <InputOTPGroup>
-            <InputOTPSlot index={0} />
-            <InputOTPSlot index={1} />
-            <InputOTPSlot index={2} />
-          </InputOTPGroup>
-          <InputOTPSeparator />
-          <InputOTPGroup>
-            <InputOTPSlot index={3} />
-            <InputOTPSlot index={4} />
-            <InputOTPSlot index={5} />
-          </InputOTPGroup>
-        </InputOTP>
+          invalid={Boolean(error)}
+          aria-label="Two-factor code"
+          autoFocus
+        />
       </div>
 
       <ErrorDisplay error={error} />
@@ -248,9 +233,9 @@ function SMSView() {
       )}
 
       <div className="flex justify-center">
-        <InputOTP
-          maxLength={6}
-          pattern={REGEXP_ONLY_DIGITS}
+        <VerificationCodeInput
+          length={6}
+          mode="numeric"
           value={code}
           onChange={(v) => {
             setCode(v);
@@ -258,19 +243,10 @@ function SMSView() {
           }}
           onComplete={(v) => void handleSubmit(v)}
           disabled={isSubmitting}
-        >
-          <InputOTPGroup>
-            <InputOTPSlot index={0} />
-            <InputOTPSlot index={1} />
-            <InputOTPSlot index={2} />
-          </InputOTPGroup>
-          <InputOTPSeparator />
-          <InputOTPGroup>
-            <InputOTPSlot index={3} />
-            <InputOTPSlot index={4} />
-            <InputOTPSlot index={5} />
-          </InputOTPGroup>
-        </InputOTP>
+          invalid={Boolean(error)}
+          aria-label="Two-factor code"
+          autoFocus
+        />
       </div>
 
       <ErrorDisplay error={error} />
