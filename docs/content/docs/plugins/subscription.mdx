@@ -195,7 +195,7 @@ final billing = context.subscription;
 final result = await billing.changePlan('team');
 ```
 
-The widgets hand checkout and portal URLs back to you (`onCheckout`, `onOpen`), so the packages don't depend on a URL launcher.
+The widgets hand checkout and portal URLs back to you (`onCheckout`, `onOpen`), so the packages don't depend on a URL launcher. On both platforms the components show plain words when a write fails and pass the server's error to `onError`.
 
 The billing methods on the core `ui-core` and `authsome_core` clients still work, and are marked deprecated in favour of these packages.
 

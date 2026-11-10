@@ -18,9 +18,6 @@ class Resource<T> {
   final Object? error;
 
   bool get isLoading => status == ResourceStatus.loading;
-
-  Resource<T> copyWith({ResourceStatus? status, T? data, Object? error}) =>
-      Resource(status ?? this.status, data ?? this.data, error);
 }
 
 /// Everything the plugin knows, as one immutable snapshot.
@@ -90,20 +87,22 @@ class SubscriptionApi {
   SubscriptionApi(this._ctx) {
     // Follow the session: a sign-out forgets everything, and a sign-in or
     // an organization switch reloads whatever had been loaded.
-    _events = _ctx.events.listen((event) {
-      switch (event) {
-        case AuthEvent.signedOut:
-          _generation++;
-          _set(SubscriptionSnapshot.initial());
-        case AuthEvent.signedIn || AuthEvent.orgChanged:
-          _generation++;
-          if (_snapshot.subscription.status != ResourceStatus.idle) {
-            unawaited(load());
-          }
-        case AuthEvent.sessionRefreshed:
-          break;
-      }
-    });
+    _events = _ctx.events.listen(
+      (event) {
+        switch (event) {
+          case AuthEvent.signedOut:
+            _generation++;
+            _set(SubscriptionSnapshot.initial());
+          case AuthEvent.signedIn || AuthEvent.orgChanged:
+            _reload();
+          case AuthEvent.sessionRefreshed:
+            break;
+        }
+      },
+      // The manager closes its events when it's disposed; nothing will
+      // change after that, so neither does this stream.
+      onDone: () => unawaited(_changes.close()),
+    );
   }
 
   final PluginContext _ctx;
@@ -114,6 +113,9 @@ class SubscriptionApi {
   // Bumped whenever the session or organization changes, so a response for
   // the one the user just left is dropped instead of shown.
   int _generation = 0;
+
+  // The load in flight for the current generation, shared by every caller.
+  ({int gen, Future<void> future})? _loading;
 
   /// The current snapshot.
   SubscriptionSnapshot get snapshot => _snapshot;
@@ -129,8 +131,33 @@ class SubscriptionApi {
   bool get _unavailable => _ctx.isServerEnabled == false;
   bool get _signedIn => _ctx.state is AuthAuthenticated;
 
-  /// Loads the subscription and its entitlements.
-  Future<void> load() async {
+  // A new session or organization: whatever was shown belongs to the old
+  // one, so clear it before anyone can act on it, then load again.
+  void _reload() {
+    _generation++;
+    if (_snapshot.subscription.status == ResourceStatus.idle) return;
+    _set(_snapshot.copyWith(
+      subscription: const Resource(ResourceStatus.loading, null),
+      entitlements: const Resource(ResourceStatus.loading, <String, Entitlement>{}),
+      canManage: false,
+    ));
+    unawaited(load());
+  }
+
+  /// Loads the subscription and its entitlements. Calls made while a load
+  /// is running share it.
+  Future<void> load() {
+    final current = _loading;
+    if (current != null && current.gen == _generation) return current.future;
+    final gen = _generation;
+    final future = _load(gen).whenComplete(() {
+      if (_loading?.gen == gen) _loading = null;
+    });
+    _loading = (gen: gen, future: future);
+    return future;
+  }
+
+  Future<void> _load(int gen) async {
     if (_unavailable) {
       _set(_snapshot.copyWith(
         subscription: const Resource(ResourceStatus.unavailable, null),
@@ -139,7 +166,6 @@ class SubscriptionApi {
       return;
     }
     if (!_signedIn) return;
-    final gen = _generation;
     _set(_snapshot.copyWith(
       subscription: Resource(ResourceStatus.loading, _snapshot.subscription.data),
     ));
@@ -165,6 +191,7 @@ class SubscriptionApi {
   }
 
   Future<void> _loadEntitlements(int gen) async {
+    if (gen != _generation) return;
     _set(_snapshot.copyWith(
       entitlements: Resource(ResourceStatus.loading, _snapshot.entitlements.data),
     ));
@@ -197,9 +224,11 @@ class SubscriptionApi {
     final state = _ctx.state;
     final user = state is AuthAuthenticated ? state.user : null;
     final appId = _ctx.clientConfig?.appId ?? (user is User ? user.appId : null);
+    final gen = _generation;
     _set(_snapshot.copyWith(plans: Resource(ResourceStatus.loading, _snapshot.plans.data)));
     try {
       final res = await _ctx.request('GET', '/v1/billing/plans', query: {'app_id': appId}) as Map;
+      if (gen != _generation) return;
       _set(_snapshot.copyWith(
         plans: Resource(ResourceStatus.ready, [
           for (final p in (res['plans'] as List? ?? const []))
@@ -207,6 +236,7 @@ class SubscriptionApi {
         ]),
       ));
     } catch (error) {
+      if (gen != _generation) return;
       _set(_snapshot.copyWith(plans: Resource(ResourceStatus.error, _snapshot.plans.data, error)));
     }
   }
@@ -250,27 +280,33 @@ class SubscriptionApi {
       };
 
   Future<ChangeResult> _change(String method, Map<String, Object?> body) async {
+    final gen = _generation;
     final res = await _ctx.request(method, '/v1/billing/subscription', body: body) as Map;
     final url = res['checkout_url'] as String?;
     if (url != null && url.isNotEmpty) return CheckoutRequired(Uri.parse(url));
-    return SubscriptionChanged(_commit(res));
+    return SubscriptionChanged(_commit(res, gen));
   }
 
   Future<Subscription> _mutate(String path, Map<String, Object?> body) async {
+    final gen = _generation;
     final res = await _ctx.request('POST', path, body: body) as Map;
-    return _commit(res);
+    return _commit(res, gen);
   }
 
   // Writes answer with the new subscription. It goes straight into the
   // cache, and the entitlements are rechecked since the plan may have moved.
-  Subscription _commit(Map res) {
+  // A write that lands after the user switched org or signed out still
+  // returns its result, but the cache now belongs to someone else.
+  Subscription _commit(Map res, int gen) {
     final json = res['subscription'] as Map?;
     if (json == null) {
       throw StateError('authsome: the server answered without a subscription');
     }
     final sub = Subscription.fromJson(Map<String, dynamic>.from(json));
-    _set(_snapshot.copyWith(subscription: Resource(ResourceStatus.ready, sub)));
-    unawaited(_loadEntitlements(_generation));
+    if (gen == _generation) {
+      _set(_snapshot.copyWith(subscription: Resource(ResourceStatus.ready, sub)));
+      unawaited(_loadEntitlements(gen));
+    }
     return sub;
   }
 
@@ -278,7 +314,7 @@ class SubscriptionApi {
   /// dispose today, so this is for tests and long-lived isolates.
   Future<void> close() async {
     await _events.cancel();
-    await _changes.close();
+    if (!_changes.isClosed) await _changes.close();
   }
 }
 

@@ -41,6 +41,8 @@ const UsageMeter(feature: 'api_calls', label: 'API calls this month');
 ManageBillingButton(onOpen: (uri) => launchUrl(uri));
 ```
 
+`PricingTable` and `CurrentPlanCard` show plain words when a change fails, such as "Couldn't change your plan. Try again.", and pass the server's error to `onError` if you want to log it. Leave out `onCheckout` and a paid plan can't be bought: the table says so and hands `onError` a `StateError`.
+
 `EntitlementGate` only shows its child when the plan includes the feature. While the check loads, on an error, or when the server doesn't have the plugin, you get the fallback.
 
 Opening a payment or portal page is left to you, so the package doesn't pull in a URL launcher. Pass `launchUrl` from url_launcher, or whatever you already use.

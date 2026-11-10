@@ -23,8 +23,9 @@ enum SubscriptionStatus {
       };
 }
 
-/// Currencies with no minor unit. Everything else is treated as two places.
-const _zeroDecimal = {'bif', 'clp', 'djf', 'gnf', 'jpy', 'kmf', 'krw', 'mga', 'pyg', 'rwf', 'ugx', 'vnd', 'vuv', 'xaf', 'xof', 'xpf'};
+/// Currencies the ledger stores without a minor unit. It stores every other
+/// currency with two places, so this list has to match the ledger's, not ISO 4217.
+const _zeroDecimal = {'jpy', 'krw', 'vnd', 'clp', 'pyg', 'idr'};
 
 const _symbols = {'usd': r'$', 'eur': '€', 'gbp': '£', 'jpy': '¥', 'inr': '₹', 'cad': r'CA$', 'aud': r'A$'};
 
@@ -39,18 +40,21 @@ class Money {
   int get decimals => _zeroDecimal.contains(currency.toLowerCase()) ? 0 : 2;
 
   /// The amount in major units, e.g. 29.0 for 2900 usd cents.
-  double get major => amountMinor / _pow10(decimals);
+  double get major => decimals == 0 ? amountMinor.toDouble() : amountMinor / 100;
 
   /// A plain rendering such as `$29.00` or `NGN 10.50`. Use your own
   /// NumberFormat for locale-aware output; [major] and [currency] are there
   /// for that.
   String format() {
-    final amount = major.toStringAsFixed(decimals);
+    // Integer arithmetic, so a large amount doesn't pick up float rounding.
+    final abs = amountMinor.abs();
+    final amount = decimals == 0
+        ? '$abs'
+        : '${abs ~/ 100}.${(abs % 100).toString().padLeft(2, '0')}';
+    final sign = amountMinor < 0 ? '-' : '';
     final symbol = _symbols[currency.toLowerCase()];
-    return symbol != null ? '$symbol$amount' : '${currency.toUpperCase()} $amount';
+    return symbol != null ? '$sign$symbol$amount' : '$sign${currency.toUpperCase()} $amount';
   }
-
-  static int _pow10(int n) => n == 0 ? 1 : 100;
 }
 
 /// A plan's base price and how often it's charged.

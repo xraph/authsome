@@ -33,6 +33,7 @@ class _SubscriptionBuilderState extends State<SubscriptionBuilder> {
     final auth = AuthProvider.of(context);
     final api = auth.plugin<SubscriptionApi>();
     _api = api;
+    // AuthProvider is inherited, so this runs again when the user signs in.
     if (!auth.isAuthenticated) return;
     if (api.snapshot.subscription.status == ResourceStatus.idle) unawaited(api.load());
     if (widget.loadPlans && api.snapshot.plans.status == ResourceStatus.idle) {
@@ -51,8 +52,11 @@ class _SubscriptionBuilderState extends State<SubscriptionBuilder> {
   }
 }
 
-bool _isLoading(Resource<Object?> r) =>
-    r.status == ResourceStatus.loading || r.status == ResourceStatus.idle;
+// Idle counts as loading only while signed in: SubscriptionBuilder is
+// about to start the load. Signed out, nothing will, so idle means empty.
+bool _isLoading(BuildContext context, Resource<Object?> r) =>
+    r.status == ResourceStatus.loading ||
+    (r.status == ResourceStatus.idle && AuthProvider.of(context).isAuthenticated);
 
 /// Shows [child] only when the plan includes [feature]. Loading, an error,
 /// or billing not being installed all show [fallback] (or [loading] while
@@ -79,7 +83,7 @@ class EntitlementGate extends StatelessWidget {
           entitlements.data[feature]?.allowed == true) {
         return child;
       }
-      if (_isLoading(entitlements)) return loading ?? fallback;
+      if (_isLoading(context, entitlements)) return loading ?? fallback;
       return fallback;
     });
   }
@@ -88,8 +92,9 @@ class EntitlementGate extends StatelessWidget {
 String _date(BuildContext context, DateTime date) =>
     MaterialLocalizations.of(context).formatShortDate(date.toLocal());
 
-void _showError(BuildContext context, Object error) {
-  final message = error is AuthClientException ? error.message : 'Something went wrong';
+// Server messages are written for developers, so people see plain words
+// and the error itself goes to the widget's onError.
+void _showError(BuildContext context, String message) {
   ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(message)));
 }
 
@@ -105,11 +110,19 @@ class PricingTable extends StatefulWidget {
     this.highlight,
     this.returnUrl,
     this.cancelUrl,
+    this.onError,
     super.key,
   });
 
   final ValueChanged<Plan>? onSelected;
+
+  /// Gets the payment page URL when a plan needs paying for. Without it the
+  /// table can't take payment: it tells the user and passes a [StateError]
+  /// to [onError].
   final ValueChanged<Uri>? onCheckout;
+
+  /// Called with the error when a change fails; the table shows plain words.
+  final ValueChanged<Object>? onError;
 
   /// Plan slug to draw attention to.
   final String? highlight;
@@ -139,11 +152,14 @@ class _PricingTableState extends State<PricingTable> {
         if (onCheckout != null) {
           onCheckout(result.url);
         } else {
-          _showError(context, StateError('Set PricingTable.onCheckout to open the payment page'));
+          debugPrint('authsome: PricingTable got a payment page but has no onCheckout to open it');
+          _showError(context, "Couldn't open the payment page.");
+          widget.onError?.call(StateError('Set PricingTable.onCheckout to open the payment page'));
         }
       }
     } catch (error) {
-      if (mounted) _showError(context, error);
+      if (mounted) _showError(context, "Couldn't change your plan. Try again.");
+      widget.onError?.call(error);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -155,7 +171,7 @@ class _PricingTableState extends State<PricingTable> {
     return SubscriptionBuilder(
       loadPlans: true,
       builder: (context, snap) {
-        if (_isLoading(snap.plans)) {
+        if (_isLoading(context, snap.plans)) {
           return const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
         }
         if (snap.plans.status == ResourceStatus.error) {
@@ -182,7 +198,15 @@ class _PricingTableState extends State<PricingTable> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(plan.name, style: theme.textTheme.titleMedium),
+                        Row(children: [
+                          Expanded(child: Text(plan.name, style: theme.textTheme.titleMedium)),
+                          if (plan.slug == widget.highlight)
+                            Chip(
+                              label: const Text('Recommended'),
+                              visualDensity: VisualDensity.compact,
+                              backgroundColor: theme.colorScheme.primaryContainer,
+                            ),
+                        ]),
                         const SizedBox(height: 8),
                         Text(plan.price?.format() ?? 'No charge', style: theme.textTheme.headlineSmall),
                         if (plan.price != null && plan.price!.interval.isNotEmpty)
@@ -228,7 +252,10 @@ class _PricingTableState extends State<PricingTable> {
 /// The tenant's plan: name, price, when it renews or ends, seats, and
 /// cancel or keep for someone who can manage billing.
 class CurrentPlanCard extends StatefulWidget {
-  const CurrentPlanCard({super.key});
+  const CurrentPlanCard({this.onError, super.key});
+
+  /// Called with the error when cancel or keep fails; the card shows plain words.
+  final ValueChanged<Object>? onError;
 
   @override
   State<CurrentPlanCard> createState() => _CurrentPlanCardState();
@@ -242,7 +269,8 @@ class _CurrentPlanCardState extends State<CurrentPlanCard> {
     try {
       await write();
     } catch (error) {
-      if (mounted) _showError(context, error);
+      if (mounted) _showError(context, "Couldn't update your plan. Try again.");
+      widget.onError?.call(error);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -260,7 +288,7 @@ class _CurrentPlanCardState extends State<CurrentPlanCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SubscriptionBuilder(builder: (context, snap) {
-      if (_isLoading(snap.subscription)) {
+      if (_isLoading(context, snap.subscription)) {
         return const Card(child: Padding(padding: EdgeInsets.all(24), child: LinearProgressIndicator()));
       }
       if (snap.subscription.status == ResourceStatus.error) {
@@ -335,7 +363,7 @@ class UsageMeter extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SubscriptionBuilder(builder: (context, snap) {
-      if (_isLoading(snap.entitlements)) return const LinearProgressIndicator();
+      if (_isLoading(context, snap.entitlements)) return const LinearProgressIndicator();
       final e = snap.entitlements.data[feature];
       if (e == null) return const SizedBox.shrink();
       final unlimited = e.limit < 0;

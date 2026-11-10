@@ -69,13 +69,19 @@ class _Harness {
   final routes = <String, Handler>{};
   final calls = <String>[];
 
-  Future<AuthNotifier> signedIn() async {
+  Future<AuthNotifier> signedIn() => _auth(withSession: true);
+
+  Future<AuthNotifier> signedOut() => _auth(withSession: false);
+
+  Future<AuthNotifier> _auth({required bool withSession}) async {
     final storage = MemoryTokenStorage();
-    await storage.setItem('authsome:session', jsonEncode({
+    if (withSession) {
+      await storage.setItem('authsome:session', jsonEncode({
       'session_token': 'tok',
       'refresh_token': 'ref',
-      'expires_at': DateTime.now().add(const Duration(hours: 1)).toUtc().toIso8601String(),
-    }));
+        'expires_at': DateTime.now().add(const Duration(hours: 1)).toUtc().toIso8601String(),
+      }));
+    }
     final auth = AuthNotifier(AuthConfig(
       baseUrl: 'https://api.test',
       storage: storage,
@@ -91,8 +97,8 @@ class _Harness {
     return auth;
   }
 
-  Future<AuthNotifier> pump(WidgetTester tester, Widget child) async {
-    final auth = await tester.runAsync(signedIn);
+  Future<AuthNotifier> pump(WidgetTester tester, Widget child, {bool signedOut = false}) async {
+    final auth = await tester.runAsync(signedOut ? this.signedOut : signedIn);
     await tester.pumpWidget(AuthProvider.test(
       notifier: auth!,
       child: MaterialApp(home: Scaffold(body: SingleChildScrollView(child: child))),
@@ -164,6 +170,55 @@ void main() {
     expect(opened, Uri.parse('https://pay.example/1'));
   });
 
+  testWidgets('PricingTable shows plain words, not the server message, when a change fails', (tester) async {
+    final h = _Harness();
+    h.routes['PATCH /v1/billing/subscription'] =
+        (_) => _json({'error': 'already subscribed: use PATCH to change plan'}, 409);
+    Object? reported;
+    await h.pump(tester, PricingTable(onError: (e) => reported = e));
+    await tester.tap(find.text('Choose Team'));
+    await _settle(tester);
+    expect(find.text("Couldn't change your plan. Try again."), findsOneWidget);
+    expect(find.textContaining('already subscribed'), findsNothing);
+    expect(reported, isA<AuthClientException>());
+  });
+
+  testWidgets('PricingTable reports a checkout it has nowhere to send', (tester) async {
+    final h = _Harness();
+    h.routes['GET /v1/billing/subscription'] = (_) => _json({'subscription': null, 'can_manage': true});
+    h.routes['POST /v1/billing/subscription'] = (_) => _json({'checkout_url': 'https://pay.example/1'});
+    Object? reported;
+    await h.pump(tester, PricingTable(onError: (e) => reported = e));
+    await tester.tap(find.text('Choose Pro'));
+    await _settle(tester);
+    expect(find.text("Couldn't open the payment page."), findsOneWidget);
+    expect(reported, isA<StateError>());
+    expect('$reported', contains('onCheckout'));
+  });
+
+  testWidgets('PricingTable says which plan is highlighted, not only with colour', (tester) async {
+    await _Harness().pump(tester, const PricingTable(highlight: 'team'));
+    expect(find.text('Recommended'), findsOneWidget);
+  });
+
+  testWidgets('widgets stop loading when nobody is signed in', (tester) async {
+    await _Harness().pump(
+      tester,
+      const Column(children: [
+        EntitlementGate(feature: 'sso', fallback: Text('locked'), loading: Text('checking'), child: Text('open')),
+        CurrentPlanCard(),
+        PricingTable(),
+        UsageMeter(feature: 'sso'),
+      ]),
+      signedOut: true,
+    );
+    expect(find.text('locked'), findsOneWidget);
+    expect(find.text('checking'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.text('No plan yet'), findsOneWidget);
+  });
+
   testWidgets('CurrentPlanCard says when a canceled plan ends and keeps it', (tester) async {
     final h = _Harness();
     h.routes['GET /v1/billing/subscription'] = (_) => _json({
@@ -181,6 +236,17 @@ void main() {
     await _settle(tester);
     expect(resumed, 1);
     expect(find.textContaining('Renews on'), findsOneWidget);
+  });
+
+  testWidgets('CurrentPlanCard shows plain words when cancel fails', (tester) async {
+    final h = _Harness();
+    h.routes['POST /v1/billing/subscription/cancel'] = (_) => _json({'error': 'ledger: row locked'}, 500);
+    Object? reported;
+    await h.pump(tester, CurrentPlanCard(onError: (e) => reported = e));
+    await tester.tap(find.text('Cancel plan'));
+    await _settle(tester);
+    expect(find.text("Couldn't update your plan. Try again."), findsOneWidget);
+    expect(reported, isNotNull);
   });
 
   testWidgets('CurrentPlanCard shows seats and no buttons to a member', (tester) async {
