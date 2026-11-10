@@ -9,4 +9,5 @@ workspace:
   - packages/authsome_flutter
   - packages/authsome_flutter_ui
   - packages/authsome_subscription
+  - packages/authsome_subscription_flutter
   - example
