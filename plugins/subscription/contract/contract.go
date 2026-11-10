@@ -43,10 +43,10 @@ type SubscriptionService interface {
 	ListSubscriptions(ctx context.Context, tenantID, appID string, opts subscription.ListOpts) ([]*subscription.Subscription, error)
 	GetSubscription(ctx context.Context, subID ledgerid.SubscriptionID) (*subscription.Subscription, error)
 	GetActiveSubscription(ctx context.Context, tenantID, appID string) (*subscription.Subscription, error)
-	Subscribe(ctx context.Context, tenantID string, planID ledgerid.PlanID, appID string) (*subscription.Subscription, error)
-	ChangePlan(ctx context.Context, subID ledgerid.SubscriptionID, newPlanID ledgerid.PlanID) error
-	PauseSubscription(ctx context.Context, subID ledgerid.SubscriptionID) error
-	ResumeSubscription(ctx context.Context, subID ledgerid.SubscriptionID) error
+	Subscribe(ctx context.Context, tenantID string, planID ledgerid.PlanID, appID string, quantity map[string]int64) (*subscription.Subscription, error)
+	ChangePlan(ctx context.Context, subID ledgerid.SubscriptionID, newPlanID ledgerid.PlanID, quantity map[string]int64) (*subscription.Subscription, error)
+	PauseSubscription(ctx context.Context, subID ledgerid.SubscriptionID) (*subscription.Subscription, error)
+	ResumeSubscription(ctx context.Context, subID ledgerid.SubscriptionID) (*subscription.Subscription, error)
 	CancelSubscription(ctx context.Context, subID ledgerid.SubscriptionID, immediately bool) error
 	ListAllInvoices(ctx context.Context, appID string) ([]*invoice.Invoice, error)
 	ListInvoices(ctx context.Context, tenantID, appID string) ([]*invoice.Invoice, error)

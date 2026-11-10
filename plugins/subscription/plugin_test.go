@@ -160,7 +160,7 @@ func TestOnInit_FindsLedgerFromEngine(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, eng.InitPlugins(ctx))
 
-	sub, err := p.Service().Subscribe(ctx, "tenant-1", pl.ID, "aapp_01jf0000000000000000000000")
+	sub, err := p.Service().Subscribe(ctx, "tenant-1", pl.ID, "aapp_01jf0000000000000000000000", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "tenant-1", sub.TenantID)
 	assert.NotNil(t, p.ledgerStore)

@@ -726,7 +726,7 @@ func (p *Plugin) handleCreateSubscription(ctx forge.Context, req *CreateSubscrip
 		return nil, forge.BadRequest("invalid plan_id")
 	}
 
-	sub, err := p.service.Subscribe(ctx.Context(), req.TenantID, planID, req.AppID)
+	sub, err := p.service.Subscribe(ctx.Context(), req.TenantID, planID, req.AppID, nil)
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create subscription: %w", err))
 	}
@@ -748,15 +748,15 @@ func (p *Plugin) handleChangePlan(ctx forge.Context, req *ChangePlanRequest) (*a
 	if err != nil {
 		return nil, forge.BadRequest("invalid new_plan_id")
 	}
-	if err := p.requireSubscriptionInApp(ctx, subID); err != nil {
+	if _, err := p.requireSubscriptionInApp(ctx, subID); err != nil {
 		return nil, err
 	}
 	if err := p.requirePlanInApp(ctx, newPlanID); err != nil {
 		return nil, err
 	}
 
-	if err := p.service.ChangePlan(ctx.Context(), subID, newPlanID); err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to change plan: %w", err))
+	if _, err := p.service.ChangePlan(ctx.Context(), subID, newPlanID, nil); err != nil {
+		return nil, writeErr(ctx, err, "change plan")
 	}
 
 	p.audit(ctx.Context(), "subscription.plan_changed", "subscription", subID.String(), "", "", bridge.OutcomeSuccess)
@@ -771,12 +771,12 @@ func (p *Plugin) handleCancelSubscription(ctx forge.Context, req *CancelSubscrip
 		return nil, forge.BadRequest("invalid subscription id")
 	}
 
-	if err := p.requireSubscriptionInApp(ctx, subID); err != nil {
+	if _, err := p.requireSubscriptionInApp(ctx, subID); err != nil {
 		return nil, err
 	}
 
 	if err := p.service.CancelSubscription(ctx.Context(), subID, req.Immediately); err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to cancel subscription: %w", err))
+		return nil, writeErr(ctx, err, "cancel subscription")
 	}
 
 	p.audit(ctx.Context(), "subscription.canceled", "subscription", subID.String(), "", "", bridge.OutcomeSuccess)
@@ -793,12 +793,16 @@ func (p *Plugin) handlePauseSubscription(ctx forge.Context, req *SubIDRequest) (
 		return nil, forge.BadRequest("invalid subscription id")
 	}
 
-	if err := p.requireSubscriptionInApp(ctx, subID); err != nil {
+	sub, err := p.requireSubscriptionInApp(ctx, subID)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireStatus(sub, lsub.StatusActive, lsub.StatusTrialing); err != nil {
 		return nil, err
 	}
 
-	if err := p.service.PauseSubscription(ctx.Context(), subID); err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to pause subscription: %w", err))
+	if _, err := p.service.PauseSubscription(ctx.Context(), subID); err != nil {
+		return nil, writeErr(ctx, err, "pause subscription")
 	}
 
 	p.audit(ctx.Context(), "subscription.paused", "subscription", subID.String(), "", "", bridge.OutcomeSuccess)
@@ -811,12 +815,16 @@ func (p *Plugin) handleResumeSubscription(ctx forge.Context, req *SubIDRequest) 
 		return nil, forge.BadRequest("invalid subscription id")
 	}
 
-	if err := p.requireSubscriptionInApp(ctx, subID); err != nil {
+	sub, err := p.requireSubscriptionInApp(ctx, subID)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireStatus(sub, lsub.StatusPaused); err != nil {
 		return nil, err
 	}
 
-	if err := p.service.ResumeSubscription(ctx.Context(), subID); err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to resume subscription: %w", err))
+	if _, err := p.service.ResumeSubscription(ctx.Context(), subID); err != nil {
+		return nil, writeErr(ctx, err, "resume subscription")
 	}
 
 	p.audit(ctx.Context(), "subscription.resumed", "subscription", subID.String(), "", "", bridge.OutcomeSuccess)
@@ -1086,12 +1094,12 @@ func (p *Plugin) requirePlanInApp(ctx forge.Context, planID ledgerid.PlanID) err
 	return nil
 }
 
-func (p *Plugin) requireSubscriptionInApp(ctx forge.Context, subID ledgerid.SubscriptionID) error {
+func (p *Plugin) requireSubscriptionInApp(ctx forge.Context, subID ledgerid.SubscriptionID) (*lsub.Subscription, error) {
 	sub, err := p.service.GetSubscription(ctx.Context(), subID)
 	if err != nil || !inRequestApp(ctx, sub.AppID) {
-		return forge.NotFound("subscription not found")
+		return nil, forge.NotFound("subscription not found")
 	}
-	return nil
+	return sub, nil
 }
 
 func (p *Plugin) requireInvoiceInApp(ctx forge.Context, invID ledgerid.InvoiceID) error {
