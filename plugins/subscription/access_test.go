@@ -85,6 +85,8 @@ type billingFixture struct {
 	handler   http.Handler
 	authStore *authmemory.Store
 	engine    *accessEngine
+	// settings holds setting overrides by key, then by org ID ("" = app-wide).
+	settings  map[string]map[string]any
 	appID     string
 	tenantID  string
 	planID    string
@@ -121,7 +123,8 @@ func newBillingFixture(t *testing.T, mode, tenantID string) *billingFixture {
 	}
 	require.NoError(t, st.CreateInvoice(ctx, inv))
 
-	mgr := settings.NewManager(modeStore{mode: mode}, log.NewNoopLogger(), settings.WithCacheTTL(0))
+	overrides := map[string]map[string]any{}
+	mgr := settings.NewManager(modeStore{mode: mode, overrides: overrides}, log.NewNoopLogger(), settings.WithCacheTTL(0))
 	require.NoError(t, (&Plugin{}).DeclareSettings(mgr))
 
 	eng := &accessEngine{managers: map[string]bool{}}
@@ -140,7 +143,7 @@ func newBillingFixture(t *testing.T, mode, tenantID string) *billingFixture {
 	require.NoError(t, p.RegisterRoutes(router))
 
 	return &billingFixture{
-		plugin: p, handler: router.Handler(), authStore: authStore, engine: eng,
+		plugin: p, handler: router.Handler(), authStore: authStore, engine: eng, settings: overrides,
 		appID: appID, tenantID: tenantID, planID: pl.ID.String(), subID: sub.ID.String(), invoiceID: inv.ID.String(),
 	}
 }

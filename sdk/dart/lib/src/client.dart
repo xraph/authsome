@@ -1123,6 +1123,26 @@ class AuthClient {
     );
   }
 
+  /// List your entitlements
+  /// GET /v1/billing/entitlements
+  Future<EntitlementsResponse> listEntitlements({required String token, String? tenantId}) async {
+    final path = '/v1/billing/entitlements';
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    if (tenantId != null) queryPairs.add(MapEntry('tenant_id', tenantId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
+    final res = await _request(
+'GET',
+      '$path$queryString',
+      token: token,
+    );
+    return EntitlementsResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Check feature entitlement
   /// GET /v1/billing/entitlements/{featureKey}
   Future<EntitlementResponse> checkEntitlement({required String featureKey, required String tenantId, required String token, String? appId}) async {
@@ -1203,13 +1223,15 @@ class AuthClient {
 
   /// List billing plans
   /// GET /v1/billing/plans
-  Future<ListPlansResponse> listBillingPlans({required String appId, required String token}) async {
+  Future<ListPlansResponse> listBillingPlans({required String appId, required String token, String? status, bool? includeAddons}) async {
     final path = '/v1/billing/plans';
     // A list of pairs rather than a map, because a query string may carry the
     // same key more than once. RFC 8707 sends `resource` that way, and a map
     // would keep only the last value.
     final queryPairs = <MapEntry<String, String>>[];
     queryPairs.add(MapEntry('app_id', appId.toString()));
+    if (status != null) queryPairs.add(MapEntry('status', status.toString()));
+    if (includeAddons != null) queryPairs.add(MapEntry('include_addons', includeAddons.toString()));
     final queryString = queryPairs.isNotEmpty
         ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';
@@ -1268,6 +1290,91 @@ class AuthClient {
     );
   }
 
+  /// Open the billing portal
+  /// POST /v1/billing/portal
+  Future<PortalResponse> createBillingPortalSession({required PortalRequest body, required String token}) async {
+    final path = '/v1/billing/portal';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return PortalResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Get your subscription
+  /// GET /v1/billing/subscription
+  Future<CurrentSubscriptionResponse> getCurrentSubscription({required String token, String? tenantId}) async {
+    final path = '/v1/billing/subscription';
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    if (tenantId != null) queryPairs.add(MapEntry('tenant_id', tenantId.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
+    final res = await _request(
+'GET',
+      '$path$queryString',
+      token: token,
+    );
+    return CurrentSubscriptionResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Subscribe to a plan
+  /// POST /v1/billing/subscription
+  Future<SubscriptionMutationResponse> subscribe({required SubscribeRequest body, required String token}) async {
+    final path = '/v1/billing/subscription';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return SubscriptionMutationResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Change plan or seats
+  /// PATCH /v1/billing/subscription
+  Future<SubscriptionMutationResponse> updateSubscription({required UpdateSubscriptionRequest body, required String token}) async {
+    final path = '/v1/billing/subscription';
+    final res = await _request(
+'PATCH',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return SubscriptionMutationResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Cancel your subscription
+  /// POST /v1/billing/subscription/cancel
+  Future<SubscriptionMutationResponse> cancelCurrentSubscription({required CancelCurrentRequest body, required String token}) async {
+    final path = '/v1/billing/subscription/cancel';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return SubscriptionMutationResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Keep your subscription
+  /// POST /v1/billing/subscription/resume
+  Future<SubscriptionMutationResponse> resumeCurrentSubscription({required TenantRequest body, required String token}) async {
+    final path = '/v1/billing/subscription/resume';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return SubscriptionMutationResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// List subscriptions
   /// GET /v1/billing/subscriptions
   Future<ListSubscriptionsResponse> listSubscriptions({required String appId, required String tenantId, required String token, String? status}) async {
@@ -1292,7 +1399,7 @@ class AuthClient {
 
   /// Create subscription
   /// POST /v1/billing/subscriptions
-  Future<Response> createSubscription({required CreateSubscriptionRequest body, required String token}) async {
+  Future<SubscriptionResponse> createSubscription({required CreateSubscriptionRequest body, required String token}) async {
     final path = '/v1/billing/subscriptions';
     final res = await _request(
 'POST',
@@ -1300,12 +1407,12 @@ class AuthClient {
       body: body.toJson(),
       token: token,
     );
-    return Response.fromJson(Map<String, dynamic>.from(res as Map));
+    return SubscriptionResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Get active subscription
   /// GET /v1/billing/subscriptions/active
-  Future<Response> getActiveSubscription({required String appId, required String tenantId, required String token}) async {
+  Future<SubscriptionResponse> getActiveSubscription({required String appId, required String tenantId, required String token}) async {
     final path = '/v1/billing/subscriptions/active';
     // A list of pairs rather than a map, because a query string may carry the
     // same key more than once. RFC 8707 sends `resource` that way, and a map
@@ -1321,7 +1428,7 @@ class AuthClient {
       '$path$queryString',
       token: token,
     );
-    return Response.fromJson(Map<String, dynamic>.from(res as Map));
+    return SubscriptionResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Cancel subscription

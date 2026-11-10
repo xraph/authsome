@@ -1587,6 +1587,33 @@ class BulkRevokeSessionsResponse {
   String toString() => 'BulkRevokeSessionsResponse(${toJson()})';
 }
 
+class CancelCurrentRequest {
+  final String? tenantId;
+  final String? when;
+
+  const CancelCurrentRequest({
+    this.tenantId,
+    this.when,
+  });
+
+  factory CancelCurrentRequest.fromJson(Map<String, dynamic> json) {
+    return CancelCurrentRequest(
+      tenantId: json['tenant_id'] as String?,
+      when: json['when'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (tenantId != null) 'tenant_id': tenantId,
+      if (when != null) 'when': when,
+    };
+  }
+
+  @override
+  String toString() => 'CancelCurrentRequest(${toJson()})';
+}
+
 class CancelSubscriptionRequest {
   final bool immediately;
 
@@ -3276,6 +3303,33 @@ class CredentialInfo {
   String toString() => 'CredentialInfo(${toJson()})';
 }
 
+class CurrentSubscriptionResponse {
+  final bool canManage;
+  final SubscriptionView? subscription;
+
+  const CurrentSubscriptionResponse({
+    required this.canManage,
+    this.subscription,
+  });
+
+  factory CurrentSubscriptionResponse.fromJson(Map<String, dynamic> json) {
+    return CurrentSubscriptionResponse(
+      canManage: json['can_manage'] as bool,
+      subscription: json['subscription'] == null ? null : SubscriptionView.fromJson(Map<String, dynamic>.from(json['subscription'] as Map)),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'can_manage': canManage,
+      if (subscription != null) 'subscription': subscription?.toJson(),
+    };
+  }
+
+  @override
+  String toString() => 'CurrentSubscriptionResponse(${toJson()})';
+}
+
 class DeclineInvitationRequest {
   final String token;
 
@@ -3994,6 +4048,29 @@ class EntitlementResponse {
 
   @override
   String toString() => 'EntitlementResponse(${toJson()})';
+}
+
+class EntitlementsResponse {
+  final Map<String, dynamic> entitlements;
+
+  const EntitlementsResponse({
+    required this.entitlements,
+  });
+
+  factory EntitlementsResponse.fromJson(Map<String, dynamic> json) {
+    return EntitlementsResponse(
+      entitlements: Map<String, dynamic>.from(json['entitlements'] as Map),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'entitlements': entitlements,
+    };
+  }
+
+  @override
+  String toString() => 'EntitlementsResponse(${toJson()})';
 }
 
 class Environment {
@@ -5035,7 +5112,7 @@ class ListPlansResponse {
 }
 
 class ListSubscriptionsResponse {
-  final List<Response> subscriptions;
+  final List<SubscriptionResponse> subscriptions;
   final int total;
 
   const ListSubscriptionsResponse({
@@ -5045,7 +5122,7 @@ class ListSubscriptionsResponse {
 
   factory ListSubscriptionsResponse.fromJson(Map<String, dynamic> json) {
     return ListSubscriptionsResponse(
-      subscriptions: (json['subscriptions'] as List).map((e) => Response.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      subscriptions: (json['subscriptions'] as List).map((e) => SubscriptionResponse.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
       total: (json['total'] as num).toInt(),
     );
   }
@@ -6090,12 +6167,57 @@ class PhoneVerifyResponse {
   String toString() => 'PhoneVerifyResponse(${toJson()})';
 }
 
+class PlanFeatureResponse {
+  final String key;
+  final int? limit;
+  final String name;
+  final String? period;
+  final bool softLimit;
+  final String type;
+
+  const PlanFeatureResponse({
+    required this.key,
+    this.limit,
+    required this.name,
+    this.period,
+    required this.softLimit,
+    required this.type,
+  });
+
+  factory PlanFeatureResponse.fromJson(Map<String, dynamic> json) {
+    return PlanFeatureResponse(
+      key: json['key'] as String,
+      limit: json['limit'] == null ? null : (json['limit'] as num).toInt(),
+      name: json['name'] as String,
+      period: json['period'] as String?,
+      softLimit: json['soft_limit'] as bool,
+      type: json['type'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'key': key,
+      if (limit != null) 'limit': limit,
+      'name': name,
+      if (period != null) 'period': period,
+      'soft_limit': softLimit,
+      'type': type,
+    };
+  }
+
+  @override
+  String toString() => 'PlanFeatureResponse(${toJson()})';
+}
+
 class PlanResponse {
+  final int? amountMinor;
   final String appId;
   final String? baseAmount;
   final String? billingPeriod;
   final String currency;
   final String description;
+  final List<PlanFeatureResponse> features;
   final int featuresCount;
   final String id;
   final bool isAddon;
@@ -6106,11 +6228,13 @@ class PlanResponse {
   final int trialDays;
 
   const PlanResponse({
+    this.amountMinor,
     required this.appId,
     this.baseAmount,
     this.billingPeriod,
     required this.currency,
     required this.description,
+    required this.features,
     required this.featuresCount,
     required this.id,
     required this.isAddon,
@@ -6123,11 +6247,13 @@ class PlanResponse {
 
   factory PlanResponse.fromJson(Map<String, dynamic> json) {
     return PlanResponse(
+      amountMinor: json['amount_minor'] == null ? null : (json['amount_minor'] as num).toInt(),
       appId: json['app_id'] as String,
       baseAmount: json['base_amount'] as String?,
       billingPeriod: json['billing_period'] as String?,
       currency: json['currency'] as String,
       description: json['description'] as String,
+      features: (json['features'] as List).map((e) => PlanFeatureResponse.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
       featuresCount: (json['features_count'] as num).toInt(),
       id: json['id'] as String,
       isAddon: json['is_addon'] as bool,
@@ -6141,11 +6267,13 @@ class PlanResponse {
 
   Map<String, dynamic> toJson() {
     return {
+      if (amountMinor != null) 'amount_minor': amountMinor,
       'app_id': appId,
       if (baseAmount != null) 'base_amount': baseAmount,
       if (billingPeriod != null) 'billing_period': billingPeriod,
       'currency': currency,
       'description': description,
+      'features': features.map((e) => e.toJson()).toList(),
       'features_count': featuresCount,
       'id': id,
       'is_addon': isAddon,
@@ -6159,6 +6287,56 @@ class PlanResponse {
 
   @override
   String toString() => 'PlanResponse(${toJson()})';
+}
+
+class PortalRequest {
+  final String? returnUrl;
+  final String? tenantId;
+
+  const PortalRequest({
+    this.returnUrl,
+    this.tenantId,
+  });
+
+  factory PortalRequest.fromJson(Map<String, dynamic> json) {
+    return PortalRequest(
+      returnUrl: json['return_url'] as String?,
+      tenantId: json['tenant_id'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (returnUrl != null) 'return_url': returnUrl,
+      if (tenantId != null) 'tenant_id': tenantId,
+    };
+  }
+
+  @override
+  String toString() => 'PortalRequest(${toJson()})';
+}
+
+class PortalResponse {
+  final String url;
+
+  const PortalResponse({
+    required this.url,
+  });
+
+  factory PortalResponse.fromJson(Map<String, dynamic> json) {
+    return PortalResponse(
+      url: json['url'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'url': url,
+    };
+  }
+
+  @override
+  String toString() => 'PortalResponse(${toJson()})';
 }
 
 class RecoveryRegenerateResponse {
@@ -6661,65 +6839,6 @@ class ResourceTypeList {
   String toString() => 'ResourceTypeList(${toJson()})';
 }
 
-class Response {
-  final String appId;
-  final String? canceledAt;
-  final String currentPeriodEnd;
-  final String currentPeriodStart;
-  final String id;
-  final String planId;
-  final String status;
-  final String tenantId;
-  final String? trialEnd;
-  final String? trialStart;
-
-  const Response({
-    required this.appId,
-    this.canceledAt,
-    required this.currentPeriodEnd,
-    required this.currentPeriodStart,
-    required this.id,
-    required this.planId,
-    required this.status,
-    required this.tenantId,
-    this.trialEnd,
-    this.trialStart,
-  });
-
-  factory Response.fromJson(Map<String, dynamic> json) {
-    return Response(
-      appId: json['app_id'] as String,
-      canceledAt: json['canceled_at'] as String?,
-      currentPeriodEnd: json['current_period_end'] as String,
-      currentPeriodStart: json['current_period_start'] as String,
-      id: json['id'] as String,
-      planId: json['plan_id'] as String,
-      status: json['status'] as String,
-      tenantId: json['tenant_id'] as String,
-      trialEnd: json['trial_end'] as String?,
-      trialStart: json['trial_start'] as String?,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'app_id': appId,
-      if (canceledAt != null) 'canceled_at': canceledAt,
-      'current_period_end': currentPeriodEnd,
-      'current_period_start': currentPeriodStart,
-      'id': id,
-      'plan_id': planId,
-      'status': status,
-      'tenant_id': tenantId,
-      if (trialEnd != null) 'trial_end': trialEnd,
-      if (trialStart != null) 'trial_start': trialStart,
-    };
-  }
-
-  @override
-  String toString() => 'Response(${toJson()})';
-}
-
 class RevokeConsentRequest {
   final String? appId;
   final String purpose;
@@ -7085,6 +7204,37 @@ class ScopeValue {
 
   @override
   String toString() => 'ScopeValue(${toJson()})';
+}
+
+class SeatsView {
+  final String featureKey;
+  final int? limit;
+  final int used;
+
+  const SeatsView({
+    required this.featureKey,
+    this.limit,
+    required this.used,
+  });
+
+  factory SeatsView.fromJson(Map<String, dynamic> json) {
+    return SeatsView(
+      featureKey: json['feature_key'] as String,
+      limit: json['limit'] == null ? null : (json['limit'] as num).toInt(),
+      used: (json['used'] as num).toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'feature_key': featureKey,
+      if (limit != null) 'limit': limit,
+      'used': used,
+    };
+  }
+
+  @override
+  String toString() => 'SeatsView(${toJson()})';
 }
 
 class SelectOption {
@@ -7749,6 +7899,210 @@ class StartRequest {
   String toString() => 'StartRequest(${toJson()})';
 }
 
+class SubscribeRequest {
+  final String? cancelUrl;
+  final String plan;
+  final String? returnUrl;
+  final int? seats;
+  final String? tenantId;
+
+  const SubscribeRequest({
+    this.cancelUrl,
+    required this.plan,
+    this.returnUrl,
+    this.seats,
+    this.tenantId,
+  });
+
+  factory SubscribeRequest.fromJson(Map<String, dynamic> json) {
+    return SubscribeRequest(
+      cancelUrl: json['cancel_url'] as String?,
+      plan: json['plan'] as String,
+      returnUrl: json['return_url'] as String?,
+      seats: json['seats'] == null ? null : (json['seats'] as num).toInt(),
+      tenantId: json['tenant_id'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (cancelUrl != null) 'cancel_url': cancelUrl,
+      'plan': plan,
+      if (returnUrl != null) 'return_url': returnUrl,
+      if (seats != null) 'seats': seats,
+      if (tenantId != null) 'tenant_id': tenantId,
+    };
+  }
+
+  @override
+  String toString() => 'SubscribeRequest(${toJson()})';
+}
+
+class SubscriptionMutationResponse {
+  final String? checkoutUrl;
+  final SubscriptionView? subscription;
+
+  const SubscriptionMutationResponse({
+    this.checkoutUrl,
+    this.subscription,
+  });
+
+  factory SubscriptionMutationResponse.fromJson(Map<String, dynamic> json) {
+    return SubscriptionMutationResponse(
+      checkoutUrl: json['checkout_url'] as String?,
+      subscription: json['subscription'] == null ? null : SubscriptionView.fromJson(Map<String, dynamic>.from(json['subscription'] as Map)),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (checkoutUrl != null) 'checkout_url': checkoutUrl,
+      if (subscription != null) 'subscription': subscription?.toJson(),
+    };
+  }
+
+  @override
+  String toString() => 'SubscriptionMutationResponse(${toJson()})';
+}
+
+class SubscriptionResponse {
+  final String appId;
+  final String? cancelAt;
+  final String? canceledAt;
+  final String currentPeriodEnd;
+  final String currentPeriodStart;
+  final String id;
+  final String? pausedAt;
+  final String planId;
+  final String status;
+  final String tenantId;
+  final String? trialEnd;
+  final String? trialStart;
+
+  const SubscriptionResponse({
+    required this.appId,
+    this.cancelAt,
+    this.canceledAt,
+    required this.currentPeriodEnd,
+    required this.currentPeriodStart,
+    required this.id,
+    this.pausedAt,
+    required this.planId,
+    required this.status,
+    required this.tenantId,
+    this.trialEnd,
+    this.trialStart,
+  });
+
+  factory SubscriptionResponse.fromJson(Map<String, dynamic> json) {
+    return SubscriptionResponse(
+      appId: json['app_id'] as String,
+      cancelAt: json['cancel_at'] as String?,
+      canceledAt: json['canceled_at'] as String?,
+      currentPeriodEnd: json['current_period_end'] as String,
+      currentPeriodStart: json['current_period_start'] as String,
+      id: json['id'] as String,
+      pausedAt: json['paused_at'] as String?,
+      planId: json['plan_id'] as String,
+      status: json['status'] as String,
+      tenantId: json['tenant_id'] as String,
+      trialEnd: json['trial_end'] as String?,
+      trialStart: json['trial_start'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'app_id': appId,
+      if (cancelAt != null) 'cancel_at': cancelAt,
+      if (canceledAt != null) 'canceled_at': canceledAt,
+      'current_period_end': currentPeriodEnd,
+      'current_period_start': currentPeriodStart,
+      'id': id,
+      if (pausedAt != null) 'paused_at': pausedAt,
+      'plan_id': planId,
+      'status': status,
+      'tenant_id': tenantId,
+      if (trialEnd != null) 'trial_end': trialEnd,
+      if (trialStart != null) 'trial_start': trialStart,
+    };
+  }
+
+  @override
+  String toString() => 'SubscriptionResponse(${toJson()})';
+}
+
+class SubscriptionView {
+  final String appId;
+  final String? cancelAt;
+  final String? canceledAt;
+  final String currentPeriodEnd;
+  final String currentPeriodStart;
+  final String id;
+  final String? pausedAt;
+  final PlanResponse plan;
+  final SeatsView? seats;
+  final String status;
+  final String tenantId;
+  final String? trialEnd;
+  final String? trialStart;
+
+  const SubscriptionView({
+    required this.appId,
+    this.cancelAt,
+    this.canceledAt,
+    required this.currentPeriodEnd,
+    required this.currentPeriodStart,
+    required this.id,
+    this.pausedAt,
+    required this.plan,
+    this.seats,
+    required this.status,
+    required this.tenantId,
+    this.trialEnd,
+    this.trialStart,
+  });
+
+  factory SubscriptionView.fromJson(Map<String, dynamic> json) {
+    return SubscriptionView(
+      appId: json['app_id'] as String,
+      cancelAt: json['cancel_at'] as String?,
+      canceledAt: json['canceled_at'] as String?,
+      currentPeriodEnd: json['current_period_end'] as String,
+      currentPeriodStart: json['current_period_start'] as String,
+      id: json['id'] as String,
+      pausedAt: json['paused_at'] as String?,
+      plan: PlanResponse.fromJson(Map<String, dynamic>.from(json['plan'] as Map)),
+      seats: json['seats'] == null ? null : SeatsView.fromJson(Map<String, dynamic>.from(json['seats'] as Map)),
+      status: json['status'] as String,
+      tenantId: json['tenant_id'] as String,
+      trialEnd: json['trial_end'] as String?,
+      trialStart: json['trial_start'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'app_id': appId,
+      if (cancelAt != null) 'cancel_at': cancelAt,
+      if (canceledAt != null) 'canceled_at': canceledAt,
+      'current_period_end': currentPeriodEnd,
+      'current_period_start': currentPeriodStart,
+      'id': id,
+      if (pausedAt != null) 'paused_at': pausedAt,
+      'plan': plan.toJson(),
+      if (seats != null) 'seats': seats?.toJson(),
+      'status': status,
+      'tenant_id': tenantId,
+      if (trialEnd != null) 'trial_end': trialEnd,
+      if (trialStart != null) 'trial_start': trialStart,
+    };
+  }
+
+  @override
+  String toString() => 'SubscriptionView(${toJson()})';
+}
+
 class SwitchOrgRequest {
   final String orgId;
 
@@ -7875,6 +8229,29 @@ class TeamListResponse {
 
   @override
   String toString() => 'TeamListResponse(${toJson()})';
+}
+
+class TenantRequest {
+  final String? tenantId;
+
+  const TenantRequest({
+    this.tenantId,
+  });
+
+  factory TenantRequest.fromJson(Map<String, dynamic> json) {
+    return TenantRequest(
+      tenantId: json['tenant_id'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (tenantId != null) 'tenant_id': tenantId,
+    };
+  }
+
+  @override
+  String toString() => 'TenantRequest(${toJson()})';
 }
 
 class TokenExchangeRequest {
@@ -8465,6 +8842,45 @@ class UpdateRoleRequest {
 
   @override
   String toString() => 'UpdateRoleRequest(${toJson()})';
+}
+
+class UpdateSubscriptionRequest {
+  final String? cancelUrl;
+  final String? plan;
+  final String? returnUrl;
+  final int? seats;
+  final String? tenantId;
+
+  const UpdateSubscriptionRequest({
+    this.cancelUrl,
+    this.plan,
+    this.returnUrl,
+    this.seats,
+    this.tenantId,
+  });
+
+  factory UpdateSubscriptionRequest.fromJson(Map<String, dynamic> json) {
+    return UpdateSubscriptionRequest(
+      cancelUrl: json['cancel_url'] as String?,
+      plan: json['plan'] as String?,
+      returnUrl: json['return_url'] as String?,
+      seats: json['seats'] == null ? null : (json['seats'] as num).toInt(),
+      tenantId: json['tenant_id'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (cancelUrl != null) 'cancel_url': cancelUrl,
+      if (plan != null) 'plan': plan,
+      if (returnUrl != null) 'return_url': returnUrl,
+      if (seats != null) 'seats': seats,
+      if (tenantId != null) 'tenant_id': tenantId,
+    };
+  }
+
+  @override
+  String toString() => 'UpdateSubscriptionRequest(${toJson()})';
 }
 
 class UpdateTeamRequest {

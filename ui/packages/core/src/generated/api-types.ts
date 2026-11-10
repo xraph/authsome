@@ -321,6 +321,11 @@ export interface BulkRevokeSessionsResponse {
   user_id: string;
 }
 
+export interface CancelCurrentRequest {
+  tenant_id?: string;
+  when?: string;
+}
+
 export interface CancelSubscriptionRequest {
   immediately: boolean;
 }
@@ -668,6 +673,11 @@ export interface CredentialInfo {
   transport: string[];
 }
 
+export interface CurrentSubscriptionResponse {
+  can_manage: boolean;
+  subscription?: SubscriptionView;
+}
+
 export interface DeclineInvitationRequest {
   token: string;
 }
@@ -813,6 +823,10 @@ export interface EntitlementResponse {
   reason?: string;
   remaining: number;
   used: number;
+}
+
+export interface EntitlementsResponse {
+  entitlements: Record<string, unknown>;
 }
 
 export interface Environment {
@@ -1023,7 +1037,7 @@ export interface ListPlansResponse {
 }
 
 export interface ListSubscriptionsResponse {
-  subscriptions: Response[];
+  subscriptions: SubscriptionResponse[];
   total: number;
 }
 
@@ -1237,12 +1251,23 @@ export interface PhoneVerifyResponse {
   user?: User;
 }
 
+export interface PlanFeatureResponse {
+  key: string;
+  limit?: number;
+  name: string;
+  period?: string;
+  soft_limit: boolean;
+  type: string;
+}
+
 export interface PlanResponse {
+  amount_minor?: number;
   app_id: string;
   base_amount?: string;
   billing_period?: string;
   currency: string;
   description: string;
+  features: PlanFeatureResponse[];
   features_count: number;
   id: string;
   is_addon: boolean;
@@ -1251,6 +1276,15 @@ export interface PlanResponse {
   slug: string;
   status: string;
   trial_days: number;
+}
+
+export interface PortalRequest {
+  return_url?: string;
+  tenant_id?: string;
+}
+
+export interface PortalResponse {
+  url: string;
 }
 
 export interface RecoveryRegenerateResponse {
@@ -1352,19 +1386,6 @@ export interface ResolvedSettingsResponse {
 export interface ResourceTypeList {
 }
 
-export interface Response {
-  app_id: string;
-  canceled_at?: string;
-  current_period_end: string;
-  current_period_start: string;
-  id: string;
-  plan_id: string;
-  status: string;
-  tenant_id: string;
-  trial_end?: string;
-  trial_start?: string;
-}
-
 export interface RevokeConsentRequest {
   app_id?: string;
   purpose: string;
@@ -1434,6 +1455,12 @@ export interface ScopeValue {
   updated_by?: string;
   value: string;
   version?: number;
+}
+
+export interface SeatsView {
+  feature_key: string;
+  limit?: number;
+  used: number;
 }
 
 export interface SelectOption {
@@ -1572,6 +1599,50 @@ export interface StartRequest {
   phone: string;
 }
 
+export interface SubscribeRequest {
+  cancel_url?: string;
+  plan: string;
+  return_url?: string;
+  seats?: number;
+  tenant_id?: string;
+}
+
+export interface SubscriptionMutationResponse {
+  checkout_url?: string;
+  subscription?: SubscriptionView;
+}
+
+export interface SubscriptionResponse {
+  app_id: string;
+  cancel_at?: string;
+  canceled_at?: string;
+  current_period_end: string;
+  current_period_start: string;
+  id: string;
+  paused_at?: string;
+  plan_id: string;
+  status: string;
+  tenant_id: string;
+  trial_end?: string;
+  trial_start?: string;
+}
+
+export interface SubscriptionView {
+  app_id: string;
+  cancel_at?: string;
+  canceled_at?: string;
+  current_period_end: string;
+  current_period_start: string;
+  id: string;
+  paused_at?: string;
+  plan: PlanResponse;
+  seats?: SeatsView;
+  status: string;
+  tenant_id: string;
+  trial_end?: string;
+  trial_start?: string;
+}
+
 export interface SwitchOrgRequest {
   org_id: string;
 }
@@ -1595,6 +1666,10 @@ export interface Team {
 export interface TeamListResponse {
   next_cursor?: string;
   teams: Team[];
+}
+
+export interface TenantRequest {
+  tenant_id?: string;
 }
 
 export interface TokenExchangeRequest {
@@ -1718,6 +1793,14 @@ export interface UpdateRoleRequest {
   description?: string;
   name?: string;
   parent_id?: string;
+}
+
+export interface UpdateSubscriptionRequest {
+  cancel_url?: string;
+  plan?: string;
+  return_url?: string;
+  seats?: number;
+  tenant_id?: string;
 }
 
 export interface UpdateTeamRequest {
@@ -1865,6 +1948,12 @@ export type SsoAdminCreateConnectionRequest = AdminCreateConnectionRequest;
 export type SsoAdminUpdateConnectionRequest = AdminUpdateConnectionRequest;
 
 export type CreateBillingPlanRequest = CreatePlanRequest;
+
+export type CreateBillingPortalSessionRequest = PortalRequest;
+
+export type CancelCurrentSubscriptionRequest = CancelCurrentRequest;
+
+export type ResumeCurrentSubscriptionRequest = TenantRequest;
 
 export type ChangeSubscriptionPlanRequest = ChangePlanRequest;
 

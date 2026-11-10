@@ -2,7 +2,9 @@ package subscription
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
@@ -49,12 +51,28 @@ func (s *Service) ListPlans(ctx context.Context, appID string) ([]*plan.Plan, er
 	return s.ledgerStore.ListPlans(ctx, appID, plan.ListOpts{})
 }
 
+// ListPlansWithOpts returns the app's plans filtered by opts.
+func (s *Service) ListPlansWithOpts(ctx context.Context, appID string, opts plan.ListOpts) ([]*plan.Plan, error) {
+	if s.ledgerStore == nil {
+		return nil, fmt.Errorf("subscription: ledger store not available")
+	}
+	return s.ledgerStore.ListPlans(ctx, appID, opts)
+}
+
 // GetPlan retrieves a plan by ID.
 func (s *Service) GetPlan(ctx context.Context, planID ledgerid.PlanID) (*plan.Plan, error) {
 	if s.ledger == nil {
 		return nil, fmt.Errorf("subscription: ledger not available")
 	}
 	return s.ledger.GetPlan(ctx, planID)
+}
+
+// GetPlanBySlug retrieves a plan by its slug within an app.
+func (s *Service) GetPlanBySlug(ctx context.Context, slug, appID string) (*plan.Plan, error) {
+	if s.ledger == nil {
+		return nil, fmt.Errorf("subscription: ledger not available")
+	}
+	return s.ledger.GetPlanBySlug(ctx, slug, appID)
 }
 
 // CreatePlan creates a new billing plan.
@@ -134,6 +152,39 @@ func (s *Service) GetActiveSubscription(ctx context.Context, tenantID, appID str
 	return s.ledger.GetActiveSubscription(ctx, tenantID, appID)
 }
 
+// currentStatuses are the states in which a tenant still holds its
+// subscription. GetActiveSubscription only answers for the first two, but a
+// tenant in dunning (past_due) or paused is still subscribed: its periods keep
+// running or are held, and a second subscription next to it would bill twice.
+var currentStatuses = []subscription.Status{
+	subscription.StatusActive,
+	subscription.StatusTrialing,
+	subscription.StatusPastDue,
+	subscription.StatusPaused,
+}
+
+// CurrentSubscription returns the tenant's newest subscription that hasn't
+// ended (active, trialing, past_due or paused), or nil when it has none.
+func (s *Service) CurrentSubscription(ctx context.Context, tenantID, appID string) (*subscription.Subscription, error) {
+	if s.ledgerStore == nil {
+		return nil, fmt.Errorf("subscription: ledger store not available")
+	}
+	subs, err := s.ledgerStore.ListSubscriptions(ctx, tenantID, appID, subscription.ListOpts{})
+	if err != nil {
+		return nil, err
+	}
+	var current *subscription.Subscription
+	for _, sub := range subs {
+		if sub == nil || sub.TenantID != tenantID || !slices.Contains(currentStatuses, sub.Status) {
+			continue
+		}
+		if current == nil || sub.CreatedAt.After(current.CreatedAt) {
+			current = sub
+		}
+	}
+	return current, nil
+}
+
 // ListSubscriptions lists subscriptions for a tenant.
 func (s *Service) ListSubscriptions(ctx context.Context, tenantID, appID string, opts subscription.ListOpts) ([]*subscription.Subscription, error) {
 	if s.ledgerStore == nil {
@@ -142,41 +193,28 @@ func (s *Service) ListSubscriptions(ctx context.Context, tenantID, appID string,
 	return s.ledgerStore.ListSubscriptions(ctx, tenantID, appID, opts)
 }
 
-// Subscribe creates a new subscription for a tenant on a plan.
-func (s *Service) Subscribe(ctx context.Context, tenantID string, planID ledgerid.PlanID, appID string) (*subscription.Subscription, error) {
+// Subscribe creates a new subscription for a tenant on a plan. Ledger picks
+// the trial from the plan's trial_days and the first period from the plan's
+// billing period. quantity sets seat counts for the plan's seat features and
+// may be nil.
+func (s *Service) Subscribe(ctx context.Context, tenantID string, planID ledgerid.PlanID, appID string, quantity map[string]int64) (*subscription.Subscription, error) {
 	if s.ledger == nil {
 		return nil, fmt.Errorf("subscription: ledger not available")
 	}
 
-	// Resolve trial days from settings.
-	trialDays, _ := settings.Get(ctx, s.settings, SettingTrialDays, settings.ResolveOpts{AppID: appID}) //nolint:errcheck // best-effort settings
-
-	now := time.Now()
 	sub := &subscription.Subscription{
-		TenantID:           tenantID,
-		PlanID:             planID,
-		Status:             subscription.StatusActive,
-		CurrentPeriodStart: now,
-		CurrentPeriodEnd:   now.AddDate(0, 1, 0),
-		AppID:              appID,
+		TenantID: tenantID,
+		PlanID:   planID,
+		AppID:    appID,
+		Quantity: quantity,
 	}
-
-	if trialDays > 0 {
-		sub.Status = subscription.StatusTrialing
-		trialEnd := now.AddDate(0, 0, trialDays)
-		sub.TrialStart = &now
-		sub.TrialEnd = &trialEnd
-		sub.CurrentPeriodEnd = trialEnd
-	}
-
 	if err := s.ledger.CreateSubscription(ctx, sub); err != nil {
 		return nil, err
 	}
-
 	return sub, nil
 }
 
-// CancelSubscription cancels a subscription.
+// CancelSubscription cancels a subscription, now or at the end of its period.
 func (s *Service) CancelSubscription(ctx context.Context, subID ledgerid.SubscriptionID, immediately bool) error {
 	if s.ledger == nil {
 		return fmt.Errorf("subscription: ledger not available")
@@ -184,49 +222,78 @@ func (s *Service) CancelSubscription(ctx context.Context, subID ledgerid.Subscri
 	return s.ledger.CancelSubscription(ctx, subID, immediately)
 }
 
-// ChangePlan changes a subscription to a different plan.
-func (s *Service) ChangePlan(ctx context.Context, subID ledgerid.SubscriptionID, newPlanID ledgerid.PlanID) error {
-	if s.ledgerStore == nil {
-		return fmt.Errorf("subscription: ledger store not available")
+// ChangePlan moves a subscription to another plan through ledger, which
+// refuses a canceled or expired subscription and a plan outside its app. A nil
+// quantity keeps the current seat counts.
+func (s *Service) ChangePlan(ctx context.Context, subID ledgerid.SubscriptionID, newPlanID ledgerid.PlanID, quantity map[string]int64) (*subscription.Subscription, error) {
+	if s.ledger == nil {
+		return nil, fmt.Errorf("subscription: ledger not available")
 	}
-
-	sub, err := s.ledger.GetSubscription(ctx, subID)
-	if err != nil {
-		return fmt.Errorf("get subscription: %w", err)
-	}
-
-	sub.PlanID = newPlanID
-	sub.Touch()
-
-	return s.ledgerStore.UpdateSubscription(ctx, sub)
+	return s.ledger.ChangePlan(ctx, subID, newPlanID, quantity)
 }
 
-// PauseSubscription pauses a subscription.
-func (s *Service) PauseSubscription(ctx context.Context, subID ledgerid.SubscriptionID) error {
-	if s.ledgerStore == nil {
-		return fmt.Errorf("subscription: ledger store not available")
+// PauseSubscription pauses an active or trialing subscription.
+func (s *Service) PauseSubscription(ctx context.Context, subID ledgerid.SubscriptionID) (*subscription.Subscription, error) {
+	if s.ledger == nil {
+		return nil, fmt.Errorf("subscription: ledger not available")
 	}
-	sub, err := s.ledger.GetSubscription(ctx, subID)
-	if err != nil {
-		return err
-	}
-	sub.Status = subscription.StatusPaused
-	sub.Touch()
-	return s.ledgerStore.UpdateSubscription(ctx, sub)
+	return s.ledger.PauseSubscription(ctx, subID)
 }
 
-// ResumeSubscription resumes a paused subscription.
-func (s *Service) ResumeSubscription(ctx context.Context, subID ledgerid.SubscriptionID) error {
-	if s.ledgerStore == nil {
-		return fmt.Errorf("subscription: ledger store not available")
+// ResumeSubscription resumes a paused subscription. Ledger stretches the
+// period and any running trial by the length of the pause, and leaves a
+// subscription that ended while paused alone.
+func (s *Service) ResumeSubscription(ctx context.Context, subID ledgerid.SubscriptionID) (*subscription.Subscription, error) {
+	if s.ledger == nil {
+		return nil, fmt.Errorf("subscription: ledger not available")
+	}
+	return s.ledger.ResumeSubscription(ctx, subID)
+}
+
+// ErrNoScheduledCancel is returned by KeepSubscription when the subscription
+// has no cancellation waiting at the end of its period.
+var ErrNoScheduledCancel = errors.New("subscription: no cancellation is scheduled")
+
+// ErrCancelDue is returned by KeepSubscription when the scheduled
+// cancellation's time has already come.
+var ErrCancelDue = errors.New("subscription: the cancellation is already due")
+
+// KeepSubscription takes back a cancellation scheduled for the end of the
+// period, so the subscription renews as usual. A subscription that has already
+// ended can't be kept.
+func (s *Service) KeepSubscription(ctx context.Context, subID ledgerid.SubscriptionID) (*subscription.Subscription, error) {
+	if s.ledger == nil || s.ledgerStore == nil {
+		return nil, fmt.Errorf("subscription: ledger not available")
 	}
 	sub, err := s.ledger.GetSubscription(ctx, subID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	sub.Status = subscription.StatusActive
+	switch sub.Status {
+	case subscription.StatusCanceled:
+		return nil, ledger.ErrSubscriptionCanceled
+	case subscription.StatusExpired:
+		return nil, ledger.ErrSubscriptionExpired
+	}
+	if sub.CancelAt == nil {
+		return nil, ErrNoScheduledCancel
+	}
+	// A cancellation whose time has come belongs to the lifecycle clock now,
+	// even if it hasn't run yet. Taking it back here would race the clock's
+	// own write and could revive a subscription it is ending.
+	//
+	// This is a full-row update, so a lifecycle write landing between the
+	// read above and the write below can still be overwritten. Ledger has no
+	// conditional "clear cancel_at" write yet; when it gets one, use it.
+	if !sub.CancelAt.After(time.Now()) {
+		return nil, ErrCancelDue
+	}
+	sub.CancelAt = nil
 	sub.Touch()
-	return s.ledgerStore.UpdateSubscription(ctx, sub)
+	if err := s.ledgerStore.UpdateSubscription(ctx, sub); err != nil {
+		return nil, err
+	}
+	return sub, nil
 }
 
 // ──────────────────────────────────────────────────

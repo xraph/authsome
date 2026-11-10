@@ -22,12 +22,22 @@ type Config struct {
 	// 0 means no trial. Can be overridden by settings.
 	TrialDays int
 
-	// AllowSelfService lets users/orgs change their own plan.
+	// AllowSelfService is unused.
+	//
+	// Deprecated: self-service is governed by the
+	// subscription.self_service_upgrade setting (on by default), and who in an
+	// organization may use it by subscription.billing_roles. This field never
+	// had an effect and will be removed.
 	AllowSelfService bool
 
 	// DisableRoutes mounts no HTTP routes. Use it when the host serves its
 	// own billing API on top of the plugin's ledger.
 	DisableRoutes bool
+
+	// Checkout takes payment before a tenant moves onto a paid plan through
+	// the self-service routes. nil grants the plan directly. A provider that
+	// also implements PortalProvider backs the billing portal route.
+	Checkout CheckoutProvider
 
 	// DisableAutoSubscribe turns off both the org-create and user-signup
 	// auto-subscribe hooks, whatever the settings say. Use it when the host

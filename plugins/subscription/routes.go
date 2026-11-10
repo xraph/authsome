@@ -125,7 +125,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if err := subs.GET("/active", p.handleGetActiveSubscription,
 		forge.WithSummary("Get active subscription"),
 		forge.WithOperationID("getActiveSubscription"),
-		forge.WithResponseSchema(http.StatusOK, "Active subscription", Response{}),
+		forge.WithResponseSchema(http.StatusOK, "Active subscription", SubscriptionResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -134,7 +134,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if err := subs.POST("", p.handleCreateSubscription,
 		forge.WithSummary("Create subscription"),
 		forge.WithOperationID("createSubscription"),
-		forge.WithCreatedResponse(Response{}),
+		forge.WithCreatedResponse(SubscriptionResponse{}),
 		forge.WithErrorResponses(),
 		p.writeGuard(),
 	); err != nil {
@@ -281,12 +281,16 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
 	)
 
-	return usage.GET("", p.handleGetUsageSummary,
+	if err := usage.GET("", p.handleGetUsageSummary,
 		forge.WithSummary("Get usage summary"),
 		forge.WithOperationID("getUsageSummary"),
 		forge.WithResponseSchema(http.StatusOK, "Usage summary", UsageSummaryResponse{}),
 		forge.WithErrorResponses(),
-	)
+	); err != nil {
+		return err
+	}
+
+	return p.registerTenantRoutes(router)
 }
 
 // ──────────────────────────────────────────────────
@@ -297,6 +301,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 type ListPlansRequest struct {
 	AppID string `query:"app_id"`
+	// Status filters by plan status. Empty means active. "all", "archived"
+	// and "draft" are for billing managers.
+	Status string `query:"status,omitempty"`
+	// IncludeAddons lists add-on plans as well as base plans.
+	IncludeAddons bool `query:"include_addons,omitempty"`
 }
 
 type ListPlansResponse struct {
@@ -345,6 +354,22 @@ type PlanResponse struct {
 	IsAddon       bool              `json:"is_addon"`
 	AppID         string            `json:"app_id"`
 	Metadata      map[string]string `json:"metadata,omitempty"`
+	// AmountMinor is the base price in minor units (cents for usd), for
+	// arithmetic and locale formatting. BaseAmount is the same price
+	// formatted in major units.
+	AmountMinor *int64                `json:"amount_minor,omitempty"`
+	Features    []PlanFeatureResponse `json:"features"`
+}
+
+// PlanFeatureResponse is one feature a plan includes. A nil Limit means
+// unlimited.
+type PlanFeatureResponse struct {
+	Key       string `json:"key"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	Limit     *int64 `json:"limit"`
+	Period    string `json:"period,omitempty"`
+	SoftLimit bool   `json:"soft_limit"`
 }
 
 type PlanIDRequest struct {
@@ -360,8 +385,8 @@ type ListSubscriptionsRequest struct {
 }
 
 type ListSubscriptionsResponse struct {
-	Subscriptions []Response `json:"subscriptions"`
-	Total         int        `json:"total"`
+	Subscriptions []SubscriptionResponse `json:"subscriptions"`
+	Total         int                    `json:"total"`
 }
 
 type GetActiveSubRequest struct {
@@ -389,7 +414,7 @@ type SubIDRequest struct {
 	SubID string `path:"subId"`
 }
 
-type Response struct {
+type SubscriptionResponse struct { //nolint:revive // the SDKs name their type after this one, and "Response" collides with fetch and package:http
 	ID                 string  `json:"id"`
 	TenantID           string  `json:"tenant_id"`
 	PlanID             string  `json:"plan_id"`
@@ -400,6 +425,10 @@ type Response struct {
 	TrialEnd           *string `json:"trial_end,omitempty"`
 	CanceledAt         *string `json:"canceled_at,omitempty"`
 	AppID              string  `json:"app_id"`
+	// CancelAt is when a cancellation scheduled for the period end takes
+	// effect. CanceledAt stays empty until it does.
+	CancelAt *string `json:"cancel_at,omitempty"`
+	PausedAt *string `json:"paused_at,omitempty"`
 }
 
 // Invoice types
@@ -534,15 +563,37 @@ func (p *Plugin) handleListPlans(ctx forge.Context, req *ListPlansRequest) (*Lis
 		return nil, err
 	}
 
-	plans, err := p.service.ListPlans(ctx.Context(), appID)
+	opts := plan.ListOpts{Status: plan.StatusActive}
+	switch req.Status {
+	case "", string(plan.StatusActive):
+	case "all", string(plan.StatusArchived), string(plan.StatusDraft):
+		// Archived and draft plans aren't for sale, so only a billing
+		// manager sees them.
+		userID, ok := middleware.UserIDFrom(ctx.Context())
+		if !ok || !p.holdsBillingManage(ctx.Context(), userID) {
+			return nil, forge.Forbidden("listing plans that aren't for sale needs billing:manage")
+		}
+		opts.Status = plan.Status(req.Status)
+		if req.Status == "all" {
+			opts.Status = ""
+		}
+	default:
+		return nil, forge.BadRequest(`status must be "active", "archived", "draft" or "all"`)
+	}
+
+	plans, err := p.service.ListPlansWithOpts(ctx.Context(), appID, opts)
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list plans: %w", err))
 	}
 
 	items := make([]PlanResponse, 0, len(plans))
 	for _, pl := range plans {
+		if isAddon(pl) && !req.IncludeAddons {
+			continue
+		}
 		items = append(items, toPlanResponse(pl))
 	}
+	sortPlansByPrice(items)
 
 	return &ListPlansResponse{Plans: items, Total: len(items)}, nil
 }
@@ -685,7 +736,7 @@ func (p *Plugin) handleListSubscriptions(ctx forge.Context, req *ListSubscriptio
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to list subscriptions: %w", err))
 	}
 
-	items := make([]Response, 0, len(subs))
+	items := make([]SubscriptionResponse, 0, len(subs))
 	for _, s := range subs {
 		items = append(items, toSubResponse(s))
 	}
@@ -693,7 +744,7 @@ func (p *Plugin) handleListSubscriptions(ctx forge.Context, req *ListSubscriptio
 	return &ListSubscriptionsResponse{Subscriptions: items, Total: len(items)}, nil
 }
 
-func (p *Plugin) handleGetActiveSubscription(ctx forge.Context, req *GetActiveSubRequest) (*Response, error) {
+func (p *Plugin) handleGetActiveSubscription(ctx forge.Context, req *GetActiveSubRequest) (*SubscriptionResponse, error) {
 	if req.AppID == "" || req.TenantID == "" {
 		return nil, forge.BadRequest("app_id and tenant_id are required")
 	}
@@ -713,7 +764,7 @@ func (p *Plugin) handleGetActiveSubscription(ctx forge.Context, req *GetActiveSu
 	return &resp, nil
 }
 
-func (p *Plugin) handleCreateSubscription(ctx forge.Context, req *CreateSubscriptionRequest) (*Response, error) {
+func (p *Plugin) handleCreateSubscription(ctx forge.Context, req *CreateSubscriptionRequest) (*SubscriptionResponse, error) {
 	if req.TenantID == "" || req.PlanID == "" || req.AppID == "" {
 		return nil, forge.BadRequest("tenant_id, plan_id, and app_id are required")
 	}
@@ -726,7 +777,7 @@ func (p *Plugin) handleCreateSubscription(ctx forge.Context, req *CreateSubscrip
 		return nil, forge.BadRequest("invalid plan_id")
 	}
 
-	sub, err := p.service.Subscribe(ctx.Context(), req.TenantID, planID, req.AppID)
+	sub, err := p.service.Subscribe(ctx.Context(), req.TenantID, planID, req.AppID, nil)
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create subscription: %w", err))
 	}
@@ -748,15 +799,15 @@ func (p *Plugin) handleChangePlan(ctx forge.Context, req *ChangePlanRequest) (*a
 	if err != nil {
 		return nil, forge.BadRequest("invalid new_plan_id")
 	}
-	if err := p.requireSubscriptionInApp(ctx, subID); err != nil {
+	if _, err := p.requireSubscriptionInApp(ctx, subID); err != nil {
 		return nil, err
 	}
 	if err := p.requirePlanInApp(ctx, newPlanID); err != nil {
 		return nil, err
 	}
 
-	if err := p.service.ChangePlan(ctx.Context(), subID, newPlanID); err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to change plan: %w", err))
+	if _, err := p.service.ChangePlan(ctx.Context(), subID, newPlanID, nil); err != nil {
+		return nil, writeErr(ctx, err, "change plan")
 	}
 
 	p.audit(ctx.Context(), "subscription.plan_changed", "subscription", subID.String(), "", "", bridge.OutcomeSuccess)
@@ -771,12 +822,12 @@ func (p *Plugin) handleCancelSubscription(ctx forge.Context, req *CancelSubscrip
 		return nil, forge.BadRequest("invalid subscription id")
 	}
 
-	if err := p.requireSubscriptionInApp(ctx, subID); err != nil {
+	if _, err := p.requireSubscriptionInApp(ctx, subID); err != nil {
 		return nil, err
 	}
 
 	if err := p.service.CancelSubscription(ctx.Context(), subID, req.Immediately); err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to cancel subscription: %w", err))
+		return nil, writeErr(ctx, err, "cancel subscription")
 	}
 
 	p.audit(ctx.Context(), "subscription.canceled", "subscription", subID.String(), "", "", bridge.OutcomeSuccess)
@@ -793,12 +844,16 @@ func (p *Plugin) handlePauseSubscription(ctx forge.Context, req *SubIDRequest) (
 		return nil, forge.BadRequest("invalid subscription id")
 	}
 
-	if err := p.requireSubscriptionInApp(ctx, subID); err != nil {
+	sub, err := p.requireSubscriptionInApp(ctx, subID)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireStatus(sub, lsub.StatusActive, lsub.StatusTrialing); err != nil {
 		return nil, err
 	}
 
-	if err := p.service.PauseSubscription(ctx.Context(), subID); err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to pause subscription: %w", err))
+	if _, err := p.service.PauseSubscription(ctx.Context(), subID); err != nil {
+		return nil, writeErr(ctx, err, "pause subscription")
 	}
 
 	p.audit(ctx.Context(), "subscription.paused", "subscription", subID.String(), "", "", bridge.OutcomeSuccess)
@@ -811,12 +866,16 @@ func (p *Plugin) handleResumeSubscription(ctx forge.Context, req *SubIDRequest) 
 		return nil, forge.BadRequest("invalid subscription id")
 	}
 
-	if err := p.requireSubscriptionInApp(ctx, subID); err != nil {
+	sub, err := p.requireSubscriptionInApp(ctx, subID)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireStatus(sub, lsub.StatusPaused); err != nil {
 		return nil, err
 	}
 
-	if err := p.service.ResumeSubscription(ctx.Context(), subID); err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to resume subscription: %w", err))
+	if _, err := p.service.ResumeSubscription(ctx.Context(), subID); err != nil {
+		return nil, writeErr(ctx, err, "resume subscription")
 	}
 
 	p.audit(ctx.Context(), "subscription.resumed", "subscription", subID.String(), "", "", bridge.OutcomeSuccess)
@@ -1086,12 +1145,12 @@ func (p *Plugin) requirePlanInApp(ctx forge.Context, planID ledgerid.PlanID) err
 	return nil
 }
 
-func (p *Plugin) requireSubscriptionInApp(ctx forge.Context, subID ledgerid.SubscriptionID) error {
+func (p *Plugin) requireSubscriptionInApp(ctx forge.Context, subID ledgerid.SubscriptionID) (*lsub.Subscription, error) {
 	sub, err := p.service.GetSubscription(ctx.Context(), subID)
 	if err != nil || !inRequestApp(ctx, sub.AppID) {
-		return forge.NotFound("subscription not found")
+		return nil, forge.NotFound("subscription not found")
 	}
-	return nil
+	return sub, nil
 }
 
 func (p *Plugin) requireInvoiceInApp(ctx forge.Context, invID ledgerid.InvoiceID) error {
@@ -1129,12 +1188,29 @@ func toPlanResponse(pl *plan.Plan) PlanResponse {
 	if pl.Pricing != nil {
 		resp.BaseAmount = pl.Pricing.BaseAmount.FormatMajor()
 		resp.BillingPeriod = string(pl.Pricing.BillingPeriod)
+		amount := pl.Pricing.BaseAmount.Amount
+		resp.AmountMinor = &amount
+	}
+	resp.Features = make([]PlanFeatureResponse, 0, len(pl.Features))
+	for _, f := range pl.Features {
+		pf := PlanFeatureResponse{
+			Key:       f.Key,
+			Name:      f.Name,
+			Type:      string(f.Type),
+			Period:    string(f.Period),
+			SoftLimit: f.SoftLimit,
+		}
+		if f.Limit >= 0 {
+			limit := f.Limit
+			pf.Limit = &limit
+		}
+		resp.Features = append(resp.Features, pf)
 	}
 	return resp
 }
 
-func toSubResponse(s *lsub.Subscription) Response {
-	resp := Response{
+func toSubResponse(s *lsub.Subscription) SubscriptionResponse {
+	resp := SubscriptionResponse{
 		ID:                 s.ID.String(),
 		TenantID:           s.TenantID,
 		PlanID:             s.PlanID.String(),
@@ -1154,6 +1230,14 @@ func toSubResponse(s *lsub.Subscription) Response {
 	if s.CanceledAt != nil {
 		ca := s.CanceledAt.Format("2006-01-02")
 		resp.CanceledAt = &ca
+	}
+	if s.CancelAt != nil {
+		ca := s.CancelAt.Format("2006-01-02")
+		resp.CancelAt = &ca
+	}
+	if s.PausedAt != nil {
+		pa := s.PausedAt.Format("2006-01-02")
+		resp.PausedAt = &pa
 	}
 	return resp
 }

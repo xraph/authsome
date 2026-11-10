@@ -372,7 +372,7 @@ func subscriptionsCreateHandler(deps Deps) func(context.Context, subscriptionWri
 		if pl.Status != plan.StatusActive {
 			return ackResponse{}, badReq("plan must be active")
 		}
-		item, err := deps.Service.Subscribe(ctx, strings.TrimSpace(in.TenantID), pl.ID, scopedApp(deps, p))
+		item, err := deps.Service.Subscribe(ctx, strings.TrimSpace(in.TenantID), pl.ID, scopedApp(deps, p), nil)
 		if err != nil {
 			return ackResponse{}, mapErr(err)
 		}
@@ -392,19 +392,19 @@ func subscriptionsChangeHandler(deps Deps) func(context.Context, subscriptionWri
 		if pl.Status != plan.StatusActive {
 			return ackResponse{}, badReq("plan must be active")
 		}
-		if err := deps.Service.ChangePlan(ctx, item.ID, pl.ID); err != nil {
+		if _, err := deps.Service.ChangePlan(ctx, item.ID, pl.ID, nil); err != nil {
 			return ackResponse{}, mapErr(err)
 		}
 		return ackResponse{OK: true, ID: item.ID.String()}, nil
 	}
 }
-func subscriptionAction(deps Deps, action func(context.Context, ledgerid.SubscriptionID) error) func(context.Context, subscriptionWriteInput, contract.Principal) (ackResponse, error) {
+func subscriptionAction(deps Deps, action func(context.Context, ledgerid.SubscriptionID) (*subscription.Subscription, error)) func(context.Context, subscriptionWriteInput, contract.Principal) (ackResponse, error) {
 	return func(ctx context.Context, in subscriptionWriteInput, p contract.Principal) (ackResponse, error) {
 		item, err := scopedSubscription(ctx, deps, p, in.ID)
 		if err != nil {
 			return ackResponse{}, err
 		}
-		if err := action(ctx, item.ID); err != nil {
+		if _, err := action(ctx, item.ID); err != nil {
 			return ackResponse{}, mapErr(err)
 		}
 		return ackResponse{OK: true, ID: item.ID.String()}, nil
