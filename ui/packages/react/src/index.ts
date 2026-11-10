@@ -17,11 +17,15 @@ export type {
   MFAEnrollment,
   APIError,
   TokenStorage,
+  AuthPlugin,
+  AuthEvent,
+  PluginContext,
+  PluginKey,
 } from "@authsome/ui-core";
 
 // Context + hooks
 export { AuthProvider, useAuth, AuthContext, type AuthProviderProps, type AuthContextValue } from "./context";
-export { useUser, useOrganizations, useSessionToken, useClientConfig } from "./hooks";
+export { useUser, useOrganizations, useSessionToken, useClientConfig, usePlugin, useActiveOrg } from "./hooks";
 
 // Headless components
 export {

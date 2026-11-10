@@ -1,6 +1,6 @@
 /** Headless UI components for common auth flows. */
 
-import { useCallback, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useAuth, type AuthContextValue } from "./context";
 
 // ── Sign In ─────────────────────────────────────────
@@ -219,17 +219,35 @@ export interface ProtectProps {
   children: ReactNode;
   /** Fallback rendered when the user doesn't meet the requirements. */
   fallback?: ReactNode;
-  /** Require a specific role (e.g. "admin"). */
+  /** Require an app role the user holds (e.g. "admin"), from /v1/me's roles. */
   role?: string;
-  /** Require a specific permission (e.g. "packages:write"). */
+  /**
+   * Require a permission (e.g. "packages:write"). The client can't check a
+   * permission on its own, so this needs a `condition` that does; without
+   * one, Protect shows the fallback.
+   */
   permission?: string;
   /** Custom condition receiving the auth context. */
   condition?: (auth: AuthContextValue) => boolean;
 }
 
+let warnedPermission = false;
+
+/** Warns once per page that a permission-only Protect can't be satisfied. */
+function warnUncheckedPermission(permission: string): void {
+  if (warnedPermission) return;
+  warnedPermission = true;
+  console.warn(
+    `authsome: <Protect permission="${permission}"> needs a condition that checks the permission. ` +
+      "The client can't check one by itself, so it shows the fallback.",
+  );
+}
+
 /**
  * Renders children only when the user is authenticated AND meets
- * the specified role, permission, or custom condition.
+ * the specified role, permission, or custom condition. Anything it can't
+ * check, it treats as not met: a guard that guesses would show protected
+ * UI to the wrong people.
  *
  * Without role/permission/condition, behaves like `<SignedIn />`.
  *
@@ -247,24 +265,22 @@ export function Protect({
   condition,
 }: ProtectProps) {
   const auth = useAuth();
+  const unchecked = Boolean(permission) && !condition;
+  useEffect(() => {
+    if (unchecked && permission) warnUncheckedPermission(permission);
+  }, [unchecked, permission]);
 
   if (auth.isLoading) return null;
   if (!auth.isAuthenticated) return <>{fallback}</>;
 
-  // Custom condition check
-  if (condition && !condition(auth)) return <>{fallback}</>;
-
-  // Role/permission checks are left to the consumer's RBAC layer
-  // since the auth context doesn't carry roles directly. The
-  // `condition` prop covers this use case generically.
-  if (role || permission) {
-    // These are checked via condition or by a higher-level wrapper
-    // that injects role/permission data.
-    if (condition === undefined) {
-      // No condition provided but role/permission requested — pass through
-      // (the consumer should wrap with their own RBAC provider).
-    }
+  if (role) {
+    const roles = (auth.user as { roles?: string[] } | null)?.roles ?? [];
+    if (!roles.includes(role)) return <>{fallback}</>;
   }
+
+  if (unchecked) return <>{fallback}</>;
+
+  if (condition && !condition(auth)) return <>{fallback}</>;
 
   return <>{children}</>;
 }
