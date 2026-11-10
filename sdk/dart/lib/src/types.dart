@@ -9647,13 +9647,13 @@ class Oauth2LogoutPostRequest {
 class Oauth2RevokeRequest {
   final String? clientId;
   final String? clientSecret;
-  final String token;
+  final String? token;
   final String? tokenTypeHint;
 
   const Oauth2RevokeRequest({
     this.clientId,
     this.clientSecret,
-    required this.token,
+    this.token,
     this.tokenTypeHint,
   });
 
@@ -9661,7 +9661,7 @@ class Oauth2RevokeRequest {
     return Oauth2RevokeRequest(
       clientId: json['client_id'] as String?,
       clientSecret: json['client_secret'] as String?,
-      token: json['token'] as String,
+      token: json['token'] as String?,
       tokenTypeHint: json['token_type_hint'] as String?,
     );
   }
@@ -9670,7 +9670,7 @@ class Oauth2RevokeRequest {
     return {
       if (clientId != null) 'client_id': clientId,
       if (clientSecret != null) 'client_secret': clientSecret,
-      'token': token,
+      if (token != null) 'token': token,
       if (tokenTypeHint != null) 'token_type_hint': tokenTypeHint,
     };
   }
@@ -9688,7 +9688,7 @@ class Oauth2TokenRequest {
   final String? code;
   final String? codeVerifier;
   final String? deviceCode;
-  final String grantType;
+  final String? grantType;
   final String? redirectUri;
   final String? refreshToken;
   final String? requestedTokenType;
@@ -9706,7 +9706,7 @@ class Oauth2TokenRequest {
     this.code,
     this.codeVerifier,
     this.deviceCode,
-    required this.grantType,
+    this.grantType,
     this.redirectUri,
     this.refreshToken,
     this.requestedTokenType,
@@ -9726,7 +9726,7 @@ class Oauth2TokenRequest {
       code: json['code'] as String?,
       codeVerifier: json['code_verifier'] as String?,
       deviceCode: json['device_code'] as String?,
-      grantType: json['grant_type'] as String,
+      grantType: json['grant_type'] as String?,
       redirectUri: json['redirect_uri'] as String?,
       refreshToken: json['refresh_token'] as String?,
       requestedTokenType: json['requested_token_type'] as String?,
@@ -9747,7 +9747,7 @@ class Oauth2TokenRequest {
       if (code != null) 'code': code,
       if (codeVerifier != null) 'code_verifier': codeVerifier,
       if (deviceCode != null) 'device_code': deviceCode,
-      'grant_type': grantType,
+      if (grantType != null) 'grant_type': grantType,
       if (redirectUri != null) 'redirect_uri': redirectUri,
       if (refreshToken != null) 'refresh_token': refreshToken,
       if (requestedTokenType != null) 'requested_token_type': requestedTokenType,

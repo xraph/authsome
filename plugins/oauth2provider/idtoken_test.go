@@ -232,8 +232,8 @@ func TestCodeGrant_ClientWithoutOpenIDScope(t *testing.T) {
 	q.Set("scope", "openid profile")
 	q.Set("code_challenge", s256(oidcVerifier))
 	q.Set("code_challenge_method", "S256")
-	refused := authorizeWith(sessionCtx(f.user.ID, f.appID, time.Now()), f.mux, q)
-	assert.NotEqual(t, http.StatusFound, refused.Code, "openid is not registered for this client; body: %s", refused.Body.String())
+	refused, _ := redirectedError(t, authorizeWith(sessionCtx(f.user.ID, f.appID, time.Now()), f.mux, q))
+	assert.Equal(t, "invalid_scope", refused, "openid is not registered for this client")
 
 	body := decodeTokenBody(t, f.codeGrant(t, noOpenIDID, "", "n-2", time.Now()))
 	assert.Equal(t, "profile email", body["scope"])

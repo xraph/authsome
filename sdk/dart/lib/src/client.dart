@@ -2062,14 +2062,14 @@ class AuthClient {
 
   /// OAuth2 Authorization
   /// GET /v1/oauth/authorize
-  Future<void> oauth2Authorize({required String responseType, required String clientId, String? redirectUri, String? scope, String? state, String? codeChallenge, String? codeChallengeMethod, List<String>? resource, String? prompt, String? nonce, String? maxAge}) async {
+  Future<void> oauth2Authorize({String? responseType, String? clientId, String? redirectUri, String? scope, String? state, String? codeChallenge, String? codeChallengeMethod, List<String>? resource, String? prompt, String? nonce, String? maxAge}) async {
     final path = '/v1/oauth/authorize';
     // A list of pairs rather than a map, because a query string may carry the
     // same key more than once. RFC 8707 sends `resource` that way, and a map
     // would keep only the last value.
     final queryPairs = <MapEntry<String, String>>[];
-    queryPairs.add(MapEntry('response_type', responseType.toString()));
-    queryPairs.add(MapEntry('client_id', clientId.toString()));
+    if (responseType != null) queryPairs.add(MapEntry('response_type', responseType.toString()));
+    if (clientId != null) queryPairs.add(MapEntry('client_id', clientId.toString()));
     if (redirectUri != null) queryPairs.add(MapEntry('redirect_uri', redirectUri.toString()));
     if (scope != null) queryPairs.add(MapEntry('scope', scope.toString()));
     if (state != null) queryPairs.add(MapEntry('state', state.toString()));

@@ -2486,7 +2486,9 @@ func (c *Client) Oauth2Revoke(ctx context.Context, req *Oauth2RevokeRequest) err
 		if req.ClientSecret != "" {
 			form.Set("client_secret", req.ClientSecret)
 		}
-		form.Set("token", req.Token)
+		if req.Token != "" {
+			form.Set("token", req.Token)
+		}
 		if req.TokenTypeHint != "" {
 			form.Set("token_type_hint", req.TokenTypeHint)
 		}
@@ -2524,7 +2526,9 @@ func (c *Client) Oauth2Token(ctx context.Context, req *Oauth2TokenRequest) (*Oau
 		if req.DeviceCode != "" {
 			form.Set("device_code", req.DeviceCode)
 		}
-		form.Set("grant_type", req.GrantType)
+		if req.GrantType != "" {
+			form.Set("grant_type", req.GrantType)
+		}
 		if req.RedirectURI != "" {
 			form.Set("redirect_uri", req.RedirectURI)
 		}

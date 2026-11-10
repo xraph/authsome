@@ -2,7 +2,6 @@ package oauth2provider_test
 
 import (
 	"context"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -66,10 +65,9 @@ func TestAuthorizeResource(t *testing.T) {
 		q := baseAuthorizeQuery(confidentialID)
 		q.Add("resource", resOther)
 
-		rec := authorize(t, mux, q)
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.Contains(t, rec.Body.String(), "invalid_target")
-		assert.Contains(t, rec.Body.String(), "not registered for this client",
+		code, desc := redirectedError(t, authorize(t, mux, q))
+		assert.Equal(t, "invalid_target", code)
+		assert.Contains(t, desc, "not registered for this client",
 			"an unregistered resource must be refused for that specific reason, not merely refused")
 	})
 
@@ -79,10 +77,9 @@ func TestAuthorizeResource(t *testing.T) {
 		q := baseAuthorizeQuery(confidentialID)
 		q.Add("resource", resAPI)
 
-		rec := authorize(t, mux, q)
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.Contains(t, rec.Body.String(), "invalid_target")
-		assert.Contains(t, rec.Body.String(), "not registered for this client",
+		code, desc := redirectedError(t, authorize(t, mux, q))
+		assert.Equal(t, "invalid_target", code)
+		assert.Contains(t, desc, "not registered for this client",
 			"an empty allowlist still rejects via the allowlist-membership check, same as an unregistered resource")
 	})
 

@@ -626,6 +626,24 @@ Authsome publishes an OpenID Connect discovery document:
 }
 ```
 
+## Errors
+
+Every error from the authorize, token, revoke and device endpoints carries an RFC 6749 code in `error`, with a human-readable `error_description` next to it. Your client library can branch on the code and never parse the prose.
+
+From `/v1/oauth/authorize`, an error goes back to the client's `redirect_uri` with `state`, the way RFC 6749 section 4.1.2.1 describes, once the client and its redirect URI check out. Before that (a missing or unknown `client_id`, a `redirect_uri` that isn't registered) it's answered as a 400 directly, because redirecting to an unverified URI would turn the endpoint into an open redirector.
+
+| Code | Where | Means |
+|------|-------|-------|
+| `invalid_request` | both | A parameter is missing or malformed |
+| `invalid_client` | token (401) | Client authentication failed. With HTTP Basic, the response carries `WWW-Authenticate: Basic` |
+| `invalid_grant` | token | The code, refresh token or PKCE verifier is wrong, used, expired or for another client |
+| `unauthorized_client` | both | The client isn't registered for this grant |
+| `unsupported_grant_type` | token | Unknown `grant_type` |
+| `unsupported_response_type` | authorize | Anything but `response_type=code` |
+| `invalid_scope` | both | A scope the client isn't registered for |
+| `invalid_target` | both | A `resource` the client isn't registered for (RFC 8707) |
+| `login_required`, `consent_required` | authorize | `prompt=none` couldn't be answered without UI |
+
 ## Configuration reference
 
 | Option | Type | Default | Description |

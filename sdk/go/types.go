@@ -2456,7 +2456,7 @@ type Oauth2UpdateRegistrationRequest struct {
 type Oauth2RevokeRequest struct {
 	ClientID      string `json:"client_id,omitempty"`
 	ClientSecret  string `json:"client_secret,omitempty"`
-	Token         string `json:"token"`
+	Token         string `json:"token,omitempty"`
 	TokenTypeHint string `json:"token_type_hint,omitempty"`
 }
 
@@ -2470,7 +2470,7 @@ type Oauth2TokenRequest struct {
 	Code               string   `json:"code,omitempty"`
 	CodeVerifier       string   `json:"code_verifier,omitempty"`
 	DeviceCode         string   `json:"device_code,omitempty"`
-	GrantType          string   `json:"grant_type"`
+	GrantType          string   `json:"grant_type,omitempty"`
 	RedirectURI        string   `json:"redirect_uri,omitempty"`
 	RefreshToken       string   `json:"refresh_token,omitempty"`
 	RequestedTokenType string   `json:"requested_token_type,omitempty"`

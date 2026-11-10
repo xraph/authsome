@@ -132,8 +132,8 @@ func TestAuthorize_PlainPKCEIsRefusedForEveryClient(t *testing.T) {
 	q := baseAuthorizeQuery(confidentialID)
 	q.Set("code_challenge", "the-verifier-in-the-clear")
 	q.Set("code_challenge_method", "plain")
-	rec := authorize(t, mux, q)
-	assert.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+	code, _ := redirectedError(t, authorize(t, mux, q))
+	assert.Equal(t, "invalid_request", code)
 }
 
 func TestUserInfo_ClaimsFollowTheTokenScopes(t *testing.T) {
