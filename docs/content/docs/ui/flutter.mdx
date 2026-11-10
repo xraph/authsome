@@ -239,7 +239,13 @@ UserProfileCard(
 
 ### OrgSwitcher
 
-Popup menu for switching between organizations and creating new ones.
+Popup menu for switching between organizations and creating new ones. With no arguments it shows the session's active organization and switches it for you:
+
+```dart
+const OrgSwitcher()
+```
+
+If your app keeps the active organization itself, pass both `activeOrgId` and `onOrgChange`:
 
 ```dart
 OrgSwitcher(
@@ -248,6 +254,15 @@ OrgSwitcher(
   onCreateOrg: () => print('New org created'),
 )
 ```
+
+The session's organization is also on `context.auth`. You get it back after a restart because `/v1/me` reports it, and signing out clears it:
+
+```dart
+final orgId = context.auth.activeOrgId;
+await context.auth.switchOrg('org_123'); // rebuilds listeners
+```
+
+Client plugins, the client half of server plugins like `subscription`, are added to `AuthConfig.plugins` and read with `context.auth.plugin<SomeApi>()`. See [Client plugins](/docs/ui/plugins).
 
 ## Session and device management
 

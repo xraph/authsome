@@ -1,0 +1,92 @@
+---
+title: Client Plugins
+description: Add the client half of a server plugin to your React or Flutter app, or write one of your own.
+---
+
+A server plugin is something you opt into with `authsome.WithPlugin(...)`. Most of them need nothing on the client. Some, like `subscription`, come with a client half too: a package that knows the plugin's routes, keeps its state, and gives you hooks or widgets. You opt into that half the same way, by adding it to your provider.
+
+## Using a plugin
+
+### React
+
+```tsx
+import { AuthProvider, usePlugin } from "@authsome/ui-react";
+import { subscription } from "@authsome/plugin-subscription";
+
+<AuthProvider baseURL={url} publishableKey={pk} plugins={[subscription()]}>
+  <App />
+</AuthProvider>
+
+function Somewhere() {
+  const billing = usePlugin(subscription);
+}
+```
+
+Plugin packages usually ship their own hooks on top of `usePlugin`, so you'll mostly call those.
+
+### Flutter
+
+```dart
+AuthProvider(
+  config: AuthConfig(
+    baseUrl: url,
+    publishableKey: pk,
+    plugins: [SubscriptionPlugin()],
+  ),
+  child: const MyApp(),
+);
+
+final billing = context.auth.plugin<SubscriptionApi>();
+```
+
+### Without a framework
+
+```ts
+const auth = new AuthManager({ baseURL: url, plugins: [subscription()] });
+const billing = auth.plugin(subscription);
+```
+
+Asking for a plugin you didn't add throws an error that names it, so a missing registration shows up the first time you run the page.
+
+A plugin's setup runs the first time you ask for it, not when the provider mounts. If its setup throws (a bad option, say), you see the error there too.
+
+## Writing a plugin
+
+A plugin has a name and a setup function. The name has to be the server plugin's `Name()`, because that's how the plugin can tell from the client config whether the server side is installed.
+
+```ts
+import { definePlugin } from "@authsome/ui-core";
+
+export const audit = definePlugin("audit", (ctx, options?: { pageSize?: number }) => ({
+  async recent() {
+    return ctx.request<{ events: AuditEvent[] }>("GET", "/v1/audit/events", {
+      query: { org_id: ctx.getActiveOrgId() ?? undefined, limit: options?.pageSize ?? 20 },
+    });
+  },
+}));
+```
+
+```dart
+class AuditPlugin extends AuthPlugin<AuditApi> {
+  @override
+  String get name => 'audit';
+
+  @override
+  AuditApi init(PluginContext ctx) => AuditApi(ctx);
+}
+```
+
+Setup gets a small context and nothing else:
+
+| Member | What it's for |
+|---|---|
+| `request` | Calls your routes as the signed-in user. The base URL, publishable key and bearer token (or the session cookie in cookie mode) are filled in, and it throws `AuthClientError` / `AuthClientException` on an error status |
+| `getState()` / `state` | The current auth state |
+| `getClientConfig()` / `clientConfig` | The client config, null until it loads |
+| `isServerEnabled()` / `isServerEnabled` | `true` or `false` from the config's `supported_plugins`, `null` while that isn't known |
+| `getActiveOrgId()` / `activeOrgId` | The session's active organization |
+| `on(event, fn)` / `events` | `signedIn`, `signedOut`, `sessionRefreshed`, `orgChanged` |
+
+Listen for `signedOut` to drop anything you cached, and `orgChanged` to refetch anything scoped to an organization. `sessionRefreshed` fires when the tokens rotate; switching organization doesn't fire it, because `orgChanged` already does.
+
+The context is small on purpose. Plugin packages version separately from the core, so anything added to it is a promise to every plugin, and it only grows when a second plugin needs the same thing.
