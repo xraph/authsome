@@ -61,29 +61,32 @@ func normalizeOrigin(raw string) string {
 	return scheme + "://" + host
 }
 
-// corsMiddleware adds the CORS headers for an allowed Origin and answers a
-// preflight itself.
+// writeCORS sets the headers for an allowed Origin, and the preflight
+// headers too when the request is a preflight.
+func (p *Plugin) writeCORS(ctx forge.Context) {
+	r := ctx.Request()
+	h := ctx.Response().Header()
+	h.Add("Vary", "Origin")
+	origin := r.Header.Get("Origin")
+	if origin == "" || !p.corsOriginAllowed(origin) {
+		return
+	}
+	h.Set("Access-Control-Allow-Origin", origin)
+	h.Del("Access-Control-Allow-Credentials")
+	h.Set("Access-Control-Expose-Headers", corsExposeHeaders)
+	if r.Method == http.MethodOptions {
+		h.Set("Access-Control-Allow-Methods", corsAllowMethods)
+		h.Set("Access-Control-Allow-Headers", corsAllowHeaders)
+		h.Set("Access-Control-Max-Age", corsMaxAge)
+	}
+}
+
+// corsMiddleware adds the CORS headers to a GET or POST route. Preflights
+// have routes of their own (registerPreflight).
 func (p *Plugin) corsMiddleware() forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
-			r := ctx.Request()
-			h := ctx.Response().Header()
-			h.Add("Vary", "Origin")
-			origin := r.Header.Get("Origin")
-			allowed := origin != "" && p.corsOriginAllowed(origin)
-			if allowed {
-				h.Set("Access-Control-Allow-Origin", origin)
-				h.Del("Access-Control-Allow-Credentials")
-				h.Set("Access-Control-Expose-Headers", corsExposeHeaders)
-			}
-			if r.Method == http.MethodOptions {
-				if allowed {
-					h.Set("Access-Control-Allow-Methods", corsAllowMethods)
-					h.Set("Access-Control-Allow-Headers", corsAllowHeaders)
-					h.Set("Access-Control-Max-Age", corsMaxAge)
-				}
-				return ctx.NoContent(http.StatusNoContent)
-			}
+			p.writeCORS(ctx)
 			return next(ctx)
 		}
 	}
@@ -111,6 +114,8 @@ func (p *Plugin) registerPreflight(r forge.Router, path string) error {
 	if p.config.DisableCORS {
 		return nil
 	}
-	return r.OPTIONS(path, func(ctx forge.Context) error { return ctx.NoContent(http.StatusNoContent) },
-		forge.WithMiddleware(p.corsMiddleware()), forge.WithOpenAPIExclude())
+	return r.OPTIONS(path, func(ctx forge.Context) error {
+		p.writeCORS(ctx)
+		return ctx.NoContent(http.StatusNoContent)
+	}, forge.WithOpenAPIExclude())
 }

@@ -128,6 +128,9 @@ func TestCORS_OriginList(t *testing.T) {
 	rec = corsRequest(t, h, http.MethodGet, "/v1/oauth/jwks", "http://localhost:5173")
 	assert.Equal(t, "http://localhost:5173", rec.Header().Get("Access-Control-Allow-Origin"))
 
+	rec = corsRequest(t, h, http.MethodGet, "/v1/oauth/jwks", "://not an origin")
+	assert.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"), "an origin that won't parse matches nothing")
+
 	rec = corsRequest(t, h, http.MethodGet, "/v1/oauth/jwks", "https://evil.example.com")
 	assert.Equal(t, http.StatusOK, rec.Code, "the request itself still works")
 	assert.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"), "but the browser won't hand it over")
