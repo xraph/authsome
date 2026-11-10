@@ -90,6 +90,9 @@
       },
       "AdminCatalogProvider": {
         "properties": {
+          "generic": {
+            "type": "boolean"
+          },
           "id": {
             "type": "string"
           },
@@ -460,11 +463,17 @@
           "client_secret": {
             "type": "string"
           },
+          "display_name": {
+            "type": "string"
+          },
           "enabled": {
             "type": "boolean"
           },
           "has_secret": {
             "type": "boolean"
+          },
+          "issuer": {
+            "type": "string"
           },
           "name": {
             "type": "string"
@@ -477,6 +486,9 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "type": {
+            "type": "string"
           }
         },
         "required": [
@@ -731,8 +743,16 @@
             "description": "OAuth client secret. Pass empty string to leave the existing value unchanged.",
             "type": "string"
           },
+          "display_name": {
+            "description": "Sign-in button label (type oidc only)",
+            "type": "string"
+          },
           "enabled": {
             "type": "boolean"
+          },
+          "issuer": {
+            "description": "OpenID Connect issuer URL (type oidc only)",
+            "type": "string"
           },
           "redirect_url": {
             "type": "string"
@@ -742,6 +762,10 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "type": {
+            "description": "Empty for a built-in provider; oidc for any OpenID Connect issuer",
+            "type": "string"
           }
         },
         "required": [
@@ -28818,6 +28842,13 @@
           {
             "in": "query",
             "name": "nonce",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_age",
             "schema": {
               "type": "string"
             }

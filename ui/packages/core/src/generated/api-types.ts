@@ -29,6 +29,7 @@ export interface AdminBanUserRequest {
 }
 
 export interface AdminCatalogProvider {
+  generic?: boolean;
   id: string;
   name: string;
 }
@@ -131,11 +132,14 @@ export interface AdminPlatformOwnerResponse {
 export interface AdminProvider {
   client_id: string;
   client_secret?: string;
+  display_name?: string;
   enabled: boolean;
   has_secret: boolean;
+  issuer?: string;
   name: string;
   redirect_url?: string;
   scopes?: string[];
+  type?: string;
 }
 
 export interface AdminProviderResponse {
@@ -204,9 +208,12 @@ export interface AdminUpdateUserRequest {
 export interface AdminUpsertProviderRequest {
   client_id: string;
   client_secret: string;
+  display_name?: string;
   enabled?: boolean;
+  issuer?: string;
   redirect_url?: string;
   scopes?: string[];
+  type?: string;
 }
 
 export interface AdminUserListResponse {

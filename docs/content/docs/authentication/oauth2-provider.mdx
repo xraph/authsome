@@ -386,6 +386,27 @@ Leave both empty and a signed-out `/authorize` answers 401, as it did before.
 
 A client that sends `prompt=none` never sees a login page. It's asking for an answer without any UI, so it gets `error=login_required` at its redirect URI (with its `state`) and decides what to do from there.
 
+### Ask for a fresh sign-in
+
+Sometimes a client needs to know the user signed in recently, say before changing a payout account. You have two ways to ask:
+
+- `prompt=login` sends the user to the login page even when they're already signed in.
+- `max_age=300` accepts a sign-in up to 300 seconds old. An older one goes to the login page first. `max_age=0` always asks.
+
+The id_token's `auth_time` tells you when the sign-in you got actually happened, so check it if the answer matters to you.
+
+When authsome sends a signed-in user back to the login page for `prompt=login`, the return URL drops `login` from the prompt and adds `login_after`, the time the trip started. The request that comes back is answered only for a session created after that, so the user can't loop and an old session can't sneak through. Your login page needs to show the sign-in form even when a session exists. The authsome UI sign-in page already does.
+
+These return errors at the client's redirect URI, with its `state`:
+
+| Request | Error |
+|---------|-------|
+| `prompt=none`, user signed out or sign-in too old | `login_required` |
+| `prompt=none`, consent still needed | `consent_required` |
+| `prompt=login` or `max_age` with no login page configured | `login_required` |
+| `prompt=none` together with any other value | `invalid_request` |
+| `max_age` that isn't a non-negative integer | `invalid_request` |
+
 ### Sign users out
 
 When a user signs out of a client, the client can end their session here as well. Register where you want them sent afterwards:
@@ -432,7 +453,7 @@ If something in front of authsome already handles CORS, set `DisableCORS: true`.
 
 ### What this doesn't do yet
 
-`prompt=login`, `max_age`, front-channel and back-channel logout aren't there yet, and neither is a way to add custom claims.
+Front-channel and back-channel logout aren't there yet, and neither is a way to add custom claims.
 
 ## Scopes and consent
 

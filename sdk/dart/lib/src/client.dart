@@ -1955,7 +1955,7 @@ class AuthClient {
 
   /// OAuth2 Authorization
   /// GET /v1/oauth/authorize
-  Future<void> oauth2Authorize({required String responseType, required String clientId, String? redirectUri, String? scope, String? state, String? codeChallenge, String? codeChallengeMethod, List<String>? resource, String? prompt, String? nonce}) async {
+  Future<void> oauth2Authorize({required String responseType, required String clientId, String? redirectUri, String? scope, String? state, String? codeChallenge, String? codeChallengeMethod, List<String>? resource, String? prompt, String? nonce, String? maxAge}) async {
     final path = '/v1/oauth/authorize';
     // A list of pairs rather than a map, because a query string may carry the
     // same key more than once. RFC 8707 sends `resource` that way, and a map
@@ -1973,6 +1973,7 @@ class AuthClient {
     }
     if (prompt != null) queryPairs.add(MapEntry('prompt', prompt.toString()));
     if (nonce != null) queryPairs.add(MapEntry('nonce', nonce.toString()));
+    if (maxAge != null) queryPairs.add(MapEntry('max_age', maxAge.toString()));
     final queryString = queryPairs.isNotEmpty
         ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
         : '';

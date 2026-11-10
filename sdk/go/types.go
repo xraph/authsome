@@ -37,8 +37,9 @@ type AdminBanUserRequest struct {
 
 // AdminCatalogProvider represents the AdminCatalogProvider schema.
 type AdminCatalogProvider struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	Generic bool   `json:"generic,omitempty"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
 }
 
 // AdminCatalogResponse represents the AdminCatalogResponse schema.
@@ -154,11 +155,14 @@ type AdminPlatformOwnerResponse struct {
 type AdminProvider struct {
 	ClientID     string   `json:"client_id"`
 	ClientSecret string   `json:"client_secret,omitempty"`
+	DisplayName  string   `json:"display_name,omitempty"`
 	Enabled      bool     `json:"enabled"`
 	HasSecret    bool     `json:"has_secret"`
+	Issuer       string   `json:"issuer,omitempty"`
 	Name         string   `json:"name"`
 	RedirectURL  string   `json:"redirect_url,omitempty"`
 	Scopes       []string `json:"scopes,omitempty"`
+	Type         string   `json:"type,omitempty"`
 }
 
 // AdminProviderResponse represents the AdminProviderResponse schema.
@@ -235,9 +239,12 @@ type AdminUpdateUserRequest struct {
 type AdminUpsertProviderRequest struct {
 	ClientID     string   `json:"client_id"`
 	ClientSecret string   `json:"client_secret"`
+	DisplayName  string   `json:"display_name,omitempty"`
 	Enabled      bool     `json:"enabled,omitempty"`
+	Issuer       string   `json:"issuer,omitempty"`
 	RedirectURL  string   `json:"redirect_url,omitempty"`
 	Scopes       []string `json:"scopes,omitempty"`
+	Type         string   `json:"type,omitempty"`
 }
 
 // AdminUserListResponse represents the AdminUserListResponse schema.
@@ -2140,9 +2147,12 @@ type UpdateOAuth2ClientRequest struct {
 type SocialAdminUpsertProviderRequest struct {
 	ClientID     string   `json:"client_id"`
 	ClientSecret string   `json:"client_secret"`
+	DisplayName  string   `json:"display_name,omitempty"`
 	Enabled      bool     `json:"enabled,omitempty"`
+	Issuer       string   `json:"issuer,omitempty"`
 	RedirectURL  string   `json:"redirect_url,omitempty"`
 	Scopes       []string `json:"scopes,omitempty"`
+	Type         string   `json:"type,omitempty"`
 }
 
 // SsoAdminCreateConnectionRequest is the request body for SsoAdminCreateConnection.
