@@ -248,6 +248,16 @@ func (p *Plugin) authorizeError(ctx forge.Context, redirectURI, code, descriptio
 	return ctx.Redirect(http.StatusFound, to)
 }
 
+// authorizeErrorFrom sends an OAuth2 error to the client's redirect URI
+// and passes anything else through unchanged.
+func (p *Plugin) authorizeErrorFrom(ctx forge.Context, redirectURI string, err error, state string) error {
+	var oe *OAuth2HTTPError
+	if errors.As(err, &oe) {
+		return p.authorizeError(ctx, redirectURI, oe.oauthError, oe.description, state)
+	}
+	return err
+}
+
 // hasPrompt reports whether the space-separated prompt list carries value.
 func hasPrompt(prompt, value string) bool {
 	for _, v := range strings.Fields(prompt) {

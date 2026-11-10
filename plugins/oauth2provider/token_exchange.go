@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -74,10 +75,10 @@ func (p *Plugin) resolveExchangeToken(ctx context.Context, token, tokenType stri
 	}
 	sess, err := p.engine.ResolveSessionByToken(ctx, token)
 	if err != nil || sess == nil {
-		return nil, forge.BadRequest("invalid_grant")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "the token is not valid or has expired")
 	}
 	if time.Now().After(sess.ExpiresAt) {
-		return nil, forge.BadRequest("invalid_grant")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "the token is not valid or has expired")
 	}
 	return sess, nil
 }
@@ -150,42 +151,42 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 	// 1. Client authentication. Confidential only: a public client cannot keep
 	// a secret and this is a privilege operation.
 	if req.ClientID == "" || req.ClientSecret == "" {
-		return nil, forge.BadRequest("client_id and client_secret required")
+		return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "client_id and client_secret are required")
 	}
 	client, err := p.oauth2Store.GetClient(ctx.Context(), req.ClientID)
 	if err != nil {
-		return nil, forge.Unauthorized("invalid client")
+		return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "invalid client")
 	}
 	if client.Public {
-		return nil, forge.BadRequest("token exchange not allowed for public clients")
+		return nil, newOAuth2Error(http.StatusBadRequest, "unauthorized_client", "token exchange not allowed for public clients")
 	}
 	if cmpErr := compareClientSecret(ctx.Context(), client.ClientSecret, req.ClientSecret); cmpErr != nil {
-		return nil, forge.Unauthorized("invalid client_secret")
+		return nil, newOAuth2Error(http.StatusUnauthorized, "invalid_client", "invalid client_secret")
 	}
 	if !p.clientSupportsGrant(client, tokenExchangeGrantType) {
-		return nil, forge.BadRequest("unauthorized_client")
+		return nil, newOAuth2Error(http.StatusBadRequest, "unauthorized_client", "client is not registered for the token exchange grant")
 	}
 
 	// 2. The client needs a principal to act as.
 	if client.PrincipalID.IsNil() {
-		e := forge.BadRequest("this client has no linked principal and cannot exchange tokens")
+		e := newOAuth2Error(http.StatusBadRequest, "unauthorized_client", "this client has no linked principal and cannot exchange tokens")
 		p.recordExchange(ctx, client, nil, nil, nil, "", denyNoPrincipal, e)
 		return nil, e
 	}
 
 	// 3. Resolve the subject.
 	if req.SubjectToken == "" || req.SubjectTokenType == "" {
-		return nil, forge.BadRequest("subject_token and subject_token_type required")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_request", "subject_token and subject_token_type are required")
 	}
 	if req.RequestedTokenType != "" && req.RequestedTokenType != tokenTypeAccessToken {
-		return nil, forge.BadRequest("unsupported requested_token_type")
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_request", "unsupported requested_token_type")
 	}
 	subject, err := p.resolveExchangeToken(ctx.Context(), req.SubjectToken, req.SubjectTokenType)
 	if err != nil {
 		reason := denyInvalidSubject
 		if errors.Is(err, errUnsupportedTokenType) {
 			reason = denyUnsupportedToken
-			err = forge.BadRequest("unsupported_token_type")
+			err = newOAuth2Error(http.StatusBadRequest, "unsupported_token_type", "unsupported_token_type: the token type is not supported")
 		}
 		p.recordExchange(ctx, client, nil, nil, nil, "", reason, err)
 		return nil, err
@@ -194,7 +195,7 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 	// 4. Cross-app exchange is refused. Without this a client in one app
 	// launders a session out of another.
 	if subject.AppID != client.AppID {
-		e := forge.BadRequest("invalid_grant")
+		e := newOAuth2Error(http.StatusBadRequest, "invalid_grant", "the token is not valid or has expired")
 		p.recordExchange(ctx, client, subject, nil, nil, "", denyCrossApp, e)
 		return nil, e
 	}
@@ -205,7 +206,7 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 	// plain bearer token carrying the same authority. That is the same
 	// downgrade the refresh path already refuses.
 	if subject.DPoPJKT != "" {
-		e := forge.BadRequest("invalid_grant: a DPoP-bound token cannot be exchanged for an unbound one")
+		e := newOAuth2Error(http.StatusBadRequest, "invalid_grant", "a DPoP-bound token cannot be exchanged for an unbound one")
 		p.recordExchange(ctx, client, subject, nil, nil, "", denyBindingDowngrade, e)
 		return nil, e
 	}
@@ -216,7 +217,7 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 	// grant be the only authority that matters.
 	actor, err := p.actorRefForClient(ctx.Context(), client)
 	if err != nil {
-		e := forge.BadRequest("invalid_grant")
+		e := newOAuth2Error(http.StatusBadRequest, "invalid_grant", "the token is not valid or has expired")
 		p.recordExchange(ctx, client, subject, nil, nil, "", denyUnknownPrincipal, e)
 		return nil, e
 	}
@@ -226,13 +227,13 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 			reason := denyInvalidSubject
 			if errors.Is(aErr, errUnsupportedTokenType) {
 				reason = denyUnsupportedToken
-				aErr = forge.BadRequest("unsupported_token_type")
+				aErr = newOAuth2Error(http.StatusBadRequest, "unsupported_token_type", "unsupported_token_type: the token type is not supported")
 			}
 			p.recordExchange(ctx, client, subject, nil, nil, "", reason, aErr)
 			return nil, aErr
 		}
 		if actorSess.AppID != client.AppID {
-			e := forge.BadRequest("invalid_grant")
+			e := newOAuth2Error(http.StatusBadRequest, "invalid_grant", "the token is not valid or has expired")
 			p.recordExchange(ctx, client, subject, nil, nil, "", denyCrossApp, e)
 			return nil, e
 		}
@@ -243,7 +244,7 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 	requested := strings.Fields(req.Scope)
 	narrowed, err := narrowRequestedScopes(requested, client.Scopes, subject.Scopes)
 	if err != nil {
-		e := forge.BadRequest(fmt.Sprintf("invalid_scope: %s", err.Error()))
+		e := newOAuth2Error(http.StatusBadRequest, "invalid_scope", err.Error())
 		p.recordExchange(ctx, client, subject, requested, nil, "", denyScopeEscalation, e)
 		return nil, e
 	}
@@ -279,7 +280,7 @@ func (p *Plugin) handleTokenExchangeGrant(ctx forge.Context, req *TokenRequest) 
 		CallerDelegationID: subject.DelegationID,
 	})
 	if err != nil {
-		e := forge.BadRequest("invalid_grant")
+		e := newOAuth2Error(http.StatusBadRequest, "invalid_grant", "the token is not valid or has expired")
 		p.recordExchange(ctx, client, subject, requested, nil, "", denyNoGrant, e)
 		return nil, e
 	}

@@ -2368,7 +2368,7 @@ export class AuthClient {
    * OAuth2 Authorization
    * GET /v1/oauth/authorize
    */
-  async oauth2Authorize(response_type: string, client_id: string, redirect_uri?: string, scope?: string, state?: string, code_challenge?: string, code_challenge_method?: string, resource?: string[], prompt?: string, nonce?: string, max_age?: string): Promise<void> {
+  async oauth2Authorize(response_type?: string, client_id?: string, redirect_uri?: string, scope?: string, state?: string, code_challenge?: string, code_challenge_method?: string, resource?: string[], prompt?: string, nonce?: string, max_age?: string): Promise<void> {
     const params = new URLSearchParams();
     if (response_type !== undefined) params.set('response_type', String(response_type));
     if (client_id !== undefined) params.set('client_id', String(client_id));

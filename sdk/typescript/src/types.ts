@@ -1870,9 +1870,9 @@ export type Oauth2RegisterClientRequest = RegisterClientRequest;
 
 export type Oauth2UpdateRegistrationRequest = UpdateRegistrationRequest;
 
-export type Oauth2RevokeRequest = { client_id?: string; client_secret?: string; token: string; token_type_hint?: string };
+export type Oauth2RevokeRequest = { client_id?: string; client_secret?: string; token?: string; token_type_hint?: string };
 
-export type Oauth2TokenRequest = { actor_token?: string; actor_token_type?: string; audience?: string; client_id?: string; client_secret?: string; code?: string; code_verifier?: string; device_code?: string; grant_type: string; redirect_uri?: string; refresh_token?: string; requested_token_type?: string; resource?: string[]; scope?: string; subject_token?: string; subject_token_type?: string };
+export type Oauth2TokenRequest = { actor_token?: string; actor_token_type?: string; audience?: string; client_id?: string; client_secret?: string; code?: string; code_verifier?: string; device_code?: string; grant_type?: string; redirect_uri?: string; refresh_token?: string; requested_token_type?: string; resource?: string[]; scope?: string; subject_token?: string; subject_token_type?: string };
 
 export type CreateOrganizationRequest = CreateOrgRequest;
 

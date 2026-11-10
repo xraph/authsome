@@ -69,10 +69,8 @@ func TestAuthorize_NonceTooLong(t *testing.T) {
 
 	q := baseAuthorizeQuery(confidentialID)
 	q.Set("nonce", strings.Repeat("a", 513))
-	rec := authorize(t, mux, q)
-
-	require.Equal(t, http.StatusBadRequest, rec.Code, "body: %s", rec.Body.String())
-	assert.Equal(t, "invalid_request", oauthErrorCode(t, rec))
+	code, _ := redirectedError(t, authorize(t, mux, q))
+	assert.Equal(t, "invalid_request", code)
 	assert.Equal(t, 0, counting.authCodesCreated, "no code may be stored for a refused request")
 
 	q.Set("nonce", strings.Repeat("a", 512))
@@ -83,8 +81,8 @@ func TestAuthorize_NonceTooLongBeforeConsentRecord(t *testing.T) {
 	_, mux, _ := newConsentFixture(t)
 	q := consentQuery("openid profile")
 	q.Set("nonce", strings.Repeat("a", 513))
-	rec := authorizeAs(t, mux, id.NewUserID(), q)
-	require.Equal(t, http.StatusBadRequest, rec.Code, "no consent redirect for a refused request; body: %s", rec.Body.String())
+	code, _ := redirectedError(t, authorizeAs(t, mux, id.NewUserID(), q))
+	assert.Equal(t, "invalid_request", code, "an error to the client, not a consent page")
 }
 
 func TestAuthorize_AuthTimeIsSessionCreatedAt(t *testing.T) {
