@@ -359,6 +359,12 @@ type BulkRevokeSessionsResponse struct {
 	UserID  string `json:"user_id"`
 }
 
+// CancelCurrentRequest represents the CancelCurrentRequest schema.
+type CancelCurrentRequest struct {
+	TenantID string `json:"tenant_id,omitempty"`
+	When     string `json:"when,omitempty"`
+}
+
 // CancelSubscriptionRequest represents the CancelSubscriptionRequest schema.
 type CancelSubscriptionRequest struct {
 	Immediately bool `json:"immediately"`
@@ -727,6 +733,12 @@ type CredentialInfo struct {
 	Transport   []string `json:"transport"`
 }
 
+// CurrentSubscriptionResponse represents the CurrentSubscriptionResponse schema.
+type CurrentSubscriptionResponse struct {
+	CanManage    bool              `json:"can_manage"`
+	Subscription *SubscriptionView `json:"subscription,omitempty"`
+}
+
 // DeclineInvitationRequest represents the DeclineInvitationRequest schema.
 type DeclineInvitationRequest struct {
 	Token string `json:"token"`
@@ -891,6 +903,11 @@ type EntitlementResponse struct {
 	Reason    string `json:"reason,omitempty"`
 	Remaining int64  `json:"remaining"`
 	Used      int64  `json:"used"`
+}
+
+// EntitlementsResponse represents the EntitlementsResponse schema.
+type EntitlementsResponse struct {
+	Entitlements map[string]any `json:"entitlements"`
 }
 
 // Environment represents the Environment schema.
@@ -1132,8 +1149,8 @@ type ListPlansResponse struct {
 
 // ListSubscriptionsResponse represents the ListSubscriptionsResponse schema.
 type ListSubscriptionsResponse struct {
-	Subscriptions []*Response `json:"subscriptions"`
-	Total         int64       `json:"total"`
+	Subscriptions []*SubscriptionResponse `json:"subscriptions"`
+	Total         int64                   `json:"total"`
 }
 
 // LoginBeginResponse represents the LoginBeginResponse schema.
@@ -1373,21 +1390,44 @@ type PhoneVerifyResponse struct {
 	User         *User  `json:"user,omitempty"`
 }
 
+// PlanFeatureResponse represents the PlanFeatureResponse schema.
+type PlanFeatureResponse struct {
+	Key       string `json:"key"`
+	Limit     int64  `json:"limit,omitempty"`
+	Name      string `json:"name"`
+	Period    string `json:"period,omitempty"`
+	SoftLimit bool   `json:"soft_limit"`
+	Type      string `json:"type"`
+}
+
 // PlanResponse represents the PlanResponse schema.
 type PlanResponse struct {
-	AppID         string         `json:"app_id"`
-	BaseAmount    string         `json:"base_amount,omitempty"`
-	BillingPeriod string         `json:"billing_period,omitempty"`
-	Currency      string         `json:"currency"`
-	Description   string         `json:"description"`
-	FeaturesCount int64          `json:"features_count"`
-	ID            string         `json:"id"`
-	IsAddon       bool           `json:"is_addon"`
-	Metadata      map[string]any `json:"metadata,omitempty"`
-	Name          string         `json:"name"`
-	Slug          string         `json:"slug"`
-	Status        string         `json:"status"`
-	TrialDays     int64          `json:"trial_days"`
+	AmountMinor   int64                  `json:"amount_minor,omitempty"`
+	AppID         string                 `json:"app_id"`
+	BaseAmount    string                 `json:"base_amount,omitempty"`
+	BillingPeriod string                 `json:"billing_period,omitempty"`
+	Currency      string                 `json:"currency"`
+	Description   string                 `json:"description"`
+	Features      []*PlanFeatureResponse `json:"features"`
+	FeaturesCount int64                  `json:"features_count"`
+	ID            string                 `json:"id"`
+	IsAddon       bool                   `json:"is_addon"`
+	Metadata      map[string]any         `json:"metadata,omitempty"`
+	Name          string                 `json:"name"`
+	Slug          string                 `json:"slug"`
+	Status        string                 `json:"status"`
+	TrialDays     int64                  `json:"trial_days"`
+}
+
+// PortalRequest represents the PortalRequest schema.
+type PortalRequest struct {
+	ReturnURL string `json:"return_url,omitempty"`
+	TenantID  string `json:"tenant_id,omitempty"`
+}
+
+// PortalResponse represents the PortalResponse schema.
+type PortalResponse struct {
+	URL string `json:"url"`
 }
 
 // RecoveryRegenerateResponse represents the RecoveryRegenerateResponse schema.
@@ -1504,20 +1544,6 @@ type ResolvedSettingsResponse struct {
 type ResourceTypeList struct {
 }
 
-// Response represents the Response schema.
-type Response struct {
-	AppID              string `json:"app_id"`
-	CanceledAt         string `json:"canceled_at,omitempty"`
-	CurrentPeriodEnd   string `json:"current_period_end"`
-	CurrentPeriodStart string `json:"current_period_start"`
-	ID                 string `json:"id"`
-	PlanID             string `json:"plan_id"`
-	Status             string `json:"status"`
-	TenantID           string `json:"tenant_id"`
-	TrialEnd           string `json:"trial_end,omitempty"`
-	TrialStart         string `json:"trial_start,omitempty"`
-}
-
 // RevokeConsentRequest represents the RevokeConsentRequest schema.
 type RevokeConsentRequest struct {
 	AppID   string `json:"app_id,omitempty"`
@@ -1599,6 +1625,13 @@ type ScopeValue struct {
 	UpdatedBy string `json:"updated_by,omitempty"`
 	Value     string `json:"value"`
 	Version   int64  `json:"version,omitempty"`
+}
+
+// SeatsView represents the SeatsView schema.
+type SeatsView struct {
+	FeatureKey string `json:"feature_key"`
+	Limit      int64  `json:"limit,omitempty"`
+	Used       int64  `json:"used"`
 }
 
 // SelectOption represents the SelectOption schema.
@@ -1754,6 +1787,54 @@ type StartRequest struct {
 	Phone string `json:"phone"`
 }
 
+// SubscribeRequest represents the SubscribeRequest schema.
+type SubscribeRequest struct {
+	CancelURL string `json:"cancel_url,omitempty"`
+	Plan      string `json:"plan"`
+	ReturnURL string `json:"return_url,omitempty"`
+	Seats     int64  `json:"seats,omitempty"`
+	TenantID  string `json:"tenant_id,omitempty"`
+}
+
+// SubscriptionMutationResponse represents the SubscriptionMutationResponse schema.
+type SubscriptionMutationResponse struct {
+	CheckoutURL  string            `json:"checkout_url,omitempty"`
+	Subscription *SubscriptionView `json:"subscription,omitempty"`
+}
+
+// SubscriptionResponse represents the SubscriptionResponse schema.
+type SubscriptionResponse struct {
+	AppID              string `json:"app_id"`
+	CancelAt           string `json:"cancel_at,omitempty"`
+	CanceledAt         string `json:"canceled_at,omitempty"`
+	CurrentPeriodEnd   string `json:"current_period_end"`
+	CurrentPeriodStart string `json:"current_period_start"`
+	ID                 string `json:"id"`
+	PausedAt           string `json:"paused_at,omitempty"`
+	PlanID             string `json:"plan_id"`
+	Status             string `json:"status"`
+	TenantID           string `json:"tenant_id"`
+	TrialEnd           string `json:"trial_end,omitempty"`
+	TrialStart         string `json:"trial_start,omitempty"`
+}
+
+// SubscriptionView represents the SubscriptionView schema.
+type SubscriptionView struct {
+	AppID              string        `json:"app_id"`
+	CancelAt           string        `json:"cancel_at,omitempty"`
+	CanceledAt         string        `json:"canceled_at,omitempty"`
+	CurrentPeriodEnd   string        `json:"current_period_end"`
+	CurrentPeriodStart string        `json:"current_period_start"`
+	ID                 string        `json:"id"`
+	PausedAt           string        `json:"paused_at,omitempty"`
+	Plan               *PlanResponse `json:"plan"`
+	Seats              *SeatsView    `json:"seats,omitempty"`
+	Status             string        `json:"status"`
+	TenantID           string        `json:"tenant_id"`
+	TrialEnd           string        `json:"trial_end,omitempty"`
+	TrialStart         string        `json:"trial_start,omitempty"`
+}
+
 // SwitchOrgRequest represents the SwitchOrgRequest schema.
 type SwitchOrgRequest struct {
 	OrgID string `json:"org_id"`
@@ -1781,6 +1862,11 @@ type Team struct {
 type TeamListResponse struct {
 	NextCursor string  `json:"next_cursor,omitempty"`
 	Teams      []*Team `json:"teams"`
+}
+
+// TenantRequest represents the TenantRequest schema.
+type TenantRequest struct {
+	TenantID string `json:"tenant_id,omitempty"`
 }
 
 // TokenExchangeRequest represents the TokenExchangeRequest schema.
@@ -1918,6 +2004,15 @@ type UpdateRoleRequest struct {
 	Description string `json:"description,omitempty"`
 	Name        string `json:"name,omitempty"`
 	ParentID    string `json:"parent_id,omitempty"`
+}
+
+// UpdateSubscriptionRequest represents the UpdateSubscriptionRequest schema.
+type UpdateSubscriptionRequest struct {
+	CancelURL string `json:"cancel_url,omitempty"`
+	Plan      string `json:"plan,omitempty"`
+	ReturnURL string `json:"return_url,omitempty"`
+	Seats     int64  `json:"seats,omitempty"`
+	TenantID  string `json:"tenant_id,omitempty"`
 }
 
 // UpdateTeamRequest represents the UpdateTeamRequest schema.
@@ -2167,6 +2262,23 @@ type CreateBillingPlanRequest struct {
 	Period      string          `json:"period"`
 	Slug        string          `json:"slug"`
 	TrialDays   int64           `json:"trial_days"`
+}
+
+// CreateBillingPortalSessionRequest is the request body for CreateBillingPortalSession.
+type CreateBillingPortalSessionRequest struct {
+	ReturnURL string `json:"return_url,omitempty"`
+	TenantID  string `json:"tenant_id,omitempty"`
+}
+
+// CancelCurrentSubscriptionRequest is the request body for CancelCurrentSubscription.
+type CancelCurrentSubscriptionRequest struct {
+	TenantID string `json:"tenant_id,omitempty"`
+	When     string `json:"when,omitempty"`
+}
+
+// ResumeCurrentSubscriptionRequest is the request body for ResumeCurrentSubscription.
+type ResumeCurrentSubscriptionRequest struct {
+	TenantID string `json:"tenant_id,omitempty"`
 }
 
 // ChangeSubscriptionPlanRequest is the request body for ChangeSubscriptionPlan.

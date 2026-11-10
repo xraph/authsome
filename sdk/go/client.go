@@ -1318,6 +1318,28 @@ func (c *Client) DeleteCoupon(ctx context.Context, couponId string) error {
 	return c.do(ctx, "DELETE", path, nil, nil)
 }
 
+// ListEntitlements — List your entitlements
+func (c *Client) ListEntitlements(ctx context.Context, params *ListEntitlementsParams) (*EntitlementsResponse, error) {
+	path := "/v1/billing/entitlements"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if params.TenantID != "" {
+			q.Set("tenant_id", params.TenantID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result EntitlementsResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // CheckEntitlement — Check feature entitlement
 func (c *Client) CheckEntitlement(ctx context.Context, featureKey string, params *CheckEntitlementParams) (*EntitlementResponse, error) {
 	path := "/v1/billing/entitlements/{featureKey}"
@@ -1404,6 +1426,12 @@ func (c *Client) ListBillingPlans(ctx context.Context, params *ListBillingPlansP
 		if params.AppID != "" {
 			q.Set("app_id", params.AppID)
 		}
+		if params.Status != "" {
+			q.Set("status", params.Status)
+		}
+		if params.IncludeAddons {
+			q.Set("include_addons", "true")
+		}
 		if encoded := q.Encode(); encoded != "" {
 			path += "?" + encoded
 		}
@@ -1454,6 +1482,98 @@ func (c *Client) ArchiveBillingPlan(ctx context.Context, planId string) error {
 	return c.do(ctx, "POST", path, nil, nil)
 }
 
+// CreateBillingPortalSession — Open the billing portal
+func (c *Client) CreateBillingPortalSession(ctx context.Context, req *CreateBillingPortalSessionRequest) (*PortalResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/portal"
+	var result PortalResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetCurrentSubscription — Get your subscription
+func (c *Client) GetCurrentSubscription(ctx context.Context, params *GetCurrentSubscriptionParams) (*CurrentSubscriptionResponse, error) {
+	path := "/v1/billing/subscription"
+	if params != nil {
+		q := url.Values{}
+		if params.AppID != "" {
+			q.Set("app_id", params.AppID)
+		}
+		if params.TenantID != "" {
+			q.Set("tenant_id", params.TenantID)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result CurrentSubscriptionResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Subscribe — Subscribe to a plan
+func (c *Client) Subscribe(ctx context.Context, req *SubscribeRequest) (*SubscriptionMutationResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/subscription"
+	var result SubscriptionMutationResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateSubscription — Change plan or seats
+func (c *Client) UpdateSubscription(ctx context.Context, req *UpdateSubscriptionRequest) (*SubscriptionMutationResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/subscription"
+	var result SubscriptionMutationResponse
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CancelCurrentSubscription — Cancel your subscription
+func (c *Client) CancelCurrentSubscription(ctx context.Context, req *CancelCurrentSubscriptionRequest) (*SubscriptionMutationResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/subscription/cancel"
+	var result SubscriptionMutationResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ResumeCurrentSubscription — Keep your subscription
+func (c *Client) ResumeCurrentSubscription(ctx context.Context, req *ResumeCurrentSubscriptionRequest) (*SubscriptionMutationResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/subscription/resume"
+	var result SubscriptionMutationResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // ListSubscriptions — List subscriptions
 func (c *Client) ListSubscriptions(ctx context.Context, params *ListSubscriptionsParams) (*ListSubscriptionsResponse, error) {
 	path := "/v1/billing/subscriptions"
@@ -1480,13 +1600,13 @@ func (c *Client) ListSubscriptions(ctx context.Context, params *ListSubscription
 }
 
 // CreateSubscription — Create subscription
-func (c *Client) CreateSubscription(ctx context.Context, req *CreateSubscriptionRequest) (*Response, error) {
+func (c *Client) CreateSubscription(ctx context.Context, req *CreateSubscriptionRequest) (*SubscriptionResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/billing/subscriptions"
-	var result Response
+	var result SubscriptionResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
@@ -1494,7 +1614,7 @@ func (c *Client) CreateSubscription(ctx context.Context, req *CreateSubscription
 }
 
 // GetActiveSubscription — Get active subscription
-func (c *Client) GetActiveSubscription(ctx context.Context, params *GetActiveSubscriptionParams) (*Response, error) {
+func (c *Client) GetActiveSubscription(ctx context.Context, params *GetActiveSubscriptionParams) (*SubscriptionResponse, error) {
 	path := "/v1/billing/subscriptions/active"
 	if params != nil {
 		q := url.Values{}
@@ -1508,7 +1628,7 @@ func (c *Client) GetActiveSubscription(ctx context.Context, params *GetActiveSub
 			path += "?" + encoded
 		}
 	}
-	var result Response
+	var result SubscriptionResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -3453,6 +3573,12 @@ type ListCouponsParams struct {
 	AppID string `json:"app_id,omitempty"`
 }
 
+// ListEntitlementsParams holds optional query parameters for ListEntitlements.
+type ListEntitlementsParams struct {
+	AppID    string `json:"app_id,omitempty"`
+	TenantID string `json:"tenant_id,omitempty"`
+}
+
 // CheckEntitlementParams holds optional query parameters for CheckEntitlement.
 type CheckEntitlementParams struct {
 	AppID    string `json:"app_id,omitempty"`
@@ -3467,7 +3593,15 @@ type ListInvoicesParams struct {
 
 // ListBillingPlansParams holds optional query parameters for ListBillingPlans.
 type ListBillingPlansParams struct {
-	AppID string `json:"app_id,omitempty"`
+	AppID         string `json:"app_id,omitempty"`
+	Status        string `json:"status,omitempty"`
+	IncludeAddons bool   `json:"include_addons,omitempty"`
+}
+
+// GetCurrentSubscriptionParams holds optional query parameters for GetCurrentSubscription.
+type GetCurrentSubscriptionParams struct {
+	AppID    string `json:"app_id,omitempty"`
+	TenantID string `json:"tenant_id,omitempty"`
 }
 
 // ListSubscriptionsParams holds optional query parameters for ListSubscriptions.

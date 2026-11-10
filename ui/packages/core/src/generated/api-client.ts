@@ -44,6 +44,7 @@ import type {
   BulkImportResult,
   BulkImportUsersRequest,
   BulkRevokeSessionsResponse,
+  CancelCurrentRequest,
   CancelSubscriptionRequest,
   ChallengeRequest,
   ChallengeResponse,
@@ -84,6 +85,7 @@ import type {
   CreateWebhookRequest,
   CreateWebhookResponse,
   CredentialInfo,
+  CurrentSubscriptionResponse,
   DeclineInvitationRequest,
   Definition,
   DefinitionGroup,
@@ -103,6 +105,7 @@ import type {
   EnrollRequest,
   EnrollResponse,
   EntitlementResponse,
+  EntitlementsResponse,
   Environment,
   EnvironmentListResponse,
   EnvironmentSettingsResponse,
@@ -161,7 +164,10 @@ import type {
   PhoneStartResponse,
   PhoneVerifyRequest,
   PhoneVerifyResponse,
+  PlanFeatureResponse,
   PlanResponse,
+  PortalRequest,
+  PortalResponse,
   RecoveryRegenerateResponse,
   RecoveryVerifyRequest,
   RecoveryVerifyResponse,
@@ -177,7 +183,6 @@ import type {
   ResolvedSettingResponse,
   ResolvedSettingsResponse,
   ResourceTypeList,
-  Response,
   RevokeConsentRequest,
   Role,
   RoleListResponse,
@@ -190,6 +195,7 @@ import type {
   SchemaList,
   ScimListResponse,
   ScopeValue,
+  SeatsView,
   SelectOption,
   SendRequest,
   SendResponse,
@@ -207,10 +213,15 @@ import type {
   SocialStartResponse,
   SsoCallbackResponse,
   StartRequest,
+  SubscribeRequest,
+  SubscriptionMutationResponse,
+  SubscriptionResponse,
+  SubscriptionView,
   SwitchOrgRequest,
   SwitchOrgResponse,
   Team,
   TeamListResponse,
+  TenantRequest,
   TokenExchangeRequest,
   TokenExchangeResponse,
   UIMetadata,
@@ -225,6 +236,7 @@ import type {
   UpdateOrgRequest,
   UpdateRegistrationRequest,
   UpdateRoleRequest,
+  UpdateSubscriptionRequest,
   UpdateTeamRequest,
   UpdateWebhookRequest,
   UsageItemResponse,
@@ -248,6 +260,9 @@ import type {
   SsoAdminCreateConnectionRequest,
   SsoAdminUpdateConnectionRequest,
   CreateBillingPlanRequest,
+  CreateBillingPortalSessionRequest,
+  CancelCurrentSubscriptionRequest,
+  ResumeCurrentSubscriptionRequest,
   ChangeSubscriptionPlanRequest,
   IntrospectTokenRequest,
   CreateAPIKeyRequest,
@@ -1480,6 +1495,24 @@ export class AuthClient {
   }
 
   /**
+   * List your entitlements
+   * GET /v1/billing/entitlements
+   */
+  async listEntitlements(token: string, app_id?: string, tenant_id?: string): Promise<EntitlementsResponse> {
+    const params = new URLSearchParams();
+    if (app_id !== undefined) params.set('app_id', String(app_id));
+    if (tenant_id !== undefined) params.set('tenant_id', String(tenant_id));
+    const qs = params.toString();
+    const path = "/v1/billing/entitlements" + (qs ? `?${qs}` : '');
+    return this.request<EntitlementsResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
    * Check feature entitlement
    * GET /v1/billing/entitlements/{featureKey}
    */
@@ -1561,9 +1594,11 @@ export class AuthClient {
    * List billing plans
    * GET /v1/billing/plans
    */
-  async listBillingPlans(app_id: string, token: string): Promise<ListPlansResponse> {
+  async listBillingPlans(app_id: string, token: string, status?: string, include_addons?: boolean): Promise<ListPlansResponse> {
     const params = new URLSearchParams();
     if (app_id !== undefined) params.set('app_id', String(app_id));
+    if (status !== undefined) params.set('status', String(status));
+    if (include_addons !== undefined) params.set('include_addons', String(include_addons));
     const qs = params.toString();
     const path = "/v1/billing/plans" + (qs ? `?${qs}` : '');
     return this.request<ListPlansResponse>(
@@ -1631,6 +1666,94 @@ export class AuthClient {
   }
 
   /**
+   * Open the billing portal
+   * POST /v1/billing/portal
+   */
+  async createBillingPortalSession(body: CreateBillingPortalSessionRequest, token: string): Promise<PortalResponse> {
+    const path = "/v1/billing/portal";
+    return this.request<PortalResponse>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Get your subscription
+   * GET /v1/billing/subscription
+   */
+  async getCurrentSubscription(token: string, app_id?: string, tenant_id?: string): Promise<CurrentSubscriptionResponse> {
+    const params = new URLSearchParams();
+    if (app_id !== undefined) params.set('app_id', String(app_id));
+    if (tenant_id !== undefined) params.set('tenant_id', String(tenant_id));
+    const qs = params.toString();
+    const path = "/v1/billing/subscription" + (qs ? `?${qs}` : '');
+    return this.request<CurrentSubscriptionResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Subscribe to a plan
+   * POST /v1/billing/subscription
+   */
+  async subscribe(body: SubscribeRequest, token: string): Promise<SubscriptionMutationResponse> {
+    const path = "/v1/billing/subscription";
+    return this.request<SubscriptionMutationResponse>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Change plan or seats
+   * PATCH /v1/billing/subscription
+   */
+  async updateSubscription(body: UpdateSubscriptionRequest, token: string): Promise<SubscriptionMutationResponse> {
+    const path = "/v1/billing/subscription";
+    return this.request<SubscriptionMutationResponse>(
+      'PATCH',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Cancel your subscription
+   * POST /v1/billing/subscription/cancel
+   */
+  async cancelCurrentSubscription(body: CancelCurrentSubscriptionRequest, token: string): Promise<SubscriptionMutationResponse> {
+    const path = "/v1/billing/subscription/cancel";
+    return this.request<SubscriptionMutationResponse>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Keep your subscription
+   * POST /v1/billing/subscription/resume
+   */
+  async resumeCurrentSubscription(body: ResumeCurrentSubscriptionRequest, token: string): Promise<SubscriptionMutationResponse> {
+    const path = "/v1/billing/subscription/resume";
+    return this.request<SubscriptionMutationResponse>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
    * List subscriptions
    * GET /v1/billing/subscriptions
    */
@@ -1653,9 +1776,9 @@ export class AuthClient {
    * Create subscription
    * POST /v1/billing/subscriptions
    */
-  async createSubscription(body: CreateSubscriptionRequest, token: string): Promise<Response> {
+  async createSubscription(body: CreateSubscriptionRequest, token: string): Promise<SubscriptionResponse> {
     const path = "/v1/billing/subscriptions";
-    return this.request<Response>(
+    return this.request<SubscriptionResponse>(
       'POST',
       path,
       body,
@@ -1667,13 +1790,13 @@ export class AuthClient {
    * Get active subscription
    * GET /v1/billing/subscriptions/active
    */
-  async getActiveSubscription(app_id: string, tenant_id: string, token: string): Promise<Response> {
+  async getActiveSubscription(app_id: string, tenant_id: string, token: string): Promise<SubscriptionResponse> {
     const params = new URLSearchParams();
     if (app_id !== undefined) params.set('app_id', String(app_id));
     if (tenant_id !== undefined) params.set('tenant_id', String(tenant_id));
     const qs = params.toString();
     const path = "/v1/billing/subscriptions/active" + (qs ? `?${qs}` : '');
-    return this.request<Response>(
+    return this.request<SubscriptionResponse>(
       'GET',
       path,
       undefined,
