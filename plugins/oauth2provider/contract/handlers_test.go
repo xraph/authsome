@@ -54,35 +54,61 @@ func TestManifest_Validates(t *testing.T) {
 	}
 }
 
-// fakeService answers from fields, so each test sets only what it needs.
+// fakeService answers from fields, so each test sets only what it needs. It
+// records the app and inputs it was called with.
 type fakeService struct {
-	createErr  error
-	created    Created
-	rotateErr  error
-	rotated    KeyInfo
-	keys       []KeyInfo
-	keysErr    error
-	issuer     IssuerDetails
-	issuerErr  error
-	getClient  Client
-	getErr     error
-	createCall int
+	createErr        error
+	created          Created
+	rotateErr        error
+	rotated          KeyInfo
+	keys             []KeyInfo
+	keysErr          error
+	issuer           IssuerDetails
+	issuerErr        error
+	getClient        Client
+	getErr           error
+	listed           []Client
+	listErr          error
+	updated          Client
+	updateErr        error
+	deleteErr        error
+	rotatedSecret    RotatedClient
+	rotateSecretErr  error
+	createCall       int
+	deleteCall       int
+	rotateSecretCall int
+	lastApp          id.AppID
+	lastID           string
+	lastCreate       CreateParams
+	lastUpdate       UpdateParams
 }
 
-func (f *fakeService) CreateClientFor(context.Context, id.AppID, CreateParams) (Created, error) {
+func (f *fakeService) CreateClientFor(_ context.Context, appID id.AppID, in CreateParams) (Created, error) {
 	f.createCall++
+	f.lastApp, f.lastCreate = appID, in
 	return f.created, f.createErr
 }
-func (f *fakeService) ListClientsFor(context.Context, id.AppID) ([]Client, error) { return nil, nil }
-func (f *fakeService) GetClientFor(context.Context, id.AppID, string) (Client, error) {
+func (f *fakeService) ListClientsFor(_ context.Context, appID id.AppID) ([]Client, error) {
+	f.lastApp = appID
+	return f.listed, f.listErr
+}
+func (f *fakeService) GetClientFor(_ context.Context, appID id.AppID, clientID string) (Client, error) {
+	f.lastApp, f.lastID = appID, clientID
 	return f.getClient, f.getErr
 }
-func (f *fakeService) UpdateClientFor(context.Context, id.AppID, string, UpdateParams) (Client, error) {
-	return Client{}, nil
+func (f *fakeService) UpdateClientFor(_ context.Context, appID id.AppID, clientID string, in UpdateParams) (Client, error) {
+	f.lastApp, f.lastID, f.lastUpdate = appID, clientID, in
+	return f.updated, f.updateErr
 }
-func (f *fakeService) DeleteClientFor(context.Context, id.AppID, string) error { return nil }
-func (f *fakeService) RotateClientSecretFor(context.Context, id.AppID, string) (RotatedClient, error) {
-	return RotatedClient{}, nil
+func (f *fakeService) DeleteClientFor(_ context.Context, appID id.AppID, clientID string) error {
+	f.deleteCall++
+	f.lastApp, f.lastID = appID, clientID
+	return f.deleteErr
+}
+func (f *fakeService) RotateClientSecretFor(_ context.Context, appID id.AppID, clientID string) (RotatedClient, error) {
+	f.rotateSecretCall++
+	f.lastApp, f.lastID = appID, clientID
+	return f.rotatedSecret, f.rotateSecretErr
 }
 func (f *fakeService) SigningKeys(context.Context, id.AppID) (string, []KeyInfo, error) {
 	return "https://iss", f.keys, f.keysErr

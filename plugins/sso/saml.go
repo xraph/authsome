@@ -168,10 +168,11 @@ func (p *samlProvider) HandleCallback(ctx context.Context, params map[string]str
 		return nil, fmt.Errorf("sso/saml: decode SAMLResponse: %w", err)
 	}
 	// Match the assertion's InResponseTo against the AuthnRequest ID we minted at
-	// login (threaded back via params["request_id"]). Without a request ID this
-	// is a no-match unless AllowIDPInitiated is set — crewjam enforces that. The
-	// signature, conditions, audience, recipient, and timestamps are validated
-	// regardless.
+	// login (threaded back via params["request_id"]). Without a request ID only
+	// an unsolicited response, one with no InResponseTo, is accepted, and only
+	// when AllowIDPInitiated is set. crewjam enforces that, so a response
+	// issued for one login can't be replayed as IdP-initiated. The signature,
+	// conditions, audience, recipient, and timestamps are validated regardless.
 	var possibleRequestIDs []string
 	if reqID := params["request_id"]; reqID != "" {
 		possibleRequestIDs = []string{reqID}

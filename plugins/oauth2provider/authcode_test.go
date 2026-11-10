@@ -37,7 +37,13 @@ const (
 // confidential and one public client registered.
 func newFixture(t *testing.T) (*oauth2provider.Plugin, oauth2provider.Store, forge.Router) {
 	t.Helper()
-	p := oauth2provider.New(oauth2provider.Config{Issuer: "https://auth.example.com"})
+	return newFixtureWithConfig(t, oauth2provider.Config{Issuer: "https://auth.example.com"})
+}
+
+// newFixtureWithConfig is newFixture with a chosen plugin config.
+func newFixtureWithConfig(t *testing.T, cfg oauth2provider.Config) (*oauth2provider.Plugin, oauth2provider.Store, forge.Router) {
+	t.Helper()
+	p := oauth2provider.New(cfg)
 	st := oauth2provider.NewMemoryStore()
 	p.SetOAuth2Store(st)
 	core := memory.New()

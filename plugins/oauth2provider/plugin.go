@@ -96,6 +96,20 @@ type Config struct {
 	// an external UI like authsome-ui to host the verification page.
 	VerificationURI string
 
+	// LoginURL is where /authorize sends a browser that has no session, so
+	// the user can sign in and come back. It is either a path on the
+	// issuer's origin ("/sign-in") or an absolute http(s) URL. When it is
+	// empty, a signed-out /authorize answers 401 as it always has. An app
+	// can override it with the oauth2.login_url setting.
+	LoginURL string
+
+	// LoginReturnParam is the query parameter that carries the authorize
+	// URL to the login page (default: "redirect", which is what the
+	// authsome Next.js middleware uses). The value is a relative path when
+	// the login page shares the issuer's origin, and an absolute URL when
+	// it doesn't.
+	LoginReturnParam string
+
 	// DynamicRegistration enables RFC 7591 registration. Off by default:
 	// an upgrade must never open a public registration endpoint on its own.
 	DynamicRegistration bool
@@ -196,6 +210,9 @@ func New(cfg ...Config) *Plugin {
 	if c.DeviceCodeInterval == 0 {
 		c.DeviceCodeInterval = 5
 	}
+	if c.LoginReturnParam == "" {
+		c.LoginReturnParam = "redirect"
+	}
 	if len(c.DynamicRegistrationScopes) == 0 {
 		c.DynamicRegistrationScopes = append([]string(nil), defaultDynamicRegistrationScopes...)
 	}
@@ -221,6 +238,9 @@ func (p *Plugin) Name() string { return "oauth2provider" }
 
 // OnInit captures dependencies from the engine.
 func (p *Plugin) OnInit(ctx context.Context, engine plugin.Engine) error {
+	if _, err := ValidateLoginURL(p.config.LoginURL); err != nil {
+		return err
+	}
 	p.engine = engine
 	p.store = engine.Store()
 	p.logger = engine.Logger()
@@ -1009,7 +1029,7 @@ func (p *Plugin) handleAuthorize(ctx forge.Context, req *AuthorizeRequest) (*api
 	// endpoints in this group and why each is or isn't covered.
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
-		return nil, forge.Unauthorized("authentication required to authorize")
+		return nil, p.signedOutAuthorize(ctx, client, redirectURI, req)
 	}
 	if !p.callerAppMatches(ctx, client.AppID) {
 		return nil, forge.NewHTTPError(http.StatusForbidden, "this client belongs to a different app than the signed-in session")

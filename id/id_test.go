@@ -70,6 +70,23 @@ func TestParseSessionFamilyID_RejectsWrongPrefix(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestNewOAuth2SigningKeyID_HasCorrectPrefix(t *testing.T) {
+	id := NewOAuth2SigningKeyID()
+	assert.True(t, strings.HasPrefix(id.String(), "aosk_"))
+}
+
+func TestParseOAuth2SigningKeyID_RoundTrip(t *testing.T) {
+	original := NewOAuth2SigningKeyID()
+	parsed, err := ParseOAuth2SigningKeyID(original.String())
+	require.NoError(t, err)
+	assert.Equal(t, original.String(), parsed.String())
+}
+
+func TestParseOAuth2SigningKeyID_RejectsWrongPrefix(t *testing.T) {
+	_, err := ParseOAuth2SigningKeyID(NewOAuth2ClientID().String())
+	assert.Error(t, err)
+}
+
 func TestNewUserEmailID_HasCorrectPrefix(t *testing.T) {
 	id := NewUserEmailID()
 	assert.True(t, strings.HasPrefix(id.String(), string(PrefixUserEmail)+"_"))
