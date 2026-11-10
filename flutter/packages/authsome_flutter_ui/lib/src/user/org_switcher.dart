@@ -5,6 +5,15 @@
 /// checkmark. Includes a "Create organization" option that opens a
 /// dialog for creating a new organization with name and slug.
 ///
+/// On its own it shows and switches the session's active organization:
+///
+/// ```dart
+/// const OrgSwitcher()
+/// ```
+///
+/// Pass [OrgSwitcher.activeOrgId] and [OrgSwitcher.onOrgChange] to manage
+/// the active organization yourself:
+///
 /// ```dart
 /// OrgSwitcher(
 ///   activeOrgId: currentOrgId,
@@ -25,13 +34,15 @@ import 'package:authsome_flutter/authsome_flutter.dart';
 /// checkmark. A footer option opens a dialog to create a new
 /// organization.
 class OrgSwitcher extends StatefulWidget {
-  /// Called when the user selects a different organization.
+  /// Called when the user selects a different organization. Leave it null
+  /// and the switcher switches the session's active organization itself.
   final ValueChanged<String>? onOrgChange;
 
   /// Called after a new organization is created.
   final VoidCallback? onCreateOrg;
 
-  /// The ID of the currently active organization.
+  /// The ID of the currently active organization. Leave it null to show the
+  /// session's active organization.
   final String? activeOrgId;
 
   /// Creates an [OrgSwitcher].
@@ -77,6 +88,24 @@ class _OrgSwitcherState extends State<OrgSwitcher> {
           _error = e.toString();
         });
       }
+    }
+  }
+
+  /// Hands the choice to [OrgSwitcher.onOrgChange] when the app manages the
+  /// active organization itself, and switches the session's otherwise.
+  Future<void> _select(String orgId) async {
+    final onOrgChange = widget.onOrgChange;
+    if (onOrgChange != null) {
+      onOrgChange(orgId);
+      return;
+    }
+    try {
+      await context.auth.switchOrg(orgId);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text("Couldn't switch organization")),
+      );
     }
   }
 
@@ -224,10 +253,13 @@ class _OrgSwitcherState extends State<OrgSwitcher> {
       );
     }
 
+    // Without an activeOrgId the switcher shows the session's own.
+    final activeOrgId = widget.activeOrgId ?? context.auth.activeOrgId;
+
     // Determine the label for the button.
     String activeLabel = 'Select organization';
     for (final org in _orgs) {
-      if (_orgField(org, 'id') == widget.activeOrgId) {
+      if (_orgField(org, 'id') == activeOrgId) {
         activeLabel = _orgField(org, 'name');
         break;
       }
@@ -242,7 +274,7 @@ class _OrgSwitcherState extends State<OrgSwitcher> {
         for (final org in _orgs) {
           final id = _orgField(org, 'id');
           final name = _orgField(org, 'name');
-          final isActive = id == widget.activeOrgId;
+          final isActive = id == activeOrgId;
 
           items.add(
             PopupMenuItem<String>(
@@ -279,7 +311,9 @@ class _OrgSwitcherState extends State<OrgSwitcher> {
               children: [
                 Icon(Icons.add, size: 18),
                 SizedBox(width: 8),
-                Text('Create organization'),
+                Flexible(
+                  child: Text('Create organization', overflow: TextOverflow.ellipsis),
+                ),
               ],
             ),
           ),
@@ -291,7 +325,7 @@ class _OrgSwitcherState extends State<OrgSwitcher> {
         if (value == '_create') {
           _showCreateDialog();
         } else {
-          widget.onOrgChange?.call(value);
+          _select(value);
         }
       },
       child: Chip(

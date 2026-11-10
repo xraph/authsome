@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useState } from "react";
-import { useAuth, useOrganizations } from "@authsome/ui-react";
+import { useActiveOrg, useAuth, useOrganizations } from "@authsome/ui-react";
 import { ChevronsUpDown, Plus, Check, Building2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import {
@@ -28,11 +28,14 @@ import { Label } from "../primitives/label";
 import { LoadingSpinner } from "./loading-spinner";
 
 export interface OrgSwitcherProps {
-  /** Called when the user selects a different organization. */
+  /**
+   * Called when the user selects a different organization. Leave it out and
+   * the switcher switches the session's active organization itself.
+   */
   onOrgChange?: (orgId: string) => void;
   /** Called when the user creates a new organization. If not provided, the built-in create dialog is used. */
   onCreateOrg?: () => void;
-  /** The currently selected organization ID. */
+  /** The currently selected organization ID. Leave it out to show the session's. */
   activeOrgId?: string;
   /** Additional CSS class names. */
   className?: string;
@@ -45,10 +48,21 @@ export interface OrgSwitcherProps {
 export function OrgSwitcher({
   onOrgChange,
   onCreateOrg,
-  activeOrgId,
+  activeOrgId: activeOrgIdProp,
   className,
 }: OrgSwitcherProps) {
   const { client, session } = useAuth();
+  const { orgId: sessionOrgId, switchOrg } = useActiveOrg();
+  const activeOrgId = activeOrgIdProp ?? sessionOrgId ?? undefined;
+  const select = (orgId: string) => {
+    if (onOrgChange) {
+      onOrgChange(orgId);
+      return;
+    }
+    // A failed switch leaves the session where it was, which is what the
+    // switcher already shows, so there's nothing to undo.
+    switchOrg(orgId).catch(() => {});
+  };
   const { organizations: orgsRaw, isLoading, reload } = useOrganizations();
   const organizations = orgsRaw ?? [];
   const [createOpen, setCreateOpen] = useState(false);
@@ -145,7 +159,7 @@ export function OrgSwitcher({
             organizations.map((org) => (
               <DropdownMenuItem
                 key={String(org.id)}
-                onClick={() => onOrgChange?.(String(org.id))}
+                onClick={() => select(String(org.id))}
                 className="flex items-center gap-2"
               >
                 <Avatar className="h-5 w-5">
