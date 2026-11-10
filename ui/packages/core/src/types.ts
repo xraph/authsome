@@ -1,6 +1,7 @@
 /** Core type definitions for AuthSome UI Kit. */
 
 import type { User } from "./generated/api-types";
+import type { AuthPlugin } from "./plugins";
 
 // ── Re-export API types from generated code ──────────
 //
@@ -131,6 +132,13 @@ export interface AuthConfig {
    * and storage keeps only the cached client config.
    */
   session?: "token" | "cookie";
+
+  /**
+   * Client plugins to load, the client half of the server plugins you
+   * installed, e.g. `[subscription()]`. Look one up with
+   * `manager.plugin(subscription)`.
+   */
+  plugins?: AuthPlugin<unknown>[];
 
   /** Callback invoked when the auth state changes. */
   onStateChange?: (state: AuthState) => void;
