@@ -3947,6 +3947,9 @@
       },
       "MeResponse": {
         "properties": {
+          "active_org_id": {
+            "type": "string"
+          },
           "app_id": {
             "type": "string"
           },

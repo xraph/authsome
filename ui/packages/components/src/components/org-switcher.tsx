@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useState } from "react";
-import { useAuth, useOrganizations } from "@authsome/ui-react";
+import { useActiveOrg, useAuth, useOrganizations } from "@authsome/ui-react";
 import { ChevronsUpDown, Plus, Check, Building2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import {
@@ -28,12 +28,20 @@ import { Label } from "../primitives/label";
 import { LoadingSpinner } from "./loading-spinner";
 
 export interface OrgSwitcherProps {
-  /** Called when the user selects a different organization. */
+  /**
+   * Called when the user selects a different organization. Leave it out and
+   * the switcher switches the session's active organization itself.
+   */
   onOrgChange?: (orgId: string) => void;
   /** Called when the user creates a new organization. If not provided, the built-in create dialog is used. */
   onCreateOrg?: () => void;
-  /** The currently selected organization ID. */
+  /** The currently selected organization ID. Leave it out to show the session's. */
   activeOrgId?: string;
+  /**
+   * Called when switching the session's organization fails. The switcher
+   * also shows a short message under itself.
+   */
+  onError?: (error: unknown) => void;
   /** Additional CSS class names. */
   className?: string;
 }
@@ -45,10 +53,27 @@ export interface OrgSwitcherProps {
 export function OrgSwitcher({
   onOrgChange,
   onCreateOrg,
-  activeOrgId,
+  activeOrgId: activeOrgIdProp,
+  onError,
   className,
 }: OrgSwitcherProps) {
   const { client, session } = useAuth();
+  const { orgId: sessionOrgId, switchOrg, isSwitching } = useActiveOrg();
+  const activeOrgId = activeOrgIdProp ?? sessionOrgId ?? undefined;
+  const [switchError, setSwitchError] = useState<string | null>(null);
+  const select = (orgId: string) => {
+    if (onOrgChange) {
+      onOrgChange(orgId);
+      return;
+    }
+    setSwitchError(null);
+    // A failed switch leaves the session where it was, which the switcher
+    // already shows; say so rather than leave the click unanswered.
+    switchOrg(orgId).catch((err: unknown) => {
+      setSwitchError("Couldn't switch organization. Try again.");
+      onError?.(err);
+    });
+  };
   const { organizations: orgsRaw, isLoading, reload } = useOrganizations();
   const organizations = orgsRaw ?? [];
   const [createOpen, setCreateOpen] = useState(false);
@@ -110,6 +135,7 @@ export function OrgSwitcher({
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
+            disabled={isSwitching}
             className={cn(
               "flex w-full items-center justify-between gap-2 px-3",
               className,
@@ -145,7 +171,7 @@ export function OrgSwitcher({
             organizations.map((org) => (
               <DropdownMenuItem
                 key={String(org.id)}
-                onClick={() => onOrgChange?.(String(org.id))}
+                onClick={() => select(String(org.id))}
                 className="flex items-center gap-2"
               >
                 <Avatar className="h-5 w-5">
@@ -177,6 +203,11 @@ export function OrgSwitcher({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {switchError && (
+        <p role="alert" className="mt-1 text-xs text-destructive">
+          {switchError}
+        </p>
+      )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md">

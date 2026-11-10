@@ -1,8 +1,8 @@
 /** Convenience hooks built on top of useAuth. */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { readOrganizationList } from "@authsome/ui-core";
-import type { ClientConfig, Organization, OrganizationList, User } from "@authsome/ui-core";
+import type { ClientConfig, Organization, OrganizationList, PluginKey, User } from "@authsome/ui-core";
 import { useAuth } from "./context";
 
 /**
@@ -114,6 +114,67 @@ export function useOrganizations(): {
     isLoading,
     reload: load,
   };
+}
+
+/**
+ * usePlugin returns a client plugin's API. The plugin has to be in the
+ * `plugins` of the surrounding `<AuthProvider>`; if it isn't, this throws an
+ * error that says which one to add.
+ *
+ * ```tsx
+ * <AuthProvider baseURL={url} plugins={[subscription()]}>...</AuthProvider>
+ * const billing = usePlugin(subscription);
+ * ```
+ */
+export function usePlugin<Api>(plugin: PluginKey<Api>): Api {
+  const { manager } = useAuth();
+  return manager.plugin(plugin);
+}
+
+/**
+ * useActiveOrg returns the session's active organization and a way to
+ * switch it. It re-renders when the organization changes, including on
+ * sign-in (restored from the session) and sign-out (cleared).
+ *
+ * ```tsx
+ * const { orgId, switchOrg } = useActiveOrg();
+ * ```
+ */
+export function useActiveOrg(): {
+  orgId: string | null;
+  switchOrg: (orgId: string) => Promise<void>;
+  isSwitching: boolean;
+} {
+  const { manager } = useAuth();
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const offs = (["orgChanged", "signedIn", "signedOut"] as const).map((e) =>
+        manager.on(e, onChange),
+      );
+      return () => offs.forEach((off) => off());
+    },
+    [manager],
+  );
+  const orgId = useSyncExternalStore(
+    subscribe,
+    () => manager.getActiveOrgId(),
+    () => manager.getActiveOrgId(),
+  );
+
+  const [isSwitching, setIsSwitching] = useState(false);
+  const switchOrg = useCallback(
+    async (next: string) => {
+      setIsSwitching(true);
+      try {
+        await manager.switchOrg(next);
+      } finally {
+        setIsSwitching(false);
+      }
+    },
+    [manager],
+  );
+
+  return { orgId, switchOrg, isSwitching };
 }
 
 /**

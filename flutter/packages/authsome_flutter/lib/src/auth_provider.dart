@@ -3,6 +3,8 @@
 /// Mirrors the React AuthProvider pattern from `ui/packages/react/src/context.tsx`.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:authsome_core/authsome_core.dart';
 
@@ -21,6 +23,7 @@ class AuthNotifier extends ChangeNotifier {
   bool _isConfigLoaded = false;
   void Function()? _unsubscribeState;
   void Function()? _unsubscribeConfig;
+  StreamSubscription<AuthEvent>? _orgEvents;
 
   /// Creates an [AuthNotifier] with the given [AuthConfig].
   ///
@@ -36,6 +39,7 @@ class AuthNotifier extends ChangeNotifier {
             storage: config.storage ?? SecureTokenStorage(),
             onStateChange: config.onStateChange,
             onError: config.onError,
+            plugins: config.plugins,
           ),
         ) {
     _state = _manager.state;
@@ -52,7 +56,29 @@ class AuthNotifier extends ChangeNotifier {
       _isConfigLoaded = true;
       notifyListeners();
     });
+
+    // A switch that keeps the same token changes no state, so listen for
+    // it directly.
+    _orgEvents = _manager.events.listen((event) {
+      if (event == AuthEvent.orgChanged) notifyListeners();
+    });
   }
+
+  // ── Plugins and organization ───────────────────────
+
+  /// The API of the registered client plugin that provides [Api]:
+  /// `context.auth.plugin<SubscriptionApi>()`. Plugin packages usually wrap
+  /// this in their own `BuildContext` extension.
+  Api plugin<Api extends Object>() => _manager.plugin<Api>();
+
+  /// Whether a registered client plugin provides [Api].
+  bool hasPlugin<Api extends Object>() => _manager.hasPlugin<Api>();
+
+  /// The session's active organization, null when it has none.
+  String? get activeOrgId => _manager.activeOrgId;
+
+  /// Switches the session into another organization and notifies listeners.
+  Future<void> switchOrg(String orgId) => _manager.switchOrg(orgId);
 
   // ── State Getters ──────────────────────────────────
 
@@ -206,6 +232,7 @@ class AuthNotifier extends ChangeNotifier {
   void dispose() {
     _unsubscribeState?.call();
     _unsubscribeConfig?.call();
+    _orgEvents?.cancel();
     _manager.dispose();
     super.dispose();
   }

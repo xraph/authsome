@@ -157,6 +157,37 @@ function OrgSelector() {
 }
 ```
 
+### useActiveOrg
+
+The organization the session is working in, and a way to switch it. You get it back after a reload because `/v1/me` reports it, and it's cleared when you sign out.
+
+```tsx
+import { useActiveOrg } from "@authsome/ui-react";
+
+function OrgBadge() {
+  const { orgId, switchOrg, isSwitching } = useActiveOrg();
+  return (
+    <button disabled={isSwitching} onClick={() => switchOrg("org_123")}>
+      {orgId ?? "No organization"}
+    </button>
+  );
+}
+```
+
+`<OrgSwitcher />` from `@authsome/ui-components` uses this when you don't pass it `activeOrgId` and `onOrgChange`, so dropping it in with no props is enough. Pass both if your app keeps the active organization somewhere else.
+
+### usePlugin
+
+Returns a client plugin's API. Client plugins are the client half of server plugins: you add them to `AuthProvider` the way you add the server side with `authsome.WithPlugin`. See [Client plugins](/docs/ui/plugins).
+
+```tsx
+<AuthProvider baseURL={url} plugins={[subscription()]}>
+  <App />
+</AuthProvider>
+
+const billing = usePlugin(subscription);
+```
+
 ### useSessionToken
 
 Returns the raw session token string, useful for passing to custom API calls.
@@ -297,6 +328,30 @@ function ProtectedArea() {
   );
 }
 ```
+
+### Protect
+
+`AuthGuard` with requirements. It shows its children only when you're signed in and meet them, and the fallback otherwise.
+
+```tsx
+import { Protect } from "@authsome/ui-react";
+
+<Protect role="admin" fallback={<p>Admins only</p>}>
+  <AdminPanel />
+</Protect>
+
+<Protect permission="billing:manage" condition={(auth) => canManageBilling(auth)} fallback={null}>
+  <BillingSettings />
+</Protect>
+```
+
+- `role` checks the app roles `/v1/me` returns for the signed-in user. Organization member roles (owner, admin, member) aren't in that list.
+- `permission` can't be checked in the browser, so it needs a `condition` that does the check, usually against something your backend told you. Without one, `Protect` shows the fallback and logs a warning once.
+- `condition` alone works too, for anything else.
+
+<Callout type="warn">
+Before this release, `role` and `permission` didn't check anything: children rendered for every signed-in user. If you relied on that, your protected UI is now hidden until you pass a role the user actually holds, or a `condition` for permissions.
+</Callout>
 
 ## Integration with React Router
 

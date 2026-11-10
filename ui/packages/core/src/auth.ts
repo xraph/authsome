@@ -20,6 +20,22 @@ import type {
   TokenStorage,
   User,
 } from "./types";
+import {
+  PluginNotRegisteredError,
+  pluginKeyName,
+  type AuthEvent,
+  type AuthPlugin,
+  type PluginContext,
+  type PluginKey,
+} from "./plugins";
+
+/** A registered plugin and, once used, what its init built (or threw). */
+interface PluginSlot {
+  plugin: AuthPlugin<unknown>;
+  built: boolean;
+  api?: unknown;
+  error?: unknown;
+}
 
 /**
  * Storage key under which the whole Session (tokens + expiry) is persisted.
@@ -202,6 +218,12 @@ export class AuthManager {
    */
   private cookieSession: boolean;
 
+  private baseURL: string;
+  private fetchFn: typeof globalThis.fetch;
+  private plugins = new Map<string, PluginSlot>();
+  private eventListeners = new Map<AuthEvent, Set<() => void>>();
+  private activeOrgId: string | null = null;
+
   constructor(config: AuthConfig) {
     this.cookieSession = config.session === "cookie";
     if (this.cookieSession) {
@@ -217,6 +239,14 @@ export class AuthManager {
     this.client = new AuthClient(config);
     let baseEnd = config.baseURL.length;
     while (baseEnd > 0 && config.baseURL[baseEnd - 1] === "/") baseEnd--;
+    this.baseURL = config.baseURL.slice(0, baseEnd);
+    this.fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis);
+    for (const plugin of config.plugins ?? []) {
+      if (this.plugins.has(plugin.name)) {
+        throw new Error(`authsome: the "${plugin.name}" plugin is registered twice`);
+      }
+      this.plugins.set(plugin.name, { plugin, built: false });
+    }
     this.configCacheKey = `${CONFIG_KEY}:${JSON.stringify([config.baseURL.slice(0, baseEnd), config.publishableKey ?? ""])}`;
     this.refreshLockKey = `authsome:refresh:${config.baseURL}:${config.publishableKey ?? ""}`;
     this.storage = config.storage ?? createMemoryStorage();
@@ -771,12 +801,197 @@ export class AuthManager {
     return this.configFetchPromise;
   }
 
-  /** Tear down: clear timers and listeners. */
+  // ── Plugins ───────────────────────────────────────
+
+  /**
+   * A registered plugin's API, built on first use. Pass the plugin's
+   * definition (`manager.plugin(subscription)`) or the instance you
+   * registered. Throws PluginNotRegisteredError when it isn't in the
+   * plugins list, and rethrows whatever the plugin's init threw.
+   */
+  plugin<Api>(key: PluginKey<Api>): Api {
+    const name = pluginKeyName(key as PluginKey<unknown>);
+    const slot = this.plugins.get(name);
+    if (!slot) throw new PluginNotRegisteredError(name);
+    if (!slot.built) {
+      slot.built = true;
+      try {
+        slot.api = slot.plugin.init(this.pluginContext(name));
+      } catch (err) {
+        slot.error = err;
+      }
+    }
+    if (slot.error !== undefined) throw slot.error;
+    return slot.api as Api;
+  }
+
+  /** Whether a plugin was added to the plugins list. */
+  hasPlugin(key: PluginKey<unknown>): boolean {
+    return this.plugins.has(pluginKeyName(key));
+  }
+
+  /**
+   * Listen for a lifecycle event: signedIn, signedOut, sessionRefreshed
+   * (new tokens for the same session) or orgChanged. Returns a function
+   * that stops listening.
+   */
+  on(event: AuthEvent, listener: () => void): () => void {
+    let set = this.eventListeners.get(event);
+    if (!set) {
+      set = new Set();
+      this.eventListeners.set(event, set);
+    }
+    set.add(listener);
+    return () => {
+      set.delete(listener);
+    };
+  }
+
+  // ── Active organization ───────────────────────────
+
+  /**
+   * The organization the session is working in, null when it has none. It
+   * is restored from /v1/me on load, set by switchOrg, and cleared on sign-out.
+   */
+  getActiveOrgId(): string | null {
+    return this.activeOrgId;
+  }
+
+  /**
+   * Switch the session into another organization. On an app that issues
+   * JWTs the server hands back a new token carrying the organization; it
+   * replaces the stored one. Fires orgChanged.
+   */
+  async switchOrg(orgId: string): Promise<void> {
+    if (this.state.status !== "authenticated") {
+      throw new Error("authsome: you have to be signed in to switch organization");
+    }
+    // A reissued token has to land in the same lock the refresh uses, or a
+    // refresh rotating the refresh token meanwhile would be overwritten with
+    // the spent one. Cookie sessions keep no tokens here.
+    const apply = () => this.applyOrgSwitch(orgId);
+    return this.cookieSession ? apply() : withRefreshLock(this.refreshLockKey, apply);
+  }
+
+  private async applyOrgSwitch(orgId: string): Promise<void> {
+    const before = this.state;
+    if (before.status !== "authenticated") {
+      throw new Error("authsome: you have to be signed in to switch organization");
+    }
+    const res = await this.client.switchOrg(
+      { org_id: orgId },
+      this.cookieSession ? "" : before.session.session_token,
+    );
+
+    // The session may have ended, or become someone else's, while the
+    // request was out. Don't bring it back.
+    const now = this.state;
+    if (now.status !== "authenticated" || now.user.id !== before.user.id) {
+      throw new Error("authsome: the session changed while switching organization");
+    }
+
+    let session = now.session;
+    if (res.session_token && !this.cookieSession) {
+      const raw = await this.storage.getItem(SESSION_KEY);
+      const latest = raw ? (JSON.parse(raw) as Session) : now.session;
+      session = {
+        ...latest,
+        session_token: res.session_token,
+        expires_at: res.expires_at ?? latest.expires_at,
+      };
+      await this.persistSession(session);
+    }
+
+    // An empty org_id is the server saying the session has none now.
+    const org = res.org_id || null;
+    const changed = this.activeOrgId !== org;
+    this.activeOrgId = org;
+    // Keep user.active_org_id in step, so a later state change doesn't read
+    // the org the session was loaded with as a fresh report.
+    const user = { ...now.user, active_org_id: org ?? undefined } as User;
+    this.setState({ status: "authenticated", user, session });
+    if (session !== now.session) this.scheduleRefresh(session);
+    if (changed) this.emit("orgChanged");
+  }
+
+  /**
+   * Tear down: clear timers and state listeners. Plugin event listeners
+   * stay: a plugin subscribes once, when it is first used, and a remount
+   * (React StrictMode, Fast Refresh) initializes this same manager again.
+   */
   destroy(): void {
     this.active = false;
     this.clearRefreshTimer();
     this.listeners.clear();
     this.configListeners.clear();
+  }
+
+  // ── Plugin context ────────────────────────────────
+
+  private pluginContext(name: string): PluginContext {
+    return {
+      request: (method, path, init) => this.pluginRequest(method, path, init),
+      getState: () => this.state,
+      getClientConfig: () => this.clientConfig,
+      isServerEnabled: () => {
+        const plugins = this.clientConfig?.supported_plugins;
+        return plugins ? plugins.includes(name) : null;
+      },
+      getActiveOrgId: () => this.activeOrgId,
+      on: (event, listener) => this.on(event, listener),
+    };
+  }
+
+  private async pluginRequest<T>(
+    method: string,
+    path: string,
+    init?: {
+      query?: Record<string, string | number | boolean | undefined>;
+      body?: unknown;
+    },
+  ): Promise<T> {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(init?.query ?? {})) {
+      if (value !== undefined) params.set(key, String(value));
+    }
+    const qs = params.toString();
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+    const token = this.cookieSession ? null : this.getSessionToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (this.publishableKey) headers["X-Publishable-Key"] = this.publishableKey;
+
+    const response = await this.fetchFn(`${this.baseURL}${path}${qs ? `?${qs}` : ""}`, {
+      method,
+      headers,
+      body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
+    });
+    if (!response.ok) {
+      const data = (await response.json().catch(() => null)) as
+        | { error?: string; code?: number; type?: string; [k: string]: unknown }
+        | null;
+      throw new AuthClientError(
+        data?.error ?? `Request failed with status ${response.status}`,
+        data?.code ?? response.status,
+        data?.type,
+        data ?? undefined,
+      );
+    }
+    if (response.status === 204) return undefined as T;
+    return (await response.json()) as T;
+  }
+
+  private emit(event: AuthEvent): void {
+    for (const listener of this.eventListeners.get(event) ?? []) {
+      try {
+        listener();
+      } catch {
+        // A plugin's listener must not break the state machine.
+      }
+    }
   }
 
   // ── Internals ─────────────────────────────────────
@@ -911,7 +1126,10 @@ export class AuthManager {
   }
 
   private setState(newState: AuthState): void {
+    const prev = this.state;
     this.state = newState;
+    const events = this.transitionEvents(prev, newState);
+
     for (const listener of this.listeners) {
       try {
         listener(newState);
@@ -919,6 +1137,50 @@ export class AuthManager {
         // Listener errors should not break the state machine.
       }
     }
+    for (const event of events) this.emit(event);
+  }
+
+  /**
+   * Works out which lifecycle events a state change means, and keeps the
+   * active organization in step: /v1/me reports it on every load, and
+   * leaving the authenticated state forgets it.
+   */
+  private transitionEvents(prev: AuthState, next: AuthState): AuthEvent[] {
+    const wasIn = prev.status === "authenticated";
+    const isIn = next.status === "authenticated";
+    const events: AuthEvent[] = [];
+
+    if (wasIn && !isIn) {
+      this.activeOrgId = null;
+      events.push("signedOut");
+      return events;
+    }
+    if (!isIn) return events;
+
+    const reported =
+      (next.user as User & { active_org_id?: string }).active_org_id ?? null;
+    // Signing in as someone else without signing out first is a sign-out
+    // and a sign-in, so nothing of the previous user's carries over.
+    if (wasIn && prev.user.id !== next.user.id) {
+      this.activeOrgId = reported;
+      events.push("signedOut", "signedIn");
+      return events;
+    }
+    if (!wasIn) {
+      this.activeOrgId = reported;
+      events.push("signedIn");
+      return events;
+    }
+    // Still signed in. A refresh rotates the refresh token; switching
+    // organization reissues only the access token, so it doesn't count.
+    if (prev.session.refresh_token !== next.session.refresh_token) {
+      events.push("sessionRefreshed");
+    }
+    if (reported !== null && reported !== this.activeOrgId) {
+      this.activeOrgId = reported;
+      events.push("orgChanged");
+    }
+    return events;
   }
 
   private handleError(err: unknown): void {
