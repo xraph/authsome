@@ -89,6 +89,13 @@ type ProviderSetting struct {
 	RedirectURL  string   `json:"redirect_url"`
 	Scopes       []string `json:"scopes,omitempty"`
 	Enabled      bool     `json:"enabled"`
+
+	// Type is empty for a built-in provider, where Name picks it, and
+	// "oidc" for a generic OpenID Connect provider, where Name is any free
+	// ID and Issuer says where to sign in.
+	Type        string `json:"type,omitempty"`
+	Issuer      string `json:"issuer,omitempty"`
+	DisplayName string `json:"display_name,omitempty"`
 }
 
 // SettingSocialProviders stores dashboard-configured social providers.
@@ -164,6 +171,27 @@ var SettingSocialProviders = settings.Define("social.providers", []ProviderSetti
 			DisplayName: "Enabled",
 			InputType:   formconfig.FieldSwitch,
 		},
+		settings.ObjectFieldDef{
+			Key:         "type",
+			DisplayName: "Type",
+			InputType:   formconfig.FieldText,
+			Placeholder: "oidc",
+			HelpText:    "Leave empty for a built-in provider. Use oidc for any OpenID Connect issuer.",
+		},
+		settings.ObjectFieldDef{
+			Key:         "issuer",
+			DisplayName: "Issuer",
+			InputType:   formconfig.FieldURL,
+			Placeholder: "https://id.example.com",
+			HelpText:    "OpenID Connect providers only: the issuer URL discovery runs against",
+		},
+		settings.ObjectFieldDef{
+			Key:         "display_name",
+			DisplayName: "Button label",
+			InputType:   formconfig.FieldText,
+			Placeholder: "Muono",
+			HelpText:    "OpenID Connect providers only: the name on the sign-in button",
+		},
 	),
 )
 
@@ -185,6 +213,13 @@ type Config struct {
 
 	// SessionRefreshTTL is the lifetime of refresh tokens (default: 30 days).
 	SessionRefreshTTL time.Duration
+
+	// HTTPClient makes every call to a generic OpenID Connect issuer:
+	// discovery, keys, token exchange and userinfo. Nil uses a client that
+	// refuses private, loopback and link-local addresses, since an app
+	// admin picks the issuer URL. Set your own to allow an issuer inside
+	// your network.
+	HTTPClient *http.Client
 }
 
 // Plugin is the social OAuth authentication plugin.
@@ -196,6 +231,7 @@ type Plugin struct {
 	appID       string
 	engine      plugin.Engine
 	settingsMgr *settings.Manager
+	oidcCache   *oidcDiscoveryCache
 
 	chronicle  bridge.Chronicle
 	relay      bridge.EventRelay
@@ -261,6 +297,7 @@ func New(cfg ...Config) *Plugin {
 		config:     c,
 		providers:  providers,
 		ceremonies: ceremony.NewMemory(),
+		oidcCache:  newOIDCDiscoveryCache(),
 	}
 }
 
@@ -354,6 +391,21 @@ func (p *Plugin) ProvidersForApp(ctx context.Context, appID id.AppID) []string {
 	return p.allProviderNames(ctx, appID)
 }
 
+// ProviderLabelsForApp returns the button label for each enabled generic
+// OpenID Connect provider appID can use, keyed by provider ID. Built-in
+// providers are left out: the engine already knows their names.
+func (p *Plugin) ProviderLabelsForApp(ctx context.Context, appID id.AppID) map[string]string {
+	out := make(map[string]string)
+	for _, s := range p.loadDBProviderSettings(ctx, appID) {
+		if s.Enabled && s.Type == ProviderTypeOIDC && s.DisplayName != "" {
+			if _, code := p.providers[s.Name]; !code {
+				out[s.Name] = s.DisplayName
+			}
+		}
+	}
+	return out
+}
+
 // resolveProvider resolves a provider by name for appID. Code-configured
 // providers take precedence over dashboard-configured ones.
 func (p *Plugin) resolveProvider(ctx context.Context, appID id.AppID, name string) (Provider, bool) {
@@ -365,13 +417,51 @@ func (p *Plugin) resolveProvider(ctx context.Context, appID id.AppID, name strin
 	dbProviders := p.loadDBProviderSettings(ctx, appID)
 	for _, s := range dbProviders {
 		if s.Name == name && s.Enabled {
-			prov := providerFromSetting(s)
+			prov := p.providerFor(ctx, s)
 			if prov != nil {
 				return prov, true
 			}
 		}
 	}
 	return nil, false
+}
+
+// providerFor builds the Provider a setting describes. A generic OpenID
+// Connect provider needs its issuer's discovery document; when that can't
+// be fetched the provider is unavailable and the failure is logged.
+func (p *Plugin) providerFor(ctx context.Context, s ProviderSetting) Provider {
+	if s.Type != ProviderTypeOIDC {
+		return providerFromSetting(s)
+	}
+	if ValidateOIDCName(s.Name) != nil || ValidateOIDCIssuer(s.Issuer) != nil {
+		return nil
+	}
+	client := p.oidcHTTPClient()
+	disc, err := p.oidcCache.get(ctx, client, s.Issuer)
+	if err != nil {
+		if p.logger != nil {
+			p.logger.Warn("social: OpenID Connect discovery failed",
+				log.String("provider", s.Name), log.String("issuer", s.Issuer), log.Error(err))
+		}
+		return nil
+	}
+	return newOIDCProviderFrom(disc, OIDCConfig{
+		ProviderConfig: ProviderConfig{
+			ClientID:     s.ClientID,
+			ClientSecret: s.ClientSecret,
+			RedirectURL:  s.RedirectURL,
+			Scopes:       s.Scopes,
+		},
+		Name:   s.Name,
+		Issuer: s.Issuer,
+	}, client)
+}
+
+func (p *Plugin) oidcHTTPClient() *http.Client {
+	if p.config.HTTPClient != nil {
+		return p.config.HTTPClient
+	}
+	return publicHTTPClient()
 }
 
 // loadDBProviderSettings reads dynamic providers from the settings store.
@@ -933,8 +1023,12 @@ func (p *Plugin) callback(ctx forge.Context, req *CallbackRequest, attempt *tele
 	// The token exchange and the profile fetch go through a client that
 	// measures each call and traces it under this request, sending the
 	// provider no trace headers and none of the caller's baggage.
+	baseClient := contextHTTPClient(ctx.Context())
+	if hc, ok := provider.(httpClientProvider); ok {
+		baseClient = hc.HTTPClient()
+	}
 	providerCtx := context.WithValue(ctx.Context(), oauth2.HTTPClient, telemetry.InstrumentClient(
-		contextHTTPClient(ctx.Context()), telemetry.Endpoint{Kind: telemetry.ProviderSocial}, telemetry.From(p.engine)))
+		baseClient, telemetry.Endpoint{Kind: telemetry.ProviderSocial}, telemetry.From(p.engine)))
 
 	cfg := provider.OAuth2Config()
 
@@ -1329,10 +1423,17 @@ var supportedProviderCatalog = []AdminCatalogProvider{
 	{ID: "line", Name: "Line"},
 }
 
+// genericOIDCCatalogEntry tells the admin UI that any OpenID Connect
+// issuer can be added: save it with type "oidc", an issuer and a free ID.
+var genericOIDCCatalogEntry = AdminCatalogProvider{ID: ProviderTypeOIDC, Name: "OpenID Connect", Generic: true}
+
 // AdminCatalogProvider is one entry in the supported-provider catalog.
 type AdminCatalogProvider struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+	// Generic marks the OpenID Connect entry: not a provider ID itself,
+	// but the type to save any issuer under.
+	Generic bool `json:"generic,omitempty"`
 }
 
 // AdminCatalogResponse is the response for GET /v1/admin/social/providers/catalog.
@@ -1352,6 +1453,9 @@ type AdminProvider struct {
 	Scopes       []string `json:"scopes,omitempty"`
 	Enabled      bool     `json:"enabled"`
 	HasSecret    bool     `json:"has_secret"`
+	Type         string   `json:"type,omitempty"`
+	Issuer       string   `json:"issuer,omitempty"`
+	DisplayName  string   `json:"display_name,omitempty"`
 }
 
 // AdminListProvidersRequest binds the query for GET /v1/admin/social/providers.
@@ -1374,6 +1478,10 @@ type AdminUpsertProviderRequest struct {
 	RedirectURL  string   `json:"redirect_url,omitempty"`
 	Scopes       []string `json:"scopes,omitempty"`
 	Enabled      *bool    `json:"enabled,omitempty"`
+
+	Type        string `json:"type,omitempty"         description:"Empty for a built-in provider; oidc for any OpenID Connect issuer"`
+	Issuer      string `json:"issuer,omitempty"       description:"OpenID Connect issuer URL (type oidc only)"`
+	DisplayName string `json:"display_name,omitempty" description:"Sign-in button label (type oidc only)"`
 }
 
 // AdminProviderResponse is the response after upsert.
@@ -1419,8 +1527,9 @@ func (p *Plugin) handleAdminListProviders(ctx forge.Context, req *AdminListProvi
 
 // handleAdminCatalog returns the static provider catalog.
 func (p *Plugin) handleAdminCatalog(_ forge.Context, _ *apitypes.Empty) (*AdminCatalogResponse, error) {
-	out := make([]AdminCatalogProvider, len(supportedProviderCatalog))
+	out := make([]AdminCatalogProvider, len(supportedProviderCatalog), len(supportedProviderCatalog)+1)
 	copy(out, supportedProviderCatalog)
+	out = append(out, genericOIDCCatalogEntry)
 	return &AdminCatalogResponse{Providers: out}, nil
 }
 
@@ -1433,52 +1542,83 @@ func (p *Plugin) handleAdminUpsertProvider(ctx forge.Context, req *AdminUpsertPr
 	if p.settingsMgr == nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("social: settings manager not wired"))
 	}
-	name := strings.ToLower(strings.TrimSpace(req.Provider))
-	if name == "" {
-		return nil, forge.BadRequest("provider is required")
-	}
-	if !catalogContains(name) {
-		return nil, forge.BadRequest("unsupported provider; call GET /v1/admin/social/providers/catalog for the list")
-	}
-	if strings.TrimSpace(req.ClientID) == "" {
-		return nil, forge.BadRequest("client_id is required")
-	}
-
 	scope, scopeID := scopeFor(req.AppID)
 	current := p.readScope(ctx.Context(), scope, scopeID)
+	updated, err := p.providerSettingFromRequest(ctx.Context(), req, current)
+	if err != nil {
+		return nil, err
+	}
+	out := replaceOrAppend(current, updated)
+	if err := p.writeScope(ctx.Context(), scope, scopeID, out); err != nil {
+		return nil, middleware.InternalError(ctx, err)
+	}
+	return &AdminProviderResponse{Provider: maskProvider(updated)}, nil
+}
 
-	// Preserve the existing secret when caller passes empty string.
-	existingSecret := ""
-	for _, prov := range current {
-		if strings.EqualFold(prov.Name, name) {
-			existingSecret = prov.ClientSecret
-			break
+// providerSettingFromRequest validates an upsert and returns the entry to
+// store. current is the list at the target scope, so an empty
+// client_secret can keep the secret already saved. A generic OpenID
+// Connect provider is discovered here, so a wrong issuer is an error on
+// save and not a missing button later.
+func (p *Plugin) providerSettingFromRequest(ctx context.Context, req *AdminUpsertProviderRequest, current []ProviderSetting) (ProviderSetting, error) {
+	name := strings.ToLower(strings.TrimSpace(req.Provider))
+	if name == "" {
+		return ProviderSetting{}, forge.BadRequest("provider is required")
+	}
+	typ := strings.ToLower(strings.TrimSpace(req.Type))
+	issuer := strings.TrimRight(strings.TrimSpace(req.Issuer), "/")
+	switch typ {
+	case "":
+		if !catalogContains(name) {
+			return ProviderSetting{}, forge.BadRequest("unsupported provider; call GET /v1/admin/social/providers/catalog for the list, or save type oidc with an issuer")
+		}
+		if issuer != "" {
+			return ProviderSetting{}, forge.BadRequest("issuer only applies to type oidc")
+		}
+	case ProviderTypeOIDC:
+		if err := ValidateOIDCName(name); err != nil {
+			return ProviderSetting{}, forge.BadRequest(err.Error())
+		}
+		if err := ValidateOIDCIssuer(issuer); err != nil {
+			return ProviderSetting{}, forge.BadRequest(err.Error())
+		}
+	default:
+		return ProviderSetting{}, forge.BadRequest("type must be empty or oidc")
+	}
+	if strings.TrimSpace(req.ClientID) == "" {
+		return ProviderSetting{}, forge.BadRequest("client_id is required")
+	}
+	if typ == ProviderTypeOIDC {
+		if _, err := p.oidcCache.get(ctx, p.oidcHTTPClient(), issuer); err != nil {
+			return ProviderSetting{}, forge.BadRequest(fmt.Sprintf("OpenID Connect discovery failed for %s: %v", issuer, err))
 		}
 	}
+
+	// Keep the existing secret when the caller passes an empty one.
 	secret := req.ClientSecret
 	if strings.TrimSpace(secret) == "" {
-		secret = existingSecret
+		for _, prov := range current {
+			if strings.EqualFold(prov.Name, name) {
+				secret = prov.ClientSecret
+				break
+			}
+		}
 	}
-
 	enabled := true
 	if req.Enabled != nil {
 		enabled = *req.Enabled
 	}
-
-	updated := ProviderSetting{
+	return ProviderSetting{
 		Name:         name,
 		ClientID:     req.ClientID,
 		ClientSecret: secret,
 		RedirectURL:  req.RedirectURL,
 		Scopes:       req.Scopes,
 		Enabled:      enabled,
-	}
-
-	out := replaceOrAppend(current, updated)
-	if err := p.writeScope(ctx.Context(), scope, scopeID, out); err != nil {
-		return nil, middleware.InternalError(ctx, err)
-	}
-	return &AdminProviderResponse{Provider: maskProvider(updated)}, nil
+		Type:         typ,
+		Issuer:       issuer,
+		DisplayName:  strings.TrimSpace(req.DisplayName),
+	}, nil
 }
 
 // handleAdminDeleteProvider removes one provider entry from the list
@@ -1578,6 +1718,9 @@ func maskProvider(p ProviderSetting) AdminProvider {
 		Scopes:      p.Scopes,
 		Enabled:     p.Enabled,
 		HasSecret:   strings.TrimSpace(p.ClientSecret) != "",
+		Type:        p.Type,
+		Issuer:      p.Issuer,
+		DisplayName: p.DisplayName,
 	}
 	if out.HasSecret {
 		out.ClientSecret = "***"
