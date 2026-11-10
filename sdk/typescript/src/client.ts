@@ -1450,9 +1450,8 @@ export class AuthClient {
    * List your entitlements
    * GET /v1/billing/entitlements
    */
-  async listEntitlements(app_id?: string, tenant_id?: string): Promise<EntitlementsResponse> {
+  async listEntitlements(tenant_id?: string): Promise<EntitlementsResponse> {
     const params = new URLSearchParams();
-    if (app_id !== undefined) params.set('app_id', String(app_id));
     if (tenant_id !== undefined) params.set('tenant_id', String(tenant_id));
     const qs = params.toString();
     const path = "/v1/billing/entitlements" + (qs ? `?${qs}` : '');
@@ -1623,9 +1622,8 @@ export class AuthClient {
    * Get your subscription
    * GET /v1/billing/subscription
    */
-  async getCurrentSubscription(app_id?: string, tenant_id?: string): Promise<CurrentSubscriptionResponse> {
+  async getCurrentSubscription(tenant_id?: string): Promise<CurrentSubscriptionResponse> {
     const params = new URLSearchParams();
-    if (app_id !== undefined) params.set('app_id', String(app_id));
     if (tenant_id !== undefined) params.set('tenant_id', String(tenant_id));
     const qs = params.toString();
     const path = "/v1/billing/subscription" + (qs ? `?${qs}` : '');

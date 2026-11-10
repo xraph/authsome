@@ -1125,13 +1125,12 @@ class AuthClient {
 
   /// List your entitlements
   /// GET /v1/billing/entitlements
-  Future<EntitlementsResponse> listEntitlements({required String token, String? appId, String? tenantId}) async {
+  Future<EntitlementsResponse> listEntitlements({required String token, String? tenantId}) async {
     final path = '/v1/billing/entitlements';
     // A list of pairs rather than a map, because a query string may carry the
     // same key more than once. RFC 8707 sends `resource` that way, and a map
     // would keep only the last value.
     final queryPairs = <MapEntry<String, String>>[];
-    if (appId != null) queryPairs.add(MapEntry('app_id', appId.toString()));
     if (tenantId != null) queryPairs.add(MapEntry('tenant_id', tenantId.toString()));
     final queryString = queryPairs.isNotEmpty
         ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
@@ -1306,13 +1305,12 @@ class AuthClient {
 
   /// Get your subscription
   /// GET /v1/billing/subscription
-  Future<CurrentSubscriptionResponse> getCurrentSubscription({required String token, String? appId, String? tenantId}) async {
+  Future<CurrentSubscriptionResponse> getCurrentSubscription({required String token, String? tenantId}) async {
     final path = '/v1/billing/subscription';
     // A list of pairs rather than a map, because a query string may carry the
     // same key more than once. RFC 8707 sends `resource` that way, and a map
     // would keep only the last value.
     final queryPairs = <MapEntry<String, String>>[];
-    if (appId != null) queryPairs.add(MapEntry('app_id', appId.toString()));
     if (tenantId != null) queryPairs.add(MapEntry('tenant_id', tenantId.toString()));
     final queryString = queryPairs.isNotEmpty
         ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'

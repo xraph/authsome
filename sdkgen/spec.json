@@ -18037,13 +18037,6 @@
         "parameters": [
           {
             "in": "query",
-            "name": "app_id",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
             "name": "tenant_id",
             "schema": {
               "type": "string"
@@ -20174,13 +20167,6 @@
         "description": "Returns the subscription of your active organization (or your own in user mode), null when there is none, and whether you may change it.",
         "operationId": "getCurrentSubscription",
         "parameters": [
-          {
-            "in": "query",
-            "name": "app_id",
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "in": "query",
             "name": "tenant_id",

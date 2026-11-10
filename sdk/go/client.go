@@ -1323,9 +1323,6 @@ func (c *Client) ListEntitlements(ctx context.Context, params *ListEntitlementsP
 	path := "/v1/billing/entitlements"
 	if params != nil {
 		q := url.Values{}
-		if params.AppID != "" {
-			q.Set("app_id", params.AppID)
-		}
 		if params.TenantID != "" {
 			q.Set("tenant_id", params.TenantID)
 		}
@@ -1501,9 +1498,6 @@ func (c *Client) GetCurrentSubscription(ctx context.Context, params *GetCurrentS
 	path := "/v1/billing/subscription"
 	if params != nil {
 		q := url.Values{}
-		if params.AppID != "" {
-			q.Set("app_id", params.AppID)
-		}
 		if params.TenantID != "" {
 			q.Set("tenant_id", params.TenantID)
 		}
@@ -3575,7 +3569,6 @@ type ListCouponsParams struct {
 
 // ListEntitlementsParams holds optional query parameters for ListEntitlements.
 type ListEntitlementsParams struct {
-	AppID    string `json:"app_id,omitempty"`
 	TenantID string `json:"tenant_id,omitempty"`
 }
 
@@ -3600,7 +3593,6 @@ type ListBillingPlansParams struct {
 
 // GetCurrentSubscriptionParams holds optional query parameters for GetCurrentSubscription.
 type GetCurrentSubscriptionParams struct {
-	AppID    string `json:"app_id,omitempty"`
 	TenantID string `json:"tenant_id,omitempty"`
 }
 
