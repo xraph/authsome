@@ -145,13 +145,17 @@ func (p *Plugin) registerTenantRoutes(router forge.Router) error {
 		forge.WithGroupAuth("session"),
 		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
 	)
-	return ent.GET("", p.handleListEntitlements,
+	if err := ent.GET("", p.handleListEntitlements,
 		forge.WithSummary("List your entitlements"),
 		forge.WithDescription("Checks every feature on your active plan in one call."),
 		forge.WithOperationID("listEntitlements"),
 		forge.WithResponseSchema(http.StatusOK, "Entitlements by feature key", EntitlementsResponse{}),
 		forge.WithErrorResponses(),
-	)
+	); err != nil {
+		return err
+	}
+
+	return p.registerPortalRoute(router)
 }
 
 // tenantScope resolves the app and tenant of a tenant route and checks the
@@ -401,6 +405,10 @@ type planChange struct {
 // applyPlanChange subscribes the tenant, or moves its subscription to the
 // plan and seat count, and answers with the updated subscription.
 func (p *Plugin) applyPlanChange(ctx forge.Context, c planChange) (*SubscriptionMutationResponse, error) {
+	if p.needsCheckout(c.plan) {
+		return p.startCheckout(ctx, c)
+	}
+
 	var (
 		sub *lsub.Subscription
 		err error

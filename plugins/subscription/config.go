@@ -34,6 +34,11 @@ type Config struct {
 	// own billing API on top of the plugin's ledger.
 	DisableRoutes bool
 
+	// Checkout takes payment before a tenant moves onto a paid plan through
+	// the self-service routes. nil grants the plan directly. A provider that
+	// also implements PortalProvider backs the billing portal route.
+	Checkout CheckoutProvider
+
 	// DisableAutoSubscribe turns off both the org-create and user-signup
 	// auto-subscribe hooks, whatever the settings say. Use it when the host
 	// creates subscriptions itself.
