@@ -44,6 +44,7 @@ eng, err := authsome.NewEngine(
 | `Domain` | `string` | `""` | Public base URL. A provider without a `RedirectURL` gets `{Domain}/v1/social/{provider}/callback` |
 | `SessionTokenTTL` | `time.Duration` | `1h` | Lifetime of sessions created via social sign-in |
 | `SessionRefreshTTL` | `time.Duration` | `30d` | Lifetime of refresh tokens |
+| `HTTPClient` | `*http.Client` | guarded client | Makes every call to a generic OpenID Connect issuer. The default refuses private, loopback and link-local addresses; set your own to reach an issuer inside your network |
 
 ## Implemented interfaces
 
@@ -101,6 +102,52 @@ social.NewAppleProvider(social.ProviderConfig{
     RedirectURL:  "https://example.com/v1/social/apple/callback",
 })
 ```
+
+### Any OpenID Connect provider
+
+If the provider speaks OpenID Connect, you don't need a constructor for it. Give authsome the issuer URL and it reads the endpoints and signing keys from the issuer's discovery document. That covers Keycloak, Okta, Auth0, Zitadel, Authentik and another authsome deployment running the OAuth2 provider plugin, so one product can offer "Sign in with Muono" where Muono is a second authsome deployment.
+
+Most of the time an app adds one itself, through the admin API:
+
+```bash
+curl -X PUT "https://auth.example.com/v1/admin/social/providers/muono?app_id=$APP_ID" \
+  -H "Content-Type: application/json" \
+  -b "authsome_session=$SESSION" \
+  -d '{
+    "type": "oidc",
+    "issuer": "https://id.muono.example",
+    "display_name": "Muono",
+    "client_id": "your-client-id",
+    "client_secret": "your-client-secret"
+  }'
+```
+
+The path segment (`muono`) is the provider's ID: lowercase letters, digits and dashes, up to 32 characters, and not one of the built-in names. Sign-in then runs at `/v1/social/muono`, and the client config lists the provider with `display_name` as its button label. Register `{Domain}/v1/social/muono/callback` as the redirect URI at the issuer.
+
+Saving runs discovery straight away, so a wrong issuer comes back as a 400 when you save it, before anyone goes looking for a missing button. The issuer has to be an absolute `https` URL with no query or fragment.
+
+You can also wire one in code:
+
+```go
+muono, err := social.NewOIDCProvider(ctx, social.OIDCConfig{
+    ProviderConfig: social.ProviderConfig{
+        ClientID:     "your-client-id",
+        ClientSecret: "your-client-secret",
+    },
+    Name:   "muono",
+    Issuer: "https://id.muono.example",
+})
+```
+
+What the plugin does with the response:
+
+- It verifies the id_token's signature against the issuer's published keys, along with its issuer, audience and expiry, and checks its nonce against the one sent at the start. A token that fails any of those never reaches account matching.
+- The profile comes from the id_token's `sub`, `email`, `email_verified`, `given_name`, `family_name`, `name` and `picture` claims. When the id_token leaves the email out, the userinfo endpoint fills it in, but only if userinfo answers for the same `sub`.
+- `email_verified` is read as a boolean or as the string `"true"`, since some issuers send a string. Anything else counts as unverified, so an address the issuer never verified can't link to an existing account.
+- `openid` is always requested. Without your own `Scopes` the request is `openid email profile`.
+- Discovery is cached per issuer for an hour.
+
+The issuer URL comes from whoever administers the app, so the default client won't connect to private, loopback, link-local or shared (`100.64.0.0/10`) addresses. It checks the address at connect time, after DNS, so a name that later resolves somewhere internal is still refused. If your identity provider lives inside your network, pass your own `HTTPClient` in `Config`. That client then handles discovery, key fetches, the token exchange and userinfo for every generic provider.
 
 ### Custom provider
 
@@ -178,12 +225,20 @@ err := socialPlugin.UnlinkAuthMethod(ctx, userID, "google")
 
 The `CanUnlink` method checks whether the provider is managed by this plugin. The engine aggregates unlink requests across all `AuthMethodUnlinker` plugins.
 
+## Providers per app
+
+Providers saved through the admin API with `?app_id` belong to that app. Start, callback, unlinking and the client config all read the app's list, and an app with its own list uses it in place of the global one. Providers wired in code are always available and win over a saved provider with the same name.
+
 ## API routes
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/v1/social/:provider` | Start OAuth flow, returns authorization URL |
 | `GET` | `/v1/social/:provider/callback` | OAuth callback, exchanges code for session |
+| `GET` | `/v1/admin/social/providers/catalog` | Built-in providers, plus an `oidc` entry marked `generic` for any OpenID Connect issuer |
+| `GET` | `/v1/admin/social/providers` | Saved providers, secrets masked. `?app_id` shows what that app resolves to |
+| `PUT` | `/v1/admin/social/providers/:provider` | Save a provider globally, or for one app with `?app_id` |
+| `DELETE` | `/v1/admin/social/providers/:provider` | Remove a saved provider |
 
 ## Observability
 

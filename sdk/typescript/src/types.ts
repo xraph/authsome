@@ -29,6 +29,7 @@ export interface AdminBanUserRequest {
 }
 
 export interface AdminCatalogProvider {
+  generic?: boolean;
   id: string;
   name: string;
 }
@@ -131,11 +132,14 @@ export interface AdminPlatformOwnerResponse {
 export interface AdminProvider {
   client_id: string;
   client_secret?: string;
+  display_name?: string;
   enabled: boolean;
   has_secret: boolean;
+  issuer?: string;
   name: string;
   redirect_url?: string;
   scopes?: string[];
+  type?: string;
 }
 
 export interface AdminProviderResponse {
@@ -204,9 +208,12 @@ export interface AdminUpdateUserRequest {
 export interface AdminUpsertProviderRequest {
   client_id: string;
   client_secret: string;
+  display_name?: string;
   enabled?: boolean;
+  issuer?: string;
   redirect_url?: string;
   scopes?: string[];
+  type?: string;
 }
 
 export interface AdminUserListResponse {
@@ -489,13 +496,32 @@ export interface Consent {
   version: string;
 }
 
+export interface ConsentDecisionBody {
+  cid: string;
+  csrf: string;
+  decision: string;
+}
+
 export interface ConsentListResponse {
   consents: Consent[];
   next_cursor?: string;
 }
 
+export interface ConsentResult {
+  redirect_url: string;
+}
+
 export interface ConsentStatusResponse {
   status: string;
+}
+
+export interface ConsentView {
+  action: string;
+  cid: string;
+  client_id: string;
+  client_name: string;
+  csrf: string;
+  scopes: string[];
 }
 
 export interface CouponResponse {
@@ -1861,6 +1887,8 @@ export type VerifyMFARecoveryRequest = RecoveryVerifyRequest;
 export type SendSMSCodeRequest = SMSSendRequest;
 
 export type VerifySMSCodeRequest = SMSVerifyRequest;
+
+export type Oauth2ConsentDecisionRequest = ConsentDecisionBody;
 
 export type Oauth2DeviceAuthorizeRequest = { client_id: string; resource?: string[]; scope?: string };
 

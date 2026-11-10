@@ -150,16 +150,19 @@ class AdminBanUserRequest {
 }
 
 class AdminCatalogProvider {
+  final bool? generic;
   final String id;
   final String name;
 
   const AdminCatalogProvider({
+    this.generic,
     required this.id,
     required this.name,
   });
 
   factory AdminCatalogProvider.fromJson(Map<String, dynamic> json) {
     return AdminCatalogProvider(
+      generic: json['generic'] as bool?,
       id: json['id'] as String,
       name: json['name'] as String,
     );
@@ -167,6 +170,7 @@ class AdminCatalogProvider {
 
   Map<String, dynamic> toJson() {
     return {
+      if (generic != null) 'generic': generic,
       'id': id,
       'name': name,
     };
@@ -657,31 +661,40 @@ class AdminPlatformOwnerResponse {
 class AdminProvider {
   final String clientId;
   final String? clientSecret;
+  final String? displayName;
   final bool enabled;
   final bool hasSecret;
+  final String? issuer;
   final String name;
   final String? redirectUrl;
   final List<String>? scopes;
+  final String? type;
 
   const AdminProvider({
     required this.clientId,
     this.clientSecret,
+    this.displayName,
     required this.enabled,
     required this.hasSecret,
+    this.issuer,
     required this.name,
     this.redirectUrl,
     this.scopes,
+    this.type,
   });
 
   factory AdminProvider.fromJson(Map<String, dynamic> json) {
     return AdminProvider(
       clientId: json['client_id'] as String,
       clientSecret: json['client_secret'] as String?,
+      displayName: json['display_name'] as String?,
       enabled: json['enabled'] as bool,
       hasSecret: json['has_secret'] as bool,
+      issuer: json['issuer'] as String?,
       name: json['name'] as String,
       redirectUrl: json['redirect_url'] as String?,
       scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+      type: json['type'] as String?,
     );
   }
 
@@ -689,11 +702,14 @@ class AdminProvider {
     return {
       'client_id': clientId,
       if (clientSecret != null) 'client_secret': clientSecret,
+      if (displayName != null) 'display_name': displayName,
       'enabled': enabled,
       'has_secret': hasSecret,
+      if (issuer != null) 'issuer': issuer,
       'name': name,
       if (redirectUrl != null) 'redirect_url': redirectUrl,
       if (scopes != null) 'scopes': scopes,
+      if (type != null) 'type': type,
     };
   }
 
@@ -1005,25 +1021,34 @@ class AdminUpdateUserRequest {
 class AdminUpsertProviderRequest {
   final String clientId;
   final String clientSecret;
+  final String? displayName;
   final bool? enabled;
+  final String? issuer;
   final String? redirectUrl;
   final List<String>? scopes;
+  final String? type;
 
   const AdminUpsertProviderRequest({
     required this.clientId,
     required this.clientSecret,
+    this.displayName,
     this.enabled,
+    this.issuer,
     this.redirectUrl,
     this.scopes,
+    this.type,
   });
 
   factory AdminUpsertProviderRequest.fromJson(Map<String, dynamic> json) {
     return AdminUpsertProviderRequest(
       clientId: json['client_id'] as String,
       clientSecret: json['client_secret'] as String,
+      displayName: json['display_name'] as String?,
       enabled: json['enabled'] as bool?,
+      issuer: json['issuer'] as String?,
       redirectUrl: json['redirect_url'] as String?,
       scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+      type: json['type'] as String?,
     );
   }
 
@@ -1031,9 +1056,12 @@ class AdminUpsertProviderRequest {
     return {
       'client_id': clientId,
       'client_secret': clientSecret,
+      if (displayName != null) 'display_name': displayName,
       if (enabled != null) 'enabled': enabled,
+      if (issuer != null) 'issuer': issuer,
       if (redirectUrl != null) 'redirect_url': redirectUrl,
       if (scopes != null) 'scopes': scopes,
+      if (type != null) 'type': type,
     };
   }
 
@@ -2413,6 +2441,37 @@ class Consent {
   String toString() => 'Consent(${toJson()})';
 }
 
+class ConsentDecisionBody {
+  final String cid;
+  final String csrf;
+  final String decision;
+
+  const ConsentDecisionBody({
+    required this.cid,
+    required this.csrf,
+    required this.decision,
+  });
+
+  factory ConsentDecisionBody.fromJson(Map<String, dynamic> json) {
+    return ConsentDecisionBody(
+      cid: json['cid'] as String,
+      csrf: json['csrf'] as String,
+      decision: json['decision'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'cid': cid,
+      'csrf': csrf,
+      'decision': decision,
+    };
+  }
+
+  @override
+  String toString() => 'ConsentDecisionBody(${toJson()})';
+}
+
 class ConsentListResponse {
   final List<Consent> consents;
   final String? nextCursor;
@@ -2440,6 +2499,29 @@ class ConsentListResponse {
   String toString() => 'ConsentListResponse(${toJson()})';
 }
 
+class ConsentResult {
+  final String redirectUrl;
+
+  const ConsentResult({
+    required this.redirectUrl,
+  });
+
+  factory ConsentResult.fromJson(Map<String, dynamic> json) {
+    return ConsentResult(
+      redirectUrl: json['redirect_url'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'redirect_url': redirectUrl,
+    };
+  }
+
+  @override
+  String toString() => 'ConsentResult(${toJson()})';
+}
+
 class ConsentStatusResponse {
   final String status;
 
@@ -2461,6 +2543,49 @@ class ConsentStatusResponse {
 
   @override
   String toString() => 'ConsentStatusResponse(${toJson()})';
+}
+
+class ConsentView {
+  final String action;
+  final String cid;
+  final String clientId;
+  final String clientName;
+  final String csrf;
+  final List<String> scopes;
+
+  const ConsentView({
+    required this.action,
+    required this.cid,
+    required this.clientId,
+    required this.clientName,
+    required this.csrf,
+    required this.scopes,
+  });
+
+  factory ConsentView.fromJson(Map<String, dynamic> json) {
+    return ConsentView(
+      action: json['action'] as String,
+      cid: json['cid'] as String,
+      clientId: json['client_id'] as String,
+      clientName: json['client_name'] as String,
+      csrf: json['csrf'] as String,
+      scopes: (json['scopes'] as List).map((e) => e as String).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'action': action,
+      'cid': cid,
+      'client_id': clientId,
+      'client_name': clientName,
+      'csrf': csrf,
+      'scopes': scopes,
+    };
+  }
+
+  @override
+  String toString() => 'ConsentView(${toJson()})';
 }
 
 class CouponResponse {

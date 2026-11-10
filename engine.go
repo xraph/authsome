@@ -1437,6 +1437,18 @@ type socialProviderLister interface {
 	Providers() []string
 }
 
+// appSocialProviderLister lists the providers one app can use, including
+// the ones configured for that app alone.
+type appSocialProviderLister interface {
+	ProvidersForApp(ctx context.Context, appID id.AppID) []string
+}
+
+// socialProviderLabeler gives the button labels for providers the engine
+// has no name for, like a generic OpenID Connect provider.
+type socialProviderLabeler interface {
+	ProviderLabelsForApp(ctx context.Context, appID id.AppID) map[string]string
+}
+
 // ssoConnectionLister is implemented by the SSO plugin to expose connections.
 type ssoConnectionLister interface {
 	Connections() []string
@@ -1508,13 +1520,26 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 			passwordEnabled = true
 		case "social":
 			socialEnabled = true
-			if lister, ok := p.(socialProviderLister); ok {
-				for _, prov := range lister.Providers() {
-					socialProviders = append(socialProviders, ClientConfigSocialProvider{
-						ID:   prov,
-						Name: providerDisplayName(prov),
-					})
+			var names []string
+			switch lister := p.(type) {
+			case appSocialProviderLister:
+				names = lister.ProvidersForApp(ctx, appID)
+			case socialProviderLister:
+				names = lister.Providers()
+			}
+			var labels map[string]string
+			if labeler, ok := p.(socialProviderLabeler); ok {
+				labels = labeler.ProviderLabelsForApp(ctx, appID)
+			}
+			for _, prov := range names {
+				label := labels[prov]
+				if label == "" {
+					label = providerDisplayName(prov)
 				}
+				socialProviders = append(socialProviders, ClientConfigSocialProvider{
+					ID:   prov,
+					Name: label,
+				})
 			}
 		case "passkey":
 			passkeyEnabled = true

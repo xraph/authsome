@@ -33,6 +33,8 @@ eng, err := authsome.NewEngine(
 | `AccessTokenTTL` | `time.Duration` | `1h` | Lifetime of issued access tokens |
 | `LoginURL` | `string` | none | Where a signed-out `/authorize` sends the browser: a path on the issuer's origin or an absolute http(s) URL. Empty keeps the 401 |
 | `LoginReturnParam` | `string` | `"redirect"` | The query parameter that carries the authorize URL to the login page |
+| `CORSOrigins` | `[]string` | any origin | Origins a browser app may call discovery, JWKS, token, userinfo, revoke and registration from. Never with credentials |
+| `DisableCORS` | `bool` | `false` | Turn those CORS headers off, for a deployment that sets CORS itself |
 | `IDTokenTTL` | `time.Duration` | `1h` | Lifetime of id_tokens |
 | `IDTokenSigningKey` | `[]byte` | none | PEM private key (RSA of 2048 bits or more, or EC P-256) that signs id_tokens. Wins over a managed key |
 | `IDTokenSigningKeyFile` | `string` | none | Path to the same PEM key |

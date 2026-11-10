@@ -161,31 +161,39 @@ func (p *Plugin) handleAppJWKS(ctx forge.Context, req *AppSlugRequest) (*JWKSRes
 // router, not the root: jwks_uri is the app's issuer plus /v1/oauth/jwks, and
 // that issuer carries the mount prefix.
 func (p *Plugin) registerAppJWKSRoute(router forge.Router) error {
-	return router.GET("/apps/:slug/v1/oauth/jwks", p.handleAppJWKS,
+	if err := p.registerPreflight(router, "/apps/:slug/v1/oauth/jwks"); err != nil {
+		return err
+	}
+	return router.GET("/apps/:slug/v1/oauth/jwks", p.handleAppJWKS, p.withCORS(
 		forge.WithSummary("App JSON Web Key Set"),
 		forge.WithDescription("Public keys that verify id_tokens issued under an app's own issuer. 404 unless the app has opted in."),
 		forge.WithOperationID("oauth2AppJWKS"),
 		forge.WithResponseSchema(http.StatusOK, "JWKS", JWKSResponse{}),
 		forge.WithTags("OAuth2"),
 		forge.WithErrorResponses(),
-	)
+	)...)
 }
 
 // registerAppWellKnown mounts the per-app discovery documents.
 func (p *Plugin) registerAppWellKnown(router forge.Router) error {
-	if err := router.GET("/apps/:slug/.well-known/openid-configuration", p.handleAppDiscovery,
+	if err := router.GET("/apps/:slug/.well-known/openid-configuration", p.handleAppDiscovery, p.withCORS(
 		forge.WithSummary("App OpenID Connect Discovery"),
 		forge.WithDescription("Discovery document for an app that has its own issuer. 404 unless the app has opted in."),
 		forge.WithOperationID("oauth2AppDiscovery"),
 		forge.WithTags("OAuth2"),
-	); err != nil {
+	)...); err != nil {
 		return err
 	}
-	return router.GET("/apps/:slug/.well-known/oauth-authorization-server", p.handleAppAuthServerMetadata,
+	for _, path := range []string{"/apps/:slug/.well-known/openid-configuration", "/apps/:slug/.well-known/oauth-authorization-server"} {
+		if err := p.registerPreflight(router, path); err != nil {
+			return err
+		}
+	}
+	return router.GET("/apps/:slug/.well-known/oauth-authorization-server", p.handleAppAuthServerMetadata, p.withCORS(
 		forge.WithSummary("App OAuth2 Authorization Server Metadata"),
 		forge.WithDescription("RFC 8414 metadata for an app that has its own issuer. 404 unless the app has opted in."),
 		forge.WithOperationID("oauth2AppAuthServerMetadata"),
 		forge.WithResponseSchema(http.StatusOK, "Metadata", AuthServerMetadata{}),
 		forge.WithTags("OAuth2"),
-	)
+	)...)
 }

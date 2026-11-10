@@ -75,11 +75,7 @@ func (p *Plugin) signedOutAuthorize(ctx forge.Context, client *OAuth2Client, red
 	// prompt=none forbids any UI, a login page included. The client hears
 	// about it at its redirect URI and decides what to do.
 	if hasPrompt(req.Prompt, "none") {
-		to, err := errorRedirect(redirectURI, errLoginRequired, "the user is not signed in", req.State)
-		if err != nil {
-			return err
-		}
-		return ctx.Redirect(http.StatusFound, to)
+		return p.authorizeError(ctx, redirectURI, errLoginRequired, "the user is not signed in", req.State)
 	}
 
 	login, err := p.loginURLFor(ctx.Context(), client.AppID)
@@ -168,11 +164,7 @@ func (p *Plugin) reauthenticate(ctx forge.Context, client *OAuth2Client, redirec
 			return ctx.Redirect(http.StatusFound, p.loginRedirect(login, returnURL(ctx.Request(), time.Now())))
 		}
 	}
-	to, err := errorRedirect(redirectURI, errLoginRequired, "the user has to sign in again", req.State)
-	if err != nil {
-		return err
-	}
-	return ctx.Redirect(http.StatusFound, to)
+	return p.authorizeError(ctx, redirectURI, errLoginRequired, "the user has to sign in again", req.State)
 }
 
 // loginURLFor returns the login page for appID: the app's own setting when

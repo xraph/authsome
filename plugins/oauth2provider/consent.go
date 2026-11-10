@@ -186,6 +186,13 @@ func denyRedirect(pc *pendingConsent) (string, error) {
 }
 
 // ConsentView is what the page and the JSON form of it show.
+// ConsentPageRequest names the parked request to show. The handler reads
+// the query itself; this type only describes it, so the generated clients
+// take cid.
+type ConsentPageRequest struct {
+	CID string `query:"cid" description:"Consent id from the redirect the authorize endpoint sent"`
+}
+
 type ConsentView struct {
 	CID        string   `json:"cid"`
 	CSRF       string   `json:"csrf"`
