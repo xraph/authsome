@@ -276,6 +276,27 @@ class _CurrentPlanCardState extends State<CurrentPlanCard> {
     }
   }
 
+  // Canceling is the one write here that's hard to take back once the
+  // period ends, so it asks first.
+  Future<void> _confirmCancel(SubscriptionApi api, Subscription sub) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel your plan?'),
+        content: Text('You keep it until ${_date(context, sub.currentPeriodEnd)}.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Never mind')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Yes, cancel'),
+          ),
+        ],
+      ),
+    );
+    if (yes == true && mounted) await _run(api.cancel);
+  }
+
   String _status(BuildContext context, Subscription sub) {
     if (sub.isPaused) return 'Paused';
     if (sub.willCancel) return 'Ends on ${_date(context, sub.cancelAt!)}';
@@ -338,7 +359,7 @@ class _CurrentPlanCardState extends State<CurrentPlanCard> {
                         child: const Text('Keep plan'),
                       )
                     : OutlinedButton(
-                        onPressed: _busy ? null : () => _run(api.cancel),
+                        onPressed: _busy ? null : () => _confirmCancel(api, sub),
                         child: const Text('Cancel plan'),
                       ),
               ],

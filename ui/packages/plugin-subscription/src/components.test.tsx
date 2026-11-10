@@ -95,6 +95,25 @@ describe("CurrentPlanCard", () => {
     await waitFor(() => expect(screen.getByText(/Renews on/)).toBeTruthy());
   });
 
+  it("asks before canceling, and cancels only on yes", async () => {
+    const h = harness();
+    const cancel = vi.fn(() => json({ subscription: subJSON({ cancel_at: "2026-12-01T00:00:00Z" }) }));
+    h.routes.set("POST /v1/billing/subscription/cancel", cancel);
+    await h.mount(<CurrentPlanCard locale="en-US" timeZone="UTC" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel plan" }));
+    expect(cancel).not.toHaveBeenCalled();
+    expect(screen.getByText("Cancel your plan? You keep it until Dec 1, 2026.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Never mind" }));
+    expect(screen.queryByText(/Cancel your plan\?/)).toBeNull();
+    expect(cancel).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel plan" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Yes, cancel" })); });
+    expect(cancel).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByText(/Ends on Dec 1, 2026/)).toBeTruthy());
+  });
+
   it("shows no buttons to someone who can't manage billing", async () => {
     const h = harness();
     h.routes.set("GET /v1/billing/subscription", () => json({ subscription: subJSON(), can_manage: false }));

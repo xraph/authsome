@@ -196,8 +196,12 @@ export function CurrentPlanCard({ locale, timeZone, onError, className }: Curren
   const { subscription: sub, canManage, isLoading, error, cancel, resume, isPending } =
     useSubscription();
   const [failed, setFailed] = useState<string | null>(null);
+  // Canceling is the one write here that's hard to take back once the
+  // period ends, so it asks first.
+  const [confirming, setConfirming] = useState(false);
 
   const run = async (write: () => Promise<unknown>) => {
+    setConfirming(false);
     setFailed(null);
     try {
       await write();
@@ -247,13 +251,25 @@ export function CurrentPlanCard({ locale, timeZone, onError, className }: Curren
         {failed && <ErrorLine>{failed}</ErrorLine>}
       </CardContent>
       {canManage && !sub.isPaused && (
-        <CardFooter>
+        <CardFooter className="flex-wrap gap-2">
           {sub.willCancel ? (
             <Button disabled={isPending} onClick={() => void run(resume)}>
               Keep plan
             </Button>
+          ) : confirming ? (
+            <>
+              <p className="w-full text-sm">
+                {`Cancel your plan? You keep it until ${formatDate(sub.currentPeriodEnd, locale, timeZone)}.`}
+              </p>
+              <Button variant="destructive" disabled={isPending} onClick={() => void run(() => cancel())}>
+                Yes, cancel
+              </Button>
+              <Button variant="outline" disabled={isPending} onClick={() => setConfirming(false)}>
+                Never mind
+              </Button>
+            </>
           ) : (
-            <Button variant="outline" disabled={isPending} onClick={() => void run(() => cancel())}>
+            <Button variant="outline" disabled={isPending} onClick={() => setConfirming(true)}>
               Cancel plan
             </Button>
           )}

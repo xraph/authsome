@@ -244,9 +244,38 @@ void main() {
     Object? reported;
     await h.pump(tester, CurrentPlanCard(onError: (e) => reported = e));
     await tester.tap(find.text('Cancel plan'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes, cancel'));
     await _settle(tester);
     expect(find.text("Couldn't update your plan. Try again."), findsOneWidget);
     expect(reported, isNotNull);
+  });
+
+  testWidgets('CurrentPlanCard asks before canceling, and cancels only on yes', (tester) async {
+    final h = _Harness();
+    var canceled = 0;
+    h.routes['POST /v1/billing/subscription/cancel'] = (_) {
+      canceled++;
+      return _json({'subscription': subJson({'cancel_at': '2026-12-01T12:00:00Z'})});
+    };
+    await h.pump(tester, const CurrentPlanCard());
+    await tester.tap(find.text('Cancel plan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancel your plan?'), findsOneWidget);
+    expect(find.textContaining('You keep it until'), findsOneWidget);
+    expect(canceled, 0);
+
+    await tester.tap(find.text('Never mind'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancel your plan?'), findsNothing);
+    expect(canceled, 0);
+
+    await tester.tap(find.text('Cancel plan'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes, cancel'));
+    await _settle(tester);
+    expect(canceled, 1);
+    expect(find.text('Keep plan'), findsOneWidget);
   });
 
   testWidgets('CurrentPlanCard shows seats and no buttons to a member', (tester) async {
