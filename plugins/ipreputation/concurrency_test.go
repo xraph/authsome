@@ -29,6 +29,12 @@ import (
 const (
 	repHammerWorkers = 4
 	repHammerBudget  = 150 * time.Millisecond
+	// repHammerMinIters is how many iterations every hammer goroutine runs
+	// whatever the clock says. The budget lets a fast machine hammer harder;
+	// the minimum stops a slow, race-instrumented CI runner from finishing
+	// with too little work to prove anything, so the floor asserted below
+	// does not depend on machine speed.
+	repHammerMinIters = 200
 )
 
 // concurrentProvider is a Provider safe to call from many goroutines. The
@@ -104,7 +110,7 @@ func TestCheck_ConcurrentWithCaching(t *testing.T) {
 		go func(w int) {
 			defer wg.Done()
 			ctx := context.Background()
-			for i := 0; time.Now().Before(deadline); i++ {
+			for i := 0; i < repHammerMinIters || time.Now().Before(deadline); i++ {
 				ip := ips[(w*len(ips)+i)%len(ips)]
 				err := p.check(ctx, ip, "app-1")
 				if blocked[ip] && err == nil {
@@ -126,7 +132,7 @@ func TestCheck_ConcurrentWithCaching(t *testing.T) {
 		wg.Add(1)
 		go func(w int) {
 			defer wg.Done()
-			for i := 0; time.Now().Before(deadline); i++ {
+			for i := 0; i < repHammerMinIters || time.Now().Before(deadline); i++ {
 				if rep := p.getCached(ips[(w+i)%len(ips)]); rep != nil {
 					rep.Score = 0
 					rep.IsBlacklisted = false
@@ -141,7 +147,7 @@ func TestCheck_ConcurrentWithCaching(t *testing.T) {
 
 	wg.Wait()
 
-	require.Greater(t, ops.Load(), int64(1000),
+	require.GreaterOrEqual(t, ops.Load(), int64(2*repHammerWorkers*repHammerMinIters),
 		"the hammer did no meaningful work; it is not exercising the cache concurrently")
 }
 
@@ -211,7 +217,7 @@ func TestCheck_BlockedIPStaysBlockedUnderLoad(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			ctx := context.Background()
-			for time.Now().Before(deadline) {
+			for i := 0; i < repHammerMinIters || time.Now().Before(deadline); i++ {
 				if err := p.check(ctx, ip, "app-1"); err == nil {
 					allowed.Add(1)
 				}
@@ -224,7 +230,7 @@ func TestCheck_BlockedIPStaysBlockedUnderLoad(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for time.Now().Before(deadline) {
+			for i := 0; i < repHammerMinIters || time.Now().Before(deadline); i++ {
 				if rep := p.getCached(ip); rep != nil {
 					rep.Score = 0
 					rep.IsBlacklisted = false
@@ -235,6 +241,6 @@ func TestCheck_BlockedIPStaysBlockedUnderLoad(t *testing.T) {
 
 	wg.Wait()
 
-	require.Greater(t, checks.Load(), int64(500), "the hammer did no meaningful work")
+	require.GreaterOrEqual(t, checks.Load(), int64(repHammerWorkers*repHammerMinIters), "the hammer did no meaningful work")
 	require.Zero(t, allowed.Load(), "a blacklisted IP was allowed through %d times; the cached verdict was mutated out from under check", allowed.Load())
 }

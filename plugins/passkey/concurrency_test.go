@@ -31,6 +31,12 @@ import (
 const (
 	passkeyHammerWorkers = 4
 	passkeyHammerBudget  = 150 * time.Millisecond
+	// passkeyHammerMinIters is how many iterations every hammer goroutine runs
+	// whatever the clock says. The budget lets a fast machine hammer harder;
+	// the minimum stops a slow, race-instrumented CI runner from finishing
+	// with too little work to prove anything, so the floor asserted below
+	// does not depend on machine speed.
+	passkeyHammerMinIters = 200
 )
 
 func newCredential(userID id.UserID, appID id.AppID, n int) *Credential {
@@ -72,7 +78,7 @@ func TestMemoryStore_ConcurrentSignCountUpdatesAndReads(t *testing.T) {
 		wg.Add(1)
 		go func(w int) {
 			defer wg.Done()
-			for i := 0; time.Now().Before(deadline); i++ {
+			for i := 0; i < passkeyHammerMinIters || time.Now().Before(deadline); i++ {
 				c := creds[(w+i)%len(creds)]
 				if err := s.UpdateSignCount(ctx, c.CredentialID, counter.Add(1)); err != nil {
 					t.Errorf("UpdateSignCount: %v", err)
@@ -87,7 +93,7 @@ func TestMemoryStore_ConcurrentSignCountUpdatesAndReads(t *testing.T) {
 		wg.Add(1)
 		go func(w int) {
 			defer wg.Done()
-			for i := 0; time.Now().Before(deadline); i++ {
+			for i := 0; i < passkeyHammerMinIters || time.Now().Before(deadline); i++ {
 				c := creds[(w+i)%len(creds)]
 				if got, err := s.GetCredential(ctx, c.CredentialID); err == nil {
 					// A verifier that scribbles on what it was handed must not
@@ -106,7 +112,7 @@ func TestMemoryStore_ConcurrentSignCountUpdatesAndReads(t *testing.T) {
 	}
 	wg.Wait()
 
-	require.Greater(t, ops.Load(), int64(500),
+	require.GreaterOrEqual(t, ops.Load(), int64(2*passkeyHammerWorkers*passkeyHammerMinIters),
 		"the hammer did no meaningful work; it is not exercising the store concurrently")
 
 	// The stored key material must be exactly what was put in.
@@ -234,7 +240,7 @@ func TestMemoryStore_ConcurrentCreateAndDelete(t *testing.T) {
 		wg.Add(1)
 		go func(w int) {
 			defer wg.Done()
-			for i := 0; time.Now().Before(deadline); i++ {
+			for i := 0; i < passkeyHammerMinIters || time.Now().Before(deadline); i++ {
 				c := newCredential(userID, appID, (w*100+i)%16)
 				if err := s.CreateCredential(ctx, c); err != nil {
 					t.Errorf("CreateCredential: %v", err)
@@ -250,5 +256,5 @@ func TestMemoryStore_ConcurrentCreateAndDelete(t *testing.T) {
 	}
 	wg.Wait()
 
-	require.Greater(t, ops.Load(), int64(500), "the hammer did no meaningful work")
+	require.GreaterOrEqual(t, ops.Load(), int64(passkeyHammerWorkers*passkeyHammerMinIters), "the hammer did no meaningful work")
 }

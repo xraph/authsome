@@ -32,6 +32,12 @@ import (
 const (
 	mfaHammerWorkers = 4
 	mfaHammerBudget  = 150 * time.Millisecond
+	// mfaHammerMinIters is how many iterations every hammer goroutine runs
+	// whatever the clock says. The budget lets a fast machine hammer harder;
+	// the minimum stops a slow, race-instrumented CI runner from finishing
+	// with too little work to prove anything, so the floor asserted below
+	// does not depend on machine speed.
+	mfaHammerMinIters = 200
 )
 
 func newRecoveryCode(userID id.UserID, n int) *RecoveryCode {
@@ -71,7 +77,7 @@ func TestMemoryStore_ConcurrentConsumeAndRead(t *testing.T) {
 		wg.Add(1)
 		go func(w int) {
 			defer wg.Done()
-			for i := 0; time.Now().Before(deadline); i++ {
+			for i := 0; i < mfaHammerMinIters || time.Now().Before(deadline); i++ {
 				_ = s.ConsumeRecoveryCode(ctx, codes[(w+i)%len(codes)].ID)
 				ops.Add(1)
 			}
@@ -82,7 +88,7 @@ func TestMemoryStore_ConcurrentConsumeAndRead(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for time.Now().Before(deadline) {
+			for i := 0; i < mfaHammerMinIters || time.Now().Before(deadline); i++ {
 				got, err := s.GetRecoveryCodes(ctx, userID)
 				if err != nil {
 					t.Errorf("GetRecoveryCodes: %v", err)
@@ -101,7 +107,7 @@ func TestMemoryStore_ConcurrentConsumeAndRead(t *testing.T) {
 	}
 	wg.Wait()
 
-	require.Greater(t, ops.Load(), int64(500),
+	require.GreaterOrEqual(t, ops.Load(), int64(2*mfaHammerWorkers*mfaHammerMinIters),
 		"the hammer did no meaningful work; it is not exercising the store concurrently")
 
 	// Every code was consumed many times over, so all of them must read as
@@ -185,7 +191,7 @@ func TestMemoryStore_ConcurrentEnrollmentReadsAndWrites(t *testing.T) {
 		wg.Add(1)
 		go func(w int) {
 			defer wg.Done()
-			for i := 0; time.Now().Before(deadline); i++ {
+			for i := 0; i < mfaHammerMinIters || time.Now().Before(deadline); i++ {
 				idx := (w + i) % len(users)
 				if got, err := s.GetEnrollment(ctx, users[idx], "totp"); err == nil {
 					got.Secret = "tampered"
@@ -205,7 +211,7 @@ func TestMemoryStore_ConcurrentEnrollmentReadsAndWrites(t *testing.T) {
 	}
 	wg.Wait()
 
-	require.Greater(t, ops.Load(), int64(500), "the hammer did no meaningful work")
+	require.GreaterOrEqual(t, ops.Load(), int64(mfaHammerWorkers*mfaHammerMinIters), "the hammer did no meaningful work")
 
 	for i, u := range users {
 		got, err := s.GetEnrollment(ctx, u, "totp")

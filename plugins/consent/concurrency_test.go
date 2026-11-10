@@ -28,6 +28,12 @@ import (
 const (
 	consentHammerWorkers = 4
 	consentHammerBudget  = 150 * time.Millisecond
+	// consentHammerMinIters is how many iterations every hammer goroutine runs
+	// whatever the clock says. The budget lets a fast machine hammer harder;
+	// the minimum stops a slow, race-instrumented CI runner from finishing
+	// with too little work to prove anything, so the floor asserted below
+	// does not depend on machine speed.
+	consentHammerMinIters = 200
 )
 
 func newConsent(userID id.UserID, appID id.AppID, purpose string) *Consent {
@@ -60,7 +66,7 @@ func TestMemoryStore_ConcurrentGrantRevokeAndRead(t *testing.T) {
 		wg.Add(1)
 		go func(w int) {
 			defer wg.Done()
-			for i := 0; time.Now().Before(deadline); i++ {
+			for i := 0; i < consentHammerMinIters || time.Now().Before(deadline); i++ {
 				u := users[(w+i)%len(users)]
 				p := purposes[i%len(purposes)]
 
@@ -87,7 +93,7 @@ func TestMemoryStore_ConcurrentGrantRevokeAndRead(t *testing.T) {
 	}
 	wg.Wait()
 
-	require.Greater(t, ops.Load(), int64(200),
+	require.GreaterOrEqual(t, ops.Load(), int64(consentHammerWorkers*consentHammerMinIters),
 		"the hammer did no meaningful work; it is not exercising the store concurrently")
 
 	// Every purpose string must still be one this test actually granted. If a

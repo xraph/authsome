@@ -27,6 +27,12 @@ import (
 const (
 	geoHammerWorkers = 4
 	geoHammerBudget  = 150 * time.Millisecond
+	// geoHammerMinIters is how many iterations every hammer goroutine runs
+	// whatever the clock says. The budget lets a fast machine hammer harder;
+	// the minimum stops a slow, race-instrumented CI runner from finishing
+	// with too little work to prove anything, so the floor asserted below
+	// does not depend on machine speed.
+	geoHammerMinIters = 200
 )
 
 // TestCache_ConcurrentGetAndSet drives Get and Set from concurrent goroutines
@@ -51,7 +57,7 @@ func TestCache_ConcurrentGetAndSet(t *testing.T) {
 			wg.Add(1)
 			go func(w int) {
 				defer wg.Done()
-				for i := 0; time.Now().Before(deadline); i++ {
+				for i := 0; i < geoHammerMinIters || time.Now().Before(deadline); i++ {
 					fn(w*len(ips) + i)
 					ops.Add(1)
 				}
@@ -83,7 +89,7 @@ func TestCache_ConcurrentGetAndSet(t *testing.T) {
 
 	wg.Wait()
 
-	require.Greater(t, ops.Load(), int64(1000),
+	require.GreaterOrEqual(t, ops.Load(), int64(3*geoHammerWorkers*geoHammerMinIters),
 		"the hammer did no meaningful work; it is not exercising the cache concurrently")
 }
 
@@ -158,7 +164,7 @@ func TestCache_ConcurrentExpiry(t *testing.T) {
 		go func(w int) {
 			defer wg.Done()
 			ip := fmt.Sprintf("198.51.100.%d", w%4)
-			for i := 0; time.Now().Before(deadline); i++ {
+			for i := 0; i < geoHammerMinIters || time.Now().Before(deadline); i++ {
 				c.Set(ip, &GeoLocation{IP: ip, Country: "US"})
 				c.Get(ip)
 				ops.Add(1)
@@ -168,5 +174,5 @@ func TestCache_ConcurrentExpiry(t *testing.T) {
 
 	wg.Wait()
 
-	require.Greater(t, ops.Load(), int64(500), "the expiry hammer did no meaningful work")
+	require.GreaterOrEqual(t, ops.Load(), int64(geoHammerWorkers*geoHammerMinIters), "the expiry hammer did no meaningful work")
 }
