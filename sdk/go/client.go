@@ -2181,15 +2181,36 @@ func (c *Client) Oauth2Authorize(ctx context.Context, params *Oauth2AuthorizePar
 }
 
 // Oauth2ConsentPage — OAuth2 consent
-func (c *Client) Oauth2ConsentPage(ctx context.Context) error {
+func (c *Client) Oauth2ConsentPage(ctx context.Context, params *Oauth2ConsentPageParams) (*ConsentView, error) {
 	path := "/v1/oauth/consent"
-	return c.do(ctx, "GET", path, nil, nil)
+	if params != nil {
+		q := url.Values{}
+		if params.Cid != "" {
+			q.Set("cid", params.Cid)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result ConsentView
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // Oauth2ConsentDecision — OAuth2 consent decision
-func (c *Client) Oauth2ConsentDecision(ctx context.Context) error {
+func (c *Client) Oauth2ConsentDecision(ctx context.Context, req *Oauth2ConsentDecisionRequest) (*ConsentResult, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
 	path := "/v1/oauth/consent"
-	return c.do(ctx, "POST", path, nil, nil)
+	var result ConsentResult
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // Oauth2DeviceAuthorize — Device Authorization
@@ -3524,6 +3545,11 @@ type Oauth2AuthorizeParams struct {
 	Resource            []string `json:"resource,omitempty"`
 	Prompt              string   `json:"prompt,omitempty"`
 	Nonce               string   `json:"nonce,omitempty"`
+}
+
+// Oauth2ConsentPageParams holds optional query parameters for Oauth2ConsentPage.
+type Oauth2ConsentPageParams struct {
+	Cid string `json:"cid,omitempty"`
 }
 
 // ListOrganizationsParams holds optional query parameters for ListOrganizations.

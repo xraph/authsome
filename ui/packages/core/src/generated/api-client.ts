@@ -66,8 +66,11 @@ import type {
   CloneEnvironmentResponse,
   Connection,
   Consent,
+  ConsentDecisionBody,
   ConsentListResponse,
+  ConsentResult,
   ConsentStatusResponse,
+  ConsentView,
   CouponResponse,
   CreateClientRequest,
   CreateClientResponse,
@@ -259,6 +262,7 @@ import type {
   VerifyRecoveryCodeRequest,
   SendSMSCodeRequest,
   VerifySMSCodeRequest,
+  Oauth2ConsentDecisionRequest,
   Oauth2DeviceAuthorizeRequest,
   Oauth2DeviceCompleteRequest,
   Oauth2RegisterClientRequest,
@@ -2396,9 +2400,12 @@ export class AuthClient {
    * OAuth2 consent
    * GET /v1/oauth/consent
    */
-  async oauth2ConsentPage(token: string): Promise<void> {
-    const path = "/v1/oauth/consent";
-    return this.request<void>(
+  async oauth2ConsentPage(cid: string, token: string): Promise<ConsentView> {
+    const params = new URLSearchParams();
+    if (cid !== undefined) params.set('cid', String(cid));
+    const qs = params.toString();
+    const path = "/v1/oauth/consent" + (qs ? `?${qs}` : '');
+    return this.request<ConsentView>(
       'GET',
       path,
       undefined,
@@ -2410,12 +2417,12 @@ export class AuthClient {
    * OAuth2 consent decision
    * POST /v1/oauth/consent
    */
-  async oauth2ConsentDecision(token: string): Promise<void> {
+  async oauth2ConsentDecision(body: Oauth2ConsentDecisionRequest, token: string): Promise<ConsentResult> {
     const path = "/v1/oauth/consent";
-    return this.request<void>(
+    return this.request<ConsentResult>(
       'POST',
       path,
-      undefined,
+      body,
       token,
     );
   }
