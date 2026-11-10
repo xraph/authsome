@@ -1985,24 +1985,35 @@ class AuthClient {
 
   /// OAuth2 consent
   /// GET /v1/oauth/consent
-  Future<void> oauth2ConsentPage({required String token}) async {
+  Future<ConsentView> oauth2ConsentPage({required String cid, required String token}) async {
     final path = '/v1/oauth/consent';
-    await _request(
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('cid', cid.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
+    final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
       token: token,
     );
+    return ConsentView.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// OAuth2 consent decision
   /// POST /v1/oauth/consent
-  Future<void> oauth2ConsentDecision({required String token}) async {
+  Future<ConsentResult> oauth2ConsentDecision({required ConsentDecisionBody body, required String token}) async {
     final path = '/v1/oauth/consent';
-    await _request(
+    final res = await _request(
 'POST',
       path,
+      body: body.toJson(),
       token: token,
     );
+    return ConsentResult.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Device Authorization

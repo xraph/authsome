@@ -341,20 +341,28 @@ func (p *Plugin) SetAppID(appID string) {
 	p.appID = appID
 }
 
-// Providers returns the list of all active provider names (code + DB).
+// Providers returns the active provider names (code + DB) at global scope.
+// ProvidersForApp also sees the providers an app configured for itself.
 func (p *Plugin) Providers() []string {
-	return p.allProviderNames(context.Background())
+	return p.allProviderNames(context.Background(), id.AppID{})
 }
 
-// resolveProvider resolves a provider by name. Code-configured providers
-// take precedence over dashboard-configured ones.
-func (p *Plugin) resolveProvider(ctx context.Context, name string) (Provider, bool) {
+// ProvidersForApp returns the active provider names for appID: the code
+// providers plus the enabled dashboard ones, read at the app's scope so
+// its own list wins over the global one.
+func (p *Plugin) ProvidersForApp(ctx context.Context, appID id.AppID) []string {
+	return p.allProviderNames(ctx, appID)
+}
+
+// resolveProvider resolves a provider by name for appID. Code-configured
+// providers take precedence over dashboard-configured ones.
+func (p *Plugin) resolveProvider(ctx context.Context, appID id.AppID, name string) (Provider, bool) {
 	// Code providers always win.
 	if prov, ok := p.providers[name]; ok {
 		return prov, true
 	}
 	// Check DB-configured providers.
-	dbProviders := p.loadDBProviderSettings(ctx)
+	dbProviders := p.loadDBProviderSettings(ctx, appID)
 	for _, s := range dbProviders {
 		if s.Name == name && s.Enabled {
 			prov := providerFromSetting(s)
@@ -367,11 +375,17 @@ func (p *Plugin) resolveProvider(ctx context.Context, name string) (Provider, bo
 }
 
 // loadDBProviderSettings reads dynamic providers from the settings store.
-func (p *Plugin) loadDBProviderSettings(ctx context.Context) []ProviderSetting {
+// With an app, the app's own list replaces the global one when it has
+// one; a zero appID reads the global list only.
+func (p *Plugin) loadDBProviderSettings(ctx context.Context, appID id.AppID) []ProviderSetting {
 	if p.settingsMgr == nil {
 		return nil
 	}
-	providers, err := settings.Get(ctx, p.settingsMgr, SettingSocialProviders, settings.ResolveOpts{})
+	opts := settings.ResolveOpts{}
+	if !appID.IsNil() {
+		opts.AppID = appID.String()
+	}
+	providers, err := settings.Get(ctx, p.settingsMgr, SettingSocialProviders, opts)
 	if err != nil {
 		return nil
 	}
@@ -437,12 +451,12 @@ func providerFromSetting(s ProviderSetting) Provider {
 }
 
 // allProviderNames returns names of all providers (code + enabled DB).
-func (p *Plugin) allProviderNames(ctx context.Context) []string {
+func (p *Plugin) allProviderNames(ctx context.Context, appID id.AppID) []string {
 	names := make(map[string]struct{})
 	for name := range p.providers {
 		names[name] = struct{}{}
 	}
-	dbProviders := p.loadDBProviderSettings(ctx)
+	dbProviders := p.loadDBProviderSettings(ctx, appID)
 	for _, s := range dbProviders {
 		if s.Enabled {
 			names[s.Name] = struct{}{}
@@ -638,13 +652,15 @@ func (p *Plugin) resolveAppID(ctx forge.Context) (id.AppID, error) {
 }
 
 func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartResponse, error) {
-	provider, ok := p.resolveProvider(ctx.Context(), req.Provider)
+	// The app decides which dashboard providers exist, so resolve it
+	// first. A failure still reports an unknown provider before a missing
+	// app, as it always has.
+	appID, appErr := p.resolveAppID(ctx)
+	provider, ok := p.resolveProvider(ctx.Context(), appID, req.Provider)
 	if !ok {
 		return nil, forge.BadRequest(fmt.Sprintf("unsupported provider: %s", req.Provider))
 	}
-
-	appID, err := p.resolveAppID(ctx)
-	if err != nil {
+	if appErr != nil {
 		return nil, forge.BadRequest("unable to determine app_id for social login")
 	}
 
@@ -842,11 +858,6 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 // callback is handleCallback's body. attempt is told where IssueSession
 // takes over the count and which refusals answer with a redirect.
 func (p *Plugin) callback(ctx forge.Context, req *CallbackRequest, attempt *telemetry.SignInAttempt) (*CallbackResponse, error) {
-	provider, ok := p.resolveProvider(ctx.Context(), req.Provider)
-	if !ok {
-		return nil, forge.BadRequest(fmt.Sprintf("unsupported provider: %s", req.Provider))
-	}
-
 	// Validate state parameter
 	if req.State == "" {
 		return nil, forge.BadRequest("missing state parameter")
@@ -882,6 +893,13 @@ func (p *Plugin) callback(ctx forge.Context, req *CallbackRequest, attempt *tele
 	appID, err := id.ParseAppID(appIDStr)
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("invalid app_id in OAuth state: %w", err))
+	}
+
+	// The provider is looked up for the app the flow started in, which is
+	// where an app-scoped provider lives.
+	provider, ok := p.resolveProvider(ctx.Context(), appID, req.Provider)
+	if !ok {
+		return nil, forge.BadRequest(fmt.Sprintf("unsupported provider: %s", req.Provider))
 	}
 
 	// This request is the provider redirecting the user agent, so the client
@@ -1116,8 +1134,14 @@ func (p *Plugin) ListUserAuthMethods(ctx context.Context, userID id.UserID) ([]*
 
 // CanUnlink implements plugin.AuthMethodUnlinker.
 // It returns true if the given provider is one managed by this plugin.
-func (p *Plugin) CanUnlink(ctx context.Context, _ id.UserID, provider string) bool {
-	_, ok := p.resolveProvider(ctx, provider)
+func (p *Plugin) CanUnlink(ctx context.Context, userID id.UserID, provider string) bool {
+	var appID id.AppID
+	if p.store != nil {
+		if u, err := p.store.GetUser(ctx, userID); err == nil && u != nil {
+			appID = u.AppID
+		}
+	}
+	_, ok := p.resolveProvider(ctx, appID, provider)
 	return ok
 }
 

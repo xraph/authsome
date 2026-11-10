@@ -690,3 +690,30 @@ func TestAppleProvider_FetchUser_MissingSub(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "missing sub claim")
 }
+
+func TestHandleStart_NoAppIsRefused(t *testing.T) {
+	p := social.New(social.Config{Providers: []social.Provider{newMockProvider("google")}})
+	p.SetStore(memory.New())
+	p.SetOAuthStore(social.NewMemoryStore())
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/social/google", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "app_id")
+
+	// A provider nobody configured is still the first thing reported.
+	req = httptest.NewRequestWithContext(context.Background(), "POST", "/v1/social/twitter", nil)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Contains(t, rec.Body.String(), "unsupported provider")
+}
+
+func TestCanUnlink_WithoutAStore(t *testing.T) {
+	p := social.New(social.Config{Providers: []social.Provider{newMockProvider("google")}})
+	assert.True(t, p.CanUnlink(context.Background(), id.NewUserID(), "google"), "code providers need no lookup")
+	assert.False(t, p.CanUnlink(context.Background(), id.NewUserID(), "github"))
+	assert.Equal(t, []string{"google"}, p.ProvidersForApp(context.Background(), id.AppID{}))
+}

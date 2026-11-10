@@ -144,11 +144,11 @@ func (p *Plugin) handleJWKS(ctx forge.Context, _ *apitypes.Empty) (*JWKSResponse
 }
 
 func (p *Plugin) registerJWKSRoute(g forge.Router) error {
-	return g.GET("/jwks", p.handleJWKS,
+	return g.GET("/jwks", p.handleJWKS, p.withCORS(
 		forge.WithSummary("JSON Web Key Set"),
 		forge.WithDescription("Public keys that verify id_tokens and asymmetric access tokens issued by this provider."),
 		forge.WithOperationID("oauth2JWKS"),
 		forge.WithResponseSchema(http.StatusOK, "JWKS", JWKSResponse{}),
 		forge.WithErrorResponses(),
-	)
+	)...)
 }

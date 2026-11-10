@@ -110,6 +110,16 @@ type Config struct {
 	// it doesn't.
 	LoginReturnParam string
 
+	// CORSOrigins lists the origins a browser app may call discovery, the
+	// key sets, token, userinfo, revoke and registration from. Empty lets
+	// any origin read them, never with credentials, which is safe because
+	// none of them reads a cookie. "*" in the list also allows any origin.
+	CORSOrigins []string
+
+	// DisableCORS turns those headers off, for a deployment that sets CORS
+	// itself in front of authsome.
+	DisableCORS bool
+
 	// DynamicRegistration enables RFC 7591 registration. Off by default:
 	// an upgrade must never open a public registration endpoint on its own.
 	DynamicRegistration bool
@@ -376,14 +386,19 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
-	if err := g.POST("/token", p.handleToken, append([]forge.RouteOption{
+	if err := g.POST("/token", p.handleToken, p.withCORS(append([]forge.RouteOption{
 		forge.WithSummary("OAuth2 Token"),
 		forge.WithDescription("Token endpoint for exchanging authorization codes or client credentials for access tokens."),
 		forge.WithOperationID("oauth2Token"),
 		forge.WithResponseSchema(http.StatusOK, "Token response", TokenResponse{}),
 		forge.WithErrorResponses(),
-	}, tokenRL...)...); err != nil {
+	}, tokenRL...)...)...); err != nil {
 		return err
+	}
+	for _, path := range []string{"/token", "/revoke", "/userinfo", "/jwks", "/register"} {
+		if err := p.registerPreflight(g, path); err != nil {
+			return err
+		}
 	}
 
 	// Public: relying parties fetch this unauthenticated to verify tokens.
@@ -397,37 +412,37 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Agent-safe: handleRevoke only revokes a token the caller itself holds
 	// (callerOwnsSession), which is how an OAuth2 client, an agent included,
 	// logs out.
-	if err := g.POST("/revoke", p.handleRevoke, append([]forge.RouteOption{
+	if err := g.POST("/revoke", p.handleRevoke, p.withCORS(append([]forge.RouteOption{
 		middleware.AgentSafe(),
 		forge.WithMiddleware(middleware.RequireScope()),
 		forge.WithSummary("Revoke token"),
 		forge.WithDescription("Revokes an access or refresh token."),
 		forge.WithOperationID("oauth2Revoke"),
 		forge.WithErrorResponses(),
-	}, tokenRL...)...); err != nil {
+	}, tokenRL...)...)...); err != nil {
 		return err
 	}
 
-	if err := g.GET("/userinfo", p.handleUserInfo,
+	if err := g.GET("/userinfo", p.handleUserInfo, p.withCORS(
 		forge.WithMiddleware(middleware.RequireScope("openid")),
 		forge.WithSummary("OIDC UserInfo"),
 		forge.WithDescription("Returns claims about the authenticated user."),
 		forge.WithOperationID("oauth2UserInfo"),
 		forge.WithResponseSchema(http.StatusOK, "UserInfo", UserInfo{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	)...); err != nil {
 		return err
 	}
 
 	// OIDC Core 5.3.1 requires userinfo to answer POST as well as GET.
-	if err := g.POST("/userinfo", p.handleUserInfo,
+	if err := g.POST("/userinfo", p.handleUserInfo, p.withCORS(
 		forge.WithMiddleware(middleware.RequireScope("openid")),
 		forge.WithSummary("OIDC UserInfo (POST)"),
 		forge.WithDescription("Returns claims about the authenticated user. Same as the GET form."),
 		forge.WithOperationID("oauth2UserInfoPost"),
 		forge.WithResponseSchema(http.StatusOK, "UserInfo", UserInfo{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	)...); err != nil {
 		return err
 	}
 
@@ -460,7 +475,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			Window: p.config.RegistrationRateLimit.Window,
 		})),
 	}
-	if err := g.POST("/register", p.handleRegisterClient, regOpts...); err != nil {
+	if err := g.POST("/register", p.handleRegisterClient, p.withCORS(regOpts...)...); err != nil {
 		return err
 	}
 
@@ -553,13 +568,19 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("OAuth2 consent"),
 		forge.WithDescription("Shows the pending authorization request for the signed-in user to approve or deny. Renders HTML, or JSON when Accept asks for it."),
 		forge.WithOperationID("oauth2ConsentPage"),
+		forge.WithRequestSchema(ConsentPageRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "The pending request", ConsentView{}),
+		forge.WithErrorResponses(),
 	); err != nil {
 		return err
 	}
 	if err := authG.POST("/consent", p.handleConsentDecision,
 		forge.WithSummary("OAuth2 consent decision"),
-		forge.WithDescription("Records the signed-in user's approval or denial of a pending authorization request and completes it."),
+		forge.WithDescription("Records the signed-in user's approval or denial of a pending authorization request and completes it. A form post is answered with a redirect, a JSON post with the redirect URL."),
 		forge.WithOperationID("oauth2ConsentDecision"),
+		forge.WithRequestSchema(ConsentDecision{}),
+		forge.WithResponseSchema(http.StatusOK, "Where to send the browser", ConsentResult{}),
+		forge.WithErrorResponses(),
 	); err != nil {
 		return err
 	}
@@ -599,19 +620,24 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	// Mirror onto the grouped router so an SDK client whose base URL
 	// includes the mount prefix still resolves discovery.
-	if err := router.GET("/.well-known/openid-configuration", p.handleDiscovery,
+	if err := router.GET("/.well-known/openid-configuration", p.handleDiscovery, p.withCORS(
 		forge.WithSummary("OpenID Connect Discovery"),
 		forge.WithOperationID("oidcDiscoveryPrefixed"),
 		forge.WithTags("OAuth2"),
-	); err != nil {
+	)...); err != nil {
 		return err
 	}
-	if err := router.GET("/apps/:slug/.well-known/openid-configuration", p.handleAppDiscovery,
+	if err := router.GET("/apps/:slug/.well-known/openid-configuration", p.handleAppDiscovery, p.withCORS(
 		forge.WithSummary("App OpenID Connect Discovery"),
 		forge.WithOperationID("oauth2AppDiscoveryPrefixed"),
 		forge.WithTags("OAuth2"),
-	); err != nil {
+	)...); err != nil {
 		return err
+	}
+	for _, path := range []string{"/.well-known/openid-configuration", "/apps/:slug/.well-known/openid-configuration"} {
+		if err := p.registerPreflight(router, path); err != nil {
+			return err
+		}
 	}
 
 	// Admin endpoints for client management. Gated behind a session plus
@@ -684,44 +710,52 @@ func (p *Plugin) RegisterRootRoutes(router forge.Router) error {
 // prefixed copy of either is undiscoverable and would only add duplicate
 // OpenAPI entries.
 func (p *Plugin) registerWellKnown(router forge.Router) error {
-	if err := router.GET("/.well-known/openid-configuration", p.handleDiscovery,
+	if err := router.GET("/.well-known/openid-configuration", p.handleDiscovery, p.withCORS(
 		forge.WithSummary("OpenID Connect Discovery"),
 		forge.WithOperationID("oidcDiscovery"),
 		forge.WithTags("OAuth2"),
-	); err != nil {
+	)...); err != nil {
 		return err
 	}
 
-	if err := router.GET("/.well-known/oauth-authorization-server", p.handleAuthServerMetadata,
+	if err := router.GET("/.well-known/oauth-authorization-server", p.handleAuthServerMetadata, p.withCORS(
 		forge.WithSummary("OAuth2 Authorization Server Metadata"),
 		forge.WithDescription("RFC 8414 authorization server metadata."),
 		forge.WithOperationID("oauth2AuthServerMetadata"),
 		forge.WithResponseSchema(http.StatusOK, "Metadata", AuthServerMetadata{}),
 		forge.WithTags("OAuth2"),
-	); err != nil {
+	)...); err != nil {
 		return err
+	}
+	for _, path := range []string{
+		"/.well-known/openid-configuration", "/.well-known/oauth-authorization-server",
+		"/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/:resourcePath",
+	} {
+		if err := p.registerPreflight(router, path); err != nil {
+			return err
+		}
 	}
 
 	if err := p.registerAppWellKnown(router); err != nil {
 		return err
 	}
 
-	if err := router.GET("/.well-known/oauth-protected-resource", p.handleProtectedResourceMetadata,
+	if err := router.GET("/.well-known/oauth-protected-resource", p.handleProtectedResourceMetadata, p.withCORS(
 		forge.WithSummary("OAuth2 Protected Resource Metadata"),
 		forge.WithDescription("RFC 9728 protected resource metadata."),
 		forge.WithOperationID("oauth2ProtectedResourceMetadata"),
 		forge.WithResponseSchema(http.StatusOK, "Metadata", ProtectedResourceMetadata{}),
 		forge.WithTags("OAuth2"),
-	); err != nil {
+	)...); err != nil {
 		return err
 	}
 
-	return router.GET("/.well-known/oauth-protected-resource/:resourcePath", p.handleScopedProtectedResourceMetadata,
+	return router.GET("/.well-known/oauth-protected-resource/:resourcePath", p.handleScopedProtectedResourceMetadata, p.withCORS(
 		forge.WithSummary("OAuth2 Protected Resource Metadata (scoped)"),
 		forge.WithOperationID("oauth2ScopedProtectedResourceMetadata"),
 		forge.WithResponseSchema(http.StatusOK, "Metadata", ProtectedResourceMetadata{}),
 		forge.WithTags("OAuth2"),
-	)
+	)...)
 }
 
 // ──────────────────────────────────────────────────
