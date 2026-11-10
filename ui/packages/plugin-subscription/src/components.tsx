@@ -26,7 +26,7 @@ import { useState, type ReactNode } from "react";
 
 import { formatMoney, type Plan, type Subscription } from "./models";
 import type { ChangeResult } from "./plugin";
-import { useEntitlement, usePlans, useSubscription } from "./react";
+import { useEntitlement, usePlans, useSubscription, type TenantOptions } from "./react";
 
 const redirect = (url: string) => window.location.assign(url);
 
@@ -44,7 +44,7 @@ function ErrorLine({ children }: { children: ReactNode }) {
 
 // ── PricingTable ──────────────────────────────────
 
-export interface PricingTableProps {
+export interface PricingTableProps extends TenantOptions {
   /** Take over selection yourself. Without it the table subscribes or changes plan. */
   onSelect?: (plan: Plan) => void;
   /** Called with the payment page URL when a plan needs paying for. Defaults to redirecting. */
@@ -72,9 +72,10 @@ export function PricingTable({
   locale,
   onError,
   className,
+  tenantId,
 }: PricingTableProps) {
   const { plans, isLoading, error } = usePlans();
-  const { subscription, canManage, subscribe, changePlan, isPending } = useSubscription();
+  const { subscription, canManage, subscribe, changePlan, isPending } = useSubscription({ tenantId });
   const [failed, setFailed] = useState(false);
 
   const choose = async (plan: Plan) => {
@@ -172,7 +173,7 @@ export function PricingTable({
 
 // ── CurrentPlanCard ───────────────────────────────
 
-export interface CurrentPlanCardProps {
+export interface CurrentPlanCardProps extends TenantOptions {
   /** Locale for prices and dates. Defaults to the browser's. */
   locale?: string;
   /** Time zone for dates. Defaults to the browser's. */
@@ -192,12 +193,16 @@ function statusLine(sub: Subscription, locale?: string, timeZone?: string): stri
 }
 
 /** The tenant's plan: name, price, when it renews or ends, seats, and cancel/keep. */
-export function CurrentPlanCard({ locale, timeZone, onError, className }: CurrentPlanCardProps) {
+export function CurrentPlanCard({ locale, timeZone, onError, className, tenantId }: CurrentPlanCardProps) {
   const { subscription: sub, canManage, isLoading, error, cancel, resume, isPending } =
-    useSubscription();
+    useSubscription({ tenantId });
   const [failed, setFailed] = useState<string | null>(null);
+  // Canceling is the one write here that's hard to take back once the
+  // period ends, so it asks first.
+  const [confirming, setConfirming] = useState(false);
 
   const run = async (write: () => Promise<unknown>) => {
+    setConfirming(false);
     setFailed(null);
     try {
       await write();
@@ -247,13 +252,25 @@ export function CurrentPlanCard({ locale, timeZone, onError, className }: Curren
         {failed && <ErrorLine>{failed}</ErrorLine>}
       </CardContent>
       {canManage && !sub.isPaused && (
-        <CardFooter>
+        <CardFooter className="flex-wrap gap-2">
           {sub.willCancel ? (
             <Button disabled={isPending} onClick={() => void run(resume)}>
               Keep plan
             </Button>
+          ) : confirming ? (
+            <>
+              <p className="w-full text-sm">
+                {`Cancel your plan? You keep it until ${formatDate(sub.currentPeriodEnd, locale, timeZone)}.`}
+              </p>
+              <Button variant="destructive" disabled={isPending} onClick={() => void run(() => cancel())}>
+                Yes, cancel
+              </Button>
+              <Button variant="outline" disabled={isPending} onClick={() => setConfirming(false)}>
+                Never mind
+              </Button>
+            </>
           ) : (
-            <Button variant="outline" disabled={isPending} onClick={() => void run(() => cancel())}>
+            <Button variant="outline" disabled={isPending} onClick={() => setConfirming(true)}>
               Cancel plan
             </Button>
           )}
@@ -265,7 +282,7 @@ export function CurrentPlanCard({ locale, timeZone, onError, className }: Curren
 
 // ── UsageMeter ────────────────────────────────────
 
-export interface UsageMeterProps {
+export interface UsageMeterProps extends TenantOptions {
   /** The metered plan feature, e.g. "api_calls". */
   feature: string;
   /** What to call it. Defaults to the feature key. */
@@ -274,8 +291,8 @@ export interface UsageMeterProps {
 }
 
 /** How much of a metered feature is used, against the plan's limit. */
-export function UsageMeter({ feature, label, className }: UsageMeterProps) {
-  const { entitlement, isLoading } = useEntitlement(feature);
+export function UsageMeter({ feature, label, className, tenantId }: UsageMeterProps) {
+  const { entitlement, isLoading } = useEntitlement(feature, { tenantId });
   if (isLoading) return <Skeleton className={cn("h-10 w-full", className)} />;
   if (!entitlement) return null;
 
@@ -311,7 +328,7 @@ export function UsageMeter({ feature, label, className }: UsageMeterProps) {
 
 // ── ManageBillingButton ───────────────────────────
 
-export interface ManageBillingButtonProps {
+export interface ManageBillingButtonProps extends TenantOptions {
   /** Where the portal sends the customer back to. */
   returnUrl?: string;
   /** Called with the portal URL. Defaults to redirecting. */
@@ -329,8 +346,9 @@ export function ManageBillingButton({
   onOpen = redirect,
   children = "Manage billing",
   className,
+  tenantId,
 }: ManageBillingButtonProps) {
-  const { canManage, openPortal, isPending } = useSubscription();
+  const { canManage, openPortal, isPending } = useSubscription({ tenantId });
   const [failed, setFailed] = useState(false);
   if (!canManage) return null;
 

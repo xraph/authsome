@@ -69,6 +69,9 @@ class _Harness {
   final routes = <String, Handler>{};
   final calls = <String>[];
 
+  /// The same calls with their query strings.
+  final urls = <String>[];
+
   Future<AuthNotifier> signedIn() => _auth(withSession: true);
 
   Future<AuthNotifier> signedOut() => _auth(withSession: false);
@@ -89,6 +92,7 @@ class _Harness {
       httpClient: MockClient((req) async {
         final key = '${req.method} ${req.url.path}';
         calls.add(key);
+        urls.add('$key${req.url.hasQuery ? '?${req.url.query}' : ''}');
         final handler = routes[key];
         return handler == null ? _json({'error': 'no route $key'}, 404) : handler(req);
       }),
@@ -244,9 +248,59 @@ void main() {
     Object? reported;
     await h.pump(tester, CurrentPlanCard(onError: (e) => reported = e));
     await tester.tap(find.text('Cancel plan'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes, cancel'));
     await _settle(tester);
     expect(find.text("Couldn't update your plan. Try again."), findsOneWidget);
     expect(reported, isNotNull);
+  });
+
+  testWidgets('CurrentPlanCard asks before canceling, and cancels only on yes', (tester) async {
+    final h = _Harness();
+    var canceled = 0;
+    h.routes['POST /v1/billing/subscription/cancel'] = (_) {
+      canceled++;
+      return _json({'subscription': subJson({'cancel_at': '2026-12-01T12:00:00Z'})});
+    };
+    await h.pump(tester, const CurrentPlanCard());
+    await tester.tap(find.text('Cancel plan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancel your plan?'), findsOneWidget);
+    expect(find.textContaining('You keep it until'), findsOneWidget);
+    expect(canceled, 0);
+
+    await tester.tap(find.text('Never mind'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancel your plan?'), findsNothing);
+    expect(canceled, 0);
+
+    await tester.tap(find.text('Cancel plan'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes, cancel'));
+    await _settle(tester);
+    expect(canceled, 1);
+    expect(find.text('Keep plan'), findsOneWidget);
+  });
+
+  testWidgets('CurrentPlanCard shows and changes another tenant when given a tenantId', (tester) async {
+    final h = _Harness();
+    Object? body;
+    h.routes['POST /v1/billing/subscription/cancel'] = (req) {
+      body = jsonDecode(req.body);
+      return _json({'subscription': subJson({'cancel_at': '2026-12-01T12:00:00Z'})});
+    };
+    await h.pump(tester, const Column(children: [
+      CurrentPlanCard(tenantId: 'org_9'),
+      EntitlementGate(tenantId: 'org_9', feature: 'sso', fallback: Text('locked'), child: Text('open')),
+    ]));
+    expect(h.urls, contains('GET /v1/billing/subscription?tenant_id=org_9'));
+    expect(h.urls, isNot(contains('GET /v1/billing/subscription')));
+    expect(find.text('open'), findsOneWidget);
+    await tester.tap(find.text('Cancel plan'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes, cancel'));
+    await _settle(tester);
+    expect(body, {'when': 'period_end', 'tenant_id': 'org_9'});
   });
 
   testWidgets('CurrentPlanCard shows seats and no buttons to a member', (tester) async {

@@ -248,7 +248,7 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 				Path:    path,
 				Summary: pair.op.Summary,
 			}
-			opDef.Deprecated = openapi.DeprecationFor(pair.op.Tags, g.config.DeprecatedTags)
+			opDef.Deprecated = dartStringBody(openapi.DeprecationFor(pair.op.Tags, g.config.DeprecatedTags))
 
 			// Determine if auth is required
 			opDef.AuthRequired = openapi.OperationTakesToken(pair.op, spec.SecuritySchemes())

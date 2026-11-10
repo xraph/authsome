@@ -46,10 +46,13 @@ export function harness(opts: { serverPlugins?: string[] } = {}) {
     ["GET /v1/billing/plans", () => json({ plans: [planJSON("free", { amount_minor: undefined, base_amount: undefined }), planJSON("pro"), planJSON("team", { amount_minor: 9900, base_amount: "99.00" })] })],
   ]);
   const calls: string[] = [];
+  // The same calls with their query strings, for tests that care.
+  const urls: string[] = [];
   const fetchFn = (async (input: string | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     const key = `${init?.method ?? "GET"} ${url.pathname}`;
     calls.push(key);
+    urls.push(`${key}${url.search}`);
     const handler = routes.get(key);
     return handler ? handler(init) : json({ error: `no route ${key}` }, 404);
   }) as unknown as typeof fetch;
@@ -76,6 +79,7 @@ export function harness(opts: { serverPlugins?: string[] } = {}) {
   return {
     routes,
     calls,
+    urls,
     async mount(node: ReactNode): Promise<void> {
       await act(async () => {
         render(wrap(node));

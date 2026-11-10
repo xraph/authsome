@@ -324,3 +324,70 @@ describe("writes", () => {
     expect(listener).toHaveBeenCalled();
   });
 });
+
+describe("a server without the plugin", () => {
+  it("warns once, naming the fix", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { manager, api } = setup({ serverPlugins: ["organization"] });
+      await manager.initialize();
+      await api().load();
+      await api().load();
+      await api().loadPlans();
+      await api().forTenant("org_9").load();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain("subscription.New");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("stays quiet when the server has it", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { manager, api } = setup({ serverPlugins: ["subscription"] });
+      await manager.initialize();
+      await api().load();
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe("forTenant", () => {
+  it("reads and writes another tenant, with its own cache", async () => {
+    const { manager, routes, calls, api } = setup();
+    let cancelBody: unknown;
+    routes.set("POST /v1/billing/subscription/cancel", (init) => {
+      cancelBody = JSON.parse(String(init?.body));
+      return json({ subscription: subJSON({ tenant_id: "org_9", cancel_at: "2026-12-01T00:00:00Z" }) });
+    });
+    await manager.initialize();
+    const other = api().forTenant("org_9");
+    expect(api().forTenant("org_9")).toBe(other);
+    expect(other.tenantId).toBe("org_9");
+    expect(api().tenantId).toBeNull();
+
+    await other.load();
+    expect(calls).toContain("GET /v1/billing/subscription?tenant_id=org_9");
+    expect(calls).toContain("GET /v1/billing/entitlements?tenant_id=org_9");
+    expect(api().getSnapshot().subscription.status).toBe("idle");
+
+    await other.cancel();
+    expect(cancelBody).toEqual({ when: "period_end", tenant_id: "org_9" });
+    expect(other.getSnapshot().subscription.data?.willCancel).toBe(true);
+  });
+
+  it("keeps a pinned tenant across org switches and forgets it on sign-out", async () => {
+    const { manager, routes, api } = setup();
+    await manager.initialize();
+    const other = api().forTenant("org_9");
+    await other.load();
+    routes.set("POST /v1/me/switch-org", () => json({ session_id: "s", org_id: "org_2" }));
+    await manager.switchOrg("org_2");
+    expect(other.getSnapshot().subscription.status).toBe("ready");
+    await manager.signOut();
+    expect(other.getSnapshot().subscription.status).toBe("idle");
+  });
+});

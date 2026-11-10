@@ -63,7 +63,7 @@ func main() {
 	outputMode := fs.String("output-mode", "standalone", "Output mode: standalone or embedded")
 	methodOverrides := fs.String("method-overrides", "", "Comma-separated operationID=name overrides")
 	fromSpec := fs.String("from-spec", "", "Path to pre-generated OpenAPI spec JSON (skip internal generation)")
-	deprecateTags := fs.String("deprecate-tags", "", "Semicolon-separated tagPrefix=note rules marking operations deprecated (e.g. \"Billing=Use @authsome/plugin-subscription instead.\")")
+	deprecateTags := fs.String("deprecate-tags", "", "Semicolon-separated tagPrefix=note rules marking operations deprecated (e.g. \"Billing=Use @authsome/plugin-subscription instead.\"); the longest matching prefix wins, and \\; puts a semicolon in a note")
 
 	if err := fs.Parse(os.Args[2:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -90,14 +90,7 @@ func main() {
 		}
 	}
 
-	// Parse deprecation rules
-	deprecated := make(map[string]string)
-	for _, rule := range strings.Split(*deprecateTags, ";") {
-		parts := strings.SplitN(strings.TrimSpace(rule), "=", 2)
-		if len(parts) == 2 && parts[0] != "" {
-			deprecated[parts[0]] = strings.TrimSpace(parts[1])
-		}
-	}
+	deprecated := openapi.ParseDeprecationRules(*deprecateTags)
 
 	// Load or generate OpenAPI spec.
 	var spec *openapi.Spec

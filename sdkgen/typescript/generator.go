@@ -279,7 +279,7 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 				Summary: pair.op.Summary,
 				Tags:    pair.op.Tags,
 			}
-			opDef.Deprecated = openapi.DeprecationFor(pair.op.Tags, g.config.DeprecatedTags)
+			opDef.Deprecated = jsDocText(openapi.DeprecationFor(pair.op.Tags, g.config.DeprecatedTags))
 
 			// Determine if auth is required
 			opDef.AuthRequired = openapi.OperationTakesToken(pair.op, spec.SecuritySchemes())

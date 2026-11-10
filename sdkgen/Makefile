@@ -31,8 +31,8 @@ FLUTTER_CORE_OVERRIDES = refreshTokens=refresh,deleteAccount=deleteMe,exportUser
 # packages, which own the tenant routes (tagged "Billing") now. The operator
 # routes ("Billing Plans", "Billing Usage", ...) belong on a server, so the
 # longer "Billing " rule says that instead. The standalone SDKs keep all of
-# them undeprecated. Notes can't contain a semicolon, and the Dart ones no
-# quotes, since they land in a quoted annotation.
+# them undeprecated. Rules are separated by semicolons; write a semicolon
+# inside a note as \; (sdkgen escapes everything else for each language).
 UI_CORE_DEPRECATIONS = Billing=Use @authsome/plugin-subscription instead.;Billing =Operator route. Call it from your server with @authsome/client, or use @authsome/plugin-subscription for tenant billing.
 FLUTTER_CORE_DEPRECATIONS = Billing=Use the authsome_subscription package instead.;Billing =Operator route. Call it from your server with the authsome Dart SDK, or use authsome_subscription for tenant billing.
 

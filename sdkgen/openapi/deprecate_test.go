@@ -22,3 +22,14 @@ func TestDeprecationFor_LongestPrefixWins(t *testing.T) {
 	assert.Empty(t, openapi.DeprecationFor([]string{"Auth"}, rules))
 	assert.Empty(t, openapi.DeprecationFor([]string{"Billing"}, nil))
 }
+
+// Rules come from one flag, split on semicolons; a note can still contain
+// one when it's escaped as \;.
+func TestParseDeprecationRules(t *testing.T) {
+	assert.Equal(t, map[string]string{
+		"Billing":  "Use the plugin; it's newer.",
+		"Billing ": "Operator route.",
+	}, openapi.ParseDeprecationRules(`Billing=Use the plugin\; it's newer.;Billing =Operator route.`))
+	assert.Empty(t, openapi.ParseDeprecationRules(""))
+	assert.Empty(t, openapi.ParseDeprecationRules("no-equals; =no key"))
+}

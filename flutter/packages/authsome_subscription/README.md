@@ -42,4 +42,6 @@ switch (result) {
 
 `cancel()` cancels at the end of the period unless you pass `when: CancelWhen.now`, and `resume()` takes that back. `billing.entitlement('sso')` reads the cached check for a feature.
 
-The snapshot follows the session: signing out clears it, and signing in or switching organization reloads it. When the server doesn't have the subscription plugin, the resources come back `ResourceStatus.unavailable` without a request.
+The snapshot follows the session: signing out clears it, and signing in or switching organization reloads it. When the server doesn't have the subscription plugin, the resources come back `ResourceStatus.unavailable` without a request, and debug builds print one warning saying so.
+
+`billing.forTenant(orgId)` returns the same API pinned to another tenant, with its own cache, for support staff who hold `billing:manage`. It keeps its tenant across organization switches and clears on sign-out.

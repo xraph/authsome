@@ -81,10 +81,23 @@ class CheckoutRequired extends ChangeResult {
 /// When a cancellation takes effect.
 enum CancelWhen { periodEnd, now }
 
+// State every scope of one plugin instance shares.
+class _Shared {
+  final scopes = <String, SubscriptionApi>{};
+  bool warned = false;
+}
+
+const _unavailableWarning =
+    "authsome: the server doesn't have the subscription plugin, so billing reads as "
+    'unavailable and every entitlement check fails closed. Register it on the server with '
+    'authsome.WithPlugin(subscription.New(...)), or drop SubscriptionPlugin from your client plugins.';
+
 /// The subscription plugin's API, from `auth.plugin<SubscriptionApi>()` or,
 /// in Flutter, `context.subscription`.
 class SubscriptionApi {
-  SubscriptionApi(this._ctx) {
+  SubscriptionApi(PluginContext ctx) : this._scoped(ctx, null, _Shared());
+
+  SubscriptionApi._scoped(this._ctx, this.tenantId, this._shared) {
     // Follow the session: a sign-out forgets everything, and a sign-in or
     // an organization switch reloads whatever had been loaded.
     _events = _ctx.events.listen(
@@ -93,8 +106,11 @@ class SubscriptionApi {
           case AuthEvent.signedOut:
             _generation++;
             _set(SubscriptionSnapshot.initial());
-          case AuthEvent.signedIn || AuthEvent.orgChanged:
+          case AuthEvent.signedIn:
             _reload();
+          // A pinned tenant doesn't change with the organization.
+          case AuthEvent.orgChanged:
+            if (tenantId == null) _reload();
           case AuthEvent.sessionRefreshed:
             break;
         }
@@ -106,6 +122,12 @@ class SubscriptionApi {
   }
 
   final PluginContext _ctx;
+  final _Shared _shared;
+
+  /// The tenant this API is pinned to, or null for the session's own (its
+  /// active organization, or the user in user mode).
+  final String? tenantId;
+
   late final StreamSubscription<AuthEvent> _events;
   final _changes = StreamController<SubscriptionSnapshot>.broadcast();
   SubscriptionSnapshot _snapshot = SubscriptionSnapshot.initial();
@@ -128,7 +150,31 @@ class SubscriptionApi {
     if (!_changes.isClosed) _changes.add(next);
   }
 
-  bool get _unavailable => _ctx.isServerEnabled == false;
+  /// The same API for another tenant, with its own cache. For operators who
+  /// hold billing:manage and look after customers' billing; the server
+  /// refuses anyone else. Calling it twice with one ID returns one instance.
+  SubscriptionApi forTenant(String tenantId) =>
+      _shared.scopes.putIfAbsent(tenantId, () => SubscriptionApi._scoped(_ctx, tenantId, _shared));
+
+  // A pinned scope names its tenant on every request; the session's scope
+  // leaves it to the server.
+  Map<String, String>? get _query => tenantId == null ? null : {'tenant_id': tenantId!};
+  Map<String, Object?> _scoped(Map<String, Object?> body) =>
+      tenantId == null ? body : {...body, 'tenant_id': tenantId};
+
+  bool get _unavailable {
+    if (_ctx.isServerEnabled != false) return false;
+    if (!_shared.warned) {
+      _shared.warned = true;
+      // Debug builds only: asserts are stripped from release builds.
+      assert(() {
+        // ignore: avoid_print
+        print(_unavailableWarning);
+        return true;
+      }());
+    }
+    return true;
+  }
   bool get _signedIn => _ctx.state is AuthAuthenticated;
 
   // A new session or organization: whatever was shown belongs to the old
@@ -171,7 +217,7 @@ class SubscriptionApi {
     ));
     final entitlements = _loadEntitlements(gen);
     try {
-      final res = await _ctx.request('GET', '/v1/billing/subscription') as Map;
+      final res = await _ctx.request('GET', '/v1/billing/subscription', query: _query) as Map;
       if (gen != _generation) return;
       final sub = res['subscription'] as Map?;
       _set(_snapshot.copyWith(
@@ -196,7 +242,7 @@ class SubscriptionApi {
       entitlements: Resource(ResourceStatus.loading, _snapshot.entitlements.data),
     ));
     try {
-      final res = await _ctx.request('GET', '/v1/billing/entitlements') as Map;
+      final res = await _ctx.request('GET', '/v1/billing/entitlements', query: _query) as Map;
       if (gen != _generation) return;
       final raw = Map<String, dynamic>.from(res['entitlements'] as Map? ?? const {});
       _set(_snapshot.copyWith(
@@ -265,7 +311,7 @@ class SubscriptionApi {
   /// A link to the payment provider's billing portal.
   Future<Uri> openPortal({String? returnUrl}) async {
     final res = await _ctx.request('POST', '/v1/billing/portal',
-        body: {if (returnUrl != null) 'return_url': returnUrl}) as Map;
+        body: _scoped({if (returnUrl != null) 'return_url': returnUrl})) as Map;
     return Uri.parse(res['url'] as String);
   }
 
@@ -281,7 +327,7 @@ class SubscriptionApi {
 
   Future<ChangeResult> _change(String method, Map<String, Object?> body) async {
     final gen = _generation;
-    final res = await _ctx.request(method, '/v1/billing/subscription', body: body) as Map;
+    final res = await _ctx.request(method, '/v1/billing/subscription', body: _scoped(body)) as Map;
     final url = res['checkout_url'] as String?;
     if (url != null && url.isNotEmpty) return CheckoutRequired(Uri.parse(url));
     return SubscriptionChanged(_commit(res, gen));
@@ -289,7 +335,7 @@ class SubscriptionApi {
 
   Future<Subscription> _mutate(String path, Map<String, Object?> body) async {
     final gen = _generation;
-    final res = await _ctx.request('POST', path, body: body) as Map;
+    final res = await _ctx.request('POST', path, body: _scoped(body)) as Map;
     return _commit(res, gen);
   }
 

@@ -49,6 +49,17 @@ export interface ChangeOptions {
 }
 
 export interface SubscriptionApi {
+  /**
+   * The tenant this API is pinned to, or null for the session's own (its
+   * active organization, or the user in user mode).
+   */
+  readonly tenantId: string | null;
+  /**
+   * The same API for another tenant, with its own cache. For operators who
+   * hold billing:manage and look after customers' billing; the server
+   * refuses anyone else. Calling it twice with one ID returns one instance.
+   */
+  forTenant(tenantId: string): SubscriptionApi;
   getSnapshot(): SubscriptionSnapshot;
   /** Listen for snapshot changes. Returns a function that stops listening. */
   onChange(listener: () => void): () => void;
@@ -87,8 +98,31 @@ function asError(err: unknown): Error {
   return err instanceof Error ? err : new Error(String(err));
 }
 
+// State every scope of one plugin instance shares.
+interface Shared {
+  scopes: Map<string, SubscriptionApi>;
+  warned: boolean;
+}
+
+const UNAVAILABLE_WARNING =
+  "authsome: the server doesn't have the subscription plugin, so billing reads as " +
+  "unavailable and every entitlement check fails closed. Register it on the server with " +
+  "authsome.WithPlugin(subscription.New(...)), or drop subscription() from your client plugins.";
+
+function isProduction(): boolean {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  return env?.NODE_ENV === "production";
+}
+
 /** Builds the subscription API over a plugin context. */
 export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
+  return createScope(ctx, null, { scopes: new Map(), warned: false });
+}
+
+function createScope(ctx: PluginContext, tenantId: string | null, shared: Shared): SubscriptionApi {
+  // A pinned scope names its tenant on every request; the session's scope
+  // leaves it to the server.
+  const scoped: Record<string, string> = tenantId ? { tenant_id: tenantId } : {};
   let snapshot = initialSnapshot();
   const listeners = new Set<() => void>();
   // Bumped whenever the session or organization changes. Anything that
@@ -113,7 +147,14 @@ export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
     }
   };
 
-  const unavailable = () => ctx.isServerEnabled() === false;
+  const unavailable = () => {
+    if (ctx.isServerEnabled() !== false) return false;
+    if (!shared.warned && !isProduction()) {
+      shared.warned = true;
+      console.warn(UNAVAILABLE_WARNING);
+    }
+    return true;
+  };
   const signedIn = () => ctx.getState().status === "authenticated";
 
   const loadEntitlements = async (gen: number) => {
@@ -122,6 +163,7 @@ export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
       const res = await ctx.request<{ entitlements: Record<string, EntitlementJSON> }>(
         "GET",
         "/v1/billing/entitlements",
+        { query: scoped },
       );
       if (gen !== generation) return;
       const entitlements: Record<string, Entitlement> = {};
@@ -142,6 +184,7 @@ export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
       const res = await ctx.request<{ subscription: SubscriptionJSON | null; can_manage: boolean }>(
         "GET",
         "/v1/billing/subscription",
+        { query: scoped },
       );
       if (gen !== generation) return;
       set({
@@ -233,7 +276,7 @@ export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
     const res = await ctx.request<{ subscription?: SubscriptionJSON; checkout_url?: string }>(
       method,
       "/v1/billing/subscription",
-      { body },
+      { body: { ...body, ...scoped } },
     );
     if (res.checkout_url) return { type: "checkout", url: res.checkout_url };
     const sub = commit(res.subscription, gen);
@@ -248,9 +291,11 @@ export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
     ...(options?.cancelUrl ? { cancel_url: options.cancelUrl } : {}),
   });
 
-  const mutate = async (path: string, body: unknown): Promise<Subscription> => {
+  const mutate = async (path: string, body: Record<string, unknown>): Promise<Subscription> => {
     const gen = generation;
-    const res = await ctx.request<{ subscription?: SubscriptionJSON }>("POST", path, { body });
+    const res = await ctx.request<{ subscription?: SubscriptionJSON }>("POST", path, {
+      body: { ...body, ...scoped },
+    });
     const sub = commit(res.subscription, gen);
     if (!sub) throw new Error("authsome: the server answered without a subscription");
     return sub;
@@ -259,7 +304,8 @@ export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
   // Follow the session: a sign-out forgets everything; a sign-in or an
   // organization switch drops the previous tenant's subscription at once
   // (so no screen shows it, or offers buttons for it, while the new one
-  // loads) and reloads whatever had been loaded.
+  // loads) and reloads whatever had been loaded. A pinned tenant doesn't
+  // change with the organization, but can_manage does change with the user.
   ctx.on("signedOut", () => {
     generation++;
     snapshot = initialSnapshot();
@@ -276,9 +322,18 @@ export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
     void load();
   };
   ctx.on("signedIn", reload);
-  ctx.on("orgChanged", reload);
+  if (!tenantId) ctx.on("orgChanged", reload);
 
   return {
+    tenantId,
+    forTenant(id) {
+      let scope = shared.scopes.get(id);
+      if (!scope) {
+        scope = createScope(ctx, id, shared);
+        shared.scopes.set(id, scope);
+      }
+      return scope;
+    },
     getSnapshot: () => snapshot,
     onChange(listener) {
       listeners.add(listener);
@@ -295,7 +350,7 @@ export function createSubscriptionApi(ctx: PluginContext): SubscriptionApi {
     resume: () => mutate("/v1/billing/subscription/resume", {}),
     async openPortal(returnUrl) {
       const res = await ctx.request<{ url: string }>("POST", "/v1/billing/portal", {
-        body: returnUrl ? { return_url: returnUrl } : {},
+        body: { ...(returnUrl ? { return_url: returnUrl } : {}), ...scoped },
       });
       return res.url;
     },

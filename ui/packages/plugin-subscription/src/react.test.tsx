@@ -5,6 +5,19 @@ import { Entitled, usePlans, useSubscription } from "./react";
 import { harness, json, planJSON, subJSON } from "./test-support";
 
 describe("useSubscription", () => {
+  it("reads another tenant when given a tenantId", async () => {
+    const h = harness();
+    let seen = null as unknown as ReturnType<typeof useSubscription>;
+    function Probe() {
+      seen = useSubscription({ tenantId: "org_9" });
+      return null;
+    }
+    await h.mount(<Probe />);
+    await waitFor(() => expect(seen.subscription?.id).toBe("sub_1"));
+    expect(h.urls).toContain("GET /v1/billing/subscription?tenant_id=org_9");
+    expect(h.urls).not.toContain("GET /v1/billing/subscription");
+  });
+
   it("loads on mount and re-renders after a plan change", async () => {
     const h = harness();
     h.routes.set("PATCH /v1/billing/subscription", () => json({ subscription: subJSON({ plan: planJSON("team") }) }));

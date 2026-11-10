@@ -47,6 +47,8 @@ ManageBillingButton(onOpen: (uri) => launchUrl(uri));
 
 Opening a payment or portal page is left to you, so the package doesn't pull in a URL launcher. Pass `launchUrl` from url_launcher, or whatever you already use.
 
+`CurrentPlanCard` asks before it cancels. Every widget takes a `tenantId` for support staff who hold `billing:manage` and look after a customer's billing, and `context.subscriptionFor(id)` is the API for that tenant.
+
 For your own UI, `context.subscription` is the plugin's API and `SubscriptionBuilder` rebuilds from its snapshot:
 
 ```dart
