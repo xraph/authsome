@@ -108,7 +108,7 @@ GET /v1/oauth/authorize?
   code_challenge_method=S256
 ```
 
-If the user is not already signed in, they are redirected to the Authsome login page. After authentication (and MFA if enabled), the user is shown a consent screen listing the requested scopes. On approval, the user is redirected back to the client with an authorization code.
+If the user isn't signed in yet, authsome sends them to your login page, as long as you've set one (see [Send signed-out users to your login page](#send-signed-out-users-to-your-login-page)). Once they're in, a third-party client shows them a consent screen listing the requested scopes. On approval, the browser goes back to the client with an authorization code.
 
 ```
 HTTP/1.1 302 Found
@@ -365,9 +365,30 @@ go-oidc accepts only RS256 unless you say otherwise. If your deployment signs wi
 
 The `nonce` you send on `/v1/oauth/authorize` can be up to 512 bytes. It's optional on the code flow.
 
+### Send signed-out users to your login page
+
+A "Sign in with your app" button only works if a signed-out user ends up somewhere they can sign in. Set `LoginURL` and authsome sends them there from `/v1/oauth/authorize`, with the full authorize request attached so they come straight back once they're in:
+
+```go
+oauth2provider.New(oauth2provider.Config{
+    Issuer:   "https://auth.myapp.com",
+    LoginURL: "/sign-in", // or "https://login.myapp.com/sign-in"
+})
+```
+
+The user lands on `/sign-in?redirect=/v1/oauth/authorize?client_id=...`. Your sign-in page signs them in and then sends the browser to whatever `redirect` says, and authsome picks the request up from there (consent if the client needs it, then the code).
+
+The value is a relative path when the login page is on the issuer's origin, which is what most sign-in pages expect, since they refuse to redirect off-site. A login page on another origin gets an absolute URL on the issuer, since a bare path would resolve against the wrong host. If your page reads a different parameter, set `LoginReturnParam`, for example to `return_to`.
+
+Each app can have its own page too. Set **Login page** (`oauth2.login_url`) in the app's OAuth2 settings, and it wins over `LoginURL` for that app's clients. Both take a path starting with `/` or an absolute http(s) URL, and anything else is refused when you save it.
+
+Leave both empty and a signed-out `/authorize` answers 401, as it did before.
+
+A client that sends `prompt=none` never sees a login page. It's asking for an answer without any UI, so it gets `error=login_required` at its redirect URI (with its `state`) and decides what to do from there.
+
 ### What this doesn't do yet
 
-A signed-out user who reaches `/v1/oauth/authorize` gets a 401 and no login page, so a browser app has to sign the user in to authsome first. `prompt=none`, `max_age`, `id_token_hint`, RP-initiated logout and CORS on the OIDC endpoints are also not there yet, and neither is a way to add custom claims.
+`prompt=login`, `max_age`, `id_token_hint`, RP-initiated logout and CORS on the OIDC endpoints aren't there yet, and neither is a way to add custom claims.
 
 ## Scopes and consent
 
