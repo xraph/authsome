@@ -15,6 +15,8 @@ import (
 	wardenmem "github.com/xraph/warden/store/memory"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/xraph/forge"
+	"github.com/xraph/forge/extensions/dashboard"
 	dashauth "github.com/xraph/forge/extensions/dashboard/auth"
 	dashcontract "github.com/xraph/forge/extensions/dashboard/contract"
 	"github.com/xraph/forge/extensions/dashboard/contract/loader"
@@ -553,4 +555,78 @@ func TestClientAuthChecker_OrgNeverTravelsWithoutApp(t *testing.T) {
 	})
 
 	assert.Empty(t, claims)
+}
+
+// ──────────────────────────────────────────────────
+// Wiring
+// ──────────────────────────────────────────────────
+
+// TestRegisterDashboardAuth_InstallsTheIdentityChecker: the checker the
+// dashboard gets reads contributor names from the registry
+// RegisterContractContributor captured, and role scopes from config.
+func TestRegisterDashboardAuth_InstallsTheIdentityChecker(t *testing.T) {
+	t.Parallel()
+	f := newIdentityFixture(t)
+
+	m, err := loader.Load(strings.NewReader(gatedManifest), "chronicle.yaml")
+	require.NoError(t, err)
+	reg := dashcontract.NewRegistry()
+	require.NoError(t, reg.Register(m))
+
+	e := New()
+	e.SetLogger(forge.NewNoopLogger())
+	e.engine = f.eng
+	e.config.Dashboard.RoleScopes = map[string][]string{"auditor": {"chronicle.admin"}}
+	e.config.Dashboard.RequiredRoles = []string{rbac.PlatformAdminSlug}
+	e.dashContributors.set(reg)
+
+	dashExt, ok := dashboard.NewExtension().(*dashboard.Extension)
+	require.True(t, ok)
+	e.RegisterDashboardAuth(dashExt)
+
+	checker, ok := dashExt.AuthChecker().(*authChecker)
+	require.True(t, ok, "engine mode installs the engine-backed checker, got %T", dashExt.AuthChecker())
+	assert.Same(t, f.eng, checker.engine)
+	assert.Equal(t, []string{"chronicle"}, checker.scopes.contributors())
+	assert.Equal(t, e.config.Dashboard.RoleScopes, checker.scopes.roleScopes)
+	assert.NotNil(t, dashExt.TenantResolver())
+}
+
+func TestContributorSource_NoRegistryNoNames(t *testing.T) {
+	t.Parallel()
+	var src contributorSource
+	assert.Nil(t, src.names(), "before RegisterContractContributor runs there is nothing to grant")
+}
+
+func TestCookieID_NilRequest(t *testing.T) {
+	t.Parallel()
+	got, ok := cookieID(nil, authcontract.AppSwitcherCookie, func(s string) (id.ID, error) {
+		t.Fatalf("parse must not run without a request, got %q", s)
+		return id.ID{}, nil
+	})
+	assert.False(t, ok)
+	assert.True(t, got.IsNil())
+}
+
+// TestPlatformAppID_FallsBackToConfiguredAppID: before bootstrap names a
+// platform app, the configured AppID stands in for it.
+func TestPlatformAppID_FallsBackToConfiguredAppID(t *testing.T) {
+	t.Parallel()
+	want := id.NewAppID()
+	cfg := authsome.DefaultConfig()
+	cfg.AppID = want.String()
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+
+	eng, err := authsome.NewEngine(
+		authsome.WithChronicle(bridge.NewMemoryChronicle()),
+		authsome.WithStore(memory.New()),
+		authsome.WithWarden(w),
+		authsome.WithDisableMigrate(),
+		authsome.WithConfig(cfg),
+	)
+	require.NoError(t, err)
+	require.True(t, eng.PlatformAppID().IsNil(), "no bootstrap, no platform app")
+
+	assert.Equal(t, want, platformAppID(eng))
 }
