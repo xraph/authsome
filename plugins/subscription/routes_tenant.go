@@ -1,12 +1,11 @@
 package subscription
 
 import (
-	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 
 	"github.com/xraph/forge"
-	"github.com/xraph/ledger"
 	ledgerid "github.com/xraph/ledger/id"
 	"github.com/xraph/ledger/plan"
 	lsub "github.com/xraph/ledger/subscription"
@@ -20,11 +19,12 @@ import (
 // tenant, addressed by the tenant rather than by ID, so a client never
 // carries a subscription ID and can't aim a write at someone else's. The
 // tenant comes from the session (see resolveTenant); tenant_id is an
-// operator override.
+// operator override. The app is always the request's app, for reads and
+// writes alike, so a read can never show one app while a write changes
+// another.
 
 // CurrentSubscriptionRequest reads the caller's tenant's subscription.
 type CurrentSubscriptionRequest struct {
-	AppID    string `query:"app_id,omitempty"`
 	TenantID string `query:"tenant_id,omitempty"`
 }
 
@@ -74,7 +74,6 @@ type SubscriptionMutationResponse struct { //nolint:revive // the SDKs name thei
 
 // ListEntitlementsRequest reads every entitlement of the caller's tenant.
 type ListEntitlementsRequest struct {
-	AppID    string `query:"app_id,omitempty"`
 	TenantID string `query:"tenant_id,omitempty"`
 }
 
@@ -95,6 +94,10 @@ func (p *Plugin) registerTenantRoutes(router forge.Router) error {
 		forge.WithGroupAuth("session"),
 		forge.WithGroupMiddleware(plugin.SessionGuard(p.engine)...),
 	)
+	// Changing a plan is a human decision, the way writeGuard keeps the
+	// operator writes. The deny-by-default interceptor refuses an agent
+	// too, but only when the routes are mounted through the extension.
+	humanOnly := forge.WithMiddleware(middleware.DenyDelegatedSession())
 
 	if err := group.GET("", p.handleGetCurrentSubscription,
 		forge.WithSummary("Get your subscription"),
@@ -110,6 +113,7 @@ func (p *Plugin) registerTenantRoutes(router forge.Router) error {
 		forge.WithOperationID("subscribe"),
 		forge.WithResponseSchema(http.StatusOK, "Subscription or checkout URL", SubscriptionMutationResponse{}),
 		forge.WithErrorResponses(),
+		humanOnly,
 	); err != nil {
 		return err
 	}
@@ -118,6 +122,7 @@ func (p *Plugin) registerTenantRoutes(router forge.Router) error {
 		forge.WithOperationID("updateSubscription"),
 		forge.WithResponseSchema(http.StatusOK, "Subscription or checkout URL", SubscriptionMutationResponse{}),
 		forge.WithErrorResponses(),
+		humanOnly,
 	); err != nil {
 		return err
 	}
@@ -127,6 +132,7 @@ func (p *Plugin) registerTenantRoutes(router forge.Router) error {
 		forge.WithOperationID("cancelCurrentSubscription"),
 		forge.WithResponseSchema(http.StatusOK, "Updated subscription", SubscriptionMutationResponse{}),
 		forge.WithErrorResponses(),
+		humanOnly,
 	); err != nil {
 		return err
 	}
@@ -136,6 +142,7 @@ func (p *Plugin) registerTenantRoutes(router forge.Router) error {
 		forge.WithOperationID("resumeCurrentSubscription"),
 		forge.WithResponseSchema(http.StatusOK, "Updated subscription", SubscriptionMutationResponse{}),
 		forge.WithErrorResponses(),
+		humanOnly,
 	); err != nil {
 		return err
 	}
@@ -155,13 +162,13 @@ func (p *Plugin) registerTenantRoutes(router forge.Router) error {
 		return err
 	}
 
-	return p.registerPortalRoute(router)
+	return p.registerPortalRoute(router, humanOnly)
 }
 
 // tenantScope resolves the app and tenant of a tenant route and checks the
 // caller may read that tenant.
-func (p *Plugin) tenantScope(ctx forge.Context, appID, tenantID string) (app, tenant string, err error) {
-	app, appErr := p.requestApp(ctx, appID)
+func (p *Plugin) tenantScope(ctx forge.Context, tenantID string) (app, tenant string, err error) {
+	app, appErr := p.requestApp(ctx, "")
 	if appErr != nil {
 		return "", "", appErr
 	}
@@ -191,12 +198,10 @@ func (p *Plugin) writeScope(ctx forge.Context, tenantID string) (app, tenant str
 	return app, tenant, nil
 }
 
-// activeSubscription answers nil, nil when the tenant has none.
-func (p *Plugin) activeSubscription(ctx forge.Context, tenantID, appID string) (*lsub.Subscription, error) {
-	sub, err := p.service.GetActiveSubscription(ctx.Context(), tenantID, appID)
-	if errors.Is(err, ledger.ErrNoActiveSubscription) {
-		return nil, nil
-	}
+// currentSubscription answers the tenant's subscription that hasn't ended,
+// past_due and paused included, or nil, nil when it has none.
+func (p *Plugin) currentSubscription(ctx forge.Context, tenantID, appID string) (*lsub.Subscription, error) {
+	sub, err := p.service.CurrentSubscription(ctx.Context(), tenantID, appID)
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("load subscription: %w", err))
 	}
@@ -212,13 +217,14 @@ func (p *Plugin) mutationResponse(ctx forge.Context, sub *lsub.Subscription) (*S
 }
 
 func (p *Plugin) handleGetCurrentSubscription(ctx forge.Context, req *CurrentSubscriptionRequest) (*CurrentSubscriptionResponse, error) {
-	appID, tenantID, err := p.tenantScope(ctx, req.AppID, req.TenantID)
+	appID, tenantID, err := p.tenantScope(ctx, req.TenantID)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &CurrentSubscriptionResponse{}
-	if userID, ok := middleware.UserIDFrom(ctx.Context()); ok {
+	userID, ok := middleware.UserIDFrom(ctx.Context())
+	if ok && middleware.RefuseDelegated(ctx.Context()) == nil {
 		manage, manageErr := p.canManageTenant(ctx.Context(), userID, tenantID)
 		if manageErr != nil {
 			return nil, middleware.InternalError(ctx, manageErr)
@@ -226,7 +232,7 @@ func (p *Plugin) handleGetCurrentSubscription(ctx forge.Context, req *CurrentSub
 		resp.CanManage = manage && (p.selfServiceOn(ctx.Context()) || p.holdsBillingManage(ctx.Context(), userID))
 	}
 
-	sub, err := p.activeSubscription(ctx, tenantID, appID)
+	sub, err := p.currentSubscription(ctx, tenantID, appID)
 	if err != nil || sub == nil {
 		return resp, err
 	}
@@ -245,7 +251,12 @@ func (p *Plugin) handleSubscribe(ctx forge.Context, req *SubscribeRequest) (*Sub
 		return nil, err
 	}
 
-	current, err := p.activeSubscription(ctx, tenantID, appID)
+	// Check-then-create runs under the tenant's lock, so a double click
+	// can't leave two live subscriptions. See tenantLock for its limits.
+	unlock := p.tenantLock(tenantID, appID)
+	defer unlock()
+
+	current, err := p.currentSubscription(ctx, tenantID, appID)
 	if err != nil {
 		return nil, err
 	}
@@ -277,12 +288,17 @@ func (p *Plugin) handleUpdateSubscription(ctx forge.Context, req *UpdateSubscrip
 		return nil, err
 	}
 
-	current, err := p.activeSubscription(ctx, tenantID, appID)
+	current, err := p.currentSubscription(ctx, tenantID, appID)
 	if err != nil {
 		return nil, err
 	}
 	if current == nil {
 		return nil, forge.NotFound("no active subscription")
+	}
+	// A paused subscription is held by an operator, often for an unpaid
+	// invoice; changing its plan would route around that.
+	if statusErr := requireStatus(current, lsub.StatusActive, lsub.StatusTrialing, lsub.StatusPastDue); statusErr != nil {
+		return nil, statusErr
 	}
 
 	var pl *plan.Plan
@@ -297,6 +313,9 @@ func (p *Plugin) handleUpdateSubscription(ctx forge.Context, req *UpdateSubscrip
 	quantity, err := seatQuantity(pl, req.Seats)
 	if err != nil {
 		return nil, err
+	}
+	if quantity == nil {
+		quantity = carriedQuantity(current.Quantity, pl)
 	}
 
 	return p.applyPlanChange(ctx, planChange{
@@ -319,7 +338,7 @@ func (p *Plugin) handleCancelCurrentSubscription(ctx forge.Context, req *CancelC
 	if err != nil {
 		return nil, err
 	}
-	current, err := p.activeSubscription(ctx, tenantID, appID)
+	current, err := p.currentSubscription(ctx, tenantID, appID)
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +364,7 @@ func (p *Plugin) handleResumeCurrentSubscription(ctx forge.Context, req *TenantR
 	if err != nil {
 		return nil, err
 	}
-	current, err := p.activeSubscription(ctx, tenantID, appID)
+	current, err := p.currentSubscription(ctx, tenantID, appID)
 	if err != nil {
 		return nil, err
 	}
@@ -363,13 +382,13 @@ func (p *Plugin) handleResumeCurrentSubscription(ctx forge.Context, req *TenantR
 }
 
 func (p *Plugin) handleListEntitlements(ctx forge.Context, req *ListEntitlementsRequest) (*EntitlementsResponse, error) {
-	appID, tenantID, err := p.tenantScope(ctx, req.AppID, req.TenantID)
+	appID, tenantID, err := p.tenantScope(ctx, req.TenantID)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &EntitlementsResponse{Entitlements: map[string]EntitlementResponse{}}
-	sub, err := p.activeSubscription(ctx, tenantID, appID)
+	sub, err := p.currentSubscription(ctx, tenantID, appID)
 	if err != nil || sub == nil {
 		return resp, err
 	}
@@ -406,31 +425,23 @@ type planChange struct {
 	returnURL, cancelURL string
 }
 
-// applyPlanChange subscribes the tenant, or moves its subscription to the
-// plan and seat count, and answers with the updated subscription.
+// applyPlanChange asks the checkout provider, when there is one, whether the
+// change needs paying for first. Without a provider, or when it answers with
+// no URL, the change is applied now.
 func (p *Plugin) applyPlanChange(ctx forge.Context, c planChange) (*SubscriptionMutationResponse, error) {
-	if p.needsCheckout(c.plan) {
-		return p.startCheckout(ctx, c)
+	if p.config.Checkout != nil {
+		url, err := p.startCheckout(ctx, c)
+		if err != nil {
+			return nil, err
+		}
+		if url != "" {
+			return &SubscriptionMutationResponse{CheckoutURL: url}, nil
+		}
 	}
 
-	var (
-		sub *lsub.Subscription
-		err error
-	)
-	if c.current == nil {
-		sub, err = p.service.Subscribe(ctx.Context(), c.tenantID, c.plan.ID, c.appID, c.quantity)
-		if err != nil {
-			return nil, writeErr(ctx, err, "subscribe")
-		}
-		p.audit(ctx.Context(), "subscription.create", "subscription", sub.ID.String(), p.actor(ctx), c.tenantID, bridge.OutcomeSuccess)
-		p.relayEvent(ctx.Context(), "subscription.created", c.tenantID, map[string]string{"plan_slug": c.plan.Slug})
-	} else {
-		sub, err = p.service.ChangePlan(ctx.Context(), c.current.ID, c.plan.ID, c.quantity)
-		if err != nil {
-			return nil, writeErr(ctx, err, "change plan")
-		}
-		p.audit(ctx.Context(), "subscription.plan_changed", "subscription", sub.ID.String(), p.actor(ctx), c.tenantID, bridge.OutcomeSuccess)
-		p.relayEvent(ctx.Context(), "subscription.plan_changed", c.tenantID, map[string]string{"plan_slug": c.plan.Slug})
+	sub, err := p.commitPlanChange(ctx.Context(), c, p.actor(ctx))
+	if err != nil {
+		return nil, writeErr(ctx, err, "change plan")
 	}
 	return p.mutationResponse(ctx, sub)
 }
@@ -460,7 +471,7 @@ func (p *Plugin) resolvePlan(ctx forge.Context, ref, appID string) (*plan.Plan, 
 }
 
 // seatQuantity turns a requested seat count into a ledger quantity. A nil
-// count keeps whatever the subscription has.
+// count answers nil: keep what the subscription has.
 func seatQuantity(pl *plan.Plan, seats *int64) (map[string]int64, error) {
 	if seats == nil {
 		return nil, nil
@@ -473,6 +484,27 @@ func seatQuantity(pl *plan.Plan, seats *int64) (map[string]int64, error) {
 		return nil, forge.BadRequest("seats can't be negative")
 	}
 	return map[string]int64{feat.Key: *seats}, nil
+}
+
+// carriedQuantity is the seat count a plan change keeps when the caller
+// didn't name one. Ledger keeps the current quantity on a nil map, and
+// refuses a key the new plan has no seat feature for, so seats bought on
+// the old plan would block a move to a plan without them. Keys the new plan
+// still has carry over; the rest are dropped. nil means nothing changed.
+func carriedQuantity(current map[string]int64, pl *plan.Plan) map[string]int64 {
+	if len(current) == 0 {
+		return nil
+	}
+	kept := make(map[string]int64, len(current))
+	for key, n := range current {
+		if f := pl.FindFeature(key); f != nil && f.Type == plan.FeatureSeat {
+			kept[key] = n
+		}
+	}
+	if maps.Equal(kept, current) {
+		return nil
+	}
+	return kept
 }
 
 func isAddon(pl *plan.Plan) bool {

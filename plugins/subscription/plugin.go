@@ -2,6 +2,7 @@ package subscription
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
@@ -157,6 +158,9 @@ type Plugin struct {
 	settings     *settings.Manager
 	defaultAppID string
 	engine       plugin.Engine
+
+	// tenantLocks holds a *sync.Mutex per tenant and app; see tenantLock.
+	tenantLocks sync.Map
 }
 
 // Service returns the subscription service (nil until OnInit completes).

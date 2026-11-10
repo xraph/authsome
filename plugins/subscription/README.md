@@ -99,21 +99,25 @@ Writes answer with the updated subscription, so you don't need to fetch it again
 ```
 
 A cancellation at the period end leaves `status` at `active` and sets `cancel_at`. That's
-your cue to show "ends on" and a button that calls `/subscription/resume`.
+your cue to show "ends on" and a button that calls `/subscription/resume`. A subscription
+that's `past_due` or `paused` still counts as the tenant's subscription: `GET` shows it, and
+subscribing again answers 409.
 
 Pausing is still an operator action, through the ID routes below. A tenant can't unpause
-itself, because a pause is often how you stop service for an unpaid invoice.
+itself or change the plan of a paused subscription, because a pause is often how you stop
+service for an unpaid invoice. Agents and other delegated sessions can read but not write.
 
 ## Taking payment
 
 Without a checkout provider, subscribing grants the plan straight away. That's fine for free
-plans and trials. To charge for paid ones, give the plugin a `CheckoutProvider`:
+plans and trials. To charge, give the plugin a `CheckoutProvider`. Every subscribe and every
+plan or seat change asks it first: return a URL to send the customer to your payment page, or
+an empty result when there's nothing to pay and the change should just happen.
 
 ```go
-type stripeCheckout struct{ /* your Stripe client */ }
-
-func (s stripeCheckout) Checkout(ctx context.Context, req subscription.CheckoutRequest) (string, error) {
-    // Create a checkout session for req.Plan and req.TenantID, and return its URL.
+func (s stripeCheckout) Checkout(ctx context.Context, req subscription.CheckoutRequest) (subscription.CheckoutResult, error) {
+    // req.Plan is where they're going, req.CurrentPlan where they are.
+    // Return CheckoutResult{} to apply now, or CheckoutResult{URL: ...} to charge first.
 }
 
 authsome.WithPlugin(subscription.New(subscription.Config{
@@ -121,17 +125,22 @@ authsome.WithPlugin(subscription.New(subscription.Config{
 }))
 ```
 
-Subscribing or changing to a plan with a price now answers `{"checkout_url": "..."}` and
-changes nothing. Send the customer there. When your payment provider's webhook tells you
-they paid, finish the change yourself with `plugin.Service().Subscribe` or
-`plugin.Service().ChangePlan`, using the tenant, plan and seat count from the
-`CheckoutRequest`. Cancel, resume and free plans never go through the provider.
+When you return a URL the API answers `{"checkout_url": "..."}` and changes nothing. Once
+your payment provider's webhook says they paid, call `plugin.CompleteCheckout(ctx, req)`. It's
+safe to call twice for one payment and records the same audit entry and event as the API.
+
+Cancel and resume never go through the provider. Listen for `subscription.canceled`,
+`subscription.plan_changed` and `subscription.resumed` and update your provider to match, or a
+customer who cancels in your app keeps getting charged.
 
 If your provider also implements `PortalProvider`, `POST /portal` returns a link to its
 hosted page for payment details and invoices. Without one that route answers 404.
 
 A provider error is logged and the client gets a 502, so nothing from your payment
 provider's error text reaches the browser.
+
+Two subscribes for one tenant at the same moment are serialized within a process, not across
+replicas, because ledger has no per-tenant uniqueness yet.
 
 ## Endpoints
 

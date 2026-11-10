@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
@@ -151,6 +152,39 @@ func (s *Service) GetActiveSubscription(ctx context.Context, tenantID, appID str
 	return s.ledger.GetActiveSubscription(ctx, tenantID, appID)
 }
 
+// currentStatuses are the states in which a tenant still holds its
+// subscription. GetActiveSubscription only answers for the first two, but a
+// tenant in dunning (past_due) or paused is still subscribed: its periods keep
+// running or are held, and a second subscription next to it would bill twice.
+var currentStatuses = []subscription.Status{
+	subscription.StatusActive,
+	subscription.StatusTrialing,
+	subscription.StatusPastDue,
+	subscription.StatusPaused,
+}
+
+// CurrentSubscription returns the tenant's newest subscription that hasn't
+// ended (active, trialing, past_due or paused), or nil when it has none.
+func (s *Service) CurrentSubscription(ctx context.Context, tenantID, appID string) (*subscription.Subscription, error) {
+	if s.ledgerStore == nil {
+		return nil, fmt.Errorf("subscription: ledger store not available")
+	}
+	subs, err := s.ledgerStore.ListSubscriptions(ctx, tenantID, appID, subscription.ListOpts{})
+	if err != nil {
+		return nil, err
+	}
+	var current *subscription.Subscription
+	for _, sub := range subs {
+		if sub == nil || sub.TenantID != tenantID || !slices.Contains(currentStatuses, sub.Status) {
+			continue
+		}
+		if current == nil || sub.CreatedAt.After(current.CreatedAt) {
+			current = sub
+		}
+	}
+	return current, nil
+}
+
 // ListSubscriptions lists subscriptions for a tenant.
 func (s *Service) ListSubscriptions(ctx context.Context, tenantID, appID string, opts subscription.ListOpts) ([]*subscription.Subscription, error) {
 	if s.ledgerStore == nil {
@@ -220,6 +254,10 @@ func (s *Service) ResumeSubscription(ctx context.Context, subID ledgerid.Subscri
 // has no cancellation waiting at the end of its period.
 var ErrNoScheduledCancel = errors.New("subscription: no cancellation is scheduled")
 
+// ErrCancelDue is returned by KeepSubscription when the scheduled
+// cancellation's time has already come.
+var ErrCancelDue = errors.New("subscription: the cancellation is already due")
+
 // KeepSubscription takes back a cancellation scheduled for the end of the
 // period, so the subscription renews as usual. A subscription that has already
 // ended can't be kept.
@@ -239,6 +277,16 @@ func (s *Service) KeepSubscription(ctx context.Context, subID ledgerid.Subscript
 	}
 	if sub.CancelAt == nil {
 		return nil, ErrNoScheduledCancel
+	}
+	// A cancellation whose time has come belongs to the lifecycle clock now,
+	// even if it hasn't run yet. Taking it back here would race the clock's
+	// own write and could revive a subscription it is ending.
+	//
+	// This is a full-row update, so a lifecycle write landing between the
+	// read above and the write below can still be overwritten. Ledger has no
+	// conditional "clear cancel_at" write yet; when it gets one, use it.
+	if !sub.CancelAt.After(time.Now()) {
+		return nil, ErrCancelDue
 	}
 	sub.CancelAt = nil
 	sub.Touch()

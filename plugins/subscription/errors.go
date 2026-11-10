@@ -14,6 +14,8 @@ import (
 	"github.com/xraph/authsome/middleware"
 )
 
+var errNoPortalURL = errors.New("provider returned no URL")
+
 // writeErr turns a ledger refusal into an error the caller can act on. Only
 // failures the caller didn't cause become a 500.
 func writeErr(ctx forge.Context, err error, action string) error {
@@ -24,6 +26,8 @@ func writeErr(ctx forge.Context, err error, action string) error {
 		return forge.NewHTTPError(http.StatusConflict, "already subscribed")
 	case errors.Is(err, ErrNoScheduledCancel):
 		return forge.NewHTTPError(http.StatusConflict, "no cancellation is scheduled")
+	case errors.Is(err, ErrCancelDue):
+		return forge.NewHTTPError(http.StatusConflict, "the cancellation is already due")
 	case errors.Is(err, ledger.ErrPlanArchived):
 		return forge.BadRequest("plan is not available")
 	case errors.Is(err, ledger.ErrPlanNotFound):
