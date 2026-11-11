@@ -2,7 +2,7 @@ module github.com/xraph/authsome
 
 go 1.26.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 // replace github.com/xraph/forge => ../../forge
 
@@ -17,21 +17,21 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	github.com/xraph/chronicle v1.11.0
-	github.com/xraph/dispatch v1.9.4
-	github.com/xraph/forge v1.13.2
-	github.com/xraph/forge/extensions/auth v1.12.9
+	github.com/xraph/dispatch v1.9.5
+	github.com/xraph/forge v1.13.6
+	github.com/xraph/forge/extensions/auth v1.13.6
 	github.com/xraph/go-utils v1.5.0
 	github.com/xraph/grove v1.10.2
-	github.com/xraph/grove/drivers/mongodriver v1.10.1
+	github.com/xraph/grove/drivers/mongodriver v1.10.2
 	github.com/xraph/grove/drivers/pgdriver v1.10.2
-	github.com/xraph/grove/drivers/sqlitedriver v1.10.1
-	github.com/xraph/herald v1.10.2
-	github.com/xraph/keysmith v1.8.0
-	github.com/xraph/ledger v1.9.1
-	github.com/xraph/relay v1.8.0
-	github.com/xraph/vault v1.8.0
+	github.com/xraph/grove/drivers/sqlitedriver v1.10.2
+	github.com/xraph/herald v1.10.3
+	github.com/xraph/keysmith v1.9.1
+	github.com/xraph/ledger v1.9.2
+	github.com/xraph/relay v1.8.2
+	github.com/xraph/vault v1.8.2
 	github.com/xraph/vessel v1.0.5
-	github.com/xraph/warden v1.8.0
+	github.com/xraph/warden v1.8.2
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 	go.mongodb.org/mongo-driver/v2 v2.9.1
 	go.opentelemetry.io/otel/sdk v1.47.0
@@ -124,7 +124,7 @@ require (
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
-	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.16 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect

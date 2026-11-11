@@ -3460,7 +3460,7 @@ class DeclineInvitationRequest {
 
 class Definition {
   final String category;
-  final String defaultValue;
+  final dynamic defaultValue;
   final String description;
   final String displayName;
   final bool enforceable;
@@ -3488,7 +3488,7 @@ class Definition {
   factory Definition.fromJson(Map<String, dynamic> json) {
     return Definition(
       category: json['category'] as String,
-      defaultValue: json['default'] as String,
+      defaultValue: json['default'],
       description: json['description'] as String,
       displayName: json['display_name'] as String,
       enforceable: json['enforceable'] as bool,
@@ -4016,7 +4016,7 @@ class EnforceSettingRequest {
   final String? orgId;
   final String scope;
   final String? scopeId;
-  final String value;
+  final dynamic value;
 
   const EnforceSettingRequest({
     this.appId,
@@ -4032,7 +4032,7 @@ class EnforceSettingRequest {
       orgId: json['org_id'] as String?,
       scope: json['scope'] as String,
       scopeId: json['scope_id'] as String?,
-      value: json['value'] as String,
+      value: json['value'],
     );
   }
 
@@ -6973,7 +6973,7 @@ class ResetPasswordRequest {
 class ResolvedSetting {
   final bool canOverride;
   final Definition? definition;
-  final String effectiveValue;
+  final dynamic effectiveValue;
   final String? enforcedAt;
   final List<ScopeValue> scopeValues;
 
@@ -6989,7 +6989,7 @@ class ResolvedSetting {
     return ResolvedSetting(
       canOverride: json['can_override'] as bool,
       definition: json['definition'] == null ? null : Definition.fromJson(Map<String, dynamic>.from(json['definition'] as Map)),
-      effectiveValue: json['effective_value'] as String,
+      effectiveValue: json['effective_value'],
       enforcedAt: json['enforced_at'] as String?,
       scopeValues: (json['scope_values'] as List).map((e) => ScopeValue.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
     );
@@ -7516,7 +7516,7 @@ class ScopeValue {
   final String? scopeId;
   final String? updatedAt;
   final String? updatedBy;
-  final String value;
+  final dynamic value;
   final int? version;
 
   const ScopeValue({
@@ -7536,7 +7536,7 @@ class ScopeValue {
       scopeId: json['scope_id'] as String?,
       updatedAt: json['updated_at'] as String?,
       updatedBy: json['updated_by'] as String?,
-      value: json['value'] as String,
+      value: json['value'],
       version: json['version'] == null ? null : (json['version'] as num).toInt(),
     );
   }
@@ -7841,7 +7841,7 @@ class SetSettingRequest {
   final String? orgId;
   final String scope;
   final String? scopeId;
-  final String value;
+  final dynamic value;
 
   const SetSettingRequest({
     this.appId,
@@ -7857,7 +7857,7 @@ class SetSettingRequest {
       orgId: json['org_id'] as String?,
       scope: json['scope'] as String,
       scopeId: json['scope_id'] as String?,
-      value: json['value'] as String,
+      value: json['value'],
     );
   }
 
@@ -7880,7 +7880,7 @@ class SettingValueResponse {
   final String scope;
   final String? scopeId;
   final String status;
-  final String value;
+  final dynamic value;
 
   const SettingValueResponse({
     required this.key,
@@ -7896,7 +7896,7 @@ class SettingValueResponse {
       scope: json['scope'] as String,
       scopeId: json['scope_id'] as String?,
       status: json['status'] as String,
-      value: json['value'] as String,
+      value: json['value'],
     );
   }
 
@@ -9893,7 +9893,7 @@ class VerifyMFAResponse {
 class VisibilityCondition {
   final String key;
   final String? operatorValue;
-  final String value;
+  final dynamic value;
 
   const VisibilityCondition({
     required this.key,
@@ -9905,7 +9905,7 @@ class VisibilityCondition {
     return VisibilityCondition(
       key: json['key'] as String,
       operatorValue: json['operator'] as String?,
-      value: json['value'] as String,
+      value: json['value'],
     );
   }
 
