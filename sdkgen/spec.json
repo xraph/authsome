@@ -2616,9 +2616,7 @@
           "category": {
             "type": "string"
           },
-          "default": {
-            "type": "string"
-          },
+          "default": {},
           "description": {
             "type": "string"
           },
@@ -3060,8 +3058,7 @@
             "type": "string"
           },
           "value": {
-            "description": "Setting value (JSON)",
-            "type": "string"
+            "description": "Setting value (JSON)"
           }
         },
         "required": [
@@ -5152,9 +5149,7 @@
           "definition": {
             "$ref": "#/components/schemas/Definition"
           },
-          "effective_value": {
-            "type": "string"
-          },
+          "effective_value": {},
           "enforced_at": {
             "type": "string"
           },
@@ -5504,9 +5499,7 @@
           "updated_by": {
             "type": "string"
           },
-          "value": {
-            "type": "string"
-          },
+          "value": {},
           "version": {
             "type": "integer"
           }
@@ -5721,8 +5714,7 @@
             "type": "string"
           },
           "value": {
-            "description": "Setting value (JSON)",
-            "type": "string"
+            "description": "Setting value (JSON)"
           }
         },
         "required": [
@@ -5750,8 +5742,7 @@
             "type": "string"
           },
           "value": {
-            "description": "Setting value",
-            "type": "string"
+            "description": "Setting value"
           }
         },
         "required": [
@@ -7139,9 +7130,7 @@
           "operator": {
             "type": "string"
           },
-          "value": {
-            "type": "string"
-          }
+          "value": {}
         },
         "required": [
           "key",

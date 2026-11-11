@@ -800,7 +800,7 @@ type DeclineInvitationRequest struct {
 // Definition represents the Definition schema.
 type Definition struct {
 	Category    string      `json:"category"`
-	Default     string      `json:"default"`
+	Default     any         `json:"default"`
 	Description string      `json:"description"`
 	DisplayName string      `json:"display_name"`
 	Enforceable bool        `json:"enforceable"`
@@ -931,7 +931,7 @@ type EnforceSettingRequest struct {
 	OrgID   string `json:"org_id,omitempty"`
 	Scope   string `json:"scope"`
 	ScopeID string `json:"scope_id,omitempty"`
-	Value   string `json:"value"`
+	Value   any    `json:"value"`
 }
 
 // EnrollRequest represents the EnrollRequest schema.
@@ -1608,7 +1608,7 @@ type ResetPasswordRequest struct {
 type ResolvedSetting struct {
 	CanOverride    bool          `json:"can_override"`
 	Definition     *Definition   `json:"definition,omitempty"`
-	EffectiveValue string        `json:"effective_value"`
+	EffectiveValue any           `json:"effective_value"`
 	EnforcedAt     string        `json:"enforced_at,omitempty"`
 	ScopeValues    []*ScopeValue `json:"scope_values"`
 }
@@ -1733,7 +1733,7 @@ type ScopeValue struct {
 	ScopeID   string `json:"scope_id,omitempty"`
 	UpdatedAt string `json:"updated_at,omitempty"`
 	UpdatedBy string `json:"updated_by,omitempty"`
-	Value     string `json:"value"`
+	Value     any    `json:"value"`
 	Version   int64  `json:"version,omitempty"`
 }
 
@@ -1807,7 +1807,7 @@ type SetSettingRequest struct {
 	OrgID   string `json:"org_id,omitempty"`
 	Scope   string `json:"scope"`
 	ScopeID string `json:"scope_id,omitempty"`
-	Value   string `json:"value"`
+	Value   any    `json:"value"`
 }
 
 // SettingValueResponse represents the SettingValueResponse schema.
@@ -1816,7 +1816,7 @@ type SettingValueResponse struct {
 	Scope   string `json:"scope"`
 	ScopeID string `json:"scope_id,omitempty"`
 	Status  string `json:"status"`
-	Value   string `json:"value"`
+	Value   any    `json:"value"`
 }
 
 // Settings represents the Settings schema.
@@ -2281,7 +2281,7 @@ type VerifyMFAResponse struct {
 type VisibilityCondition struct {
 	Key      string `json:"key"`
 	Operator string `json:"operator,omitempty"`
-	Value    string `json:"value"`
+	Value    any    `json:"value"`
 }
 
 // VoidInvoiceRequest represents the VoidInvoiceRequest schema.

@@ -705,7 +705,7 @@ export interface DeclineInvitationRequest {
 
 export interface Definition {
   category: string;
-  default: string;
+  default: unknown;
   description: string;
   display_name: string;
   enforceable: boolean;
@@ -822,7 +822,7 @@ export interface EnforceSettingRequest {
   org_id?: string;
   scope: string;
   scope_id?: string;
-  value: string;
+  value: unknown;
 }
 
 export interface EnrollRequest {
@@ -1418,7 +1418,7 @@ export interface ResetPasswordRequest {
 export interface ResolvedSetting {
   can_override: boolean;
   definition?: Definition;
-  effective_value: string;
+  effective_value: unknown;
   enforced_at?: string;
   scope_values: ScopeValue[];
 }
@@ -1525,7 +1525,7 @@ export interface ScopeValue {
   scope_id?: string;
   updated_at?: string;
   updated_by?: string;
-  value: string;
+  value: unknown;
   version?: number;
 }
 
@@ -1590,7 +1590,7 @@ export interface SetSettingRequest {
   org_id?: string;
   scope: string;
   scope_id?: string;
-  value: string;
+  value: unknown;
 }
 
 export interface SettingValueResponse {
@@ -1598,7 +1598,7 @@ export interface SettingValueResponse {
   scope: string;
   scope_id?: string;
   status: string;
-  value: string;
+  value: unknown;
 }
 
 export interface Settings {
@@ -2014,7 +2014,7 @@ export interface VerifyMFAResponse {
 export interface VisibilityCondition {
   key: string;
   operator?: string;
-  value: string;
+  value: unknown;
 }
 
 export interface VoidInvoiceRequest {
