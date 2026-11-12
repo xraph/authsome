@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/pquerna/otp/totp"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -874,9 +875,11 @@ func TestHandleRecoveryRegenerate(t *testing.T) {
 	err = s.CreateRecoveryCodes(context.Background(), oldCodes)
 	require.NoError(t, err)
 
-	// Regenerate
+	// Regenerate, from a session that already passed a second factor.
 	body := jsonBody(t, map[string]string{})
 	req := authedRequest(t, "POST", "/v1/mfa/recovery/regenerate", body, userID)
+	stampedSess, _ := middleware.SessionFrom(req.Context())
+	stampedSess.MFAVerifiedAt = time.Now()
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -1062,4 +1065,54 @@ func TestHandleDisable_RejectsReplayedTOTPCode(t *testing.T) {
 
 	rec := disableWith(t, mux, userID, jsonBody(t, map[string]string{"code": code}))
 	assert.Equal(t, http.StatusUnauthorized, rec.Code, "a spent TOTP code must not authorise a disable")
+}
+
+// Regenerating recovery codes needs a second-factor proof: a session that
+// passed one, or a current TOTP code in the request. An unstamped session
+// without a code is refused and the old codes survive.
+func TestHandleRecoveryRegenerate_NeedsAProof(t *testing.T) {
+	const secret = "JBSWY3DPEHPK3PXP"
+	setup := func(t *testing.T) (http.Handler, *mfa.MemoryStore, id.UserID) {
+		p, s := newTestPlugin(t)
+		mux := forge.NewRouter()
+		require.NoError(t, p.RegisterRoutes(mux))
+		uid := id.NewUserID()
+		require.NoError(t, s.CreateEnrollment(context.Background(), &mfa.Enrollment{
+			ID: id.NewMFAID(), UserID: uid, Method: "totp", Secret: secret, Verified: true,
+			CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		}))
+		codes, _, err := mfa.GenerateRecoveryCodes(uid, 4)
+		require.NoError(t, err)
+		require.NoError(t, s.CreateRecoveryCodes(context.Background(), codes))
+		return mux.Handler(), s, uid
+	}
+	call := func(h http.Handler, uid id.UserID, body map[string]string, stamped bool) *httptest.ResponseRecorder {
+		req := authedRequest(t, "POST", "/v1/mfa/recovery/regenerate", jsonBody(t, body), uid)
+		if stamped {
+			sess, _ := middleware.SessionFrom(req.Context())
+			sess.MFAVerifiedAt = time.Now()
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	h, s, uid := setup(t)
+	old, _ := s.GetRecoveryCodes(context.Background(), uid)
+	assert.Equal(t, http.StatusUnauthorized, call(h, uid, map[string]string{}, false).Code, "unstamped, no code")
+	assert.Equal(t, http.StatusUnauthorized, call(h, uid, map[string]string{"code": "000000"}, false).Code, "unstamped, bad code")
+	after, _ := s.GetRecoveryCodes(context.Background(), uid)
+	require.Len(t, after, len(old))
+	oldIDs, afterIDs := map[string]bool{}, map[string]bool{}
+	for i := range old {
+		oldIDs[old[i].ID.String()], afterIDs[after[i].ID.String()] = true, true
+	}
+	assert.Equal(t, oldIDs, afterIDs, "a refused request must leave the codes alone")
+
+	assert.Equal(t, http.StatusOK, call(h, uid, map[string]string{}, true).Code, "a stamped session")
+
+	h, _, uid = setup(t)
+	code, err := totp.GenerateCode(secret, time.Now())
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, call(h, uid, map[string]string{"code": code}, false).Code, "unstamped with a valid TOTP code")
 }

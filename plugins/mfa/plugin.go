@@ -392,8 +392,12 @@ type RecoveryVerifyResponse struct {
 	CodesRemaining  int  `json:"codes_remaining"`
 }
 
-// RecoveryRegenerateRequest is an empty request for regenerating recovery codes.
-type RecoveryRegenerateRequest struct{}
+// RecoveryRegenerateRequest regenerates recovery codes. Code is a current
+// TOTP code; it is needed unless the calling session already passed a second
+// factor.
+type RecoveryRegenerateRequest struct {
+	Code string `json:"code,omitempty"`
+}
 
 // RecoveryRegenerateResponse is returned with new recovery codes.
 type RecoveryRegenerateResponse struct {
@@ -795,6 +799,21 @@ type sessionStamper interface {
 	MarkSessionMFAVerified(ctx context.Context, sessionID id.SessionID, at time.Time) error
 }
 
+// sessionStamped reports whether the request's session passed a second
+// factor. A session read from its row carries the stamp; one that came in on
+// a JWT is read by id. Anything that cannot be read is not stamped.
+func (p *Plugin) sessionStamped(ctx context.Context) bool {
+	if s, ok := middleware.SessionFrom(ctx); ok && s != nil && !s.CreatedAt.IsZero() {
+		return !s.MFAVerifiedAt.IsZero()
+	}
+	sid, ok := middleware.SessionIDFrom(ctx)
+	if !ok || sid.IsNil() || p.engine == nil || p.engine.Store() == nil {
+		return false
+	}
+	s, err := p.engine.Store().GetSession(ctx, sid)
+	return err == nil && s != nil && !s.MFAVerifiedAt.IsZero()
+}
+
 // markSessionVerified records that the request's own session just proved a
 // second factor, so a host enforcing two-step reads it as verified. A request
 // with no session (or no engine) records nothing.
@@ -1041,7 +1060,7 @@ func (p *Plugin) handleRecoveryVerify(ctx forge.Context, req *RecoveryVerifyRequ
 }
 
 // handleRecoveryRegenerate generates a fresh set of recovery codes, replacing any existing ones.
-func (p *Plugin) handleRecoveryRegenerate(ctx forge.Context, _ *RecoveryRegenerateRequest) (*RecoveryRegenerateResponse, error) {
+func (p *Plugin) handleRecoveryRegenerate(ctx forge.Context, req *RecoveryRegenerateRequest) (*RecoveryRegenerateResponse, error) {
 	// The route refuses a delegated session too. Checked here as well so a
 	// mount without that guard still fails closed.
 	if middleware.RefuseDelegated(ctx.Context()) != nil {
@@ -1056,6 +1075,24 @@ func (p *Plugin) handleRecoveryRegenerate(ctx forge.Context, _ *RecoveryRegenera
 	enrollment, err := p.store.GetEnrollment(ctx.Context(), userID, "totp")
 	if err != nil || !enrollment.Verified {
 		return nil, forge.BadRequest("no verified MFA enrollment found")
+	}
+
+	// Replacing the codes wipes the account's way back in, so the caller has
+	// to have proved a second factor: a session that already did, or a
+	// current TOTP code sent with the request. A recovery code verified on
+	// this session stamps it, so without this an unverified session could
+	// regenerate, verify a fresh code and stamp itself.
+	if !p.sessionStamped(ctx.Context()) {
+		if req == nil || req.Code == "" {
+			return nil, forge.NewHTTPError(http.StatusUnauthorized, "code required: prove your current factor to regenerate recovery codes")
+		}
+		ok, step := ValidateTOTPStep(req.Code, enrollment.Secret)
+		if !ok {
+			return nil, forge.Unauthorized("invalid TOTP code")
+		}
+		if p.totpStepUsed(ctx.Context(), enrollment.ID, step) {
+			return nil, forge.Unauthorized("TOTP code already used")
+		}
 	}
 
 	// Generate new codes

@@ -298,6 +298,8 @@ Users can regenerate their recovery codes at any time. This invalidates all prev
 
 `POST /v1/mfa/recovery/regenerate`
 
+The call needs a second-factor proof: a session that already passed one, or a current TOTP code in the body (`{"code": "123456"}`). Without either it is a 401 and the existing codes are left alone.
+
 ```json
 {
   "recovery_codes": [
