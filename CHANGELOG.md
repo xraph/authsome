@@ -59,6 +59,10 @@ sessions gain a nullable `mfa_verified_at` column. Neither backfills.
 - `POST /v1/mfa/enroll` and `DELETE /v1/mfa/enrollment` are rate limited like
   the other code-submission routes, keyed off `MFAChallengeLimit`. Both take a
   TOTP or recovery code, and could be brute-forced before.
+- The MFA routes now count against their own per-address budget
+  (`MFAChallengeLimit`), kept apart from the one sign-up, email verification
+  and sign-in share. Before, someone who enrolled straight after signing up
+  could have their first code refused with 429.
 - Breaking: once your SMS number is verified, `POST /v1/mfa/sms/send` always
   sends to it and ignores a `phone` in the body. Before this, a session that had
   only the password could text a code to any number and pass the second

@@ -289,10 +289,24 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 // endpoints, keyed off the engine's limiter and the MFAChallengeLimit config.
 // Returns nil when rate limiting is disabled or the host engine isn't the
 // concrete *authsome.Engine (e.g. minimal test wiring).
+//
+// The MFA routes share one budget per client address, kept apart from the
+// engine's default bucket (sign-up, email verification, sign-in): someone
+// who enrolls straight after signing up would otherwise find their first
+// code refused.
 func (p *Plugin) mfaRateLimit() []forge.RouteOption {
-	return authsome.PluginRateLimit(p.engine, func(c authsome.RateLimitConfig) int {
-		return c.MFAChallengeLimit
-	})
+	eng, ok := p.engine.(*authsome.Engine)
+	if !ok || eng == nil {
+		return nil
+	}
+	rl := eng.RateLimiter()
+	limit := eng.Config().RateLimit.MFAChallengeLimit
+	if rl == nil || !eng.Config().RateLimit.Enabled || limit <= 0 {
+		return nil
+	}
+	cfg := eng.RateLimitMiddlewareConfig(limit)
+	cfg.KeyFunc = func(ctx forge.Context) string { return "mfa:" + middleware.ClientIP(ctx.Request()) }
+	return []forge.RouteOption{forge.WithMiddleware(middleware.RateLimit(rl, cfg))}
 }
 
 // ──────────────────────────────────────────────────

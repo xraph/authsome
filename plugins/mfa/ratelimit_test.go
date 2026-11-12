@@ -131,3 +131,51 @@ func TestMFAEnrollAndDisable_RateLimited(t *testing.T) {
 			"%s %s: the attempt beyond the MFA challenge limit must be rate limited (429)", c.method, c.path)
 	}
 }
+
+// The MFA code routes have their own per-address budget. Sign-up, email
+// verification and sign-in spend the engine's shared one, and a person who
+// enrolls a factor straight after signing up must not find their first
+// code refused because of them.
+func TestMFA_ownBucketSeparateFromSignIn(t *testing.T) {
+	const limit = 3
+	cfg := authsome.DefaultConfig()
+	cfg.AppID = "aapp_01jf0000000000000000000000"
+	cfg.RateLimit.Enabled = true
+	cfg.RateLimit.MFAChallengeLimit = limit
+	cfg.RateLimit.WindowSeconds = 60
+
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+	p := mfa.New()
+	eng, err := authsome.NewEngine(authsome.WithChronicle(bridge.NewMemoryChronicle()),
+		authsome.WithStore(memory.New()),
+		authsome.WithWarden(w),
+		authsome.WithDisableMigrate(),
+		authsome.WithConfig(cfg),
+		authsome.WithRateLimiter(ratelimit.NewMemoryLimiter()),
+		authsome.WithPlugin(p),
+	)
+	require.NoError(t, err)
+	require.NoError(t, eng.Start(context.Background()))
+	t.Cleanup(func() { _ = eng.Stop(context.Background()) })
+
+	router := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(router))
+	// A stand-in for sign-in: a route on the engine's own limiter.
+	require.NoError(t, router.POST("/v1/signin", func(c forge.Context) error { return c.NoContent(http.StatusOK) },
+		eng.RateLimitOptions(limit)...))
+	h := router.Handler()
+	send := func(method, path string) int {
+		req := httptest.NewRequestWithContext(context.Background(), method, path, nil)
+		req.RemoteAddr = "203.0.113.12:5555"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	for i := 0; i < limit; i++ {
+		require.Equal(t, http.StatusOK, send("POST", "/v1/signin"))
+	}
+	require.Equal(t, http.StatusTooManyRequests, send("POST", "/v1/signin"), "the sign-in budget is spent")
+	require.NotEqual(t, http.StatusTooManyRequests, send("POST", "/v1/mfa/verify"),
+		"MFA codes have their own budget")
+}
