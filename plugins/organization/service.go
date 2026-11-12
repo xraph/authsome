@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
@@ -16,6 +18,7 @@ import (
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/page"
 	"github.com/xraph/authsome/store"
+	"github.com/xraph/authsome/user"
 )
 
 // ──────────────────────────────────────────────────
@@ -428,7 +431,62 @@ func (p *Plugin) CreateInvitation(ctx context.Context, inv *organization.Invitat
 	if err := p.store.CreateInvitation(ctx, inv); err != nil {
 		return fmt.Errorf("organization: create invitation: %w", err)
 	}
+	p.sendInvitationEmail(ctx, inv)
 	return nil
+}
+
+// invitationSender is what the notification plugin offers for mailing an
+// invitation. The organization plugin finds it by name at send time, so the
+// two can be registered in either order.
+type invitationSender interface {
+	SendInvitation(ctx context.Context, email, inviterName, orgName, acceptURL string) error
+}
+
+// sendInvitationEmail mails inv, whose Token must still be the plaintext, to
+// the invited address. It is best effort: with no URL template or no
+// notification plugin it logs once and does nothing, and a failed send is
+// logged, never returned, so the invitation still exists and an admin can
+// resend it.
+func (p *Plugin) sendInvitationEmail(ctx context.Context, inv *organization.Invitation) {
+	if p.config.InvitationURLTemplate == "" || inv.Token == "" {
+		p.skipOnce("organization: invitation email not sent: Config.InvitationURLTemplate is empty")
+		return
+	}
+	var sender invitationSender
+	if p.plugins != nil {
+		if np := p.plugins.Plugin("notification"); np != nil {
+			sender, _ = np.(invitationSender)
+		}
+	}
+	if sender == nil {
+		p.skipOnce("organization: invitation email not sent: no notification plugin registered")
+		return
+	}
+
+	orgName := ""
+	if o, err := p.store.GetOrganization(ctx, inv.OrgID); err == nil {
+		orgName = o.Name
+	}
+	var inviter *user.User
+	if u, err := p.store.GetUser(ctx, inv.InviterID); err == nil {
+		inviter = u
+	}
+	acceptURL := strings.ReplaceAll(p.config.InvitationURLTemplate, "{token}", url.QueryEscape(inv.Token))
+	if err := sender.SendInvitation(ctx, inv.Email, inviterName(inviter), orgName, acceptURL); err != nil {
+		p.warn("organization: send invitation email failed",
+			log.String("invitation_id", inv.ID.String()),
+			log.String("error", err.Error()),
+		)
+	}
+}
+
+// skipOnce logs msg at info level the first time only.
+func (p *Plugin) skipOnce(msg string) {
+	p.skipLogged.Do(func() {
+		if p.logger != nil {
+			p.logger.Info(msg)
+		}
+	})
 }
 
 // ListInvitations lists invitations for an organization.
@@ -589,6 +647,7 @@ func (p *Plugin) ResendInvitation(ctx context.Context, orgID id.OrgID, invID id.
 		return nil, fmt.Errorf("organization: resend invitation: %w", err)
 	}
 	p.emitInvitationEvent(ctx, hook.ActionInvitationResend, "org.invitation.resent", inv)
+	p.sendInvitationEmail(ctx, inv)
 	return inv, nil
 }
 

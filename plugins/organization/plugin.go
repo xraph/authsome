@@ -3,6 +3,7 @@ package organization
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
@@ -33,6 +34,14 @@ type Config struct {
 	// turns expiry off, so invitations never lapse, which was the behaviour
 	// before this option existed.
 	InvitationTTL time.Duration
+
+	// InvitationURLTemplate is the link an invitation email carries, with
+	// {token} standing in for the invitation token, for example
+	// "https://app.example.com/accept-invite?token={token}". Empty (the
+	// default) means the plugin sends no invitation email, which was the
+	// behaviour before this option existed. Mail goes through the plugin
+	// registered as "notification"; without one nothing is sent either.
+	InvitationURLTemplate string
 }
 
 // DefaultInvitationTTL is how long an invitation stays acceptable when
@@ -65,6 +74,7 @@ type Plugin struct {
 	basePath     string
 	defaultAppID string
 	permChecker  plugin.PermissionChecker
+	skipLogged   sync.Once
 }
 
 // New creates a new organization plugin with optional configuration.
