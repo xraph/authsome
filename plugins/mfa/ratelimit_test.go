@@ -107,3 +107,27 @@ func TestMFARecoveryRegenerate_RateLimited(t *testing.T) {
 	require.Equal(t, http.StatusTooManyRequests, lastCode,
 		"the attempt beyond the MFA challenge limit must be rate limited (429)")
 }
+
+// TestMFAEnrollAndDisable_RateLimited pins the same protection on the two
+// routes that take a TOTP or recovery code as step-up: enroll (a second
+// factor) and DELETE /enrollment (turning MFA off). Without it a stolen
+// session can guess the code that removes the second factor.
+func TestMFAEnrollAndDisable_RateLimited(t *testing.T) {
+	const limit = 3
+	for _, c := range []struct{ method, path, addr string }{
+		{"POST", "/v1/mfa/enroll", "203.0.113.10:5555"},
+		{"DELETE", "/v1/mfa/enrollment", "203.0.113.11:5555"},
+	} {
+		h := newMFARateLimited(t, limit)
+		var lastCode int
+		for i := 0; i < limit+1; i++ {
+			req := httptest.NewRequestWithContext(context.Background(), c.method, c.path, nil)
+			req.RemoteAddr = c.addr
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			lastCode = rec.Code
+		}
+		require.Equal(t, http.StatusTooManyRequests, lastCode,
+			"%s %s: the attempt beyond the MFA challenge limit must be rate limited (429)", c.method, c.path)
+	}
+}

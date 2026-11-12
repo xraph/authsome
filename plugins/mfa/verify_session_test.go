@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 )
@@ -68,9 +69,14 @@ func stampingPlugin(t *testing.T) (*Plugin, *MemoryStore, *recordingStamper, htt
 
 func postAs(t *testing.T, h http.Handler, path string, body any, uid id.UserID) (*httptest.ResponseRecorder, id.SessionID) {
 	t.Helper()
+	return sendAs(t, h, http.MethodPost, path, body, uid)
+}
+
+func sendAs(t *testing.T, h http.Handler, method, path string, body any, uid id.UserID) (*httptest.ResponseRecorder, id.SessionID) {
+	t.Helper()
 	raw, err := json.Marshal(body)
 	require.NoError(t, err)
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, path, bytes.NewReader(raw))
+	req := httptest.NewRequestWithContext(context.Background(), method, path, bytes.NewReader(raw))
 	req.Header.Set("Content-Type", "application/json")
 	sess := &session.Session{ID: id.NewSessionID(), UserID: uid, CreatedAt: time.Now()}
 	ctx := middleware.WithUserID(req.Context(), uid)
@@ -103,8 +109,9 @@ func TestRecoveryVerify_StampsTheSession(t *testing.T) {
 }
 
 func TestSMSVerify_StampsTheSession(t *testing.T) {
-	p, _, r, h := stampingPlugin(t)
+	p, s, r, h := stampingPlugin(t)
 	uid := id.NewUserID()
+	smsEnrollment(t, s, uid, "+15550001", true)
 	raw, err := json.Marshal(SMSChallenge{Code: "123456", ExpiresAt: time.Now().Add(time.Minute)})
 	require.NoError(t, err)
 	require.NoError(t, p.ceremonies.Set(context.Background(), "mfa:sms:"+uid.String(), raw, time.Minute))
@@ -133,4 +140,123 @@ func TestVerify_StampsTheSession(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Equal(t, 1, r.calls)
 	assert.Equal(t, sid, r.sid)
+}
+
+type recordingSMS struct{ to []string }
+
+func (r *recordingSMS) SendSMS(_ context.Context, msg *bridge.SMSMessage) error {
+	r.to = append(r.to, msg.To)
+	return nil
+}
+
+func smsEnrollment(t *testing.T, s *MemoryStore, uid id.UserID, phone string, verified bool) {
+	t.Helper()
+	require.NoError(t, s.CreateEnrollment(context.Background(), &Enrollment{
+		ID: id.NewMFAID(), UserID: uid, Method: "sms", Secret: phone, Verified: verified,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
+}
+
+func pendingSMSCode(t *testing.T, p *Plugin, uid id.UserID) string {
+	t.Helper()
+	raw, err := p.ceremonies.Get(context.Background(), "mfa:sms:"+uid.String())
+	require.NoError(t, err)
+	var c SMSChallenge
+	require.NoError(t, json.Unmarshal(raw, &c))
+	return c.Code
+}
+
+// Once the SMS factor is verified, a code always goes to the enrolled
+// number. A phone override would let a session that has only the password
+// send itself a code and pass the second factor.
+func TestSMSSend_VerifiedEnrollmentIgnoresThePhoneOverride(t *testing.T) {
+	p, s, r, h := stampingPlugin(t)
+	sms := &recordingSMS{}
+	p.SetSMSSender(sms)
+	uid := id.NewUserID()
+	smsEnrollment(t, s, uid, "+15550001", true)
+
+	rec, _ := postAs(t, h, "/v1/mfa/sms/send", map[string]string{"phone": "+15559999"}, uid)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, []string{"+15550001"}, sms.to, "the code went to the enrolled number only")
+
+	// And the code that went there is what stamps the session.
+	rec, sid := postAs(t, h, "/v1/mfa/sms/verify", map[string]string{"code": pendingSMSCode(t, p, uid)}, uid)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, 1, r.calls)
+	assert.Equal(t, sid, r.sid)
+}
+
+// Before the SMS factor is verified, the override is the enrollment flow:
+// it moves the pending enrollment to the new number, under the same step-up
+// as enrolling. Confirming it verifies the enrollment but does not stamp
+// the session: the session has not passed a factor it already held.
+func TestSMSSend_UnverifiedEnrollmentOverrideConfirmsWithoutStamping(t *testing.T) {
+	p, s, r, h := stampingPlugin(t)
+	sms := &recordingSMS{}
+	p.SetSMSSender(sms)
+	uid := id.NewUserID()
+	smsEnrollment(t, s, uid, "+15550001", false)
+
+	rec, _ := postAs(t, h, "/v1/mfa/sms/send", map[string]string{"phone": "+15550002"}, uid)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, []string{"+15550002"}, sms.to)
+
+	rec, _ = postAs(t, h, "/v1/mfa/sms/verify", map[string]string{"code": pendingSMSCode(t, p, uid)}, uid)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Zero(t, r.calls, "confirming an enrollment does not stamp the session")
+	e, err := s.GetEnrollment(context.Background(), uid, "sms")
+	require.NoError(t, err)
+	assert.True(t, e.Verified)
+	assert.Equal(t, "+15550002", e.Secret, "the number confirmed is the one the code went to")
+}
+
+// A user who already holds a verified TOTP factor must prove it before a
+// pending SMS enrollment is pointed at a new number, as enrolling does.
+func TestSMSSend_UnverifiedOverrideNeedsTheExistingFactor(t *testing.T) {
+	p, s, _, h := stampingPlugin(t)
+	sms := &recordingSMS{}
+	p.SetSMSSender(sms)
+	uid := id.NewUserID()
+	require.NoError(t, s.CreateEnrollment(context.Background(), &Enrollment{
+		ID: id.NewMFAID(), UserID: uid, Method: "totp", Secret: "JBSWY3DPEHPK3PXP", Verified: true,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
+	smsEnrollment(t, s, uid, "+15550001", false)
+
+	rec, _ := postAs(t, h, "/v1/mfa/sms/send", map[string]string{"phone": "+15559999"}, uid)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
+	assert.Empty(t, sms.to, "nothing was sent to the new number")
+	e, err := s.GetEnrollment(context.Background(), uid, "sms")
+	require.NoError(t, err)
+	assert.Equal(t, "+15550001", e.Secret)
+
+	// Without an override it goes to the pending number, as before.
+	rec, _ = postAs(t, h, "/v1/mfa/sms/send", map[string]string{}, uid)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, []string{"+15550001"}, sms.to)
+}
+
+// Removing the factor removes what the session's stamp stood for, so the
+// current session is unstamped too (the others are already revoked).
+func TestDisable_ClearsTheSessionStamp(t *testing.T) {
+	_, s, r, h := stampingPlugin(t)
+	uid := id.NewUserID()
+	const secret = "JBSWY3DPEHPK3PXP"
+	require.NoError(t, s.CreateEnrollment(context.Background(), &Enrollment{
+		ID: id.NewMFAID(), UserID: uid, Method: "totp", Secret: secret, Verified: true,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
+	rec, _ := sendAs(t, h, http.MethodDelete, "/v1/mfa/enrollment", map[string]string{"code": "000000"}, uid)
+	require.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
+	assert.Zero(t, r.calls, "a refused disable leaves the stamp alone")
+
+	code, err := totp.GenerateCode(secret, time.Now())
+	require.NoError(t, err)
+	r.at = time.Now()
+	rec, sid := sendAs(t, h, http.MethodDelete, "/v1/mfa/enrollment", map[string]string{"code": code}, uid)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, 1, r.calls)
+	assert.Equal(t, sid, r.sid)
+	assert.True(t, r.at.IsZero(), "the stamp is cleared, not renewed")
 }

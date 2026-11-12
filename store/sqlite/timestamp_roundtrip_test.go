@@ -115,6 +115,30 @@ func TestTimestampRoundTrip_Sessions(t *testing.T) {
 	assertSameInstant(t, refTime, got.UpdatedAt, "updated_at")
 }
 
+// The MFA stamp is set, then cleared with the zero time, which reads back
+// as unstamped.
+func TestSessionMFAStamp_SetAndClear(t *testing.T) {
+	s := setupTestStore(t)
+	ctx := context.Background()
+	sess := &session.Session{
+		ID: id.NewSessionID(), AppID: id.NewAppID(), EnvID: id.NewEnvironmentID(), UserID: id.NewUserID(),
+		Token: "tok_stamp", RefreshToken: "rtk_stamp",
+		ExpiresAt: refTime.Add(time.Hour), RefreshTokenExpiresAt: refTime.Add(time.Hour),
+		CreatedAt: refTime, UpdatedAt: refTime,
+	}
+	require.NoError(t, s.CreateSession(ctx, sess))
+
+	require.NoError(t, s.MarkSessionMFAVerified(ctx, sess.ID, refTime))
+	got, err := s.GetSession(ctx, sess.ID)
+	require.NoError(t, err)
+	assertSameInstant(t, refTime, got.MFAVerifiedAt, "mfa_verified_at")
+
+	require.NoError(t, s.MarkSessionMFAVerified(ctx, sess.ID, time.Time{}))
+	got, err = s.GetSession(ctx, sess.ID)
+	require.NoError(t, err)
+	assert.True(t, got.MFAVerifiedAt.IsZero(), "the stamp is cleared: %v", got.MFAVerifiedAt)
+}
+
 func TestTimestampRoundTrip_Organizations(t *testing.T) {
 	s := setupTestStore(t)
 	ctx := context.Background()

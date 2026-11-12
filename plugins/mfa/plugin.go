@@ -195,13 +195,15 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// recent-sign-in step-up too. Only the user's own session may.
 	ownSession := forge.WithMiddleware(middleware.DenyDelegatedSession())
 
-	if err := g.POST("/enroll", p.handleEnroll,
+	// Enroll and disable take a TOTP or recovery code as step-up, so they
+	// are throttled like the other code-submission routes.
+	if err := g.POST("/enroll", p.handleEnroll, withRL(
 		ownSession,
 		forge.WithSummary("Enroll in MFA"),
 		forge.WithOperationID("enrollMFA"),
 		forge.WithResponseSchema(http.StatusOK, "Enrollment started", EnrollResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	)...); err != nil {
 		return err
 	}
 
@@ -233,13 +235,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
-	if err := g.DELETE("/enrollment", p.handleDisable,
+	if err := g.DELETE("/enrollment", p.handleDisable, withRL(
 		ownSession,
 		forge.WithSummary("Disable MFA"),
 		forge.WithOperationID("disableMFA"),
 		forge.WithResponseSchema(http.StatusOK, "MFA disabled", DisableResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	)...); err != nil {
 		return err
 	}
 
@@ -816,6 +818,20 @@ func (p *Plugin) sessionStamped(ctx context.Context) bool {
 	return err == nil && s != nil && !s.MFAVerifiedAt.IsZero()
 }
 
+// clearSessionVerified removes the request's own session's stamp, after the
+// factor it proved has been removed. A request with no session records
+// nothing.
+func (p *Plugin) clearSessionVerified(ctx context.Context) error {
+	if p.stamper == nil {
+		return nil
+	}
+	sid, ok := middleware.SessionIDFrom(ctx)
+	if !ok || sid.IsNil() {
+		return nil
+	}
+	return p.stamper.MarkSessionMFAVerified(ctx, sid, time.Time{})
+}
+
 // markSessionVerified records that the request's own session just proved a
 // second factor, so a host enforcing two-step reads it as verified. A request
 // with no session (or no engine) records nothing.
@@ -990,6 +1006,11 @@ func (p *Plugin) handleDisable(ctx forge.Context, req *DisableRequest) (*Disable
 	p.relayEvent(ctx.Context(), "auth.mfa.disabled", "", map[string]string{"user_id": userID.String(), "method": "totp"})
 	p.emitHook(ctx.Context(), hook.ActionMFADisable, "mfa", enrollment.ID.String(), userID.String(), "")
 	p.revokeOtherSessions(ctx.Context(), userID)
+	// The factor this session may have proved is gone, so its stamp goes
+	// too: a host enforcing two-step must ask again.
+	if err := p.clearSessionVerified(ctx.Context()); err != nil {
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to clear the verified session: %w", err))
+	}
 
 	return &DisableResponse{Status: "mfa disabled"}, nil
 }
@@ -1250,8 +1271,23 @@ func (p *Plugin) handleSMSSend(ctx forge.Context, req *SMSSendRequest) (*SMSSend
 		return nil, forge.NotFound("no SMS MFA enrollment found")
 	}
 
+	// Once the number is verified a code only ever goes there: an override
+	// would let a session that has only the password text itself a code
+	// and pass the second factor. Before then, an override is the
+	// enrollment flow pointing the pending enrollment at a corrected
+	// number, so it needs the same step-up as enrolling, and the
+	// enrollment moves with it so the number confirmed is the one that
+	// got the code.
 	phone := enrollment.Secret // Phone stored as the enrollment secret
-	if req.Phone != "" {
+	if req.Phone != "" && req.Phone != phone && !enrollment.Verified {
+		if err := p.requireStepUp(ctx, userID, ""); err != nil {
+			return nil, err
+		}
+		enrollment.Secret = req.Phone
+		enrollment.UpdatedAt = time.Now()
+		if err := p.store.UpdateEnrollment(ctx.Context(), enrollment); err != nil {
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to update SMS enrollment: %w", err))
+		}
 		phone = req.Phone
 	}
 
@@ -1305,17 +1341,26 @@ func (p *Plugin) handleSMSVerify(ctx forge.Context, req *SMSVerifyRequest) (*SMS
 	// Remove the used challenge
 	_ = p.ceremonies.Delete(ctx.Context(), "mfa:sms:"+userID.String()) //nolint:errcheck // best-effort cleanup
 
-	// The code was good: this session has now passed a second factor.
-	if err := p.markSessionVerified(ctx.Context()); err != nil {
-		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to record the verified session: %w", err))
-	}
-
-	// If the enrollment is not yet verified, mark it as verified
 	enrollment, err := p.store.GetEnrollment(ctx.Context(), userID, "sms")
-	if err == nil && !enrollment.Verified {
+	if err != nil {
+		return nil, forge.NotFound("no SMS MFA enrollment found")
+	}
+	if !enrollment.Verified {
+		// The code confirms the number, which makes it a factor from now
+		// on. It is not a factor the session already held, so the session
+		// is not stamped: it proves the factor with a fresh code next.
 		enrollment.Verified = true
 		enrollment.UpdatedAt = time.Now()
-		_ = p.store.UpdateEnrollment(ctx.Context(), enrollment) //nolint:errcheck // best-effort update
+		if err := p.store.UpdateEnrollment(ctx.Context(), enrollment); err != nil {
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to verify SMS enrollment: %w", err))
+		}
+		return &SMSVerifyResponse{Verified: true, Method: "sms"}, nil
+	}
+
+	// The code went to the verified number: this session has now passed a
+	// second factor.
+	if err := p.markSessionVerified(ctx.Context()); err != nil {
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to record the verified session: %w", err))
 	}
 
 	return &SMSVerifyResponse{

@@ -485,7 +485,7 @@ func (s *Store) TouchSession(ctx context.Context, sessionID id.SessionID, lastAc
 
 func (s *Store) MarkSessionMFAVerified(ctx context.Context, sessionID id.SessionID, at time.Time) error {
 	res, err := s.pg.NewUpdate((*SessionModel)(nil)).
-		Set("mfa_verified_at = ?", at).
+		Set("mfa_verified_at = ?", stampValue(at)).
 		Set("updated_at = ?", time.Now()).
 		Where("id = ?", sessionID.String()).
 		Exec(ctx)
@@ -1828,4 +1828,13 @@ func (s *Store) DeleteOrganizationCascade(ctx context.Context, orgID id.OrgID) e
 		return fmt.Errorf("authsome/postgres: commit org cascade: %w", err)
 	}
 	return nil
+}
+
+// stampValue is the column value for a session's MFA stamp: NULL for the
+// zero time, which clears it.
+func stampValue(at time.Time) any {
+	if at.IsZero() {
+		return nil
+	}
+	return at
 }
