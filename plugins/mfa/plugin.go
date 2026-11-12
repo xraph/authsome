@@ -253,13 +253,15 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
-	if err := g.POST("/recovery/regenerate", p.handleRecoveryRegenerate,
+	// The request can carry a TOTP code, so it is throttled like the other
+	// code-submission routes.
+	if err := g.POST("/recovery/regenerate", p.handleRecoveryRegenerate, withRL(
 		ownSession,
 		forge.WithSummary("Regenerate MFA recovery codes"),
 		forge.WithOperationID("regenerateMFARecoveryCodes"),
 		forge.WithResponseSchema(http.StatusOK, "New recovery codes generated", RecoveryRegenerateResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	)...); err != nil {
 		return err
 	}
 

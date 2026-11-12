@@ -88,3 +88,22 @@ func TestMFASMSVerify_RateLimited(t *testing.T) {
 	require.Equal(t, http.StatusTooManyRequests, lastCode,
 		"the attempt beyond the limit on SMS verify must be rate limited (429)")
 }
+
+// TestMFARecoveryRegenerate_RateLimited pins that regenerate, which accepts a
+// TOTP code, is throttled like the other code-submission routes.
+func TestMFARecoveryRegenerate_RateLimited(t *testing.T) {
+	const limit = 3
+	h := newMFARateLimited(t, limit)
+
+	var lastCode int
+	for i := 0; i < limit+1; i++ {
+		req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/mfa/recovery/regenerate", nil)
+		req.RemoteAddr = "203.0.113.9:5555"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		lastCode = rec.Code
+	}
+
+	require.Equal(t, http.StatusTooManyRequests, lastCode,
+		"the attempt beyond the MFA challenge limit must be rate limited (429)")
+}
