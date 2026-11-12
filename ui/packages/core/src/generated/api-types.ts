@@ -1334,6 +1334,10 @@ export interface PortalResponse {
   url: string;
 }
 
+export interface RecoveryRegenerateRequest {
+  code?: string;
+}
+
 export interface RecoveryRegenerateResponse {
   codes: string[];
 }
@@ -2075,6 +2079,8 @@ export type ChallengeMFARequest = ChallengeRequest;
 export type EnrollMFARequest = EnrollRequest;
 
 export type DisableMFARequest = DisableRequest;
+
+export type RegenerateMFARecoveryCodesRequest = RecoveryRegenerateRequest;
 
 export type VerifyRecoveryCodeRequest = RecoveryVerifyRequest;
 

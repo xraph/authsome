@@ -177,6 +177,7 @@ import type {
   PlanResponse,
   PortalRequest,
   PortalResponse,
+  RecoveryRegenerateRequest,
   RecoveryRegenerateResponse,
   RecoveryVerifyRequest,
   RecoveryVerifyResponse,
@@ -287,6 +288,7 @@ import type {
   ChallengeMFARequest,
   EnrollMFARequest,
   DisableMFARequest,
+  RegenerateMFARecoveryCodesRequest,
   VerifyMFARecoveryRequest,
   SendSMSCodeRequest,
   VerifySMSCodeRequest,
@@ -2347,12 +2349,12 @@ export class AuthClient {
    * Regenerate MFA recovery codes
    * POST /v1/mfa/recovery/regenerate
    */
-  async regenerateMFARecoveryCodes(): Promise<RecoveryRegenerateResponse> {
+  async regenerateMFARecoveryCodes(body: RegenerateMFARecoveryCodesRequest): Promise<RecoveryRegenerateResponse> {
     const path = "/v1/mfa/recovery/regenerate";
     return this.request<RecoveryRegenerateResponse>(
       'POST',
       path,
-      undefined,
+      body,
     );
   }
 

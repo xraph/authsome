@@ -4867,6 +4867,14 @@
         ],
         "type": "object"
       },
+      "RecoveryRegenerateRequest": {
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "RecoveryRegenerateResponse": {
         "properties": {
           "codes": {
@@ -29916,6 +29924,17 @@
     "/v1/mfa/recovery/regenerate": {
       "post": {
         "operationId": "regenerateMFARecoveryCodes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryRegenerateRequest"
+              }
+            }
+          },
+          "description": "Request body",
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {

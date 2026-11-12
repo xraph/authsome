@@ -1512,6 +1512,11 @@ type PortalResponse struct {
 	URL string `json:"url"`
 }
 
+// RecoveryRegenerateRequest represents the RecoveryRegenerateRequest schema.
+type RecoveryRegenerateRequest struct {
+	Code string `json:"code,omitempty"`
+}
+
 // RecoveryRegenerateResponse represents the RecoveryRegenerateResponse schema.
 type RecoveryRegenerateResponse struct {
 	Codes []string `json:"codes"`
@@ -2478,6 +2483,11 @@ type EnrollMFARequest struct {
 
 // DisableMFARequest is the request body for DisableMFA.
 type DisableMFARequest struct {
+	Code string `json:"code,omitempty"`
+}
+
+// RegenerateMFARecoveryCodesRequest is the request body for RegenerateMFARecoveryCodes.
+type RegenerateMFARecoveryCodesRequest struct {
 	Code string `json:"code,omitempty"`
 }
 

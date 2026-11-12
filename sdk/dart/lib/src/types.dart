@@ -6569,6 +6569,29 @@ class PortalResponse {
   String toString() => 'PortalResponse(${toJson()})';
 }
 
+class RecoveryRegenerateRequest {
+  final String? code;
+
+  const RecoveryRegenerateRequest({
+    this.code,
+  });
+
+  factory RecoveryRegenerateRequest.fromJson(Map<String, dynamic> json) {
+    return RecoveryRegenerateRequest(
+      code: json['code'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (code != null) 'code': code,
+    };
+  }
+
+  @override
+  String toString() => 'RecoveryRegenerateRequest(${toJson()})';
+}
+
 class RecoveryRegenerateResponse {
   final List<String> codes;
 

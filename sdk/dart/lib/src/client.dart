@@ -2012,11 +2012,12 @@ class AuthClient {
 
   /// Regenerate MFA recovery codes
   /// POST /v1/mfa/recovery/regenerate
-  Future<RecoveryRegenerateResponse> regenerateMFARecoveryCodes({required String token}) async {
+  Future<RecoveryRegenerateResponse> regenerateMFARecoveryCodes({required RecoveryRegenerateRequest body, required String token}) async {
     final path = '/v1/mfa/recovery/regenerate';
     final res = await _request(
 'POST',
       path,
+      body: body.toJson(),
       token: token,
     );
     return RecoveryRegenerateResponse.fromJson(Map<String, dynamic>.from(res as Map));

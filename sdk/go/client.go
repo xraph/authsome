@@ -2197,10 +2197,14 @@ func (c *Client) DisableMFA(ctx context.Context, req *DisableMFARequest) (*Disab
 }
 
 // RegenerateMFARecoveryCodes — Regenerate MFA recovery codes
-func (c *Client) RegenerateMFARecoveryCodes(ctx context.Context) (*RecoveryRegenerateResponse, error) {
+func (c *Client) RegenerateMFARecoveryCodes(ctx context.Context, req *RegenerateMFARecoveryCodesRequest) (*RecoveryRegenerateResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
 	path := "/v1/mfa/recovery/regenerate"
 	var result RecoveryRegenerateResponse
-	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
