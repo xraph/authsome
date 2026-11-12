@@ -32,6 +32,9 @@ sessions gain a nullable `mfa_verified_at` column. Neither backfills.
   runs before status and expiry, and their request never changes the
   invitation. If your client showed a "wrong account" message on 403, show it
   on 404 now.
+- Breaking: `organization.ErrInvitationEmailMismatch` is gone, since that case
+  is now the same not-found error as an unknown token. If your code checks for
+  it, check for `store.ErrNotFound` instead.
 - A token that was already used answers 409, and an expired one answers 410.
   Both used to be a 500.
 - Breaking: only a verified address counts as the invitee: the primary
