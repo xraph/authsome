@@ -302,6 +302,9 @@ func (e *Engine) issueSession(ctx context.Context, req *IssueSessionRequest) (*I
 	if err != nil {
 		return nil, fmt.Errorf("authsome: build session: %w", err)
 	}
+	if req.MFAJustVerified {
+		sess.MFAVerifiedAt = time.Now().UTC()
+	}
 	e.bindSessionToDevice(ctx, sess, req.AppID, req.EnvID, req.IPAddress, req.UserAgent)
 	if hookErr := e.plugins.EmitBeforeSessionCreate(ctx, sess); hookErr != nil {
 		return nil, &hookRefusedError{fmt.Errorf("authsome: before session create: %w", hookErr)}

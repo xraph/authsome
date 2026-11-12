@@ -1641,5 +1641,24 @@ ALTER TABLE authsome_invitations DROP COLUMN IF EXISTS sent_at;
 				return err
 			},
 		},
+
+		// Migration: when a session passed a second factor. Nullable, so a
+		// session from before this column reads as never verified.
+		&migrate.Migration{
+			Name:    "add_session_mfa_verified_at",
+			Version: "20261111000020",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions ADD COLUMN IF NOT EXISTS mfa_verified_at TIMESTAMPTZ;
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions DROP COLUMN IF EXISTS mfa_verified_at;
+`)
+				return err
+			},
+		},
 	)
 }

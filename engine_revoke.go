@@ -101,3 +101,19 @@ func (e *Engine) RevokeOtherUserSessions(ctx context.Context, userID id.UserID, 
 	})
 	return nil
 }
+
+// MarkSessionMFAVerified records that the session passed a second factor at
+// the given instant. The MFA plugin calls it when a signed-in user proves
+// their code on the verify endpoint, so a session that predates enrolment
+// reads as verified without a fresh sign-in.
+func (e *Engine) MarkSessionMFAVerified(ctx context.Context, sessionID id.SessionID, at time.Time) error {
+	sess, err := e.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("authsome: mark session mfa verified: %w", err)
+	}
+	sess.MFAVerifiedAt = at.UTC()
+	if err := e.store.UpdateSession(ctx, sess); err != nil {
+		return fmt.Errorf("authsome: mark session mfa verified: %w", err)
+	}
+	return nil
+}

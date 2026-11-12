@@ -87,6 +87,14 @@ type Session struct {
 	// delegation grant and the client's own registered scopes.
 	Scopes []string `json:"scopes,omitempty"`
 
+	// MFAVerifiedAt is when this session passed a second factor: a code
+	// accepted at the sign-in challenge, or on the verify endpoint from the
+	// session itself. The zero time means it never did, which is every
+	// session issued before this field existed and every sign-in that was not
+	// asked for a second factor. A host that enforces two-step per workspace
+	// reads it, because authsome's own MFARequired is per app.
+	MFAVerifiedAt time.Time `json:"mfa_verified_at,omitempty"`
+
 	// PrincipalKind identifies the type of principal that owns this session:
 	// principal.KindUser, principal.KindAgent, principal.KindWorkload, or
 	// principal.KindService. Empty string means KindUser, for backwards

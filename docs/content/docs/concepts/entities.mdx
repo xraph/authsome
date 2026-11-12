@@ -92,6 +92,7 @@ type Session struct {
     ActorGrant            principal.GrantKind `json:"actor_grant,omitempty"`
     DelegationID          id.DelegationID     `json:"delegation_id,omitempty"`
     DPoPJKT               string              `json:"dpop_jkt,omitempty"`
+    MFAVerifiedAt         time.Time           `json:"mfa_verified_at,omitempty"`
     ClientID              string              `json:"client_id,omitempty"`
 }
 ```

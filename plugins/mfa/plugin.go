@@ -81,6 +81,9 @@ type Plugin struct {
 	// revoker ends the user's other sessions after a factor changes. Nil in
 	// minimal test wiring, in which case nothing is revoked.
 	revoker sessionRevoker
+	// stamper records on the request's session that it passed a second
+	// factor. Nil in minimal test wiring, in which case nothing is recorded.
+	stamper sessionStamper
 	// tel counts every code check. Nil when the engine records no metrics.
 	tel *telemetry.Metrics
 }
@@ -122,6 +125,9 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	}
 	p.engine = engine
 	p.revoker = engine
+	if st, ok := engine.(sessionStamper); ok {
+		p.stamper = st
+	}
 	p.tel = telemetry.From(engine)
 
 	// Build a persistent, at-rest-encrypted enrollment store when one hasn't
@@ -555,6 +561,11 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyMFARequest) (*Verify
 	}
 	p.tel.MFAVerification(telemetry.MFAFlowVerify, telemetry.MFAMethodTOTP, telemetry.MFAOK)
 
+	// The code was good: this session has now passed a second factor.
+	if err := p.markSessionVerified(ctx.Context()); err != nil {
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to record the verified session: %w", err))
+	}
+
 	// Mark as verified if this is the first successful verification
 	if !enrollment.Verified {
 		enrollment.Verified = true
@@ -777,6 +788,25 @@ func (p *Plugin) requireStepUp(ctx forge.Context, userID id.UserID, code string)
 // sessionRevoker is the slice of the engine a factor change needs.
 type sessionRevoker interface {
 	RevokeOtherUserSessions(ctx context.Context, userID id.UserID, keep id.SessionID) error
+}
+
+// sessionStamper is the slice of the engine that records a verified session.
+type sessionStamper interface {
+	MarkSessionMFAVerified(ctx context.Context, sessionID id.SessionID, at time.Time) error
+}
+
+// markSessionVerified records that the request's own session just proved a
+// second factor, so a host enforcing two-step reads it as verified. A request
+// with no session (or no engine) records nothing.
+func (p *Plugin) markSessionVerified(ctx context.Context) error {
+	if p.stamper == nil {
+		return nil
+	}
+	sid, ok := middleware.SessionIDFrom(ctx)
+	if !ok || sid.IsNil() {
+		return nil
+	}
+	return p.stamper.MarkSessionMFAVerified(ctx, sid, time.Now())
 }
 
 // revokeOtherSessions signs the user out everywhere but the session that

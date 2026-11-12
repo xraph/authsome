@@ -106,6 +106,7 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"SessionActorChainRoundTrip", testSessionActorChainRoundTrip},
 		{"ServiceAccountKindDefaultsToService", testServiceAccountKindDefaultsToService},
 		{"SessionDPoPJKTRoundTrip", testSessionDPoPJKTRoundTrip},
+		{"SessionMFAVerifiedAtRoundTrip", testSessionMFAVerifiedAtRoundTrip},
 		{"ExpiredEmailVerificationIsNotActive", testExpiredEmailVerificationIsNotActive},
 		{"KVRoundTrip", testKVRoundTrip},
 		{"KVSetNXHonoursExpiry", testKVSetNXHonoursExpiry},
@@ -1071,6 +1072,27 @@ func testSessionDPoPJKTRoundTrip(t *testing.T, s store.Store) {
 	fetched, err := s.GetSessionByToken(context.Background(), unbound.Token)
 	require.NoError(t, err)
 	assert.Empty(t, fetched.DPoPJKT)
+}
+
+// testSessionMFAVerifiedAtRoundTrip proves the instant a session passed a
+// second factor survives the store, and that a session that never did reads
+// back as the zero time.
+func testSessionMFAVerifiedAtRoundTrip(t *testing.T, s store.Store) {
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "mfa-verified-at@example.com")
+
+	at := time.Now().UTC().Truncate(time.Second)
+	verified := seedSession(t, s, tn, u.ID, "tok-mfa-yes", "ref-mfa-yes")
+	verified.MFAVerifiedAt = at
+	require.NoError(t, s.UpdateSession(context.Background(), verified))
+	got, err := s.GetSessionByToken(context.Background(), "tok-mfa-yes")
+	require.NoError(t, err)
+	assert.True(t, at.Equal(got.MFAVerifiedAt), "want %v, got %v", at, got.MFAVerifiedAt)
+
+	plain := seedSession(t, s, tn, u.ID, "tok-mfa-no", "ref-mfa-no")
+	fetched, err := s.GetSessionByToken(context.Background(), plain.Token)
+	require.NoError(t, err)
+	assert.True(t, fetched.MFAVerifiedAt.IsZero())
 }
 
 // ──────────────────────────────────────────────────

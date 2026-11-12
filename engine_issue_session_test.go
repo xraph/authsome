@@ -299,3 +299,30 @@ func TestIssueSession_MFARequiredErrorRendersAs403(t *testing.T) {
 	assert.Equal(t, "test-ticket-abc", body["mfa_ticket"])
 	assert.Equal(t, []string{"totp"}, body["available_methods"])
 }
+
+// TestIssueSession_recordsMFAVerified pins that a session minted after a
+// second factor says so, and one minted without it does not. Hosts that
+// enforce two-step per workspace read this off the session.
+func TestIssueSession_recordsMFAVerified(t *testing.T) {
+	t.Parallel()
+	eng, u, appID := issueSessionFixture(t)
+
+	plain, err := eng.IssueSession(context.Background(), &authsome.IssueSessionRequest{
+		User: u, AppID: appID, AuthMethod: "password",
+	})
+	require.NoError(t, err)
+	assert.True(t, plain.Session.MFAVerifiedAt.IsZero(), "a password sign-in has not passed a second factor")
+
+	verified, err := eng.IssueSession(context.Background(), &authsome.IssueSessionRequest{
+		User: u, AppID: appID, AuthMethod: "password+mfa", MFAJustVerified: true,
+	})
+	require.NoError(t, err)
+	assert.False(t, verified.Session.MFAVerifiedAt.IsZero(), "the session is stamped when the code was accepted")
+
+	stored, err := eng.Store().GetSession(context.Background(), verified.Session.ID)
+	require.NoError(t, err)
+	assert.False(t, stored.MFAVerifiedAt.IsZero(), "the stamp survives the store")
+	plainStored, err := eng.Store().GetSession(context.Background(), plain.Session.ID)
+	require.NoError(t, err)
+	assert.True(t, plainStored.MFAVerifiedAt.IsZero())
+}
