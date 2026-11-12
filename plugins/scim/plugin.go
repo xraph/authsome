@@ -108,6 +108,11 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 // SetSCIMStore overrides the store the plugin uses; call it before OnInit.
 func (p *Plugin) SetSCIMStore(s Store) { p.scimStore = s }
 
+// SCIMStore returns the config and token store so an embedding host app can
+// read an organization's provisioning state behind its own authorization.
+// Returns nil before OnInit has wired a store.
+func (p *Plugin) SCIMStore() Store { return p.scimStore }
+
 // MigrationGroups returns SCIM-specific database migrations.
 func (p *Plugin) MigrationGroups(driverName string) []*migrate.Group {
 	switch driverName {
