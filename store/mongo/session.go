@@ -144,6 +144,22 @@ func (s *Store) TouchSession(ctx context.Context, sessionID id.SessionID, lastAc
 	return nil
 }
 
+// MarkSessionMFAVerified sets only mfa_verified_at on the session.
+func (s *Store) MarkSessionMFAVerified(ctx context.Context, sessionID id.SessionID, at time.Time) error {
+	res, err := s.mdb.NewUpdate((*sessionModel)(nil)).
+		Filter(bson.M{"_id": sessionID.String()}).
+		Set("mfa_verified_at", at).
+		Set("updated_at", now()).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("authsome/mongo: mark session mfa verified: %w", err)
+	}
+	if res.MatchedCount() == 0 {
+		return store.ErrNotFound
+	}
+	return nil
+}
+
 // DeleteSession removes a session by ID.
 func (s *Store) DeleteSession(ctx context.Context, sessionID id.SessionID) error {
 	res, err := s.mdb.NewDelete((*sessionModel)(nil)).

@@ -107,6 +107,7 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"ServiceAccountKindDefaultsToService", testServiceAccountKindDefaultsToService},
 		{"SessionDPoPJKTRoundTrip", testSessionDPoPJKTRoundTrip},
 		{"SessionMFAVerifiedAtRoundTrip", testSessionMFAVerifiedAtRoundTrip},
+		{"MarkSessionMFAVerifiedLeavesTokensAlone", testMarkSessionMFAVerifiedLeavesTokensAlone},
 		{"ExpiredEmailVerificationIsNotActive", testExpiredEmailVerificationIsNotActive},
 		{"KVRoundTrip", testKVRoundTrip},
 		{"KVSetNXHonoursExpiry", testKVSetNXHonoursExpiry},
@@ -1093,6 +1094,37 @@ func testSessionMFAVerifiedAtRoundTrip(t *testing.T, s store.Store) {
 	fetched, err := s.GetSessionByToken(context.Background(), plain.Token)
 	require.NoError(t, err)
 	assert.True(t, fetched.MFAVerifiedAt.IsZero())
+}
+
+// testMarkSessionMFAVerifiedLeavesTokensAlone proves the targeted stamp sets
+// the instant without rewriting the row: a rotation that landed first keeps
+// its new tokens, and a missing session is ErrNotFound.
+func testMarkSessionMFAVerifiedLeavesTokensAlone(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	u := seedUser(t, s, tn, "mfa-stamp@example.com")
+	sess := seedSession(t, s, tn, u.ID, "tok-stamp-old", "ref-stamp-old")
+
+	// A rotation lands between the caller's read and the stamp.
+	stale, err := s.GetSession(ctx, sess.ID)
+	require.NoError(t, err)
+	rotated := *stale
+	rotated.Token, rotated.RefreshToken = "tok-stamp-new", "ref-stamp-new"
+	ok, err := s.RotateSession(ctx, &rotated, store.HashToken("tok-stamp-old"))
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	at := time.Now().UTC().Truncate(time.Second)
+	require.NoError(t, s.MarkSessionMFAVerified(ctx, sess.ID, at))
+
+	got, err := s.GetSessionByToken(ctx, "tok-stamp-new")
+	require.NoError(t, err, "the rotated token must still resolve")
+	assert.True(t, at.Equal(got.MFAVerifiedAt))
+	_, err = s.GetSessionByToken(ctx, "tok-stamp-old")
+	assert.Error(t, err, "the stamp must not bring the old token back")
+
+	err = s.MarkSessionMFAVerified(ctx, id.NewSessionID(), at)
+	assert.ErrorIs(t, err, store.ErrNotFound)
 }
 
 // ──────────────────────────────────────────────────

@@ -44,6 +44,10 @@ type Store interface {
 	// TouchSession performs a lightweight update of last_activity_at, expires_at,
 	// and updated_at without rewriting the entire session row.
 	TouchSession(ctx context.Context, sessionID id.SessionID, lastActivityAt, expiresAt time.Time) error
+	// MarkSessionMFAVerified sets only mfa_verified_at (and updated_at). It
+	// never rewrites the row, so it cannot clobber a token rotation that lands
+	// at the same moment.
+	MarkSessionMFAVerified(ctx context.Context, sessionID id.SessionID, at time.Time) error
 	DeleteSession(ctx context.Context, sessionID id.SessionID) error
 	DeleteUserSessions(ctx context.Context, userID id.UserID) error
 	// DeleteSessionsByGrant deletes every session issued under grantID. An

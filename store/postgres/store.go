@@ -483,6 +483,21 @@ func (s *Store) TouchSession(ctx context.Context, sessionID id.SessionID, lastAc
 	return pgError(err)
 }
 
+func (s *Store) MarkSessionMFAVerified(ctx context.Context, sessionID id.SessionID, at time.Time) error {
+	res, err := s.pg.NewUpdate((*SessionModel)(nil)).
+		Set("mfa_verified_at = ?", at).
+		Set("updated_at = ?", time.Now()).
+		Where("id = ?", sessionID.String()).
+		Exec(ctx)
+	if err != nil {
+		return pgError(err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 { //nolint:errcheck // the driver always reports rows affected
+		return store.ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) DeleteSession(ctx context.Context, sessionID id.SessionID) error {
 	_, err := s.pg.NewDelete((*SessionModel)(nil)).Where("id = ?", sessionID.String()).Exec(ctx)
 	return pgError(err)

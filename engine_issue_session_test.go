@@ -326,3 +326,23 @@ func TestIssueSession_recordsMFAVerified(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, plainStored.MFAVerifiedAt.IsZero())
 }
+
+// A passkey assertion that verified its user is a second proof by itself, so
+// the session it mints is stamped. An assertion that did not verify the user
+// is not.
+func TestIssueSession_passkeyUserVerificationStamps(t *testing.T) {
+	t.Parallel()
+	eng, u, appID := issueSessionFixture(t)
+
+	verified, err := eng.IssueSession(context.Background(), &authsome.IssueSessionRequest{
+		User: u, AppID: appID, AuthMethod: "passkey", UserVerifiedByKey: true,
+	})
+	require.NoError(t, err)
+	assert.False(t, verified.Session.MFAVerifiedAt.IsZero())
+
+	unverified, err := eng.IssueSession(context.Background(), &authsome.IssueSessionRequest{
+		User: u, AppID: appID, AuthMethod: "passkey",
+	})
+	require.NoError(t, err)
+	assert.True(t, unverified.Session.MFAVerifiedAt.IsZero())
+}

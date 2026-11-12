@@ -605,6 +605,18 @@ func (s *Store) TouchSession(_ context.Context, sessionID id.SessionID, lastActi
 	return nil
 }
 
+func (s *Store) MarkSessionMFAVerified(_ context.Context, sessionID id.SessionID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.sessions[sessionID.String()]
+	if !ok {
+		return store.ErrNotFound
+	}
+	sess.MFAVerifiedAt = at
+	sess.UpdatedAt = time.Now()
+	return nil
+}
+
 func (s *Store) DeleteSession(_ context.Context, sessionID id.SessionID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -1026,6 +1026,11 @@ func (p *Plugin) handleRecoveryVerify(ctx forge.Context, req *RecoveryVerifyRequ
 	}
 	p.tel.MFAVerification(telemetry.MFAFlowVerify, telemetry.MFAMethodRecovery, telemetry.MFAOK)
 
+	// A spent recovery code is a second-factor proof for this session.
+	if err := p.markSessionVerified(ctx.Context()); err != nil {
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to record the verified session: %w", err))
+	}
+
 	p.audit(ctx.Context(), hook.ActionMFARecoveryUsed, "mfa", matched.ID.String(), userID.String(), "", bridge.OutcomeSuccess)
 	p.emitHook(ctx.Context(), hook.ActionMFARecoveryUsed, "mfa", matched.ID.String(), userID.String(), "")
 
@@ -1260,6 +1265,11 @@ func (p *Plugin) handleSMSVerify(ctx forge.Context, req *SMSVerifyRequest) (*SMS
 
 	// Remove the used challenge
 	_ = p.ceremonies.Delete(ctx.Context(), "mfa:sms:"+userID.String()) //nolint:errcheck // best-effort cleanup
+
+	// The code was good: this session has now passed a second factor.
+	if err := p.markSessionVerified(ctx.Context()); err != nil {
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to record the verified session: %w", err))
+	}
 
 	// If the enrollment is not yet verified, mark it as verified
 	enrollment, err := p.store.GetEnrollment(ctx.Context(), userID, "sms")
