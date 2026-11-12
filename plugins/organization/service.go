@@ -540,6 +540,10 @@ func (p *Plugin) invitationForInvitee(ctx context.Context, verb, token string, c
 
 	org, err := p.store.GetOrganization(ctx, inv.OrgID)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			// An invitation whose organization is gone reads as unknown.
+			return nil, nil, invitationNotFound(verb)
+		}
 		return nil, nil, fmt.Errorf("organization: %s invitation: org lookup: %w", verb, err)
 	}
 
@@ -548,6 +552,17 @@ func (p *Plugin) invitationForInvitee(ctx context.Context, verb, token string, c
 	if requireCaller {
 		if errors.Is(err, store.ErrNotFound) || (err == nil && u.ID.String() != callerID.String()) {
 			return nil, nil, invitationNotFound(verb)
+		}
+		if err == nil {
+			// Owning the address is not enough; it has to be verified, or
+			// anyone could attach someone else's address to their account.
+			verified, vErr := p.ownsVerifiedEmail(ctx, org.AppID, u, inv.Email)
+			if vErr != nil {
+				return nil, nil, fmt.Errorf("organization: %s invitation: read email: %w", verb, vErr)
+			}
+			if !verified {
+				return nil, nil, invitationNotFound(verb)
+			}
 		}
 	}
 	if err != nil {
@@ -559,6 +574,21 @@ func (p *Plugin) invitationForInvitee(ctx context.Context, verb, token string, c
 		u = nil
 	}
 	return inv, u, nil
+}
+
+// ownsVerifiedEmail says whether u holds email as a verified address: its
+// primary with EmailVerified set, or a secondary marked verified. The same
+// rule wakflo's invitation preview applies.
+func (p *Plugin) ownsVerifiedEmail(ctx context.Context, appID id.AppID, u *user.User, email string) (bool, error) {
+	rec, err := p.store.GetUserEmailRecord(ctx, appID, id.Nil, email)
+	if errors.Is(err, store.ErrNotFound) {
+		// No row for the address: only the user's own primary can match.
+		return strings.EqualFold(strings.TrimSpace(u.Email), strings.TrimSpace(email)) && u.EmailVerified, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return rec.Verified || (rec.IsPrimary && u.EmailVerified), nil
 }
 
 func (p *Plugin) acceptInvitation(ctx context.Context, token string, callerID id.UserID, requireCaller bool) (*organization.Member, error) {

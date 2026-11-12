@@ -19,6 +19,7 @@ import (
 	"github.com/xraph/authsome/organization"
 	orgplugin "github.com/xraph/authsome/plugins/organization"
 	"github.com/xraph/authsome/store"
+	"github.com/xraph/authsome/user"
 )
 
 // Accepting an invitation added the account that owned the invited email,
@@ -27,6 +28,7 @@ import (
 // Only the account that owns the invited address may accept now.
 
 type acceptFixture struct {
+	eng     *authsome.Engine
 	plugin  *orgplugin.Plugin
 	h       http.Handler
 	org     *organization.Organization
@@ -52,8 +54,10 @@ func newAcceptFixture(t *testing.T) *acceptFixture {
 		return u.ID
 	}
 
-	f := &acceptFixture{plugin: p, h: router.Handler()}
+	f := &acceptFixture{eng: eng, plugin: p, h: router.Handler()}
 	f.invitee = signUp("invitee@example.com")
+	// Sign-up leaves the address unverified; only a verified address counts.
+	require.NoError(t, eng.Store().MarkUserEmailVerified(context.Background(), f.invitee, "invitee@example.com"))
 	f.other = signUp("someone-else@example.com")
 	f.org = seedOrg(t, p, id.NewUserID())
 	f.inv = &organization.Invitation{
@@ -214,4 +218,79 @@ func TestAcceptInvitation_inviteeSeesTheStateOfTheirOwnToken(t *testing.T) {
 	}
 	require.NoError(t, f.plugin.CreateInvitation(ctx, late))
 	assert.Equal(t, http.StatusGone, f.post(t, "/v1/orgs/invitations/accept", late.Token, f.invitee).Code)
+}
+
+// Only a verified address makes someone the invitee. An unverified secondary
+// or an unverified primary matching the invitation's email gets the
+// unknown-token 404, and a verified secondary passes. Each answer is the same
+// on accept and decline.
+func TestInvitationTokens_onlyAVerifiedAddressCounts(t *testing.T) {
+	f := newAcceptFixture(t)
+	ctx := context.Background()
+	appID, err := id.ParseAppID(orgTestAppID)
+	require.NoError(t, err)
+
+	invite := func(email, token string) *organization.Invitation {
+		inv := &organization.Invitation{
+			ID: id.NewInvitationID(), OrgID: f.org.ID, Email: email,
+			Role: organization.RoleMember, Status: organization.InvitationPending, Token: token,
+		}
+		require.NoError(t, f.plugin.CreateInvitation(ctx, inv))
+		return inv
+	}
+	signUp := func(email string) id.UserID {
+		u, _, err := f.eng.SignUp(ctx, &account.SignUpRequest{AppID: appID, Email: email, Password: "SecureP@ss123", FirstName: "T"})
+		require.NoError(t, err)
+		return u.ID
+	}
+	both := []string{"/v1/orgs/invitations/accept", "/v1/orgs/invitations/decline"}
+	unknown := f.post(t, both[0], "tok-never-existed", f.other)
+	require.Equal(t, http.StatusNotFound, unknown.Code)
+
+	// Unverified primary: the account exists but never verified the address.
+	unverified := signUp("unverified@example.com")
+	invite("unverified@example.com", "tok-unverified-primary")
+	for _, path := range both {
+		rec := f.post(t, path, "tok-unverified-primary", unverified)
+		assert.Equal(t, unknown.Code, rec.Code, path)
+		assert.Equal(t, unknown.Body.String(), rec.Body.String(), path)
+	}
+
+	// Unverified secondary.
+	claimant := signUp("claimant@example.com")
+	require.NoError(t, f.eng.Store().AddUserEmail(ctx, &user.UserEmail{
+		ID: id.NewUserEmailID(), UserID: claimant, AppID: appID,
+		Email: "victim@example.com", Verified: false, Source: "test",
+	}))
+	invite("victim@example.com", "tok-unverified-secondary")
+	for _, path := range both {
+		rec := f.post(t, path, "tok-unverified-secondary", claimant)
+		assert.Equal(t, unknown.Code, rec.Code, path)
+		assert.Equal(t, unknown.Body.String(), rec.Body.String(), path)
+	}
+
+	// Once verified, the secondary is enough.
+	require.NoError(t, f.eng.Store().MarkUserEmailVerified(ctx, claimant, "victim@example.com"))
+	rec := f.post(t, both[0], "tok-unverified-secondary", claimant)
+	assert.Equal(t, http.StatusCreated, rec.Code, "body=%s", rec.Body.String())
+}
+
+// An invitation whose organization no longer exists reads as an unknown
+// token, not a server error.
+func TestInvitationTokens_goneOrgIsTheUnknownTokenAnswer(t *testing.T) {
+	f := newAcceptFixture(t)
+	ctx := context.Background()
+	inv := &organization.Invitation{
+		ID: id.NewInvitationID(), OrgID: id.NewOrgID(), Email: "invitee@example.com",
+		Role: organization.RoleMember, Status: organization.InvitationPending, Token: "tok-gone-org",
+	}
+	if err := f.plugin.CreateInvitation(ctx, inv); err != nil {
+		t.Skipf("the store refuses an invitation with no organization: %v", err)
+	}
+	unknown := f.post(t, "/v1/orgs/invitations/accept", "tok-never-existed", f.invitee)
+	for _, path := range []string{"/v1/orgs/invitations/accept", "/v1/orgs/invitations/decline"} {
+		rec := f.post(t, path, inv.Token, f.invitee)
+		assert.Equal(t, unknown.Code, rec.Code, path)
+		assert.Equal(t, unknown.Body.String(), rec.Body.String(), path)
+	}
 }

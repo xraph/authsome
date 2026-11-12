@@ -135,7 +135,7 @@ func (p *Plugin) registerOrgRoutes(router forge.Router) error {
 	// Invitations
 	if err := g.POST("/orgs/invitations/accept", p.handleAcceptInvitation,
 		forge.WithSummary("Accept invitation"),
-		forge.WithDescription("Accepts a pending organization invitation using the invitation token. The signed-in user must own the email the invitation was sent to."),
+		forge.WithDescription("Accepts a pending organization invitation using the invitation token. The signed-in user must own, and have verified, the email the invitation was sent to. Answers 401 when signed out and 404 for an unknown token or for anyone but the invitee, 409 for a token already used or withdrawn and 410 for an expired one."),
 		forge.WithOperationID("acceptInvitation"),
 		forge.WithRequestSchema(AcceptInvitationRequest{}),
 		forge.WithCreatedResponse(organization.Member{}),
@@ -158,7 +158,7 @@ func (p *Plugin) registerOrgRoutes(router forge.Router) error {
 
 	if err := g.POST("/orgs/invitations/decline", p.handleDeclineInvitation,
 		forge.WithSummary("Decline invitation"),
-		forge.WithDescription("Declines a pending organization invitation using the invitation token."),
+		forge.WithDescription("Declines a pending organization invitation using the invitation token. The signed-in user must own, and have verified, the email the invitation was sent to. Answers 401 when signed out and 404 for an unknown token or for anyone but the invitee, 409 for a token already used or withdrawn and 410 for an expired one."),
 		forge.WithOperationID("declineInvitation"),
 		forge.WithRequestSchema(DeclineInvitationRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Declined", StatusResponse{}),
