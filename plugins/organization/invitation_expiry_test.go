@@ -72,24 +72,24 @@ func TestCreateInvitation_NegativeTTLNeverExpires(t *testing.T) {
 }
 
 func TestAcceptInvitation_ExpiredIsGone(t *testing.T) {
-	p, h := newOrgHTTP(t)
-	o := seedOrg(t, p, id.NewUserID())
-	inv := &organization.Invitation{
+	f := newAcceptFixture(t)
+	f.inv.Status = organization.InvitationPending
+	late := &organization.Invitation{
 		ID:        id.NewInvitationID(),
-		OrgID:     o.ID,
-		Email:     "late@example.com",
+		OrgID:     f.org.ID,
+		Email:     "invitee@example.com",
 		Role:      organization.RoleMember,
 		Status:    organization.InvitationPending,
 		Token:     "tok-expired",
 		CreatedAt: time.Now().Add(-8 * 24 * time.Hour),
 		ExpiresAt: time.Now().Add(-24 * time.Hour),
 	}
-	require.NoError(t, p.CreateInvitation(context.Background(), inv))
+	require.NoError(t, f.plugin.CreateInvitation(context.Background(), late))
 
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, orgReq("POST", "/v1/orgs/invitations/accept", postJSON(t, map[string]string{"token": inv.Token}), id.NewUserID()))
+	// Only the invitee is told it has expired.
+	rec := f.post(t, "/v1/orgs/invitations/accept", late.Token, f.invitee)
 	assert.Equal(t, http.StatusGone, rec.Code, "body=%s", rec.Body.String())
 
-	_, err := p.AcceptInvitation(context.Background(), inv.Token)
+	_, err := f.plugin.AcceptInvitation(context.Background(), late.Token)
 	assert.Error(t, err, "an expired invitation stays refused")
 }

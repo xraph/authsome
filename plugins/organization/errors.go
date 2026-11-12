@@ -16,11 +16,6 @@ var ErrSlugTaken = errors.New("organization: slug already taken")
 // ExpiresAt. The HTTP layer answers it with 410 Gone.
 var ErrInvitationExpired = errors.New("organization: invitation has expired")
 
-// ErrInvitationEmailMismatch is returned by AcceptInvitationAs when the
-// signed-in user does not own the email the invitation was sent to. The HTTP
-// layer answers it with 403 Forbidden.
-var ErrInvitationEmailMismatch = errors.New("organization: invitation was sent to a different email address")
-
 // ErrInvitationNotActionable is returned by ResendInvitation and
 // RevokeInvitation when the invitation has already been accepted, declined or
 // revoked. The HTTP layer answers it with 409 Conflict.

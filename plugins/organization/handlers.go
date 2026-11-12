@@ -703,6 +703,21 @@ func (p *Plugin) handleRevokeInvitation(ctx forge.Context, _ *RevokeInvitationRe
 	return nil, ctx.JSON(http.StatusOK, inv)
 }
 
+// invitationTokenError maps what accepting or declining by token can return.
+// An unknown token and a token that is someone else's are the same 404; only
+// the invitee can see 409 (used or withdrawn) or 410 (expired).
+func invitationTokenError(ctx forge.Context, err error) error {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		return forge.NotFound("invitation not found")
+	case errors.Is(err, ErrInvitationExpired):
+		return forge.NewHTTPError(http.StatusGone, "invitation has expired")
+	case errors.Is(err, ErrInvitationNotPending):
+		return forge.NewHTTPError(http.StatusConflict, "this invitation was already used or withdrawn")
+	}
+	return mapErrorCtx(ctx, err)
+}
+
 func (p *Plugin) handleAcceptInvitation(ctx forge.Context, req *AcceptInvitationRequest) (*organization.Member, error) {
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
@@ -714,15 +729,7 @@ func (p *Plugin) handleAcceptInvitation(ctx forge.Context, req *AcceptInvitation
 
 	member, err := p.AcceptInvitationAs(ctx.Context(), req.Token, userID)
 	if err != nil {
-		switch {
-		case errors.Is(err, ErrInvitationExpired):
-			return nil, forge.NewHTTPError(http.StatusGone, "invitation has expired")
-		case errors.Is(err, ErrInvitationNotPending):
-			return nil, forge.NewHTTPError(http.StatusConflict, "this invitation was already used or withdrawn")
-		case errors.Is(err, ErrInvitationEmailMismatch):
-			return nil, forge.Forbidden("this invitation was sent to a different email address; sign in with that address to accept it")
-		}
-		return nil, mapErrorCtx(ctx, err)
+		return nil, invitationTokenError(ctx, err)
 	}
 
 	return nil, ctx.JSON(http.StatusCreated, member)
@@ -814,18 +821,16 @@ func (p *Plugin) handleGetInvitation(ctx forge.Context, req *GetInvitationReques
 }
 
 func (p *Plugin) handleDeclineInvitation(ctx forge.Context, req *DeclineInvitationRequest) (*StatusResponse, error) {
+	userID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
 	if req.Token == "" {
 		return nil, forge.BadRequest("token is required")
 	}
 
-	if err := p.DeclineInvitation(ctx.Context(), req.Token); err != nil {
-		switch {
-		case errors.Is(err, ErrInvitationExpired):
-			return nil, forge.NewHTTPError(http.StatusGone, "invitation has expired")
-		case errors.Is(err, ErrInvitationNotPending):
-			return nil, forge.NewHTTPError(http.StatusConflict, "this invitation was already used or withdrawn")
-		}
-		return nil, mapErrorCtx(ctx, err)
+	if err := p.DeclineInvitationAs(ctx.Context(), req.Token, userID); err != nil {
+		return nil, invitationTokenError(ctx, err)
 	}
 
 	resp := &StatusResponse{Status: "declined"}
