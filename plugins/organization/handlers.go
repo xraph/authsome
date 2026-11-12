@@ -717,6 +717,8 @@ func (p *Plugin) handleAcceptInvitation(ctx forge.Context, req *AcceptInvitation
 		switch {
 		case errors.Is(err, ErrInvitationExpired):
 			return nil, forge.NewHTTPError(http.StatusGone, "invitation has expired")
+		case errors.Is(err, ErrInvitationNotPending):
+			return nil, forge.NewHTTPError(http.StatusConflict, "this invitation was already used or withdrawn")
 		case errors.Is(err, ErrInvitationEmailMismatch):
 			return nil, forge.Forbidden("this invitation was sent to a different email address; sign in with that address to accept it")
 		}
@@ -817,6 +819,12 @@ func (p *Plugin) handleDeclineInvitation(ctx forge.Context, req *DeclineInvitati
 	}
 
 	if err := p.DeclineInvitation(ctx.Context(), req.Token); err != nil {
+		switch {
+		case errors.Is(err, ErrInvitationExpired):
+			return nil, forge.NewHTTPError(http.StatusGone, "invitation has expired")
+		case errors.Is(err, ErrInvitationNotPending):
+			return nil, forge.NewHTTPError(http.StatusConflict, "this invitation was already used or withdrawn")
+		}
 		return nil, mapErrorCtx(ctx, err)
 	}
 

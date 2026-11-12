@@ -525,7 +525,7 @@ func (p *Plugin) acceptInvitation(ctx context.Context, token string, callerID id
 	}
 
 	if inv.Status != organization.InvitationPending {
-		return nil, fmt.Errorf("organization: invitation is not pending (status: %s)", inv.Status)
+		return nil, notPendingError(inv.Status)
 	}
 
 	if !inv.ExpiresAt.IsZero() && time.Now().After(inv.ExpiresAt) {
@@ -700,7 +700,7 @@ func (p *Plugin) DeclineInvitation(ctx context.Context, token string) error {
 	}
 
 	if inv.Status != organization.InvitationPending {
-		return fmt.Errorf("organization: invitation is not pending (status: %s)", inv.Status)
+		return notPendingError(inv.Status)
 	}
 
 	inv.Status = organization.InvitationDeclined

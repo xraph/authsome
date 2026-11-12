@@ -111,3 +111,24 @@ func TestAcceptInvitationAs_StrangerWithNoAccountForTheEmail(t *testing.T) {
 	_, err := f.plugin.AcceptInvitationAs(context.Background(), f.inv.Token, id.NewUserID())
 	assert.ErrorIs(t, err, orgplugin.ErrInvitationEmailMismatch)
 }
+
+// A token that was already used is the caller's conflict, not a server fault.
+func TestAcceptInvitation_alreadyAcceptedIs409(t *testing.T) {
+	f := newAcceptFixture(t)
+
+	rec := f.accept(t, f.invitee)
+	require.Equal(t, http.StatusCreated, rec.Code, "body=%s", rec.Body.String())
+
+	rec = f.accept(t, f.invitee)
+	assert.Equal(t, http.StatusConflict, rec.Code, "body=%s", rec.Body.String())
+}
+
+func TestAcceptInvitation_revokedIs409(t *testing.T) {
+	f := newAcceptFixture(t)
+
+	_, err := f.plugin.RevokeInvitation(context.Background(), f.org.ID, f.inv.ID)
+	require.NoError(t, err)
+
+	rec := f.accept(t, f.invitee)
+	assert.Equal(t, http.StatusConflict, rec.Code, "body=%s", rec.Body.String())
+}

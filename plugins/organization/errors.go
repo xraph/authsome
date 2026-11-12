@@ -1,6 +1,11 @@
 package organization
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+
+	"github.com/xraph/authsome/organization"
+)
 
 // ErrSlugTaken is returned when an organization is created with a slug that
 // another organization in the same app already holds. The HTTP layer answers
@@ -25,3 +30,17 @@ var ErrInvitationNotActionable = errors.New("organization: invitation can no lon
 // ResendInvitationInterval of the last send. The HTTP layer answers it with
 // 429 Too Many Requests.
 var ErrInvitationResendTooSoon = errors.New("organization: invitation was sent a moment ago")
+
+// ErrInvitationNotPending is returned when an invitation is accepted or
+// declined after it was already accepted, declined or revoked. The HTTP
+// handlers answer it with 409.
+var ErrInvitationNotPending = errors.New("organization: invitation is not pending")
+
+// notPendingError says why an invitation cannot be taken. An expired one
+// keeps answering as expired, which is 410.
+func notPendingError(status organization.InvitationStatus) error {
+	if status == organization.InvitationExpired {
+		return fmt.Errorf("organization: invitation is not pending (status: %s): %w", status, ErrInvitationExpired)
+	}
+	return fmt.Errorf("%w (status: %s)", ErrInvitationNotPending, status)
+}
