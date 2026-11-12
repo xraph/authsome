@@ -1,6 +1,7 @@
 package organization
 
 import (
+	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/plugin"
 )
 
@@ -9,6 +10,9 @@ import (
 func (p *Plugin) SetPermCheckerForTest(pc plugin.PermissionChecker) {
 	p.permChecker = pc
 }
+
+// RoleRankForTest exposes the rank a role gets under the plugin's config.
+func (p *Plugin) RoleRankForTest(r organization.MemberRole) int { return p.roleRank(r) }
 
 // MaskEmail and InviterName expose the invitation preview's two formatting
 // helpers so they can be tested directly. Both decide what a page shows to

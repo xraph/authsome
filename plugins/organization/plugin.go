@@ -3,6 +3,7 @@ package organization
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,6 +43,17 @@ type Config struct {
 	// behaviour before this option existed. Mail goes through the plugin
 	// registered as "notification"; without one nothing is sent either.
 	InvitationURLTemplate string
+
+	// RoleRanks gives role names other than owner, admin and member a rank
+	// for the checks that compare roles: who may read or change an
+	// organization, grant a role, or remove a member. Keys are lower case
+	// names; values are on the built-in scale, member 1, admin 2, owner 3,
+	// so {"builder": 1} lets a builder do what a member can and nothing
+	// more. A name not listed ranks 0, below member, which is how every
+	// custom role was treated before this option existed. The built-in names
+	// cannot be changed here. Be careful with 2 or 3: a role ranked as admin
+	// passes every admin-level check in this plugin.
+	RoleRanks map[string]int
 }
 
 // DefaultInvitationTTL is how long an invitation stays acceptable when
@@ -83,6 +95,15 @@ func New(cfg ...Config) *Plugin {
 	var c Config
 	if len(cfg) > 0 {
 		c = cfg[0]
+	}
+	// Keys are matched trimmed and lower case, so store them that way. The
+	// caller's map is copied, not changed.
+	if len(c.RoleRanks) > 0 {
+		ranks := make(map[string]int, len(c.RoleRanks))
+		for name, rank := range c.RoleRanks {
+			ranks[strings.ToLower(strings.TrimSpace(name))] = rank
+		}
+		c.RoleRanks = ranks
 	}
 	return &Plugin{config: c}
 }

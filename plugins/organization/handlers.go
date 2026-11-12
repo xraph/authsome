@@ -491,7 +491,7 @@ func (p *Plugin) handleAddMember(ctx forge.Context, req *AddMemberRequest) (*org
 	if req.Role != "" {
 		role = normalizeRole(req.Role)
 	}
-	if gerr := mayGrantRole(caller.Role, role); gerr != nil {
+	if gerr := p.mayGrantRole(caller.Role, role); gerr != nil {
 		return nil, gerr
 	}
 
@@ -593,7 +593,7 @@ func (p *Plugin) handleCreateInvitation(ctx forge.Context, req *CreateInvitation
 	if req.Role != "" {
 		role = normalizeRole(req.Role)
 	}
-	if gerr := mayGrantRole(inviter.Role, role); gerr != nil {
+	if gerr := p.mayGrantRole(inviter.Role, role); gerr != nil {
 		return nil, gerr
 	}
 
@@ -659,7 +659,7 @@ func (p *Plugin) authorizeInvitationChange(ctx forge.Context) (id.OrgID, id.Invi
 		}
 		return id.OrgID{}, id.InvitationID{}, p.mapError(ctx, err)
 	}
-	if gerr := mayGrantRole(caller.Role, inv.Role); gerr != nil {
+	if gerr := p.mayGrantRole(caller.Role, inv.Role); gerr != nil {
 		return id.OrgID{}, id.InvitationID{}, gerr
 	}
 	return orgID, invID, nil

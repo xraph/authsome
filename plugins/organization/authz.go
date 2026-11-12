@@ -13,9 +13,12 @@ import (
 	"github.com/xraph/authsome/store"
 )
 
-// orgRoleRank ranks membership roles so they can be compared (higher is more
-// privileged): owner > admin > member.
-func orgRoleRank(r organization.MemberRole) int {
+// roleRank ranks membership roles so they can be compared (higher is more
+// privileged): owner (3) > admin (2) > member (1). Any other name is ranked
+// by Config.RoleRanks, and is 0, below member, when it is not listed there.
+// The three built-in names always rank as above; Config.RoleRanks cannot
+// change them.
+func (p *Plugin) roleRank(r organization.MemberRole) int {
 	switch r {
 	case organization.RoleOwner:
 		return 3
@@ -23,9 +26,11 @@ func orgRoleRank(r organization.MemberRole) int {
 		return 2
 	case organization.RoleMember:
 		return 1
-	default:
-		return 0
 	}
+	if rank, ok := p.config.RoleRanks[strings.ToLower(strings.TrimSpace(string(r)))]; ok {
+		return rank
+	}
+	return 0
 }
 
 // normalizeRole canonicalises a requested role. The built-in roles are matched
@@ -43,8 +48,8 @@ func normalizeRole(r string) organization.MemberRole {
 // mayGrantRole refuses granting a role that outranks the caller's own. Only an
 // owner can make an owner; an admin can still grant admin and below. Without
 // it, an org admin could invite an alias -- or add an account -- as owner.
-func mayGrantRole(caller, requested organization.MemberRole) error {
-	if orgRoleRank(requested) > orgRoleRank(caller) {
+func (p *Plugin) mayGrantRole(caller, requested organization.MemberRole) error {
+	if p.roleRank(requested) > p.roleRank(caller) {
 		return forge.Forbidden("cannot grant a role above your own")
 	}
 	return nil
@@ -61,7 +66,7 @@ func (p *Plugin) requireRemovable(ctx forge.Context, caller *organization.Member
 		}
 		return p.mapError(ctx, err)
 	}
-	if orgRoleRank(target.Role) > orgRoleRank(caller.Role) {
+	if p.roleRank(target.Role) > p.roleRank(caller.Role) {
 		return forge.Forbidden("cannot remove a member with a higher role than your own")
 	}
 	if target.Role != organization.RoleOwner {
@@ -104,7 +109,7 @@ func (p *Plugin) requireOrgRole(ctx forge.Context, orgID id.OrgID, minRole organ
 		}
 		return nil, p.mapError(ctx, err)
 	}
-	if orgRoleRank(member.Role) < orgRoleRank(minRole) {
+	if p.roleRank(member.Role) < p.roleRank(minRole) {
 		return nil, forge.Forbidden("insufficient organization role")
 	}
 	return member, nil
