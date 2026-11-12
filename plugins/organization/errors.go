@@ -15,3 +15,13 @@ var ErrInvitationExpired = errors.New("organization: invitation has expired")
 // signed-in user does not own the email the invitation was sent to. The HTTP
 // layer answers it with 403 Forbidden.
 var ErrInvitationEmailMismatch = errors.New("organization: invitation was sent to a different email address")
+
+// ErrInvitationNotActionable is returned by ResendInvitation and
+// RevokeInvitation when the invitation has already been accepted, declined or
+// revoked. The HTTP layer answers it with 409 Conflict.
+var ErrInvitationNotActionable = errors.New("organization: invitation can no longer be changed")
+
+// ErrInvitationResendTooSoon is returned by ResendInvitation inside
+// ResendInvitationInterval of the last send. The HTTP layer answers it with
+// 429 Too Many Requests.
+var ErrInvitationResendTooSoon = errors.New("organization: invitation was sent a moment ago")

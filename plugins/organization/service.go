@@ -8,6 +8,7 @@ import (
 
 	log "github.com/xraph/go-utils/log"
 
+	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
@@ -421,6 +422,9 @@ func (p *Plugin) CreateInvitation(ctx context.Context, inv *organization.Invitat
 			inv.ExpiresAt = inv.CreatedAt.Add(ttl)
 		}
 	}
+	if inv.SentAt.IsZero() {
+		inv.SentAt = inv.CreatedAt
+	}
 	if err := p.store.CreateInvitation(ctx, inv); err != nil {
 		return fmt.Errorf("organization: create invitation: %w", err)
 	}
@@ -528,6 +532,105 @@ func (p *Plugin) acceptInvitation(ctx context.Context, token string, callerID id
 	})
 
 	return member, nil
+}
+
+// ResendInvitationInterval is how long an invitation must wait between sends.
+const ResendInvitationInterval = time.Minute
+
+// GetInvitation returns an invitation of orgID by ID. An invitation that
+// belongs to another organization is store.ErrNotFound, the same as one that
+// does not exist.
+func (p *Plugin) GetInvitation(ctx context.Context, orgID id.OrgID, invID id.InvitationID) (*organization.Invitation, error) {
+	inv, err := p.store.GetInvitation(ctx, invID)
+	if err != nil {
+		return nil, fmt.Errorf("organization: get invitation: %w", err)
+	}
+	if inv.OrgID.String() != orgID.String() {
+		return nil, fmt.Errorf("organization: get invitation: %w", store.ErrNotFound)
+	}
+	return inv, nil
+}
+
+// ResendInvitation gives a pending or expired invitation a new token and a
+// fresh Config.InvitationTTL, so the link already sent stops working. The
+// returned invitation carries the new plaintext Token; it is the only copy, so
+// whoever delivers the invitation must take it from here. Accepted, declined
+// and revoked invitations return ErrInvitationNotActionable, and a second send
+// inside ResendInvitationInterval returns ErrInvitationResendTooSoon.
+func (p *Plugin) ResendInvitation(ctx context.Context, orgID id.OrgID, invID id.InvitationID) (*organization.Invitation, error) {
+	inv, err := p.GetInvitation(ctx, orgID, invID)
+	if err != nil {
+		return nil, err
+	}
+	if inv.Status != organization.InvitationPending && inv.Status != organization.InvitationExpired {
+		return nil, fmt.Errorf("organization: resend invitation (status: %s): %w", inv.Status, ErrInvitationNotActionable)
+	}
+	lastSent := inv.SentAt
+	if lastSent.IsZero() {
+		lastSent = inv.CreatedAt
+	}
+	now := time.Now()
+	if now.Sub(lastSent) < ResendInvitationInterval {
+		return nil, fmt.Errorf("organization: resend invitation: %w", ErrInvitationResendTooSoon)
+	}
+
+	token, err := account.GenerateVerificationToken()
+	if err != nil {
+		return nil, fmt.Errorf("organization: resend invitation: %w", err)
+	}
+	inv.Token = token
+	inv.TokenHash = store.HashToken(token)
+	inv.Status = organization.InvitationPending
+	inv.SentAt = now
+	if ttl := p.config.invitationTTL(); ttl > 0 {
+		inv.ExpiresAt = now.Add(ttl)
+	}
+	if err := p.store.UpdateInvitation(ctx, inv); err != nil {
+		return nil, fmt.Errorf("organization: resend invitation: %w", err)
+	}
+	p.emitInvitationEvent(ctx, hook.ActionInvitationResend, "org.invitation.resent", inv)
+	return inv, nil
+}
+
+// RevokeInvitation withdraws a pending or expired invitation. The row stays,
+// marked revoked, so the audit trail has something to point at; its token
+// stops working. Anything else returns ErrInvitationNotActionable.
+func (p *Plugin) RevokeInvitation(ctx context.Context, orgID id.OrgID, invID id.InvitationID) (*organization.Invitation, error) {
+	inv, err := p.GetInvitation(ctx, orgID, invID)
+	if err != nil {
+		return nil, err
+	}
+	if inv.Status != organization.InvitationPending && inv.Status != organization.InvitationExpired {
+		return nil, fmt.Errorf("organization: revoke invitation (status: %s): %w", inv.Status, ErrInvitationNotActionable)
+	}
+	inv.Status = organization.InvitationRevoked
+	if err := p.store.UpdateInvitation(ctx, inv); err != nil {
+		return nil, fmt.Errorf("organization: revoke invitation: %w", err)
+	}
+	p.emitInvitationEvent(ctx, hook.ActionInvitationRevoke, "org.invitation.revoked", inv)
+	return inv, nil
+}
+
+// emitInvitationEvent fires the org hook and the webhook relay for an
+// invitation the signed-in admin resent or revoked. Billing recounts seats off
+// these.
+func (p *Plugin) emitInvitationEvent(ctx context.Context, action, relayType string, inv *organization.Invitation) {
+	actor := ""
+	if uid, ok := middleware.UserIDFrom(ctx); ok {
+		actor = uid.String()
+	}
+	p.hooks.Emit(ctx, &hook.Event{
+		Action:     action,
+		Resource:   hook.ResourceInvitation,
+		ResourceID: inv.ID.String(),
+		ActorID:    actor,
+		Tenant:     inv.OrgID.String(),
+		Category:   hook.CategoryOrg,
+	})
+	p.relayEvent(ctx, relayType, inv.OrgID.String(), map[string]string{
+		"invitation_id": inv.ID.String(),
+		"email":         inv.Email,
+	})
 }
 
 // DeclineInvitation declines a pending invitation by token.

@@ -725,6 +725,7 @@ type invitationModel struct {
 	TokenHash string    `grove:"token_hash"   bson:"token_hash,omitempty"`
 	ExpiresAt time.Time `grove:"expires_at"   bson:"expires_at"`
 	CreatedAt time.Time `grove:"created_at"   bson:"created_at"`
+	SentAt    time.Time `grove:"sent_at"      bson:"sent_at,omitempty"`
 }
 
 func toInvitationModel(inv *organization.Invitation) *invitationModel {
@@ -738,6 +739,7 @@ func toInvitationModel(inv *organization.Invitation) *invitationModel {
 		TokenHash: hashOrDerive(inv.TokenHash, inv.Token),
 		ExpiresAt: inv.ExpiresAt,
 		CreatedAt: inv.CreatedAt,
+		SentAt:    inv.SentAt,
 	}
 }
 
@@ -765,6 +767,7 @@ func fromInvitationModel(m *invitationModel) (*organization.Invitation, error) {
 		TokenHash: hashOrDerive(m.TokenHash, m.Token),
 		ExpiresAt: m.ExpiresAt,
 		CreatedAt: m.CreatedAt,
+		SentAt:    m.SentAt,
 	}, nil
 }
 

@@ -202,6 +202,8 @@ const (
 
 	ActionInvitationAccept  = "org.invitation.accept"
 	ActionInvitationDecline = "org.invitation.decline"
+	ActionInvitationResend  = "org.invitation.resend"
+	ActionInvitationRevoke  = "org.invitation.revoke"
 
 	ActionTeamCreate = "org.team.create"
 	ActionTeamUpdate = "org.team.update"

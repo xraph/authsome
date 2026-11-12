@@ -986,6 +986,7 @@ export interface Invitation {
   inviter_id: string;
   org_id: string;
   role: string;
+  sent_at: string;
   status: string;
 }
 

@@ -2764,6 +2764,30 @@ func (c *Client) CreateInvitation(ctx context.Context, orgId string, req *Create
 	return &result, nil
 }
 
+// RevokeInvitation — Revoke invitation
+func (c *Client) RevokeInvitation(ctx context.Context, orgId string, invitationId string) (*Invitation, error) {
+	path := "/v1/orgs/{orgId}/invitations/{invitationId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	path = strings.Replace(path, "{invitationId}", invitationId, 1)
+	var result Invitation
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ResendInvitation — Resend invitation
+func (c *Client) ResendInvitation(ctx context.Context, orgId string, invitationId string) (*Invitation, error) {
+	path := "/v1/orgs/{orgId}/invitations/{invitationId}/resend"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	path = strings.Replace(path, "{invitationId}", invitationId, 1)
+	var result Invitation
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // ListMembers — List members
 func (c *Client) ListMembers(ctx context.Context, orgId string, params *ListMembersParams) (*MemberListResponse, error) {
 	path := "/v1/orgs/{orgId}/members"

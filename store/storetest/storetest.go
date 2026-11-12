@@ -97,6 +97,7 @@ func RunConformance(t *testing.T, newStore Factory, skip ...string) {
 		{"ListUserOrganizationsPage", testListUserOrganizationsPage},
 		{"ListMembersPage", testListMembersPage},
 		{"ListInvitationsPage", testListInvitationsPage},
+		{"InvitationResendRoundTrip", testInvitationResendRoundTrip},
 		{"ListTeamsPage", testListTeamsPage},
 		{"PrincipalRoundTrip", testPrincipalRoundTrip},
 		{"EphemeralPrincipalExpiry", testEphemeralPrincipalExpiry},

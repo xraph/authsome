@@ -86,6 +86,20 @@ type ListInvitationsRequest struct {
 	Cursor string `query:"cursor" description:"Cursor from the previous page's next_cursor" optional:"true"`
 }
 
+// ResendInvitationRequest binds the path for
+// POST /orgs/:orgId/invitations/:invitationId/resend.
+type ResendInvitationRequest struct {
+	OrgID        string `path:"orgId" description:"Organization identifier"`
+	InvitationID string `path:"invitationId" description:"Invitation identifier"`
+}
+
+// RevokeInvitationRequest binds the path for
+// DELETE /orgs/:orgId/invitations/:invitationId.
+type RevokeInvitationRequest struct {
+	OrgID        string `path:"orgId" description:"Organization identifier"`
+	InvitationID string `path:"invitationId" description:"Invitation identifier"`
+}
+
 // AcceptInvitationRequest binds the body for POST /orgs/invitations/accept.
 type AcceptInvitationRequest struct {
 	Token string `json:"token" description:"Invitation token"`

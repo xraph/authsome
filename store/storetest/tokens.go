@@ -394,3 +394,32 @@ func testSessionClientIDRoundTrip(t *testing.T, s store.Store) {
 	require.NoError(t, err)
 	assert.Empty(t, got.ClientID, "a session that is not an OAuth2 token carries no client")
 }
+
+// testInvitationResendRoundTrip proves what resend and revoke lean on: SentAt
+// survives a write (and reads as zero on a row that never had one), and a
+// rotated token answers while the one it replaced does not.
+func testInvitationResendRoundTrip(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	tn := seedTenant(t, s)
+	owner := seedUser(t, s, tn, "inv-resend@test.com")
+	org := seedOrg(t, s, tn, owner.ID, "ir")
+
+	inv := seedInvitation(t, s, org.ID, owner.ID, "resend-first")
+	got, err := s.GetInvitation(ctx, inv.ID)
+	require.NoError(t, err)
+	assert.True(t, got.SentAt.IsZero(), "a row written without SentAt reads as zero")
+
+	sent := now().Truncate(time.Second)
+	got.SentAt = sent
+	got.Token = "resend-second"
+	got.TokenHash = store.HashToken("resend-second")
+	got.Status = organization.InvitationRevoked
+	require.NoError(t, s.UpdateInvitation(ctx, got))
+
+	_, err = s.GetInvitationByToken(ctx, "resend-first")
+	require.ErrorIs(t, err, store.ErrNotFound)
+	byNew, err := s.GetInvitationByToken(ctx, "resend-second")
+	require.NoError(t, err)
+	assert.True(t, byNew.SentAt.Equal(sent), "SentAt round-trips: got %s want %s", byNew.SentAt, sent)
+	assert.Equal(t, organization.InvitationRevoked, byNew.Status)
+}

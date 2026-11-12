@@ -2511,6 +2511,30 @@ class AuthClient {
     return Invitation.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Revoke invitation
+  /// DELETE /v1/orgs/{orgId}/invitations/{invitationId}
+  Future<Invitation> revokeInvitation({required String orgId, required String invitationId, required String token}) async {
+    final path = '/v1/orgs/$orgId/invitations/$invitationId';
+    final res = await _request(
+'DELETE',
+      path,
+      token: token,
+    );
+    return Invitation.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Resend invitation
+  /// POST /v1/orgs/{orgId}/invitations/{invitationId}/resend
+  Future<Invitation> resendInvitation({required String orgId, required String invitationId, required String token}) async {
+    final path = '/v1/orgs/$orgId/invitations/$invitationId/resend';
+    final res = await _request(
+'POST',
+      path,
+      token: token,
+    );
+    return Invitation.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// List members
   /// GET /v1/orgs/{orgId}/members
   Future<MemberListResponse> listMembers({required String orgId, required String token, int? limit, String? cursor}) async {

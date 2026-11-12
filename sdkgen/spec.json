@@ -3614,6 +3614,10 @@
           "role": {
             "type": "string"
           },
+          "sent_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "status": {
             "type": "string"
           }
@@ -3626,7 +3630,8 @@
           "inviter_id",
           "status",
           "expires_at",
-          "created_at"
+          "created_at",
+          "sent_at"
         ],
         "type": "object"
       },
@@ -35897,6 +35902,384 @@
           }
         ],
         "summary": "Create invitation",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
+    "/v1/orgs/{orgId}/invitations/{invitationId}": {
+      "delete": {
+        "description": "Revokes a pending or expired invitation. The record is kept with status revoked and its token stops working. Answers 409 for any other status.",
+        "operationId": "revokeInvitation",
+        "parameters": [
+          {
+            "description": "Organization identifier",
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "description": "Organization identifier",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Invitation identifier",
+            "in": "path",
+            "name": "invitationId",
+            "required": true,
+            "schema": {
+              "description": "Invitation identifier",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invitation"
+                }
+              }
+            },
+            "description": "Revoked invitation"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Revoke invitation",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
+    "/v1/orgs/{orgId}/invitations/{invitationId}/resend": {
+      "post": {
+        "description": "Gives a pending or expired invitation a new token and a fresh expiry, so the link already sent stops working. Answers 409 for an accepted, declined or revoked invitation and 429 within a minute of the last send.",
+        "operationId": "resendInvitation",
+        "parameters": [
+          {
+            "description": "Organization identifier",
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "description": "Organization identifier",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Invitation identifier",
+            "in": "path",
+            "name": "invitationId",
+            "required": true,
+            "schema": {
+              "description": "Invitation identifier",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invitation"
+                }
+              }
+            },
+            "description": "Resent invitation"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Resend invitation",
         "tags": [
           "organizations"
         ]

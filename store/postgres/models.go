@@ -713,6 +713,8 @@ type InvitationModel struct {
 	TokenHash sql.NullString `grove:"token_hash"`
 	ExpiresAt time.Time      `grove:"expires_at,notnull"`
 	CreatedAt time.Time      `grove:"created_at,notnull,default:now()"`
+	// SentAt is NULL on rows from before the column existed.
+	SentAt sql.NullTime `grove:"sent_at"`
 }
 
 func toInvitation(m *InvitationModel) (*organization.Invitation, error) {
@@ -739,6 +741,7 @@ func toInvitation(m *InvitationModel) (*organization.Invitation, error) {
 		TokenHash: hashOrDerive(m.TokenHash.String, m.Token).String,
 		ExpiresAt: m.ExpiresAt,
 		CreatedAt: m.CreatedAt,
+		SentAt:    m.SentAt.Time,
 	}, nil
 }
 
@@ -753,6 +756,7 @@ func fromInvitation(inv *organization.Invitation) *InvitationModel {
 		TokenHash: hashOrDerive(inv.TokenHash, inv.Token),
 		ExpiresAt: inv.ExpiresAt,
 		CreatedAt: inv.CreatedAt,
+		SentAt:    sql.NullTime{Time: inv.SentAt, Valid: !inv.SentAt.IsZero()},
 	}
 }
 

@@ -56,6 +56,10 @@ type Invitation struct {
 	TokenHash string           `json:"-"`
 	ExpiresAt time.Time        `json:"expires_at"`
 	CreatedAt time.Time        `json:"created_at"`
+	// SentAt is when the invitation was last sent: CreatedAt until it is
+	// resent. Zero on rows written before the column existed, which read as
+	// CreatedAt.
+	SentAt time.Time `json:"sent_at"`
 }
 
 // InvitationStatus tracks the state of an invitation.
@@ -66,6 +70,7 @@ const (
 	InvitationAccepted InvitationStatus = "accepted"
 	InvitationExpired  InvitationStatus = "expired"
 	InvitationDeclined InvitationStatus = "declined"
+	InvitationRevoked  InvitationStatus = "revoked"
 )
 
 // Team represents a team within an organization.

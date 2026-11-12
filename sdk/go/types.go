@@ -1118,6 +1118,7 @@ type Invitation struct {
 	InviterID string `json:"inviter_id"`
 	OrgID     string `json:"org_id"`
 	Role      string `json:"role"`
+	SentAt    string `json:"sent_at"`
 	Status    string `json:"status"`
 }
 

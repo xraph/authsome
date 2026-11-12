@@ -188,6 +188,26 @@ func (p *Plugin) registerOrgRoutes(router forge.Router) error {
 		return err
 	}
 
+	if err := g.POST("/orgs/:orgId/invitations/:invitationId/resend", p.handleResendInvitation,
+		forge.WithSummary("Resend invitation"),
+		forge.WithDescription("Gives a pending or expired invitation a new token and a fresh expiry, so the link already sent stops working. Answers 409 for an accepted, declined or revoked invitation and 429 within a minute of the last send."),
+		forge.WithOperationID("resendInvitation"),
+		forge.WithResponseSchema(http.StatusOK, "Resent invitation", organization.Invitation{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	if err := g.DELETE("/orgs/:orgId/invitations/:invitationId", p.handleRevokeInvitation,
+		forge.WithSummary("Revoke invitation"),
+		forge.WithDescription("Revokes a pending or expired invitation. The record is kept with status revoked and its token stops working. Answers 409 for any other status."),
+		forge.WithOperationID("revokeInvitation"),
+		forge.WithResponseSchema(http.StatusOK, "Revoked invitation", organization.Invitation{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
 	// Teams
 	if err := g.POST("/orgs/:orgId/teams", p.handleCreateTeam,
 		forge.WithSummary("Create team"),
@@ -613,6 +633,74 @@ func (p *Plugin) handleListInvitations(ctx forge.Context, req *ListInvitationsRe
 	}
 	resp := &InvitationListResponse{Invitations: pg.Items, NextCursor: pg.NextCursor}
 	return nil, ctx.JSON(http.StatusOK, resp)
+}
+
+// authorizeInvitationChange is what resending and revoking share with creating
+// an invitation: the caller is an admin of the org, and may grant the role the
+// invitation carries (an admin cannot touch an owner's invitation). It returns
+// the invitation's org and ID.
+func (p *Plugin) authorizeInvitationChange(ctx forge.Context) (id.OrgID, id.InvitationID, error) {
+	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
+	if err != nil {
+		return id.OrgID{}, id.InvitationID{}, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
+	}
+	invID, err := id.ParseInvitationID(ctx.Param("invitationId"))
+	if err != nil {
+		return id.OrgID{}, id.InvitationID{}, forge.BadRequest(fmt.Sprintf("invalid invitation id: %v", err))
+	}
+	caller, err := p.requireOrgRole(ctx, orgID, organization.RoleAdmin)
+	if err != nil {
+		return id.OrgID{}, id.InvitationID{}, err
+	}
+	inv, err := p.GetInvitation(ctx.Context(), orgID, invID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return id.OrgID{}, id.InvitationID{}, forge.NotFound("invitation not found")
+		}
+		return id.OrgID{}, id.InvitationID{}, p.mapError(ctx, err)
+	}
+	if gerr := mayGrantRole(caller.Role, inv.Role); gerr != nil {
+		return id.OrgID{}, id.InvitationID{}, gerr
+	}
+	return orgID, invID, nil
+}
+
+// mapInvitationChangeError turns the resend and revoke sentinels into their
+// status codes.
+func (p *Plugin) mapInvitationChangeError(ctx forge.Context, err error) error {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		return forge.NotFound("invitation not found")
+	case errors.Is(err, ErrInvitationNotActionable):
+		return forge.NewHTTPError(http.StatusConflict, "only a pending or expired invitation can be changed")
+	case errors.Is(err, ErrInvitationResendTooSoon):
+		return forge.NewHTTPError(http.StatusTooManyRequests, "this invitation was sent a moment ago; try again in a minute")
+	}
+	return p.mapError(ctx, err)
+}
+
+func (p *Plugin) handleResendInvitation(ctx forge.Context, _ *ResendInvitationRequest) (*organization.Invitation, error) {
+	orgID, invID, err := p.authorizeInvitationChange(ctx)
+	if err != nil {
+		return nil, err
+	}
+	inv, err := p.ResendInvitation(ctx.Context(), orgID, invID)
+	if err != nil {
+		return nil, p.mapInvitationChangeError(ctx, err)
+	}
+	return nil, ctx.JSON(http.StatusOK, inv)
+}
+
+func (p *Plugin) handleRevokeInvitation(ctx forge.Context, _ *RevokeInvitationRequest) (*organization.Invitation, error) {
+	orgID, invID, err := p.authorizeInvitationChange(ctx)
+	if err != nil {
+		return nil, err
+	}
+	inv, err := p.RevokeInvitation(ctx.Context(), orgID, invID)
+	if err != nil {
+		return nil, p.mapInvitationChangeError(ctx, err)
+	}
+	return nil, ctx.JSON(http.StatusOK, inv)
 }
 
 func (p *Plugin) handleAcceptInvitation(ctx forge.Context, req *AcceptInvitationRequest) (*organization.Member, error) {

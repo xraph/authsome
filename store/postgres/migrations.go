@@ -1620,5 +1620,26 @@ ALTER TABLE authsome_sessions DROP COLUMN IF EXISTS dpop_jkt;
 				return err
 			},
 		},
+
+		// Migration: when an invitation was last sent, for the resend limit.
+		//
+		// Nullable. A row from before this column reads as sent at created_at,
+		// so no backfill is needed and no existing invitation changes meaning.
+		&migrate.Migration{
+			Name:    "add_invitation_sent_at",
+			Version: "20261111000010",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_invitations ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ;
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_invitations DROP COLUMN IF EXISTS sent_at;
+`)
+				return err
+			},
+		},
 	)
 }

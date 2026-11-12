@@ -4824,6 +4824,7 @@ class Invitation {
   final String inviterId;
   final String orgId;
   final String role;
+  final String sentAt;
   final String status;
 
   const Invitation({
@@ -4834,6 +4835,7 @@ class Invitation {
     required this.inviterId,
     required this.orgId,
     required this.role,
+    required this.sentAt,
     required this.status,
   });
 
@@ -4846,6 +4848,7 @@ class Invitation {
       inviterId: json['inviter_id'] as String,
       orgId: json['org_id'] as String,
       role: json['role'] as String,
+      sentAt: json['sent_at'] as String,
       status: json['status'] as String,
     );
   }
@@ -4859,6 +4862,7 @@ class Invitation {
       'inviter_id': inviterId,
       'org_id': orgId,
       'role': role,
+      'sent_at': sentAt,
       'status': status,
     };
   }

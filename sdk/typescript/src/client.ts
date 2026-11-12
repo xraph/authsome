@@ -2815,6 +2815,32 @@ export class AuthClient {
   }
 
   /**
+   * Revoke invitation
+   * DELETE /v1/orgs/{orgId}/invitations/{invitationId}
+   */
+  async revokeInvitation(orgId: string, invitationId: string): Promise<Invitation> {
+    const path = `/v1/orgs/${orgId}/invitations/${invitationId}`;
+    return this.request<Invitation>(
+      'DELETE',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Resend invitation
+   * POST /v1/orgs/{orgId}/invitations/{invitationId}/resend
+   */
+  async resendInvitation(orgId: string, invitationId: string): Promise<Invitation> {
+    const path = `/v1/orgs/${orgId}/invitations/${invitationId}/resend`;
+    return this.request<Invitation>(
+      'POST',
+      path,
+      undefined,
+    );
+  }
+
+  /**
    * List members
    * GET /v1/orgs/{orgId}/members
    */
