@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/pquerna/otp/totp"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/pquerna/otp/totp"
 
 	log "github.com/xraph/go-utils/log"
 

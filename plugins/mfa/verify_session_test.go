@@ -10,8 +10,9 @@ import (
 	"time"
 
 	"github.com/pquerna/otp/totp"
-	"github.com/xraph/authsome/session"
 	"github.com/xraph/forge"
+
+	"github.com/xraph/authsome/session"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
