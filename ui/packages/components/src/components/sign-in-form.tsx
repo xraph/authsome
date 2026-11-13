@@ -805,6 +805,9 @@ export function SignInForm({
             <TurnstileWidget
               key={`${captchaCfg?.provider}:${captchaCfg?.site_key}:${captchaAttempt}`}
               siteKey={captchaCfg.site_key}
+              // The server binds this route's captcha to "signin" and
+              // refuses a token issued for any other action, or none.
+              action="signin"
               onToken={setCaptchaToken}
               onExpire={() => setCaptchaToken(null)}
               onError={() => setCaptchaToken(null)}
