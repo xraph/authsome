@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xraph/forge"
+
+	"github.com/xraph/authsome/id"
 )
 
 // TestMagicLink_SendThenVerify_Succeeds is the end-to-end flow: /send must
@@ -64,4 +66,30 @@ func TestMagicLink_Send_UnknownEmail_UniformSuccessNoLink(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code, "send must return a uniform success even for unknown emails; body=%s", rec.Body.String())
 	assert.Empty(t, mailer.sent, "no magic link should be sent to an unregistered email")
+}
+
+// TestMagicLink_Send_StoresUserEnvironment pins the token to the user's
+// environment. The SQL stores hold env_id to a foreign key, so a token
+// saved with an empty one fails the insert and /send returns a 500 for
+// every real account. The memory store doesn't enforce the key, so check
+// the field itself.
+func TestMagicLink_Send_StoresUserEnvironment(t *testing.T) {
+	p, s, mailer := newTestPlugin(t)
+	u := createTestUser(t, s)
+	u.EnvID = id.NewEnvironmentID()
+	require.NoError(t, s.UpdateUser(context.Background(), u))
+
+	mux := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(mux))
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/magic-link/send", jsonBody(t, map[string]string{"email": u.Email}))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.Handler().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "send body=%s", rec.Body.String())
+	require.Len(t, mailer.sent, 1)
+
+	v, err := s.GetVerification(context.Background(), mailer.sent[0].Token)
+	require.NoError(t, err)
+	assert.Equal(t, u.EnvID.String(), v.EnvID.String(), "the link must be stored in the user's environment")
 }
