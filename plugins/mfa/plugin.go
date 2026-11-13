@@ -1294,13 +1294,13 @@ func (p *Plugin) handleSMSSend(ctx forge.Context, req *SMSSendRequest) (*SMSSend
 	// got the code.
 	phone := enrollment.Secret // Phone stored as the enrollment secret
 	if req.Phone != "" && req.Phone != phone && !enrollment.Verified {
-		if err := p.requireStepUp(ctx, userID, ""); err != nil {
-			return nil, err
+		if stepErr := p.requireStepUp(ctx, userID, ""); stepErr != nil {
+			return nil, stepErr
 		}
 		enrollment.Secret = req.Phone
 		enrollment.UpdatedAt = time.Now()
-		if err := p.store.UpdateEnrollment(ctx.Context(), enrollment); err != nil {
-			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to update SMS enrollment: %w", err))
+		if updErr := p.store.UpdateEnrollment(ctx.Context(), enrollment); updErr != nil {
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to update SMS enrollment: %w", updErr))
 		}
 		phone = req.Phone
 	}

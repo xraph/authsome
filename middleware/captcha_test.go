@@ -412,7 +412,7 @@ func TestCaptchaMiddleware_JSONBodyStillBindsTypedRequest(t *testing.T) {
 		Settings:    env.manager,
 		VerifierFor: func(string, string) (captcha.Verifier, error) { return stub, nil },
 	}))
-	require.NoError(t, router.POST("/signup", func(ctx forge.Context, req *signUp) (*signUp, error) {
+	require.NoError(t, router.POST("/signup", func(_ forge.Context, req *signUp) (*signUp, error) {
 		bound = *req
 		return req, nil
 	}))

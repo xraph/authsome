@@ -230,13 +230,12 @@ func TestInvitationTokens_onlyAVerifiedAddressCounts(t *testing.T) {
 	appID, err := id.ParseAppID(orgTestAppID)
 	require.NoError(t, err)
 
-	invite := func(email, token string) *organization.Invitation {
+	invite := func(email, token string) {
 		inv := &organization.Invitation{
 			ID: id.NewInvitationID(), OrgID: f.org.ID, Email: email,
 			Role: organization.RoleMember, Status: organization.InvitationPending, Token: token,
 		}
 		require.NoError(t, f.plugin.CreateInvitation(ctx, inv))
-		return inv
 	}
 	signUp := func(email string) id.UserID {
 		u, _, err := f.eng.SignUp(ctx, &account.SignUpRequest{AppID: appID, Email: email, Password: "SecureP@ss123", FirstName: "T"})
