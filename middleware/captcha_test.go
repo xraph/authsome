@@ -345,6 +345,88 @@ func TestCaptchaMiddleware_TokenFromHeaderOrForm(t *testing.T) {
 	assert.Equal(t, "header-tok", sawToken, "header should take precedence over form field")
 }
 
+// The UI SDK posts sign-up and sign-in as JSON with captcha_token in the
+// body, which is also what the request schema documents. The token has to
+// be found there, and the handler behind the middleware must still read the
+// whole body.
+func TestCaptchaMiddleware_TokenFromJSONBody(t *testing.T) {
+	env := newCaptchaTestEnv(t, true)
+	var sawToken string
+	stub := &stubVerifier{fn: func(_ context.Context, token, _, _ string) (*captcha.Result, error) {
+		sawToken = token
+		return &captcha.Result{Success: true}, nil
+	}}
+	var handlerSaw map[string]any
+	router := forge.NewRouter()
+	router.Use(middleware.CaptchaMiddleware(middleware.CaptchaOptions{
+		Settings:    env.manager,
+		VerifierFor: func(string, string) (captcha.Verifier, error) { return stub, nil },
+	}))
+	router.POST("/test", func(ctx forge.Context) error {
+		handlerSaw = decodeJSON(t, ctx.Request().Body)
+		return ctx.NoContent(http.StatusOK)
+	})
+	handler := router.Handler()
+
+	post := func(contentType, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/test", strings.NewReader(body))
+		req.Header.Set("Content-Type", contentType)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+
+	rec := post("application/json; charset=utf-8", `{"email":"a@b.io","password":"pw","captcha_token":"json-tok"}`)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "json-tok", sawToken, "captcha_token in a JSON body should populate the token")
+	assert.Equal(t, "a@b.io", handlerSaw["email"], "the handler must still read the full body")
+
+	// No token in the body: still refused.
+	sawToken = ""
+	rec = post("application/json", `{"email":"a@b.io"}`)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Empty(t, sawToken)
+
+	// A body that isn't JSON at all is refused, not a crash.
+	rec = post("application/json", `not json`)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+// The real sign-up and sign-in routes bind into a typed request, the way
+// every authsome handler does. The body the middleware read must reach that
+// binding whole, or a passed captcha would hand the handler an empty
+// request.
+func TestCaptchaMiddleware_JSONBodyStillBindsTypedRequest(t *testing.T) {
+	env := newCaptchaTestEnv(t, true)
+	stub := &stubVerifier{fn: func(context.Context, string, string, string) (*captcha.Result, error) {
+		return &captcha.Result{Success: true}, nil
+	}}
+	type signUp struct {
+		Email        string `json:"email"`
+		Password     string `json:"password"`
+		CaptchaToken string `json:"captcha_token,omitempty"`
+	}
+	var bound signUp
+	router := forge.NewRouter()
+	router.Use(middleware.CaptchaMiddleware(middleware.CaptchaOptions{
+		Settings:    env.manager,
+		VerifierFor: func(string, string) (captcha.Verifier, error) { return stub, nil },
+	}))
+	require.NoError(t, router.POST("/signup", func(ctx forge.Context, req *signUp) (*signUp, error) {
+		bound = *req
+		return req, nil
+	}))
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/signup",
+		strings.NewReader(`{"email":"a@b.io","password":"Abcdefgh-1234","captcha_token":"json-tok"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, signUp{Email: "a@b.io", Password: "Abcdefgh-1234", CaptchaToken: "json-tok"}, bound)
+}
+
 func TestCaptchaMiddleware_VerifierCachedAcrossRequests(t *testing.T) {
 	env := newCaptchaTestEnv(t, true)
 	stub := &stubVerifier{fn: func(_ context.Context, _, _, _ string) (*captcha.Result, error) {

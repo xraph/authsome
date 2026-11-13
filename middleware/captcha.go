@@ -1,10 +1,13 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"strings"
 	"sync"
 
 	log "github.com/xraph/go-utils/log"
@@ -285,11 +288,54 @@ func captchaResolveString(ctx context.Context, mgr *settings.Manager, key string
 	return val, nil
 }
 
+// captchaJSONPeekLimit bounds how much of a JSON body the middleware reads
+// to find the token. Sign-up and sign-in bodies are a few hundred bytes; a
+// larger body is passed through untouched and has to use the header.
+const captchaJSONPeekLimit = 64 << 10
+
 func captchaExtractToken(r *http.Request) string {
 	if v := r.Header.Get(captchaTokenHeader); v != "" {
 		return v
 	}
+	if isJSONRequest(r) {
+		return captchaTokenFromJSON(r)
+	}
 	return r.FormValue(captchaTokenFormField)
+}
+
+func isJSONRequest(r *http.Request) bool {
+	ct := r.Header.Get("Content-Type")
+	if i := strings.IndexByte(ct, ';'); i >= 0 {
+		ct = ct[:i]
+	}
+	ct = strings.TrimSpace(strings.ToLower(ct))
+	return ct == "application/json" || strings.HasSuffix(ct, "+json")
+}
+
+// captchaTokenFromJSON reads captcha_token from a JSON body, which is how
+// the UI SDK sends it and what the sign-up and sign-in request schemas
+// document. The middleware runs before the handler binds the body, so the
+// bytes it reads are put back in front of whatever is left: the handler
+// sees the body exactly as it arrived.
+func captchaTokenFromJSON(r *http.Request) string {
+	if r.Body == nil || r.Body == http.NoBody {
+		return ""
+	}
+	peeked, err := io.ReadAll(io.LimitReader(r.Body, captchaJSONPeekLimit+1))
+	r.Body = struct {
+		io.Reader
+		io.Closer
+	}{io.MultiReader(bytes.NewReader(peeked), r.Body), r.Body}
+	if err != nil || len(peeked) > captchaJSONPeekLimit {
+		return ""
+	}
+	var body struct {
+		CaptchaToken string `json:"captcha_token"`
+	}
+	if json.Unmarshal(peeked, &body) != nil {
+		return ""
+	}
+	return body.CaptchaToken
 }
 
 func captchaClientIP(r *http.Request) string {
