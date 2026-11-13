@@ -99,11 +99,11 @@ func TestRecoveryVerify_StampsTheSession(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, s.CreateRecoveryCodes(context.Background(), codes))
 
-	rec, sid := postAs(t, h, "/v1/mfa/recovery/verify", map[string]string{"code": "wrong"}, uid)
+	rec, _ := postAs(t, h, "/v1/mfa/recovery/verify", map[string]string{"code": "wrong"}, uid)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	assert.Zero(t, r.calls, "a wrong code stamps nothing")
 
-	rec, sid = postAs(t, h, "/v1/mfa/recovery/verify", map[string]string{"code": plain[0]}, uid)
+	rec, sid := postAs(t, h, "/v1/mfa/recovery/verify", map[string]string{"code": plain[0]}, uid)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Equal(t, 1, r.calls)
 	assert.Equal(t, sid, r.sid)
@@ -112,7 +112,7 @@ func TestRecoveryVerify_StampsTheSession(t *testing.T) {
 func TestSMSVerify_StampsTheSession(t *testing.T) {
 	p, s, r, h := stampingPlugin(t)
 	uid := id.NewUserID()
-	smsEnrollment(t, s, uid, "+15550001", true)
+	smsEnrollment(t, s, uid, true)
 	raw, err := json.Marshal(SMSChallenge{Code: "123456", ExpiresAt: time.Now().Add(time.Minute)})
 	require.NoError(t, err)
 	require.NoError(t, p.ceremonies.Set(context.Background(), "mfa:sms:"+uid.String(), raw, time.Minute))
@@ -150,10 +150,13 @@ func (r *recordingSMS) SendSMS(_ context.Context, msg *bridge.SMSMessage) error 
 	return nil
 }
 
-func smsEnrollment(t *testing.T, s *MemoryStore, uid id.UserID, phone string, verified bool) {
+// enrolledPhone is the number every SMS enrollment in these tests uses.
+const enrolledPhone = "+15550001"
+
+func smsEnrollment(t *testing.T, s *MemoryStore, uid id.UserID, verified bool) {
 	t.Helper()
 	require.NoError(t, s.CreateEnrollment(context.Background(), &Enrollment{
-		ID: id.NewMFAID(), UserID: uid, Method: "sms", Secret: phone, Verified: verified,
+		ID: id.NewMFAID(), UserID: uid, Method: "sms", Secret: enrolledPhone, Verified: verified,
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}))
 }
@@ -175,11 +178,11 @@ func TestSMSSend_VerifiedEnrollmentIgnoresThePhoneOverride(t *testing.T) {
 	sms := &recordingSMS{}
 	p.SetSMSSender(sms)
 	uid := id.NewUserID()
-	smsEnrollment(t, s, uid, "+15550001", true)
+	smsEnrollment(t, s, uid, true)
 
 	rec, _ := postAs(t, h, "/v1/mfa/sms/send", map[string]string{"phone": "+15559999"}, uid)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.Equal(t, []string{"+15550001"}, sms.to, "the code went to the enrolled number only")
+	assert.Equal(t, []string{enrolledPhone}, sms.to, "the code went to the enrolled number only")
 
 	// And the code that went there is what stamps the session.
 	rec, sid := postAs(t, h, "/v1/mfa/sms/verify", map[string]string{"code": pendingSMSCode(t, p, uid)}, uid)
@@ -197,7 +200,7 @@ func TestSMSSend_UnverifiedEnrollmentOverrideConfirmsWithoutStamping(t *testing.
 	sms := &recordingSMS{}
 	p.SetSMSSender(sms)
 	uid := id.NewUserID()
-	smsEnrollment(t, s, uid, "+15550001", false)
+	smsEnrollment(t, s, uid, false)
 
 	rec, _ := postAs(t, h, "/v1/mfa/sms/send", map[string]string{"phone": "+15550002"}, uid)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
@@ -223,19 +226,19 @@ func TestSMSSend_UnverifiedOverrideNeedsTheExistingFactor(t *testing.T) {
 		ID: id.NewMFAID(), UserID: uid, Method: "totp", Secret: "JBSWY3DPEHPK3PXP", Verified: true,
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}))
-	smsEnrollment(t, s, uid, "+15550001", false)
+	smsEnrollment(t, s, uid, false)
 
 	rec, _ := postAs(t, h, "/v1/mfa/sms/send", map[string]string{"phone": "+15559999"}, uid)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code, rec.Body.String())
 	assert.Empty(t, sms.to, "nothing was sent to the new number")
 	e, err := s.GetEnrollment(context.Background(), uid, "sms")
 	require.NoError(t, err)
-	assert.Equal(t, "+15550001", e.Secret)
+	assert.Equal(t, enrolledPhone, e.Secret)
 
 	// Without an override it goes to the pending number, as before.
 	rec, _ = postAs(t, h, "/v1/mfa/sms/send", map[string]string{}, uid)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.Equal(t, []string{"+15550001"}, sms.to)
+	assert.Equal(t, []string{enrolledPhone}, sms.to)
 }
 
 // Removing the factor removes what the session's stamp stood for, so the

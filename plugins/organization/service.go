@@ -455,7 +455,9 @@ func (p *Plugin) sendInvitationEmail(ctx context.Context, inv *organization.Invi
 	var sender invitationSender
 	if p.plugins != nil {
 		if np := p.plugins.Plugin("notification"); np != nil {
-			sender, _ = np.(invitationSender)
+			if s, ok := np.(invitationSender); ok {
+				sender = s
+			}
 		}
 	}
 	if sender == nil {

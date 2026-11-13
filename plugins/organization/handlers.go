@@ -639,12 +639,12 @@ func (p *Plugin) handleListInvitations(ctx forge.Context, req *ListInvitationsRe
 // an invitation: the caller is an admin of the org, and may grant the role the
 // invitation carries (an admin cannot touch an owner's invitation). It returns
 // the invitation's org and ID.
-func (p *Plugin) authorizeInvitationChange(ctx forge.Context) (id.OrgID, id.InvitationID, error) {
-	orgID, err := id.ParseOrgID(ctx.Param("orgId"))
+func (p *Plugin) authorizeInvitationChange(ctx forge.Context) (orgID id.OrgID, invID id.InvitationID, err error) {
+	orgID, err = id.ParseOrgID(ctx.Param("orgId"))
 	if err != nil {
 		return id.OrgID{}, id.InvitationID{}, forge.BadRequest(fmt.Sprintf("invalid org id: %v", err))
 	}
-	invID, err := id.ParseInvitationID(ctx.Param("invitationId"))
+	invID, err = id.ParseInvitationID(ctx.Param("invitationId"))
 	if err != nil {
 		return id.OrgID{}, id.InvitationID{}, forge.BadRequest(fmt.Sprintf("invalid invitation id: %v", err))
 	}
