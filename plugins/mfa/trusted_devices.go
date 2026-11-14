@@ -354,3 +354,13 @@ func hashTrustedDeviceToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
 }
+
+// CountTrustedDevices is how many live trusted devices the user has, for a
+// host's own account page.
+func (p *Plugin) CountTrustedDevices(ctx context.Context, userID id.UserID) (int, error) {
+	devices, err := p.liveTrustedDevices(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	return len(devices), nil
+}

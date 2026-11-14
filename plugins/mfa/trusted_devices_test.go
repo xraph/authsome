@@ -83,3 +83,21 @@ func TestTrustDevice_StoresOnlyTheHash(t *testing.T) {
 	assert.Equal(t, hashTrustedDeviceToken(token), d.TokenHash)
 	assert.Len(t, token, 43, "32 random bytes, base64url without padding")
 }
+
+func TestCountTrustedDevices_LiveOnly(t *testing.T) {
+	ctx := context.Background()
+	userID := id.NewUserID()
+	p := New()
+	p.SetStore(NewMemoryStore())
+	_, _, err := p.trustDevice(ctx, userID, "198.51.100.4", "curl/8.0")
+	require.NoError(t, err)
+	_, old, err := p.trustDevice(ctx, userID, "198.51.100.5", "curl/8.0")
+	require.NoError(t, err)
+	require.NoError(t, p.store.DeleteTrustedDevice(ctx, userID, old.ID))
+	old.ExpiresAt = time.Now().Add(-time.Minute)
+	require.NoError(t, p.store.CreateTrustedDevice(ctx, old))
+
+	n, err := p.CountTrustedDevices(ctx, userID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n, "an expired device is not counted")
+}
