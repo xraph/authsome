@@ -2048,6 +2048,20 @@ func (c *Client) VerifyMagicLink(ctx context.Context, req *VerifyMagicLinkReques
 	return &result, nil
 }
 
+// VerifyMagicLinkCode — Verify magic link code
+func (c *Client) VerifyMagicLinkCode(ctx context.Context, req *VerifyMagicLinkCodeRequest) (*MagiclinkVerifyResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/magic-link/verify-code"
+	var result MagiclinkVerifyResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // GetMe — Get current user
 func (c *Client) GetMe(ctx context.Context) (*MeResponse, error) {
 	path := "/v1/me"
@@ -2247,6 +2261,37 @@ func (c *Client) VerifySMSCode(ctx context.Context, req *VerifySMSCodeRequest) (
 	path := "/v1/mfa/sms/verify"
 	var result SMSVerifyResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListMFATrustedDevices — List trusted devices
+func (c *Client) ListMFATrustedDevices(ctx context.Context) (*TrustedDevicesResponse, error) {
+	path := "/v1/mfa/trusted-devices"
+	var result TrustedDevicesResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RemoveAllMFATrustedDevices — Remove all trusted devices
+func (c *Client) RemoveAllMFATrustedDevices(ctx context.Context) (*TrustedDevicesRemovedResponse, error) {
+	path := "/v1/mfa/trusted-devices"
+	var result TrustedDevicesRemovedResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RemoveMFATrustedDevice — Remove a trusted device
+func (c *Client) RemoveMFATrustedDevice(ctx context.Context, id string) (*TrustedDevicesRemovedResponse, error) {
+	path := "/v1/mfa/trusted-devices/{id}"
+	path = strings.Replace(path, "{id}", id, 1)
+	var result TrustedDevicesRemovedResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -3427,6 +3472,20 @@ func (c *Client) SignUp(ctx context.Context, req *SignUpRequest) (*AuthResponse,
 	return &result, nil
 }
 
+// SocialExchange — Exchange a social sign-in one-time code for a session
+func (c *Client) SocialExchange(ctx context.Context, req *SocialExchangeRequest) (*SocialCallbackResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/social/exchange"
+	var result SocialCallbackResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // StartOAuth — Start OAuth flow
 func (c *Client) StartOAuth(ctx context.Context, provider string, params *StartOAuthParams) (*SocialStartResponse, error) {
 	path := "/v1/social/{provider}"
@@ -3470,6 +3529,25 @@ func (c *Client) OauthCallback(ctx context.Context, provider string, params *Oau
 		}
 	}
 	var result SocialCallbackResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DiscoverSSOConnection — Discover the SSO connection for an email domain
+func (c *Client) DiscoverSSOConnection(ctx context.Context, params *DiscoverSSOConnectionParams) (*Discovery, error) {
+	path := "/v1/sso/discover"
+	if params != nil {
+		q := url.Values{}
+		if params.Email != "" {
+			q.Set("email", params.Email)
+		}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+	var result Discovery
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -3962,6 +4040,11 @@ type OauthCallbackParams struct {
 	State string `json:"state,omitempty"`
 	Code  string `json:"code,omitempty"`
 	Error string `json:"error,omitempty"`
+}
+
+// DiscoverSSOConnectionParams holds optional query parameters for DiscoverSSOConnection.
+type DiscoverSSOConnectionParams struct {
+	Email string `json:"email,omitempty"`
 }
 
 // SsoCallbackParams holds optional query parameters for SsoCallback.

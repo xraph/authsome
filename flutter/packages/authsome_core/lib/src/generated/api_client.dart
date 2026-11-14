@@ -1879,6 +1879,19 @@ class AuthClient {
     return MagiclinkVerifyResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Verify magic link code
+  /// POST /v1/magic-link/verify-code
+  Future<MagiclinkVerifyResponse> verifyMagicLinkCode({required VerifyCodeRequest body, required String token}) async {
+    final path = '/v1/magic-link/verify-code';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return MagiclinkVerifyResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Get current user
   /// GET /v1/me
   Future<MeResponse> getMe({required String token}) async {
@@ -2087,6 +2100,42 @@ class AuthClient {
       token: token,
     );
     return SMSVerifyResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// List trusted devices
+  /// GET /v1/mfa/trusted-devices
+  Future<TrustedDevicesResponse> listMFATrustedDevices({required String token}) async {
+    final path = '/v1/mfa/trusted-devices';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return TrustedDevicesResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Remove all trusted devices
+  /// DELETE /v1/mfa/trusted-devices
+  Future<TrustedDevicesRemovedResponse> removeAllMFATrustedDevices({required String token}) async {
+    final path = '/v1/mfa/trusted-devices';
+    final res = await _request(
+'DELETE',
+      path,
+      token: token,
+    );
+    return TrustedDevicesRemovedResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Remove a trusted device
+  /// DELETE /v1/mfa/trusted-devices/{id}
+  Future<TrustedDevicesRemovedResponse> removeMFATrustedDevice({required String id, required String token}) async {
+    final path = '/v1/mfa/trusted-devices/$id';
+    final res = await _request(
+'DELETE',
+      path,
+      token: token,
+    );
+    return TrustedDevicesRemovedResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Verify MFA code
@@ -3138,6 +3187,19 @@ class AuthClient {
     return AuthResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Exchange a social sign-in one-time code for a session
+  /// POST /v1/social/exchange
+  Future<SocialCallbackResponse> socialExchange({required SocialExchangeRequest body, required String token}) async {
+    final path = '/v1/social/exchange';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return SocialCallbackResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Start OAuth flow
   /// POST /v1/social/{provider}
   Future<SocialStartResponse> startOAuth({required String provider, String? frontendUrl, String? redirectUrl}) async {
@@ -3179,9 +3241,29 @@ class AuthClient {
     return SocialCallbackResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Discover the SSO connection for an email domain
+  /// GET /v1/sso/discover
+  Future<Discovery> discoverSSOConnection({required String email, required String token}) async {
+    final path = '/v1/sso/discover';
+    // A list of pairs rather than a map, because a query string may carry the
+    // same key more than once. RFC 8707 sends `resource` that way, and a map
+    // would keep only the last value.
+    final queryPairs = <MapEntry<String, String>>[];
+    queryPairs.add(MapEntry('email', email.toString()));
+    final queryString = queryPairs.isNotEmpty
+        ? '?${queryPairs.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
+    final res = await _request(
+'GET',
+      '$path$queryString',
+      token: token,
+    );
+    return Discovery.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Exchange SSO one-time code for a session
   /// POST /v1/sso/exchange
-  Future<SsoCallbackResponse> ssoExchange({required ExchangeRequest body, required String token}) async {
+  Future<SsoCallbackResponse> ssoExchange({required SsoExchangeRequest body, required String token}) async {
     final path = '/v1/sso/exchange';
     final res = await _request(
 'POST',

@@ -333,12 +333,15 @@ export interface CancelSubscriptionRequest {
 export interface ChallengeRequest {
   code: string;
   mfa_ticket: string;
+  trust_device?: boolean;
 }
 
 export interface ChallengeResponse {
   expires_at: string;
   refresh_token: string;
   session_token: string;
+  trusted_device_expires_at?: string;
+  trusted_device_token?: string;
   user: unknown;
 }
 
@@ -785,6 +788,15 @@ export interface DisableResponse {
   status: string;
 }
 
+export interface Discovery {
+  connection_id: string;
+  domain: string;
+  enforced: boolean;
+  name: string;
+  protocol: string;
+  provider: string;
+}
+
 export interface DiscoveryResponse {
   authorization_endpoint: string;
   claims_supported: string[];
@@ -848,6 +860,7 @@ export interface EnrollmentResponse {
   enabled: boolean;
   factors: EnrolledFactor[];
   recovery_codes_remaining: number;
+  trusted_devices: number;
 }
 
 export interface EntitlementResponse {
@@ -888,10 +901,6 @@ export interface EnvironmentSettingsResponse {
   overrides?: Settings;
   settings?: Settings;
   type_defaults?: Settings;
-}
-
-export interface ExchangeRequest {
-  code: string;
 }
 
 export interface FeatureInput {
@@ -1547,10 +1556,15 @@ export interface SelectOption {
 
 export interface SendRequest {
   app_id?: string;
+  captcha_token?: string;
+  create_user?: boolean;
   email: string;
+  name?: string;
 }
 
 export interface SendResponse {
+  code_length?: number;
+  expires_in: number;
   status: string;
 }
 
@@ -1658,6 +1672,10 @@ export interface SocialCallbackResponse {
   user: User;
 }
 
+export interface SocialExchangeRequest {
+  code: string;
+}
+
 export interface SocialStartResponse {
   auth_url: string;
 }
@@ -1669,6 +1687,10 @@ export interface SsoCallbackResponse {
   refresh_token: string;
   session_token: string;
   user: User;
+}
+
+export interface SsoExchangeRequest {
+  code: string;
 }
 
 export interface StartRequest {
@@ -1781,6 +1803,26 @@ export interface TokenExchangeResponse {
 
 export interface TokenListResponse {
   tokens: Token[];
+}
+
+export interface TrustedDeviceInfo {
+  created_at: string;
+  current: boolean;
+  expires_at: string;
+  id: string;
+  ip_address: string;
+  label: string;
+  last_used_at: string;
+  user_agent: string;
+}
+
+export interface TrustedDevicesRemovedResponse {
+  removed: number;
+  status: string;
+}
+
+export interface TrustedDevicesResponse {
+  devices: TrustedDeviceInfo[];
 }
 
 export interface UIMetadata {
@@ -1999,6 +2041,12 @@ export interface Validation {
   required?: boolean;
 }
 
+export interface VerifyCodeRequest {
+  app_id?: string;
+  code: string;
+  email: string;
+}
+
 export interface VerifyEmailRequest {
   app_id?: string;
   code?: string;
@@ -2074,6 +2122,8 @@ export type SendMagicLinkRequest = SendRequest;
 
 export type VerifyMagicLinkRequest = MagiclinkVerifyRequest;
 
+export type VerifyMagicLinkCodeRequest = VerifyCodeRequest;
+
 export type ChallengeMFARequest = ChallengeRequest;
 
 export type EnrollMFARequest = EnrollRequest;
@@ -2129,8 +2179,6 @@ export type AuthsomeAssignRoleRequest = AssignRoleRequest;
 export type AuthsomeAddPermissionRequest = AddPermissionRequest;
 
 export type AuthsomeUnassignRoleRequest = UnassignRoleRequest;
-
-export type SsoExchangeRequest = ExchangeRequest;
 
 export type StartSSOLoginByDomainRequest = LoginByDomainRequest;
 

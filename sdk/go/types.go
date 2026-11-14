@@ -379,16 +379,19 @@ type CancelSubscriptionRequest struct {
 
 // ChallengeRequest represents the ChallengeRequest schema.
 type ChallengeRequest struct {
-	Code      string `json:"code"`
-	MFATicket string `json:"mfa_ticket"`
+	Code        string `json:"code"`
+	MFATicket   string `json:"mfa_ticket"`
+	TrustDevice bool   `json:"trust_device,omitempty"`
 }
 
 // ChallengeResponse represents the ChallengeResponse schema.
 type ChallengeResponse struct {
-	ExpiresAt    string `json:"expires_at"`
-	RefreshToken string `json:"refresh_token"`
-	SessionToken string `json:"session_token"`
-	User         any    `json:"user"`
+	ExpiresAt              string `json:"expires_at"`
+	RefreshToken           string `json:"refresh_token"`
+	SessionToken           string `json:"session_token"`
+	TrustedDeviceExpiresAt string `json:"trusted_device_expires_at,omitempty"`
+	TrustedDeviceToken     string `json:"trusted_device_token,omitempty"`
+	User                   any    `json:"user"`
 }
 
 // ChangePasswordRequest represents the ChangePasswordRequest schema.
@@ -890,6 +893,16 @@ type DisableResponse struct {
 	Status string `json:"status"`
 }
 
+// Discovery represents the Discovery schema.
+type Discovery struct {
+	ConnectionID string `json:"connection_id"`
+	Domain       string `json:"domain"`
+	Enforced     bool   `json:"enforced"`
+	Name         string `json:"name"`
+	Protocol     string `json:"protocol"`
+	Provider     string `json:"provider"`
+}
+
 // DiscoveryResponse represents the DiscoveryResponse schema.
 type DiscoveryResponse struct {
 	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
@@ -961,6 +974,7 @@ type EnrollmentResponse struct {
 	Enabled                bool              `json:"enabled"`
 	Factors                []*EnrolledFactor `json:"factors"`
 	RecoveryCodesRemaining int64             `json:"recovery_codes_remaining"`
+	TrustedDevices         int64             `json:"trusted_devices"`
 }
 
 // EntitlementResponse represents the EntitlementResponse schema.
@@ -1006,11 +1020,6 @@ type EnvironmentSettingsResponse struct {
 	Overrides    *Settings `json:"overrides,omitempty"`
 	Settings     *Settings `json:"settings,omitempty"`
 	TypeDefaults *Settings `json:"type_defaults,omitempty"`
-}
-
-// ExchangeRequest represents the ExchangeRequest schema.
-type ExchangeRequest struct {
-	Code string `json:"code"`
 }
 
 // FeatureInput represents the FeatureInput schema.
@@ -1758,13 +1767,18 @@ type SelectOption struct {
 
 // SendRequest represents the SendRequest schema.
 type SendRequest struct {
-	AppID string `json:"app_id,omitempty"`
-	Email string `json:"email"`
+	AppID        string `json:"app_id,omitempty"`
+	CaptchaToken string `json:"captcha_token,omitempty"`
+	CreateUser   bool   `json:"create_user,omitempty"`
+	Email        string `json:"email"`
+	Name         string `json:"name,omitempty"`
 }
 
 // SendResponse represents the SendResponse schema.
 type SendResponse struct {
-	Status string `json:"status"`
+	CodeLength int64  `json:"code_length,omitempty"`
+	ExpiresIn  int64  `json:"expires_in"`
+	Status     string `json:"status"`
 }
 
 // ServiceProviderConfig represents the ServiceProviderConfig schema.
@@ -1882,6 +1896,11 @@ type SocialCallbackResponse struct {
 	User         *User  `json:"user"`
 }
 
+// SocialExchangeRequest represents the SocialExchangeRequest schema.
+type SocialExchangeRequest struct {
+	Code string `json:"code"`
+}
+
 // SocialStartResponse represents the SocialStartResponse schema.
 type SocialStartResponse struct {
 	AuthURL string `json:"auth_url"`
@@ -1895,6 +1914,11 @@ type SsoCallbackResponse struct {
 	RefreshToken string `json:"refresh_token"`
 	SessionToken string `json:"session_token"`
 	User         *User  `json:"user"`
+}
+
+// SsoExchangeRequest represents the SsoExchangeRequest schema.
+type SsoExchangeRequest struct {
+	Code string `json:"code"`
 }
 
 // StartRequest represents the StartRequest schema.
@@ -2022,6 +2046,29 @@ type TokenExchangeResponse struct {
 // TokenListResponse represents the TokenListResponse schema.
 type TokenListResponse struct {
 	Tokens []*Token `json:"tokens"`
+}
+
+// TrustedDeviceInfo represents the TrustedDeviceInfo schema.
+type TrustedDeviceInfo struct {
+	CreatedAt  string `json:"created_at"`
+	Current    bool   `json:"current"`
+	ExpiresAt  string `json:"expires_at"`
+	ID         string `json:"id"`
+	IPAddress  string `json:"ip_address"`
+	Label      string `json:"label"`
+	LastUsedAt string `json:"last_used_at"`
+	UserAgent  string `json:"user_agent"`
+}
+
+// TrustedDevicesRemovedResponse represents the TrustedDevicesRemovedResponse schema.
+type TrustedDevicesRemovedResponse struct {
+	Removed int64  `json:"removed"`
+	Status  string `json:"status"`
+}
+
+// TrustedDevicesResponse represents the TrustedDevicesResponse schema.
+type TrustedDevicesResponse struct {
+	Devices []*TrustedDeviceInfo `json:"devices"`
 }
 
 // UIMetadata represents the UIMetadata schema.
@@ -2263,6 +2310,13 @@ type Validation struct {
 	Required bool   `json:"required,omitempty"`
 }
 
+// VerifyCodeRequest represents the VerifyCodeRequest schema.
+type VerifyCodeRequest struct {
+	AppID string `json:"app_id,omitempty"`
+	Code  string `json:"code"`
+	Email string `json:"email"`
+}
+
 // VerifyEmailRequest represents the VerifyEmailRequest schema.
 type VerifyEmailRequest struct {
 	AppID string `json:"app_id,omitempty"`
@@ -2458,8 +2512,11 @@ type CreateAPIKeyRequest struct {
 
 // SendMagicLinkRequest is the request body for SendMagicLink.
 type SendMagicLinkRequest struct {
-	AppID string `json:"app_id,omitempty"`
-	Email string `json:"email"`
+	AppID        string `json:"app_id,omitempty"`
+	CaptchaToken string `json:"captcha_token,omitempty"`
+	CreateUser   bool   `json:"create_user,omitempty"`
+	Email        string `json:"email"`
+	Name         string `json:"name,omitempty"`
 }
 
 // VerifyMagicLinkRequest is the request body for VerifyMagicLink.
@@ -2468,10 +2525,18 @@ type VerifyMagicLinkRequest struct {
 	Token string `json:"token"`
 }
 
+// VerifyMagicLinkCodeRequest is the request body for VerifyMagicLinkCode.
+type VerifyMagicLinkCodeRequest struct {
+	AppID string `json:"app_id,omitempty"`
+	Code  string `json:"code"`
+	Email string `json:"email"`
+}
+
 // ChallengeMFARequest is the request body for ChallengeMFA.
 type ChallengeMFARequest struct {
-	Code      string `json:"code"`
-	MFATicket string `json:"mfa_ticket"`
+	Code        string `json:"code"`
+	MFATicket   string `json:"mfa_ticket"`
+	TrustDevice bool   `json:"trust_device,omitempty"`
 }
 
 // EnrollMFARequest is the request body for EnrollMFA.
@@ -2691,11 +2756,6 @@ type AuthsomeAddPermissionRequest struct {
 // AuthsomeUnassignRoleRequest is the request body for AuthsomeUnassignRole.
 type AuthsomeUnassignRoleRequest struct {
 	UserID string `json:"user_id"`
-}
-
-// SsoExchangeRequest is the request body for SsoExchange.
-type SsoExchangeRequest struct {
-	Code string `json:"code"`
 }
 
 // StartSSOLoginByDomainRequest is the request body for StartSSOLoginByDomain.

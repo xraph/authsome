@@ -104,6 +104,7 @@ import type {
   DeviceListResponse,
   DisableRequest,
   DisableResponse,
+  Discovery,
   DiscoveryResponse,
   Email,
   Empty,
@@ -117,7 +118,6 @@ import type {
   Environment,
   EnvironmentListResponse,
   EnvironmentSettingsResponse,
-  ExchangeRequest,
   FeatureInput,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
@@ -223,8 +223,10 @@ import type {
   SignUpRequest,
   SlugAvailableResponse,
   SocialCallbackResponse,
+  SocialExchangeRequest,
   SocialStartResponse,
   SsoCallbackResponse,
+  SsoExchangeRequest,
   StartRequest,
   SubscribeRequest,
   SubscriptionMutationResponse,
@@ -240,6 +242,9 @@ import type {
   TokenExchangeRequest,
   TokenExchangeResponse,
   TokenListResponse,
+  TrustedDeviceInfo,
+  TrustedDevicesRemovedResponse,
+  TrustedDevicesResponse,
   UIMetadata,
   UnassignRoleRequest,
   UnlinkAuthMethodResponse,
@@ -263,6 +268,7 @@ import type {
   UserResource,
   UserRoleListResponse,
   Validation,
+  VerifyCodeRequest,
   VerifyEmailRequest,
   VerifyMFARequest,
   VerifyMFAResponse,
@@ -285,6 +291,7 @@ import type {
   CreateAPIKeyRequest,
   SendMagicLinkRequest,
   VerifyMagicLinkRequest,
+  VerifyMagicLinkCodeRequest,
   ChallengeMFARequest,
   EnrollMFARequest,
   DisableMFARequest,
@@ -313,7 +320,6 @@ import type {
   AuthsomeAssignRoleRequest,
   AuthsomeAddPermissionRequest,
   AuthsomeUnassignRoleRequest,
-  SsoExchangeRequest,
   StartSSOLoginByDomainRequest,
   ExchangeTokenRequest,
   ResendEmailVerificationRequest,
@@ -2299,6 +2305,20 @@ export class AuthClient {
   }
 
   /**
+   * Verify magic link code
+   * POST /v1/magic-link/verify-code
+   */
+  async verifyMagicLinkCode(body: VerifyMagicLinkCodeRequest, token: string): Promise<MagiclinkVerifyResponse> {
+    const path = "/v1/magic-link/verify-code";
+    return this.request<MagiclinkVerifyResponse>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
    * Get current user
    * GET /v1/me
    */
@@ -2530,6 +2550,48 @@ export class AuthClient {
       'POST',
       path,
       body,
+      token,
+    );
+  }
+
+  /**
+   * List trusted devices
+   * GET /v1/mfa/trusted-devices
+   */
+  async listMFATrustedDevices(token: string): Promise<TrustedDevicesResponse> {
+    const path = "/v1/mfa/trusted-devices";
+    return this.request<TrustedDevicesResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Remove all trusted devices
+   * DELETE /v1/mfa/trusted-devices
+   */
+  async removeAllMFATrustedDevices(token: string): Promise<TrustedDevicesRemovedResponse> {
+    const path = "/v1/mfa/trusted-devices";
+    return this.request<TrustedDevicesRemovedResponse>(
+      'DELETE',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Remove a trusted device
+   * DELETE /v1/mfa/trusted-devices/{id}
+   */
+  async removeMFATrustedDevice(id: string, token: string): Promise<TrustedDevicesRemovedResponse> {
+    const path = `/v1/mfa/trusted-devices/${id}`;
+    return this.request<TrustedDevicesRemovedResponse>(
+      'DELETE',
+      path,
+      undefined,
       token,
     );
   }
@@ -3660,6 +3722,20 @@ export class AuthClient {
   }
 
   /**
+   * Exchange a social sign-in one-time code for a session
+   * POST /v1/social/exchange
+   */
+  async socialExchange(body: SocialExchangeRequest, token: string): Promise<SocialCallbackResponse> {
+    const path = "/v1/social/exchange";
+    return this.request<SocialCallbackResponse>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
    * Start OAuth flow
    * POST /v1/social/{provider}
    */
@@ -3691,6 +3767,23 @@ export class AuthClient {
       'GET',
       path,
       undefined,
+    );
+  }
+
+  /**
+   * Discover the SSO connection for an email domain
+   * GET /v1/sso/discover
+   */
+  async discoverSSOConnection(email: string, token: string): Promise<Discovery> {
+    const params = new URLSearchParams();
+    if (email !== undefined) params.set('email', String(email));
+    const qs = params.toString();
+    const path = "/v1/sso/discover" + (qs ? `?${qs}` : '');
+    return this.request<Discovery>(
+      'GET',
+      path,
+      undefined,
+      token,
     );
   }
 
