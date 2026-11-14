@@ -14,8 +14,18 @@ import {
 } from "../test-support";
 
 vi.mock("./turnstile-widget", () => ({
-  TurnstileWidget: ({ onToken }: { onToken: (token: string) => void }) => (
-    <button type="button" onClick={() => onToken("challenge-token")}>
+  TurnstileWidget: ({
+    onToken,
+    action,
+  }: {
+    onToken: (token: string) => void;
+    action?: string;
+  }) => (
+    <button
+      type="button"
+      data-action={action}
+      onClick={() => onToken("challenge-token")}
+    >
       Complete captcha
     </button>
   ),
@@ -212,6 +222,41 @@ describe("AutoConfig Continue", () => {
 });
 
 describe("captcha retries and verification", () => {
+  // The server's captcha middleware binds each route to an action
+  // ("signup", "signin") and refuses a token whose action doesn't match.
+  // A widget rendered without one issues tokens with an empty action, so
+  // every real submission came back captcha_invalid.
+  it("binds the widget to the action the server checks", async () => {
+    const captcha = {
+      captcha: { required: true, provider: "turnstile", site_key: "site" },
+    };
+    const signIn = render(
+      withProvider(<SignInForm />, {
+        fetch: routedFetch({}).fetchFn,
+        session: null,
+        clientConfig: captcha,
+      }),
+    );
+    email();
+    await screen.findByLabelText("Password");
+    expect(
+      screen.getByText("Complete captcha").getAttribute("data-action"),
+    ).toBe("signin");
+    signIn.unmount();
+
+    render(
+      withProvider(<SignUpForm />, {
+        fetch: routedFetch({}).fetchFn,
+        session: null,
+        clientConfig: captcha,
+      }),
+    );
+    email();
+    await screen.findByLabelText("Password");
+    expect(
+      screen.getByText("Complete captcha").getAttribute("data-action"),
+    ).toBe("signup");
+  });
   it("blocks a required captcha with missing configuration, including form submission", async () => {
     const { fetchFn, calls } = routedFetch({});
     render(
