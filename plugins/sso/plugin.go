@@ -25,6 +25,7 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/browserbind"
+	"github.com/xraph/authsome/internal/handoff"
 	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
@@ -427,6 +428,21 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
+	// Home-realm discovery without side effects: which connection, if any,
+	// serves an email's domain. Unlike POST /login it starts no flow, so a
+	// sign-in form can ask as the user types and choose between SSO and a
+	// password. Shares the group's per-address budget.
+	if err := g.GET("/discover", p.handleDiscover,
+		forge.WithSummary("Discover the SSO connection for an email domain"),
+		forge.WithDescription("Returns the active SSO connection serving the email's domain, or 404 when there is none. Starts no login."),
+		forge.WithOperationID("discoverSSOConnection"),
+		forge.WithRequestSchema(DiscoverRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "SSO connection", Discovery{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
 	// SP metadata: IdPs fetch this to auto-configure the Service Provider.
 	// Raw handler because it emits application/samlmetadata+xml, not JSON.
 	if err := g.GET("/:provider/metadata", p.handleSPMetadata,
@@ -597,18 +613,6 @@ type ExchangeRequest struct {
 	Code string `json:"code" description:"One-time code issued by the ACS redirect"`
 }
 
-// otcPayload is the session handoff stashed under a one-time code by ACS and
-// redeemed once (app-bound) at /v1/sso/exchange. It names the session and
-// carries no credential: the exchange rotates that session into fresh tokens,
-// so a copy of the ceremony store yields nothing a browser could present.
-type otcPayload struct {
-	User      json.RawMessage `json:"user,omitempty"`
-	SessionID string          `json:"session_id"`
-	Provider  string          `json:"provider,omitempty"`
-	IsNewUser bool            `json:"is_new_user,omitempty"`
-	AppID     string          `json:"app_id"`
-}
-
 // LoginResponse is returned when the SSO flow is initiated.
 type LoginResponse struct {
 	LoginURL string `json:"login_url"`
@@ -771,6 +775,80 @@ func (p *Plugin) handleLoginByDomain(ctx forge.Context, req *LoginByDomainReques
 	return p.startLogin(ctx.Context(), appID, provider, conn.Provider, conn.ID.String(), req.ReturnURL, ctx.Response(), ctx.Request())
 }
 
+// DiscoverRequest is the query for GET /v1/sso/discover.
+type DiscoverRequest struct {
+	Email string `query:"email" description:"Email whose domain selects the SSO connection"`
+}
+
+// Discovery describes the SSO connection serving an email domain, as
+// GET /v1/sso/discover and DiscoverByEmail return it. It names the
+// connection and nothing secret about it.
+type Discovery struct {
+	ConnectionID string `json:"connection_id"`
+	Provider     string `json:"provider"`
+	// Name is the connection's display name, or its provider when it has
+	// none.
+	Name     string `json:"name"`
+	Protocol string `json:"protocol"`
+	Domain   string `json:"domain"`
+	// Enforced reports that password sign-in is refused for the domain.
+	Enforced bool `json:"enforced"`
+}
+
+// ErrNoConnectionForDomain is DiscoverByEmail's answer when no active
+// connection serves the email's domain, or the email has none.
+var ErrNoConnectionForDomain = errors.New("no sso connection for this domain")
+
+// DiscoverByEmail returns the active SSO connection of appID that serves the
+// domain of email, for a host deciding in-process whether to send a user to
+// SSO. It starts no login and writes nothing. A malformed email, an unknown
+// domain and an inactive connection all return ErrNoConnectionForDomain.
+func (p *Plugin) DiscoverByEmail(ctx context.Context, appID id.AppID, email string) (*Discovery, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	at := strings.LastIndexByte(email, '@')
+	if at <= 0 || at == len(email)-1 || p.ssoStore == nil {
+		return nil, ErrNoConnectionForDomain
+	}
+	conn, err := p.ssoStore.GetConnectionByDomain(ctx, appID, email[at+1:])
+	if err != nil {
+		if errors.Is(err, ErrConnectionNotFound) || errors.Is(err, store.ErrNotFound) {
+			return nil, ErrNoConnectionForDomain
+		}
+		return nil, fmt.Errorf("sso: discover connection: %w", err)
+	}
+	if conn == nil || !conn.Active {
+		return nil, ErrNoConnectionForDomain
+	}
+	name := conn.DisplayName
+	if name == "" {
+		name = conn.Provider
+	}
+	return &Discovery{
+		ConnectionID: conn.ID.String(),
+		Provider:     conn.Provider,
+		Name:         name,
+		Protocol:     conn.Protocol,
+		Domain:       conn.Domain,
+		Enforced:     conn.Enforced,
+	}, nil
+}
+
+// handleDiscover serves GET /v1/sso/discover?email=.
+func (p *Plugin) handleDiscover(ctx forge.Context, req *DiscoverRequest) (*Discovery, error) {
+	appID, err := p.requestAppID(ctx)
+	if err != nil {
+		return nil, middleware.InternalError(ctx, fmt.Errorf("invalid app_id configuration: %w", err))
+	}
+	d, err := p.DiscoverByEmail(ctx.Context(), appID, req.Email)
+	if errors.Is(err, ErrNoConnectionForDomain) {
+		return nil, forge.NewHTTPError(http.StatusNotFound, ErrNoConnectionForDomain.Error())
+	}
+	if err != nil {
+		return nil, middleware.InternalError(ctx, err)
+	}
+	return d, nil
+}
+
 // handleSPMetadata serves the SAML SP metadata XML for an IdP to consume. Raw
 // handler: the body is application/samlmetadata+xml, not the usual JSON envelope.
 func (p *Plugin) handleSPMetadata(ctx forge.Context) error {
@@ -930,19 +1008,7 @@ func (p *Plugin) handleOIDCRedirect(ctx forge.Context) error {
 
 	params := map[string]string{"code": code, "state": state, "nonce": st.Nonce, "code_verifier": st.CodeVerifier}
 	result, aerr := p.authenticateUser(ctx, conn.AppID, provider, conn, params)
-	if aerr != nil {
-		if p.logger != nil {
-			p.logger.Warn("sso: oidc callback authentication failed", log.String("error", aerr.Error()))
-		}
-		return fail("auth_failed")
-	}
-
-	otc, cerr := p.mintOTC(ctx.Context(), conn.AppID, result)
-	if cerr != nil {
-		return fail("handoff_failed")
-	}
-	http.Redirect(ctx.Response(), r, p.successRedirect(returnURL, otc), http.StatusFound)
-	return nil
+	return p.finishLanding(ctx, returnURL, "oidc callback", conn.AppID, result, aerr)
 }
 
 // handleACS processes the SAML Assertion Consumer Service POST. It is a raw
@@ -1008,18 +1074,49 @@ func (p *Plugin) handleACS(ctx forge.Context) error {
 
 	params := map[string]string{"SAMLResponse": samlResponse, "RelayState": relayState, "request_id": requestID}
 	result, aerr := p.authenticateUser(ctx, conn.AppID, provider, conn, params)
-	if aerr != nil {
-		if p.logger != nil {
-			p.logger.Warn("sso: acs authentication failed", log.String("error", aerr.Error()))
-		}
-		return fail("auth_failed")
-	}
+	return p.finishLanding(ctx, returnURL, "acs", conn.AppID, result, aerr)
+}
 
-	code, cerr := p.mintOTC(ctx.Context(), conn.AppID, result)
-	if cerr != nil {
-		return fail("handoff_failed")
+// finishLanding redirects a browser landing (OIDC redirect or SAML ACS) to
+// the return URL once authenticateUser has answered: with `?code=` for the
+// session on success, else as landingFailure says.
+func (p *Plugin) finishLanding(ctx forge.Context, returnURL, landing string, appID id.AppID, result *CallbackResponse, aerr error) error {
+	if aerr != nil {
+		return p.landingFailure(ctx, returnURL, landing, aerr)
 	}
-	http.Redirect(ctx.Response(), r, p.successRedirect(returnURL, code), http.StatusFound)
+	target := p.errorRedirect(returnURL, "handoff_failed")
+	if code, err := p.mintOTC(ctx.Context(), appID, result); err == nil {
+		target = p.successRedirect(returnURL, code)
+	}
+	http.Redirect(ctx.Response(), ctx.Request(), target, http.StatusFound)
+	return nil
+}
+
+// landingFailure answers a browser landing (OIDC redirect or SAML ACS) whose
+// sign-in did not produce a session. It redirects to the return URL in every
+// case, never rendering an error body:
+//
+//   - a second factor is owed: `?mfa_ticket=<ticket>&mfa_methods=<a,b>`, for
+//     the frontend to finish at the MFA challenge;
+//   - the app refused the sign-up: `?sso_error=<code>`, the code being one of
+//     authsome's SignUpRefused* values (signup_disabled, waitlist_required,
+//     signup_refused) or a hook's own;
+//   - anything else: `?sso_error=auth_failed`, with the cause logged.
+func (p *Plugin) landingFailure(ctx forge.Context, returnURL, landing string, err error) error {
+	w, r := ctx.Response(), ctx.Request()
+	var mfaErr *authsome.MFARequiredError
+	if errors.As(err, &mfaErr) {
+		http.Redirect(w, r, p.mfaRedirect(returnURL, mfaErr), http.StatusFound)
+		return nil
+	}
+	reason := "auth_failed"
+	var refused *authsome.SignUpRefusedError
+	if errors.As(err, &refused) {
+		reason = refused.Code
+	} else if p.logger != nil {
+		p.logger.Warn("sso: "+landing+" authentication failed", log.String("error", err.Error()))
+	}
+	http.Redirect(w, r, p.errorRedirect(returnURL, reason), http.StatusFound)
 	return nil
 }
 
@@ -1038,9 +1135,11 @@ var errUnverifiedSSOLink = errors.New("sso: refusing to link to an unverified pr
 //     provider asserts today.
 //  3. Otherwise a verified account holding the email is linked, and the
 //     binding is recorded so step 2 catches the next login.
-//  4. Otherwise a user is created. The IdP subject becomes the local id only
-//     for a connection flagged trusted_federation.
-func (p *Plugin) resolveIdentity(ctx context.Context, appID id.AppID, envID id.EnvironmentID, conn *Connection, ssoUser *User) (*user.User, bool, error) {
+//  4. Otherwise a user is created, once the app's sign-up gates (sign-up
+//     switch, BeforeSignUp hooks) let it; a refusal is
+//     *authsome.SignUpRefusedError and writes nothing. The IdP subject
+//     becomes the local id only for a connection flagged trusted_federation.
+func (p *Plugin) resolveIdentity(ctx context.Context, appID id.AppID, envID id.EnvironmentID, conn *Connection, ssoUser *User, client signUpClient) (*user.User, bool, error) {
 	email := strings.ToLower(strings.TrimSpace(ssoUser.Email))
 	if email == "" {
 		return nil, false, forge.BadRequest("SSO provider did not return an email address")
@@ -1074,7 +1173,23 @@ func (p *Plugin) resolveIdentity(ctx context.Context, appID id.AppID, envID id.E
 		return nil, false, middleware.InternalErrorCtx(ctx, fmt.Errorf("sso: resolve existing user: %w", err))
 	}
 	isNew := false
+	var gate signUpGate
 	if u == nil {
+		if g, ok := p.engine.(signUpGate); ok {
+			gate = g
+			if gateErr := gate.GateFederatedSignUp(ctx, &account.SignUpRequest{
+				AppID:      appID,
+				EnvID:      envID,
+				Email:      email,
+				FirstName:  ssoUser.FirstName,
+				LastName:   ssoUser.LastName,
+				IPAddress:  client.IP,
+				UserAgent:  client.UserAgent,
+				AuthMethod: client.AuthMethod,
+			}); gateErr != nil {
+				return nil, false, gateErr
+			}
+		}
 		localID := id.NewUserID()
 		if conn != nil && conn.TrustedFederation && subject != "" {
 			if parsed, parseErr := id.ParseUserID(subject); parseErr == nil {
@@ -1108,8 +1223,29 @@ func (p *Plugin) resolveIdentity(ctx context.Context, appID id.AppID, envID id.E
 				log.String("error", bindErr.Error()))
 		}
 	}
+	if isNew && gate != nil {
+		gate.FinishFederatedSignUp(ctx, u, nil)
+	}
 	return u, isNew, nil
 }
+
+// signUpClient is what the sign-up hooks see of the request a first SSO
+// sign-in arrived on, and the auth method it is creating the account by.
+type signUpClient struct {
+	IP         string
+	UserAgent  string
+	AuthMethod string
+}
+
+// signUpGate is the slice of the engine that gates an account created here
+// the way SignUp gates a password sign-up. Test wiring without a full engine
+// has none and creates the user ungated.
+type signUpGate interface {
+	GateFederatedSignUp(ctx context.Context, req *account.SignUpRequest) error
+	FinishFederatedSignUp(ctx context.Context, u *user.User, sess *session.Session)
+}
+
+var _ signUpGate = (*authsome.Engine)(nil)
 
 // linkableExistingUser resolves an existing local account for an SSO email and
 // verifies it is safe to link to. It returns:
@@ -1266,7 +1402,11 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 
 	// Find or create user by email. Match across all of an account's emails so
 	// a verified SSO email links to the existing account instead of duplicating.
-	u, isNew, err := p.resolveIdentity(goCtx, appID, envID, conn, ssoUser)
+	u, isNew, err := p.resolveIdentity(goCtx, appID, envID, conn, ssoUser, signUpClient{
+		IP:         middleware.ClientIP(ctx.Request()),
+		UserAgent:  ctx.Request().UserAgent(),
+		AuthMethod: "sso:" + provider.Name(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1447,29 +1587,21 @@ func (p *Plugin) mintOTC(ctx context.Context, appID id.AppID, r *CallbackRespons
 	if r == nil || r.sessionID.IsNil() {
 		return "", errors.New("sso: one-time code needs a session to hand over")
 	}
-	code, err := generateState()
-	if err != nil {
-		return "", err
-	}
 	var userJSON json.RawMessage
 	if b, merr := json.Marshal(r.User); merr == nil {
 		userJSON = b
 	}
-	payload, err := json.Marshal(otcPayload{
+	return handoff.Mint(ctx, p.ceremonies, ssoOTCPrefix, &handoff.Payload{
 		User:      userJSON,
 		SessionID: r.sessionID.String(),
 		Provider:  r.Provider,
 		IsNewUser: r.IsNewUser,
 		AppID:     appID.String(),
 	})
-	if err != nil {
-		return "", err
-	}
-	if err := p.ceremonies.Set(ctx, "sso:otc:"+code, payload, 60*time.Second); err != nil {
-		return "", err
-	}
-	return code, nil
 }
+
+// ssoOTCPrefix namespaces SSO one-time codes in the ceremony store.
+const ssoOTCPrefix = "sso:otc:"
 
 // handleExchange redeems a one-time code (single-use) for session tokens. The
 // caller presents its publishable key; the code is bound to the app it was
@@ -1478,38 +1610,13 @@ func (p *Plugin) mintOTC(ctx context.Context, appID id.AppID, r *CallbackRespons
 // the exchange rotates the session and returns the rotated pair; the callback
 // pair is retired in the same step.
 func (p *Plugin) handleExchange(ctx forge.Context, req *ExchangeRequest) (*CallbackResponse, error) {
-	code := strings.TrimSpace(req.Code)
-	if code == "" {
-		return nil, forge.BadRequest("code is required")
+	var eng *authsome.Engine
+	if e, ok := p.engine.(*authsome.Engine); ok {
+		eng = e
 	}
-	raw, err := p.ceremonies.Get(ctx.Context(), "sso:otc:"+code)
+	pl, sess, err := handoff.Redeem(ctx, eng, p.ceremonies, ssoOTCPrefix, req.Code)
 	if err != nil {
-		return nil, forge.BadRequest("invalid or expired code")
-	}
-	_ = p.ceremonies.Delete(ctx.Context(), "sso:otc:"+code) //nolint:errcheck // single-use
-	var pl otcPayload
-	if unmarshalErr := json.Unmarshal(raw, &pl); unmarshalErr != nil {
-		return nil, forge.BadRequest("invalid code")
-	}
-	// App-bind: reject redemption under a different app's publishable key.
-	if appID, ok := middleware.AppIDFrom(ctx.Context()); ok && appID.String() != pl.AppID {
-		return nil, forge.BadRequest("code is not valid for this app")
-	}
-	sessionID, err := id.ParseSessionID(pl.SessionID)
-	if err != nil {
-		return nil, forge.BadRequest("invalid code")
-	}
-	eng, ok := p.engine.(*authsome.Engine)
-	if !ok || eng == nil {
-		return nil, middleware.InternalError(ctx, errors.New("sso: exchange needs the authsome engine"))
-	}
-	r := ctx.Request()
-	sess, err := eng.RefreshBySessionID(ctx.Context(), sessionID, authsome.RefreshOpts{
-		IPAddress: middleware.ClientIP(r),
-		UserAgent: r.UserAgent(),
-	})
-	if err != nil {
-		return nil, forge.BadRequest("invalid or expired code")
+		return nil, err
 	}
 	var u any
 	if len(pl.User) > 0 {
@@ -1579,6 +1686,11 @@ func (p *Plugin) successRedirect(returnURL, code string) string {
 
 func (p *Plugin) errorRedirect(returnURL, reason string) string {
 	return appendQuery(p.defaultReturnURL(returnURL), "sso_error", reason)
+}
+
+func (p *Plugin) mfaRedirect(returnURL string, mfaErr *authsome.MFARequiredError) string {
+	target := appendQuery(p.defaultReturnURL(returnURL), "mfa_ticket", mfaErr.Ticket)
+	return appendQuery(target, "mfa_methods", strings.Join(mfaErr.AvailableMethods, ","))
 }
 
 func appendQuery(base, key, value string) string {

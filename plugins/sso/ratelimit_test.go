@@ -37,3 +37,24 @@ func TestSSO_PublicRoutesAreRateLimited(t *testing.T) {
 	assert.NotEqual(t, http.StatusTooManyRequests, hit(), "the first request fits the budget")
 	assert.Equal(t, http.StatusTooManyRequests, hit(), "the second request in the window is refused")
 }
+
+// Discovery is unauthenticated too, so it spends the same budget.
+func TestSSO_DiscoverIsRateLimited(t *testing.T) {
+	cfg := authsome.DefaultConfig()
+	cfg.AppID = "aapp_01jf0000000000000000000000"
+	cfg.RateLimit.SSOLimit = 1
+	p := New()
+	_ = secutil.NewTestEngine(t, authsome.WithConfig(cfg), authsome.WithRateLimiter(ratelimit.NewMemoryLimiter()), authsome.WithPlugin(p))
+	router := forge.NewRouter()
+	require.NoError(t, p.RegisterRoutes(router))
+	h := router.Handler()
+
+	hit := func() int {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/sso/discover?email=someone%40example.com", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	assert.Equal(t, http.StatusNotFound, hit(), "the first request fits the budget")
+	assert.Equal(t, http.StatusTooManyRequests, hit(), "the second request in the window is refused")
+}

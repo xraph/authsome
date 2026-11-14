@@ -54,6 +54,7 @@ post-ACS landing, so treat it as a security control and not a convenience.
 
 | Method | Path | Purpose |
 |---|---|---|
+| `GET` | `/v1/sso/discover?email=` | Which active connection serves an email's domain. Starts nothing |
 | `POST` | `/v1/sso/login` | Start SSO by email domain |
 | `POST` | `/v1/sso/:provider/login` | Start SSO against a named provider |
 | `POST` | `/v1/sso/:provider/acs` | SAML assertion consumer service |
@@ -66,9 +67,14 @@ post-ACS landing, so treat it as a security control and not a convenience.
 | `PUT` | `/v1/admin/sso/connections/:connectionId` | Update a connection |
 | `DELETE` | `/v1/admin/sso/connections/:connectionId` | Delete a connection |
 
+The OIDC landing and the ACS always redirect to the return URL: `code` on success,
+`mfa_ticket` and `mfa_methods` when a second factor is owed, `sso_error` otherwise.
+`DiscoverByEmail(ctx, appID, email)` answers the discovery question in-process.
+
 ## Lifecycle hooks
 
-None. It is a `RouteProvider`, a `SettingsProvider` and a `MigrationProvider` for its
+`OnBeforeSignIn` refuses password sign-in on enforced domains. A first SSO sign-in creates
+the account only if the app's sign-up switch and every `BeforeSignUp` hook allow it. It is a `RouteProvider`, a `SettingsProvider` and a `MigrationProvider` for its
 connection tables.
 
 ## Related
