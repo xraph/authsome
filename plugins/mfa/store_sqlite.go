@@ -162,6 +162,64 @@ func (s *SqliteStore) DeleteRecoveryCodes(ctx context.Context, userID id.UserID)
 }
 
 // ──────────────────────────────────────────────────
+// Trusted device store methods
+// ──────────────────────────────────────────────────
+
+func (s *SqliteStore) CreateTrustedDevice(ctx context.Context, d *TrustedDevice) error {
+	_, err := s.sdb.NewInsert(fromTrustedDevice(d)).Exec(ctx)
+	return mfaSqliteError(err)
+}
+
+func (s *SqliteStore) GetTrustedDeviceByTokenHash(ctx context.Context, tokenHash string) (*TrustedDevice, error) {
+	m := new(trustedDeviceModel)
+	err := s.sdb.NewSelect(m).
+		Where("token_hash = ?", tokenHash).
+		Scan(ctx)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrTrustedDeviceNotFound
+	}
+	if err != nil {
+		return nil, mfaSqliteError(err)
+	}
+	return toTrustedDevice(m)
+}
+
+func (s *SqliteStore) ListTrustedDevices(ctx context.Context, userID id.UserID) ([]*TrustedDevice, error) {
+	var models []trustedDeviceModel
+	err := s.sdb.NewSelect(&models).
+		Where("user_id = ?", userID.String()).
+		OrderExpr("created_at DESC").
+		Scan(ctx)
+	if err != nil {
+		return nil, mfaSqliteError(err)
+	}
+	return toTrustedDevices(models)
+}
+
+func (s *SqliteStore) TouchTrustedDevice(ctx context.Context, deviceID id.TrustedDeviceID, at time.Time) error {
+	_, err := s.sdb.NewUpdate((*trustedDeviceModel)(nil)).
+		Set("last_used_at = ?", at).
+		Where("id = ?", deviceID.String()).
+		Exec(ctx)
+	return mfaSqliteError(err)
+}
+
+func (s *SqliteStore) DeleteTrustedDevice(ctx context.Context, userID id.UserID, deviceID id.TrustedDeviceID) error {
+	_, err := s.sdb.NewDelete((*trustedDeviceModel)(nil)).
+		Where("id = ?", deviceID.String()).
+		Where("user_id = ?", userID.String()).
+		Exec(ctx)
+	return mfaSqliteError(err)
+}
+
+func (s *SqliteStore) DeleteTrustedDevices(ctx context.Context, userID id.UserID) error {
+	_, err := s.sdb.NewDelete((*trustedDeviceModel)(nil)).
+		Where("user_id = ?", userID.String()).
+		Exec(ctx)
+	return mfaSqliteError(err)
+}
+
+// ──────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────
 

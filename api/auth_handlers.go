@@ -306,6 +306,8 @@ func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse
 		IPAddress: clientIPFromRequest(httpReq),
 		UserAgent: httpReq.UserAgent(),
 		DPoPJKT:   dpopJKT,
+
+		TrustedDeviceToken: authsome.TrustedDeviceToken(httpReq),
 	})
 	if err != nil {
 		var locked *account.LockedError
@@ -552,6 +554,8 @@ func (a *API) issueSessionForUser(ctx forge.Context, userID id.UserID, authMetho
 		DPoPJKT:    dpopJKT,
 		IPAddress:  clientIPFromRequest(httpReq),
 		UserAgent:  httpReq.UserAgent(),
+
+		TrustedDeviceToken: authsome.TrustedDeviceToken(httpReq),
 	})
 	if err != nil {
 		return nil, err

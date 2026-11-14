@@ -206,6 +206,8 @@ func (p *Plugin) issueSession(ctx forge.Context, u *user.User, userVerified bool
 		IPAddress:         ctx.Request().RemoteAddr,
 		UserAgent:         ctx.Request().UserAgent(),
 		UserVerifiedByKey: userVerified,
+
+		TrustedDeviceToken: authsome.TrustedDeviceToken(ctx.Request()),
 	})
 	if err != nil {
 		return nil, err

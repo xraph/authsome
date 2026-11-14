@@ -7,8 +7,10 @@ since the last tag; this file says what changes for you when you upgrade.
 
 Breaking changes start with "Breaking:" and say what to do about them.
 
-No migrations. The sign-in code lives in the ceremony store next to the
-link's existing verification row.
+This release adds one migration: the mfa plugin gains an
+`authsome_mfa_trusted_devices` table (postgres and SQLite; mongo needs nothing).
+It starts empty. The magic link sign-in code needs none: it lives in the
+ceremony store next to the link's existing verification row.
 
 ### Magic link
 
@@ -53,6 +55,43 @@ link's existing verification row.
 - An account with no password can't be signed in through `/v1/signin` with
   any password, empty or not, and the refusal takes as long as any other.
   Forgot and reset password give it one.
+
+### Trusted devices
+
+- A user can now trust the device they just passed the second factor on, and
+  skip it there for 30 days. Send `"trust_device": true` to
+  `POST /v1/mfa/challenge`. The response then carries `trusted_device_token`
+  and `trusted_device_expires_at`, and sets an httpOnly
+  `authsome_trusted_device` cookie (Path `/`, SameSite Lax, Secure whenever
+  the session cookie is). Only a hash of the token is stored.
+- Every sign-in path honours the token: password, email-verification
+  auto-login, magic link, passkey, social, SSO and phone. Browsers send the
+  cookie; other clients send the `X-Authsome-Trusted-Device` header, which wins
+  when both are present. A trusted device skips the per-user gate and the
+  app-wide `MFARequired` rule alike, and its session gets `MFAVerifiedAt` set
+  to when the device was trusted, so a host that wants a recent second factor
+  still asks for one. An unknown, expired, removed or other user's token
+  changes nothing, and a failed lookup asks for the second factor.
+- If you call `IssueSession` yourself, set the new
+  `IssueSessionRequest.TrustedDeviceToken` from
+  `authsome.TrustedDeviceToken(r)`. `account.SignInRequest` has the same field
+  for `Engine.SignIn`. Leave it empty and nothing changes.
+- New routes. `GET /v1/mfa/trusted-devices` lists the signed-in user's live
+  devices with a label, user agent, IP, created, last used and expiry times,
+  and marks the one making the request `current`.
+  `DELETE /v1/mfa/trusted-devices/:id` removes one and
+  `DELETE /v1/mfa/trusted-devices` removes them all. `GET /v1/mfa/enrollment`
+  gains a `trusted_devices` count.
+- Trusted devices are forgotten when the user turns MFA off, changes or resets
+  their password, or is deleted.
+- `mfa.Config` gains `TrustedDeviceTTL` (30 days when left at zero; a negative
+  value turns the feature off) and `DisableTrustedDevices`. The
+  `mfa.trusted_devices_enabled` setting turns it off for one app; off, existing
+  tokens stop working too.
+- Breaking, if you implement `mfa.Store` yourself: it gains six
+  trusted-device methods. The built-in stores and `EncryptedStore` have them.
+- New hooks: `auth.mfa.trusted_device_add` and
+  `auth.mfa.trusted_device_remove`.
 
 ## v1.11.0 (unreleased)
 

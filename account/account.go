@@ -82,4 +82,9 @@ type SignInRequest struct {
 	// DPoPJKT binds the issued session to a client-held key (RFC 9449).
 	// Empty issues an ordinary unbound session.
 	DPoPJKT string `json:"-"`
+
+	// TrustedDeviceToken is the trusted-device token the request carried,
+	// passed through to the MFA gate. Empty asks for the second factor as
+	// usual.
+	TrustedDeviceToken string `json:"-"`
 }

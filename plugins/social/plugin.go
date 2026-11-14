@@ -1103,6 +1103,8 @@ func (p *Plugin) callback(ctx forge.Context, req *CallbackRequest, attempt *tele
 			UserAgent:  ctx.Request().UserAgent(),
 			SessionTTL: p.resolveTTL(goCtx, appID, SettingSessionTokenTTLSeconds, p.config.SessionTokenTTL),
 			RefreshTTL: p.resolveTTL(goCtx, appID, SettingSessionRefreshTTLSeconds, p.config.SessionRefreshTTL),
+
+			TrustedDeviceToken: authsome.TrustedDeviceToken(ctx.Request()),
 		})
 		if issueErr != nil {
 			// *authsome.MFARequiredError implements forge's

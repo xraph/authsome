@@ -296,6 +296,12 @@ const (
 
 	ActionMFADisable = "auth.mfa.disable"
 
+	// ActionMFATrustedDeviceAdd fires when a user trusts the device they just
+	// passed the second factor on; ActionMFATrustedDeviceRemove when one or
+	// all of their trusted devices are removed.
+	ActionMFATrustedDeviceAdd    = "auth.mfa.trusted_device_add"
+	ActionMFATrustedDeviceRemove = "auth.mfa.trusted_device_remove"
+
 	ActionWaitlistJoin    = "waitlist.join"
 	ActionWaitlistApprove = "waitlist.approve"
 	ActionWaitlistReject  = "waitlist.reject"

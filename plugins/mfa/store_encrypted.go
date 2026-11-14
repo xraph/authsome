@@ -3,6 +3,7 @@ package mfa
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
@@ -109,6 +110,31 @@ func (s *EncryptedStore) ConsumeRecoveryCode(ctx context.Context, codeID id.Reco
 
 func (s *EncryptedStore) DeleteRecoveryCodes(ctx context.Context, userID id.UserID) error {
 	return s.inner.DeleteRecoveryCodes(ctx, userID)
+}
+
+// Trusted devices hold only a token hash, never a secret — delegate unchanged.
+func (s *EncryptedStore) CreateTrustedDevice(ctx context.Context, d *TrustedDevice) error {
+	return s.inner.CreateTrustedDevice(ctx, d)
+}
+
+func (s *EncryptedStore) GetTrustedDeviceByTokenHash(ctx context.Context, tokenHash string) (*TrustedDevice, error) {
+	return s.inner.GetTrustedDeviceByTokenHash(ctx, tokenHash)
+}
+
+func (s *EncryptedStore) ListTrustedDevices(ctx context.Context, userID id.UserID) ([]*TrustedDevice, error) {
+	return s.inner.ListTrustedDevices(ctx, userID)
+}
+
+func (s *EncryptedStore) TouchTrustedDevice(ctx context.Context, deviceID id.TrustedDeviceID, at time.Time) error {
+	return s.inner.TouchTrustedDevice(ctx, deviceID, at)
+}
+
+func (s *EncryptedStore) DeleteTrustedDevice(ctx context.Context, userID id.UserID, deviceID id.TrustedDeviceID) error {
+	return s.inner.DeleteTrustedDevice(ctx, userID, deviceID)
+}
+
+func (s *EncryptedStore) DeleteTrustedDevices(ctx context.Context, userID id.UserID) error {
+	return s.inner.DeleteTrustedDevices(ctx, userID)
 }
 
 func (s *EncryptedStore) encryptCopy(e *Enrollment) (*Enrollment, error) {

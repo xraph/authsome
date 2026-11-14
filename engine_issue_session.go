@@ -72,6 +72,12 @@ type IssueSessionRequest struct {
 	// second factor isn't asked for after it. Set it only from a verified
 	// WebAuthn assertion's UV flag.
 	UserVerifiedByKey bool
+
+	// TrustedDeviceToken is the trusted-device token the sign-in request
+	// carried (see TrustedDeviceToken). When the mfa plugin recognises it as
+	// a live device of this user, the second factor is not asked for again
+	// and the session counts as verified. Empty skips the check.
+	TrustedDeviceToken string
 }
 
 // IssueSessionResult is the gate's success output. On the
@@ -285,6 +291,15 @@ func (e *Engine) issueSession(ctx context.Context, req *IssueSessionRequest) (*I
 		}
 		gate = enrolled
 	}
+	// A device the user trusted after passing a second factor on it skips
+	// the gate until that trust expires, under the app-wide rule as well as
+	// the user's own. The device is known by the token it holds, never by
+	// its user agent, and only the mfa plugin can say whether it is live.
+	var trustedAt time.Time
+	if gate && req.TrustedDeviceToken != "" {
+		trustedAt = e.trustedDeviceVerifiedAt(ctx, req.AppID, req.User.ID, req.TrustedDeviceToken)
+		gate = trustedAt.IsZero()
+	}
 	if gate {
 		ticket, err := e.persistMFATicket(ctx, req)
 		if err != nil {
@@ -306,6 +321,11 @@ func (e *Engine) issueSession(ctx context.Context, req *IssueSessionRequest) (*I
 	// (possession plus a biometric or PIN), so it counts as verified too.
 	if req.MFAJustVerified || req.UserVerifiedByKey {
 		sess.MFAVerifiedAt = time.Now().UTC()
+	} else if !trustedAt.IsZero() {
+		// A trusted device passed a second factor when it was trusted, so the
+		// session is verified as of then, not now: a host asking for a recent
+		// second factor still asks.
+		sess.MFAVerifiedAt = trustedAt
 	}
 	e.bindSessionToDevice(ctx, sess, req.AppID, req.EnvID, req.IPAddress, req.UserAgent)
 	if hookErr := e.plugins.EmitBeforeSessionCreate(ctx, sess); hookErr != nil {
@@ -331,6 +351,7 @@ func (e *Engine) issueSession(ctx context.Context, req *IssueSessionRequest) (*I
 			"auth_method":       req.AuthMethod,
 			"session_id":        sess.ID.String(),
 			"mfa_just_verified": fmt.Sprintf("%v", req.MFAJustVerified),
+			"trusted_device":    fmt.Sprintf("%v", !trustedAt.IsZero()),
 		},
 	})
 

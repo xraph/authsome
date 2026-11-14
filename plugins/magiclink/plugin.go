@@ -665,6 +665,8 @@ func (p *Plugin) signIn(ctx forge.Context, attempt *telemetry.SignInAttempt, u *
 			UserAgent:  ctx.Request().UserAgent(),
 			SessionTTL: p.resolveTTL(ctx.Context(), appID, SettingSessionTokenTTLSeconds, p.config.SessionTokenTTL),
 			RefreshTTL: p.resolveTTL(ctx.Context(), appID, SettingSessionRefreshTTLSeconds, p.config.SessionRefreshTTL),
+
+			TrustedDeviceToken: authsome.TrustedDeviceToken(ctx.Request()),
 		})
 		if issueErr != nil {
 			return nil, issueErr
