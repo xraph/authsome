@@ -59,7 +59,7 @@ func TestResolve_ProviderIDMatch_SurvivesEmailChange(t *testing.T) {
 		ProviderUserID: "gh-1", Email: "b@x.com", EmailVerified: true,
 		Emails: []ProviderEmail{{Email: "b@x.com", Verified: true, Primary: true}},
 	}
-	got, err := p.resolveUserForCallback(ctx, appID, envID, "github", pu, tok())
+	got, err := p.resolveUserForCallback(ctx, appID, envID, "github", pu, tok(), signUpClient{})
 	require.NoError(t, err)
 	assert.Equal(t, u.ID.String(), got.ID.String(), "must resolve to the same user, not a new one")
 
@@ -86,7 +86,7 @@ func TestResolve_VerifiedEmailMatch_LinksExistingAccount(t *testing.T) {
 			{Email: "a@x.com", Verified: true},
 		},
 	}
-	got, err := p.resolveUserForCallback(ctx, appID, envID, "github", pu, tok())
+	got, err := p.resolveUserForCallback(ctx, appID, envID, "github", pu, tok(), signUpClient{})
 	require.NoError(t, err)
 	assert.Equal(t, existing.ID.String(), got.ID.String(), "must link to the existing account, not duplicate")
 
@@ -112,7 +112,7 @@ func TestResolve_UnverifiedEmail_NoTakeover(t *testing.T) {
 		ProviderUserID: "gh-3", Email: "a@x.com", EmailVerified: false,
 		Emails: []ProviderEmail{{Email: "a@x.com", Verified: false, Primary: true}},
 	}
-	got, err := p.resolveUserForCallback(ctx, appID, envID, "github", pu, tok())
+	got, err := p.resolveUserForCallback(ctx, appID, envID, "github", pu, tok(), signUpClient{})
 	require.NoError(t, err)
 	assert.NotEqual(t, existing.ID.String(), got.ID.String(), "must NOT link to the existing account")
 
@@ -139,7 +139,7 @@ func TestResolve_AmbiguousMatch_Refuses(t *testing.T) {
 			{Email: "e@x.com", Verified: true},
 		},
 	}
-	_, err := p.resolveUserForCallback(ctx, appID, envID, "github", pu, tok())
+	_, err := p.resolveUserForCallback(ctx, appID, envID, "github", pu, tok(), signUpClient{})
 	require.Error(t, err, "ambiguous match must be refused")
 
 	// No connection was created for the refused identity.
@@ -160,7 +160,7 @@ func TestResolve_NewUser_SeedsAllVerifiedEmails(t *testing.T) {
 			{Email: "g@x.com", Verified: true},
 		},
 	}
-	got, err := p.resolveUserForCallback(ctx, appID, envID, "github", pu, tok())
+	got, err := p.resolveUserForCallback(ctx, appID, envID, "github", pu, tok(), signUpClient{})
 	require.NoError(t, err)
 
 	for _, email := range []string{"f@x.com", "g@x.com"} {

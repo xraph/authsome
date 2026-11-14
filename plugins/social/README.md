@@ -70,15 +70,22 @@ OAuth callback is how tokens get stolen.
 |---|---|---|
 | `POST` | `/v1/social/:provider` | Start the OAuth flow |
 | `GET` | `/v1/social/:provider/callback` | Handle the provider callback and mint a session |
+| `POST` | `/v1/social/exchange` | Trade the callback's one-time `code` for a session |
 | `GET` | `/v1/social/providers` | List providers available to the caller |
 | `GET` | `/v1/admin/social/providers/catalog` | Every provider the plugin supports |
 | `GET` | `/v1/admin/social/providers` | List configured providers |
 | `PUT` | `/v1/admin/social/providers/:provider` | Configure a provider at runtime |
 | `DELETE` | `/v1/admin/social/providers/:provider` | Remove a provider |
 
+A browser callback always ends back at the `redirect_url` (else `frontend_url`) the flow started
+with. On success it sets the session cookie and adds a one-time `code` (60 seconds, single use)
+for an app that keeps tokens on its own origin to redeem at `/v1/social/exchange`. When a second
+factor is owed it adds `mfa_ticket` and `mfa_methods` instead, and on a failure `error`.
+
 ## Lifecycle hooks
 
-None on the sign-in path. It registers as an `AuthMethodContributor` and an
+A first sign-in creates the account only if the app's sign-up switch and every `BeforeSignUp`
+hook allow it, and fires the `AfterSignUp` hooks after. Existing accounts are never gated. Otherwise none on the sign-in path. It registers as an `AuthMethodContributor` and an
 `AuthMethodUnlinker`, so a user can see and disconnect a linked provider, plus a
 `MigrationProvider` for the connection table.
 
