@@ -360,6 +360,7 @@ func TestMigration_MachineAPIKeyOwners(t *testing.T) {
 	})
 	t.Run("non destructive downgrade", func(t *testing.T) {
 		orchestrator := migrate.NewOrchestrator(pgmigrate.New(db), pgstore.Migrations)
+		rollbackToMachineKeyOwners(t, db, orchestrator)
 		_, rollbackErr := orchestrator.Rollback(ctx)
 		require.ErrorContains(t, rollbackErr, "while machine keys exist")
 		checkMachineKey(t, s, &machine, sa)
@@ -419,11 +420,37 @@ func assertKeyPreserved(t *testing.T, want, got *apikey.APIKey) {
 	require.Equal(t, want, &normalized)
 }
 
+// machineKeyOwnersVersion is the api_key_machine_owners migration, the one
+// whose Down the downgrade tests exercise.
+const machineKeyOwnersVersion = "20261009000001"
+
+// rollbackToMachineKeyOwners undoes every migration applied after
+// api_key_machine_owners. Rollback only ever reverses the newest migration,
+// so without this the downgrade tests would stop exercising its Down as soon
+// as a later migration lands.
+func rollbackToMachineKeyOwners(t *testing.T, db *pgdriver.PgDB, orchestrator *migrate.Orchestrator) {
+	t.Helper()
+	ctx := context.Background()
+	exec := pgmigrate.New(db)
+	for {
+		applied, err := exec.ListApplied(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, applied, "api_key_machine_owners is not applied")
+		if applied[len(applied)-1].Version == machineKeyOwnersVersion {
+			return
+		}
+		_, err = orchestrator.Rollback(ctx)
+		require.NoError(t, err)
+	}
+}
+
 func TestMigration_MachineAPIKeyDowngradeWaitsForIssuer(t *testing.T) {
 	s, db := setupTestDatabase(t, true)
 	ctx := context.Background()
 	a := createTestApp(t, s, "rollback-race")
 	sa := machineAccount(t, s, a.ID, "concurrent-issuer")
+	orchestrator := migrate.NewOrchestrator(pgmigrate.New(db), pgstore.Migrations)
+	rollbackToMachineKeyOwners(t, db, orchestrator)
 	tx, err := db.BeginTx(ctx, nil)
 	require.NoError(t, err)
 	defer func() { _ = tx.Rollback() }() // Cleanup after commit or test failure.
@@ -432,7 +459,7 @@ func TestMigration_MachineAPIKeyDowngradeWaitsForIssuer(t *testing.T) {
 	require.NoError(t, err)
 	finished := make(chan error, 1)
 	go func() {
-		_, rollbackErr := migrate.NewOrchestrator(pgmigrate.New(db), pgstore.Migrations).Rollback(ctx)
+		_, rollbackErr := orchestrator.Rollback(ctx)
 		finished <- rollbackErr
 	}()
 	require.Eventually(t, func() bool {
