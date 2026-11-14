@@ -143,11 +143,16 @@ func (p *Plugin) NotificationMappings() map[string]*plugin.NotificationMapping {
 // is on and the address has no approved entry. Sign-ups that are not a form
 // post (a social or SSO first sign-in) report it under the code
 // "waitlist_required".
-var ErrApprovalRequired error = approvalRequiredError("waitlist: signup requires waitlist approval — join the waitlist first")
+var ErrApprovalRequired error = errApprovalRequired
+
+// errApprovalRequired is ErrApprovalRequired with its concrete type, so the
+// compile-time check below names a value rather than converting one, which
+// errcheck reads as an unchecked error.
+var errApprovalRequired = approvalRequiredError("waitlist: signup requires waitlist approval — join the waitlist first")
 
 type approvalRequiredError string
 
-var _ authsome.SignUpRefusal = approvalRequiredError("")
+var _ authsome.SignUpRefusal = errApprovalRequired
 
 func (e approvalRequiredError) Error() string { return string(e) }
 
