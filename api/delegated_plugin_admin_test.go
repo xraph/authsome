@@ -92,7 +92,7 @@ func TestPluginAdminGroups_RefuseAgentToken(t *testing.T) {
 			CreatedAt: time.Now(), UpdatedAt: time.Now(),
 		}
 		require.NoError(t, wlStore.CreateEntry(ctx, entry))
-		path := eng.BasePath() + "/admin/waitlist/" + entry.ID.String() + "/approve"
+		path := "/v1/admin/waitlist/" + entry.ID.String() + "/approve"
 
 		rec := call(agentSess.Token, http.MethodPost, path, `{}`)
 		assert.Equal(t, http.StatusForbidden, rec.Code, "body=%s", rec.Body.String())

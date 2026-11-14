@@ -10,16 +10,14 @@ import (
 	"time"
 
 	"github.com/pquerna/otp/totp"
-	"github.com/xraph/forge"
-
-	"github.com/xraph/authsome/session"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/session"
 )
 
 type recordingStamper struct {
@@ -150,13 +148,13 @@ func (r *recordingSMS) SendSMS(_ context.Context, msg *bridge.SMSMessage) error 
 	return nil
 }
 
-// enrolledPhone is the number every SMS enrollment in these tests uses.
-const enrolledPhone = "+15550001"
+// smsPhone is the number every SMS enrollment in these tests is made with.
+const smsPhone = "+15550001"
 
 func smsEnrollment(t *testing.T, s *MemoryStore, uid id.UserID, verified bool) {
 	t.Helper()
 	require.NoError(t, s.CreateEnrollment(context.Background(), &Enrollment{
-		ID: id.NewMFAID(), UserID: uid, Method: "sms", Secret: enrolledPhone, Verified: verified,
+		ID: id.NewMFAID(), UserID: uid, Method: "sms", Secret: smsPhone, Verified: verified,
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}))
 }
@@ -182,7 +180,7 @@ func TestSMSSend_VerifiedEnrollmentIgnoresThePhoneOverride(t *testing.T) {
 
 	rec, _ := postAs(t, h, "/v1/mfa/sms/send", map[string]string{"phone": "+15559999"}, uid)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.Equal(t, []string{enrolledPhone}, sms.to, "the code went to the enrolled number only")
+	assert.Equal(t, []string{"+15550001"}, sms.to, "the code went to the enrolled number only")
 
 	// And the code that went there is what stamps the session.
 	rec, sid := postAs(t, h, "/v1/mfa/sms/verify", map[string]string{"code": pendingSMSCode(t, p, uid)}, uid)
@@ -233,12 +231,12 @@ func TestSMSSend_UnverifiedOverrideNeedsTheExistingFactor(t *testing.T) {
 	assert.Empty(t, sms.to, "nothing was sent to the new number")
 	e, err := s.GetEnrollment(context.Background(), uid, "sms")
 	require.NoError(t, err)
-	assert.Equal(t, enrolledPhone, e.Secret)
+	assert.Equal(t, "+15550001", e.Secret)
 
 	// Without an override it goes to the pending number, as before.
 	rec, _ = postAs(t, h, "/v1/mfa/sms/send", map[string]string{}, uid)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	assert.Equal(t, []string{enrolledPhone}, sms.to)
+	assert.Equal(t, []string{"+15550001"}, sms.to)
 }
 
 // Removing the factor removes what the session's stamp stood for, so the

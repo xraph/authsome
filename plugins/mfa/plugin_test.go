@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/pquerna/otp/totp"
-
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/stretchr/testify/assert"

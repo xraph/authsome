@@ -103,14 +103,16 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.logger = engine.Logger()
 	p.settingsMgr = engine.Settings()
 	p.defaultAppID = engine.DefaultAppID()
-	p.basePath = engine.BasePath()
+	// The router plugins register on is already grouped at the app's base
+	// path (extension/extension.go groups it before handing it over), so
+	// the routes carry only the version segment. engine.BasePath() here put
+	// them at /authsome/authsome/waitlist/join, while the UI client posts to
+	// {baseURL}/v1/waitlist/join. agentauth and consent use "/v1" for the
+	// same reason.
+	p.basePath = "/v1"
 
 	if pc, ok := engine.(plugin.PermissionChecker); ok {
 		p.permChecker = pc
-	}
-
-	if p.basePath == "" {
-		p.basePath = "/v1"
 	}
 
 	return nil
@@ -631,6 +633,14 @@ func (p *Plugin) emitHook(ctx context.Context, action, resource, resourceID, act
 func (p *Plugin) resolveAppID(ctx forge.Context, reqAppID string) (id.AppID, error) {
 	if reqAppID != "" {
 		return id.ParseAppID(reqAppID)
+	}
+	// The publishable key (or an authenticated caller's tenant) puts the
+	// app on authsome's own context key, not forge's scope. The UI client's
+	// join sends nothing but the key, so without this every join from the
+	// sign-up form failed with "unable to determine app_id" on a host that
+	// has no single default app.
+	if keyApp, ok := middleware.AppIDFrom(ctx.Context()); ok && !keyApp.IsNil() {
+		return keyApp, nil
 	}
 	if scopeAppID := forge.AppIDFrom(ctx.Context()); scopeAppID != "" {
 		return id.ParseAppID(scopeAppID)

@@ -20,4 +20,7 @@ regexes = [
   # docs/content/docs/plugins/oauth2provider.mdx: the id_token in the sample
   # token response, cut off after the start of an RS256 header.
   '''^eyJhbGciOiJSUzI1NiIs\.\.\.$''',
+  # middleware/captcha_test.go: the password in a sign-up body the captcha
+  # middleware must pass through to the handler unchanged.
+  '''^Abcdefgh-1234$''',
 ]

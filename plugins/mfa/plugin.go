@@ -1299,8 +1299,8 @@ func (p *Plugin) handleSMSSend(ctx forge.Context, req *SMSSendRequest) (*SMSSend
 		}
 		enrollment.Secret = req.Phone
 		enrollment.UpdatedAt = time.Now()
-		if err = p.store.UpdateEnrollment(ctx.Context(), enrollment); err != nil {
-			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to update SMS enrollment: %w", err))
+		if updErr := p.store.UpdateEnrollment(ctx.Context(), enrollment); updErr != nil {
+			return nil, middleware.InternalError(ctx, fmt.Errorf("failed to update SMS enrollment: %w", updErr))
 		}
 		phone = req.Phone
 	}

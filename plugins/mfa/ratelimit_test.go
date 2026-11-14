@@ -20,7 +20,7 @@ import (
 	wardenmem "github.com/xraph/warden/store/memory"
 )
 
-// mfaChallengeLimit is the MFA-challenge limit newMFARateLimited sets.
+// mfaChallengeLimit is the MFA-challenge limit newMFARateLimited configures.
 const mfaChallengeLimit = 3
 
 // newMFARateLimited builds an engine with rate limiting enabled at
@@ -58,11 +58,10 @@ func newMFARateLimited(t *testing.T) http.Handler {
 // throttled: past the MFAChallengeLimit, further attempts return 429. Without
 // this an attacker can brute-force the 6-digit code space unthrottled.
 func TestMFAVerify_RateLimited(t *testing.T) {
-	const limit = mfaChallengeLimit
 	h := newMFARateLimited(t)
 
 	var lastCode int
-	for i := 0; i < limit+1; i++ {
+	for i := 0; i < mfaChallengeLimit+1; i++ {
 		req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/mfa/verify", nil)
 		req.RemoteAddr = "203.0.113.7:5555"
 		rec := httptest.NewRecorder()
@@ -76,11 +75,10 @@ func TestMFAVerify_RateLimited(t *testing.T) {
 
 // TestMFASMSVerify_RateLimited pins the same protection on the SMS verify route.
 func TestMFASMSVerify_RateLimited(t *testing.T) {
-	const limit = mfaChallengeLimit
 	h := newMFARateLimited(t)
 
 	var lastCode int
-	for i := 0; i < limit+1; i++ {
+	for i := 0; i < mfaChallengeLimit+1; i++ {
 		req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/mfa/sms/verify", nil)
 		req.RemoteAddr = "203.0.113.8:5555"
 		rec := httptest.NewRecorder()
@@ -95,11 +93,10 @@ func TestMFASMSVerify_RateLimited(t *testing.T) {
 // TestMFARecoveryRegenerate_RateLimited pins that regenerate, which accepts a
 // TOTP code, is throttled like the other code-submission routes.
 func TestMFARecoveryRegenerate_RateLimited(t *testing.T) {
-	const limit = mfaChallengeLimit
 	h := newMFARateLimited(t)
 
 	var lastCode int
-	for i := 0; i < limit+1; i++ {
+	for i := 0; i < mfaChallengeLimit+1; i++ {
 		req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/mfa/recovery/regenerate", nil)
 		req.RemoteAddr = "203.0.113.9:5555"
 		rec := httptest.NewRecorder()
@@ -116,14 +113,13 @@ func TestMFARecoveryRegenerate_RateLimited(t *testing.T) {
 // factor) and DELETE /enrollment (turning MFA off). Without it a stolen
 // session can guess the code that removes the second factor.
 func TestMFAEnrollAndDisable_RateLimited(t *testing.T) {
-	const limit = mfaChallengeLimit
 	for _, c := range []struct{ method, path, addr string }{
 		{"POST", "/v1/mfa/enroll", "203.0.113.10:5555"},
 		{"DELETE", "/v1/mfa/enrollment", "203.0.113.11:5555"},
 	} {
 		h := newMFARateLimited(t)
 		var lastCode int
-		for i := 0; i < limit+1; i++ {
+		for i := 0; i < mfaChallengeLimit+1; i++ {
 			req := httptest.NewRequestWithContext(context.Background(), c.method, c.path, nil)
 			req.RemoteAddr = c.addr
 			rec := httptest.NewRecorder()
