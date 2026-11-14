@@ -294,6 +294,11 @@ func (p *Plugin) handleSend(ctx forge.Context, req *SendRequest) (*SendResponse,
 	if err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create magic link token: %w", err))
 	}
+	// NewVerification leaves the environment empty, and the SQL stores hold
+	// env_id to a foreign key, so an empty one fails the insert and every
+	// send for a real account is a 500. The link lives in the user's own
+	// environment.
+	v.EnvID = u.EnvID
 
 	if err := p.store.CreateVerification(ctx.Context(), v); err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to create magic link: %w", err))
