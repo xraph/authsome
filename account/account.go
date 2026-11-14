@@ -67,6 +67,12 @@ type SignUpRequest struct {
 	// DPoPJKT binds the newly created session to a client-held key
 	// (RFC 9449). Empty issues an ordinary unbound session.
 	DPoPJKT string `json:"-"`
+
+	// AuthMethod names the path creating the account when it is not a
+	// password sign-up, e.g. "social:google" or "sso:acme.com", so a
+	// BeforeSignUp hook can tell an identity-provider sign-up apart. Empty
+	// for SignUp.
+	AuthMethod string `json:"-"`
 }
 
 // SignInRequest is the input for account authentication.

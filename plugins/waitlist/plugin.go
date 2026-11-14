@@ -139,6 +139,21 @@ func (p *Plugin) NotificationMappings() map[string]*plugin.NotificationMapping {
 	}
 }
 
+// ErrApprovalRequired is the refusal OnBeforeSignUp returns while the waitlist
+// is on and the address has no approved entry. Sign-ups that are not a form
+// post (a social or SSO first sign-in) report it under the code
+// "waitlist_required".
+var ErrApprovalRequired error = approvalRequiredError("waitlist: signup requires waitlist approval — join the waitlist first")
+
+type approvalRequiredError string
+
+var _ authsome.SignUpRefusal = approvalRequiredError("")
+
+func (e approvalRequiredError) Error() string { return string(e) }
+
+// SignUpRefusalCode implements authsome.SignUpRefusal.
+func (approvalRequiredError) SignUpRefusalCode() string { return authsome.SignUpRefusedWaitlist }
+
 // OnBeforeSignUp implements plugin.BeforeSignUp.
 // When the waitlist is enabled, it blocks sign-ups unless the email has
 // an approved entry on the waitlist.
@@ -148,7 +163,7 @@ func (p *Plugin) OnBeforeSignUp(ctx context.Context, req *account.SignUpRequest)
 	}
 
 	if req.Email == "" {
-		return fmt.Errorf("waitlist: signup requires waitlist approval — join the waitlist first")
+		return ErrApprovalRequired
 	}
 
 	appID := req.AppID
@@ -162,13 +177,13 @@ func (p *Plugin) OnBeforeSignUp(ctx context.Context, req *account.SignUpRequest)
 	entry, err := p.store.GetEntryByEmail(ctx, appID, strings.ToLower(req.Email))
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			return fmt.Errorf("waitlist: signup requires waitlist approval — join the waitlist first")
+			return ErrApprovalRequired
 		}
 		return fmt.Errorf("waitlist: failed to check waitlist status: %w", err)
 	}
 
 	if entry.Status != StatusApproved {
-		return fmt.Errorf("waitlist: signup requires waitlist approval — join the waitlist first")
+		return ErrApprovalRequired
 	}
 
 	return nil

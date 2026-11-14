@@ -65,7 +65,7 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 	}
 
 	// Check if signup is disabled for this app.
-	if clientCfg, cfgErr := e.store.GetAppClientConfig(ctx, req.AppID); cfgErr == nil && clientCfg.SignupEnabled != nil && !*clientCfg.SignupEnabled {
+	if e.signUpDisabled(ctx, req.AppID) {
 		return nil, nil, fmt.Errorf("authsome: signup is disabled for this application")
 	}
 
