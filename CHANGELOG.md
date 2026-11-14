@@ -3,6 +3,63 @@
 Release notes for the Go module. The GitHub release also lists every commit
 since the last tag; this file says what changes for you when you upgrade.
 
+## v1.12.0 (unreleased)
+
+Breaking changes start with "Breaking:" and say what to do about them.
+
+No migrations.
+
+### Social and SSO sign-in from a browser
+
+- Breaking: when a browser social callback (`GET /v1/social/:provider/callback`) needs a
+  second factor, it now redirects with `302` to the `redirect_url` the flow started with
+  (else its `frontend_url`), adding `mfa_ticket=<ticket>&mfa_methods=<a,b>` to the query.
+  It used to answer the JSON 403 `mfa_required` body, which the browser rendered as a
+  page. Read the two parameters on your landing page and finish at the MFA challenge with
+  the ticket. A flow started without either URL still gets the JSON 403.
+- Breaking: the SSO OIDC landing and SAML ACS now redirect with `mfa_ticket` and
+  `mfa_methods` too, where they used to redirect with `sso_error=auth_failed`. The JSON
+  `POST /v1/sso/:provider/callback` still answers the 403.
+- The ticket keeps the auth method (`social:google`, `social:kineta`, `sso:<provider>`),
+  so the session minted after the challenge records it as before (with `+mfa`).
+- A successful browser social callback still sets the session cookie and serves the
+  page that closes a popup, and now also adds a one-time `code` to the URL it redirects
+  to. An app that keeps tokens on its own origin redeems it once, within 60 seconds and
+  with its publishable key, at the new `POST /v1/social/exchange {code}`, which answers
+  like the API callback (`session_token`, `refresh_token`, `expires_at`, `user`,
+  `provider`, `is_new_user`). The exchange rotates the session, so the cookie's token
+  stops working; use one or the other. `POST /v1/sso/exchange` shares the code and now
+  also refuses a code two replicas try to redeem at once.
+
+### Sign-up gates
+
+- Breaking: a first social or SSO sign-in now has to pass the same gates as a password
+  sign-up before the account is created: the app's sign-up switch (`signup_enabled`) and
+  every `BeforeSignUp` plugin hook (waitlist, IP reputation, geofencing, the password
+  plugin's `AllowedDomains`, your own). The `AfterSignUp` hooks fire after. Accounts that
+  already exist are never gated. A refused browser sign-in redirects with
+  `error=<code>` (social) or `sso_error=<code>` (SSO), where the code is
+  `signup_disabled`, `waitlist_required` or `signup_refused`, and writes nothing. API
+  callers get 403 `{"type":"signup_refused","reason":"<code>"}`. If you relied on social
+  or SSO to let people past a waitlist or a closed sign-up, approve them first.
+- Captcha is not asked for on these sign-ups. It is a check on the sign-up form, and the
+  identity provider round trip already shows a person is there.
+- `Engine.GateFederatedSignUp` and `Engine.FinishFederatedSignUp` run those gates for
+  any other path that creates accounts. A refusal is `*authsome.SignUpRefusedError`.
+- `account.SignUpRequest` gains `AuthMethod` (`social:google`, `sso:acme`; empty for a
+  password sign-up), so a hook can tell the paths apart.
+- A `BeforeSignUp` hook can name its own refusal code by returning an error that
+  implements `authsome.SignUpRefusal`. The waitlist's refusal is
+  `waitlist.ErrApprovalRequired`, with the same message as before.
+
+### SSO discovery
+
+- New route `GET /v1/sso/discover?email=` answers `{connection_id, provider, name,
+  protocol, domain, enforced}` for the active connection on the email's domain, or 404
+  `{"error":"no sso connection for this domain"}`. Unlike `POST /v1/sso/login` it starts
+  no login. It shares the SSO routes' per-address rate limit. `Plugin.DiscoverByEmail`
+  answers the same in-process and returns `sso.ErrNoConnectionForDomain` on a miss.
+
 ## v1.11.0 (unreleased)
 
 Breaking changes start with "Breaking:" and say what to do about them.
