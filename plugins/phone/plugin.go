@@ -436,6 +436,8 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (_ *VerifyR
 			DPoPJKT:    dpopJKT,
 			IPAddress:  ctx.Request().RemoteAddr,
 			UserAgent:  ctx.Request().UserAgent(),
+
+			TrustedDeviceToken: authsome.TrustedDeviceToken(ctx.Request()),
 		})
 		if issueErr != nil {
 			return nil, issueErr

@@ -1299,6 +1299,8 @@ func (p *Plugin) authenticateUser(ctx forge.Context, appID id.AppID, provider Pr
 			UserAgent:  ctx.Request().UserAgent(),
 			SessionTTL: p.resolveTTL(goCtx, appID, SettingSessionTokenTTLSeconds, p.config.SessionTokenTTL),
 			RefreshTTL: p.resolveTTL(goCtx, appID, SettingSessionRefreshTTLSeconds, p.config.SessionRefreshTTL),
+
+			TrustedDeviceToken: authsome.TrustedDeviceToken(ctx.Request()),
 		})
 		if issueErr != nil {
 			return nil, issueErr

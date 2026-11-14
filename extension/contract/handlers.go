@@ -70,6 +70,8 @@ func loginHandler(deps Deps) func(ctx context.Context, in LoginInput, p contract
 			Password:  in.Password,
 			IPAddress: clientIP(httpReq),
 			UserAgent: httpReq.UserAgent(),
+
+			TrustedDeviceToken: authsome.TrustedDeviceToken(httpReq),
 		}
 		u, sess, err := eng.SignIn(ctx, signInReq)
 		if err != nil {

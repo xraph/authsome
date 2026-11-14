@@ -34,6 +34,7 @@ var (
 	_ plugin.OnInit            = (*Plugin)(nil)
 	_ plugin.MigrationProvider = (*Plugin)(nil)
 	_ plugin.SettingsProvider  = (*Plugin)(nil)
+	_ plugin.BeforeUserDelete  = (*Plugin)(nil)
 )
 
 // ──────────────────────────────────────────────────
@@ -62,6 +63,15 @@ type Config struct {
 	// a first factor on session auth alone (default: 5 minutes). Once a
 	// factor is verified, enrolling another one asks for that factor.
 	StepUpWindow time.Duration
+
+	// TrustedDeviceTTL is how long a device the user chose to trust at the
+	// sign-in challenge skips the second factor (default 30 days). A
+	// negative value turns trusting devices off.
+	TrustedDeviceTTL time.Duration
+
+	// DisableTrustedDevices turns off "trust this device": the challenge
+	// ignores trust_device and no existing token skips the second factor.
+	DisableTrustedDevices bool
 }
 
 // Plugin is the MFA authentication plugin.
@@ -90,7 +100,10 @@ type Plugin struct {
 
 // DeclareSettings implements plugin.SettingsProvider.
 func (p *Plugin) DeclareSettings(m *settings.Manager) error {
-	return settings.RegisterTyped(m, "mfa", SettingIssuer)
+	if err := settings.RegisterTyped(m, "mfa", SettingIssuer); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "mfa", SettingTrustedDevicesEnabled)
 }
 
 // New creates a new MFA plugin.
@@ -101,6 +114,9 @@ func New(cfg ...Config) *Plugin {
 	}
 	if c.Issuer == "" {
 		c.Issuer = "AuthSome"
+	}
+	if c.TrustedDeviceTTL == 0 {
+		c.TrustedDeviceTTL = DefaultTrustedDeviceTTL
 	}
 	return &Plugin{
 		config:     c,
@@ -129,6 +145,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		p.stamper = st
 	}
 	p.tel = telemetry.From(engine)
+	p.subscribePasswordChanges()
 
 	// Build a persistent, at-rest-encrypted enrollment store when one hasn't
 	// been injected (tests inject via SetStore). TOTP/SMS secrets are wrapped
@@ -245,6 +262,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
+	if err := p.registerTrustedDeviceRoutes(g); err != nil {
+		return err
+	}
+
 	// Recovery code routes
 	if err := g.POST("/recovery/verify", p.handleRecoveryVerify, withRL(
 		forge.WithSummary("Verify MFA recovery code"),
@@ -349,6 +370,9 @@ type VerifyMFAResponse struct {
 type ChallengeRequest struct {
 	Ticket string `json:"mfa_ticket" description:"Ticket returned by /v1/signin when MFA was required"`
 	Code   string `json:"code"       description:"TOTP code from the user's authenticator (6 digits) or recovery code"`
+	// TrustDevice asks to skip the second factor on this device for the
+	// configured trust period (30 days by default).
+	TrustDevice bool `json:"trust_device,omitempty" description:"Trust this device: later sign-ins from it skip the second factor until the trust expires"`
 }
 
 // ChallengeResponse is the AuthResponse-shaped body returned on a
@@ -360,6 +384,12 @@ type ChallengeResponse struct {
 	SessionToken string `json:"session_token" description:"Session token"`
 	RefreshToken string `json:"refresh_token" description:"Refresh token"`
 	ExpiresAt    string `json:"expires_at"    description:"Token expiration time (RFC3339)"`
+
+	// TrustedDeviceToken is set when the request asked to trust the device.
+	// A browser also gets it as an httpOnly cookie; other clients send it
+	// back in the X-Authsome-Trusted-Device header when they sign in.
+	TrustedDeviceToken     string `json:"trusted_device_token,omitempty"      description:"Opaque token that lets this device skip the second factor; send it as X-Authsome-Trusted-Device on sign-in"`
+	TrustedDeviceExpiresAt string `json:"trusted_device_expires_at,omitempty" description:"When the device stops being trusted (RFC3339)"`
 }
 
 // DisableRequest is an empty request for disabling MFA.
@@ -397,6 +427,7 @@ type EnrollmentResponse struct {
 	Enabled                bool             `json:"enabled" description:"Whether any factor is verified"`
 	Factors                []EnrolledFactor `json:"factors" description:"Every factor set up, verified or not"`
 	RecoveryCodesRemaining int              `json:"recovery_codes_remaining" description:"How many unused recovery codes are left"`
+	TrustedDevices         int              `json:"trusted_devices" description:"How many devices currently skip the second factor"`
 }
 
 // RecoveryVerifyRequest is the request body for verifying an MFA recovery code.
@@ -778,12 +809,16 @@ func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*Cha
 			result.Session.Token, result.Session.ExpiresAt)
 	}
 
-	return &ChallengeResponse{
+	resp := &ChallengeResponse{
 		User:         result.User,
 		SessionToken: result.Session.Token,
 		RefreshToken: result.Session.RefreshToken,
 		ExpiresAt:    expires,
-	}, nil
+	}
+	if req.TrustDevice {
+		p.trustChallengedDevice(ctx, eng, payload.AppID, userID, resp)
+	}
+	return resp, nil
 }
 
 // requireStepUp gates a factor change. A user who already holds a verified
@@ -979,6 +1014,10 @@ func (p *Plugin) handleGetEnrollment(ctx forge.Context, _ *EnrollmentRequest) (*
 			}
 		}
 	}
+	// Likewise the trusted device count.
+	if devices, err := p.liveTrustedDevices(ctx.Context(), userID); err == nil {
+		resp.TrustedDevices = len(devices)
+	}
 
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
@@ -1011,6 +1050,13 @@ func (p *Plugin) handleDisable(ctx forge.Context, req *DisableRequest) (*Disable
 			return nil, err
 		}
 	}
+
+	// Devices trusted to skip the factor go before the factor does, so a
+	// failure here leaves MFA on rather than off with trust still standing.
+	if err := p.store.DeleteTrustedDevices(ctx.Context(), userID); err != nil {
+		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to remove trusted devices: %w", err))
+	}
+	authsome.ClearTrustedDeviceCookie(ctx.Response(), ctx.Request())
 
 	if err := p.store.DeleteEnrollment(ctx.Context(), enrollment.ID); err != nil {
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to remove enrollment: %w", err))
@@ -1432,9 +1478,9 @@ func (p *Plugin) emitHook(ctx context.Context, action, resource, resourceID, act
 // maskPhone masks all but the last 4 digits of a phone number.
 func maskPhone(phone string) string { return mask.Phone(phone) }
 
-// OnBeforeUserDelete removes a deleted user's MFA enrollments and recovery
-// codes: a second factor for an account that no longer exists is a secret
-// with no owner.
+// OnBeforeUserDelete removes a deleted user's MFA enrollments, recovery codes
+// and trusted devices: a second factor for an account that no longer exists
+// is a secret with no owner.
 func (p *Plugin) OnBeforeUserDelete(ctx context.Context, userID id.UserID) error {
 	if p.store == nil {
 		return nil
@@ -1450,6 +1496,9 @@ func (p *Plugin) OnBeforeUserDelete(ctx context.Context, userID id.UserID) error
 	}
 	if err := p.store.DeleteRecoveryCodes(ctx, userID); err != nil {
 		return fmt.Errorf("mfa: delete recovery codes: %w", err)
+	}
+	if err := p.store.DeleteTrustedDevices(ctx, userID); err != nil {
+		return fmt.Errorf("mfa: delete trusted devices: %w", err)
 	}
 	return nil
 }

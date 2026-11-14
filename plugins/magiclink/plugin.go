@@ -399,6 +399,8 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (_ *VerifyR
 			UserAgent:  ctx.Request().UserAgent(),
 			SessionTTL: p.resolveTTL(ctx.Context(), v.AppID, SettingSessionTokenTTLSeconds, p.config.SessionTokenTTL),
 			RefreshTTL: p.resolveTTL(ctx.Context(), v.AppID, SettingSessionRefreshTTLSeconds, p.config.SessionRefreshTTL),
+
+			TrustedDeviceToken: authsome.TrustedDeviceToken(ctx.Request()),
 		})
 		if issueErr != nil {
 			return nil, issueErr

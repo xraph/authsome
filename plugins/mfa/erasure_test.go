@@ -3,6 +3,7 @@ package mfa
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,6 +20,8 @@ func TestOnBeforeUserDelete_RemovesEnrollments(t *testing.T) {
 	userID, other := id.NewUserID(), id.NewUserID()
 	require.NoError(t, st.CreateEnrollment(ctx, &Enrollment{ID: id.NewMFAID(), UserID: userID, Method: "totp", Secret: "s", Verified: true}))
 	require.NoError(t, st.CreateEnrollment(ctx, &Enrollment{ID: id.NewMFAID(), UserID: other, Method: "totp", Secret: "o", Verified: true}))
+	require.NoError(t, st.CreateTrustedDevice(ctx, &TrustedDevice{ID: id.NewTrustedDeviceID(), UserID: userID, TokenHash: "mine", ExpiresAt: time.Now().Add(time.Hour)}))
+	require.NoError(t, st.CreateTrustedDevice(ctx, &TrustedDevice{ID: id.NewTrustedDeviceID(), UserID: other, TokenHash: "theirs", ExpiresAt: time.Now().Add(time.Hour)}))
 
 	require.NoError(t, p.OnBeforeUserDelete(ctx, userID))
 
@@ -28,4 +31,11 @@ func TestOnBeforeUserDelete_RemovesEnrollments(t *testing.T) {
 	theirs, err := st.ListEnrollments(ctx, other)
 	require.NoError(t, err)
 	assert.Len(t, theirs, 1, "another user's enrollments stay")
+
+	myDevices, err := st.ListTrustedDevices(ctx, userID)
+	require.NoError(t, err)
+	assert.Empty(t, myDevices, "trusted devices go with the account")
+	theirDevices, err := st.ListTrustedDevices(ctx, other)
+	require.NoError(t, err)
+	assert.Len(t, theirDevices, 1)
 }

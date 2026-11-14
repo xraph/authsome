@@ -387,6 +387,8 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (_ *use
 		IPAddress:  req.IPAddress,
 		UserAgent:  req.UserAgent,
 		DPoPJKT:    req.DPoPJKT,
+
+		TrustedDeviceToken: req.TrustedDeviceToken,
 	})
 	if err != nil {
 		return u, nil, err

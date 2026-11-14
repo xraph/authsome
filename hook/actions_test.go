@@ -38,7 +38,7 @@ func allActions() []string {
 		hook.ActionPasskeyRegister, hook.ActionPasskeyLogin, hook.ActionPasskeyDelete,
 		hook.ActionAPIKeyCreate, hook.ActionAPIKeyRevoke,
 		hook.ActionSocialSignIn, hook.ActionSocialSignUp, hook.ActionSSOSignIn, hook.ActionSSOSignUp,
-		hook.ActionMFADisable,
+		hook.ActionMFADisable, hook.ActionMFATrustedDeviceAdd, hook.ActionMFATrustedDeviceRemove,
 		hook.ActionWaitlistJoin, hook.ActionWaitlistApprove, hook.ActionWaitlistReject,
 	}
 }
