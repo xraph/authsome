@@ -3,6 +3,7 @@ package mfa
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -53,6 +54,18 @@ type recoveryCodeDoc struct {
 	Used      bool       `bson:"used"`
 	UsedAt    *time.Time `bson:"used_at,omitempty"`
 	CreatedAt time.Time  `bson:"created_at"`
+}
+
+type trustedDeviceDoc struct {
+	ID         string    `bson:"_id"`
+	UserID     string    `bson:"user_id"`
+	TokenHash  string    `bson:"token_hash"`
+	Label      string    `bson:"label"`
+	UserAgent  string    `bson:"user_agent"`
+	IPAddress  string    `bson:"ip_address"`
+	CreatedAt  time.Time `bson:"created_at"`
+	LastUsedAt time.Time `bson:"last_used_at"`
+	ExpiresAt  time.Time `bson:"expires_at"`
 }
 
 // ──────────────────────────────────────────────────
@@ -115,8 +128,9 @@ func recoveryCodeDocToRecoveryCode(d *recoveryCodeDoc) (*RecoveryCode, error) {
 // ──────────────────────────────────────────────────
 
 const (
-	mfaEnrollmentsColl   = "authsome_mfa_enrollments"
-	mfaRecoveryCodesColl = "authsome_mfa_recovery_codes"
+	mfaEnrollmentsColl    = "authsome_mfa_enrollments"
+	mfaRecoveryCodesColl  = "authsome_mfa_recovery_codes"
+	mfaTrustedDevicesColl = "authsome_mfa_trusted_devices"
 )
 
 // ──────────────────────────────────────────────────
@@ -267,6 +281,103 @@ func (s *MongoStore) DeleteRecoveryCodes(ctx context.Context, userID id.UserID) 
 		"user_id": userID.String(),
 	})
 	return mfaMongoError(err)
+}
+
+// ──────────────────────────────────────────────────
+// Trusted device store methods
+// ──────────────────────────────────────────────────
+
+func (s *MongoStore) CreateTrustedDevice(ctx context.Context, d *TrustedDevice) error {
+	_, err := s.mdb.Collection(mfaTrustedDevicesColl).InsertOne(ctx, &trustedDeviceDoc{
+		ID:         d.ID.String(),
+		UserID:     d.UserID.String(),
+		TokenHash:  d.TokenHash,
+		Label:      d.Label,
+		UserAgent:  d.UserAgent,
+		IPAddress:  d.IPAddress,
+		CreatedAt:  d.CreatedAt,
+		LastUsedAt: d.LastUsedAt,
+		ExpiresAt:  d.ExpiresAt,
+	})
+	return mfaMongoError(err)
+}
+
+func (s *MongoStore) GetTrustedDeviceByTokenHash(ctx context.Context, tokenHash string) (*TrustedDevice, error) {
+	doc := new(trustedDeviceDoc)
+	err := s.mdb.Collection(mfaTrustedDevicesColl).FindOne(ctx, bson.M{"token_hash": tokenHash}).Decode(doc)
+	if err != nil {
+		if isNoDocuments(err) {
+			return nil, ErrTrustedDeviceNotFound
+		}
+		return nil, err
+	}
+	return trustedDeviceDocToTrustedDevice(doc)
+}
+
+func (s *MongoStore) ListTrustedDevices(ctx context.Context, userID id.UserID) ([]*TrustedDevice, error) {
+	cursor, err := s.mdb.Collection(mfaTrustedDevicesColl).Find(ctx, bson.M{"user_id": userID.String()})
+	if err != nil {
+		return nil, mfaMongoError(err)
+	}
+	defer func() { _ = cursor.Close(ctx) }()
+
+	var docs []trustedDeviceDoc
+	if err := cursor.All(ctx, &docs); err != nil {
+		return nil, mfaMongoError(err)
+	}
+	result := make([]*TrustedDevice, 0, len(docs))
+	for i := range docs {
+		d, err := trustedDeviceDocToTrustedDevice(&docs[i])
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, d)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].CreatedAt.After(result[j].CreatedAt) })
+	return result, nil
+}
+
+func (s *MongoStore) TouchTrustedDevice(ctx context.Context, deviceID id.TrustedDeviceID, at time.Time) error {
+	_, err := s.mdb.Collection(mfaTrustedDevicesColl).UpdateOne(ctx,
+		bson.M{"_id": deviceID.String()},
+		bson.M{"$set": bson.M{"last_used_at": at}},
+	)
+	return mfaMongoError(err)
+}
+
+func (s *MongoStore) DeleteTrustedDevice(ctx context.Context, userID id.UserID, deviceID id.TrustedDeviceID) error {
+	_, err := s.mdb.Collection(mfaTrustedDevicesColl).DeleteOne(ctx, bson.M{
+		"_id":     deviceID.String(),
+		"user_id": userID.String(),
+	})
+	return mfaMongoError(err)
+}
+
+func (s *MongoStore) DeleteTrustedDevices(ctx context.Context, userID id.UserID) error {
+	_, err := s.mdb.Collection(mfaTrustedDevicesColl).DeleteMany(ctx, bson.M{"user_id": userID.String()})
+	return mfaMongoError(err)
+}
+
+func trustedDeviceDocToTrustedDevice(d *trustedDeviceDoc) (*TrustedDevice, error) {
+	deviceID, err := id.ParseTrustedDeviceID(d.ID)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := id.ParseUserID(d.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return &TrustedDevice{
+		ID:         deviceID,
+		UserID:     userID,
+		TokenHash:  d.TokenHash,
+		Label:      d.Label,
+		UserAgent:  d.UserAgent,
+		IPAddress:  d.IPAddress,
+		CreatedAt:  d.CreatedAt,
+		LastUsedAt: d.LastUsedAt,
+		ExpiresAt:  d.ExpiresAt,
+	}, nil
 }
 
 // ──────────────────────────────────────────────────

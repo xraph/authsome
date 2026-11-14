@@ -60,6 +60,35 @@ DROP TABLE IF EXISTS authsome_mfa_enrollments;
 				return err
 			},
 		},
+		&migrate.Migration{
+			Name:    "create_mfa_trusted_devices",
+			Version: "20261113000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS authsome_mfa_trusted_devices (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL REFERENCES authsome_users(id) ON DELETE CASCADE,
+    token_hash   TEXT NOT NULL,
+    label        TEXT NOT NULL DEFAULT '',
+    user_agent   TEXT NOT NULL DEFAULT '',
+    ip_address   TEXT NOT NULL DEFAULT '',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at   TIMESTAMPTZ NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_mfa_trusted_devices_token
+    ON authsome_mfa_trusted_devices (token_hash);
+CREATE INDEX IF NOT EXISTS idx_authsome_mfa_trusted_devices_user
+    ON authsome_mfa_trusted_devices (user_id);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_mfa_trusted_devices;`)
+				return err
+			},
+		},
 	)
 
 	// ──────────────────────────────────────────────────
@@ -106,6 +135,35 @@ CREATE INDEX IF NOT EXISTS idx_authsome_mfa_recovery_codes_user
 DROP TABLE IF EXISTS authsome_mfa_recovery_codes;
 DROP TABLE IF EXISTS authsome_mfa_enrollments;
 `)
+				return err
+			},
+		},
+		&migrate.Migration{
+			Name:    "create_mfa_trusted_devices",
+			Version: "20261113000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS authsome_mfa_trusted_devices (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL REFERENCES authsome_users(id) ON DELETE CASCADE,
+    token_hash   TEXT NOT NULL,
+    label        TEXT NOT NULL DEFAULT '',
+    user_agent   TEXT NOT NULL DEFAULT '',
+    ip_address   TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    last_used_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at   TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_mfa_trusted_devices_token
+    ON authsome_mfa_trusted_devices (token_hash);
+CREATE INDEX IF NOT EXISTS idx_authsome_mfa_trusted_devices_user
+    ON authsome_mfa_trusted_devices (user_id);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_mfa_trusted_devices;`)
 				return err
 			},
 		},

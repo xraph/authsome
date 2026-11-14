@@ -3,6 +3,7 @@ package mfa
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 	"time"
 
@@ -12,11 +13,15 @@ import (
 // ErrEnrollmentNotFound is returned when an MFA enrollment is not found.
 var ErrEnrollmentNotFound = errors.New("mfa: enrollment not found")
 
+// ErrTrustedDeviceNotFound is returned when no trusted device matches.
+var ErrTrustedDeviceNotFound = errors.New("mfa: trusted device not found")
+
 // MemoryStore is an in-memory Store for testing.
 type MemoryStore struct {
 	mu            sync.RWMutex
 	enrollments   map[id.MFAID]*Enrollment
 	recoveryCodes map[id.RecoveryCodeID]*RecoveryCode
+	trusted       map[id.TrustedDeviceID]*TrustedDevice
 }
 
 // NewMemoryStore creates a new in-memory MFA enrollment store.
@@ -24,6 +29,7 @@ func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		enrollments:   make(map[id.MFAID]*Enrollment),
 		recoveryCodes: make(map[id.RecoveryCodeID]*RecoveryCode),
+		trusted:       make(map[id.TrustedDeviceID]*TrustedDevice),
 	}
 }
 
@@ -151,6 +157,86 @@ func (s *MemoryStore) DeleteRecoveryCodes(_ context.Context, userID id.UserID) e
 	for k, c := range s.recoveryCodes {
 		if c.UserID == userID {
 			delete(s.recoveryCodes, k)
+		}
+	}
+	return nil
+}
+
+// ──────────────────────────────────────────────────
+// Trusted device methods
+// ──────────────────────────────────────────────────
+
+// CreateTrustedDevice stores a new trusted device.
+func (s *MemoryStore) CreateTrustedDevice(_ context.Context, d *TrustedDevice) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, existing := range s.trusted {
+		if existing.TokenHash == d.TokenHash {
+			return errors.New("mfa: duplicate trusted device token")
+		}
+	}
+	cp := *d
+	s.trusted[d.ID] = &cp
+	return nil
+}
+
+// GetTrustedDeviceByTokenHash finds a trusted device by its token's hash.
+func (s *MemoryStore) GetTrustedDeviceByTokenHash(_ context.Context, tokenHash string) (*TrustedDevice, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, d := range s.trusted {
+		if d.TokenHash == tokenHash {
+			cp := *d
+			return &cp, nil
+		}
+	}
+	return nil, ErrTrustedDeviceNotFound
+}
+
+// ListTrustedDevices returns a user's trusted devices, newest first.
+func (s *MemoryStore) ListTrustedDevices(_ context.Context, userID id.UserID) ([]*TrustedDevice, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := []*TrustedDevice{}
+	for _, d := range s.trusted {
+		if d.UserID == userID {
+			cp := *d
+			result = append(result, &cp)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].CreatedAt.After(result[j].CreatedAt) })
+	return result, nil
+}
+
+// TouchTrustedDevice records that a trusted device was just used.
+func (s *MemoryStore) TouchTrustedDevice(_ context.Context, deviceID id.TrustedDeviceID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, ok := s.trusted[deviceID]
+	if !ok {
+		return ErrTrustedDeviceNotFound
+	}
+	d.LastUsedAt = at
+	return nil
+}
+
+// DeleteTrustedDevice removes one of a user's trusted devices.
+func (s *MemoryStore) DeleteTrustedDevice(_ context.Context, userID id.UserID, deviceID id.TrustedDeviceID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if d, ok := s.trusted[deviceID]; ok && d.UserID == userID {
+		delete(s.trusted, deviceID)
+	}
+	return nil
+}
+
+// DeleteTrustedDevices removes every trusted device a user has.
+func (s *MemoryStore) DeleteTrustedDevices(_ context.Context, userID id.UserID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, d := range s.trusted {
+		if d.UserID == userID {
+			delete(s.trusted, k)
 		}
 	}
 	return nil

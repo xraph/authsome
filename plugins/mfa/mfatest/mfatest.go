@@ -49,6 +49,12 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"ConsumeRecoveryCodeIsSingleUse", testConsumeRecoveryCodeIsSingleUse},
 		{"RecoveryCodesAreScopedToUser", testRecoveryCodesAreScopedToUser},
 		{"DeleteRecoveryCodes", testDeleteRecoveryCodes},
+		{"TrustedDeviceRoundTrip", testTrustedDeviceRoundTrip},
+		{"TrustedDeviceUnknownToken", testTrustedDeviceUnknownToken},
+		{"TouchTrustedDevice", testTouchTrustedDevice},
+		{"ListTrustedDevicesIsScopedToUser", testListTrustedDevicesIsScopedToUser},
+		{"DeleteTrustedDeviceIsScopedToUser", testDeleteTrustedDeviceIsScopedToUser},
+		{"DeleteTrustedDevices", testDeleteTrustedDevices},
 	}
 	for _, tc := range cases {
 		if skipSet[tc.name] {

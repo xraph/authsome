@@ -72,6 +72,7 @@ const (
 	PrefixAgentGrant       Prefix = "aagr"
 	PrefixRetentionJob     Prefix = "artj"
 	PrefixRetentionRef     Prefix = "artr"
+	PrefixTrustedDevice    Prefix = "atdv"
 )
 
 // ID is the primary identifier type for all AuthSome entities.
@@ -241,6 +242,10 @@ type RetentionJobID = ID
 
 // RetentionRefID is a type-safe identifier for retention contact refs (prefix: "artr").
 type RetentionRefID = ID
+
+// TrustedDeviceID is a type-safe identifier for devices trusted to skip the
+// second factor (prefix: "atdv").
+type TrustedDeviceID = ID
 
 // ──────────────────────────────────────────────────
 // Core functions
@@ -456,6 +461,9 @@ func NewRetentionJobID() ID { return New(PrefixRetentionJob) }
 // NewRetentionRefID generates a new unique retention contact ref ID.
 func NewRetentionRefID() ID { return New(PrefixRetentionRef) }
 
+// NewTrustedDeviceID generates a new unique trusted device ID.
+func NewTrustedDeviceID() ID { return New(PrefixTrustedDevice) }
+
 // ──────────────────────────────────────────────────
 // Convenience parsers
 // ──────────────────────────────────────────────────
@@ -595,6 +603,9 @@ func ParseRetentionJobID(s string) (ID, error) { return ParseWithPrefix(s, Prefi
 
 // ParseRetentionRefID parses a string and validates the "artr" prefix.
 func ParseRetentionRefID(s string) (ID, error) { return ParseWithPrefix(s, PrefixRetentionRef) }
+
+// ParseTrustedDeviceID parses a string and validates the "atdv" prefix.
+func ParseTrustedDeviceID(s string) (ID, error) { return ParseWithPrefix(s, PrefixTrustedDevice) }
 
 // ParseAny parses a string into an ID without type checking the prefix.
 func ParseAny(s string) (ID, error) { return Parse(s) }

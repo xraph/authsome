@@ -93,3 +93,69 @@ func toRecoveryCode(m *recoveryCodeModel) (*RecoveryCode, error) {
 		CreatedAt: m.CreatedAt,
 	}, nil
 }
+
+// ──────────────────────────────────────────────────
+// Trusted device model (shared across SQL stores)
+// ──────────────────────────────────────────────────
+
+type trustedDeviceModel struct {
+	grove.BaseModel `grove:"table:authsome_mfa_trusted_devices,alias:td"`
+
+	ID         string    `grove:"id,pk"`
+	UserID     string    `grove:"user_id,notnull"`
+	TokenHash  string    `grove:"token_hash,notnull"`
+	Label      string    `grove:"label,notnull"`
+	UserAgent  string    `grove:"user_agent,notnull"`
+	IPAddress  string    `grove:"ip_address,notnull"`
+	CreatedAt  time.Time `grove:"created_at,notnull"`
+	LastUsedAt time.Time `grove:"last_used_at,notnull"`
+	ExpiresAt  time.Time `grove:"expires_at,notnull"`
+}
+
+func toTrustedDevice(m *trustedDeviceModel) (*TrustedDevice, error) {
+	deviceID, err := id.ParseTrustedDeviceID(m.ID)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := id.ParseUserID(m.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return &TrustedDevice{
+		ID:         deviceID,
+		UserID:     userID,
+		TokenHash:  m.TokenHash,
+		Label:      m.Label,
+		UserAgent:  m.UserAgent,
+		IPAddress:  m.IPAddress,
+		CreatedAt:  m.CreatedAt,
+		LastUsedAt: m.LastUsedAt,
+		ExpiresAt:  m.ExpiresAt,
+	}, nil
+}
+
+func fromTrustedDevice(d *TrustedDevice) *trustedDeviceModel {
+	return &trustedDeviceModel{
+		ID:         d.ID.String(),
+		UserID:     d.UserID.String(),
+		TokenHash:  d.TokenHash,
+		Label:      d.Label,
+		UserAgent:  d.UserAgent,
+		IPAddress:  d.IPAddress,
+		CreatedAt:  d.CreatedAt,
+		LastUsedAt: d.LastUsedAt,
+		ExpiresAt:  d.ExpiresAt,
+	}
+}
+
+func toTrustedDevices(models []trustedDeviceModel) ([]*TrustedDevice, error) {
+	result := make([]*TrustedDevice, 0, len(models))
+	for i := range models {
+		d, err := toTrustedDevice(&models[i])
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, d)
+	}
+	return result, nil
+}
