@@ -150,10 +150,12 @@ func TestHandleSend_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var resp map[string]string
+	var resp map[string]any
 	err = json.NewDecoder(rec.Body).Decode(&resp)
 	require.NoError(t, err)
 	assert.Equal(t, "magic link sent", resp["status"])
+	assert.InDelta(t, 300, resp["expires_in"], 0, "expires_in is the link lifetime in seconds")
+	assert.NotContains(t, resp, "code_length", "no code is sent unless the email code is on")
 
 	// Mailer should have been called for the registered user.
 	mailer.mu.Lock()
