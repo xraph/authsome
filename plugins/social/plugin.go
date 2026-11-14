@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -28,12 +29,14 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/browserbind"
+	"github.com/xraph/authsome/internal/handoff"
 	"github.com/xraph/authsome/internal/telemetry"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
+	"github.com/xraph/authsome/user"
 
 	"github.com/xraph/grove/migrate"
 
@@ -596,6 +599,23 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
+	// Redeem the one-time code a browser callback put on the redirect, for
+	// an app that keeps the session tokens on its own origin rather than in
+	// the httpOnly cookie on this one.
+	exchangeOpts := make([]forge.RouteOption, 0, 6+len(callbackRateOpts))
+	exchangeOpts = append(exchangeOpts,
+		forge.WithSummary("Exchange a social sign-in one-time code for a session"),
+		forge.WithDescription("Redeems, once, the `code` a browser OAuth callback added to the redirect URL, and returns the session tokens. The session is rotated, so the token in the callback's cookie stops working."),
+		forge.WithOperationID("socialExchange"),
+		forge.WithRequestSchema(ExchangeRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Authentication result", CallbackResponse{}),
+		forge.WithErrorResponses(),
+	)
+	exchangeOpts = append(exchangeOpts, callbackRateOpts...)
+	if err := g.POST("/exchange", p.handleExchange, exchangeOpts...); err != nil {
+		return err
+	}
+
 	// Admin endpoints read and write provider client secrets — session plus
 	// manage/social_provider required.
 	admin := router.Group("/v1/admin/social",
@@ -1082,8 +1102,18 @@ func (p *Plugin) callback(ctx forge.Context, req *CallbackRequest, attempt *tele
 	// provider-account-id-first, verified-email-set algorithm. This replaces
 	// the old brittle single-email match that spawned duplicate users when a
 	// provider email changed or a GitHub account exposed multiple emails.
-	u, err := p.resolveUserForCallback(goCtx, appID, envID, req.Provider, providerUser, token)
+	u, err := p.resolveUserForCallback(goCtx, appID, envID, req.Provider, providerUser, token,
+		signUpClient{IP: middleware.ClientIP(ctx.Request()), UserAgent: ctx.Request().UserAgent()})
 	if err != nil {
+		// A sign-up the app refused goes back to the browser as an error
+		// code the frontend can show, like any other callback failure.
+		var refused *authsome.SignUpRefusedError
+		if errors.As(err, &refused) {
+			attempt.Refuse(telemetry.SignInDenied)
+			if p.callbackRedirect(ctx, stateInfo, map[string]string{"error": refused.Code}) {
+				return nil, nil
+			}
+		}
 		return nil, err
 	}
 
@@ -1107,9 +1137,13 @@ func (p *Plugin) callback(ctx forge.Context, req *CallbackRequest, attempt *tele
 			TrustedDeviceToken: authsome.TrustedDeviceToken(ctx.Request()),
 		})
 		if issueErr != nil {
-			// *authsome.MFARequiredError implements forge's
-			// StatusCode/ResponseBody so it renders as a 403 with the
-			// ticket envelope; other errors fall through as 500.
+			// A browser that owes a second factor is sent back to the
+			// frontend with the ticket. Anyone else gets the 403 ticket
+			// envelope *authsome.MFARequiredError renders itself.
+			var mfaErr *authsome.MFARequiredError
+			if errors.As(issueErr, &mfaErr) && p.callbackMFARedirect(ctx, stateInfo, mfaErr) {
+				return nil, nil
+			}
 			return nil, issueErr
 		}
 		sess = result.Session
@@ -1163,6 +1197,11 @@ func (p *Plugin) callback(ctx forge.Context, req *CallbackRequest, attempt *tele
 		}
 		if redirectTarget == "" {
 			redirectTarget = "/"
+		} else {
+			// An app that keeps the tokens on its own origin redeems this
+			// code at POST /v1/social/exchange. A cookie-mode client can
+			// ignore it; it expires unused.
+			redirectTarget = p.withHandoffCode(goCtx, redirectTarget, appID, u, sess, req.Provider, isNewUser)
 		}
 		// The redirect target is interpolated into a JS string literal
 		// (`window.location.href="<value>"`), so we must use JS-escaping
@@ -1329,33 +1368,125 @@ func (p *Plugin) resolveCallbackURL(r *http.Request, providerRedirectURL, provid
 	return base + prefix + "/v1/social/" + providerName + "/callback"
 }
 
+// socialOTCPrefix namespaces social one-time codes in the ceremony store.
+const socialOTCPrefix = "social:otc:"
+
+// withHandoffCode mints a one-time code for sess and adds it to target as
+// `code`. On failure it logs and returns target unchanged: the cookie still
+// carries the session for clients that use it.
+func (p *Plugin) withHandoffCode(ctx context.Context, target string, appID id.AppID, u *user.User, sess *session.Session, provider string, isNew bool) string {
+	parsed, err := url.Parse(target)
+	if err != nil {
+		return target
+	}
+	var userJSON json.RawMessage
+	if b, merr := json.Marshal(u); merr == nil {
+		userJSON = b
+	}
+	code, err := handoff.Mint(ctx, p.ceremonies, socialOTCPrefix, &handoff.Payload{
+		User:      userJSON,
+		SessionID: sess.ID.String(),
+		Provider:  provider,
+		IsNewUser: isNew,
+		AppID:     appID.String(),
+	})
+	if err != nil {
+		if p.logger != nil {
+			p.logger.Warn("social: mint one-time code failed", log.String("error", err.Error()))
+		}
+		return target
+	}
+	q := parsed.Query()
+	q.Set("code", code)
+	parsed.RawQuery = q.Encode()
+	return parsed.String()
+}
+
+// ExchangeRequest is the body for POST /v1/social/exchange.
+type ExchangeRequest struct {
+	Code string `json:"code" description:"One-time code the browser callback added to the redirect URL"`
+}
+
+// handleExchange redeems a one-time code, once, for session tokens. The
+// caller presents its publishable key and the code only works for the app it
+// was minted in. The session is rotated: the tokens minted at the callback
+// (and set in its cookie) are retired, and the rotated pair is returned.
+func (p *Plugin) handleExchange(ctx forge.Context, req *ExchangeRequest) (*CallbackResponse, error) {
+	var eng *authsome.Engine
+	if e, ok := p.engine.(*authsome.Engine); ok {
+		eng = e
+	}
+	pl, sess, err := handoff.Redeem(ctx, eng, p.ceremonies, socialOTCPrefix, req.Code)
+	if err != nil {
+		return nil, err
+	}
+	var u any
+	if len(pl.User) > 0 {
+		u = pl.User
+	}
+	return &CallbackResponse{
+		User:         u,
+		SessionToken: sess.Token,
+		RefreshToken: sess.RefreshToken,
+		ExpiresAt:    sess.ExpiresAt,
+		Provider:     pl.Provider,
+		IsNewUser:    pl.IsNewUser,
+	}, nil
+}
+
 // callbackError handles a callback failure once the OAuth state is known. For
 // browser-initiated GET callbacks it redirects the user back to the SPA with
 // an `error` query parameter so the frontend can render an error UI; for
 // non-browser callers it surfaces the error as a JSON 400. The fallback chain
 // for the redirect target is: redirect_url → frontend_url → forge.BadRequest.
 func (p *Plugin) callbackError(ctx forge.Context, stateInfo map[string]string, message string) (*CallbackResponse, error) {
+	if p.callbackRedirect(ctx, stateInfo, map[string]string{"error": message}) {
+		return nil, nil
+	}
+	return nil, forge.BadRequest(message)
+}
+
+// callbackMFARedirect sends a browser that owes a second factor back to the
+// frontend with the ticket: `mfa_ticket=<ticket>&mfa_methods=<a,b>`. The
+// frontend finishes the sign-in at the MFA challenge with that ticket. It
+// reports false, having written nothing, when callbackRedirect would.
+func (p *Plugin) callbackMFARedirect(ctx forge.Context, stateInfo map[string]string, mfaErr *authsome.MFARequiredError) bool {
+	return p.callbackRedirect(ctx, stateInfo, map[string]string{
+		"mfa_ticket":  mfaErr.Ticket,
+		"mfa_methods": strings.Join(mfaErr.AvailableMethods, ","),
+	})
+}
+
+// callbackRedirect 302s a browser-initiated GET callback to the frontend URL
+// the flow started with (redirect_url, else frontend_url), with params added
+// to its query. Both URLs were checked against the app's allowed frontend
+// origins when the flow started. It reports false, having written nothing,
+// for a non-GET caller or a flow that started without either URL; the caller
+// then answers with JSON instead.
+func (p *Plugin) callbackRedirect(ctx forge.Context, stateInfo, params map[string]string) bool {
 	if ctx.Request().Method != http.MethodGet {
-		return nil, forge.BadRequest(message)
+		return false
 	}
 	target := stateInfo["redirect_url"]
 	if target == "" {
 		target = stateInfo["frontend_url"]
 	}
 	if target == "" {
-		return nil, forge.BadRequest(message)
+		return false
 	}
 	parsed, err := url.Parse(target)
 	if err != nil {
-		return nil, forge.BadRequest(message)
+		return false
 	}
 	q := parsed.Query()
-	q.Set("error", message)
+	for k, v := range params {
+		q.Set(k, v)
+	}
 	parsed.RawQuery = q.Encode()
 
 	ctx.Response().Header().Set("Location", parsed.String())
 	ctx.Response().WriteHeader(http.StatusFound)
-	return nil, nil
+	return true
 }
 
 // contextHTTPClient returns the client golang.org/x/oauth2 would use for

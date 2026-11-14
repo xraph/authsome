@@ -11,12 +11,32 @@ import (
 	"github.com/xraph/forge"
 	log "github.com/xraph/go-utils/log"
 
+	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/user"
 
 	"golang.org/x/oauth2"
 )
+
+// signUpClient is the request a first sign-in arrived on, handed to the
+// sign-up hooks that judge it (IP reputation, geofencing).
+type signUpClient struct {
+	IP        string
+	UserAgent string
+}
+
+// signUpGate is the slice of the engine that gates an account created here
+// the way SignUp gates a password sign-up. Test wiring without a full engine
+// has none and creates the user ungated.
+type signUpGate interface {
+	GateFederatedSignUp(ctx context.Context, req *account.SignUpRequest) error
+	FinishFederatedSignUp(ctx context.Context, u *user.User, sess *session.Session)
+}
+
+var _ signUpGate = (*authsome.Engine)(nil)
 
 // resolveUserForCallback resolves (or creates) the AuthSome user behind a
 // social identity, using a provider-account-id-first, verified-email-set
@@ -30,8 +50,10 @@ import (
 //	        only when the stored address is itself verified (no takeover via an
 //	        unverified email). One match links; multiple distinct matches are
 //	        ambiguous and refused (409) rather than silently merged.
-//	STEP 3  Else create a new user seeded with the provider's known addresses.
-func (p *Plugin) resolveUserForCallback(ctx context.Context, appID id.AppID, envID id.EnvironmentID, provider string, pu *ProviderUser, token *oauth2.Token) (*user.User, error) {
+//	STEP 3  Else create a new user seeded with the provider's known addresses,
+//	        once the app's sign-up gates (sign-up switch, BeforeSignUp hooks)
+//	        let it. Steps 1 and 2 are sign-ins and are never gated.
+func (p *Plugin) resolveUserForCallback(ctx context.Context, appID id.AppID, envID id.EnvironmentID, provider string, pu *ProviderUser, token *oauth2.Token, client signUpClient) (*user.User, error) {
 	// STEP 1 — provider-account-id match (authoritative).
 	if p.oauthStore != nil {
 		conn, connErr := p.oauthStore.GetOAuthConnection(ctx, appID, provider, pu.ProviderUserID)
@@ -83,14 +105,17 @@ func (p *Plugin) resolveUserForCallback(ctx context.Context, appID id.AppID, env
 	}
 
 	// STEP 3 — no match: create a new user.
-	return p.createUserFromProvider(ctx, appID, envID, provider, pu, token)
+	return p.createUserFromProvider(ctx, appID, envID, provider, pu, token, client)
 }
 
 // createUserFromProvider creates a fresh user seeded with the provider's known
 // addresses. Addresses already owned by another account are skipped (never
 // stolen), so an unverified provider email colliding with an existing account
 // simply isn't attached.
-func (p *Plugin) createUserFromProvider(ctx context.Context, appID id.AppID, envID id.EnvironmentID, provider string, pu *ProviderUser, token *oauth2.Token) (*user.User, error) {
+//
+// The app's sign-up gates run first. A refusal returns
+// *authsome.SignUpRefusedError and writes nothing.
+func (p *Plugin) createUserFromProvider(ctx context.Context, appID id.AppID, envID id.EnvironmentID, provider string, pu *ProviderUser, token *oauth2.Token, client signUpClient) (*user.User, error) {
 	now := time.Now()
 	u := &user.User{
 		ID:        id.NewUserID(),
@@ -114,6 +139,29 @@ func (p *Plugin) createUserFromProvider(ctx context.Context, appID id.AppID, env
 
 	source := "social:" + provider
 	primary := choosePrimaryEmail(pu, claimable)
+
+	var gate signUpGate
+	if g, ok := p.engine.(signUpGate); ok {
+		gate = g
+	}
+	if gate != nil {
+		req := &account.SignUpRequest{
+			AppID:      appID,
+			EnvID:      envID,
+			FirstName:  pu.FirstName,
+			LastName:   pu.LastName,
+			IPAddress:  client.IP,
+			UserAgent:  client.UserAgent,
+			AuthMethod: source,
+		}
+		if primary != nil {
+			req.Email = primary.Email
+		}
+		if err := gate.GateFederatedSignUp(ctx, req); err != nil {
+			return nil, err
+		}
+	}
+
 	if primary == nil {
 		// No claimable email — create a user without an email row.
 		if err := p.store.CreateUser(ctx, u); err != nil {
@@ -161,6 +209,9 @@ func (p *Plugin) createUserFromProvider(ctx context.Context, appID id.AppID, env
 	}
 	if err := p.createConnection(ctx, u, appID, provider, pu, token); err != nil {
 		return nil, err
+	}
+	if gate != nil {
+		gate.FinishFederatedSignUp(ctx, u, nil)
 	}
 	return u, nil
 }

@@ -38,11 +38,11 @@ func httpStatus(t *testing.T, err error) int {
 
 func TestResolveIdentity_RefusesEmailOutsideTheConnectionDomains(t *testing.T) {
 	p, _, conn, appID, envID := identityFixture(t)
-	_, _, err := p.resolveIdentity(context.Background(), appID, envID, conn, &User{ProviderUserID: "s1", Email: "alice@attacker.example"})
+	_, _, err := p.resolveIdentity(context.Background(), appID, envID, conn, &User{ProviderUserID: "s1", Email: "alice@attacker.example"}, signUpClient{})
 	require.Error(t, err)
 	assert.Equal(t, http.StatusForbidden, httpStatus(t, err))
 
-	u, isNew, err := p.resolveIdentity(context.Background(), appID, envID, conn, &User{ProviderUserID: "s2", Email: "Bob@Subsidiary.Example"})
+	u, isNew, err := p.resolveIdentity(context.Background(), appID, envID, conn, &User{ProviderUserID: "s2", Email: "Bob@Subsidiary.Example"}, signUpClient{})
 	require.NoError(t, err, "a listed extra domain is accepted whatever its case")
 	assert.True(t, isNew)
 	assert.Equal(t, "bob@subsidiary.example", u.Email)
@@ -51,18 +51,18 @@ func TestResolveIdentity_RefusesEmailOutsideTheConnectionDomains(t *testing.T) {
 func TestResolveIdentity_RefusesAnUnverifiedClaim(t *testing.T) {
 	p, _, conn, appID, envID := identityFixture(t)
 	no := false
-	_, _, err := p.resolveIdentity(context.Background(), appID, envID, conn, &User{ProviderUserID: "s1", Email: "alice@corp.example", EmailVerified: &no})
+	_, _, err := p.resolveIdentity(context.Background(), appID, envID, conn, &User{ProviderUserID: "s1", Email: "alice@corp.example", EmailVerified: &no}, signUpClient{})
 	require.Error(t, err)
 	assert.Equal(t, http.StatusForbidden, httpStatus(t, err))
 	yes := true
-	_, _, err = p.resolveIdentity(context.Background(), appID, envID, conn, &User{ProviderUserID: "s1", Email: "alice@corp.example", EmailVerified: &yes})
+	_, _, err = p.resolveIdentity(context.Background(), appID, envID, conn, &User{ProviderUserID: "s1", Email: "alice@corp.example", EmailVerified: &yes}, signUpClient{})
 	require.NoError(t, err)
 }
 
 func TestResolveIdentity_SubjectBindingOutranksEmail(t *testing.T) {
 	p, s, conn, appID, envID := identityFixture(t)
 	ctx := context.Background()
-	first, isNew, err := p.resolveIdentity(ctx, appID, envID, conn, &User{ProviderUserID: "subject-7", Email: "alice@corp.example"})
+	first, isNew, err := p.resolveIdentity(ctx, appID, envID, conn, &User{ProviderUserID: "subject-7", Email: "alice@corp.example"}, signUpClient{})
 	require.NoError(t, err)
 	require.True(t, isNew)
 	ident, err := p.ssoStore.GetIdentity(ctx, conn.ID, "subject-7")
@@ -72,7 +72,7 @@ func TestResolveIdentity_SubjectBindingOutranksEmail(t *testing.T) {
 	// A verified account now holds a different email; the IdP asserts that
 	// email for the same subject. The subject wins.
 	other := seedUserWithEmail(t, s, appID, envID, "carol@corp.example", true, "")
-	again, isNew, err := p.resolveIdentity(ctx, appID, envID, conn, &User{ProviderUserID: "subject-7", Email: "carol@corp.example"})
+	again, isNew, err := p.resolveIdentity(ctx, appID, envID, conn, &User{ProviderUserID: "subject-7", Email: "carol@corp.example"}, signUpClient{})
 	require.NoError(t, err)
 	assert.False(t, isNew)
 	assert.Equal(t, first.ID.String(), again.ID.String(), "the bound user, not the email holder")
@@ -80,7 +80,7 @@ func TestResolveIdentity_SubjectBindingOutranksEmail(t *testing.T) {
 
 	// An unseen subject asserting a verified holder's email links to it and
 	// binds, so the next login by that subject no longer needs the email.
-	linked, isNew, err := p.resolveIdentity(ctx, appID, envID, conn, &User{ProviderUserID: "subject-8", Email: "carol@corp.example"})
+	linked, isNew, err := p.resolveIdentity(ctx, appID, envID, conn, &User{ProviderUserID: "subject-8", Email: "carol@corp.example"}, signUpClient{})
 	require.NoError(t, err)
 	assert.False(t, isNew)
 	assert.Equal(t, other.ID.String(), linked.ID.String())
@@ -93,14 +93,14 @@ func TestResolveIdentity_AdoptsTheSubjectOnlyForTrustedFederation(t *testing.T) 
 	p, _, conn, appID, envID := identityFixture(t)
 	ctx := context.Background()
 	adoptable := id.NewUserID().String()
-	u, _, err := p.resolveIdentity(ctx, appID, envID, conn, &User{ProviderUserID: adoptable, Email: "dan@corp.example"})
+	u, _, err := p.resolveIdentity(ctx, appID, envID, conn, &User{ProviderUserID: adoptable, Email: "dan@corp.example"}, signUpClient{})
 	require.NoError(t, err)
 	assert.NotEqual(t, adoptable, u.ID.String(), "an untrusted connection never lets the IdP pick local ids")
 
 	conn.TrustedFederation = true
 	require.NoError(t, p.ssoStore.UpdateConnection(ctx, conn))
 	adoptable2 := id.NewUserID().String()
-	u2, _, err := p.resolveIdentity(ctx, appID, envID, conn, &User{ProviderUserID: adoptable2, Email: "erin@corp.example"})
+	u2, _, err := p.resolveIdentity(ctx, appID, envID, conn, &User{ProviderUserID: adoptable2, Email: "erin@corp.example"}, signUpClient{})
 	require.NoError(t, err)
 	assert.Equal(t, adoptable2, u2.ID.String(), "a trusted federation adopts the IdP subject")
 }
@@ -110,7 +110,7 @@ func TestResolveIdentity_BoundUserFromAnotherAppIsIgnored(t *testing.T) {
 	ctx := context.Background()
 	foreign := seedUserWithEmail(t, s, id.NewAppID(), envID, "frank@corp.example", true, "")
 	require.NoError(t, p.ssoStore.CreateIdentity(ctx, &Identity{ConnectionID: conn.ID, Subject: "cross-app", UserID: foreign.ID}))
-	u, _, err := p.resolveIdentity(ctx, appID, envID, conn, &User{ProviderUserID: "cross-app", Email: "frank@corp.example"})
+	u, _, err := p.resolveIdentity(ctx, appID, envID, conn, &User{ProviderUserID: "cross-app", Email: "frank@corp.example"}, signUpClient{})
 	require.NoError(t, err)
 	assert.NotEqual(t, foreign.ID.String(), u.ID.String(), "a binding that points outside the app is not followed")
 }
