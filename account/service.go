@@ -54,6 +54,8 @@ var (
 	ErrTooManyAttempts    = errors.New("account: too many verification attempts; request a new code")
 	ErrRateLimited        = errors.New("account: too many attempts for this identifier; try again later")
 	ErrMFARequired        = errors.New("account: MFA challenge required to complete sign-in")
+	ErrSignUpDisabled     = errors.New("account: sign-up is disabled for this application")
+	ErrSignUpRefused      = errors.New("account: sign-up was refused")
 )
 
 // PasswordPolicy configures password validation rules.

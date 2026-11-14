@@ -44,8 +44,34 @@ import (
 
 // SignUp creates a new user account and returns the user + session.
 func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.User, *session.Session, error) {
+	return e.signUp(ctx, req, false)
+}
+
+// SignUpPasswordless creates an account with no password, for sign-up flows
+// where the user proves their inbox instead (a magic link or an emailed
+// code). It runs the same path as SignUp: the app and sign-up-enabled
+// checks, email normalization, BeforeSignUp hooks (waitlist and the like),
+// custom form fields, email and username uniqueness, BeforeUserCreate and
+// AfterUserCreate, the default role, AfterSignUp, and the sign-up audit
+// event. It skips the password policy, the breach check and the hash, and
+// mints no session and no email-verification code: the caller delivers its
+// own proof of the inbox and signs the user in once it comes back.
+//
+// req.Password is ignored. The user can set one later through forgot and
+// reset password. A disabled sign-up returns account.ErrSignUpDisabled and
+// a refusal by a BeforeSignUp hook wraps account.ErrSignUpRefused; an
+// address that already has an account returns account.ErrEmailTaken.
+func (e *Engine) SignUpPasswordless(ctx context.Context, req *account.SignUpRequest) (*user.User, error) {
+	u, _, err := e.signUp(ctx, req, true)
+	return u, err
+}
+
+func (e *Engine) signUp(ctx context.Context, req *account.SignUpRequest, passwordless bool) (*user.User, *session.Session, error) {
 	if err := e.requireStarted(); err != nil {
 		return nil, nil, err
+	}
+	if passwordless {
+		req.Password = ""
 	}
 
 	// Defense-in-depth: validate that the AppID points to an existing
@@ -66,28 +92,37 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 
 	// Check if signup is disabled for this app.
 	if clientCfg, cfgErr := e.store.GetAppClientConfig(ctx, req.AppID); cfgErr == nil && clientCfg.SignupEnabled != nil && !*clientCfg.SignupEnabled {
-		return nil, nil, fmt.Errorf("authsome: signup is disabled for this application")
+		return nil, nil, fmt.Errorf("authsome: signup is disabled for this application: %w", account.ErrSignUpDisabled)
 	}
 
 	// Normalize email early so all downstream checks use the canonical form.
 	if req.Email != "" {
 		req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	}
-
-	// Validate password
-	policy := e.passwordPolicy()
-	if err := policy.ValidatePassword(req.Password); err != nil {
-		return nil, nil, err
+	// The inbox is a passwordless account's only way in.
+	if passwordless && req.Email == "" {
+		return nil, nil, fmt.Errorf("authsome: signup: email is required")
 	}
 
-	// Breach check. It fails open, and says so: a lookup that could not run
-	// is counted as a control that did not run.
-	if policy.CheckBreached && e.passwordBreached(ctx, req.AppID.String(), req.Password) {
-		return nil, nil, account.ErrPasswordBreached
+	// Validate password. A passwordless sign-up has none to check.
+	policy := e.passwordPolicy()
+	if !passwordless {
+		if err := policy.ValidatePassword(req.Password); err != nil {
+			return nil, nil, err
+		}
+
+		// Breach check. It fails open, and says so: a lookup that could not run
+		// is counted as a control that did not run.
+		if policy.CheckBreached && e.passwordBreached(ctx, req.AppID.String(), req.Password) {
+			return nil, nil, account.ErrPasswordBreached
+		}
 	}
 
 	// Plugin: before signup
 	if err := e.plugins.EmitBeforeSignUp(ctx, req); err != nil {
+		if passwordless {
+			return nil, nil, fmt.Errorf("authsome: before signup: %w: %w", account.ErrSignUpRefused, err)
+		}
 		return nil, nil, fmt.Errorf("authsome: before signup: %w", err)
 	}
 
@@ -134,10 +169,14 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 		}
 	}
 
-	// Hash password using configured algorithm
-	hash, err := e.hashPassword(ctx, req.Password, policy)
-	if err != nil {
-		return nil, nil, err
+	// Hash password using configured algorithm. A passwordless account
+	// keeps an empty hash, which no password ever matches.
+	var hash string
+	if !passwordless {
+		hash, err = e.hashPassword(ctx, req.Password, policy)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	// Create user
@@ -152,7 +191,11 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 	// recorded in authsome_user_emails — this lets social/SSO sign-ins later
 	// link to this account by email and enforces cross-account email
 	// uniqueness (incl. against other accounts' secondary emails).
-	if createErr := e.store.CreateUserWithPrimaryEmail(ctx, u, user.NewPrimaryEmail(u, "password")); createErr != nil {
+	emailSource := "password"
+	if passwordless {
+		emailSource = "passwordless"
+	}
+	if createErr := e.store.CreateUserWithPrimaryEmail(ctx, u, user.NewPrimaryEmail(u, emailSource)); createErr != nil {
 		return nil, nil, fmt.Errorf("authsome: create user: %w", createErr)
 	}
 
@@ -160,8 +203,9 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 	e.plugins.EmitAfterUserCreate(ctx, u)
 
 	// Issue an email-verification OTP for the new (unverified) user. Best-effort:
-	// a failure to mint/deliver the code must not block signup.
-	if !u.EmailVerified {
+	// a failure to mint/deliver the code must not block signup. A passwordless
+	// sign-up skips it: the caller's own link or code proves the inbox.
+	if !u.EmailVerified && !passwordless {
 		if _, issueErr := e.issueEmailVerificationForUser(ctx, u); issueErr != nil {
 			e.logger.Warn("authsome: issue email verification failed", log.String("error", issueErr.Error()))
 		}
@@ -176,7 +220,7 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 	// verification code is its way in. A session here would let it into
 	// the app from any other tab while the UI still asked for the code.
 	var sess *session.Session
-	if u.EmailVerified || !e.EmailVerificationRequired(ctx, req.AppID) {
+	if !passwordless && (u.EmailVerified || !e.EmailVerificationRequired(ctx, req.AppID)) {
 		// Create session (using per-app + per-env config; JWT if configured)
 		sess, err = e.newSession(req.AppID, u.ID, req.EnvID, e.sessionConfigForApp(ctx, req.AppID, req.EnvID), req.DPoPJKT)
 		if err != nil {
@@ -312,6 +356,16 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (_ *use
 		// the response time does not say which identifiers exist. It gets
 		// the same verify password span too, so a trace doesn't either.
 		lookupFailed = !errors.Is(err, store.ErrNotFound)
+		e.consumeDummyVerify(ctx, req.Password)
+		e.recordFailedSignin(ctx, req, lockoutKey)
+		return nil, nil, account.ErrInvalidCredentials
+	}
+
+	// An account created without a password (a passwordless sign-up) has
+	// no hash, and no password, empty or not, signs it in. It pays the same
+	// hash an unknown identifier does so the response time doesn't say
+	// which accounts have a password. Forgot and reset password set one.
+	if u.PasswordHash == "" {
 		e.consumeDummyVerify(ctx, req.Password)
 		e.recordFailedSignin(ctx, req, lockoutKey)
 		return nil, nil, account.ErrInvalidCredentials
@@ -2003,6 +2057,42 @@ func (e *Engine) VerifyEmailCode(ctx context.Context, userID id.UserID, code str
 		"user_id": u.ID.String(),
 	})
 
+	return nil
+}
+
+// MarkEmailVerified records that u has proved their inbox by some means
+// other than the email-verification code, such as a magic link or a
+// sign-in code, which already went to that address. It persists
+// EmailVerified, claims a platform owner slot the way a verified sign-up
+// does, and emits the same email-verified hook and relay event. A user
+// whose email is already verified is left as it is.
+func (e *Engine) MarkEmailVerified(ctx context.Context, u *user.User) error {
+	if u == nil || u.EmailVerified {
+		return nil
+	}
+	u.EmailVerified = true
+	u.UpdatedAt = time.Now()
+	if err := e.store.UpdateUser(ctx, u); err != nil {
+		return fmt.Errorf("authsome: update user: %w", err)
+	}
+	e.promoteVerifiedOwner(ctx, u)
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionEmailVerify,
+		Resource:   hook.ResourceUser,
+		ResourceID: u.ID.String(),
+		ActorID:    u.ID.String(),
+		Tenant:     u.AppID.String(),
+		Category:   "auth",
+		Private: map[string]string{
+			"email":     u.Email,
+			"user_name": u.Name(),
+		},
+	})
+
+	e.relayEvent(ctx, "user.email_verified", u.AppID.String(), map[string]string{
+		"user_id": u.ID.String(),
+	})
 	return nil
 }
 
