@@ -32,6 +32,10 @@ type Authenticator struct {
 	// NoUserVerification signs assertions with user presence only, the
 	// way a security key with no PIN does.
 	NoUserVerification bool
+	// Synced marks the credential as a synced passkey, the way iCloud
+	// Keychain or Google Password Manager do: backup eligible and backed up
+	// on every ceremony.
+	Synced bool
 
 	key        *ecdsa.PrivateKey
 	credID     []byte
@@ -57,6 +61,8 @@ func (a *Authenticator) CredentialID() string {
 const (
 	flagUserPresent  = 0x01
 	flagUserVerified = 0x04
+	flagBackupElig   = 0x08
+	flagBackupState  = 0x10
 	flagAttestedData = 0x40
 )
 
@@ -197,6 +203,9 @@ func (a *Authenticator) Get(options json.RawMessage) ([]byte, error) {
 // authData is the fixed head of authenticator data: the RP ID hash, the
 // flags and the signature counter.
 func (a *Authenticator) authData(flags byte) []byte {
+	if a.Synced {
+		flags |= flagBackupElig | flagBackupState
+	}
 	rpHash := sha256.Sum256([]byte(a.RPID))
 	out := append([]byte{}, rpHash[:]...)
 	out = append(out, flags)

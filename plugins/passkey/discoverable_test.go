@@ -40,16 +40,16 @@ func TestResolveDiscoverableUser(t *testing.T) {
 	u := seedPasskeyUser(t, eng)
 	ctx := context.Background()
 
-	gotUser, wau, err := p.resolveDiscoverableUser(ctx, []byte(u.ID.String()))
+	gotUser, wau, err := p.resolveDiscoverableUser(ctx, []byte(u.ID.String()), nil)
 	require.NoError(t, err)
 	require.NotNil(t, wau)
 	assert.Equal(t, u.ID.String(), gotUser.ID.String())
 	assert.Equal(t, []byte(u.ID.String()), wau.WebAuthnID(), "the webauthn user handle must round-trip")
 
-	_, _, err = p.resolveDiscoverableUser(ctx, []byte("not-a-valid-user-id"))
+	_, _, err = p.resolveDiscoverableUser(ctx, []byte("not-a-valid-user-id"), nil)
 	assert.Error(t, err, "an unparseable user handle must error")
 
-	_, _, err = p.resolveDiscoverableUser(ctx, []byte(id.NewUserID().String()))
+	_, _, err = p.resolveDiscoverableUser(ctx, []byte(id.NewUserID().String()), nil)
 	assert.Error(t, err, "an unknown user must error")
 }
 

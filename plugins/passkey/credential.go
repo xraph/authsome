@@ -18,6 +18,11 @@ type Credential struct {
 	SignCount       uint32       `json:"sign_count"`
 	AAGUID          []byte       `json:"aaguid"`
 	DisplayName     string       `json:"display_name"`
-	CreatedAt       time.Time    `json:"created_at"`
-	UpdatedAt       time.Time    `json:"updated_at"`
+	// Flags is the WebAuthn authenticator-data flag byte go-webauthn keeps
+	// with a credential: backup eligibility and state, and whether the
+	// authenticator has verified its user. Nil for a passkey registered before
+	// authsome stored them; its first sign-in fills them in.
+	Flags     *uint8    `json:"-"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }

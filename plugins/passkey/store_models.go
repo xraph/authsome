@@ -26,6 +26,7 @@ type credentialModel struct {
 	SignCount       int       `grove:"sign_count,notnull"`
 	AAGUID          []byte    `grove:"aaguid"`
 	DisplayName     string    `grove:"display_name,notnull"`
+	Flags           *int16    `grove:"flags"`
 	CreatedAt       time.Time `grove:"created_at,notnull,default:now()"`
 	UpdatedAt       time.Time `grove:"updated_at,notnull,default:now()"`
 }
@@ -64,6 +65,7 @@ func credentialFromModel(m *credentialModel) (*Credential, error) {
 		SignCount:       uint32(m.SignCount),
 		AAGUID:          m.AAGUID,
 		DisplayName:     m.DisplayName,
+		Flags:           flagsFromColumn(m.Flags),
 		CreatedAt:       m.CreatedAt,
 		UpdatedAt:       m.UpdatedAt,
 	}, nil
@@ -81,7 +83,25 @@ func credentialToModel(c *Credential) *credentialModel {
 		SignCount:       int(c.SignCount),
 		AAGUID:          c.AAGUID,
 		DisplayName:     c.DisplayName,
+		Flags:           flagsToColumn(c.Flags),
 		CreatedAt:       c.CreatedAt,
 		UpdatedAt:       c.UpdatedAt,
 	}
+}
+
+// flagsFromColumn reads the nullable flags column; NULL stays nil.
+func flagsFromColumn(v *int16) *uint8 {
+	if v == nil {
+		return nil
+	}
+	f := uint8(*v)
+	return &f
+}
+
+func flagsToColumn(f *uint8) *int16 {
+	if f == nil {
+		return nil
+	}
+	v := int16(*f)
+	return &v
 }

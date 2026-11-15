@@ -30,7 +30,10 @@ func NewMongoStore(db *grove.DB) *MongoStore {
 }
 
 // Compile-time interface check.
-var _ Store = (*MongoStore)(nil)
+var (
+	_ Store      = (*MongoStore)(nil)
+	_ FlagsStore = (*MongoStore)(nil)
+)
 
 // ──────────────────────────────────────────────────
 // Mongo document model
@@ -47,6 +50,7 @@ type credentialDoc struct {
 	SignCount       int       `bson:"sign_count"`
 	AAGUID          []byte    `bson:"aaguid,omitempty"`
 	DisplayName     string    `bson:"display_name"`
+	Flags           *int16    `bson:"flags,omitempty"`
 	CreatedAt       time.Time `bson:"created_at"`
 	UpdatedAt       time.Time `bson:"updated_at"`
 }
@@ -85,6 +89,7 @@ func credentialDocToCredential(d *credentialDoc) (*Credential, error) {
 		SignCount:       uint32(d.SignCount),
 		AAGUID:          d.AAGUID,
 		DisplayName:     d.DisplayName,
+		Flags:           flagsFromColumn(d.Flags),
 		CreatedAt:       d.CreatedAt,
 		UpdatedAt:       d.UpdatedAt,
 	}, nil
@@ -102,6 +107,7 @@ func credentialToDoc(c *Credential) *credentialDoc {
 		SignCount:       int(c.SignCount),
 		AAGUID:          c.AAGUID,
 		DisplayName:     c.DisplayName,
+		Flags:           flagsToColumn(c.Flags),
 		CreatedAt:       c.CreatedAt,
 		UpdatedAt:       c.UpdatedAt,
 	}
@@ -180,6 +186,18 @@ func (s *MongoStore) UpdateSignCount(ctx context.Context, credentialID []byte, c
 		bson.M{"$set": bson.M{
 			"sign_count": int(count),
 			"updated_at": now,
+		}},
+	)
+	return passkeyMongoError(err)
+}
+
+// UpdateCredentialFlags records a credential's WebAuthn flags.
+func (s *MongoStore) UpdateCredentialFlags(ctx context.Context, credentialID []byte, flags uint8) error {
+	_, err := s.mdb.Collection(passkeyCredentialsColl).UpdateOne(ctx,
+		bson.M{"credential_id": credentialID},
+		bson.M{"$set": bson.M{
+			"flags":      int16(flags),
+			"updated_at": time.Now(),
 		}},
 	)
 	return passkeyMongoError(err)

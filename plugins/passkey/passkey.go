@@ -1,6 +1,7 @@
 package passkey
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -455,6 +456,15 @@ func (u *webAuthnUser) WebAuthnIcon() string { return "" }
 
 // toWebAuthnUser converts an authsome user to a WebAuthn user with credentials.
 func (p *Plugin) toWebAuthnUser(ctx context.Context, u *user.User) *webAuthnUser {
+	return p.toWebAuthnUserFor(ctx, u, nil)
+}
+
+// toWebAuthnUserFor is toWebAuthnUser for verifying assertion. A passkey
+// stored before authsome kept its flags borrows the backup bits from the
+// assertion that is signing in with it, so go-webauthn's backup-eligible
+// consistency check has something to compare against. "User verified" is
+// never borrowed: it is read from each assertion itself (see assertionUV).
+func (p *Plugin) toWebAuthnUserFor(ctx context.Context, u *user.User, assertion *protocol.ParsedCredentialAssertionData) *webAuthnUser {
 	wau := &webAuthnUser{user: u}
 
 	if p.store != nil {
@@ -469,6 +479,7 @@ func (p *Plugin) toWebAuthnUser(ctx context.Context, u *user.User) *webAuthnUser
 				PublicKey:       c.PublicKey,
 				AttestationType: c.AttestationType,
 				Transport:       transports,
+				Flags:           storedFlags(c, assertion),
 				Authenticator: webauthn.Authenticator{
 					AAGUID:    c.AAGUID,
 					SignCount: c.SignCount,
@@ -480,6 +491,40 @@ func (p *Plugin) toWebAuthnUser(ctx context.Context, u *user.User) *webAuthnUser
 	return wau
 }
 
+// storedFlags is the flag set go-webauthn should start from for c. Stored
+// flags are used as they are. Without any, only the backup bits of the
+// assertion signing in with that same credential are taken; everything else
+// starts clear.
+func storedFlags(c *Credential, assertion *protocol.ParsedCredentialAssertionData) webauthn.CredentialFlags {
+	if c.Flags != nil {
+		return webauthn.NewCredentialFlags(protocol.AuthenticatorFlags(*c.Flags))
+	}
+	if assertion == nil || !bytes.Equal(assertion.RawID, c.CredentialID) {
+		return webauthn.CredentialFlags{}
+	}
+	backup := protocol.FlagBackupEligible | protocol.FlagBackupState
+	return webauthn.NewCredentialFlags(assertion.Response.AuthenticatorData.Flags & backup)
+}
+
+// assertionUV reports whether the authenticator verified its user (PIN or
+// biometric) for this sign-in. It is the assertion's own UV bit. go-webauthn
+// v0.18 stopped copying that bit onto the credential it returns, so reading
+// cred.Flags.UserVerified would say false for every passkey whose stored flags
+// say false, and a passkey sign-in would always be asked for a second factor.
+func assertionUV(assertion *protocol.ParsedCredentialAssertionData) bool {
+	return assertion != nil && assertion.Response.AuthenticatorData.Flags.UserVerified()
+}
+
+// saveFlags keeps the flags go-webauthn settled on after a sign-in, so the
+// next one is checked against them. Best effort, like the sign count.
+func (p *Plugin) saveFlags(ctx context.Context, cred *webauthn.Credential) {
+	fs, ok := p.store.(FlagsStore)
+	if !ok || cred == nil {
+		return
+	}
+	_ = fs.UpdateCredentialFlags(ctx, cred.ID, uint8(cred.Flags.ProtocolValue())) //nolint:errcheck // best-effort update
+}
+
 // toCredential converts a WebAuthn credential to a passkey Credential.
 func toCredential(userID id.UserID, appID id.AppID, cred *webauthn.Credential, displayName string) *Credential {
 	transports := make([]string, 0, len(cred.Transport))
@@ -488,6 +533,7 @@ func toCredential(userID id.UserID, appID id.AppID, cred *webauthn.Credential, d
 	}
 
 	now := time.Now()
+	flags := uint8(cred.Flags.ProtocolValue())
 	return &Credential{
 		ID:              id.NewPasskeyID(),
 		UserID:          userID,
@@ -499,6 +545,7 @@ func toCredential(userID id.UserID, appID id.AppID, cred *webauthn.Credential, d
 		SignCount:       cred.Authenticator.SignCount,
 		AAGUID:          cred.Authenticator.AAGUID,
 		DisplayName:     displayName,
+		Flags:           &flags,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}

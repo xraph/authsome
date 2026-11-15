@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/xraph/forge"
 
@@ -88,7 +89,7 @@ func clearCeremonyCookie(w http.ResponseWriter, secure bool) {
 // the user and its webauthn.User view, WITHOUT requiring a pre-authenticated
 // session — this is what makes passwordless login work. Errors on an
 // unparseable handle, a missing engine, or an unknown user.
-func (p *Plugin) resolveDiscoverableUser(ctx context.Context, userHandle []byte) (u *user.User, waUser webauthn.User, err error) {
+func (p *Plugin) resolveDiscoverableUser(ctx context.Context, userHandle []byte, assertion *protocol.ParsedCredentialAssertionData) (u *user.User, waUser webauthn.User, err error) {
 	uid, perr := id.ParseUserID(string(userHandle))
 	if perr != nil {
 		return nil, nil, fmt.Errorf("passkey: invalid user handle: %w", perr)
@@ -100,7 +101,7 @@ func (p *Plugin) resolveDiscoverableUser(ctx context.Context, userHandle []byte)
 	if gerr != nil {
 		return nil, nil, gerr
 	}
-	return loaded, p.toWebAuthnUser(ctx, loaded), nil
+	return loaded, p.toWebAuthnUserFor(ctx, loaded, assertion), nil
 }
 
 // finishDiscoverableLogin completes a passwordless WebAuthn ceremony: it loads
@@ -124,9 +125,14 @@ func (p *Plugin) finishDiscoverableLogin(ctx forge.Context, ceremonyID string) (
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to parse session: %w", unmarshalErr))
 	}
 
+	assertion, err := protocol.ParseCredentialRequestResponse(ctx.Request())
+	if err != nil {
+		return nil, forge.Unauthorized(fmt.Sprintf("passkey: finish discoverable login: %v", err))
+	}
+
 	var loggedIn *user.User
 	handler := func(_, userHandle []byte) (webauthn.User, error) {
-		u, wau, herr := p.resolveDiscoverableUser(ctx.Context(), userHandle)
+		u, wau, herr := p.resolveDiscoverableUser(ctx.Context(), userHandle, assertion)
 		if herr != nil {
 			return nil, herr
 		}
@@ -134,7 +140,7 @@ func (p *Plugin) finishDiscoverableLogin(ctx forge.Context, ceremonyID string) (
 		return wau, nil
 	}
 
-	cred, err := p.waForRequest(ctx.Request()).FinishDiscoverableLogin(handler, waSession, ctx.Request())
+	cred, err := p.waForRequest(ctx.Request()).ValidateDiscoverableLogin(handler, waSession, assertion)
 	if err != nil {
 		return nil, forge.Unauthorized(fmt.Sprintf("passkey: finish discoverable login: %v", err))
 	}
@@ -150,9 +156,10 @@ func (p *Plugin) finishDiscoverableLogin(ctx forge.Context, ceremonyID string) (
 
 	if p.store != nil {
 		_ = p.store.UpdateSignCount(ctx.Context(), cred.ID, cred.Authenticator.SignCount) //nolint:errcheck // best-effort update
+		p.saveFlags(ctx.Context(), cred)
 	}
 
-	sess, err := p.issueSession(ctx, loggedIn, cred.Flags.UserVerified, attempt)
+	sess, err := p.issueSession(ctx, loggedIn, assertionUV(assertion), attempt)
 	if err != nil {
 		return nil, err
 	}

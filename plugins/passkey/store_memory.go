@@ -22,7 +22,10 @@ func NewMemoryStore() *MemoryStore {
 	}
 }
 
-var _ Store = (*MemoryStore)(nil)
+var (
+	_ Store      = (*MemoryStore)(nil)
+	_ FlagsStore = (*MemoryStore)(nil)
+)
 
 func credKey(credentialID []byte) string {
 	return hex.EncodeToString(credentialID)
@@ -90,6 +93,20 @@ func (s *MemoryStore) UpdateSignCount(_ context.Context, credentialID []byte, co
 	return nil
 }
 
+// UpdateCredentialFlags records a credential's WebAuthn flags.
+func (s *MemoryStore) UpdateCredentialFlags(_ context.Context, credentialID []byte, flags uint8) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.credentials[credKey(credentialID)]
+	if !ok {
+		return ErrCredentialNotFound
+	}
+	f := flags
+	c.Flags = &f
+	c.UpdatedAt = time.Now()
+	return nil
+}
+
 // cloneCredential deep-copies c, every byte slice included.
 //
 // The store mutates credentials in place: UpdateSignCount writes SignCount
@@ -113,5 +130,9 @@ func cloneCredential(c *Credential) *Credential {
 	cp.PublicKey = append([]byte(nil), c.PublicKey...)
 	cp.AAGUID = append([]byte(nil), c.AAGUID...)
 	cp.Transport = append([]string(nil), c.Transport...)
+	if c.Flags != nil {
+		f := *c.Flags
+		cp.Flags = &f
+	}
 	return &cp
 }

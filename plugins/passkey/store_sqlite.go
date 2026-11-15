@@ -27,7 +27,10 @@ func NewSqliteStore(db *grove.DB) *SqliteStore {
 }
 
 // Compile-time interface check.
-var _ Store = (*SqliteStore)(nil)
+var (
+	_ Store      = (*SqliteStore)(nil)
+	_ FlagsStore = (*SqliteStore)(nil)
+)
 
 // ──────────────────────────────────────────────────
 // Store methods
@@ -89,6 +92,16 @@ func (s *SqliteStore) UpdateSignCount(ctx context.Context, credentialID []byte, 
 	_, err := s.sdb.NewUpdate((*credentialModel)(nil)).
 		Set("sign_count = ?", int(count)).
 		Set("updated_at = ?", now).
+		Where("credential_id = ?", credentialID).
+		Exec(ctx)
+	return passkeySqliteError(err)
+}
+
+// UpdateCredentialFlags records a credential's WebAuthn flags.
+func (s *SqliteStore) UpdateCredentialFlags(ctx context.Context, credentialID []byte, flags uint8) error {
+	_, err := s.sdb.NewUpdate((*credentialModel)(nil)).
+		Set("flags = ?", int16(flags)).
+		Set("updated_at = ?", time.Now()).
 		Where("credential_id = ?", credentialID).
 		Exec(ctx)
 	return passkeySqliteError(err)
