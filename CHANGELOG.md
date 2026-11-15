@@ -3,6 +3,18 @@
 Release notes for the Go module. The GitHub release also lists every commit
 since the last tag; this file says what changes for you when you upgrade.
 
+## v1.12.2 (unreleased)
+
+No migrations.
+
+### Dependencies
+
+- ledger 1.9.3, so saving a card works on a Stripe account with Managed
+  Payments on, which Stripe now enables by default. Ledger's setup-mode
+  Checkout session used to be refused with "Invalid mode: setup"; it now
+  turns Managed Payments off for that session alone.
+- forge 1.13.7, which ledger 1.9.3 requires.
+
 ## v1.12.1 (unreleased)
 
 This release adds one migration: passkey credentials gain a nullable `flags`

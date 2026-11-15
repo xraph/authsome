@@ -18,7 +18,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	github.com/xraph/chronicle v1.11.0
 	github.com/xraph/dispatch v1.9.5
-	github.com/xraph/forge v1.13.6
+	github.com/xraph/forge v1.13.7
 	github.com/xraph/forge/extensions/auth v1.13.6
 	github.com/xraph/go-utils v1.5.0
 	github.com/xraph/grove v1.10.3
@@ -27,7 +27,7 @@ require (
 	github.com/xraph/grove/drivers/sqlitedriver v1.10.3
 	github.com/xraph/herald v1.10.3
 	github.com/xraph/keysmith v1.9.1
-	github.com/xraph/ledger v1.9.2
+	github.com/xraph/ledger v1.9.3
 	github.com/xraph/relay v1.8.2
 	github.com/xraph/vault v1.8.2
 	github.com/xraph/vessel v1.0.5
