@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/xraph/authsome/plugins/passkey"
 )
 
 func testCredentialCRUD(t *testing.T, f Fixture) {
@@ -150,4 +152,38 @@ func testDeleteCredential(t *testing.T, f Fixture) {
 		assert.False(t, bytes.Equal(existing.CredentialID, c.CredentialID),
 			"a deleted credential still appears in the user's listing")
 	}
+}
+
+// testFlagsRoundTrip checks the WebAuthn flag byte: a credential stored
+// without flags reads back with none (not a zero byte, which would claim the
+// passkey is not backup eligible), one stored with flags keeps every bit, and
+// a store that updates flags does so in place.
+func testFlagsRoundTrip(t *testing.T, f Fixture) {
+	ctx := context.Background()
+
+	legacy := newCredential(f, f.UserID)
+	legacy.Flags = nil
+	require.NoError(t, f.Store.CreateCredential(ctx, legacy))
+	got, err := f.Store.GetCredential(ctx, legacy.CredentialID)
+	require.NoError(t, err)
+	assert.Nil(t, got.Flags, "a credential stored without flags must read back without them")
+
+	flags := uint8(0xDD) // UP, UV, BE, BS, AT, ED: high bit set too
+	c := newCredential(f, f.UserID)
+	c.Flags = &flags
+	require.NoError(t, f.Store.CreateCredential(ctx, c))
+	got, err = f.Store.GetCredential(ctx, c.CredentialID)
+	require.NoError(t, err)
+	require.NotNil(t, got.Flags)
+	assert.Equal(t, flags, *got.Flags)
+
+	fs, ok := f.Store.(passkey.FlagsStore)
+	if !ok {
+		return
+	}
+	require.NoError(t, fs.UpdateCredentialFlags(ctx, legacy.CredentialID, 0x19))
+	got, err = f.Store.GetCredential(ctx, legacy.CredentialID)
+	require.NoError(t, err)
+	require.NotNil(t, got.Flags)
+	assert.Equal(t, uint8(0x19), *got.Flags)
 }

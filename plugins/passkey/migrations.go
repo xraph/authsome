@@ -66,6 +66,28 @@ ALTER TABLE authsome_passkey_credentials
 				return err
 			},
 		},
+		&migrate.Migration{
+			// go-webauthn checks a sign-in's backup-eligible bit against the
+			// one stored with the credential, and from v0.18 takes "user
+			// verified" from it too. NULL marks a passkey registered before
+			// the column; its first sign-in fills it in.
+			Name:    "add_credential_flags",
+			Version: "20240201000003",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_passkey_credentials
+    ADD COLUMN IF NOT EXISTS flags SMALLINT;
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_passkey_credentials
+    DROP COLUMN IF EXISTS flags;
+`)
+				return err
+			},
+		},
 	)
 
 	// ──────────────────────────────────────────────────
@@ -102,6 +124,23 @@ CREATE INDEX IF NOT EXISTS idx_authsome_passkey_credentials_user
 			},
 			Down: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_passkey_credentials;`)
+				return err
+			},
+		},
+		&migrate.Migration{
+			// See the postgres migration of the same name.
+			Name:    "add_credential_flags",
+			Version: "20240201000003",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_passkey_credentials ADD COLUMN flags INTEGER;
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_passkey_credentials DROP COLUMN flags;
+`)
 				return err
 			},
 		},

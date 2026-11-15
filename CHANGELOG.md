@@ -3,6 +3,33 @@
 Release notes for the Go module. The GitHub release also lists every commit
 since the last tag; this file says what changes for you when you upgrade.
 
+## v1.12.1 (unreleased)
+
+This release adds one migration: passkey credentials gain a nullable `flags`
+column (postgres SMALLINT, SQLite INTEGER; mongo needs nothing). It is not
+backfilled. A passkey registered before it fills its flags in on its next
+sign-in.
+
+### Passkeys
+
+- Synced passkeys (iCloud Keychain, Google Password Manager, any
+  authenticator that reports itself backup eligible) can sign in. authsome
+  never stored a credential's WebAuthn flags, and go-webauthn refuses an
+  assertion whose backup-eligible bit differs from the stored one, so these
+  sign-ins failed with "Backup Eligible flag inconsistency". Registration now
+  stores the flags and every sign-in saves what go-webauthn settled on.
+- A passkey that verified its user (PIN or biometric) signs in without a
+  second factor again when built against go-webauthn v0.18. From v0.18 the
+  credential go-webauthn returns carries the stored "user verified" bit, not
+  the assertion's, so every passkey sign-in was asked for a code. authsome now
+  reads it from the sign-in's own assertion, on any go-webauthn version.
+- `Credential` gains `Flags *uint8`, nil for a passkey stored before this
+  release. A store that implements the new optional `passkey.FlagsStore`
+  (`UpdateCredentialFlags`) keeps flags across sign-ins; the built-in stores
+  all do. A `Store` without it keeps working, with each sign-in's backup bits
+  taken from its own assertion.
+- go-webauthn is now v0.18.2.
+
 ## v1.12.0 (unreleased)
 
 Breaking changes start with "Breaking:" and say what to do about them.

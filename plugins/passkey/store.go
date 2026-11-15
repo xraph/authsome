@@ -18,3 +18,10 @@ type Store interface {
 	DeleteCredential(ctx context.Context, credentialID []byte) error
 	UpdateSignCount(ctx context.Context, credentialID []byte, count uint32) error
 }
+
+// FlagsStore is implemented by a Store that keeps a credential's WebAuthn
+// flags. The built-in stores all do. A Store without it still works: its
+// passkeys' flags are taken from each sign-in's own assertion.
+type FlagsStore interface {
+	UpdateCredentialFlags(ctx context.Context, credentialID []byte, flags uint8) error
+}

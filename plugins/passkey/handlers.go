@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/xraph/forge"
 	log "github.com/xraph/go-utils/log"
@@ -475,9 +476,13 @@ func (p *Plugin) handleLoginFinish(ctx forge.Context, _ *LoginFinishRequest) (*L
 		return nil, middleware.InternalError(ctx, fmt.Errorf("failed to parse session: %w", unmarshalErr))
 	}
 
-	wau := p.toWebAuthnUser(ctx.Context(), u)
+	assertion, err := protocol.ParseCredentialRequestResponse(ctx.Request())
+	if err != nil {
+		return nil, forge.Unauthorized(fmt.Sprintf("passkey: finish login: %v", err))
+	}
+	wau := p.toWebAuthnUserFor(ctx.Context(), u, assertion)
 
-	cred, err := p.waForRequest(ctx.Request()).FinishLogin(wau, session, ctx.Request())
+	cred, err := p.waForRequest(ctx.Request()).ValidateLogin(wau, session, assertion)
 	if err != nil {
 		return nil, forge.Unauthorized(fmt.Sprintf("passkey: finish login: %v", err))
 	}
@@ -491,9 +496,10 @@ func (p *Plugin) handleLoginFinish(ctx forge.Context, _ *LoginFinishRequest) (*L
 		return nil, forge.Unauthorized(cwErr.Error())
 	}
 
-	// Update sign count
+	// Update sign count and flags
 	if p.store != nil {
 		_ = p.store.UpdateSignCount(ctx.Context(), cred.ID, cred.Authenticator.SignCount) //nolint:errcheck // best-effort update
+		p.saveFlags(ctx.Context(), cred)
 	}
 
 	userIDStr := u.ID.String()

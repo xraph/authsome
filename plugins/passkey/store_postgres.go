@@ -27,7 +27,10 @@ func NewPostgresStore(db *grove.DB) *PostgresStore {
 }
 
 // Compile-time interface check.
-var _ Store = (*PostgresStore)(nil)
+var (
+	_ Store      = (*PostgresStore)(nil)
+	_ FlagsStore = (*PostgresStore)(nil)
+)
 
 // ──────────────────────────────────────────────────
 // Store methods
@@ -89,6 +92,16 @@ func (s *PostgresStore) UpdateSignCount(ctx context.Context, credentialID []byte
 	_, err := s.pg.NewUpdate((*credentialModel)(nil)).
 		Set("sign_count = ?", int(count)).
 		Set("updated_at = ?", now).
+		Where("credential_id = ?", credentialID).
+		Exec(ctx)
+	return passkeyPgError(err)
+}
+
+// UpdateCredentialFlags records a credential's WebAuthn flags.
+func (s *PostgresStore) UpdateCredentialFlags(ctx context.Context, credentialID []byte, flags uint8) error {
+	_, err := s.pg.NewUpdate((*credentialModel)(nil)).
+		Set("flags = ?", int16(flags)).
+		Set("updated_at = ?", time.Now()).
 		Where("credential_id = ?", credentialID).
 		Exec(ctx)
 	return passkeyPgError(err)

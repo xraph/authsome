@@ -50,6 +50,7 @@ func RunConformance(t *testing.T, newFixture Factory, skip ...string) {
 		{"UpdateSignCount", testUpdateSignCount},
 		{"SignCountHoldsFullUint32", testSignCountHoldsFullUint32},
 		{"DeleteCredential", testDeleteCredential},
+		{"FlagsRoundTrip", testFlagsRoundTrip},
 	}
 	for _, tc := range cases {
 		if skipSet[tc.name] {

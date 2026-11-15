@@ -30,12 +30,14 @@ type twoStepFixture struct {
 	h      http.Handler
 	u      *user.User
 	secret string
+	store  *passkey.MemoryStore
 }
 
 func newTwoStepFixture(t *testing.T) twoStepFixture {
 	t.Helper()
 	pk := passkey.New(passkey.Config{RPID: "localhost"})
-	pk.SetStore(passkey.NewMemoryStore())
+	store := passkey.NewMemoryStore()
+	pk.SetStore(store)
 	mfaStore := mfa.NewMemoryStore()
 	m := mfa.New()
 	m.SetStore(mfaStore)
@@ -56,7 +58,7 @@ func newTwoStepFixture(t *testing.T) twoStepFixture {
 
 	router := forge.NewRouter()
 	require.NoError(t, pk.RegisterRoutes(router))
-	return twoStepFixture{h: router.Handler(), u: u, secret: key.Secret()}
+	return twoStepFixture{h: router.Handler(), u: u, secret: key.Secret(), store: store}
 }
 
 func (f twoStepFixture) send(t *testing.T, path string, body []byte, signedIn bool, cookies ...*http.Cookie) *httptest.ResponseRecorder {
