@@ -18,9 +18,9 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.45.0
 	github.com/xraph/chronicle v1.11.0
 	github.com/xraph/dispatch v1.9.5
-	github.com/xraph/forge v1.13.7
-	github.com/xraph/forge/extensions/auth v1.13.7
-	github.com/xraph/go-utils v1.5.0
+	github.com/xraph/forge v1.14.0
+	github.com/xraph/forge/extensions/auth v1.14.0
+	github.com/xraph/go-utils v1.5.1
 	github.com/xraph/grove v1.10.3
 	github.com/xraph/grove/drivers/mongodriver v1.10.3
 	github.com/xraph/grove/drivers/pgdriver v1.10.3
@@ -30,7 +30,7 @@ require (
 	github.com/xraph/ledger v1.9.3
 	github.com/xraph/relay v1.8.2
 	github.com/xraph/vault v1.8.2
-	github.com/xraph/vessel v1.0.5
+	github.com/xraph/vessel v1.0.7
 	github.com/xraph/warden v1.8.3
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 	go.mongodb.org/mongo-driver/v2 v2.9.3

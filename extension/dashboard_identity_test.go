@@ -449,6 +449,8 @@ func enforceRequest(t *testing.T, token string) *http.Request {
 	})
 	require.NoError(t, err)
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/dashboard/v1", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
 	req.AddCookie(&http.Cookie{Name: dashboardCookieName, Value: token})
 	return req
 }
