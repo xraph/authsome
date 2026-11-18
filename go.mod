@@ -17,21 +17,21 @@ require (
 	github.com/testcontainers/testcontainers-go v0.45.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.45.0
 	github.com/xraph/chronicle v1.11.0
-	github.com/xraph/dispatch v1.9.9
-	github.com/xraph/forge v1.14.0
-	github.com/xraph/forge/extensions/auth v1.14.0
+	github.com/xraph/dispatch v1.9.10
+	github.com/xraph/forge v1.14.1
+	github.com/xraph/forge/extensions/auth v1.14.1
 	github.com/xraph/go-utils v1.5.1
 	github.com/xraph/grove v1.10.3
 	github.com/xraph/grove/drivers/mongodriver v1.10.3
 	github.com/xraph/grove/drivers/pgdriver v1.10.3
 	github.com/xraph/grove/drivers/sqlitedriver v1.10.3
-	github.com/xraph/herald v1.10.4
-	github.com/xraph/keysmith v1.9.2
-	github.com/xraph/ledger v1.9.4
-	github.com/xraph/relay v1.8.3
-	github.com/xraph/vault v1.8.3
-	github.com/xraph/vessel v1.0.7
-	github.com/xraph/warden v1.8.4
+	github.com/xraph/herald v1.10.5
+	github.com/xraph/keysmith v1.9.3
+	github.com/xraph/ledger v1.9.5
+	github.com/xraph/relay v1.8.4
+	github.com/xraph/vault v1.8.4
+	github.com/xraph/vessel v1.0.8
+	github.com/xraph/warden v1.8.5
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 	go.mongodb.org/mongo-driver/v2 v2.10.0
 	go.opentelemetry.io/otel v1.47.0
